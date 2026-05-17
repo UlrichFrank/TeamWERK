@@ -1,0 +1,26 @@
+# Binaries
+bin/
+vereinswerk
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+
+# Frontend
+web/dist/
+web/node_modules/
+web/tsconfig.tsbuildinfo
+
+# Go test artifacts
+*.test
+coverage.out
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/settings.local.json

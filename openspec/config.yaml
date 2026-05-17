@@ -1,0 +1,65 @@
+schema: spec-driven
+
+context: |
+  ## Projekt: VereinsWerk
+
+  Interne Vereinsverwaltungsplattform für Team Stuttgart (Handball).
+  Produktions-URL: https://intern.team-stuttgart.org (IONOS VPS Linux XS, 1 GB RAM)
+
+  ## Tech Stack
+
+  **Backend:** Go 1.23, Chi v5 Router, SQLite (modernc.org/sqlite, pure Go, kein CGo),
+  golang-migrate für Migrationen, golang-jwt/jwt v5, bcrypt für Passwörter, net/smtp für E-Mail.
+  Go-Modul: github.com/teamstuttgart/vereinswerk
+
+  **Frontend:** React 18, TypeScript, Tailwind CSS v3, Vite, React Router v6, Axios.
+  Das Frontend wird via embed.FS in die Go-Binary eingebettet (web/dist/).
+
+  **Deployment:** Einzelne statische Go-Binary, systemd-Service, Nginx Reverse Proxy (Port 8080),
+  Let's Encrypt SSL. Konfiguration via /etc/vereinswerk/env.
+
+  ## Architekturprinzipien
+
+  - Kein ORM — direktes database/sql mit sql.NullXxx für nullable Felder
+  - Ein Package pro Domäne unter internal/ (auth, config, members, duties, mailer, scheduler)
+  - Handler-Struct-Pattern: type Handler struct{ db *sql.DB }
+  - JWT Access Token (15 min, HS256, in Memory) + Refresh Token (7 Tage, opaque, HttpOnly Cookie)
+  - CORS ist auf https://intern.team-stuttgart.org hardgekodiert (dev: Vite proxy)
+  - SQLite WAL-Mode und foreign_keys=ON werden bei jedem DB-Open gesetzt
+  - Keine Dependency Injection Frameworks, keine generischen Repositories
+
+  ## Rollen
+
+  admin · trainer · elternteil · spieler (CHECK-Constraint in SQLite)
+  - admin: Vollzugriff
+  - trainer: Eigenes Team (Mitglieder, Slots, Anfragen)
+  - elternteil: Kinder via family_links + Dienstbörse/Konto
+  - spieler: Eigenes Profil + Dienstbörse/Konto
+
+  ## Frontend-Konventionen
+
+  - Axios-Instanz in lib/api.ts mit baseURL '/api', Auto-Refresh-Interceptor bei 401
+  - AuthContext hält user (email + role) und loading-State
+  - Eine Datei pro Route unter web/src/pages/
+  - Markenfarben: Blau #3E4A98, Gelb #FAE806, Grün #6EB42E
+  - Kein State-Manager (kein Redux/Zustand) — lokale useState + Context reicht
+
+  ## Wichtige Constraints
+
+  - 1 GB RAM auf VPS: keine speicherhungrigen Bibliotheken einführen
+  - SQLite: kein RETURNING-Statement (SQLite < 3.35 Kompatibilität beachten), stattdessen LastInsertId()
+  - embed.FS: web/dist/ muss vor go build existieren; für go run im Dev-Modus nur Backend nutzen
+  - Keine externe Datenbank (kein PostgreSQL, kein Redis)
+  - E-Mail-Versand via Mittwald SMTP (vorstand@team-stuttgart.org)
+
+# Per-artifact rules
+rules:
+  proposal:
+    - Neue Features müssen mit dem bestehenden Rollen-Modell (admin/trainer/elternteil/spieler) kompatibel sein
+    - RAM-Footprint im Blick behalten (VPS hat 1 GB)
+    - Keine neuen externen Dienste ohne explizite Begründung
+  tasks:
+    - Backend-Tasks vor Frontend-Tasks listen (API zuerst, dann UI)
+    - Neue Migrations-Dateien bekommen die nächste freie Nummer (aktuell: 004 ist die letzte)
+    - Go-Handler-Tests sind optional (kein Test-Framework eingerichtet)
+    - Jeder Task soll in < 2 Stunden umsetzbar sein
