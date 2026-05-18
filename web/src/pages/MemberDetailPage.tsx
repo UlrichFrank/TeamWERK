@@ -169,8 +169,8 @@ export default function MemberDetailPage() {
                   onClick={() => togglePosition(pos)}
                   className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                     selectedPositions.includes(pos)
-                      ? 'bg-brand-blue text-white border-brand-blue'
-                      : 'text-gray-600 border-gray-300 hover:border-brand-blue'
+                      ? 'bg-brand-yellow text-black border-brand-yellow'
+                      : 'text-gray-600 border-gray-300 hover:border-black hover:text-black'
                   }`}
                 >
                   {pos}
@@ -189,8 +189,8 @@ export default function MemberDetailPage() {
                 onClick={() => handleStatusChange(s)}
                 className={`px-3 py-1 rounded-full text-sm border ${
                   form.status === s
-                    ? 'bg-brand-blue text-white border-brand-blue'
-                    : 'text-gray-600 border-gray-300 hover:border-brand-blue'
+                    ? 'bg-brand-yellow text-black border-brand-yellow'
+                    : 'text-gray-600 border-gray-300 hover:border-black hover:text-black'
                 }`}
               >
                 {s}
@@ -204,7 +204,7 @@ export default function MemberDetailPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="bg-brand-blue text-white px-4 py-2 rounded-md text-sm hover:bg-brand-blue-dark disabled:opacity-50"
+            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
@@ -245,7 +245,7 @@ export default function MemberDetailPage() {
           </label>
           <button
             onClick={handleAssignTeam}
-            className="mt-3 bg-brand-blue text-white px-4 py-2 rounded-md text-sm hover:bg-brand-blue-dark"
+            className="mt-3 bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
           >
             Zuweisen
           </button>
@@ -258,7 +258,7 @@ export default function MemberDetailPage() {
           <h2 className="font-semibold text-gray-700 mb-1">Nutzer verknüpfen</h2>
           <p className="text-xs text-gray-500 mb-4">Das Mitglied erhält damit Zugang zu seinem eigenen Profil.</p>
           {currentUserID && (
-            <p className="text-xs text-brand-green mb-3">
+            <p className="text-xs text-black mb-3">
               Aktuell verknüpft: {users.find(u => u.id === currentUserID)?.name ?? `User #${currentUserID}`}
             </p>
           )}
@@ -278,7 +278,7 @@ export default function MemberDetailPage() {
             </div>
             <button
               onClick={handleLinkUser}
-              className="bg-brand-blue text-white px-4 py-2 rounded-md text-sm hover:bg-brand-blue-dark"
+              className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
             >
               Speichern
             </button>
@@ -307,7 +307,7 @@ export default function MemberDetailPage() {
             </div>
             <button
               onClick={handleFamilyLink}
-              className="bg-brand-blue text-white px-4 py-2 rounded-md text-sm hover:bg-brand-blue-dark"
+              className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
             >
               Verknüpfen
             </button>

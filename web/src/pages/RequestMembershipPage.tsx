@@ -34,7 +34,7 @@ export default function RequestMembershipPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-full max-w-sm bg-white rounded-xl shadow p-8 text-center">
-          <h2 className="text-xl font-bold text-brand-green mb-2">Antrag gesendet!</h2>
+          <h2 className="text-xl font-bold mb-2">Antrag gesendet!</h2>
           <p className="text-sm text-gray-600">
             Dein Antrag wurde weitergeleitet. Du erhältst eine E-Mail sobald er bearbeitet wurde.
           </p>
@@ -46,7 +46,7 @@ export default function RequestMembershipPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
-        <h1 className="text-2xl font-bold text-brand-blue mb-1">Beitrittsantrag</h1>
+        <h1 className="text-2xl font-bold mb-1">Beitrittsantrag</h1>
         <p className="text-sm text-gray-500 mb-6">Team Stuttgart – TeamWERK</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -78,7 +78,7 @@ export default function RequestMembershipPage() {
           </div>
           <button
             type="submit"
-            className="w-full bg-brand-blue text-white rounded-md py-2 text-sm font-medium hover:bg-brand-blue-dark"
+            className="w-full bg-brand-yellow text-black rounded-md py-2 text-sm font-semibold hover:bg-black hover:text-brand-yellow transition-colors"
           >
             Antrag absenden
           </button>

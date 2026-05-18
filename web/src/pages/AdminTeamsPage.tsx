@@ -36,7 +36,7 @@ export default function AdminTeamsPage() {
               <option value="f">Weiblich</option>
               <option value="mixed">Gemischt</option>
             </select>
-            <button type="submit" className="bg-brand-blue text-white rounded-md px-4 py-2 text-sm font-medium">
+            <button type="submit" className="bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
               Team anlegen
             </button>
           </form>
@@ -56,7 +56,7 @@ export default function AdminTeamsPage() {
                   <td className="px-4 py-3 font-medium">{t.name}</td>
                   <td className="px-4 py-3 text-gray-500">{t.age_class}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${t.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${t.is_active ? 'bg-brand-yellow text-black' : 'bg-gray-100 text-gray-500'}`}>
                       {t.is_active ? 'aktiv' : 'inaktiv'}
                     </span>
                   </td>

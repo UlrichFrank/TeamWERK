@@ -40,9 +40,9 @@ export default function DutySlotsPage() {
 
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-700',
-      fulfilled: 'bg-green-100 text-green-700',
-      cash_substitute: 'bg-blue-100 text-blue-700',
+      pending: 'bg-brand-yellow text-black',
+      fulfilled: 'bg-black text-white',
+      cash_substitute: 'bg-gray-200 text-gray-700',
     }
     const label: Record<string, string> = {
       pending: 'ausstehend', fulfilled: 'erfüllt', cash_substitute: 'Geldersatz',
@@ -83,7 +83,7 @@ export default function DutySlotsPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => loadAssignments(s.id)}
-                      className="text-xs text-brand-blue hover:underline"
+                      className="text-xs text-black hover:text-brand-yellow transition-colors"
                     >
                       {expanded === s.id ? 'schließen' : 'Zuteilungen'}
                     </button>
@@ -117,7 +117,7 @@ export default function DutySlotsPage() {
                                     <div className="flex items-center justify-end gap-2">
                                       <button
                                         onClick={() => fulfill(a.id)}
-                                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                                        className="text-xs bg-brand-yellow text-black px-2 py-1 rounded font-medium hover:bg-black hover:text-brand-yellow transition-colors"
                                       >
                                         Erfüllt
                                       </button>
@@ -129,7 +129,7 @@ export default function DutySlotsPage() {
                                       />
                                       <button
                                         onClick={() => cashSub(a.id)}
-                                        className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                                        className="text-xs border border-black text-black px-2 py-1 rounded hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
                                       >
                                         Geldersatz
                                       </button>

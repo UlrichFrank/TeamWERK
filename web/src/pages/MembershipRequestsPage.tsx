@@ -25,10 +25,10 @@ export default function MembershipRequestsPage() {
               <div className="text-xs text-gray-400 mt-0.5">{new Date(r.created_at).toLocaleDateString('de-DE')}</div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => approve(r.id)} className="bg-brand-green text-white rounded-md px-3 py-1.5 text-sm hover:bg-brand-green-dark">
+              <button onClick={() => approve(r.id)} className="bg-brand-yellow text-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
                 Genehmigen
               </button>
-              <button onClick={() => reject(r.id)} className="bg-red-500 text-white rounded-md px-3 py-1.5 text-sm hover:bg-red-600">
+              <button onClick={() => reject(r.id)} className="bg-black text-white rounded-md px-3 py-1.5 text-sm hover:bg-gray-800 transition-colors">
                 Ablehnen
               </button>
             </div>

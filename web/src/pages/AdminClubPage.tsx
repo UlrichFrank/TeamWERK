@@ -35,7 +35,7 @@ export default function AdminClubPage() {
             <input value={address} onChange={e => setAddress(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
           </div>
-          <button type="submit" className="bg-brand-blue text-white rounded-md px-4 py-2 text-sm font-medium">
+          <button type="submit" className="bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
             {saved ? 'Gespeichert ✓' : 'Speichern'}
           </button>
         </form>

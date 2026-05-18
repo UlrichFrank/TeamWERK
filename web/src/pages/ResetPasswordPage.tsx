@@ -22,7 +22,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
-        <h1 className="text-xl font-bold text-brand-blue mb-6">Neues Passwort setzen</h1>
+        <h1 className="text-xl font-bold mb-6">Neues Passwort setzen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <input
@@ -30,7 +30,7 @@ export default function ResetPasswordPage() {
             placeholder="Neues Passwort"
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
-          <button type="submit" className="w-full bg-brand-blue text-white rounded-md py-2 text-sm font-medium">
+          <button type="submit" className="w-full bg-brand-yellow text-black rounded-md py-2 text-sm font-semibold hover:bg-black hover:text-brand-yellow transition-colors">
             Passwort speichern
           </button>
         </form>

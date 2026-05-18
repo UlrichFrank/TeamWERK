@@ -59,9 +59,7 @@ func serve() {
 	defer database.Close()
 
 	m := mailer.New(cfg.SMTP)
-	baseURL := "https://intern.team-stuttgart.org"
-
-	authH := auth.NewHandler(database, cfg.JWTSecret, m, baseURL)
+	authH := auth.NewHandler(database, cfg.JWTSecret, m, cfg.BaseURL)
 	cfgH := appconfig.NewHandler(database)
 	membH := members.NewHandler(database)
 	dutyH := duties.NewHandler(database)
@@ -115,6 +113,7 @@ func serve() {
 			r.Get("/api/admin/membership-requests", authH.ListMembershipRequests)
 			r.Post("/api/admin/membership-requests/{id}/approve", authH.ApproveMembershipRequest)
 			r.Post("/api/admin/membership-requests/{id}/reject", authH.RejectMembershipRequest)
+			r.Delete("/api/admin/membership-requests/{id}", authH.DeleteMembershipRequest)
 			r.Post("/api/auth/invite", authH.Invite)
 		})
 
@@ -132,6 +131,9 @@ func serve() {
 			r.Put("/api/admin/teams/{id}", cfgH.UpdateTeam)
 			r.Post("/api/admin/teams/{id}/assign-trainer", cfgH.AssignTrainer)
 			r.Get("/api/admin/users", authH.ListUsers)
+			r.Delete("/api/admin/users/{id}", authH.DeleteUser)
+			r.Get("/api/admin/invitations", authH.ListInvitations)
+			r.Delete("/api/admin/invitations/{id}", authH.DeleteInvitation)
 			r.Put("/api/admin/members/{id}/user", membH.LinkUser)
 			r.Post("/api/admin/family-links", membH.CreateFamilyLink)
 			r.Get("/api/admin/duty-types", dutyH.ListTypes)

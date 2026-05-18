@@ -33,7 +33,7 @@ export default function MembersPage() {
             <>
               <Link
                 to="/mitglieder/neu"
-                className="text-sm bg-brand-blue text-white border border-brand-blue rounded-md px-3 py-1.5 hover:bg-brand-blue-dark"
+                className="text-sm bg-brand-yellow text-black border border-brand-yellow rounded-md px-3 py-1.5 font-medium hover:bg-black hover:text-brand-yellow hover:border-black transition-colors"
               >
                 + Neu
               </Link>
@@ -42,7 +42,7 @@ export default function MembersPage() {
                   const url = URL.createObjectURL(r.data)
                   const a = document.createElement('a'); a.href = url; a.download = 'mitglieder.csv'; a.click()
                 })}
-                className="text-sm text-brand-blue border border-brand-blue rounded-md px-3 py-1.5 hover:bg-brand-blue hover:text-white"
+                className="text-sm border border-black text-black rounded-md px-3 py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
               >
                 Export CSV
               </button>
@@ -64,7 +64,7 @@ export default function MembersPage() {
             {filtered.map(m => (
               <tr key={m.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium">
-                  <Link to={`/mitglieder/${m.id}`} className="hover:text-brand-blue">
+                  <Link to={`/mitglieder/${m.id}`} className="hover:text-brand-yellow transition-colors">
                     {m.last_name}, {m.first_name}
                   </Link>
                 </td>
@@ -72,9 +72,9 @@ export default function MembersPage() {
                 <td className="px-4 py-3 text-gray-500">{m.position || '–'}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                    m.status === 'aktiv' ? 'bg-green-100 text-green-700' :
-                    m.status === 'verletzt' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-gray-100 text-gray-600'
+                    m.status === 'aktiv' ? 'bg-black text-white' :
+                    m.status === 'verletzt' ? 'bg-brand-yellow text-black' :
+                    'bg-gray-200 text-gray-600'
                   }`}>{m.status}</span>
                 </td>
               </tr>

@@ -26,9 +26,9 @@ export default function ProfilePage() {
   }
 
   const statusColor = (s: string) =>
-    s === 'aktiv' ? 'bg-green-100 text-green-700' :
-    s === 'verletzt' ? 'bg-yellow-100 text-yellow-700' :
-    'bg-gray-100 text-gray-600'
+    s === 'aktiv' ? 'bg-black text-white' :
+    s === 'verletzt' ? 'bg-brand-yellow text-black' :
+    'bg-gray-200 text-gray-600'
 
   return (
     <div className="max-w-2xl">
@@ -101,7 +101,7 @@ export default function ProfilePage() {
         <div className="mt-4 flex items-center gap-3">
           <button
             onClick={handleVehicleSave}
-            className="bg-brand-blue text-white px-4 py-2 rounded-md text-sm hover:bg-brand-blue-dark"
+            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
           >
             Speichern
           </button>

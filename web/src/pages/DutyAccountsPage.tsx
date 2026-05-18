@@ -21,7 +21,7 @@ export default function DutyAccountsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Dienstkonten</h1>
         {user?.role === 'admin' && (
-          <button onClick={exportCSV} className="text-sm text-brand-blue border border-brand-blue rounded-md px-3 py-1.5 hover:bg-brand-blue hover:text-white">
+          <button onClick={exportCSV} className="text-sm border border-black text-black rounded-md px-3 py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors">
             Export CSV
           </button>
         )}

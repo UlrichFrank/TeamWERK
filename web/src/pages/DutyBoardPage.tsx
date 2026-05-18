@@ -32,7 +32,7 @@ export default function DutyBoardPage() {
             </div>
             <button
               onClick={() => claim(s.id)}
-              className="bg-brand-green text-white rounded-md px-4 py-1.5 text-sm font-medium hover:bg-brand-green-dark"
+              className="bg-brand-yellow text-black rounded-md px-4 py-1.5 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
             >
               Eintragen
             </button>

@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
@@ -212,17 +214,23 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 	if teamID.Valid {
 		teamIDVal = &teamID.Int64
 	}
-	h.db.ExecContext(r.Context(),
+	if _, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at) VALUES (?,?,?,?,?)`,
 		email, teamIDVal, "elternteil", tokenHash, expiry,
-	)
+	); err != nil {
+		log.Printf("DB ERROR (ApproveMembership token for %s): %v", email, err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	h.db.ExecContext(r.Context(),
 		`UPDATE membership_requests SET status='approved', handled_by=?, handled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		claims.UserID, id,
 	)
 	link := fmt.Sprintf("%s/register?token=%s", h.baseURL, plain)
-	h.mailer.Send(email, "Deine Anmeldung bei TeamWERK wurde bestätigt",
-		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", name, link))
+	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK wurde bestätigt",
+		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", name, link)); err != nil {
+		log.Printf("SMTP ERROR (ApproveMembership to %s): %v", email, err)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -241,16 +249,18 @@ func (h *Handler) RejectMembershipRequest(w http.ResponseWriter, r *http.Request
 		`UPDATE membership_requests SET status='rejected', handled_by=?, handled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		claims.UserID, id,
 	)
-	h.mailer.Send(email, "Deine Anmeldung bei TeamWERK",
-		fmt.Sprintf("Hallo %s,\n\nLeider konnte deine Anfrage nicht bestätigt werden. Wende dich an den Vereinsvorstand.", name))
+	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK",
+		fmt.Sprintf("Hallo %s,\n\nLeider konnte deine Anfrage nicht bestätigt werden. Wende dich an den Vereinsvorstand.", name)); err != nil {
+		log.Printf("SMTP ERROR (RejectMembership to %s): %v", email, err)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email  string `json:"email"`
-		TeamID int    `json:"team_id"`
-		Role   string `json:"role"`
+		Email  string  `json:"email"`
+		TeamID *int    `json:"team_id"` // pointer so JSON null → SQL NULL (not 0)
+		Role   string  `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -261,13 +271,32 @@ func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 	}
 	plain, tokenHash, _ := GenerateOpaqueToken()
 	expiry := InvitationExpiry()
-	h.db.ExecContext(r.Context(),
+	if _, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at) VALUES (?,?,?,?,?)`,
 		req.Email, req.TeamID, req.Role, tokenHash, expiry,
-	)
+	); err != nil {
+		log.Printf("DB ERROR (Invite for %s): %v", req.Email, err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	link := fmt.Sprintf("%s/register?token=%s", h.baseURL, plain)
-	h.mailer.Send(req.Email, "Einladung zu TeamWERK – Team Stuttgart",
-		fmt.Sprintf("Du wurdest eingeladen! Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", link))
+	body := fmt.Sprintf(`Hallo,
+
+du wurdest zur internen Verwaltungsplattform von Team Stuttgart (TeamWERK) eingeladen.
+
+Klicke auf den folgenden Link, um dein Konto zu erstellen:
+
+%s
+
+Der Link ist 48 Stunden gültig. Falls du diese Einladung nicht erwartet hast, kannst du sie ignorieren.
+
+Viele Grüße
+Team Stuttgart`, link)
+	if err := h.mailer.Send(req.Email, "Einladung zu TeamWERK – Team Stuttgart", body); err != nil {
+		log.Printf("SMTP ERROR (Invite to %s): %v", req.Email, err)
+		http.Error(w, "mail delivery failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -363,26 +392,147 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 // GET /api/admin/users
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, name, email, role FROM users ORDER BY name`)
+		`SELECT u.id, u.name, u.email, u.role, COALESCE(t.name, '') AS team_name
+		 FROM users u LEFT JOIN teams t ON t.id = u.team_id ORDER BY u.name`)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 	type user struct {
-		ID    int    `json:"id"`
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		Role  string `json:"role"`
+		ID       int    `json:"id"`
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Role     string `json:"role"`
+		TeamName string `json:"team_name"`
 	}
 	var result []user
 	for rows.Next() {
 		var u user
-		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role)
+		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.TeamName)
 		result = append(result, u)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// DELETE /api/admin/users/{id}
+func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if claims.UserID == targetID {
+		http.Error(w, "cannot delete your own account", http.StatusBadRequest)
+		return
+	}
+
+	var exists bool
+	h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) > 0 FROM users WHERE id = ?`, targetID).Scan(&exists)
+	if !exists {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for _, q := range []string{
+		`DELETE FROM refresh_tokens WHERE user_id = ?`,
+		`DELETE FROM invitation_tokens WHERE email = (SELECT email FROM users WHERE id = ?)`,
+		`DELETE FROM password_reset_tokens WHERE user_id = ?`,
+		`DELETE FROM family_links WHERE parent_user_id = ?`,
+		`DELETE FROM duty_assignments WHERE user_id = ?`,
+		`DELETE FROM duty_accounts WHERE user_id = ?`,
+		`DELETE FROM users WHERE id = ?`,
+	} {
+		if _, err := tx.ExecContext(r.Context(), q, targetID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/admin/invitations
+func (h *Handler) ListInvitations(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT it.id, it.email, it.role, COALESCE(t.name,'') AS team_name, it.expires_at
+		 FROM invitation_tokens it LEFT JOIN teams t ON t.id = it.team_id
+		 WHERE it.used_at IS NULL AND it.expires_at > CURRENT_TIMESTAMP
+		 ORDER BY it.expires_at`)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type invitation struct {
+		ID        int    `json:"id"`
+		Email     string `json:"email"`
+		Role      string `json:"role"`
+		TeamName  string `json:"team_name"`
+		ExpiresAt string `json:"expires_at"`
+	}
+	var result []invitation
+	for rows.Next() {
+		var inv invitation
+		rows.Scan(&inv.ID, &inv.Email, &inv.Role, &inv.TeamName, &inv.ExpiresAt)
+		result = append(result, inv)
+	}
+	if result == nil {
+		result = []invitation{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// DELETE /api/admin/invitations/{id}
+func (h *Handler) DeleteInvitation(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM invitation_tokens WHERE id = ?`, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/admin/membership-requests/{id}
+func (h *Handler) DeleteMembershipRequest(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM membership_requests WHERE id = ?`, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) notifyTrainersOfRequest(r *http.Request, teamID int, name, email string) {
