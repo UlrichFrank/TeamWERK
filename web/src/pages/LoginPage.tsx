@@ -24,7 +24,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex bg-brand-blue">
       <div className="flex flex-col justify-center items-center w-full max-w-xs px-8 py-12 text-white">
         <img src="/logo.svg" alt="Team Stuttgart" className="h-20 w-20 mb-6" />
-        <h1 className="text-2xl font-bold mb-1">VereinsWerk</h1>
+        <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
         <p className="text-white/60 text-sm">Team Stuttgart</p>
       </div>
       <div className="flex-1 flex items-center justify-center bg-white rounded-l-3xl">

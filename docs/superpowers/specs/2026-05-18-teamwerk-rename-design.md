@@ -23,7 +23,6 @@ Vollständige Umbenennung der Plattform von „VereinsWERK" zu „TeamWERK" — 
 | DB-Dateiname (Default) | `vereinswerk.db` | `teamwerk.db` |
 | npm-Packagename | `vereinswerk-web` | `teamwerk-web` |
 | Lokales Verzeichnis | `/Users/ulrich/Dev/vereinswerk` | `/Users/ulrich/Dev/teamwerk` |
-| GitHub-Repo | `teamstuttgart/vereinswerk` | `teamstuttgart/teamwerk` (via `gh repo rename`) |
 
 **Betroffene Dateien:**
 - `go.mod` — Modulpfad
@@ -64,7 +63,6 @@ crontab -e
 ### GitHub-Repo umbenennen
 
 ```bash
-gh repo rename teamwerk
 git remote set-url origin https://github.com/teamstuttgart/teamwerk.git
 ```
 

@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  ## Projekt: VereinsWerk
+  ## Projekt: TeamWERK
 
   Interne Vereinsverwaltungsplattform für Team Stuttgart (Handball).
   Produktions-URL: https://intern.team-stuttgart.org (IONOS VPS Linux XS, 1 GB RAM)
@@ -10,13 +10,13 @@ context: |
 
   **Backend:** Go 1.23, Chi v5 Router, SQLite (modernc.org/sqlite, pure Go, kein CGo),
   golang-migrate für Migrationen, golang-jwt/jwt v5, bcrypt für Passwörter, net/smtp für E-Mail.
-  Go-Modul: github.com/teamstuttgart/vereinswerk
+  Go-Modul: github.com/teamstuttgart/teamwerk
 
   **Frontend:** React 18, TypeScript, Tailwind CSS v3, Vite, React Router v6, Axios.
   Das Frontend wird via embed.FS in die Go-Binary eingebettet (web/dist/).
 
   **Deployment:** Einzelne statische Go-Binary, systemd-Service, Nginx Reverse Proxy (Port 8080),
-  Let's Encrypt SSL. Konfiguration via /etc/vereinswerk/env.
+  Let's Encrypt SSL. Konfiguration via /etc/teamwerk/env.
 
   ## Architekturprinzipien
 

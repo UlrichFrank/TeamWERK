@@ -47,7 +47,7 @@ export default function RequestMembershipPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
         <h1 className="text-2xl font-bold text-brand-blue mb-1">Beitrittsantrag</h1>
-        <p className="text-sm text-gray-500 mb-6">Team Stuttgart – VereinsWerk</p>
+        <p className="text-sm text-gray-500 mb-6">Team Stuttgart – TeamWERK</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <div>

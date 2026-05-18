@@ -1,4 +1,4 @@
-module github.com/teamstuttgart/vereinswerk
+module github.com/teamstuttgart/teamwerk
 
 go 1.25.0
 

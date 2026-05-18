@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/teamstuttgart/vereinswerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/auth"
 )
 
 type Handler struct{ db *sql.DB }

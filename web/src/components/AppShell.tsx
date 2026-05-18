@@ -30,7 +30,7 @@ export default function AppShell() {
       <aside className="w-56 bg-brand-blue text-white flex flex-col">
         <div className="px-4 py-5 border-b border-white/20 flex items-center gap-3">
           <img src="/logo.svg" alt="Team Stuttgart" className="h-8 w-8" />
-          <span className="font-bold text-lg">VereinsWerk</span>
+          <span className="font-bold text-lg">TeamWERK</span>
         </div>
         <nav className="flex-1 py-4">
           {visible.map(item => (

@@ -8,27 +8,27 @@ set -euo pipefail
 apt-get update && apt-get install -y nginx certbot python3-certbot-nginx
 
 # Create app data directory
-mkdir -p /var/lib/vereinswerk
-chown www-data:www-data /var/lib/vereinswerk
+mkdir -p /var/lib/teamwerk
+chown www-data:www-data /var/lib/teamwerk
 
 # Create env directory
-mkdir -p /etc/vereinswerk
-cat > /etc/vereinswerk/env <<'EOF'
+mkdir -p /etc/teamwerk
+cat > /etc/teamwerk/env <<'EOF'
 PORT=8080
-DB_PATH=/var/lib/vereinswerk/vereinswerk.db
+DB_PATH=/var/lib/teamwerk/teamwerk.db
 JWT_SECRET=REPLACE_WITH_RANDOM_SECRET
-SMTP_HOST=smtp.mittwald.de
+SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587
-SMTP_USER=vorstand@team-stuttgart.org
+SMTP_USER=p459264p5
 SMTP_PASS=REPLACE_WITH_SMTP_PASSWORD
-SMTP_FROM=VereinsWerk <vorstand@team-stuttgart.org>
+SMTP_FROM=TeamWERK <vorstand@team-stuttgart.org>
 EOF
-chmod 600 /etc/vereinswerk/env
+chmod 600 /etc/teamwerk/env
 
 # Install systemd service
-cp vereinswerk.service /etc/systemd/system/
+cp teamwerk.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable vereinswerk
+systemctl enable teamwerk
 
 # Install Nginx config
 cp nginx-intern.conf /etc/nginx/sites-available/intern.team-stuttgart.org
@@ -39,6 +39,6 @@ nginx -t && systemctl reload nginx
 certbot --nginx -d intern.team-stuttgart.org --non-interactive --agree-tos -m webmaster@team-stuttgart.org
 
 # Add scheduler Cronjob
-(crontab -l 2>/dev/null; echo "* * * * * /usr/local/bin/vereinswerk scheduler:run >> /var/log/vereinswerk-scheduler.log 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "* * * * * /usr/local/bin/teamwerk scheduler:run >> /var/log/teamwerk-scheduler.log 2>&1") | crontab -
 
 echo "VPS setup complete. Deploy the binary with: make deploy"

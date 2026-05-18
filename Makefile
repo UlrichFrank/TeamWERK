@@ -1,8 +1,8 @@
-BINARY     := vereinswerk
+BINARY     := teamwerk
 BUILD_DIR  := bin
 REMOTE     := $(shell grep REMOTE_USER .env 2>/dev/null | cut -d= -f2)@$(shell grep REMOTE_HOST .env 2>/dev/null | cut -d= -f2)
 REMOTE_DIR := $(shell grep REMOTE_DIR .env 2>/dev/null | cut -d= -f2)
-DB_PATH    := /var/lib/vereinswerk/vereinswerk.db
+DB_PATH    := /var/lib/teamwerk/teamwerk.db
 
 .PHONY: init dev build deploy migrate-up migrate-down create-admin env clean
 
@@ -19,28 +19,28 @@ init:
 
 dev:
 	@echo "Starting backend on :8080 and frontend dev server..."
-	@go run ./cmd/vereinswerk &
+	@go run ./cmd/teamwerk &
 	@cd web && pnpm dev
 
 build:
 	cd web && pnpm build
-	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/vereinswerk
+	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
 
 deploy: build
 	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):$(REMOTE_DIR)/$(BINARY).new
 	ssh $(REMOTE) "mv $(REMOTE_DIR)/$(BINARY).new $(REMOTE_DIR)/$(BINARY) && \
 		$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH) && \
-		sudo systemctl restart vereinswerk"
+		sudo systemctl restart teamwerk"
 	@echo "Deployed successfully."
 
 migrate-up:
-	go run ./cmd/vereinswerk migrate up --db ./vereinswerk.db
+	go run ./cmd/teamwerk migrate up --db ./teamwerk.db
 
 migrate-down:
-	go run ./cmd/vereinswerk migrate down --db ./vereinswerk.db
+	go run ./cmd/teamwerk migrate down --db ./teamwerk.db
 
 create-admin:
-	go run ./cmd/vereinswerk create-admin --db ./vereinswerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)
+	go run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)
 
 clean:
-	rm -rf $(BUILD_DIR) cmd/vereinswerk/web/dist
+	rm -rf $(BUILD_DIR) cmd/teamwerk/web/dist

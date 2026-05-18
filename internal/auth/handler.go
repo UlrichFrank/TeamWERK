@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/teamstuttgart/vereinswerk/internal/mailer"
+	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -221,7 +221,7 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 		claims.UserID, id,
 	)
 	link := fmt.Sprintf("%s/register?token=%s", h.baseURL, plain)
-	h.mailer.Send(email, "Deine Anmeldung bei VereinsWerk wurde bestätigt",
+	h.mailer.Send(email, "Deine Anmeldung bei TeamWERK wurde bestätigt",
 		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", name, link))
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -241,7 +241,7 @@ func (h *Handler) RejectMembershipRequest(w http.ResponseWriter, r *http.Request
 		`UPDATE membership_requests SET status='rejected', handled_by=?, handled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		claims.UserID, id,
 	)
-	h.mailer.Send(email, "Deine Anmeldung bei VereinsWerk",
+	h.mailer.Send(email, "Deine Anmeldung bei TeamWERK",
 		fmt.Sprintf("Hallo %s,\n\nLeider konnte deine Anfrage nicht bestätigt werden. Wende dich an den Vereinsvorstand.", name))
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -266,7 +266,7 @@ func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 		req.Email, req.TeamID, req.Role, tokenHash, expiry,
 	)
 	link := fmt.Sprintf("%s/register?token=%s", h.baseURL, plain)
-	h.mailer.Send(req.Email, "Einladung zu VereinsWerk – Team Stuttgart",
+	h.mailer.Send(req.Email, "Einladung zu TeamWERK – Team Stuttgart",
 		fmt.Sprintf("Du wurdest eingeladen! Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", link))
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -329,7 +329,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		userID, tokenHash, expiry,
 	)
 	link := fmt.Sprintf("%s/reset-password?token=%s", h.baseURL, plain)
-	h.mailer.Send(req.Email, "Passwort zurücksetzen – VereinsWerk",
+	h.mailer.Send(req.Email, "Passwort zurücksetzen – TeamWERK",
 		fmt.Sprintf("Hallo %s,\n\nPasswort zurücksetzen:\n%s\n\nDer Link ist 1 Stunde gültig.", name, link))
 }
 
@@ -397,7 +397,7 @@ func (h *Handler) notifyTrainersOfRequest(r *http.Request, teamID int, name, ema
 	for rows.Next() {
 		var trainerEmail string
 		rows.Scan(&trainerEmail)
-		h.mailer.Send(trainerEmail, "Neuer Beitrittsantrag – VereinsWerk",
-			fmt.Sprintf("Neuer Antrag von %s (%s).\nBitte in VereinsWerk prüfen: %s/admin/membership-requests", name, email, h.baseURL))
+		h.mailer.Send(trainerEmail, "Neuer Beitrittsantrag – TeamWERK",
+			fmt.Sprintf("Neuer Antrag von %s (%s).\nBitte in TeamWERK prüfen: %s/admin/membership-requests", name, email, h.baseURL))
 	}
 }

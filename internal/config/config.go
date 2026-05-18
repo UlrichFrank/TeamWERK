@@ -25,14 +25,14 @@ func Load() (*Config, error) {
 	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
 	c := &Config{
 		Port:      getEnv("PORT", "8080"),
-		DBPath:    getEnv("DB_PATH", "./vereinswerk.db"),
+		DBPath:    getEnv("DB_PATH", "./teamwerk.db"),
 		JWTSecret: os.Getenv("JWT_SECRET"),
 		SMTP: SMTPConfig{
-			Host:     getEnv("SMTP_HOST", "smtp.mittwald.de"),
+			Host:     getEnv("SMTP_HOST", "mail.agenturserver.de"),
 			Port:     smtpPort,
 			User:     os.Getenv("SMTP_USER"),
 			Password: os.Getenv("SMTP_PASS"),
-			From:     getEnv("SMTP_FROM", "VereinsWerk <vorstand@team-stuttgart.org>"),
+			From:     getEnv("SMTP_FROM", "TeamWERK <vorstand@team-stuttgart.org>"),
 		},
 	}
 	if c.JWTSecret == "" {

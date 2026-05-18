@@ -2,18 +2,24 @@ package mailer
 
 import (
 	"fmt"
+	"net/mail"
 	"net/smtp"
 	"strings"
 
-	"github.com/teamstuttgart/vereinswerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/config"
 )
 
 type Mailer struct {
-	cfg config.SMTPConfig
+	cfg      config.SMTPConfig
+	fromAddr string // bare email extracted from cfg.From
 }
 
 func New(cfg config.SMTPConfig) *Mailer {
-	return &Mailer{cfg: cfg}
+	fromAddr := cfg.User
+	if addr, err := mail.ParseAddress(cfg.From); err == nil {
+		fromAddr = addr.Address
+	}
+	return &Mailer{cfg: cfg, fromAddr: fromAddr}
 }
 
 func (m *Mailer) Send(to, subject, body string) error {
@@ -28,5 +34,5 @@ func (m *Mailer) Send(to, subject, body string) error {
 		body,
 	}, "\r\n")
 	addr := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
-	return smtp.SendMail(addr, auth, m.cfg.User, []string{to}, []byte(msg))
+	return smtp.SendMail(addr, auth, m.fromAddr, []string{to}, []byte(msg))
 }

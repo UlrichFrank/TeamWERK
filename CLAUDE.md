@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Überblick
 
-VereinsWERK (VereinsWERK — Where Engagement Really Klicks) ist die interne Verwaltungsplattform für Team Stuttgart (Handball). Sie läuft unter `https://intern.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
+TeamWERK (TeamWERK — Where Engagement Really Klicks) ist die interne Verwaltungsplattform für Team Stuttgart (Handball). Sie läuft unter `https://intern.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
 
 **Stack:** Go 1.23 + Chi v5 · SQLite (WAL) · React 18 + Tailwind v3 · Vite · JWT-Auth
 
@@ -15,8 +15,8 @@ Die öffentliche TYPO3-Homepage (`team-stuttgart.org`) ist ein separates Repo un
 ## Verzeichnisstruktur
 
 ```
-vereinswerk/
-├── cmd/vereinswerk/main.go   ← Einstiegspunkt: Router, embed.FS, Subcommands
+teamwerk/
+├── cmd/teamwerk/main.go   ← Einstiegspunkt: Router, embed.FS, Subcommands
 ├── internal/
 │   ├── auth/                 ← JWT-Tokens, Middleware, Auth-Handler
 │   ├── config/               ← Config-Struct (.env-Laden), Club/Season/Team-Handler
@@ -34,7 +34,7 @@ vereinswerk/
 │   │   ├── lib/api.ts        ← Axios-Instanz mit Auto-Refresh-Interceptor
 │   │   └── pages/            ← Eine Datei pro Route
 │   └── vite.config.ts        ← Proxy /api → :8080
-├── deploy/                   ← setup-vps.sh, nginx-intern.conf, vereinswerk.service
+├── deploy/                   ← setup-vps.sh, nginx-intern.conf, teamwerk.service
 ├── Makefile
 └── .env.example
 ```
@@ -47,7 +47,7 @@ vereinswerk/
 
 ```bash
 # Terminal 1 — Go-Backend auf :8080
-go run ./cmd/vereinswerk
+go run ./cmd/teamwerk
 
 # Terminal 2 — Vite Dev-Server auf :5173 (proxyt /api → :8080)
 cd web && npm run dev
@@ -55,20 +55,20 @@ cd web && npm run dev
 
 `make dev` startet beide, aber das Go-Backend läuft dann im Hintergrund ohne sauberes Beenden.
 
-> **Wichtig:** `go run ./cmd/vereinswerk` erfordert `web/dist/` (wegen `//go:embed all:web/dist`).  
+> **Wichtig:** `go run ./cmd/teamwerk` erfordert `web/dist/` (wegen `//go:embed all:web/dist`).  
 > Im reinen Backend-Dev einfach `web/dist/.gitkeep` anlegen oder `make build` einmal laufen lassen.
 
 ### Build & Deploy
 
 ```bash
-make build    # npm run build + go build → bin/vereinswerk
+make build    # npm run build + go build → bin/teamwerk
 make deploy   # build + rsync auf VPS + systemctl restart
 ```
 
 ### Datenbank-Migrations lokal
 
 ```bash
-make migrate-up    # go run ./cmd/vereinswerk migrate up --db ./vereinswerk.db
+make migrate-up    # go run ./cmd/teamwerk migrate up --db ./teamwerk.db
 make migrate-down
 ```
 
@@ -291,11 +291,11 @@ Schrift: Hanken Grotesk (Google Fonts, entspricht TYPO3-Site)
 
 ## Deployment
 
-**Ziel:** IONOS VPS Linux XS · `/usr/local/bin/vereinswerk` · systemd-Service `vereinswerk`  
+**Ziel:** IONOS VPS Linux XS · `/usr/local/bin/teamwerk` · systemd-Service `teamwerk`  
 **Nginx:** Reverse Proxy Port 443 → 8080, Zertifikat via Certbot  
-**Konfiguration:** `/etc/vereinswerk/env` (enthält PORT, DB_PATH, JWT_SECRET, SMTP_*)  
-**DB:** `/var/lib/vereinswerk/vereinswerk.db`  
-**Scheduler:** Cronjob `* * * * * /usr/local/bin/vereinswerk scheduler:run`
+**Konfiguration:** `/etc/teamwerk/env` (enthält PORT, DB_PATH, JWT_SECRET, SMTP_*)  
+**DB:** `/var/lib/teamwerk/teamwerk.db`  
+**Scheduler:** Cronjob `* * * * * /usr/local/bin/teamwerk scheduler:run`
 
 Für einen Erstaufbau: `bash deploy/setup-vps.sh` auf dem VPS ausführen (root).
 
@@ -308,5 +308,5 @@ Diese Tasks aus Phase 1 erfordern SSH-Zugang zum IONOS-VPS und wurden noch nicht
 - SSH-Zugang prüfen, Ubuntu-Version notieren
 - `deploy/setup-vps.sh` ausführen (Nginx, Certbot, systemd, Cron)
 - DNS: Subdomain `intern.team-stuttgart.org` → VPS-IP setzen
-- `/etc/vereinswerk/env` befüllen (JWT_SECRET, SMTP_PASS)
+- `/etc/teamwerk/env` befüllen (JWT_SECRET, SMTP_PASS)
 - `make deploy` ausführen (erster Deployment)

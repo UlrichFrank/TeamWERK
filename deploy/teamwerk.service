@@ -1,13 +1,13 @@
 [Unit]
-Description=VereinsWerk – Team Stuttgart
+Description=TeamWERK – Team Stuttgart
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
 WorkingDirectory=/usr/local/bin
-ExecStart=/usr/local/bin/vereinswerk
-EnvironmentFile=/etc/vereinswerk/env
+ExecStart=/usr/local/bin/teamwerk
+EnvironmentFile=/etc/teamwerk/env
 Restart=on-failure
 RestartSec=5
 

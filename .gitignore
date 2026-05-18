@@ -1,6 +1,9 @@
 # Binaries
 bin/
-vereinswerk
+teamwerk
+
+# Embedded frontend build
+cmd/teamwerk/web/dist/
 
 # SQLite
 *.db
