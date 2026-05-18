@@ -17,6 +17,9 @@ import AdminTeamsPage from './pages/AdminTeamsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import MembershipRequestsPage from './pages/MembershipRequestsPage'
+import SpielplanPage from './pages/SpielplanPage'
+import SpieltagDetailPage from './pages/SpieltagDetailPage'
+import AdminGameTemplatePage from './pages/AdminGameTemplatePage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -51,6 +54,9 @@ export default function App() {
             <Route path="admin/teams" element={<AdminTeamsPage />} />
             <Route path="admin/nutzer" element={<AdminUsersPage />} />
             <Route path="admin/diensttypen" element={<AdminDutyTypesPage />} />
+            <Route path="spielplan" element={<SpielplanPage />} />
+            <Route path="spielplan/:gameId" element={<SpieltagDetailPage />} />
+            <Route path="admin/spielplan-template" element={<AdminGameTemplatePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

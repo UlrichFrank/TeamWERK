@@ -18,6 +18,7 @@ const navModules: NavModule[] = [
   {
     label: 'Dienste',
     items: [
+      { to: '/spielplan', label: 'Spielplan', roles: ['admin', 'trainer'] },
       { to: '/dienstboerse', label: 'Dienstbörse', roles: ['admin', 'trainer', 'elternteil', 'spieler'] },
       { to: '/dienstkonten', label: 'Dienstkonten', roles: ['admin', 'trainer', 'elternteil', 'spieler'] },
       { to: '/dienste', label: 'Dienst-Planung', roles: ['admin', 'trainer'] },
@@ -31,6 +32,7 @@ const navModules: NavModule[] = [
       { to: '/admin/teams', label: 'Teams', roles: ['admin'] },
       { to: '/admin/nutzer', label: 'Nutzer', roles: ['admin'] },
       { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin'] },
+      { to: '/admin/spielplan-template', label: 'Spiel-Vorlage', roles: ['admin'] },
     ],
   },
 ]

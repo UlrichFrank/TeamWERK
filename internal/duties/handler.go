@@ -97,19 +97,25 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 // POST /api/duty-slots
 func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		EventName   string `json:"event_name"`
-		EventDate   string `json:"event_date"`
-		DutyTypeID  int    `json:"duty_type_id"`
-		RoleDesc    string `json:"role_desc"`
-		SlotsTotal  int    `json:"slots_total"`
-		TeamID      *int   `json:"team_id"`
-		SeasonID    int    `json:"season_id"`
+		EventName  string `json:"event_name"`
+		EventDate  string `json:"event_date"`
+		EventTime  string `json:"event_time"`
+		DutyTypeID int    `json:"duty_type_id"`
+		RoleDesc   string `json:"role_desc"`
+		SlotsTotal int    `json:"slots_total"`
+		TeamID     *int   `json:"team_id"`
+		SeasonID   int    `json:"season_id"`
+		GameID     *int   `json:"game_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	var eventTime any = nil
+	if req.EventTime != "" {
+		eventTime = req.EventTime
+	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, role_desc, slots_total, team_id, season_id)
-		 VALUES (?,?,?,?,?,?,?)`,
-		req.EventName, req.EventDate, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID)
+		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
+		 VALUES (?,?,?,?,?,?,?,?,?)`,
+		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -119,13 +125,34 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		EventName  string `json:"event_name"`
 		EventDate  string `json:"event_date"`
+		EventTime  string `json:"event_time"`
 		RoleDesc   string `json:"role_desc"`
 		SlotsTotal int    `json:"slots_total"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	var eventTime any = nil
+	if req.EventTime != "" {
+		eventTime = req.EventTime
+	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE duty_slots SET event_name=?, event_date=?, role_desc=?, slots_total=? WHERE id=?`,
-		req.EventName, req.EventDate, req.RoleDesc, req.SlotsTotal, id)
+		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=? WHERE id=?`,
+		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/duty-slots/:id
+func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

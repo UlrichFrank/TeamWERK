@@ -19,6 +19,7 @@ import (
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
+	"github.com/teamstuttgart/teamwerk/internal/games"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
@@ -63,6 +64,7 @@ func serve() {
 	cfgH := appconfig.NewHandler(database)
 	membH := members.NewHandler(database)
 	dutyH := duties.NewHandler(database)
+	gameH := games.NewHandler(database)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -108,11 +110,19 @@ func serve() {
 		r.Get("/api/duty-slots", dutyH.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", dutyH.ListAssignments)
 
+		// Games (admin + trainer)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireRole("admin", "trainer"))
+			r.Get("/api/games", gameH.ListGames)
+			r.Get("/api/games/{id}", gameH.GetGame)
+		})
+
 		// Admin + Trainer
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole("admin", "trainer"))
 			r.Post("/api/duty-slots", dutyH.CreateSlot)
 			r.Put("/api/duty-slots/{id}", dutyH.UpdateSlot)
+			r.Delete("/api/duty-slots/{id}", dutyH.DeleteSlot)
 			r.Post("/api/duty-assignments/{id}/fulfill", dutyH.Fulfill)
 			r.Post("/api/duty-assignments/{id}/cash-substitute", dutyH.CashSubstitute)
 			r.Get("/api/admin/membership-requests", authH.ListMembershipRequests)
@@ -145,6 +155,13 @@ func serve() {
 			r.Post("/api/admin/duty-types", dutyH.CreateType)
 			r.Put("/api/admin/duty-types/{id}", dutyH.UpdateType)
 			r.Get("/api/admin/duty-accounts/export", dutyH.ExportAccounts)
+			r.Post("/api/admin/games", gameH.CreateGame)
+			r.Put("/api/admin/games/{id}", gameH.UpdateGame)
+			r.Delete("/api/admin/games/{id}", gameH.DeleteGame)
+			r.Post("/api/admin/games/{id}/regenerate", gameH.RegenerateSlots)
+			r.Get("/api/admin/game-template", gameH.GetTemplate)
+			r.Put("/api/admin/game-template", gameH.SetTemplate)
+			r.Get("/api/admin/game-template/preview", gameH.PreviewSlots)
 		})
 	})
 
