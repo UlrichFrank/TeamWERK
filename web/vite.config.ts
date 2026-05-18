@@ -9,7 +9,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../cmd/vereinswerk/web/dist',
+    outDir: '../cmd/teamwerk/web/dist',
     emptyOutDir: true,
   },
 })

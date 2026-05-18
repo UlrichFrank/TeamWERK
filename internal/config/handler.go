@@ -49,7 +49,7 @@ func (h *Handler) ListSeasons(w http.ResponseWriter, r *http.Request) {
 		EndDate   string `json:"end_date"`
 		IsActive  bool   `json:"is_active"`
 	}
-	var result []season
+	result := []season{}
 	for rows.Next() {
 		var s season
 		var active int
@@ -93,7 +93,7 @@ func (h *Handler) ListTeams(w http.ResponseWriter, r *http.Request) {
 		Gender   string `json:"gender"`
 		IsActive bool   `json:"is_active"`
 	}
-	var result []team
+	result := []team{}
 	for rows.Next() {
 		var t team
 		var active int

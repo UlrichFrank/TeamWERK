@@ -191,7 +191,7 @@ func runCreateAdmin() {
 
 func runScheduler() {
 	_ = godotenv.Load()
-	database, err := db.Open(getEnvOrDefault("DB_PATH", "./vereinswerk.db"))
+	database, err := db.Open(getEnvOrDefault("DB_PATH", "./teamwerk.db"))
 	if err != nil {
 		log.Fatalf("scheduler: open db: %v", err)
 	}
@@ -201,12 +201,18 @@ func runScheduler() {
 
 func runMigrate() {
 	_ = godotenv.Load()
-	database, err := db.Open(getEnvOrDefault("DB_PATH", "./vereinswerk.db"))
+	dbPath := getEnvOrDefault("DB_PATH", "./teamwerk.db")
+	for i, arg := range os.Args {
+		if arg == "--db" && i+1 < len(os.Args) {
+			dbPath = os.Args[i+1]
+		}
+	}
+	database, err := db.Open(dbPath)
 	if err != nil {
 		log.Fatalf("migrate: open db: %v", err)
 	}
 	defer database.Close()
-	if err := db.Migrate(database, "./migrations"); err != nil {
+	if err := db.Migrate(database, db.MigrationsFS); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
 	log.Println("migrations applied")

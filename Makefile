@@ -1,46 +1,77 @@
 BINARY     := teamwerk
 BUILD_DIR  := bin
-REMOTE     := $(shell grep REMOTE_USER .env 2>/dev/null | cut -d= -f2)@$(shell grep REMOTE_HOST .env 2>/dev/null | cut -d= -f2)
-REMOTE_DIR := $(shell grep REMOTE_DIR .env 2>/dev/null | cut -d= -f2)
+REMOTE     := $(shell grep '^REMOTE=' .env 2>/dev/null | cut -d= -f2)
+REMOTE_DIR := $(shell grep '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2)
 DB_PATH    := /var/lib/teamwerk/teamwerk.db
+EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
+PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
+NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: init dev build deploy migrate-up migrate-down create-admin env clean
+.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down create-admin create-admin-remote env clean
 
-env:
+.DEFAULT_GOAL := help
+
+help: ## Diesen Hilfetext anzeigen
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  %-22s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+env: ## .env aus .env.example erstellen
 	@if [ -f .env ]; then echo ".env existiert bereits – nichts geändert."; else \
 		SECRET=$$(openssl rand -hex 32); \
 		sed "s/change-me-to-a-random-secret/$$SECRET/" .env.example > .env; \
 		echo ".env erstellt (JWT_SECRET automatisch gesetzt)."; \
 	fi
 
-init:
+init: ## Abhängigkeiten installieren (go mod tidy, pnpm install)
 	go mod tidy
 	cd web && pnpm install
 
-dev:
+dev: ## Backend + Vite Dev-Server lokal starten
 	@echo "Starting backend on :8080 and frontend dev server..."
 	@go run ./cmd/teamwerk &
 	@cd web && pnpm dev
 
-build:
-	cd web && pnpm build
-	go build -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
+dev-remote: ## SSH-Tunnel zum VPS + Vite Dev-Server (kein lokales Backend)
+	@echo "Opening SSH tunnel to $(REMOTE) and starting frontend dev server..."
+	@ssh -N -L 8080:localhost:8080 $(REMOTE) &
+	@cd web && pnpm dev
 
-deploy: build
-	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):$(REMOTE_DIR)/$(BINARY).new
-	ssh $(REMOTE) "mv $(REMOTE_DIR)/$(BINARY).new $(REMOTE_DIR)/$(BINARY) && \
+build: ## Frontend + Backend für Linux/amd64 bauen
+	cd web && pnpm build
+	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
+
+setup-vps: ## VPS einmalig einrichten (Nginx, Certbot, systemd)
+	rsync -az deploy/ $(REMOTE):/tmp/teamwerk-deploy/
+	ssh $(REMOTE) "cd /tmp/teamwerk-deploy && sudo bash setup-vps.sh"
+
+deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
+	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):/tmp/$(BINARY).new
+	rsync -az deploy/teamwerk.service $(REMOTE):/tmp/teamwerk.service
+	ssh $(REMOTE) "[ -f /etc/teamwerk/env ]" 2>/dev/null || \
+		grep -E '^(PORT|DB_PATH|JWT_SECRET|BASE_URL|SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_PASS|SMTP_FROM)=' .env | \
+		sed 's|DB_PATH=.*|DB_PATH=/var/lib/teamwerk/teamwerk.db|; s|BASE_URL=.*|BASE_URL=https://intern.team-stuttgart.org|' | \
+		ssh $(REMOTE) "sudo mkdir -p /etc/teamwerk && sudo tee /etc/teamwerk/env > /dev/null && sudo chmod 600 /etc/teamwerk/env"
+	ssh $(REMOTE) "sudo mkdir -p $(dir $(DB_PATH)) && \
+		if ! [ -f /etc/systemd/system/teamwerk.service ]; then \
+			sudo mv /tmp/teamwerk.service /etc/systemd/system/teamwerk.service && \
+			sudo systemctl daemon-reload && sudo systemctl enable teamwerk; \
+		fi && \
+		sudo mv /tmp/$(BINARY).new $(REMOTE_DIR)/$(BINARY) && \
 		$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH) && \
+		sudo chown www-data:www-data $(DB_PATH) $(DB_PATH)-shm $(DB_PATH)-wal 2>/dev/null; \
 		sudo systemctl restart teamwerk"
 	@echo "Deployed successfully."
 
-migrate-up:
-	go run ./cmd/teamwerk migrate up --db ./teamwerk.db
+migrate-up: ## Migrationen lokal anwenden
+	go run ./cmd/teamwerk migrate up
 
-migrate-down:
-	go run ./cmd/teamwerk migrate down --db ./teamwerk.db
+migrate-down: ## Letzte Migration lokal rückgängig machen
+	go run ./cmd/teamwerk migrate down
 
-create-admin:
+create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
 	go run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)
 
-clean:
+create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
+	ssh $(REMOTE) "/usr/local/bin/teamwerk create-admin --db $(DB_PATH) --email=$(EMAIL) --password=$(PASSWORD) --name='$(NAME)'"
+
+clean: ## Build-Artefakte löschen
 	rm -rf $(BUILD_DIR) cmd/teamwerk/web/dist

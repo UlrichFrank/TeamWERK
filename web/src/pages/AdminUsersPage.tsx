@@ -43,6 +43,7 @@ export default function AdminUsersPage() {
   const [inviteTeamID, setInviteTeamID] = useState('')
   const [inviteRole, setInviteRole] = useState('elternteil')
   const [sent, setSent] = useState(false)
+  const [inviteError, setInviteError] = useState('')
 
   const reload = () => Promise.all([
     api.get('/admin/users').then(r => setUsers(r.data ?? [])),
@@ -57,11 +58,16 @@ export default function AdminUsersPage() {
 
   const handleInvite = async (e: FormEvent) => {
     e.preventDefault()
-    await api.post('/auth/invite', { email: inviteEmail, team_id: Number(inviteTeamID) || null, role: inviteRole })
-    setSent(true)
-    setInviteEmail('')
-    setInvitations(prev => [...prev, { id: Date.now(), email: inviteEmail, role: inviteRole, team_name: '', expires_at: '' }])
-    setTimeout(() => { setSent(false); reload() }, 3000)
+    setInviteError('')
+    try {
+      await api.post('/auth/invite', { email: inviteEmail, team_id: Number(inviteTeamID) || null, role: inviteRole })
+      setSent(true)
+      setInviteEmail('')
+      setInvitations(prev => [...prev, { id: Date.now(), email: inviteEmail, role: inviteRole, team_name: '', expires_at: '' }])
+      setTimeout(() => { setSent(false); reload() }, 3000)
+    } catch {
+      setInviteError('Einladung konnte nicht gesendet werden. Bitte E-Mail-Konfiguration prüfen.')
+    }
   }
 
   const handleDeleteUser = async (u: User) => {
@@ -103,6 +109,7 @@ export default function AdminUsersPage() {
       <div className="bg-white rounded-xl shadow p-6 max-w-md mb-8">
         <h2 className="font-semibold mb-4">Einladung versenden</h2>
         {sent && <p className="text-green-600 text-sm mb-3">Einladung gesendet ✓</p>}
+        {inviteError && <p className="text-red-600 text-sm mb-3">{inviteError}</p>}
         <form onSubmit={handleInvite} className="space-y-3">
           <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} type="email" placeholder="E-Mail" required
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />

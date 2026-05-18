@@ -24,7 +24,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		HoursValue     float64  `json:"hours_value"`
 		CashSubstitute *float64 `json:"cash_substitute,omitempty"`
 	}
-	var result []dt
+	result := []dt{}
 	for rows.Next() {
 		var d dt
 		var cs sql.NullFloat64
@@ -84,7 +84,7 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 		DutyType    string `json:"duty_type"`
 		RoleDesc    string `json:"role_desc,omitempty"`
 	}
-	var result []slot
+	result := []slot{}
 	for rows.Next() {
 		var s slot
 		rows.Scan(&s.ID, &s.EventName, &s.EventDate, &s.SlotsTotal, &s.SlotsFilled, &s.DutyType, &s.RoleDesc)
@@ -146,7 +146,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		DutyType  string `json:"duty_type"`
 		RoleDesc  string `json:"role_desc,omitempty"`
 	}
-	var result []slot
+	result := []slot{}
 	for rows.Next() {
 		var s slot
 		rows.Scan(&s.ID, &s.EventName, &s.EventDate, &s.Vacancies, &s.DutyType, &s.RoleDesc)
@@ -198,7 +198,7 @@ func (h *Handler) ListAssignments(w http.ResponseWriter, r *http.Request) {
 		Status     string  `json:"status"`
 		CashAmount float64 `json:"cash_amount,omitempty"`
 	}
-	var result []assignment
+	result := []assignment{}
 	for rows.Next() {
 		var a assignment
 		rows.Scan(&a.ID, &a.UserName, &a.Status, &a.CashAmount)
@@ -253,7 +253,7 @@ func (h *Handler) Accounts(w http.ResponseWriter, r *http.Request) {
 		Ist      float64 `json:"ist"`
 		Balance  float64 `json:"balance"`
 	}
-	var result []account
+	result := []account{}
 	for rows.Next() {
 		var a account
 		rows.Scan(&a.UserID, &a.Name, &a.SeasonID, &a.Soll, &a.Ist)

@@ -52,7 +52,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var result []Member
+	result := []Member{}
 	for rows.Next() {
 		var m Member
 		var jerseyNum sql.NullInt64
@@ -239,7 +239,7 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 // GET /api/profile/me — returns the logged-in user's linked member profile(s)
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
-	var result []Member
+	result := []Member{}
 
 	// Spieler / Trainer / Admin: own member profile via user_id
 	var m Member

@@ -406,7 +406,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		Role     string `json:"role"`
 		TeamName string `json:"team_name"`
 	}
-	var result []user
+	result := []user{}
 	for rows.Next() {
 		var u user
 		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.TeamName)
@@ -484,14 +484,11 @@ func (h *Handler) ListInvitations(w http.ResponseWriter, r *http.Request) {
 		TeamName  string `json:"team_name"`
 		ExpiresAt string `json:"expires_at"`
 	}
-	var result []invitation
+	result := []invitation{}
 	for rows.Next() {
 		var inv invitation
 		rows.Scan(&inv.ID, &inv.Email, &inv.Role, &inv.TeamName, &inv.ExpiresAt)
 		result = append(result, inv)
-	}
-	if result == nil {
-		result = []invitation{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)

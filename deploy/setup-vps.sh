@@ -4,16 +4,17 @@
 
 set -euo pipefail
 
-# Install Nginx
-apt-get update && apt-get install -y nginx certbot python3-certbot-nginx
+# Install Nginx if not present
+apt-get update && apt-get install -y nginx openssl
 
 # Create app data directory
 mkdir -p /var/lib/teamwerk
 chown www-data:www-data /var/lib/teamwerk
 
-# Create env directory
-mkdir -p /etc/teamwerk
-cat > /etc/teamwerk/env <<'EOF'
+# Create env file (skip if already configured)
+if [ ! -f /etc/teamwerk/env ]; then
+    mkdir -p /etc/teamwerk
+    cat > /etc/teamwerk/env <<'EOF'
 PORT=8080
 DB_PATH=/var/lib/teamwerk/teamwerk.db
 JWT_SECRET=REPLACE_WITH_RANDOM_SECRET
@@ -21,24 +22,42 @@ SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587
 SMTP_USER=p459264p5
 SMTP_PASS=REPLACE_WITH_SMTP_PASSWORD
-SMTP_FROM=TeamWERK <vorstand@team-stuttgart.org>
+SMTP_FROM=TeamWERK <teamwerk@team-stuttgart.org>
 EOF
-chmod 600 /etc/teamwerk/env
+    chmod 600 /etc/teamwerk/env
+    echo "⚠️  Bitte /etc/teamwerk/env mit echten Werten befüllen!"
+fi
 
 # Install systemd service
 cp teamwerk.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable teamwerk
 
-# Install Nginx config
+# Generate self-signed certificate
+mkdir -p /etc/ssl/teamwerk
+if [ ! -f /etc/ssl/teamwerk/cert.pem ]; then
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout /etc/ssl/teamwerk/key.pem \
+        -out /etc/ssl/teamwerk/cert.pem \
+        -subj "/CN=intern.team-stuttgart.org"
+fi
+
+# Install Nginx vhost config
 cp nginx-intern.conf /etc/nginx/sites-available/intern.team-stuttgart.org
-ln -sf /etc/nginx/sites-available/intern.team-stuttgart.org /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
+ln -sf /etc/nginx/sites-available/intern.team-stuttgart.org /etc/nginx/sites-enabled/intern.team-stuttgart.org
+nginx -t
+systemctl enable nginx
+if systemctl is-active --quiet nginx; then
+    systemctl reload nginx
+else
+    systemctl start nginx
+fi
 
-# Obtain SSL certificate
-certbot --nginx -d intern.team-stuttgart.org --non-interactive --agree-tos -m webmaster@team-stuttgart.org
-
-# Add scheduler Cronjob
-(crontab -l 2>/dev/null; echo "* * * * * /usr/local/bin/teamwerk scheduler:run >> /var/log/teamwerk-scheduler.log 2>&1") | crontab -
+# Add scheduler cronjob (idempotent)
+CRONJOB="* * * * * /usr/local/bin/teamwerk scheduler:run >> /var/log/teamwerk-scheduler.log 2>&1"
+if ! crontab -l 2>/dev/null | grep -qF "$CRONJOB"; then
+    (crontab -l 2>/dev/null; echo "$CRONJOB") | crontab -
+fi
 
 echo "VPS setup complete. Deploy the binary with: make deploy"
+echo "Hinweis: Self-signed Zertifikat – Browser zeigt Sicherheitswarnung."
