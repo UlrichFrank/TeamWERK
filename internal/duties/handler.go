@@ -16,19 +16,22 @@ func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
 // GET /api/admin/duty-types
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
-	rows, _ := h.db.QueryContext(r.Context(), `SELECT id, name, hours_value, cash_substitute FROM duty_types ORDER BY name`)
+	rows, _ := h.db.QueryContext(r.Context(),
+		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes FROM duty_types ORDER BY name`)
 	defer rows.Close()
 	type dt struct {
-		ID             int      `json:"id"`
-		Name           string   `json:"name"`
-		HoursValue     float64  `json:"hours_value"`
-		CashSubstitute *float64 `json:"cash_substitute,omitempty"`
+		ID                   int      `json:"id"`
+		Name                 string   `json:"name"`
+		HoursValue           float64  `json:"hours_value"`
+		CashSubstitute       *float64 `json:"cash_substitute,omitempty"`
+		DefaultAnchor        string   `json:"default_anchor"`
+		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
 	}
 	result := []dt{}
 	for rows.Next() {
 		var d dt
 		var cs sql.NullFloat64
-		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs)
+		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes)
 		if cs.Valid {
 			d.CashSubstitute = &cs.Float64
 		}
@@ -41,14 +44,19 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/duty-types
 func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name           string   `json:"name"`
-		HoursValue     float64  `json:"hours_value"`
-		CashSubstitute *float64 `json:"cash_substitute"`
+		Name                 string   `json:"name"`
+		HoursValue           float64  `json:"hours_value"`
+		CashSubstitute       *float64 `json:"cash_substitute"`
+		DefaultAnchor        string   `json:"default_anchor"`
+		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	if req.DefaultAnchor == "" {
+		req.DefaultAnchor = "start"
+	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_types (name, hours_value, cash_substitute) VALUES (?,?,?)`,
-		req.Name, req.HoursValue, req.CashSubstitute)
+		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes) VALUES (?,?,?,?,?)`,
+		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -56,14 +64,19 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Name           string   `json:"name"`
-		HoursValue     float64  `json:"hours_value"`
-		CashSubstitute *float64 `json:"cash_substitute"`
+		Name                 string   `json:"name"`
+		HoursValue           float64  `json:"hours_value"`
+		CashSubstitute       *float64 `json:"cash_substitute"`
+		DefaultAnchor        string   `json:"default_anchor"`
+		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	if req.DefaultAnchor == "" {
+		req.DefaultAnchor = "start"
+	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=? WHERE id=?`,
-		req.Name, req.HoursValue, req.CashSubstitute, id)
+		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=? WHERE id=?`,
+		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -212,7 +212,7 @@ export default function SpieltagDetailPage() {
   if (notFound) return (
     <div className="text-center py-12">
       <p className="text-gray-500 mb-4">Spiel nicht gefunden.</p>
-      <Link to="/spielplan" className="text-[#3E4A98] hover:underline text-sm">← Zurück zum Spielplan</Link>
+      <Link to="/spielplan" className="text-black hover:underline text-sm">← Zurück zum Spielplan</Link>
     </div>
   )
   if (!game) return null
@@ -223,7 +223,7 @@ export default function SpieltagDetailPage() {
 
   return (
     <div className="max-w-2xl">
-      <Link to="/spielplan" className="text-sm text-gray-400 hover:text-[#3E4A98] mb-4 inline-block">
+      <Link to="/spielplan" className="text-sm text-gray-400 hover:text-black mb-4 inline-block">
         ← Spielplan
       </Link>
 
@@ -240,7 +240,7 @@ export default function SpieltagDetailPage() {
               <button
                 onClick={handleOpenRegen}
                 disabled={regenLoading}
-                className="text-sm border rounded-lg px-3 py-1.5 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+                className="text-sm border rounded-md px-3 py-1.5 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
               >
                 {regenLoading ? 'Laden…' : '↺ Dienste neu generieren'}
               </button>
@@ -261,7 +261,7 @@ export default function SpieltagDetailPage() {
           {isAdmin && (
             <button
               onClick={() => setShowAddSlot(true)}
-              className="text-sm bg-[#3E4A98] hover:bg-[#2e3a7a] text-white px-3 py-1.5 rounded-lg"
+              className="text-sm bg-brand-yellow text-black px-3 py-1.5 rounded-md font-medium hover:bg-black hover:text-brand-yellow transition-colors"
             >
               + Dienst hinzufügen
             </button>
@@ -274,7 +274,7 @@ export default function SpieltagDetailPage() {
           <div className="divide-y">
             {slots.map(s => (
               <div key={s.id} className="px-4 py-3 flex items-start gap-4">
-                <div className="font-mono text-sm font-semibold text-[#3E4A98] w-12 flex-shrink-0 pt-0.5">
+                <div className="font-mono text-sm font-semibold w-12 flex-shrink-0 pt-0.5">
                   {s.event_time || '–'}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -290,7 +290,7 @@ export default function SpieltagDetailPage() {
                   <div className="flex gap-1 flex-shrink-0">
                     <button
                       onClick={() => openEditSlot(s)}
-                      className="text-xs text-gray-400 hover:text-[#3E4A98] px-2 py-1 rounded hover:bg-gray-100"
+                      className="text-xs text-gray-400 hover:text-black px-2 py-1 rounded hover:bg-gray-100"
                     >Bearbeiten</button>
                     <button
                       onClick={() => setDeleteSlotId(s.id)}
@@ -313,7 +313,7 @@ export default function SpieltagDetailPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Diensttyp *</label>
                 <select value={addDutyTypeId} onChange={e => setAddDutyTypeId(Number(e.target.value))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]">
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow">
                   <option value="">Auswählen…</option>
                   {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
                 </select>
@@ -321,24 +321,24 @@ export default function SpieltagDetailPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Uhrzeit</label>
                 <input type="time" value={addEventTime} onChange={e => setAddEventTime(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Personen</label>
                 <input type="number" min={1} value={addSlotsTotal} onChange={e => setAddSlotsTotal(Number(e.target.value))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Rollenbezeichnung</label>
                 <input type="text" value={addRoleDesc} onChange={e => setAddRoleDesc(e.target.value)}
                   placeholder="z.B. Aufbau, Bewirtung…"
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setShowAddSlot(false)}
-                  className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                  className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
                 <button onClick={handleAddSlot} disabled={!addDutyTypeId || addSaving}
-                  className="flex-1 bg-[#3E4A98] hover:bg-[#2e3a7a] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">
+                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                   {addSaving ? 'Speichern…' : 'Hinzufügen'}
                 </button>
               </div>
@@ -357,23 +357,23 @@ export default function SpieltagDetailPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Uhrzeit</label>
                 <input type="time" value={editEventTime} onChange={e => setEditEventTime(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Personen</label>
                 <input type="number" min={1} value={editSlotsTotal} onChange={e => setEditSlotsTotal(Number(e.target.value))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Rollenbezeichnung</label>
                 <input type="text" value={editRoleDesc} onChange={e => setEditRoleDesc(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditSlot(null)}
-                  className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                  className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
                 <button onClick={handleEditSlot} disabled={editSaving}
-                  className="flex-1 bg-[#3E4A98] hover:bg-[#2e3a7a] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">
+                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                   {editSaving ? 'Speichern…' : 'Speichern'}
                 </button>
               </div>
@@ -390,9 +390,9 @@ export default function SpieltagDetailPage() {
             <p className="text-sm text-gray-500 mb-5">Dieser Dienst wird endgültig gelöscht.</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteSlotId(null)}
-                className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
               <button onClick={handleDeleteSlot} disabled={deleteSaving}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-md px-4 py-2 text-sm disabled:opacity-50">
                 {deleteSaving ? 'Löschen…' : 'Löschen'}
               </button>
             </div>
@@ -413,10 +413,10 @@ export default function SpieltagDetailPage() {
             ) : (
               <div className="space-y-1.5 mb-4 max-h-56 overflow-y-auto">
                 {regenPreview.map((s, i) => (
-                  <label key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <label key={i} className="flex items-center gap-2.5 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
                     <input type="checkbox" checked={regenSelectedIndices.has(i)} onChange={() => toggleRegenSlot(i)}
                       className="rounded" />
-                    <span className="font-mono text-sm font-semibold w-12 text-[#3E4A98]">{s.event_time}</span>
+                    <span className="font-mono text-sm font-semibold w-12">{s.event_time}</span>
                     <span className="text-sm flex-1">{s.duty_type_name}</span>
                     {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
                     <span className="text-xs text-gray-400 ml-auto">{s.slots_count}×</span>
@@ -429,9 +429,9 @@ export default function SpieltagDetailPage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowRegen(false)}
-                className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
               <button onClick={handleRegen} disabled={regenSaving}
-                className="flex-1 bg-[#3E4A98] hover:bg-[#2e3a7a] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">
+                className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                 {regenSaving ? 'Generieren…' : 'Bestätigen'}
               </button>
             </div>

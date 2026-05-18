@@ -167,7 +167,7 @@ export default function SpielplanPage() {
         {user?.role === 'admin' && (
           <button
             onClick={() => setShowCreate(true)}
-            className="bg-[#3E4A98] hover:bg-[#2e3a7a] text-white px-4 py-2 rounded-lg text-sm font-medium"
+            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
           >
             + Heimspiel anlegen
           </button>
@@ -198,17 +198,17 @@ export default function SpielplanPage() {
             const dayGames = gamesByDate[dateStr] ?? []
             const isToday = dateStr === todayStr
             return (
-              <div key={day} className={`min-h-[90px] p-1.5 border-r border-b ${isToday ? 'bg-blue-50' : ''}`}>
-                <div className={`text-xs mb-1 ${isToday ? 'font-bold text-[#3E4A98]' : 'text-gray-400'}`}>{day}</div>
+              <div key={day} className={`min-h-[90px] p-1.5 border-r border-b ${isToday ? 'bg-brand-yellow/20' : ''}`}>
+                <div className={`text-xs mb-1 ${isToday ? 'font-bold' : 'text-gray-400'}`}>{day}</div>
                 {dayGames.map(g => (
                   <button
                     key={g.id}
                     onClick={() => navigate(`/spielplan/${g.id}`)}
-                    className="w-full text-left mb-1 p-1.5 rounded-md text-xs bg-[#3E4A98]/10 hover:bg-[#3E4A98]/20 transition-colors border border-[#3E4A98]/20"
+                    className="w-full text-left mb-1 p-1.5 rounded-md text-xs bg-gray-100 hover:bg-gray-200 transition-colors border border-gray-200"
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${trafficColor(g.filled_count, g.total_count, g.slot_count)}`} />
-                      <span className="font-semibold truncate text-[#3E4A98]">{g.team_name}</span>
+                      <span className="font-semibold truncate">{g.team_name}</span>
                     </div>
                     <div className="truncate text-gray-500 leading-tight">vs. {g.opponent || '–'}</div>
                     <div className="text-gray-400 leading-tight">{g.time}</div>
@@ -235,22 +235,22 @@ export default function SpielplanPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Datum *</label>
                   <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                    className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Anstoßzeit</label>
                   <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                    className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Gegner</label>
                   <input type="text" value={newOpponent} onChange={e => setNewOpponent(e.target.value)}
-                    placeholder="Name des Gegners" className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]" />
+                    placeholder="Name des Gegners" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Mannschaft *</label>
                   <select value={newTeamId} onChange={e => setNewTeamId(Number(e.target.value))}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]">
+                    className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow">
                     <option value="">Auswählen…</option>
                     {teams.filter(t => t.is_active).map(t => (
                       <option key={t.id} value={t.id}>{t.name}</option>
@@ -262,11 +262,11 @@ export default function SpielplanPage() {
                 )}
                 <div className="flex gap-2 pt-2">
                   <button onClick={closeDialog}
-                    className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                    className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
                   <button
                     onClick={handleFetchPreview}
                     disabled={!newDate || !newTeamId || previewLoading || creating}
-                    className="flex-1 bg-[#3E4A98] hover:bg-[#2e3a7a] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
+                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {previewLoading || creating ? 'Laden…' : 'Weiter →'}
                   </button>
@@ -282,7 +282,7 @@ export default function SpielplanPage() {
                     <label key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
                       <input type="checkbox" checked={selectedIndices.has(i)} onChange={() => toggleSlot(i)}
                         className="rounded" />
-                      <span className="font-mono text-sm font-semibold w-12 text-[#3E4A98]">{s.event_time}</span>
+                      <span className="font-mono text-sm font-semibold w-12">{s.event_time}</span>
                       <span className="text-sm flex-1">{s.duty_type_name}</span>
                       {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
                       <span className="text-xs text-gray-400 ml-auto">{s.slots_count}×</span>
@@ -294,16 +294,16 @@ export default function SpielplanPage() {
                 )}
                 <div className="flex gap-2">
                   <button onClick={() => setShowPreview(false)}
-                    className="border rounded-lg px-3 py-2 text-sm hover:bg-gray-50">← Zurück</button>
+                    className="border rounded-md px-3 py-2 text-sm hover:bg-gray-50">← Zurück</button>
                   <button
                     onClick={() => doCreateGame([])}
                     disabled={creating}
-                    className="border rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    className="border rounded-md px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >Ohne Dienste</button>
                   <button
                     onClick={() => doCreateGame(preview.filter((_, i) => selectedIndices.has(i)))}
                     disabled={creating}
-                    className="flex-1 bg-[#3E4A98] hover:bg-[#2e3a7a] text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
+                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Bestätigen'}
                   </button>

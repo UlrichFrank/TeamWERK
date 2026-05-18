@@ -4,6 +4,8 @@ import { api } from '../lib/api'
 interface DutyType {
   id: number
   name: string
+  default_anchor: 'start' | 'end'
+  default_offset_minutes: number
 }
 
 interface TemplateItem {
@@ -96,7 +98,7 @@ export default function AdminGameTemplatePage() {
           type="text"
           value={template.name}
           onChange={e => setTemplate(t => ({ ...t, name: e.target.value }))}
-          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]"
+          className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
         />
       </div>
 
@@ -106,7 +108,7 @@ export default function AdminGameTemplatePage() {
           <h2 className="font-semibold">Dienst-Einträge</h2>
           <button
             onClick={addItem}
-            className="text-sm bg-[#3E4A98] hover:bg-[#2e3a7a] text-white px-3 py-1.5 rounded-lg"
+            className="text-sm bg-brand-yellow text-black px-3 py-1.5 rounded-md font-medium hover:bg-black hover:text-brand-yellow transition-colors"
           >
             + Eintrag hinzufügen
           </button>
@@ -124,8 +126,15 @@ export default function AdminGameTemplatePage() {
                   <label className="block text-xs text-gray-500 mb-1">Diensttyp</label>
                   <select
                     value={item.duty_type_id}
-                    onChange={e => updateItem(i, { duty_type_id: Number(e.target.value) })}
-                    className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]"
+                    onChange={e => {
+                      const id = Number(e.target.value)
+                      const dt = dutyTypes.find(d => d.id === id)
+                      updateItem(i, {
+                        duty_type_id: id,
+                        ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}),
+                      })
+                    }}
+                    className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
                   >
                     <option value={0}>Auswählen…</option>
                     {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
@@ -136,7 +145,7 @@ export default function AdminGameTemplatePage() {
                   <select
                     value={item.anchor}
                     onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
-                    className="border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]"
+                    className="border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
                   >
                     <option value="start">Anpfiff</option>
                     <option value="end">Spielende</option>
@@ -148,7 +157,7 @@ export default function AdminGameTemplatePage() {
                     type="number"
                     value={item.offset_minutes}
                     onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
-                    className="w-20 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]"
+                    className="w-20 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
                   />
                 </div>
                 <div>
@@ -158,7 +167,7 @@ export default function AdminGameTemplatePage() {
                     min={1}
                     value={item.slots_count}
                     onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                    className="w-16 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]"
+                    className="w-16 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
                   />
                 </div>
                 <div>
@@ -168,7 +177,7 @@ export default function AdminGameTemplatePage() {
                     value={item.role_desc}
                     onChange={e => updateItem(i, { role_desc: e.target.value })}
                     placeholder="Optional"
-                    className="w-36 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E4A98]"
+                    className="w-36 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
                   />
                 </div>
                 <button
@@ -195,7 +204,7 @@ export default function AdminGameTemplatePage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[#3E4A98] hover:bg-[#2e3a7a] text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+          className="bg-brand-yellow text-black px-6 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
         >
           {saving ? 'Speichern…' : 'Vorlage speichern'}
         </button>

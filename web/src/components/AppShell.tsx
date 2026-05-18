@@ -11,7 +11,7 @@ const navModules: NavModule[] = [
   {
     label: 'Mitglieder',
     items: [
-      { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'trainer', 'elternteil', 'spieler'] },
+      { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'trainer'] },
       { to: '/profil', label: 'Mein Profil', roles: ['elternteil', 'spieler'] },
     ],
   },

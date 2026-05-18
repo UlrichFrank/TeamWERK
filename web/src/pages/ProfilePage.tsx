@@ -8,9 +8,14 @@ interface Member {
   jersey_number?: number; position: string; status: string
 }
 
+interface Parent {
+  id: number; name: string; email: string
+}
+
 export default function ProfilePage() {
   const { user, logout } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
+  const [parents, setParents] = useState<Parent[]>([])
   const [vehicle, setVehicle] = useState({ seats: 0, notes: '' })
   const [vehicleSaved, setVehicleSaved] = useState(false)
 
@@ -32,7 +37,10 @@ export default function ProfilePage() {
   const [emailSent, setEmailSent] = useState(false)
 
   useEffect(() => {
-    api.get('/profile/me').then(r => setMembers(r.data ?? []))
+    api.get('/profile/me').then(r => {
+      setMembers(r.data?.members ?? [])
+      setParents(r.data?.parents ?? [])
+    })
     api.get('/profile/vehicle').then(r => setVehicle(r.data ?? { seats: 0, notes: '' }))
     api.get('/profile/account').then(r => setAccountName(r.data.name ?? ''))
   }, [])
@@ -193,6 +201,21 @@ export default function ProfilePage() {
       {members.length === 0 && (
         <div className="bg-white rounded-xl shadow p-6 mb-4 text-sm text-gray-500">
           Kein Mitgliedsprofil verknüpft. Bitte den Administrator kontaktieren.
+        </div>
+      )}
+
+      {/* Familie: Elternteile (spieler) */}
+      {user?.role === 'spieler' && parents.length > 0 && (
+        <div className="bg-white rounded-xl shadow p-6 mb-4">
+          <h2 className="font-semibold text-gray-700 mb-4">Meine Elternteile</h2>
+          <div className="space-y-2">
+            {parents.map(p => (
+              <div key={p.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3">
+                <span className="font-medium text-sm">{p.name}</span>
+                <span className="text-sm text-gray-400">{p.email}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
