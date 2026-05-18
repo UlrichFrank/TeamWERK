@@ -1,13 +1,18 @@
 import { useState, FormEvent } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(
+    searchParams.get('error') === 'invalid_token'
+      ? 'Der Bestätigungslink ist ungültig oder abgelaufen.'
+      : ''
+  )
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

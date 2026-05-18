@@ -36,7 +36,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var id int
 	var hash, role string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, password, role FROM users WHERE email = ?`, req.Email,
+		`SELECT id, password, role FROM users WHERE LOWER(email) = LOWER(?)`, req.Email,
 	).Scan(&id, &hash, &role)
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
@@ -181,7 +181,7 @@ func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request)
 		Status    string `json:"status"`
 		CreatedAt string `json:"created_at"`
 	}
-	var results []row
+	results := []row{}
 	for rows.Next() {
 		var r row
 		var teamID sql.NullInt64
@@ -530,6 +530,150 @@ func (h *Handler) DeleteMembershipRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/profile/account
+func (h *Handler) GetAccount(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+	var name string
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT name FROM users WHERE id=?`, claims.UserID,
+	).Scan(&name); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"name": name, "email": claims.Email})
+}
+
+// PUT /api/profile/account
+func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE users SET name=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		req.Name, claims.UserID,
+	); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/profile/password
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CurrentPassword == "" || req.NewPassword == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var hash string
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT password FROM users WHERE id=?`, claims.UserID,
+	).Scan(&hash); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.CurrentPassword)); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.db.ExecContext(r.Context(), `UPDATE users SET password=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, string(newHash), claims.UserID)
+	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE user_id=?`, claims.UserID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/profile/email
+func (h *Handler) RequestEmailChange(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+	var req struct {
+		NewEmail string `json:"new_email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.NewEmail == "" || req.Password == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var hash string
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT password FROM users WHERE id=?`, claims.UserID,
+	).Scan(&hash); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var exists bool
+	h.db.QueryRowContext(r.Context(), `SELECT COUNT(*)>0 FROM users WHERE email=?`, req.NewEmail).Scan(&exists)
+	if exists {
+		http.Error(w, "email already taken", http.StatusConflict)
+		return
+	}
+	h.db.ExecContext(r.Context(), `DELETE FROM email_change_tokens WHERE user_id=?`, claims.UserID)
+	plain, tokenHash, err := GenerateOpaqueToken()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	expiry := time.Now().Add(24 * time.Hour)
+	if _, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO email_change_tokens (user_id, token, new_email, expires_at) VALUES (?,?,?,?)`,
+		claims.UserID, tokenHash, req.NewEmail, expiry,
+	); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	link := fmt.Sprintf("%s/api/profile/email/confirm?token=%s", h.baseURL, plain)
+	body := fmt.Sprintf("Hallo,\n\nbitte bestätige deine neue E-Mail-Adresse für TeamWERK:\n\n%s\n\nDer Link ist 24 Stunden gültig.\n\nFalls du diese Änderung nicht beantragt hast, ignoriere diese Mail.", link)
+	if err := h.mailer.Send(req.NewEmail, "E-Mail-Adresse bestätigen – TeamWERK", body); err != nil {
+		log.Printf("SMTP ERROR (EmailChange to %s): %v", req.NewEmail, err)
+		h.db.ExecContext(r.Context(), `DELETE FROM email_change_tokens WHERE user_id=?`, claims.UserID)
+		http.Error(w, "mail delivery failed", http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/profile/email/confirm?token=xyz
+func (h *Handler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
+	plain := r.URL.Query().Get("token")
+	if plain == "" {
+		http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)
+		return
+	}
+	tokenHash := HashToken(plain)
+	var id, userID int
+	var newEmail string
+	var expiresAt time.Time
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT id, user_id, new_email, expires_at FROM email_change_tokens WHERE token=? AND used_at IS NULL`,
+		tokenHash,
+	).Scan(&id, &userID, &newEmail, &expiresAt)
+	if err != nil || time.Now().After(expiresAt) {
+		http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)
+		return
+	}
+	h.db.ExecContext(r.Context(), `UPDATE users SET email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, newEmail, userID)
+	h.db.ExecContext(r.Context(), `UPDATE email_change_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE user_id=?`, userID)
+	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
 func (h *Handler) notifyTrainersOfRequest(r *http.Request, teamID int, name, email string) {

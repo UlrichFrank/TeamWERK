@@ -7,7 +7,7 @@ EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down create-admin create-admin-remote env clean
+.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down create-admin create-admin-remote env clean
 
 .DEFAULT_GOAL := help
 
@@ -66,6 +66,12 @@ migrate-up: ## Migrationen lokal anwenden
 
 migrate-down: ## Letzte Migration lokal rückgängig machen
 	go run ./cmd/teamwerk migrate down
+
+migrate-remote-up: ## Ausstehende Migrationen auf VPS anwenden
+	ssh $(REMOTE) "$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH)"
+
+migrate-remote-down: ## Letzte Migration auf VPS rückgängig machen
+	ssh $(REMOTE) "$(REMOTE_DIR)/$(BINARY) migrate down --db $(DB_PATH)"
 
 create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
 	go run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)

@@ -79,6 +79,7 @@ func serve() {
 	r.Post("/api/auth/register", authH.Register)
 	r.Post("/api/auth/forgot-password", authH.ForgotPassword)
 	r.Post("/api/auth/reset-password", authH.ResetPassword)
+	r.Get("/api/profile/email/confirm", authH.ConfirmEmailChange)
 
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
@@ -95,6 +96,10 @@ func serve() {
 		r.Get("/api/profile/me", membH.GetProfile)
 		r.Get("/api/profile/vehicle", membH.GetVehicle)
 		r.Put("/api/profile/vehicle", membH.UpdateVehicle)
+		r.Get("/api/profile/account", authH.GetAccount)
+		r.Put("/api/profile/account", authH.UpdateAccount)
+		r.Post("/api/profile/password", authH.ChangePassword)
+		r.Post("/api/profile/email", authH.RequestEmailChange)
 
 		// Duties
 		r.Get("/api/duty-board", dutyH.Board)
