@@ -28,8 +28,8 @@
 - [x] 4.2 `AdminUsersPage`: `usePaginatedFetch('/admin/users')` für registrierte Nutzer; Card-Liste auf Mobile (Name + E-Mail · Rolle-Badge + ⋮-Menü mit Löschen/Einladung-Widerruf/Anfrage-Aktionen); Einladungen + Anfragen-Cards ohne Paginierung (kleiner Datensatz)
 - [x] 4.3 `AdminTeamsPage`: Card-Liste auf Mobile (Teamname + Altersklasse · Status-Badge; keine Aktionen nötig)
 - [x] 4.4 `AdminDutyTypesPage`: Card-Liste auf Mobile (Name + Stunden · Geldersatz + ⋮-Menü); ⋮-„Bearbeiten" öffnet `EditModal` mit Name/Stunden/Geldersatz/Anker/Versatz-Feldern
-- [ ] 4.5 `DutyAccountsPage`: Card-Liste auf Mobile (Name + Soll/Ist · Differenz-Badge; keine Aktionen)
-- [ ] 4.6 `DutySlotsPage`: Card-Liste auf Mobile (Event + Datum · Belegung) mit Accordion-Expand für Zuteilungen als flache Liste (Name · Status-Badge · Aktions-Button wenn pending)
+- [x] 4.5 `DutyAccountsPage`: Card-Liste auf Mobile (Name + Soll/Ist · Differenz-Badge; keine Aktionen)
+- [x] 4.6 `DutySlotsPage`: Card-Liste auf Mobile (Event + Datum · Belegung) mit Accordion-Expand für Zuteilungen als flache Liste (Name · Status-Badge · Aktions-Button wenn pending)
 
 ## 5. Grid/Form-Seiten: Responsive Anpassungen
 
