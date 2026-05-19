@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import ActionMenu from '../components/ActionMenu'
 
 interface DutyType {
   id: number
@@ -121,18 +122,22 @@ export default function AdminGameTemplatePage() {
         ) : (
           <>
             {/* Mobile: Card Layout */}
-            <div className="sm:hidden divide-y">
+            <div className="sm:hidden space-y-3">
               {template.items.map((item, i) => {
                 const dutyType = dutyTypes.find(d => d.id === item.duty_type_id)
                 return (
-                  <div key={i} className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium text-sm">{dutyType?.name || 'Diensttyp auswählen'}</h3>
-                      <button
-                        onClick={() => removeItem(i)}
-                        className="text-gray-400 hover:text-brand-error transition-colors px-1"
-                        title="Eintrag entfernen"
-                      >✕</button>
+                  <div key={i} className="bg-white border border-brand-black/10 rounded p-4">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <h3 className="font-medium text-sm flex-1">{dutyType?.name || 'Diensttyp auswählen'}</h3>
+                      <ActionMenu
+                        actions={[
+                          {
+                            label: 'Löschen',
+                            onClick: () => removeItem(i),
+                            variant: 'danger',
+                          },
+                        ]}
+                      />
                     </div>
                     <div className="space-y-3">
                       <div>

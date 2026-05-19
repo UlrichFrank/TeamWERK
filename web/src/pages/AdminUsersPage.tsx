@@ -3,7 +3,6 @@ import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePaginatedFetch } from '../lib/usePaginatedFetch'
 import MobileCard from '../components/MobileCard'
-import ActionMenu from '../components/ActionMenu'
 
 interface Team { id: number; name: string }
 interface User { id: number; name: string; email: string; role: string; team_name: string }
@@ -129,13 +128,22 @@ export default function AdminUsersPage() {
                 title={req.name}
                 subtitle={req.email}
                 badge={{ label: 'Anfrage', variant: 'yellow' }}
-              >
-                <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => handleApproveRequest(req)} className="text-xs bg-brand-green text-white px-2 py-1.5 rounded hover:opacity-80">Genehmigen</button>
-                  <button onClick={() => handleRejectRequest(req)} className="text-xs border border-gray-300 px-2 py-1.5 rounded hover:bg-gray-50">Ablehnen</button>
-                  <button onClick={() => handleDeleteRequest(req)} className="text-xs border border-red-500 text-red-600 px-2 py-1.5 rounded hover:bg-red-50">Löschen</button>
-                </div>
-              </MobileCard>
+                actions={[
+                  {
+                    label: 'Genehmigen',
+                    onClick: () => handleApproveRequest(req),
+                  },
+                  {
+                    label: 'Ablehnen',
+                    onClick: () => handleRejectRequest(req),
+                  },
+                  {
+                    label: 'Löschen',
+                    onClick: () => handleDeleteRequest(req),
+                    variant: 'danger',
+                  },
+                ]}
+              />
             ))}
             {invitations.map(inv => (
               <MobileCard
@@ -143,9 +151,14 @@ export default function AdminUsersPage() {
                 title={inv.email}
                 subtitle={inv.team_name || '–'}
                 badge={{ label: 'Einladung', variant: 'red' }}
-              >
-                <button onClick={() => handleDeleteInvitation(inv)} className="text-xs border border-red-500 text-red-600 px-2 py-1.5 rounded hover:bg-red-50">Löschen</button>
-              </MobileCard>
+                actions={[
+                  {
+                    label: 'Löschen',
+                    onClick: () => handleDeleteInvitation(inv),
+                    variant: 'danger',
+                  },
+                ]}
+              />
             ))}
           </div>
 
@@ -202,26 +215,23 @@ export default function AdminUsersPage() {
                 title={u.name}
                 subtitle={u.email}
                 badge={{ label: ROLE_LABELS[u.role], variant: 'blue' }}
-              >
-                <ActionMenu
-                  actions={[
-                    ...(canEdit ? [{
-                      label: 'Rolle ändern',
-                      onClick: () => {
-                        const newRole = prompt(`Neue Rolle für ${u.name}:`, u.role)
-                        if (newRole && allowedRoles(self?.role ?? '').includes(newRole)) {
-                          handleRoleChange(u, newRole)
-                        }
-                      },
-                    }] : []),
-                    {
-                      label: 'Löschen',
-                      onClick: () => handleDeleteUser(u),
-                      variant: 'danger',
+                actions={[
+                  ...(canEdit ? [{
+                    label: 'Rolle ändern',
+                    onClick: () => {
+                      const newRole = prompt(`Neue Rolle für ${u.name}:`, u.role)
+                      if (newRole && allowedRoles(self?.role ?? '').includes(newRole)) {
+                        handleRoleChange(u, newRole)
+                      }
                     },
-                  ]}
-                />
-              </MobileCard>
+                  }] : []),
+                  {
+                    label: 'Löschen',
+                    onClick: () => handleDeleteUser(u),
+                    variant: 'danger',
+                  },
+                ]}
+              />
             )
           })}
         </div>

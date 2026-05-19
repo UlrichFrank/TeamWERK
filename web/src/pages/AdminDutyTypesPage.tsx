@@ -1,7 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { api } from '../lib/api'
 import MobileCard from '../components/MobileCard'
-import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 
 interface DutyType {
@@ -135,24 +134,22 @@ export default function AdminDutyTypesPage() {
               key={t.id}
               title={t.name}
               subtitle={`${t.hours_value.toFixed(1)}h${t.cash_substitute ? ` · ${t.cash_substitute.toFixed(2)}€` : ''}`}
+              actions={[
+                {
+                  label: 'Bearbeiten',
+                  onClick: () => startModalEdit(t),
+                },
+                {
+                  label: 'Löschen',
+                  onClick: () => handleDelete(t.id, t.name),
+                  variant: 'danger',
+                },
+              ]}
             >
-              <div className="text-xs text-gray-500 space-y-1 mb-2">
+              <div className="text-xs text-gray-500 space-y-1">
                 <div>Anker: {t.default_anchor === 'start' ? 'Anpfiff' : 'Spielende'}</div>
                 <div>Versatz: {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes} min</div>
               </div>
-              <ActionMenu
-                actions={[
-                  {
-                    label: 'Bearbeiten',
-                    onClick: () => startModalEdit(t),
-                  },
-                  {
-                    label: 'Löschen',
-                    onClick: () => handleDelete(t.id, t.name),
-                    variant: 'danger',
-                  },
-                ]}
-              />
             </MobileCard>
           ))}
         </div>

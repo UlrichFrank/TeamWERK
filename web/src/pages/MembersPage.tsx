@@ -58,19 +58,13 @@ export default function MembersPage() {
       {/* Mobile: Cards */}
       <div className="sm:hidden space-y-0">
         {items.map(m => (
-          <MobileCard
-            key={m.id}
-            title={`${m.last_name}, ${m.first_name}`}
-            subtitle={m.position || '–'}
-            badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
-          >
-            <Link
-              to={`/mitglieder/${m.id}`}
-              className="text-brand-yellow hover:text-brand-black transition-colors font-medium"
-            >
-              Ansehen →
-            </Link>
-          </MobileCard>
+          <Link key={m.id} to={`/mitglieder/${m.id}`} className="block">
+            <MobileCard
+              title={`${m.last_name}, ${m.first_name}`}
+              subtitle={m.position || '–'}
+              badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
+            />
+          </Link>
         ))}
       </div>
 

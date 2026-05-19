@@ -67,14 +67,13 @@ export default function DutySlotsPage() {
               title={s.event_name}
               subtitle={`${s.event_date} · ${s.duty_type}`}
               badge={{ label: `${s.slots_filled}/${s.slots_total}`, variant: s.slots_filled >= s.slots_total ? 'green' : 'yellow' }}
-            >
-              <button
-                onClick={() => loadAssignments(s.id)}
-                className="text-xs text-brand-yellow hover:text-brand-black transition-colors font-medium"
-              >
-                {expanded === s.id ? '▾ Schließen' : '▸ Zuteilungen anzeigen'}
-              </button>
-            </MobileCard>
+              actions={[
+                {
+                  label: expanded === s.id ? 'Schließen' : 'Zuteilungen',
+                  onClick: () => loadAssignments(s.id),
+                },
+              ]}
+            />
             {expanded === s.id && (
               <div className="bg-gray-50 px-4 py-3 text-sm border-b border-brand-black/10">
                 {assignments.length === 0 ? (
