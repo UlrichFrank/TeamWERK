@@ -21,6 +21,7 @@ import SpielplanPage from './pages/SpielplanPage'
 import SpieltagDetailPage from './pages/SpieltagDetailPage'
 import AdminGameTemplatePage from './pages/AdminGameTemplatePage'
 import AdminSeasonsPage from './pages/AdminSeasonsPage'
+import AdminKaderPage from './pages/AdminKaderPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="anfragen" element={<MembershipRequestsPage />} />
             <Route path="admin/verein" element={<AdminClubPage />} />
             <Route path="admin/teams" element={<AdminTeamsPage />} />
+            <Route path="admin/kader" element={<AdminKaderPage />} />
             <Route path="admin/nutzer" element={<AdminUsersPage />} />
             <Route path="admin/diensttypen" element={<AdminDutyTypesPage />} />
             <Route path="spielplan" element={<SpielplanPage />} />

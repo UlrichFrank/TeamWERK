@@ -20,6 +20,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/games"
+	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
@@ -65,6 +66,7 @@ func serve() {
 	membH := members.NewHandler(database)
 	dutyH := duties.NewHandler(database)
 	gameH := games.NewHandler(database)
+	kaderH := kader.NewHandler(database)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -165,6 +167,13 @@ func serve() {
 			r.Get("/api/admin/game-template", gameH.GetTemplate)
 			r.Put("/api/admin/game-template", gameH.SetTemplate)
 			r.Get("/api/admin/game-template/preview", gameH.PreviewSlots)
+			// Kader (season-based teams)
+			r.Get("/api/admin/kader", kaderH.ListKader)
+			r.Post("/api/admin/kader", kaderH.InitializeKader)
+			r.Get("/api/admin/kader/{id}", kaderH.GetKader)
+			r.Put("/api/admin/kader/{id}", kaderH.UpdateKader)
+			r.Get("/api/admin/kader/{id}/member-suggestions", kaderH.MemberSuggestions)
+			r.Post("/api/admin/kader/copy-from-season", kaderH.CopyFromSeason)
 		})
 	})
 
