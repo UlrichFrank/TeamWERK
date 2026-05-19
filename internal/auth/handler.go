@@ -391,9 +391,46 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/admin/users
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT u.id, u.name, u.email, u.role, COALESCE(t.name, '') AS team_name
-		 FROM users u LEFT JOIN teams t ON t.id = u.team_id ORDER BY u.name`)
+	search := r.URL.Query().Get("search")
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+
+	searchFilter := ""
+	if search != "" {
+		searchFilter = ` WHERE u.name LIKE ? OR u.email LIKE ?`
+	}
+
+	countQuery := `SELECT COUNT(*) FROM users u` + searchFilter
+	var total int
+	if search != "" {
+		err := h.db.QueryRowContext(r.Context(), countQuery, "%"+search+"%", "%"+search+"%").Scan(&total)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		err := h.db.QueryRowContext(r.Context(), countQuery).Scan(&total)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	query := `SELECT u.id, u.name, u.email, u.role, COALESCE(t.name, '') AS team_name
+	 FROM users u LEFT JOIN teams t ON t.id = u.team_id` + searchFilter + ` ORDER BY u.name LIMIT ? OFFSET ?`
+	var rows *sql.Rows
+	var err error
+	if search != "" {
+		rows, err = h.db.QueryContext(r.Context(), query, "%"+search+"%", "%"+search+"%", limit, offset)
+	} else {
+		rows, err = h.db.QueryContext(r.Context(), query, limit, offset)
+	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -413,7 +450,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		result = append(result, u)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(map[string]interface{}{"items": result, "total": total})
 }
 
 // PUT /api/admin/users/{id}/role

@@ -26,41 +26,71 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-brand-gray">
-      <div className="flex flex-col justify-center items-center w-full max-w-xs px-8 py-12 text-brand-black">
+    <div className="min-h-screen flex flex-col sm:flex-row bg-brand-gray">
+      {/* Logo Section - Hidden on Mobile */}
+      <div className="hidden sm:flex flex-col justify-center items-center w-full sm:max-w-xs px-8 py-12 text-brand-black">
         <img src="/logo.svg" alt="Team Stuttgart" className="h-20 w-20 mb-6" />
         <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
         <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
       </div>
-      <div className="flex-1 flex items-center justify-center bg-brand-white rounded-l-3xl border-l-4 border-brand-yellow">
-        <div className="w-full max-w-sm px-8">
+
+      {/* Login Form */}
+      <div className="flex-1 flex items-center justify-center bg-brand-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
+        <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
+          {/* Mobile Logo */}
+          <div className="sm:hidden flex flex-col items-center mb-8">
+            <img src="/logo.svg" alt="Team Stuttgart" className="h-16 w-16 mb-4" />
+            <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
+            <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
+          </div>
+
           <h2 className="text-xl font-bold text-brand-black mb-6">Anmelden</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && <p className="text-brand-error text-sm">{error}</p>}
             <div>
               <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
               <input
-                type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-brand-black mb-1">Passwort</label>
               <input
-                type="password" value={password} onChange={e => setPassword(e.target.value)} required
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-brand-yellow text-brand-black rounded-md py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
+              className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
             >
               Anmelden
             </button>
           </form>
           <div className="mt-4 text-center text-sm space-y-1">
-            <div><Link to="/passwort-vergessen" className="text-brand-black hover:text-brand-yellow transition-colors">Passwort vergessen?</Link></div>
-            <div><Link to="/beitritt" className="text-brand-black hover:text-brand-yellow transition-colors">Beitrittsantrag stellen</Link></div>
+            <div>
+              <Link
+                to="/passwort-vergessen"
+                className="text-brand-black hover:text-brand-yellow transition-colors"
+              >
+                Passwort vergessen?
+              </Link>
+            </div>
+            <div>
+              <Link
+                to="/beitritt"
+                className="text-brand-black hover:text-brand-yellow transition-colors"
+              >
+                Beitrittsantrag stellen
+              </Link>
+            </div>
           </div>
         </div>
       </div>

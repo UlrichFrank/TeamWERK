@@ -119,75 +119,161 @@ export default function AdminGameTemplatePage() {
             Keine Einträge — klicke auf „+ Eintrag hinzufügen"
           </p>
         ) : (
-          <div className="divide-y">
-            {template.items.map((item, i) => (
-              <div key={i} className="p-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 items-center">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Diensttyp</label>
-                  <select
-                    value={item.duty_type_id}
-                    onChange={e => {
-                      const id = Number(e.target.value)
-                      const dt = dutyTypes.find(d => d.id === id)
-                      updateItem(i, {
-                        duty_type_id: id,
-                        ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}),
-                      })
-                    }}
-                    className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-                  >
-                    <option value={0}>Auswählen…</option>
-                    {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
-                  </select>
+          <>
+            {/* Mobile: Card Layout */}
+            <div className="sm:hidden divide-y">
+              {template.items.map((item, i) => {
+                const dutyType = dutyTypes.find(d => d.id === item.duty_type_id)
+                return (
+                  <div key={i} className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium text-sm">{dutyType?.name || 'Diensttyp auswählen'}</h3>
+                      <button
+                        onClick={() => removeItem(i)}
+                        className="text-gray-400 hover:text-brand-error transition-colors px-1"
+                        title="Eintrag entfernen"
+                      >✕</button>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Diensttyp</label>
+                        <select
+                          value={item.duty_type_id}
+                          onChange={e => {
+                            const id = Number(e.target.value)
+                            const dt = dutyTypes.find(d => d.id === id)
+                            updateItem(i, {
+                              duty_type_id: id,
+                              ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}),
+                            })
+                          }}
+                          className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                        >
+                          <option value={0}>Auswählen…</option>
+                          {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Anker</label>
+                          <select
+                            value={item.anchor}
+                            onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
+                            className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                          >
+                            <option value="start">Anpfiff</option>
+                            <option value="end">Spielende</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Versatz (min)</label>
+                          <input
+                            type="number"
+                            value={item.offset_minutes}
+                            onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
+                            className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Personen</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.slots_count}
+                            onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
+                            className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Rollenbezeichnung</label>
+                        <input
+                          type="text"
+                          value={item.role_desc}
+                          onChange={e => updateItem(i, { role_desc: e.target.value })}
+                          placeholder="Optional"
+                          className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop: Grid Layout */}
+            <div className="hidden sm:block divide-y">
+              {template.items.map((item, i) => (
+                <div key={i} className="p-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 items-center">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Diensttyp</label>
+                    <select
+                      value={item.duty_type_id}
+                      onChange={e => {
+                        const id = Number(e.target.value)
+                        const dt = dutyTypes.find(d => d.id === id)
+                        updateItem(i, {
+                          duty_type_id: id,
+                          ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}),
+                        })
+                      }}
+                      className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                    >
+                      <option value={0}>Auswählen…</option>
+                      {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Anker</label>
+                    <select
+                      value={item.anchor}
+                      onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
+                      className="border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                    >
+                      <option value="start">Anpfiff</option>
+                      <option value="end">Spielende</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Versatz (min)</label>
+                    <input
+                      type="number"
+                      value={item.offset_minutes}
+                      onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
+                      className="w-20 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Personen</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={item.slots_count}
+                      onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
+                      className="w-16 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Rollenbezeichnung</label>
+                    <input
+                      type="text"
+                      value={item.role_desc}
+                      onChange={e => updateItem(i, { role_desc: e.target.value })}
+                      placeholder="Optional"
+                      className="w-36 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                    />
+                  </div>
+                  <button
+                    onClick={() => removeItem(i)}
+                    className="text-gray-400 hover:text-brand-error transition-colors mt-4 px-1"
+                    title="Eintrag entfernen"
+                  >✕</button>
                 </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Anker</label>
-                  <select
-                    value={item.anchor}
-                    onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
-                    className="border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-                  >
-                    <option value="start">Anpfiff</option>
-                    <option value="end">Spielende</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Versatz (min)</label>
-                  <input
-                    type="number"
-                    value={item.offset_minutes}
-                    onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
-                    className="w-20 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Personen</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={item.slots_count}
-                    onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                    className="w-16 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Rollenbezeichnung</label>
-                  <input
-                    type="text"
-                    value={item.role_desc}
-                    onChange={e => updateItem(i, { role_desc: e.target.value })}
-                    placeholder="Optional"
-                    className="w-36 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-                  />
-                </div>
-                <button
-                  onClick={() => removeItem(i)}
-                  className="text-gray-400 hover:text-brand-error transition-colors mt-4 px-1"
-                  title="Eintrag entfernen"
-                >✕</button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

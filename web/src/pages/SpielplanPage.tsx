@@ -267,7 +267,7 @@ export default function SpielplanPage() {
                   <button
                     onClick={handleFetchPreview}
                     disabled={!newDate || !newTeamId || previewLoading || creating}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {previewLoading || creating ? 'Laden…' : 'Weiter →'}
                   </button>
@@ -304,7 +304,7 @@ export default function SpielplanPage() {
                   <button
                     onClick={() => doCreateGame(preview.filter((_, i) => selectedIndices.has(i)))}
                     disabled={creating}
-                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Bestätigen'}
                   </button>

@@ -338,7 +338,7 @@ export default function SpieltagDetailPage() {
                 <button onClick={() => setShowAddSlot(false)}
                   className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
                 <button onClick={handleAddSlot} disabled={!addDutyTypeId || addSaving}
-                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
+                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                   {addSaving ? 'Speichern…' : 'Hinzufügen'}
                 </button>
               </div>
@@ -373,7 +373,7 @@ export default function SpieltagDetailPage() {
                 <button onClick={() => setEditSlot(null)}
                   className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
                 <button onClick={handleEditSlot} disabled={editSaving}
-                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
+                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                   {editSaving ? 'Speichern…' : 'Speichern'}
                 </button>
               </div>
@@ -431,7 +431,7 @@ export default function SpieltagDetailPage() {
               <button onClick={() => setShowRegen(false)}
                 className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
               <button onClick={handleRegen} disabled={regenSaving}
-                className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
+                className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                 {regenSaving ? 'Generieren…' : 'Bestätigen'}
               </button>
             </div>

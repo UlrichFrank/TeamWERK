@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -30,22 +31,74 @@ type Member struct {
 // GET /api/members
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
-	var rows *sql.Rows
+
+	search := r.URL.Query().Get("search")
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+
+	searchFilter := ""
+	if search != "" {
+		searchFilter = ` AND (first_name LIKE ? OR last_name LIKE ? OR position LIKE ?)`
+	}
+
 	var err error
+	countQuery := ""
 	if claims.Role == "admin" {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT id, first_name, last_name, COALESCE(date_of_birth,''), COALESCE(member_number,''), COALESCE(pass_number,''),
-			        jersey_number, COALESCE(position,''), status, user_id
-			 FROM members WHERE status != 'ausgetreten' ORDER BY last_name, first_name`)
+		countQuery = `SELECT COUNT(*) FROM members WHERE status != 'ausgetreten'` + searchFilter
 	} else {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
-			        m.jersey_number, COALESCE(m.position,''), m.status, m.user_id
-			 FROM members m
-			 JOIN team_memberships tm ON tm.member_id = m.id
-			 JOIN team_trainers tt ON tt.team_id = tm.team_id
-			 WHERE tt.user_id = ? AND m.status != 'ausgetreten'
-			 ORDER BY m.last_name, m.first_name`, claims.UserID)
+		countQuery = `SELECT COUNT(DISTINCT m.id) FROM members m
+		 JOIN team_memberships tm ON tm.member_id = m.id
+		 JOIN team_trainers tt ON tt.team_id = tm.team_id
+		 WHERE tt.user_id = ? AND m.status != 'ausgetreten'` + searchFilter
+	}
+
+	var total int
+	if claims.Role == "admin" {
+		if search != "" {
+			err = h.db.QueryRowContext(r.Context(), countQuery, "%"+search+"%", "%"+search+"%", "%"+search+"%").Scan(&total)
+		} else {
+			err = h.db.QueryRowContext(r.Context(), countQuery).Scan(&total)
+		}
+	} else {
+		if search != "" {
+			err = h.db.QueryRowContext(r.Context(), countQuery, claims.UserID, "%"+search+"%", "%"+search+"%", "%"+search+"%").Scan(&total)
+		} else {
+			err = h.db.QueryRowContext(r.Context(), countQuery, claims.UserID).Scan(&total)
+		}
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var rows *sql.Rows
+	if claims.Role == "admin" {
+		query := `SELECT id, first_name, last_name, COALESCE(date_of_birth,''), COALESCE(member_number,''), COALESCE(pass_number,''),
+		        jersey_number, COALESCE(position,''), status, user_id
+		 FROM members WHERE status != 'ausgetreten'` + searchFilter + ` ORDER BY last_name, first_name LIMIT ? OFFSET ?`
+		if search != "" {
+			rows, err = h.db.QueryContext(r.Context(), query, "%"+search+"%", "%"+search+"%", "%"+search+"%", limit, offset)
+		} else {
+			rows, err = h.db.QueryContext(r.Context(), query, limit, offset)
+		}
+	} else {
+		query := `SELECT DISTINCT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		        m.jersey_number, COALESCE(m.position,''), m.status, m.user_id
+		 FROM members m
+		 JOIN team_memberships tm ON tm.member_id = m.id
+		 JOIN team_trainers tt ON tt.team_id = tm.team_id
+		 WHERE tt.user_id = ? AND m.status != 'ausgetreten'` + searchFilter + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
+		if search != "" {
+			rows, err = h.db.QueryContext(r.Context(), query, claims.UserID, "%"+search+"%", "%"+search+"%", "%"+search+"%", limit, offset)
+		} else {
+			rows, err = h.db.QueryContext(r.Context(), query, claims.UserID, limit, offset)
+		}
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -70,7 +123,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		result = append(result, m)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(map[string]interface{}{"items": result, "total": total})
 }
 
 // POST /api/members

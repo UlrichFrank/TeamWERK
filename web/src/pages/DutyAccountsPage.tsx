@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import MobileCard from '../components/MobileCard'
 
 interface Account { user_id: number; name: string; soll: number; ist: number; balance: number }
 
@@ -18,15 +19,32 @@ export default function DutyAccountsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3 sm:gap-0">
         <h1 className="text-2xl font-bold">Dienstkonten</h1>
         {user?.role === 'admin' && (
-          <button onClick={exportCSV} className="text-sm border border-black text-black rounded-md px-3 py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors">
+          <button onClick={exportCSV} className="text-sm border border-black text-black rounded-md px-3 py-2.5 sm:py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors">
             Export CSV
           </button>
         )}
       </div>
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+
+      {/* Mobile: Cards */}
+      <div className="sm:hidden space-y-0">
+        {accounts.map(a => (
+          <MobileCard
+            key={a.user_id}
+            title={a.name}
+            subtitle={`${a.soll.toFixed(1)}h Soll · ${a.ist.toFixed(1)}h Ist`}
+            badge={{
+              label: `${a.balance > 0 ? '+' : ''}${a.balance.toFixed(1)}h`,
+              variant: a.balance > 0 ? 'red' : 'green',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Desktop: Table */}
+      <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>

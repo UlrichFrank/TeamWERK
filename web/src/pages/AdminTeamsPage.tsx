@@ -1,5 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { api } from '../lib/api'
+import MobileCard from '../components/MobileCard'
 
 interface Team { id: number; name: string; age_class: string; gender: string; is_active: boolean }
 
@@ -43,7 +44,7 @@ export default function AdminTeamsPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Teams</h1>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow px-4 sm:px-6 py-6">
           <h2 className="font-semibold mb-4">Neues Team</h2>
           <form onSubmit={handleCreate} className="space-y-3">
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Teamname" required
@@ -57,12 +58,26 @@ export default function AdminTeamsPage() {
                 </option>
               ))}
             </select>
-            <button type="submit" className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
+            <button type="submit" className="w-full sm:w-auto bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
               Team anlegen
             </button>
           </form>
         </div>
-        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+
+        {/* Mobile: Cards */}
+        <div className="sm:hidden space-y-0">
+          {teams.map(t => (
+            <MobileCard
+              key={t.id}
+              title={t.name}
+              subtitle={t.age_class}
+              badge={{ label: t.is_active ? 'aktiv' : 'inaktiv', variant: t.is_active ? 'yellow' : 'red' }}
+            />
+          ))}
+        </div>
+
+        {/* Desktop: Table */}
+        <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
               <tr>

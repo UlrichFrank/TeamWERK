@@ -2,6 +2,12 @@
 
 Guidance for Claude Code working in this repository.
 
+## Wichtig: pnpm verwenden
+
+**Immer `pnpm` für alle npm-Operationen verwenden. Niemals `npm`.**
+
+---
+
 ## Überblick
 
 TeamWERK (TeamWERK — Where Engagement Really Klicks) ist die interne Verwaltungsplattform für Team Stuttgart (Handball). Sie läuft unter `https://intern.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
@@ -321,6 +327,46 @@ Schrift: Hanken Grotesk (Google Fonts, entspricht TYPO3-Site)
 **Scheduler:** Cronjob `* * * * * /usr/local/bin/teamwerk scheduler:run`
 
 Für einen Erstaufbau: `bash deploy/setup-vps.sh` auf dem VPS ausführen (root).
+
+---
+
+## Mobile & PWA
+
+### Breakpoint-Konvention
+
+`sm:` (640px) ist die einzige Mobile/Desktop-Grenze. Mobile = `< 640px`, Desktop = `≥ 640px`. Keine `md:`-Logik für Mobile-Unterscheidungen.
+
+### Navigation auf Mobile
+
+Hamburger-Button (☰) in einer mobilen Kopfzeile ersetzt die Sidebar. Die Sidebar öffnet sich als Fixed-Position-Overlay (`z-50`) mit halbtransparentem Backdrop. Die Desktop-Sidebar ist immer sichtbar und bleibt unverändert. Main-Content Padding auf Mobile: `px-4 py-4` (statt `p-8`). Die Dekorationsklassen des Main-Content (`rounded-tl-3xl rounded-bl-3xl border-l-4 border-brand-yellow`) sind nur auf Desktop aktiv: `sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow`.
+
+### Tabellen auf Mobile
+
+Alle tabellenbasierten Seiten zeigen auf Mobile (`< 640px`) ein Card-Layout statt `<table>`. Jede Zeile wird als Card gerendert. Actions hinter ⋮-Dropdown. Inline-Edit-Formulare mit mehreren Feldern (z.B. AdminDutyTypesPage) öffnen auf Mobile ein Modal. Shared-Komponenten: `MobileCard`, `ActionMenu`, `EditModal` in `web/src/components/`.
+
+### Paginierte Listen
+
+`GET /api/members` und `GET /api/admin/users` unterstützen Paginierung:
+
+```
+GET /api/members?search=&limit=50&offset=0
+Response: { items: [...Member], total: 1000 }
+```
+
+Suchleiste auf diesen Seiten ist serverseitig und auf Mobile `sticky top-0 z-10`. Frontend nutzt „Mehr laden"-Button (kein automatisches Infinite Scroll). Die Clientseitige `filter()`-Logik in MembersPage entfällt.
+
+### Touch-Targets
+
+Alle interaktiven Elemente müssen auf Mobile mindestens **44px** Höhe haben. Buttons erhalten `py-2.5` statt `py-1.5` auf Mobile (`sm:py-1.5`).
+
+### Progressive Web App (PWA)
+
+TeamWERK ist als PWA installierbar. Setup via `vite-plugin-pwa` (einzige neue Frontend-Dependency):
+
+- **Service Worker**: Network-first für `/api/*`, Cache-first für statische Assets
+- **Manifest**: `web/public/manifest.json` — Name: „TeamWERK", Theme: `#000000`, Background: `#FFFFFF`
+- **Icons**: PNG-Icons in `web/public/icons/` (generiert aus Logo-SVG, Größen: 192×192, 512×512)
+- **Offline**: Zeigt Shell mit „Sie sind offline"-Hinweis wenn keine Verbindung
 
 ---
 

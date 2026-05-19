@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TeamWERK – Offline</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .container { text-align: center; max-width: 400px; }
+    .logo { font-size: 48px; margin-bottom: 20px; }
+    h1 { font-size: 28px; margin-bottom: 10px; font-weight: 600; }
+    p { font-size: 16px; color: #ccc; margin-bottom: 30px; line-height: 1.6; }
+    button { background: #FAE806; color: #000; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+    button:hover { background: #fff; transform: scale(1.05); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">📱</div>
+    <h1>Sie sind offline</h1>
+    <p>TeamWERK benötigt eine Internetverbindung. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.</p>
+    <button onclick="location.reload()">Seite neu laden</button>
+  </div>
+</body>
+</html>

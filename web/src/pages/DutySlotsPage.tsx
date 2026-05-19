@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import MobileCard from '../components/MobileCard'
 
 interface Slot {
   id: number; event_name: string; event_date: string
@@ -57,7 +58,77 @@ export default function DutySlotsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Dienst-Planung</h1>
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+
+      {/* Mobile: Cards with Accordion */}
+      <div className="sm:hidden space-y-0">
+        {slots.map(s => (
+          <div key={s.id}>
+            <MobileCard
+              title={s.event_name}
+              subtitle={`${s.event_date} · ${s.duty_type}`}
+              badge={{ label: `${s.slots_filled}/${s.slots_total}`, variant: s.slots_filled >= s.slots_total ? 'green' : 'yellow' }}
+            >
+              <button
+                onClick={() => loadAssignments(s.id)}
+                className="text-xs text-brand-yellow hover:text-brand-black transition-colors font-medium"
+              >
+                {expanded === s.id ? '▾ Schließen' : '▸ Zuteilungen anzeigen'}
+              </button>
+            </MobileCard>
+            {expanded === s.id && (
+              <div className="bg-gray-50 px-4 py-3 text-sm border-b border-brand-black/10">
+                {assignments.length === 0 ? (
+                  <p className="text-gray-400 text-xs">Keine Zuteilungen</p>
+                ) : (
+                  <div className="space-y-2">
+                    {assignments.map(a => (
+                      <div key={a.id} className="py-2 border-t border-gray-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium">{a.user_name}</span>
+                          {statusBadge(a.status)}
+                        </div>
+                        {a.status === 'cash_substitute' && a.cash_amount > 0 && (
+                          <div className="text-xs text-gray-500 mb-2">{a.cash_amount.toFixed(2)} €</div>
+                        )}
+                        {a.status === 'pending' && (
+                          <div className="flex flex-col gap-2">
+                            <button
+                              onClick={() => fulfill(a.id)}
+                              className="text-xs bg-brand-yellow text-black px-2 py-1.5 rounded font-medium hover:opacity-80"
+                            >
+                              Erfüllt
+                            </button>
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="€"
+                                value={cashAmount[a.id] ?? ''}
+                                onChange={e => setCashAmount(c => ({ ...c, [a.id]: e.target.value }))}
+                                className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs"
+                              />
+                              <button
+                                onClick={() => cashSub(a.id)}
+                                className="text-xs border border-gray-300 text-gray-600 px-2 py-1 rounded hover:bg-gray-100"
+                              >
+                                Geldersatz
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: Table */}
+      <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
