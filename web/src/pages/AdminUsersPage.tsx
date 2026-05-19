@@ -220,7 +220,7 @@ export default function AdminUsersPage() {
                     label: 'Rolle ändern',
                     onClick: () => {
                       const newRole = prompt(`Neue Rolle für ${u.name}:`, u.role)
-                      if (newRole && allowedRoles(self?.role ?? '').includes(newRole)) {
+                      if (newRole && allowedRoles(self?.role ?? '').includes(newRole as typeof ALL_ROLES[number])) {
                         handleRoleChange(u, newRole)
                       }
                     },

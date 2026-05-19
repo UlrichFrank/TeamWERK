@@ -14,13 +14,13 @@ interface UsePaginatedFetchState<T> {
   error: string | null
 }
 
-interface UsePaginatedFetchActions<T> {
+interface UsePaginatedFetchActions {
   loadMore: () => void
   setSearch: (search: string) => void
   reset: () => void
 }
 
-export function usePaginatedFetch<T>(endpoint: string, limit = 50): UsePaginatedFetchState<T> & UsePaginatedFetchActions<T> {
+export function usePaginatedFetch<T>(endpoint: string, limit = 50): UsePaginatedFetchState<T> & UsePaginatedFetchActions {
   const [state, setState] = useState<UsePaginatedFetchState<T>>({
     items: [],
     total: 0,
@@ -29,7 +29,7 @@ export function usePaginatedFetch<T>(endpoint: string, limit = 50): UsePaginated
     error: null,
   })
   const [search, setSearchImmediate] = useState('')
-  const searchTimeoutRef = useRef<NodeJS.Timeout>()
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
 
   const fetchData = async (searchVal: string, offsetVal: number) => {
     setState(prev => ({ ...prev, loading: true, error: null }))
