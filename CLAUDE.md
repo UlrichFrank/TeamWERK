@@ -24,6 +24,7 @@ teamwerk/
 │   ├── duties/               ← Diensttypen, Slots, Assignments, Accounts
 │   ├── mailer/               ← SMTP-Versand (net/smtp)
 │   ├── members/              ← Mitglieder, Familien-Links, Fahrzeuginfo
+│   ├── games/                ← Spielplan, Template, Slot-Generierung
 │   └── scheduler/            ← Expired-Token-Bereinigung
 ├── internal/db/migrations/   ← golang-migrate .up/.down SQL-Dateien (embedded im Binary)
 ├── web/                      ← Vite + React-Projekt
@@ -187,11 +188,19 @@ h.mailer.Send(to, subject, body)  // net/smtp, SMTP-Config aus .env
 
 | Tabelle | Schlüsselfelder |
 |---------|----------------|
-| `duty_types` | `id`, `name`, `hours_value`, `cash_substitute` |
-| `duty_slots` | `id`, `duty_type_id` FK, `event_name`, `event_date`, `slots_total`, `slots_filled`, `role_description`, `season_id` FK |
+| `duty_types` | `id`, `name`, `hours_value`, `cash_substitute`, `default_anchor`, `default_offset_minutes` |
+| `duty_slots` | `id`, `duty_type_id` FK, `event_name`, `event_date`, `event_time`, `slots_total`, `slots_filled`, `role_desc`, `team_id` FK, `season_id` FK, `game_id` FK |
 | `duty_assignments` | `id`, `duty_slot_id` FK, `user_id` FK, `status` CHECK('pending','fulfilled','cash_substitute'), `cash_amount`, `fulfilled_at`, UNIQUE(slot,user) |
 | `duty_accounts` | `user_id` PK FK, `season_id` PK FK, `soll`, `ist` |
 | `duty_season_targets` | `season_id` FK, `duty_type_id` FK, `soll_hours` |
+
+### 010 – Games
+
+| Tabelle | Schlüsselfelder |
+|---------|----------------|
+| `games` | `id`, `team_id` FK, `season_id` FK, `opponent`, `date`, `time`, `is_home`, `source` |
+| `game_templates` | `id`, `name`, `game_duration_minutes`, `is_active` |
+| `game_template_items` | `id`, `template_id` FK, `duty_type_id` FK, `anchor`, `offset_minutes`, `slots_count`, `role_desc`, `sort_order` |
 
 ---
 
@@ -229,8 +238,11 @@ GET  /api/duty-slots/{id}/assignments
 
 ### Admin + Trainer
 ```
+GET  /api/games
+GET  /api/games/{id}
 POST /api/duty-slots
 PUT  /api/duty-slots/{id}
+DELETE /api/duty-slots/{id}
 POST /api/duty-assignments/{id}/fulfill
 POST /api/duty-assignments/{id}/cash-substitute
 GET  /api/admin/membership-requests
@@ -243,7 +255,7 @@ POST /api/auth/invite
 ```
 GET/PUT  /api/admin/club
 GET/POST /api/admin/seasons
-PUT      /api/admin/seasons/{id}/activate
+PUT      /api/admin/seasons/{id}/activate      → Frontend: /admin/saisons
 PUT      /api/admin/seasons/{id}/duty-targets
 GET/POST /api/admin/teams
 PUT      /api/admin/teams/{id}
@@ -251,8 +263,13 @@ POST     /api/admin/teams/{id}/assign-trainer
 GET      /api/admin/users
 POST     /api/admin/family-links
 GET/POST /api/admin/duty-types
-PUT      /api/admin/duty-types/{id}
+PUT/DELETE /api/admin/duty-types/{id}
 GET      /api/admin/duty-accounts/export
+POST     /api/admin/games
+PUT/DELETE /api/admin/games/{id}
+POST     /api/admin/games/{id}/regenerate
+GET/PUT  /api/admin/game-template             → Frontend: /admin/spielplan-template
+GET      /api/admin/game-template/preview
 ```
 
 ---
@@ -288,7 +305,8 @@ Alle Pfade relativ zu `/api/` (der Prefix wird in api.ts gesetzt: `baseURL: '/ap
 Tailwind v3 via CDN-Klassen. Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`-Direktiven).  
 Marken-Primärfarben: Schwarz `#000000`, Gelb `#FAE806`, Weiß `#FFFFFF`.  
 Marken-Sekundärfarben: Blau `#3E4A98`, Grün `#6EB42E`.  
-Sidebar-Hintergrund: `bg-[#3E4A98]`. Primär-Buttons: `bg-[#FAE806] hover:bg-[#000000]`.  
+Sidebar-Hintergrund: `bg-brand-gray` (`#E5E7EB`). Primär-Buttons: `bg-brand-yellow hover:bg-black`.
+Tailwind-Config: `brand.yellow=#FAE806`, `brand.gray=#E5E7EB`, `brand.blue=#3E4A98`, `brand.green=#6EB42E`  
 Logo-SVG: `../team-stuttgart-org/team-stuttgart-site/Resources/Public/Images/logo.svg`  
 Schrift: Hanken Grotesk (Google Fonts, entspricht TYPO3-Site)
 
@@ -316,12 +334,13 @@ Für einen Erstaufbau: `bash deploy/setup-vps.sh` auf dem VPS ausführen (root).
 
 ---
 
-## Offene VPS-Aufgaben (manuell)
+## VPS-Status
 
-Diese Tasks aus Phase 1 erfordern SSH-Zugang zum IONOS-VPS und wurden noch nicht ausgeführt:
+VPS ist in Betrieb. SSH-Alias: `vServer` (in `.env`). Direkt erreichbar unter `https://217.160.118.39`.
+Domain `intern.team-stuttgart.org` und Certbot-Zertifikat noch ausstehend.
 
-- SSH-Zugang prüfen, Ubuntu-Version notieren
-- `deploy/setup-vps.sh` ausführen (Nginx, Certbot, systemd, Cron)
-- DNS: Subdomain `intern.team-stuttgart.org` → VPS-IP setzen
-- `/etc/teamwerk/env` befüllen (JWT_SECRET, SMTP_PASS)
-- `make deploy` ausführen (erster Deployment)
+Nützliche Remote-Befehle:
+```bash
+make migrate-remote-up                                      # Migrationen auf VPS anwenden
+make create-admin-remote EMAIL=… PASSWORD=… NAME=…         # Admin-User anlegen
+```

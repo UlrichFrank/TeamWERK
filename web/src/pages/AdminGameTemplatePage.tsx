@@ -92,7 +92,7 @@ export default function AdminGameTemplatePage() {
       </p>
 
       {/* Template name */}
-      <div className="bg-white rounded-xl shadow p-5 mb-5">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-5 mb-5">
         <label className="block text-sm font-medium mb-1">Name der Vorlage</label>
         <input
           type="text"
@@ -103,7 +103,7 @@ export default function AdminGameTemplatePage() {
       </div>
 
       {/* Items */}
-      <div className="bg-white rounded-xl shadow overflow-hidden mb-5">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-5">
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <h2 className="font-semibold">Dienst-Einträge</h2>
           <button
@@ -182,7 +182,7 @@ export default function AdminGameTemplatePage() {
                 </div>
                 <button
                   onClick={() => removeItem(i)}
-                  className="text-gray-400 hover:text-red-500 transition-colors mt-4 px-1"
+                  className="text-gray-400 hover:text-brand-error transition-colors mt-4 px-1"
                   title="Eintrag entfernen"
                 >✕</button>
               </div>
@@ -198,7 +198,7 @@ export default function AdminGameTemplatePage() {
       </div>
 
       {saveError && (
-        <p className="text-red-600 text-sm mb-3">{saveError}</p>
+        <p className="text-brand-error text-sm mb-3">{saveError}</p>
       )}
       <div className="flex items-center gap-3">
         <button
@@ -208,7 +208,7 @@ export default function AdminGameTemplatePage() {
         >
           {saving ? 'Speichern…' : 'Vorlage speichern'}
         </button>
-        {saved && <span className="text-green-600 text-sm">✓ Gespeichert</span>}
+        {saved && <span className="text-brand-success text-sm">✓ Gespeichert</span>}
       </div>
     </div>
   )

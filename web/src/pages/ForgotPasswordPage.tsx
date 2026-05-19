@@ -13,7 +13,7 @@ export default function ForgotPasswordPage() {
 
   if (sent) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-sm bg-white rounded-xl shadow p-8 text-center">
+      <div className="max-w-sm bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
         <p className="text-sm text-gray-700">Falls die Adresse bekannt ist, erhältst du eine E-Mail mit dem Reset-Link.</p>
       </div>
     </div>
@@ -21,7 +21,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
+      <div className="w-full max-w-sm bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8">
         <h1 className="text-xl font-bold mb-6">Passwort zurücksetzen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input

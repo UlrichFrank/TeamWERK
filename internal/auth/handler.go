@@ -416,6 +416,52 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// PUT /api/admin/users/{id}/role
+func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
+	caller := ClaimsFromCtx(r.Context())
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	roleRank := map[string]int{"admin": 5, "vorstand": 4, "trainer": 3, "elternteil": 2, "spieler": 1}
+	callerRank, ok := roleRank[caller.Role]
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	targetRank, ok := roleRank[req.Role]
+	if !ok {
+		http.Error(w, "invalid role", http.StatusBadRequest)
+		return
+	}
+	if targetRank > callerRank {
+		http.Error(w, "cannot assign role higher than own", http.StatusForbidden)
+		return
+	}
+	var currentRole string
+	if err := h.db.QueryRowContext(r.Context(), `SELECT role FROM users WHERE id = ?`, targetID).Scan(&currentRole); err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if roleRank[currentRole] > callerRank {
+		http.Error(w, "cannot modify user with higher role", http.StatusForbidden)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(), `UPDATE users SET role = ? WHERE id = ?`, req.Role, targetID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // DELETE /api/admin/users/{id}
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromCtx(r.Context())

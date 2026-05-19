@@ -37,7 +37,7 @@ interface SlotPreview {
 
 function ProgressBar({ filled, total }: { filled: number; total: number }) {
   const pct = total > 0 ? Math.round((filled / total) * 100) : 0
-  const color = pct === 100 ? 'bg-green-500' : pct > 0 ? 'bg-yellow-400' : 'bg-red-400'
+  const color = pct === 100 ? 'bg-brand-success' : pct > 0 ? 'bg-brand-warning' : 'bg-brand-error'
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -212,7 +212,7 @@ export default function SpieltagDetailPage() {
   if (notFound) return (
     <div className="text-center py-12">
       <p className="text-gray-500 mb-4">Spiel nicht gefunden.</p>
-      <Link to="/spielplan" className="text-black hover:underline text-sm">← Zurück zum Spielplan</Link>
+      <Link to="/spielplan" className="text-brand-black hover:underline text-sm">← Zurück zum Spielplan</Link>
     </div>
   )
   if (!game) return null
@@ -228,7 +228,7 @@ export default function SpieltagDetailPage() {
       </Link>
 
       {/* Game header */}
-      <div className="bg-white rounded-xl shadow p-6 mb-6">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-6">
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold">vs. {game.opponent || '(kein Gegner)'}</h1>
@@ -248,20 +248,20 @@ export default function SpieltagDetailPage() {
           )}
         </div>
         {regenKeptSlots !== null && regenKeptSlots > 0 && (
-          <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+          <div className="mt-3 p-3 bg-brand-warning-light border border-brand-warning rounded-lg text-sm text-brand-warning">
             Hinweis: {regenKeptSlots} belegte Dienst{regenKeptSlots !== 1 ? 'e' : ''} wurden nicht überschrieben.
           </div>
         )}
       </div>
 
       {/* Slots */}
-      <div className="bg-white rounded-xl shadow overflow-hidden mb-4">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-4">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="font-semibold">Dienste</h2>
           {isAdmin && (
             <button
               onClick={() => setShowAddSlot(true)}
-              className="text-sm bg-brand-yellow text-black px-3 py-1.5 rounded-md font-medium hover:bg-black hover:text-brand-yellow transition-colors"
+              className="text-sm bg-brand-yellow text-brand-black px-3 py-1.5 rounded-md font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
             >
               + Dienst hinzufügen
             </button>
@@ -294,7 +294,7 @@ export default function SpieltagDetailPage() {
                     >Bearbeiten</button>
                     <button
                       onClick={() => setDeleteSlotId(s.id)}
-                      className="text-xs text-gray-400 hover:text-red-500 px-2 py-1 rounded hover:bg-red-50"
+                      className="text-xs text-gray-400 hover:text-brand-error px-2 py-1 rounded hover:bg-red-50"
                     >Löschen</button>
                   </div>
                 )}
@@ -306,8 +306,8 @@ export default function SpieltagDetailPage() {
 
       {/* Add slot modal */}
       {showAddSlot && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="font-bold mb-4">Dienst hinzufügen</h3>
             <div className="space-y-3">
               <div>
@@ -349,8 +349,8 @@ export default function SpieltagDetailPage() {
 
       {/* Edit slot modal */}
       {editSlot && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="font-bold mb-4">Dienst bearbeiten</h3>
             <p className="text-sm text-gray-500 mb-3 font-medium">{editSlot.duty_type_name}</p>
             <div className="space-y-3">
@@ -384,15 +384,15 @@ export default function SpieltagDetailPage() {
 
       {/* Delete slot confirmation */}
       {deleteSlotId !== null && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="font-bold mb-2">Dienst löschen?</h3>
             <p className="text-sm text-gray-500 mb-5">Dieser Dienst wird endgültig gelöscht.</p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteSlotId(null)}
                 className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
               <button onClick={handleDeleteSlot} disabled={deleteSaving}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-md px-4 py-2 text-sm disabled:opacity-50">
+                className="flex-1 bg-brand-error hover:bg-brand-error text-brand-white rounded-md px-4 py-2 text-sm disabled:opacity-50">
                 {deleteSaving ? 'Löschen…' : 'Löschen'}
               </button>
             </div>
@@ -402,8 +402,8 @@ export default function SpieltagDetailPage() {
 
       {/* Regenerate dialog */}
       {showRegen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="font-bold mb-1">Dienste neu generieren</h3>
             <p className="text-sm text-gray-500 mb-3">
               Unbesetzte Dienste werden gelöscht und durch diese ersetzt:
@@ -424,7 +424,7 @@ export default function SpieltagDetailPage() {
                 ))}
               </div>
             )}
-            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-700 mb-4">
+            <div className="p-3 bg-brand-warning-light border border-brand-warning rounded-lg text-xs text-brand-warning mb-4">
               Bereits belegte Dienste werden nicht überschrieben.
             </div>
             <div className="flex gap-2">

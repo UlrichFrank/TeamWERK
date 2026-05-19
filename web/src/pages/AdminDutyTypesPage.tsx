@@ -86,7 +86,7 @@ export default function AdminDutyTypesPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Diensttypen</h1>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
           <h2 className="font-semibold mb-4">Neuer Diensttyp</h2>
           <form onSubmit={handleCreate} className="space-y-3">
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Name (z.B. Kassierer)" required
@@ -113,13 +113,13 @@ export default function AdminDutyTypesPage() {
             <p className="text-xs text-gray-400">
               Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff)
             </p>
-            <button type="submit" className="bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
+            <button type="submit" className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
               Anlegen
             </button>
           </form>
         </div>
 
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
               <tr>
@@ -158,7 +158,7 @@ export default function AdminDutyTypesPage() {
                   <td className="px-3 py-2">
                     <div className="flex gap-1 justify-end">
                       <button onClick={() => saveEdit(t.id)}
-                        className="text-xs bg-[#3E4A98] text-white rounded px-2 py-1 hover:bg-[#2e3a7a]">
+                        className="text-xs bg-brand-blue text-brand-white rounded px-2 py-1 hover:bg-brand-blue-dark">
                         Speichern
                       </button>
                       <button onClick={cancelEdit}
@@ -184,12 +184,12 @@ export default function AdminDutyTypesPage() {
                   <td className="px-3 py-3">
                     <div className="flex gap-1 justify-end">
                       <button onClick={() => startEdit(t)}
-                        className="text-xs text-[#3E4A98] hover:underline">
+                        className="text-xs text-brand-blue hover:underline">
                         Bearbeiten
                       </button>
                       <span className="text-gray-300">|</span>
                       <button onClick={() => handleDelete(t.id, t.name)}
-                        className="text-xs text-red-500 hover:underline">
+                        className="text-xs text-brand-error hover:underline">
                         Löschen
                       </button>
                     </div>

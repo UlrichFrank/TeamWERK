@@ -18,7 +18,7 @@ export default function MembershipRequestsPage() {
       {requests.length === 0 && <p className="text-gray-500">Keine offenen Anfragen.</p>}
       <div className="space-y-3">
         {requests.map(r => (
-          <div key={r.id} className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
+          <div key={r.id} className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-4 flex items-center justify-between">
             <div>
               <div className="font-medium">{r.name}</div>
               <div className="text-sm text-gray-500">{r.email}</div>

@@ -92,8 +92,8 @@ export default function ProfilePage() {
   }
 
   const statusColor = (s: string) =>
-    s === 'aktiv' ? 'bg-black text-white' :
-    s === 'verletzt' ? 'bg-brand-yellow text-black' :
+    s === 'aktiv' ? 'bg-brand-black text-brand-white' :
+    s === 'verletzt' ? 'bg-brand-yellow text-brand-black' :
     'bg-gray-200 text-gray-600'
 
   const inputClass = 'w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow'
@@ -103,7 +103,7 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold mb-6">Mein Profil</h1>
 
       {/* Account */}
-      <div className="bg-white rounded-xl shadow p-6 mb-4">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
         <h2 className="font-semibold text-gray-700 mb-4">Konto</h2>
         <p className="text-sm text-gray-500 mb-4">{user?.email}</p>
         <form onSubmit={handleAccountSave} className="space-y-3">
@@ -118,19 +118,19 @@ export default function ProfilePage() {
             <button type="submit" className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
               Speichern
             </button>
-            {accountSaved && <span className="text-sm text-green-600">Gespeichert</span>}
+            {accountSaved && <span className="text-sm text-brand-success">Gespeichert</span>}
           </div>
         </form>
       </div>
 
       {/* Password change */}
-      <div className="bg-white rounded-xl shadow p-6 mb-4">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
         <h2 className="font-semibold text-gray-700 mb-4">Passwort ändern</h2>
         {pwSuccess ? (
-          <p className="text-sm text-green-600">Passwort geändert. Du wirst ausgeloggt…</p>
+          <p className="text-sm text-brand-success">Passwort geändert. Du wirst ausgeloggt…</p>
         ) : (
           <form onSubmit={handlePasswordChange} className="space-y-3">
-            {pwError && <p className="text-sm text-red-600">{pwError}</p>}
+            {pwError && <p className="text-sm text-brand-error">{pwError}</p>}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Aktuelles Passwort</label>
               <input type="password" value={pwCurrent} onChange={e => setPwCurrent(e.target.value)} required className={inputClass} />
@@ -151,13 +151,13 @@ export default function ProfilePage() {
       </div>
 
       {/* Email change */}
-      <div className="bg-white rounded-xl shadow p-6 mb-4">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
         <h2 className="font-semibold text-gray-700 mb-4">E-Mail-Adresse ändern</h2>
         {emailSent ? (
-          <p className="text-sm text-green-600">Bestätigungs-Mail gesendet. Bitte prüfe dein neues Postfach.</p>
+          <p className="text-sm text-brand-success">Bestätigungs-Mail gesendet. Bitte prüfe dein neues Postfach.</p>
         ) : (
           <form onSubmit={handleEmailChange} className="space-y-3">
-            {emailError && <p className="text-sm text-red-600">{emailError}</p>}
+            {emailError && <p className="text-sm text-brand-error">{emailError}</p>}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Neue E-Mail-Adresse</label>
               <input type="email" value={emailNew} onChange={e => setEmailNew(e.target.value)} required className={inputClass} />
@@ -175,7 +175,7 @@ export default function ProfilePage() {
 
       {/* Own member profile */}
       {ownMember ? (
-        <div className="bg-white rounded-xl shadow p-6 mb-4">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
           <h2 className="font-semibold text-gray-700 mb-4">Meine Mitgliedsdaten</h2>
           <div className="border border-gray-100 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
@@ -193,14 +193,14 @@ export default function ProfilePage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow p-6 mb-4 text-sm text-gray-500">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4 text-sm text-gray-500">
           Kein Mitgliedsprofil verknüpft. Bitte den Administrator kontaktieren.
         </div>
       )}
 
       {/* Elternteil: linked children */}
       {user?.role === 'elternteil' && children.length > 0 && (
-        <div className="bg-white rounded-xl shadow p-6 mb-4">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
           <h2 className="font-semibold text-gray-700 mb-4">Meine Kinder</h2>
           <div className="space-y-4">
             {children.map(m => (
@@ -225,7 +225,7 @@ export default function ProfilePage() {
 
       {/* Familie: Elternteile (spieler) */}
       {user?.role === 'spieler' && parents.length > 0 && (
-        <div className="bg-white rounded-xl shadow p-6 mb-4">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
           <h2 className="font-semibold text-gray-700 mb-4">Meine Elternteile</h2>
           <div className="space-y-2">
             {parents.map(p => (
@@ -239,7 +239,7 @@ export default function ProfilePage() {
       )}
 
       {/* Vehicle info */}
-      <div className="bg-white rounded-xl shadow p-6">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-gray-700 mb-4">Fahrzeug</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -269,7 +269,7 @@ export default function ProfilePage() {
           >
             Speichern
           </button>
-          {vehicleSaved && <span className="text-sm text-green-600">Gespeichert</span>}
+          {vehicleSaved && <span className="text-sm text-brand-success">Gespeichert</span>}
         </div>
       </div>
     </div>

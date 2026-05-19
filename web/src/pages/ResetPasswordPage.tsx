@@ -21,10 +21,10 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
+      <div className="w-full max-w-sm bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8">
         <h1 className="text-xl font-bold mb-6">Neues Passwort setzen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-brand-error text-sm">{error}</p>}
           <input
             type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
             placeholder="Neues Passwort"

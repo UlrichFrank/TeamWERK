@@ -13,7 +13,7 @@ export default function RegisterPage() {
 
   if (!token) return (
     <div className="min-h-screen flex items-center justify-center">
-      <p className="text-red-600">Ungültiger oder abgelaufener Einladungslink.</p>
+      <p className="text-brand-error">Ungültiger oder abgelaufener Einladungslink.</p>
     </div>
   )
 
@@ -31,25 +31,25 @@ export default function RegisterPage() {
 
   if (done) return (
     <div className="min-h-screen flex items-center justify-center">
-      <p className="text-green-600 font-medium">Registrierung erfolgreich! Weiterleitung…</p>
+      <p className="text-brand-success font-medium">Registrierung erfolgreich! Weiterleitung…</p>
     </div>
   )
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
+      <div className="w-full max-w-sm bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8">
         <h1 className="text-2xl font-bold mb-6">Konto erstellen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-brand-error text-sm">{error}</p>}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Vor- und Nachname</label>
+            <label className="block text-sm font-medium text-brand-black mb-1">Vor- und Nachname</label>
             <input
               type="text" value={name} onChange={e => setName(e.target.value)} required
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Passwort</label>
+            <label className="block text-sm font-medium text-brand-black mb-1">Passwort</label>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
@@ -57,7 +57,7 @@ export default function RegisterPage() {
           </div>
           <button
             type="submit"
-            className="w-full bg-brand-yellow text-black rounded-md py-2 text-sm font-semibold hover:bg-black hover:text-brand-yellow transition-colors"
+            className="w-full bg-brand-yellow text-brand-black rounded-md py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
           >
             Konto erstellen
           </button>

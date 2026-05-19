@@ -1,7 +1,8 @@
 -- Retrofix: migration 007 was added after 008/009 were already deployed,
 -- so these game tables and duty_slots columns were never created on production.
+-- IF NOT EXISTS makes this safe on environments where 007 already ran.
 
-CREATE TABLE games (
+CREATE TABLE IF NOT EXISTS games (
     id          INTEGER  PRIMARY KEY AUTOINCREMENT,
     team_id     INTEGER  NOT NULL REFERENCES teams(id)   ON DELETE RESTRICT,
     season_id   INTEGER  NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
@@ -13,7 +14,7 @@ CREATE TABLE games (
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE game_templates (
+CREATE TABLE IF NOT EXISTS game_templates (
     id                    INTEGER  PRIMARY KEY AUTOINCREMENT,
     name                  TEXT     NOT NULL DEFAULT 'Heimspiel Standard',
     game_duration_minutes INTEGER  NOT NULL DEFAULT 90,
@@ -21,7 +22,7 @@ CREATE TABLE game_templates (
     created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE game_template_items (
+CREATE TABLE IF NOT EXISTS game_template_items (
     id             INTEGER  PRIMARY KEY AUTOINCREMENT,
     template_id    INTEGER  NOT NULL REFERENCES game_templates(id) ON DELETE CASCADE,
     duty_type_id   INTEGER  NOT NULL REFERENCES duty_types(id)     ON DELETE RESTRICT,
@@ -33,8 +34,11 @@ CREATE TABLE game_template_items (
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Rebuild duty_slots to add event_time and game_id columns (SQLite has no ADD COLUMN with FK)
+-- Rebuild duty_slots to add event_time and game_id columns (SQLite has no ADD COLUMN with FK).
+-- The INSERT uses NULL literals for the new columns, so it works whether or not 007 already ran.
 PRAGMA foreign_keys=OFF;
+
+DROP TABLE IF EXISTS duty_slots_new;
 
 CREATE TABLE duty_slots_new (
     id           INTEGER  PRIMARY KEY AUTOINCREMENT,

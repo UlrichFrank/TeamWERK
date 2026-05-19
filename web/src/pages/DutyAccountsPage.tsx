@@ -26,7 +26,7 @@ export default function DutyAccountsPage() {
           </button>
         )}
       </div>
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
@@ -42,7 +42,7 @@ export default function DutyAccountsPage() {
                 {user?.role === 'admin' && <td className="px-4 py-3 font-medium">{a.name}</td>}
                 <td className="px-4 py-3 text-right">{a.soll.toFixed(1)}</td>
                 <td className="px-4 py-3 text-right">{a.ist.toFixed(1)}</td>
-                <td className={`px-4 py-3 text-right font-medium ${a.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                <td className={`px-4 py-3 text-right font-medium ${a.balance > 0 ? 'text-brand-error' : 'text-brand-success'}`}>
                   {a.balance.toFixed(1)}
                 </td>
               </tr>

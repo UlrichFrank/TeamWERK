@@ -34,10 +34,10 @@ const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 
 function trafficColor(filledCount: number, totalCount: number, slotCount: number): string {
-  if (slotCount === 0) return 'bg-red-400'
-  if (totalCount > 0 && filledCount >= totalCount) return 'bg-green-500'
-  if (filledCount > 0) return 'bg-yellow-400'
-  return 'bg-red-400'
+  if (slotCount === 0) return 'bg-brand-error'
+  if (totalCount > 0 && filledCount >= totalCount) return 'bg-brand-success'
+  if (filledCount > 0) return 'bg-brand-warning'
+  return 'bg-brand-error'
 }
 
 function padDate(year: number, month: number, day: number): string {
@@ -168,7 +168,7 @@ export default function SpielplanPage() {
         {user?.role === 'admin' && (
           <button
             onClick={() => setShowCreate(true)}
-            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
+            className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
           >
             + Heimspiel anlegen
           </button>
@@ -183,7 +183,7 @@ export default function SpielplanPage() {
       </div>
 
       {/* Calendar */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <div className="grid grid-cols-7 bg-gray-50 border-b">
           {WEEKDAYS.map(d => (
             <div key={d} className="text-center text-xs font-semibold py-2 text-gray-500 uppercase tracking-wide">{d}</div>
@@ -227,8 +227,8 @@ export default function SpielplanPage() {
 
       {/* Create dialog */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h2 className="text-lg font-bold mb-4">Heimspiel anlegen</h2>
 
             {!showPreview ? (
@@ -259,7 +259,7 @@ export default function SpielplanPage() {
                   </select>
                 </div>
                 {createError && (
-                  <p className="text-red-600 text-sm mt-2">{createError}</p>
+                  <p className="text-brand-error text-sm mt-2">{createError}</p>
                 )}
                 <div className="flex gap-2 pt-2">
                   <button onClick={closeDialog}
@@ -267,7 +267,7 @@ export default function SpielplanPage() {
                   <button
                     onClick={handleFetchPreview}
                     disabled={!newDate || !newTeamId || previewLoading || creating}
-                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {previewLoading || creating ? 'Laden…' : 'Weiter →'}
                   </button>
@@ -291,7 +291,7 @@ export default function SpielplanPage() {
                   ))}
                 </div>
                 {createError && (
-                  <p className="text-red-600 text-sm mb-3">{createError}</p>
+                  <p className="text-brand-error text-sm mb-3">{createError}</p>
                 )}
                 <div className="flex gap-2">
                   <button onClick={() => setShowPreview(false)}

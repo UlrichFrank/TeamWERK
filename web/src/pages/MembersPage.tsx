@@ -33,7 +33,7 @@ export default function MembersPage() {
             <>
               <Link
                 to="/mitglieder/neu"
-                className="text-sm bg-brand-yellow text-black border border-brand-yellow rounded-md px-3 py-1.5 font-medium hover:bg-black hover:text-brand-yellow hover:border-black transition-colors"
+                className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
               >
                 + Neu
               </Link>
@@ -42,7 +42,7 @@ export default function MembersPage() {
                   const url = URL.createObjectURL(r.data)
                   const a = document.createElement('a'); a.href = url; a.download = 'mitglieder.csv'; a.click()
                 })}
-                className="text-sm border border-black text-black rounded-md px-3 py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
+                className="text-sm border border-brand-black text-brand-black rounded-md px-3 py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
               >
                 Export CSV
               </button>
@@ -50,7 +50,7 @@ export default function MembersPage() {
           )}
         </div>
       </div>
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
@@ -72,8 +72,8 @@ export default function MembersPage() {
                 <td className="px-4 py-3 text-gray-500">{m.position || '–'}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                    m.status === 'aktiv' ? 'bg-black text-white' :
-                    m.status === 'verletzt' ? 'bg-brand-yellow text-black' :
+                    m.status === 'aktiv' ? 'bg-brand-black text-brand-white' :
+                    m.status === 'verletzt' ? 'bg-brand-yellow text-brand-black' :
                     'bg-gray-200 text-gray-600'
                   }`}>{m.status}</span>
                 </td>

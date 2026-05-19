@@ -24,7 +24,7 @@ export default function DutyBoardPage() {
       {slots.length === 0 && <p className="text-gray-500">Keine offenen Dienste.</p>}
       <div className="space-y-3">
         {slots.map(s => (
-          <div key={s.id} className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
+          <div key={s.id} className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-4 flex items-center justify-between">
             <div>
               <div className="font-medium">{s.event_name}</div>
               <div className="text-sm text-gray-500">{s.event_date} · {s.duty_type}{s.role_desc ? ` · ${s.role_desc}` : ''}</div>

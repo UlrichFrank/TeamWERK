@@ -23,7 +23,7 @@ export default function AdminClubPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Vereinseinstellungen</h1>
-      <div className="bg-white rounded-xl shadow p-6 max-w-lg">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 max-w-lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Vereinsname</label>
@@ -35,7 +35,7 @@ export default function AdminClubPage() {
             <input value={address} onChange={e => setAddress(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
           </div>
-          <button type="submit" className="bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
+          <button type="submit" className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
             {saved ? 'Gespeichert ✓' : 'Speichern'}
           </button>
         </form>

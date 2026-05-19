@@ -40,8 +40,8 @@ export default function DutySlotsPage() {
 
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
-      pending: 'bg-brand-yellow text-black',
-      fulfilled: 'bg-black text-white',
+      pending: 'bg-brand-yellow text-brand-black',
+      fulfilled: 'bg-brand-black text-brand-white',
       cash_substitute: 'bg-gray-200 text-gray-700',
     }
     const label: Record<string, string> = {
@@ -57,7 +57,7 @@ export default function DutySlotsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Dienst-Planung</h1>
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
@@ -76,7 +76,7 @@ export default function DutySlotsPage() {
                   <td className="px-4 py-3 text-gray-500">{s.event_date}</td>
                   <td className="px-4 py-3 text-gray-500">{s.duty_type}</td>
                   <td className="px-4 py-3 text-right">
-                    <span className={s.slots_filled >= s.slots_total ? 'text-green-600' : 'text-orange-500'}>
+                    <span className={s.slots_filled >= s.slots_total ? 'text-brand-success' : 'text-orange-500'}>
                       {s.slots_filled}/{s.slots_total}
                     </span>
                   </td>

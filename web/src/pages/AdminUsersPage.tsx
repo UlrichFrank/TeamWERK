@@ -13,14 +13,12 @@ type Row =
   | { kind: 'request'; data: MembershipRequest }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin', trainer: 'Trainer', elternteil: 'Elternteil', spieler: 'Spieler',
+  admin: 'Admin', vorstand: 'Vorstand', trainer: 'Trainer', elternteil: 'Elternteil', spieler: 'Spieler',
 }
-const ROLE_COLORS: Record<string, string> = {
-  admin: 'bg-black text-white',
-  trainer: 'bg-brand-yellow text-black',
-  elternteil: 'bg-gray-200 text-gray-700',
-  spieler: 'bg-gray-100 text-gray-600',
+const ROLE_RANK: Record<string, number> = {
+  admin: 5, vorstand: 4, trainer: 3, elternteil: 2, spieler: 1,
 }
+const ALL_ROLES = ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] as const
 
 function buildRows(users: User[], invitations: Invitation[], requests: MembershipRequest[]): Row[] {
   const pending: Row[] = [
@@ -99,6 +97,14 @@ export default function AdminUsersPage() {
     setRequests(prev => prev.filter(x => x.id !== req.id))
   }
 
+  const handleRoleChange = async (u: User, newRole: string) => {
+    await api.put(`/admin/users/${u.id}/role`, { role: newRole })
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: newRole } : x))
+  }
+
+  const allowedRoles = (callerRole: string) =>
+    ALL_ROLES.filter(r => ROLE_RANK[r] <= (ROLE_RANK[callerRole] ?? 0))
+
   const rows = buildRows(users, invitations, requests)
   const total = users.length + invitations.length + requests.length
 
@@ -106,10 +112,10 @@ export default function AdminUsersPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Nutzerverwaltung</h1>
 
-      <div className="bg-white rounded-xl shadow p-6 max-w-md mb-8">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 max-w-md mb-8">
         <h2 className="font-semibold mb-4">Einladung versenden</h2>
-        {sent && <p className="text-green-600 text-sm mb-3">Einladung gesendet ✓</p>}
-        {inviteError && <p className="text-red-600 text-sm mb-3">{inviteError}</p>}
+        {sent && <p className="text-brand-success text-sm mb-3">Einladung gesendet ✓</p>}
+        {inviteError && <p className="text-brand-error text-sm mb-3">{inviteError}</p>}
         <form onSubmit={handleInvite} className="space-y-3">
           <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} type="email" placeholder="E-Mail" required
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
@@ -118,6 +124,7 @@ export default function AdminUsersPage() {
             <option value="elternteil">Elternteil</option>
             <option value="spieler">Spieler</option>
             <option value="trainer">Trainer</option>
+            <option value="vorstand">Vorstand</option>
             <option value="admin">Admin</option>
           </select>
           <select value={inviteTeamID} onChange={e => setInviteTeamID(e.target.value)}
@@ -131,7 +138,7 @@ export default function AdminUsersPage() {
         </form>
       </div>
 
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold">Alle Einträge ({total})</h2>
         </div>
@@ -158,9 +165,9 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-6 py-3 text-gray-600">–</td>
                     <td className="px-6 py-3 text-right space-x-3">
-                      <button onClick={() => handleApproveRequest(req)} className="text-xs text-green-700 hover:text-green-900">Genehmigen</button>
+                      <button onClick={() => handleApproveRequest(req)} className="text-xs text-brand-success hover:text-brand-success">Genehmigen</button>
                       <button onClick={() => handleRejectRequest(req)} className="text-xs text-gray-600 hover:text-gray-900">Ablehnen</button>
-                      <button onClick={() => handleDeleteRequest(req)} className="text-xs text-red-600 hover:text-red-800">Löschen</button>
+                      <button onClick={() => handleDeleteRequest(req)} className="text-xs text-brand-error hover:text-brand-error">Löschen</button>
                     </td>
                   </tr>
                 )
@@ -176,28 +183,40 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-6 py-3 text-gray-600">{inv.team_name || '–'}</td>
                     <td className="px-6 py-3 text-right">
-                      <button onClick={() => handleDeleteInvitation(inv)} className="text-xs text-red-600 hover:text-red-800">Löschen</button>
+                      <button onClick={() => handleDeleteInvitation(inv)} className="text-xs text-brand-error hover:text-brand-error">Löschen</button>
                     </td>
                   </tr>
                 )
               }
               // kind === 'user'
               const u = row.data
+              const callerRank = ROLE_RANK[self?.role ?? ''] ?? 0
+              const canEdit = self?.id !== u.id && (ROLE_RANK[u.role] ?? 0) <= callerRank
               return (
                 <tr key={`user-${u.id}`} className="hover:bg-gray-50">
                   <td className="px-6 py-3 font-medium">{u.name}</td>
                   <td className="px-6 py-3 text-gray-600">{u.email}</td>
                   <td className="px-6 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${ROLE_COLORS[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {ROLE_LABELS[u.role] ?? u.role}
-                    </span>
+                    {canEdit ? (
+                      <select
+                        value={u.role}
+                        onChange={e => handleRoleChange(u, e.target.value)}
+                        className="border border-gray-300 rounded px-2 py-0.5 text-xs"
+                      >
+                        {allowedRoles(self?.role ?? '').map(r => (
+                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs text-gray-500">{ROLE_LABELS[u.role] ?? u.role}</span>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-gray-600">{u.team_name}</td>
                   <td className="px-6 py-3 text-right">
                     <button
                       onClick={() => handleDeleteUser(u)}
                       disabled={self?.id === u.id}
-                      className="text-xs text-red-600 hover:text-red-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="text-xs text-brand-error hover:text-brand-error disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       Löschen
                     </button>

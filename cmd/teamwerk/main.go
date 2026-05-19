@@ -132,9 +132,9 @@ func serve() {
 			r.Post("/api/auth/invite", authH.Invite)
 		})
 
-		// Admin only
+		// Admin + Vorstand
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireRole("admin"))
+			r.Use(auth.RequireRole("admin", "vorstand"))
 			r.Get("/api/admin/club", cfgH.GetClub)
 			r.Put("/api/admin/club", cfgH.UpdateClub)
 			r.Get("/api/admin/seasons", cfgH.ListSeasons)
@@ -146,6 +146,7 @@ func serve() {
 			r.Put("/api/admin/teams/{id}", cfgH.UpdateTeam)
 			r.Post("/api/admin/teams/{id}/assign-trainer", cfgH.AssignTrainer)
 			r.Get("/api/admin/users", authH.ListUsers)
+			r.Put("/api/admin/users/{id}/role", authH.UpdateUserRole)
 			r.Delete("/api/admin/users/{id}", authH.DeleteUser)
 			r.Get("/api/admin/invitations", authH.ListInvitations)
 			r.Delete("/api/admin/invitations/{id}", authH.DeleteInvitation)

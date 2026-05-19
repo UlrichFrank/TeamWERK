@@ -155,7 +155,7 @@ export default function MemberDetailPage() {
       </div>
 
       {/* Stammdaten */}
-      <div className="bg-white rounded-xl shadow p-6 mb-4">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
         <h2 className="font-semibold text-gray-700 mb-4">Stammdaten</h2>
         <div className="grid grid-cols-2 gap-4">
           {field('Vorname', 'first_name')}
@@ -179,8 +179,8 @@ export default function MemberDetailPage() {
                   onClick={() => togglePosition(pos)}
                   className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                     selectedPositions.includes(pos)
-                      ? 'bg-brand-yellow text-black border-brand-yellow'
-                      : 'text-gray-600 border-gray-300 hover:border-black hover:text-black'
+                      ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                      : 'text-gray-600 border-gray-300 hover:border-brand-black hover:text-brand-black'
                   }`}
                 >
                   {pos}
@@ -199,8 +199,8 @@ export default function MemberDetailPage() {
                 onClick={() => handleStatusChange(s)}
                 className={`px-3 py-1 rounded-full text-sm border ${
                   form.status === s
-                    ? 'bg-brand-yellow text-black border-brand-yellow'
-                    : 'text-gray-600 border-gray-300 hover:border-black hover:text-black'
+                    ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                    : 'text-gray-600 border-gray-300 hover:border-brand-black hover:text-brand-black'
                 }`}
               >
                 {s}
@@ -209,22 +209,22 @@ export default function MemberDetailPage() {
           </div>
         </div>
 
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-3 text-sm text-brand-error">{error}</p>}
         <div className="mt-4 flex items-center gap-3">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
+            className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40"
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
-          {saved && <span className="text-sm text-green-600">Gespeichert</span>}
+          {saved && <span className="text-sm text-brand-success">Gespeichert</span>}
         </div>
       </div>
 
       {/* Team-Zuordnung (nur bei existierendem, nicht-passivem Mitglied) */}
       {!isNew && !isPassive && (
-        <div className="bg-white rounded-xl shadow p-6 mb-4">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
           <h2 className="font-semibold text-gray-700 mb-4">Mannschaft zuweisen</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -264,11 +264,11 @@ export default function MemberDetailPage() {
 
       {/* Nutzer verknüpfen (Admin only, existierendes Mitglied) */}
       {isAdmin && !isNew && (
-        <div className="bg-white rounded-xl shadow p-6 mb-4">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
           <h2 className="font-semibold text-gray-700 mb-1">Nutzer verknüpfen</h2>
           <p className="text-xs text-gray-500 mb-4">Das Mitglied erhält damit Zugang zu seinem eigenen Profil.</p>
           {currentUserID && (
-            <p className="text-xs text-black mb-3">
+            <p className="text-xs text-brand-black mb-3">
               Aktuell verknüpft: {users.find(u => u.id === currentUserID)?.name ?? `User #${currentUserID}`}
             </p>
           )}
@@ -293,13 +293,13 @@ export default function MemberDetailPage() {
               Speichern
             </button>
           </div>
-          {saved && <p className="mt-2 text-sm text-green-600">Gespeichert</p>}
+          {saved && <p className="mt-2 text-sm text-brand-success">Gespeichert</p>}
         </div>
       )}
 
       {/* Familien-Verlinkung (Admin only, existierendes Mitglied) */}
       {isAdmin && !isNew && (
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
           <h2 className="font-semibold text-gray-700 mb-4">Elternteile</h2>
           {linkedParents.length > 0 && (
             <div className="mb-4 space-y-2">
@@ -332,7 +332,7 @@ export default function MemberDetailPage() {
               Verknüpfen
             </button>
           </div>
-          {saved && <p className="mt-2 text-sm text-green-600">Gespeichert</p>}
+          {saved && <p className="mt-2 text-sm text-brand-success">Gespeichert</p>}
         </div>
       )}
     </div>
