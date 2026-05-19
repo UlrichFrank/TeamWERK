@@ -25,7 +25,7 @@ teamwerk/
 │   ├── mailer/               ← SMTP-Versand (net/smtp)
 │   ├── members/              ← Mitglieder, Familien-Links, Fahrzeuginfo
 │   └── scheduler/            ← Expired-Token-Bereinigung
-├── migrations/               ← golang-migrate .up/.down SQL-Dateien
+├── internal/db/migrations/   ← golang-migrate .up/.down SQL-Dateien (embedded im Binary)
 ├── web/                      ← Vite + React-Projekt
 │   ├── src/
 │   │   ├── App.tsx           ← Routen-Baum (BrowserRouter)
@@ -72,7 +72,9 @@ make migrate-up    # go run ./cmd/teamwerk migrate up --db ./teamwerk.db
 make migrate-down
 ```
 
-Neue Migration anlegen: `migrations/00N_beschreibung.up.sql` + `00N_beschreibung.down.sql`.
+Neue Migration anlegen: `internal/db/migrations/00N_beschreibung.up.sql` + `.down.sql`.
+
+> **Warnung:** Nie eine Nummer einfügen, die ≤ der aktuellen DB-Version ist — golang-migrate überspringt sie lautlos. Immer die nächste freie Nummer verwenden.
 
 ---
 
@@ -99,7 +101,8 @@ Route-Gruppen:
 - **Public**: Login, Register, Passwort-Reset, Beitrittsantrag
 - **Authenticated** (`auth.Middleware`): alle eingeloggten Nutzer
 - **Admin + Trainer** (`auth.RequireRole("admin","trainer")`): Slot-Verwaltung, Anfragen
-- **Admin only** (`auth.RequireRole("admin")`): Vereinskonfig, Nutzer, Export
+- **Vorstand** (`auth.RequireRole("vorstand")`): Vereinskonfig, Nutzer
+- **Admin only** (`auth.RequireRole("admin")`): Export
 
 ### Auth / JWT
 
@@ -123,7 +126,8 @@ Refresh Token: 7 Tage, opaque (SHA256-Hash in DB), als HttpOnly-Cookie.
 
 | Rolle | Bedeutung |
 |-------|-----------|
-| `admin` | Vollzugriff, Vereinskonfig |
+| `admin` | Vollzugriff |
+| `vorstand` | Vereinskonfig |
 | `trainer` | Eigenes Team: Mitglieder sehen, Slots verwalten, Anfragen bearbeiten |
 | `elternteil` | Nur eigene Kinder (via `family_links`), Dienstbörse, Konto |
 | `spieler` | Eigenes Profil, Dienstbörse, Konto |
@@ -167,7 +171,7 @@ h.mailer.Send(to, subject, body)  // net/smtp, SMTP-Config aus .env
 |---------|----------------|
 | `clubs` | `id`, `name`, `address`, `founded_year` |
 | `seasons` | `id`, `name`, `start_date`, `end_date`, `is_active` (max. 1 aktiv) |
-| `teams` | `id`, `name`, `age_group`, `status` CHECK('aktiv','inaktiv') |
+| `teams` | `id`, `name`, `age_class`, `gender` CHECK('m','f','mixed'), `is_active` |
 | `team_trainers` | `team_id` FK, `user_id` FK (UNIQUE-Paar) |
 
 ### 003 – Members
@@ -282,8 +286,9 @@ Alle Pfade relativ zu `/api/` (der Prefix wird in api.ts gesetzt: `baseURL: '/ap
 ### Styling
 
 Tailwind v3 via CDN-Klassen. Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`-Direktiven).  
-Markenfarben: Blau `#3E4A98`, Gelb `#FAE806`, Grün `#6EB42E`.  
-Sidebar-Hintergrund: `bg-[#3E4A98]`. Primär-Buttons: `bg-[#3E4A98] hover:bg-[#2e3a7a]`.  
+Marken-Primärfarben: Schwarz `#000000`, Gelb `#FAE806`, Weiß `#FFFFFF`.  
+Marken-Sekundärfarben: Blau `#3E4A98`, Grün `#6EB42E`.  
+Sidebar-Hintergrund: `bg-[#3E4A98]`. Primär-Buttons: `bg-[#FAE806] hover:bg-[#000000]`.  
 Logo-SVG: `../team-stuttgart-org/team-stuttgart-site/Resources/Public/Images/logo.svg`  
 Schrift: Hanken Grotesk (Google Fonts, entspricht TYPO3-Site)
 
@@ -298,6 +303,16 @@ Schrift: Hanken Grotesk (Google Fonts, entspricht TYPO3-Site)
 **Scheduler:** Cronjob `* * * * * /usr/local/bin/teamwerk scheduler:run`
 
 Für einen Erstaufbau: `bash deploy/setup-vps.sh` auf dem VPS ausführen (root).
+
+---
+
+## Bekannte Gotchas
+
+**SQLite DATE-Felder:** API gibt Datumsfelder als ISO-Timestamp zurück (`"2026-05-30T00:00:00Z"`). Im Frontend immer `.slice(0, 10)` verwenden für Vergleiche und `date + 'T12:00:00'`-Konstruktionen.
+
+**Aktive Saison:** Spielplan, Dienst-Erstellung und Dienst-Konten setzen eine aktive Saison voraus. Verwalten unter `/admin/saisons`. Ohne aktive Saison schlagen game- und slot-Inserts mit FK-Fehler fehl.
+
+**`make deploy`** führt automatisch `migrate up` aus — der neue Binary hat die Migrations eingebettet.
 
 ---
 

@@ -109,7 +109,7 @@ export default function SpieltagDetailPage() {
     try {
       await api.post('/duty-slots', {
         event_name: `Heimspiel vs. ${game.opponent || ''}`.trim(),
-        event_date: game.date,
+        event_date: game.date.slice(0, 10),
         event_time: addEventTime || null,
         duty_type_id: addDutyTypeId,
         role_desc: addRoleDesc,
@@ -142,7 +142,7 @@ export default function SpieltagDetailPage() {
     try {
       await api.put(`/duty-slots/${editSlot.id}`, {
         event_name: `Heimspiel vs. ${game?.opponent || ''}`.trim(),
-        event_date: game?.date,
+        event_date: game?.date.slice(0, 10),
         event_time: editEventTime || null,
         role_desc: editRoleDesc,
         slots_total: editSlotsTotal,
@@ -171,7 +171,7 @@ export default function SpieltagDetailPage() {
     setRegenLoading(true)
     setRegenKeptSlots(null)
     try {
-      const r = await api.get(`/admin/game-template/preview?date=${game.date}&time=${game.time}`)
+      const r = await api.get(`/admin/game-template/preview?date=${game.date.slice(0, 10)}&time=${game.time}`)
       const p: SlotPreview[] = r.data ?? []
       setRegenPreview(p)
       setRegenSelectedIndices(new Set(p.map((_, i) => i)))
@@ -217,7 +217,7 @@ export default function SpieltagDetailPage() {
   )
   if (!game) return null
 
-  const dateFormatted = new Date(game.date + 'T12:00:00').toLocaleDateString('de-DE', {
+  const dateFormatted = new Date(game.date.slice(0, 10) + 'T12:00:00').toLocaleDateString('de-DE', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
 

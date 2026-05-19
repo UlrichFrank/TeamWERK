@@ -84,8 +84,9 @@ export default function SpielplanPage() {
 
   const gamesByDate: Record<string, Game[]> = {}
   for (const g of monthGames) {
-    if (!gamesByDate[g.date]) gamesByDate[g.date] = []
-    gamesByDate[g.date].push(g)
+    const key = g.date.slice(0, 10)
+    if (!gamesByDate[key]) gamesByDate[key] = []
+    gamesByDate[key].push(g)
   }
 
   const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7

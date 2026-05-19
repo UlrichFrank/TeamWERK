@@ -32,6 +32,7 @@ const navModules: NavModule[] = [
       { to: '/admin/teams', label: 'Teams', roles: ['admin'] },
       { to: '/admin/nutzer', label: 'Nutzer', roles: ['admin'] },
       { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin'] },
+      { to: '/admin/saisons', label: 'Saisons', roles: ['admin'] },
       { to: '/admin/spielplan-template', label: 'Spiel-Vorlage', roles: ['admin'] },
     ],
   },
