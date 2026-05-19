@@ -14,7 +14,8 @@ interface Parent {
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
-  const [members, setMembers] = useState<Member[]>([])
+  const [ownMember, setOwnMember] = useState<Member | null>(null)
+  const [children, setChildren] = useState<Member[]>([])
   const [parents, setParents] = useState<Parent[]>([])
   const [vehicle, setVehicle] = useState({ seats: 0, notes: '' })
   const [vehicleSaved, setVehicleSaved] = useState(false)
@@ -38,7 +39,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     api.get('/profile/me').then(r => {
-      setMembers(r.data?.members ?? [])
+      setOwnMember(r.data?.own_member ?? null)
+      setChildren(r.data?.children ?? [])
       setParents(r.data?.parents ?? [])
     })
     api.get('/profile/vehicle').then(r => setVehicle(r.data ?? { seats: 0, notes: '' }))
@@ -113,7 +115,7 @@ export default function ProfilePage() {
             />
           </div>
           <div className="flex items-center gap-3">
-            <button type="submit" className="bg-[#3E4A98] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#2e3a7a] transition-colors">
+            <button type="submit" className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
               Speichern
             </button>
             {accountSaved && <span className="text-sm text-green-600">Gespeichert</span>}
@@ -141,7 +143,7 @@ export default function ProfilePage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Neues Passwort wiederholen</label>
               <input type="password" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)} required className={inputClass} />
             </div>
-            <button type="submit" className="bg-[#3E4A98] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#2e3a7a] transition-colors">
+            <button type="submit" className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
               Passwort ändern
             </button>
           </form>
@@ -164,21 +166,44 @@ export default function ProfilePage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Aktuelles Passwort zur Bestätigung</label>
               <input type="password" value={emailPw} onChange={e => setEmailPw(e.target.value)} required className={inputClass} />
             </div>
-            <button type="submit" className="bg-[#3E4A98] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#2e3a7a] transition-colors">
+            <button type="submit" className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
               Bestätigungs-Mail senden
             </button>
           </form>
         )}
       </div>
 
-      {/* Member profiles */}
-      {members.length > 0 && (
+      {/* Own member profile */}
+      {ownMember ? (
         <div className="bg-white rounded-xl shadow p-6 mb-4">
-          <h2 className="font-semibold text-gray-700 mb-4">
-            {user?.role === 'elternteil' ? 'Meine Kinder' : 'Mein Spielerprofil'}
-          </h2>
+          <h2 className="font-semibold text-gray-700 mb-4">Meine Mitgliedsdaten</h2>
+          <div className="border border-gray-100 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium">{ownMember.last_name}, {ownMember.first_name}</span>
+              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(ownMember.status)}`}>
+                {ownMember.status}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-6 text-sm text-gray-500">
+              {ownMember.date_of_birth && <div><span className="text-gray-400">Geb.:</span> {ownMember.date_of_birth}</div>}
+              {ownMember.pass_number && <div><span className="text-gray-400">Pass:</span> {ownMember.pass_number}</div>}
+              {ownMember.jersey_number != null && <div><span className="text-gray-400">Trikot:</span> #{ownMember.jersey_number}</div>}
+              {ownMember.position && <div><span className="text-gray-400">Position:</span> {ownMember.position}</div>}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow p-6 mb-4 text-sm text-gray-500">
+          Kein Mitgliedsprofil verknüpft. Bitte den Administrator kontaktieren.
+        </div>
+      )}
+
+      {/* Elternteil: linked children */}
+      {user?.role === 'elternteil' && children.length > 0 && (
+        <div className="bg-white rounded-xl shadow p-6 mb-4">
+          <h2 className="font-semibold text-gray-700 mb-4">Meine Kinder</h2>
           <div className="space-y-4">
-            {members.map(m => (
+            {children.map(m => (
               <div key={m.id} className="border border-gray-100 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">{m.last_name}, {m.first_name}</span>
@@ -195,12 +220,6 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {members.length === 0 && (
-        <div className="bg-white rounded-xl shadow p-6 mb-4 text-sm text-gray-500">
-          Kein Mitgliedsprofil verknüpft. Bitte den Administrator kontaktieren.
         </div>
       )}
 

@@ -243,14 +243,15 @@ type ProfileParent struct {
 }
 
 type ProfileResponse struct {
-	Members []Member       `json:"members"`
-	Parents []ProfileParent `json:"parents"`
+	OwnMember *Member        `json:"own_member,omitempty"`
+	Children  []Member       `json:"children"`
+	Parents   []ProfileParent `json:"parents"`
 }
 
 // GET /api/profile/me — returns the logged-in user's linked member profile(s)
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
-	resp := ProfileResponse{Members: []Member{}, Parents: []ProfileParent{}}
+	resp := ProfileResponse{Children: []Member{}, Parents: []ProfileParent{}}
 
 	// Own member profile via user_id
 	var m Member
@@ -268,7 +269,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		if userID.Valid {
 			n := int(userID.Int64); m.UserID = &n
 		}
-		resp.Members = append(resp.Members, m)
+		resp.OwnMember = &m
 	}
 
 	// Elternteil: linked children via family_links
@@ -288,7 +289,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 					&jn, &child.Position, &child.Status, &uid)
 				if jn.Valid { n := int(jn.Int64); child.JerseyNumber = &n }
 				if uid.Valid { n := int(uid.Int64); child.UserID = &n }
-				resp.Members = append(resp.Members, child)
+				resp.Children = append(resp.Children, child)
 			}
 		}
 	}
@@ -313,6 +314,27 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// GET /api/admin/members/{id}/parents
+func (h *Handler) GetMemberParents(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT u.id, u.name, u.email
+		 FROM users u
+		 JOIN family_links fl ON fl.parent_user_id = u.id
+		 WHERE fl.member_id=?`, id)
+	result := []ProfileParent{}
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var p ProfileParent
+			rows.Scan(&p.ID, &p.Name, &p.Email)
+			result = append(result, p)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // GET/PUT /api/profile/vehicle

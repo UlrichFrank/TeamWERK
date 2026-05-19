@@ -80,6 +80,13 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// DELETE /api/admin/duty-types/:id
+func (h *Handler) DeleteType(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	h.db.ExecContext(r.Context(), `DELETE FROM duty_types WHERE id=?`, id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GET /api/duty-slots
 func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 	rows, _ := h.db.QueryContext(r.Context(),

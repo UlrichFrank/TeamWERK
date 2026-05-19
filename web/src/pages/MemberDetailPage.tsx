@@ -34,11 +34,18 @@ export default function MemberDetailPage() {
   const [selectedSeason, setSelectedSeason] = useState('')
   const [isPrimary, setIsPrimary] = useState(false)
   const [selectedParentUser, setSelectedParentUser] = useState('')
+  const [linkedParents, setLinkedParents] = useState<User[]>([])
   const [selectedLinkedUser, setSelectedLinkedUser] = useState('')
   const [currentUserID, setCurrentUserID] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+
+  const loadLinkedParents = () => {
+    if (isAdmin && !isNew && id) {
+      api.get(`/admin/members/${id}/parents`).then(r => setLinkedParents(r.data ?? []))
+    }
+  }
 
   useEffect(() => {
     api.get('/admin/teams').then(r => setTeams(r.data ?? []))
@@ -61,6 +68,7 @@ export default function MemberDetailPage() {
         setCurrentUserID(m.user_id ?? null)
         setSelectedLinkedUser(m.user_id ? String(m.user_id) : '')
       })
+      loadLinkedParents()
     }
   }, [id, isNew, isAdmin])
 
@@ -99,6 +107,8 @@ export default function MemberDetailPage() {
   const handleFamilyLink = async () => {
     if (!selectedParentUser || !id) return
     await api.post('/admin/family-links', { parent_user_id: Number(selectedParentUser), member_id: Number(id) })
+    setSelectedParentUser('')
+    loadLinkedParents()
     setSaved(true); setTimeout(() => setSaved(false), 2000)
   }
 
@@ -290,17 +300,27 @@ export default function MemberDetailPage() {
       {/* Familien-Verlinkung (Admin only, existierendes Mitglied) */}
       {isAdmin && !isNew && (
         <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Elternteil verknüpfen</h2>
+          <h2 className="font-semibold text-gray-700 mb-4">Elternteile</h2>
+          {linkedParents.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {linkedParents.map(p => (
+                <div key={p.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-2 text-sm">
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-gray-400">{p.email}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex gap-3 items-end">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Elternteil (Nutzer)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Weiteres Elternteil hinzufügen</label>
               <select
                 value={selectedParentUser}
                 onChange={e => setSelectedParentUser(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
               >
                 <option value="">– auswählen –</option>
-                {users.filter(u => u.role === 'elternteil').map(u => (
+                {users.filter(u => u.role === 'elternteil' && !linkedParents.some(p => p.id === u.id)).map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                 ))}
               </select>
