@@ -35,7 +35,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
   const [fromSeasonId, setFromSeasonId] = useState<number | ''>('')
   const [sourceKader, setSourceKader] = useState<SourceKader[]>([])
   const [selectedKader, setSelectedKader] = useState<Set<string>>(new Set())
-  const [assignments, setAssignments] = useState<Record<string, string>>({}) // "A-Jugend|m" → member_source
+  const [emptyOnly, setEmptyOnly] = useState<Set<string>>(new Set()) // "A-Jugend|m" → only structure
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,12 +52,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
     setSourceKader(kader)
     const keys = new Set(kader.map(k => `${k.age_class}|${k.gender}`))
     setSelectedKader(keys)
-    // Default assignments
-    const defaults: Record<string, string> = {}
-    kader.forEach(k => {
-      defaults[`${k.age_class}|${k.gender}`] = 'same-age-previous'
-    })
-    setAssignments(defaults)
+    setEmptyOnly(new Set())
   }
 
   const toggleKader = (key: string) => {
@@ -69,20 +64,13 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
     })
   }
 
-  const memberSourceLabel = (k: SourceKader, source: string) => {
-    if (source === 'empty') return 'Nur Struktur'
-    if (source === 'same-age-previous') return `${k.age_class} aus Saison (${k.member_count} Mitgl.)`
-    if (source === 'age-before-previous') {
-      const before = ageBefore(k.age_class)
-      return before ? `${before} aus Saison (jüngere Altersklasse)` : 'Nur Struktur'
-    }
-    if (source === 'auto-assign') return 'Auto-Assign nach Jahrgang+Geschlecht'
-    return source
-  }
-
-  const ageBefore = (ac: string) => {
-    const map: Record<string, string> = { 'B-Jugend': 'A-Jugend', 'C-Jugend': 'B-Jugend', 'D-Jugend': 'C-Jugend' }
-    return map[ac]
+  const toggleEmptyOnly = (key: string) => {
+    setEmptyOnly(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   const handleConfirm = async () => {
@@ -90,7 +78,8 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
     setError(null)
     const assignmentList: Assignment[] = Array.from(selectedKader).map(key => {
       const [ageClass, gender] = key.split('|')
-      return { age_class: ageClass, gender, member_source: assignments[key] ?? 'empty' }
+      const memberSource = emptyOnly.has(key) ? 'empty' : 'smart-copy'
+      return { age_class: ageClass, gender, member_source: memberSource }
     })
     try {
       await api.post('/admin/kader/copy-from-season', {
@@ -117,7 +106,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
         <div className="p-6">
           {/* Step indicator */}
           <div className="flex gap-2 mb-6 text-xs">
-            {[1, 2, 3, 4].map(s => (
+            {[1, 2].map(s => (
               <div key={s} className={`flex-1 h-1 rounded-full ${s <= step ? 'bg-brand-yellow' : 'bg-gray-200'}`} />
             ))}
           </div>
@@ -153,109 +142,45 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
             </div>
           )}
 
-          {/* Step 2: Select which Kader to copy */}
+          {/* Step 2: Select which Kader to copy and set options */}
           {step === 2 && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600">Welche Kader sollen kopiert werden?</p>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {sourceKader.map(k => {
                   const key = `${k.age_class}|${k.gender}`
                   return (
-                    <label key={key} className="flex items-center gap-3 text-sm p-2 rounded hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedKader.has(key)}
-                        onChange={() => toggleKader(key)}
-                        className="accent-brand-blue"
-                      />
-                      <span className="font-medium">{k.age_class} {GENDER_LABEL[k.gender]}</span>
-                      <span className="text-gray-400 text-xs ml-auto">({k.member_count} Mitgl.)</span>
-                    </label>
-                  )
-                })}
-              </div>
-              <div className="flex justify-between gap-2">
-                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Zurück</button>
-                <button
-                  onClick={() => setStep(3)}
-                  disabled={selectedKader.size === 0}
-                  className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40"
-                >
-                  Weiter
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Member assignment per Kader */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">Wie sollen die Mitglieder übernommen werden?</p>
-              <div className="space-y-3">
-                {sourceKader.filter(k => selectedKader.has(`${k.age_class}|${k.gender}`)).map(k => {
-                  const key = `${k.age_class}|${k.gender}`
-                  const hasBefore = !!ageBefore(k.age_class)
-                  return (
-                    <div key={key} className="border rounded-lg p-3">
-                      <div className="font-medium text-sm mb-2">{k.age_class} {GENDER_LABEL[k.gender]}</div>
-                      <div className="space-y-1">
-                        {(['empty', 'same-age-previous', hasBefore ? 'age-before-previous' : null, 'auto-assign'] as (string | null)[])
-                          .filter(Boolean)
-                          .map(src => (
-                            <label key={src!} className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
-                                type="radio"
-                                name={key}
-                                value={src!}
-                                checked={assignments[key] === src}
-                                onChange={() => setAssignments(prev => ({ ...prev, [key]: src! }))}
-                                className="accent-brand-blue"
-                              />
-                              <span>{memberSourceLabel(k, src!)}</span>
-                            </label>
-                          ))}
-                      </div>
+                    <div key={key} className="border rounded-lg p-3 space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedKader.has(key)}
+                          onChange={() => toggleKader(key)}
+                          className="accent-brand-blue"
+                        />
+                        <span className="font-medium text-sm">{k.age_class} {GENDER_LABEL[k.gender]}</span>
+                      </label>
+                      {selectedKader.has(key) && (
+                        <label className="flex items-center gap-3 cursor-pointer ml-6 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={emptyOnly.has(key)}
+                            onChange={() => toggleEmptyOnly(key)}
+                            className="accent-brand-blue"
+                          />
+                          <span className="text-gray-600">Nur Struktur (keine Mitglieder)</span>
+                        </label>
+                      )}
                     </div>
                   )
                 })}
               </div>
-              <div className="flex justify-between gap-2">
-                <button onClick={() => setStep(2)} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Zurück</button>
-                <button
-                  onClick={() => setStep(4)}
-                  className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
-                >
-                  Weiter
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Confirm */}
-          {step === 4 && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Es werden <strong>{selectedKader.size} Kader</strong> in Saison <strong>{toSeasonName}</strong> angelegt.
-              </p>
-              <ul className="text-sm space-y-1 text-gray-500">
-                {sourceKader
-                  .filter(k => selectedKader.has(`${k.age_class}|${k.gender}`))
-                  .map(k => {
-                    const key = `${k.age_class}|${k.gender}`
-                    return (
-                      <li key={key}>
-                        • {k.age_class} {GENDER_LABEL[k.gender]}
-                        {' '}– {memberSourceLabel(k, assignments[key] ?? 'empty')}
-                      </li>
-                    )
-                  })}
-              </ul>
               {error && <p className="text-brand-error text-sm">{error}</p>}
               <div className="flex justify-between gap-2">
-                <button onClick={() => setStep(3)} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Zurück</button>
+                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Zurück</button>
                 <button
                   onClick={handleConfirm}
-                  disabled={saving}
+                  disabled={selectedKader.size === 0 || saving}
                   className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40"
                 >
                   {saving ? 'Anlegen…' : 'Kader anlegen'}

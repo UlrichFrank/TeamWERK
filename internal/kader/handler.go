@@ -385,6 +385,62 @@ func (h *Handler) CopyFromSeason(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"created": created})
 }
 
+// POST /api/admin/kader/auto-assign — auto-assign members to multiple kader by age/gender bracket
+func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		KaderIDs []int `json:"kader_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.KaderIDs) == 0 {
+		http.Error(w, "kader_ids required", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for _, kaderID := range req.KaderIDs {
+		var k kaderRow
+		var seasonStartYear int
+		var dedicatedBirthYear sql.NullInt64
+		err := tx.QueryRowContext(r.Context(),
+			`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.dedicated_birth_year,
+			        CAST(strftime('%Y', s.start_date) AS INTEGER)
+			 FROM kader k JOIN seasons s ON s.id=k.season_id
+			 WHERE k.id=?`, kaderID).
+			Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &dedicatedBirthYear, &seasonStartYear)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				continue
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if dedicatedBirthYear.Valid {
+			v := int(dedicatedBirthYear.Int64)
+			k.DedicatedBirthYear = &v
+		}
+
+		_, err = autoAssignMembers(r.Context(), tx, k.ID, k.AgeClass, k.Gender, seasonStartYear, k.DedicatedBirthYear)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
 func (h *Handler) loadTrainers(ctx context.Context, kaderID int) ([]trainerRow, error) {
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT m.id, m.first_name || ' ' || m.last_name

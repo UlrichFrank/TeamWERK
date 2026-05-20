@@ -20,16 +20,16 @@ type createdKader struct {
 	MemberCount  int    `json:"member_count"`
 }
 
-// ageClassBefore returns the next younger age class (progression: A←B←C←D).
-// A-Jugend has no "age before", so it returns "".
-func ageClassBefore(ac string) string {
+// ageClassBelow returns the next younger age class (one level down).
+// A-Jugend→B-Jugend, B-Jugend→C-Jugend, C-Jugend→D-Jugend, D-Jugend→""
+func ageClassBelow(ac string) string {
 	switch ac {
-	case "B-Jugend":
-		return "A-Jugend"
-	case "C-Jugend":
+	case "A-Jugend":
 		return "B-Jugend"
-	case "D-Jugend":
+	case "B-Jugend":
 		return "C-Jugend"
+	case "C-Jugend":
+		return "D-Jugend"
 	default:
 		return ""
 	}
@@ -70,6 +70,9 @@ func copyKader(ctx context.Context, db *sql.DB, fromSeasonID, toSeasonID, target
 		}
 	}
 
+	// Compute target bracket for age classes
+	targetBrackets := ComputeAgeBrackets(targetStartYear)
+
 	var created []createdKader
 	for _, a := range assignments {
 		// Insert kader for target season with team_number=1, dedicated_birth_year=NULL (mixed mode)
@@ -88,23 +91,59 @@ func copyKader(ctx context.Context, db *sql.DB, fromSeasonID, toSeasonID, target
 		}
 
 		memberCount := 0
+		bracket, hasBracket := targetBrackets[a.AgeClass]
+
 		switch a.MemberSource {
+		case "", "smart-copy":
+			// Smart-copy: combine same-age and one-level-below sources, filtered by target bracket
+			if hasBracket {
+				// Source 1: same age class
+				srcID, ok := sourceMap[a.AgeClass+"|"+a.Gender]
+				if ok {
+					count, err := copyMembersFromKader(ctx, tx, srcID, int(newKaderID), bracket[0], bracket[1])
+					if err != nil {
+						return nil, err
+					}
+					memberCount = count
+				}
+
+				// Source 2: one level below (younger class, where older cohort comes from)
+				youngerClass := ageClassBelow(a.AgeClass)
+				if youngerClass != "" {
+					srcID, ok := sourceMap[youngerClass+"|"+a.Gender]
+					if ok {
+						count, err := copyMembersFromKader(ctx, tx, srcID, int(newKaderID), bracket[0], bracket[1])
+						if err != nil {
+							return nil, err
+						}
+						memberCount = count
+					}
+				}
+			}
 		case "same-age-previous":
-			srcID, ok := sourceMap[a.AgeClass+"|"+a.Gender]
-			if ok {
-				memberCount, err = copyMembersFromKader(ctx, tx, srcID, int(newKaderID))
-				if err != nil {
-					return nil, err
+			// Legacy: same age only, filtered by target bracket
+			if hasBracket {
+				srcID, ok := sourceMap[a.AgeClass+"|"+a.Gender]
+				if ok {
+					count, err := copyMembersFromKader(ctx, tx, srcID, int(newKaderID), bracket[0], bracket[1])
+					if err != nil {
+						return nil, err
+					}
+					memberCount = count
 				}
 			}
 		case "age-before-previous":
-			olderClass := ageClassBefore(a.AgeClass)
-			if olderClass != "" {
-				srcID, ok := sourceMap[olderClass+"|"+a.Gender]
-				if ok {
-					memberCount, err = copyMembersFromKader(ctx, tx, srcID, int(newKaderID))
-					if err != nil {
-						return nil, err
+			// Legacy: one level below only, filtered by target bracket
+			if hasBracket {
+				olderClass := ageClassBelow(a.AgeClass)
+				if olderClass != "" {
+					srcID, ok := sourceMap[olderClass+"|"+a.Gender]
+					if ok {
+						count, err := copyMembersFromKader(ctx, tx, srcID, int(newKaderID), bracket[0], bracket[1])
+						if err != nil {
+							return nil, err
+						}
+						memberCount = count
 					}
 				}
 			}
@@ -130,11 +169,13 @@ func copyKader(ctx context.Context, db *sql.DB, fromSeasonID, toSeasonID, target
 	return created, nil
 }
 
-func copyMembersFromKader(ctx context.Context, tx *sql.Tx, fromKaderID, toKaderID int) (int, error) {
+func copyMembersFromKader(ctx context.Context, tx *sql.Tx, fromKaderID, toKaderID, bracketMin, bracketMax int) (int, error) {
 	_, err := tx.ExecContext(ctx,
 		`INSERT OR IGNORE INTO kader_members (kader_id, member_id)
-		 SELECT ?, member_id FROM kader_members WHERE kader_id=?`,
-		toKaderID, fromKaderID)
+		 SELECT ?, km.member_id FROM kader_members km
+		 JOIN members m ON m.id = km.member_id
+		 WHERE km.kader_id=? AND CAST(strftime('%Y', m.date_of_birth) AS INTEGER) BETWEEN ? AND ?`,
+		toKaderID, fromKaderID, bracketMin, bracketMax)
 	if err != nil {
 		return 0, err
 	}

@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import KaderMemberSearch from '../components/KaderMemberSearch'
 import KaderTrainerSearch from '../components/KaderTrainerSearch'
 import CopyKaderModal from '../components/CopyKaderModal'
+import AutoAssignModal from '../components/AutoAssignModal'
 
 interface Season {
   id: number
@@ -47,6 +48,7 @@ export default function AdminKaderPage() {
   const [kaderList, setKaderList] = useState<Kader[]>([])
   const [loading, setLoading] = useState(true)
   const [showCopyModal, setShowCopyModal] = useState(false)
+  const [showAutoAssignModal, setShowAutoAssignModal] = useState(false)
   const [removing, setRemoving] = useState<Record<string, boolean>>({})
   const [initializing, setInitializing] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -228,7 +230,7 @@ export default function AdminKaderPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 gap-4">
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <h1 className="text-2xl font-bold">
           Kader
           {activeSeason && (
@@ -236,12 +238,20 @@ export default function AdminKaderPage() {
           )}
         </h1>
         {activeSeason && kaderList.length > 0 && (
-          <button
-            onClick={() => setShowCopyModal(true)}
-            className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
-          >
-            Aus vorheriger Saison kopieren
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setShowCopyModal(true)}
+              className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
+            >
+              Aus vorheriger Saison kopieren
+            </button>
+            <button
+              onClick={() => setShowAutoAssignModal(true)}
+              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:border-gray-500 transition-colors whitespace-nowrap"
+            >
+              Auto-Assign
+            </button>
+          </div>
         )}
       </div>
 
@@ -513,6 +523,19 @@ export default function AdminKaderPage() {
             showToast('Kader erfolgreich kopiert')
           }}
           onClose={() => setShowCopyModal(false)}
+        />
+      )}
+
+      {/* Auto-Assign modal */}
+      {showAutoAssignModal && activeSeason && (
+        <AutoAssignModal
+          seasonId={activeSeason.id}
+          onDone={async () => {
+            setShowAutoAssignModal(false)
+            await loadAll()
+            showToast('Auto-Assign abgeschlossen')
+          }}
+          onClose={() => setShowAutoAssignModal(false)}
         />
       )}
     </div>
