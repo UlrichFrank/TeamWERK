@@ -120,13 +120,13 @@ export default function MembersPage() {
                 </Link>
                 <button
                   onClick={() => setShowImport(true)}
-                  className="text-sm border border-brand-black text-brand-black rounded-md px-3 py-2.5 sm:py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
+                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
                 >
                   Import CSV
                 </button>
                 <button
                   onClick={handleExport}
-                  className="text-sm border border-brand-black text-brand-black rounded-md px-3 py-2.5 sm:py-1.5 hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
+                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
                 >
                   Export CSV
                 </button>
