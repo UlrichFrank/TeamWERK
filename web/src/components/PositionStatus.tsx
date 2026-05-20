@@ -15,10 +15,8 @@ const POSITIONS: Position[] = [
   { name: 'Torwart', abbr: 'TW' },
   { name: 'Linksaußen', abbr: 'LA' },
   { name: 'Rechtsaußen', abbr: 'RA' },
-  { name: 'Rückraum Links', abbr: 'RL' },
-  { name: 'Rückraum Mitte', abbr: 'RM' },
-  { name: 'Rückraum Rechts', abbr: 'RR' },
-  { name: 'Kreisläufer', abbr: 'KL' },
+  { name: 'Rückraum', abbr: 'RM' },
+  { name: 'Kreismitte', abbr: 'KL' },
 ]
 
 function countMembersForPosition(members: Member[], positionName: string): number {
