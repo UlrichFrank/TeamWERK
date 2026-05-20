@@ -56,7 +56,7 @@ export default function DutyAccountsPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {accounts.map(a => (
-              <tr key={a.user_id} className="hover:bg-gray-50">
+              <tr key={a.user_id} className="hover:bg-brand-gray">
                 {user?.role === 'admin' && <td className="px-4 py-3 font-medium">{a.name}</td>}
                 <td className="px-4 py-3 text-right">{a.soll.toFixed(1)}</td>
                 <td className="px-4 py-3 text-right">{a.ist.toFixed(1)}</td>

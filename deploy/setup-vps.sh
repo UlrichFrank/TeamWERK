@@ -11,6 +11,10 @@ apt-get update && apt-get install -y nginx openssl
 mkdir -p /var/lib/teamwerk
 chown www-data:www-data /var/lib/teamwerk
 
+# Create upload directories
+mkdir -p /var/lib/teamwerk/storage/uploads/{member-photos,user-photos,sepa-mandats}
+chown -R www-data:www-data /var/lib/teamwerk/storage/
+
 # Create env file (skip if already configured)
 if [ ! -f /etc/teamwerk/env ]; then
     mkdir -p /etc/teamwerk
@@ -18,6 +22,7 @@ if [ ! -f /etc/teamwerk/env ]; then
 PORT=8080
 DB_PATH=/var/lib/teamwerk/teamwerk.db
 JWT_SECRET=REPLACE_WITH_RANDOM_SECRET
+UPLOAD_DIR=/var/lib/teamwerk/storage/uploads
 SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587
 SMTP_USER=p459264p5

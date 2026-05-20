@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import { usePaginatedFetch } from '../lib/usePaginatedFetch'
+import { usePagination } from '../lib/usePagination'
 import MobileCard from '../components/MobileCard'
+import Pagination from '../components/Pagination'
 
 interface Member {
   id: number; first_name: string; last_name: string
@@ -51,8 +52,9 @@ const rowStatusColor = (s: ImportRow['status']) => {
 }
 
 export default function MembersPage() {
+  const navigate = useNavigate()
   const { user } = useAuth()
-  const { items, total, loading, setSearch, loadMore, reset } = usePaginatedFetch<Member>('/members')
+  const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members')
   const isAdmin = user?.role === 'admin'
 
   const [showImport, setShowImport] = useState(false)
@@ -82,7 +84,7 @@ export default function MembersPage() {
       fd.append('mode', importMode)
       const res = await api.post<ImportReport>('/members/import', fd)
       setImportResult(res.data)
-      if (res.data.created > 0 || res.data.updated > 0) reset()
+      if (res.data.created > 0 || res.data.updated > 0) refresh()
     } catch {
       setImportResult(null)
       alert('Import fehlgeschlagen. Bitte CSV-Format prüfen.')
@@ -163,11 +165,9 @@ export default function MembersPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {items.map(m => (
-              <tr key={m.id} className="hover:bg-gray-50">
+              <tr key={m.id} className="hover:bg-brand-gray cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
                 <td className="px-4 py-3 font-medium">
-                  <Link to={`/mitglieder/${m.id}`} className="hover:text-brand-yellow transition-colors">
-                    {m.last_name}, {m.first_name}
-                  </Link>
+                  {m.last_name}, {m.first_name}
                 </td>
                 <td className="px-4 py-3 text-gray-500">{m.pass_number || '–'}</td>
                 <td className="px-4 py-3 text-gray-500">{genderLabel(m.gender)}</td>
@@ -183,18 +183,7 @@ export default function MembersPage() {
         </table>
       </div>
 
-      {/* Load More Button */}
-      {items.length < total && (
-        <div className="mt-6 text-center">
-          <button
-            onClick={loadMore}
-            disabled={loading}
-            className="px-6 py-2.5 sm:py-2 bg-brand-yellow text-brand-black rounded font-medium hover:bg-brand-black hover:text-brand-yellow disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Lädt…' : `Mehr laden (${items.length}/${total})`}
-          </button>
-        </div>
-      )}
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} />
 
       {/* Import Modal */}
       {showImport && (

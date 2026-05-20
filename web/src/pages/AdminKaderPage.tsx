@@ -279,7 +279,7 @@ export default function AdminKaderPage() {
         const group = groups.get(key)!
         const hasMultiple = group.length > 1
         const firstK = group[0]
-        const canAddMore = group.length < 2
+        const canAddMore = group.length < 3
 
         return (
           <div key={key} className="mb-6">

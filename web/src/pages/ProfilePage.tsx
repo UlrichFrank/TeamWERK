@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react'
+import { useEffect, useRef, useState, FormEvent } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -12,6 +12,16 @@ interface Parent {
   id: number; name: string; email: string
 }
 
+interface Phone {
+  id: number; label: string; number: string; sort_order: number
+}
+
+interface Visibility {
+  phones_visible: boolean; address_visible: boolean; photo_visible: boolean
+}
+
+const PHONE_LABEL_SUGGESTIONS = ['Privat', 'Mobil', 'Firma', 'Notfall']
+
 export default function ProfilePage() {
   const { user, logout } = useAuth()
   const [ownMember, setOwnMember] = useState<Member | null>(null)
@@ -23,6 +33,20 @@ export default function ProfilePage() {
   // Account (name)
   const [accountName, setAccountName] = useState('')
   const [accountSaved, setAccountSaved] = useState(false)
+
+  // Contact data
+  const [address, setAddress] = useState({ street: '', zip: '', city: '' })
+  const [addressSaved, setAddressSaved] = useState(false)
+  const [phones, setPhones] = useState<Phone[]>([])
+  const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false })
+  const [visSaved, setVisSaved] = useState(false)
+  const [photoURL, setPhotoURL] = useState('')
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  // New phone form
+  const [showAddPhone, setShowAddPhone] = useState(false)
+  const [newPhone, setNewPhone] = useState({ label: '', number: '' })
+  const [addingPhone, setAddingPhone] = useState(false)
 
   // Password change
   const [pwCurrent, setPwCurrent] = useState('')
@@ -42,6 +66,10 @@ export default function ProfilePage() {
       setOwnMember(r.data?.own_member ?? null)
       setChildren(r.data?.children ?? [])
       setParents(r.data?.parents ?? [])
+      setAddress({ street: r.data?.street ?? '', zip: r.data?.zip ?? '', city: r.data?.city ?? '' })
+      setPhones(r.data?.phones ?? [])
+      setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false })
+      if (r.data?.photo_url) setPhotoURL(r.data.photo_url)
     })
     api.get('/profile/vehicle').then(r => setVehicle(r.data ?? { seats: 0, notes: '' }))
     api.get('/profile/account').then(r => setAccountName(r.data.name ?? ''))
@@ -91,6 +119,50 @@ export default function ProfilePage() {
     }
   }
 
+  const handleAddressSave = async () => {
+    await api.put('/profile/me', address)
+    setAddressSaved(true)
+    setTimeout(() => setAddressSaved(false), 2000)
+  }
+
+  const handleAddPhone = async () => {
+    if (!newPhone.number) return
+    setAddingPhone(true)
+    try {
+      const r = await api.post('/profile/phones', { label: newPhone.label, number: newPhone.number, sort_order: phones.length })
+      setPhones(prev => [...prev, { id: r.data.id, label: newPhone.label, number: newPhone.number, sort_order: phones.length }])
+      setNewPhone({ label: '', number: '' })
+      setShowAddPhone(false)
+    } finally {
+      setAddingPhone(false)
+    }
+  }
+
+  const handleDeletePhone = async (phoneId: number) => {
+    await api.delete(`/profile/phones/${phoneId}`)
+    setPhones(prev => prev.filter(p => p.id !== phoneId))
+  }
+
+  const handleVisSave = async () => {
+    await api.put('/profile/visibility', visibility)
+    setVisSaved(true)
+    setTimeout(() => setVisSaved(false), 2000)
+  }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoUploading(true)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const r = await api.post('/upload/user-photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setPhotoURL(r.data.photo_url ?? '')
+    } finally {
+      setPhotoUploading(false)
+      if (photoInputRef.current) photoInputRef.current.value = ''
+    }
+  }
+
   const statusColor = (s: string) =>
     s === 'aktiv' ? 'bg-brand-black text-brand-white' :
     s === 'verletzt' ? 'bg-brand-yellow text-brand-black' :
@@ -121,6 +193,142 @@ export default function ProfilePage() {
             {accountSaved && <span className="text-sm text-brand-success">Gespeichert</span>}
           </div>
         </form>
+      </div>
+
+      {/* Contact data: Address */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
+        <h2 className="font-semibold text-gray-700 mb-4">Adresse</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
+            <input type="text" value={address.street} onChange={e => setAddress(a => ({ ...a, street: e.target.value }))} className={inputClass} />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+              <input type="text" value={address.zip} onChange={e => setAddress(a => ({ ...a, zip: e.target.value }))} className={inputClass} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ort</label>
+              <input type="text" value={address.city} onChange={e => setAddress(a => ({ ...a, city: e.target.value }))} className={inputClass} />
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button onClick={handleAddressSave} className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
+            Speichern
+          </button>
+          {addressSaved && <span className="text-sm text-green-600">Gespeichert</span>}
+        </div>
+      </div>
+
+      {/* Contact data: Phone numbers */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
+        <h2 className="font-semibold text-gray-700 mb-4">Telefonnummern</h2>
+        {phones.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {phones.map(p => (
+              <div key={p.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-2 text-sm">
+                <div>
+                  {p.label && <span className="text-gray-400 mr-2">{p.label}:</span>}
+                  <span className="font-mono">{p.number}</span>
+                </div>
+                <button onClick={() => handleDeletePhone(p.id)} className="text-xs text-gray-400 hover:text-red-600 transition-colors px-2 py-1">
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {showAddPhone ? (
+          <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">Bezeichnung</label>
+                <input
+                  list="phone-label-suggestions"
+                  value={newPhone.label}
+                  onChange={e => setNewPhone(p => ({ ...p, label: e.target.value }))}
+                  placeholder="z.B. Mobil"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+                <datalist id="phone-label-suggestions">
+                  {PHONE_LABEL_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                </datalist>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">Nummer</label>
+                <input
+                  type="tel"
+                  value={newPhone.number}
+                  onChange={e => setNewPhone(p => ({ ...p, number: e.target.value }))}
+                  placeholder="+49 711 …"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleAddPhone} disabled={addingPhone || !newPhone.number}
+                className="bg-brand-yellow text-black px-3 py-1.5 rounded text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40">
+                {addingPhone ? '…' : 'Hinzufügen'}
+              </button>
+              <button onClick={() => { setShowAddPhone(false); setNewPhone({ label: '', number: '' }) }}
+                className="text-sm text-gray-500 hover:text-gray-700 px-2">
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setShowAddPhone(true)}
+            className="text-sm text-brand-blue underline hover:text-brand-black">
+            + Nummer hinzufügen
+          </button>
+        )}
+      </div>
+
+      {/* Contact data: Profile photo */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
+        <h2 className="font-semibold text-gray-700 mb-4">Profilbild</h2>
+        <div className="flex gap-4 items-start">
+          {photoURL ? (
+            <img src={photoURL} alt="Profilbild" className="w-20 h-20 rounded-full object-cover border border-gray-200" />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Kein Bild</div>
+          )}
+          <div>
+            <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoUpload} />
+            <button onClick={() => photoInputRef.current?.click()} disabled={photoUploading}
+              className="bg-brand-yellow text-black px-3 py-1.5 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40">
+              {photoUploading ? 'Hochladen…' : photoURL ? 'Bild ersetzen' : 'Bild hochladen'}
+            </button>
+            <p className="text-xs text-gray-400 mt-1">JPEG, PNG oder WebP, max. 5 MB</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Visibility toggles */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
+        <h2 className="font-semibold text-gray-700 mb-1">Sichtbarkeit für Teammitglieder</h2>
+        <p className="text-xs text-gray-500 mb-4">Wähle, welche Kontaktdaten andere Teammitglieder sehen dürfen.</p>
+        <div className="space-y-2">
+          {[
+            { key: 'phones_visible' as const, label: 'Telefonnummern sichtbar' },
+            { key: 'address_visible' as const, label: 'Adresse sichtbar' },
+            { key: 'photo_visible' as const, label: 'Profilbild sichtbar' },
+          ].map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={visibility[key]} onChange={e => setVisibility(v => ({ ...v, [key]: e.target.checked }))}
+                className="w-4 h-4 accent-brand-yellow" />
+              <span className="text-sm text-gray-700">{label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button onClick={handleVisSave} className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
+            Speichern
+          </button>
+          {visSaved && <span className="text-sm text-green-600">Gespeichert</span>}
+        </div>
       </div>
 
       {/* Password change */}

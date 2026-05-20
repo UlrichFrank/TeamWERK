@@ -31,6 +31,37 @@ type Member struct {
 	Status       string  `json:"status"`
 	UserID       *int    `json:"user_id,omitempty"`
 	ClubFunction *string `json:"club_function,omitempty"`
+
+	// Extended fields (populated by GetMember)
+	Street   *string `json:"street,omitempty"`
+	Zip      *string `json:"zip,omitempty"`
+	City     *string `json:"city,omitempty"`
+	JoinDate *string `json:"join_date,omitempty"`
+	IBAN     *string `json:"iban,omitempty"`
+	PhotoURL *string `json:"photo_url,omitempty"`
+	PhotoVisible bool `json:"photo_visible,omitempty"`
+
+	DsgvoVerarbeitung     bool    `json:"dsgvo_verarbeitung,omitempty"`
+	DsgvoVerarbeitungDate *string `json:"dsgvo_verarbeitung_date,omitempty"`
+	DsgvoWeitergabe       bool    `json:"dsgvo_weitergabe,omitempty"`
+	DsgvoWeitergabeDate   *string `json:"dsgvo_weitergabe_date,omitempty"`
+	SepaMandat            bool    `json:"sepa_mandat,omitempty"`
+	SepaMandatDate        *string `json:"sepa_mandat_date,omitempty"`
+	SepaMandatURL         *string `json:"sepa_mandat_url,omitempty"`
+
+	AddressSource       string         `json:"address_source,omitempty"`
+	AddressConflict     bool           `json:"address_conflict,omitempty"`
+	MemberAddressStored *AddressStored `json:"member_address_stored,omitempty"`
+
+	// Linked user contact data (shown when user visibility allows)
+	UserPhones   []UserPhone `json:"user_phones,omitempty"`
+	UserPhotoURL *string     `json:"user_photo_url,omitempty"`
+}
+
+type AddressStored struct {
+	Street string `json:"street"`
+	Zip    string `json:"zip"`
+	City   string `json:"city"`
 }
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
@@ -188,21 +219,174 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/members/:id
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
 	id := r.PathValue("id")
-	m, err := scanMember(h.db.QueryRowContext(r.Context(),
-		`SELECT id, first_name, last_name, COALESCE(date_of_birth,''), COALESCE(member_number,''), COALESCE(pass_number,''),
-		        jersey_number, COALESCE(position,''), COALESCE(gender,'u'), status, user_id, club_function
-		 FROM members WHERE id=?`, id))
+
+	row := h.db.QueryRowContext(r.Context(), `
+		SELECT m.id, m.first_name, m.last_name,
+		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function,
+		       m.street, m.zip, m.city, m.join_date, m.iban,
+		       m.photo_path, m.photo_visible,
+		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
+		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
+		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path,
+		       u.street, u.zip, u.city
+		FROM members m
+		LEFT JOIN users u ON u.id = m.user_id
+		WHERE m.id=?`, id)
+
+	var base Member
+	var jerseyNum, userID sql.NullInt64
+	var clubFunc sql.NullString
+	var mStreet, mZip, mCity sql.NullString
+	var joinDate, iban sql.NullString
+	var photoPath sql.NullString
+	var photoVisible int64
+	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
+	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
+	var uStreet, uZip, uCity sql.NullString
+
+	err := row.Scan(
+		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
+		&base.MemberNumber, &base.PassNumber,
+		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunc,
+		&mStreet, &mZip, &mCity, &joinDate, &iban,
+		&photoPath, &photoVisible,
+		&dsgvoVerarb, &dsgvoVerarbDate,
+		&dsgvoWeiter, &dsgvoWeiterDate,
+		&sepaMandat, &sepaMandatDate, &sepaMandatPath,
+		&uStreet, &uZip, &uCity,
+	)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+
+	if jerseyNum.Valid {
+		n := int(jerseyNum.Int64)
+		base.JerseyNumber = &n
+	}
+	if userID.Valid {
+		n := int(userID.Int64)
+		base.UserID = &n
+	}
+	if clubFunc.Valid {
+		base.ClubFunction = &clubFunc.String
+	}
+
+	isAdmin := claims.Role == "admin"
+	isPrivileged := claims.Role == "admin" || claims.Role == "vorstand" || claims.Role == "trainer"
+	isOwn := base.UserID != nil && *base.UserID == claims.UserID
+
+	// Address priority: user address wins when present
+	if uStreet.Valid && uStreet.String != "" {
+		base.AddressSource = "user"
+		s := uStreet.String
+		z := uZip.String
+		c := uCity.String
+		base.Street = &s
+		base.Zip = &z
+		base.City = &c
+		// Conflict: member also has an address that differs
+		if mStreet.Valid && mStreet.String != "" &&
+			(mStreet.String != uStreet.String || mZip.String != uZip.String || mCity.String != uCity.String) {
+			base.AddressConflict = true
+			base.MemberAddressStored = &AddressStored{
+				Street: mStreet.String,
+				Zip:    mZip.String,
+				City:   mCity.String,
+			}
+		}
+	} else if mStreet.Valid && mStreet.String != "" {
+		base.AddressSource = "member"
+		s := mStreet.String
+		z := mZip.String
+		c := mCity.String
+		base.Street = &s
+		base.Zip = &z
+		base.City = &c
+	}
+
+	// Photo: always for privileged roles; others only if photo_visible=1
+	base.PhotoVisible = photoVisible == 1
+	if photoPath.Valid && photoPath.String != "" {
+		if isPrivileged || base.PhotoVisible {
+			url := "/api/uploads/" + photoPath.String
+			base.PhotoURL = &url
+		}
+	}
+
+	// Admin/own-user fields
+	if isAdmin || isOwn {
+		if joinDate.Valid {
+			base.JoinDate = &joinDate.String
+		}
+		base.DsgvoVerarbeitung = dsgvoVerarb == 1
+		if dsgvoVerarbDate.Valid {
+			base.DsgvoVerarbeitungDate = &dsgvoVerarbDate.String
+		}
+		base.DsgvoWeitergabe = dsgvoWeiter == 1
+		if dsgvoWeiterDate.Valid {
+			base.DsgvoWeitergabeDate = &dsgvoWeiterDate.String
+		}
+		base.SepaMandat = sepaMandat == 1
+		if sepaMandatDate.Valid {
+			base.SepaMandatDate = &sepaMandatDate.String
+		}
+	}
+
+	// IBAN + SEPA document URL: admin only
+	if isAdmin {
+		if iban.Valid {
+			base.IBAN = &iban.String
+		}
+		if sepaMandatPath.Valid && sepaMandatPath.String != "" {
+			url := "/api/uploads/" + sepaMandatPath.String
+			base.SepaMandatURL = &url
+		}
+	}
+
+	// Linked user contact data — shown to admin/own, or based on user_visibility
+	if base.UserID != nil {
+		var pv, av, phv int
+		var userPhotoPath sql.NullString
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COALESCE(uv.phones_visible,0), COALESCE(uv.address_visible,0), COALESCE(uv.photo_visible,0), u.photo_path
+			 FROM users u LEFT JOIN user_visibility uv ON uv.user_id=u.id WHERE u.id=?`, *base.UserID).
+			Scan(&pv, &av, &phv, &userPhotoPath)
+
+		showPhones := isAdmin || isOwn || pv == 1
+		showUserPhoto := isPrivileged || isOwn || phv == 1
+
+		if showPhones {
+			phoneRows, err := h.db.QueryContext(r.Context(),
+				`SELECT id, label, number, sort_order FROM user_phones WHERE user_id=? ORDER BY sort_order, id`,
+				*base.UserID)
+			if err == nil {
+				defer phoneRows.Close()
+				base.UserPhones = []UserPhone{}
+				for phoneRows.Next() {
+					var p UserPhone
+					phoneRows.Scan(&p.ID, &p.Label, &p.Number, &p.SortOrder)
+					base.UserPhones = append(base.UserPhones, p)
+				}
+			}
+		}
+
+		if showUserPhoto && userPhotoPath.Valid && userPhotoPath.String != "" {
+			url := "/api/uploads/" + userPhotoPath.String
+			base.UserPhotoURL = &url
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(m)
+	json.NewEncoder(w).Encode(base)
 }
 
 // PUT /api/members/:id
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
 	id := r.PathValue("id")
 	var req struct {
 		FirstName    string  `json:"first_name"`
@@ -214,15 +398,52 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Position     string  `json:"position"`
 		Gender       string  `json:"gender"`
 		ClubFunction *string `json:"club_function"`
+
+		Street   string `json:"street"`
+		Zip      string `json:"zip"`
+		City     string `json:"city"`
+		JoinDate string `json:"join_date"`
+		IBAN     string `json:"iban"`
+
+		PhotoVisible bool `json:"photo_visible"`
+
+		DsgvoVerarbeitung     bool   `json:"dsgvo_verarbeitung"`
+		DsgvoVerarbeitungDate string `json:"dsgvo_verarbeitung_date"`
+		DsgvoWeitergabe       bool   `json:"dsgvo_weitergabe"`
+		DsgvoWeitergabeDate   string `json:"dsgvo_weitergabe_date"`
+		SepaMandat            bool   `json:"sepa_mandat"`
+		SepaMandatDate        string `json:"sepa_mandat_date"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.Gender == "" {
 		req.Gender = "u"
 	}
+
+	ibanVal := interface{}(nil)
+	if claims.Role == "admin" && req.IBAN != "" {
+		ibanVal = req.IBAN
+	}
+
 	_, err := h.db.ExecContext(r.Context(),
-		`UPDATE members SET first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?, jersey_number=?, position=?, gender=?, club_function=?, updated_at=? WHERE id=?`,
+		`UPDATE members SET
+			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
+			jersey_number=?, position=?, gender=?, club_function=?,
+			street=?, zip=?, city=?, join_date=?, iban=COALESCE(?, iban),
+			photo_visible=?,
+			dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
+			dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
+			sepa_mandat=?, sepa_mandat_date=?,
+			updated_at=?
+		WHERE id=?`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
-		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender, req.ClubFunction, time.Now(), id)
+		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender, req.ClubFunction,
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
+		nullableString(req.JoinDate), ibanVal,
+		boolToInt(req.PhotoVisible),
+		boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
+		boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
+		boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
+		time.Now(), id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -385,17 +606,37 @@ type ProfileParent struct {
 	Email string `json:"email"`
 }
 
-type ProfileResponse struct {
-	OwnMember *Member         `json:"own_member,omitempty"`
-	Children  []Member        `json:"children"`
-	Parents   []ProfileParent `json:"parents"`
+type UserPhone struct {
+	ID        int    `json:"id"`
+	Label     string `json:"label"`
+	Number    string `json:"number"`
+	SortOrder int    `json:"sort_order"`
 }
 
-// GET /api/profile/me — returns the logged-in user's linked member profile(s)
+type UserVisibility struct {
+	PhonesVisible  bool `json:"phones_visible"`
+	AddressVisible bool `json:"address_visible"`
+	PhotoVisible   bool `json:"photo_visible"`
+}
+
+type ProfileResponse struct {
+	OwnMember  *Member        `json:"own_member,omitempty"`
+	Children   []Member       `json:"children"`
+	Parents    []ProfileParent `json:"parents"`
+	Street     string          `json:"street,omitempty"`
+	Zip        string          `json:"zip,omitempty"`
+	City       string          `json:"city,omitempty"`
+	PhotoURL   string          `json:"photo_url,omitempty"`
+	Phones     []UserPhone     `json:"phones"`
+	Visibility UserVisibility  `json:"visibility"`
+}
+
+// GET /api/profile/me — returns the logged-in user's linked member profile(s) + contact data
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
-	resp := ProfileResponse{Children: []Member{}, Parents: []ProfileParent{}}
+	resp := ProfileResponse{Children: []Member{}, Parents: []ProfileParent{}, Phones: []UserPhone{}}
 
+	// Own linked member
 	m, err := scanMember(h.db.QueryRowContext(r.Context(),
 		`SELECT id, first_name, last_name, COALESCE(date_of_birth,''), COALESCE(member_number,''), COALESCE(pass_number,''),
 		        jersey_number, COALESCE(position,''), COALESCE(gender,'u'), status, user_id, club_function
@@ -404,6 +645,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		resp.OwnMember = &m
 	}
 
+	// Children (elternteil)
 	if claims.Role == "elternteil" {
 		rows, err := h.db.QueryContext(r.Context(),
 			`SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
@@ -421,6 +663,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parents (spieler)
 	if claims.Role == "spieler" {
 		rows, err := h.db.QueryContext(r.Context(),
 			`SELECT u.id, u.name, u.email
@@ -438,18 +681,164 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Contact data: address, photo_url, phones, visibility
+	var street, zip, city, photoPath sql.NullString
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,'') FROM users WHERE id=?`,
+		claims.UserID).Scan(&street, &zip, &city, &photoPath)
+	resp.Street = street.String
+	resp.Zip = zip.String
+	resp.City = city.String
+	if photoPath.String != "" {
+		resp.PhotoURL = "/api/uploads/" + photoPath.String
+	}
+
+	phoneRows, err := h.db.QueryContext(r.Context(),
+		`SELECT id, label, number, sort_order FROM user_phones WHERE user_id=? ORDER BY sort_order, id`,
+		claims.UserID)
+	if err == nil {
+		defer phoneRows.Close()
+		for phoneRows.Next() {
+			var p UserPhone
+			phoneRows.Scan(&p.ID, &p.Label, &p.Number, &p.SortOrder)
+			resp.Phones = append(resp.Phones, p)
+		}
+	}
+
+	var vis UserVisibility
+	var pv, av, phv int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT phones_visible, address_visible, photo_visible FROM user_visibility WHERE user_id=?`,
+		claims.UserID).Scan(&pv, &av, &phv)
+	vis.PhonesVisible = pv == 1
+	vis.AddressVisible = av == 1
+	vis.PhotoVisible = phv == 1
+	resp.Visibility = vis
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
 
+// PUT /api/profile/me — update address fields
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	var req struct {
+		Street string `json:"street"`
+		Zip    string `json:"zip"`
+		City   string `json:"city"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	h.db.ExecContext(r.Context(),
+		`UPDATE users SET street=?, zip=?, city=?, updated_at=? WHERE id=?`,
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), time.Now(), claims.UserID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/profile/phones
+func (h *Handler) AddPhone(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	var req struct {
+		Label     string `json:"label"`
+		Number    string `json:"number"`
+		SortOrder int    `json:"sort_order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Number == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO user_phones (user_id, label, number, sort_order) VALUES (?,?,?,?)`,
+		claims.UserID, req.Label, req.Number, req.SortOrder)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	id, _ := res.LastInsertId()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]int64{"id": id})
+}
+
+// PUT /api/profile/phones/{id}
+func (h *Handler) UpdatePhone(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	phoneID := r.PathValue("id")
+	var req struct {
+		Label  string `json:"label"`
+		Number string `json:"number"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Number == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE user_phones SET label=?, number=? WHERE id=? AND user_id=?`,
+		req.Label, req.Number, phoneID, claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/profile/phones/{id}
+func (h *Handler) DeletePhone(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	phoneID := r.PathValue("id")
+	res, err := h.db.ExecContext(r.Context(),
+		`DELETE FROM user_phones WHERE id=? AND user_id=?`, phoneID, claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/profile/visibility
+func (h *Handler) UpdateVisibility(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	var req UserVisibility
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	h.db.ExecContext(r.Context(),
+		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible)
+		 VALUES (?,?,?,?)
+		 ON CONFLICT(user_id) DO UPDATE SET
+		   phones_visible=excluded.phones_visible,
+		   address_visible=excluded.address_visible,
+		   photo_visible=excluded.photo_visible`,
+		claims.UserID, boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible))
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GET /api/admin/members/{id}/parents
 func (h *Handler) GetMemberParents(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
 	id := r.PathValue("id")
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT u.id, u.name, u.email
+
+	query := `SELECT u.id, u.name, u.email
 		 FROM users u
 		 JOIN family_links fl ON fl.parent_user_id = u.id
-		 WHERE fl.member_id=?`, id)
+		 WHERE fl.member_id=?`
+	args := []any{id}
+	if claims.Role == "elternteil" {
+		query += ` AND fl.parent_user_id=?`
+		args = append(args, claims.UserID)
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	result := []ProfileParent{}
 	if err == nil {
 		defer rows.Close()

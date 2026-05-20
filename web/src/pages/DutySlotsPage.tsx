@@ -141,7 +141,7 @@ export default function DutySlotsPage() {
           <tbody>
             {slots.map(s => (
               <>
-                <tr key={s.id} className="hover:bg-gray-50 border-t border-gray-100">
+                <tr key={s.id} className="hover:bg-brand-gray border-t border-gray-100">
                   <td className="px-4 py-3 font-medium">{s.event_name}</td>
                   <td className="px-4 py-3 text-gray-500">{s.event_date}</td>
                   <td className="px-4 py-3 text-gray-500">{s.duty_type}</td>

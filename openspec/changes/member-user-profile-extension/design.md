@@ -53,8 +53,12 @@ Subdirectories: `member-photos/`, `user-photos/`, `sepa-mandats/`.
 Fotos: Maximale Dateigröße 5 MB, Typen: image/jpeg, image/png, image/webp.
 SEPA-Dokument: Maximale Dateigröße 10 MB, Typen: application/pdf + image/*.
 
-### 5a. Member-Foto Sichtbarkeit: immer für alle eingeloggten Nutzer
-Das Mitgliedsfoto (Passfoto) dient der Identifikation — Trainer lernen Namen, Vorstand hat Gesicht zum Namen, Events. Es wird daher **immer** an alle authentifizierten Nutzer ausgeliefert, unabhängig von Sichtbarkeitseinstellungen. Kein Visibility-Toggle für Member-Fotos. User-Profilfotos folgen der `photo_visible`-Einstellung in `user_visibility`.
+### 5a. Member-Foto Sichtbarkeit: rollenbasiert + explizite Freigabe
+Das Mitgliedsfoto (Passfoto) dient der Identifikation. Sichtbarkeit:
+- **Trainer, Vorstand, Admin**: sehen das Foto immer (ohne Freigabe)
+- **Spieler, Elternteil**: sehen das Foto nur wenn `members.photo_visible = 1` explizit gesetzt wurde
+
+Neues Feld `photo_visible INTEGER DEFAULT 0` in Migration 017 auf `members`. Admin-Toggle in MemberDetailPage. `photo_url` wird im `GetMember`-Response nur mitgegeben wenn `claims.Role ∈ {admin, vorstand, trainer}` ODER `photo_visible = 1`. User-Profilfotos folgen weiterhin der `photo_visible`-Einstellung in `user_visibility`.
 
 ### 6. Family-Links-Sichtbarkeit: reiner Rollencheck
 Keine neue DB-Spalte. Im Handler `GET /api/members/{id}/parents` wird geprüft: wenn `claims.Role == "elternteil"` → nur eigene Links zurückgeben (WHERE parent_user_id = claims.UserID). Alle anderen Rollen bekommen alle Links des Mitglieds.
@@ -62,14 +66,17 @@ Keine neue DB-Spalte. Im Handler `GET /api/members/{id}/parents` wird geprüft: 
 ### 7. IBAN-Zugriffsschutz
 `members.iban` wird im `GetMember`-Handler nur eingeschlossen wenn `claims.Role == "admin"`. Im `ListMembers`-Response wird IBAN nie mitgegeben (auch nicht für Admin — nur im Einzelabruf).
 
-### 8. Mitglied-Adresse erbt Nutzer-Adresse als Fallback
+### 8. Mitglied-Adresse: Nutzer-Adresse immer bevorzugt
 Beide Entitäten haben eigene Adressfelder für unterschiedliche Zwecke:
 - `users.street/zip/city` = persönliche Adresse (für Fahrdienste, eigene Nutzung)
 - `members.street/zip/city` = offizielle Vereinsadresse (für Anschreiben, Rechnungen, SEPA)
 
-**Fallback-Logik in `GetMember`**: Wenn `members.street` leer ist UND das Mitglied einen verknüpften Nutzer hat, werden `users.street/zip/city` als Mitglieds-Adresse zurückgegeben. Das Feld `address_source` im Response zeigt an ob die Adresse vom Mitglied (`"member"`) oder vom Nutzer (`"user"`) kommt — ermöglicht UI-Hinweis "Übernommen vom Nutzerprofil".
+**Prioritätslogik in `GetMember`** (wenn Mitglied einen verknüpften Nutzer hat):
+- Nutzer-Adresse wird **immer** als effektive Adresse (`street/zip/city` im Response) zurückgegeben — auch wenn am Mitglied lokal eine Adresse gespeichert ist.
+- `address_source = "user"` wenn Nutzer-Adresse genutzt wird, `"member"` wenn kein Nutzer verknüpft oder Nutzer keine Adresse hat.
+- **Konflikt-Indikator**: Wenn `members.street` gesetzt ist UND von der Nutzer-Adresse abweicht, wird zusätzlich `address_conflict: true` + `member_address_stored: {street, zip, city}` zurückgegeben. Die UI zeigt dann ein ⚠-Icon neben dem Adressblock; ein Tooltip zeigt "Nutzeradresse: [user addr]" und "Am Mitglied gespeicherte Adresse: [member addr]".
 
-Admin kann die Mitglieds-Adresse explizit setzen (überschreibt den Fallback dauerhaft). Löschen der Mitglieds-Adresse (alle drei Felder auf null) reaktiviert den Fallback.
+Ohne verknüpften Nutzer-Account: Mitglieds-Adresse wird direkt verwendet (`address_source = "member"`), kein Konflikt-Feld.
 
 ### 9. Mitglied-Daten für verknüpften Nutzer
 Wenn ein Nutzer (`spieler` oder `elternteil`) `GET /api/members/{id}` aufruft und `members.user_id == claims.UserID`, bekommt er die eigenen Admin-Felder (effektive Adresse, Eintrittsdatum, DSGVO, SEPA-Status) read-only zurück — aber nie die IBAN und nie `sepa_mandat_path`. Admin bekommt alles inkl. IBAN und SEPA-Dokument-URL.

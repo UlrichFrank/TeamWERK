@@ -88,7 +88,7 @@ export default function AdminTeamsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {teams.map(t => (
-                <tr key={t.id} className="hover:bg-gray-50">
+                <tr key={t.id} className="hover:bg-brand-gray">
                   <td className="px-4 py-3 font-medium">{t.name}</td>
                   <td className="px-4 py-3 text-gray-500">{t.age_class}</td>
                   <td className="px-4 py-3">

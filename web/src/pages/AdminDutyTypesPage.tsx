@@ -205,7 +205,7 @@ export default function AdminDutyTypesPage() {
                   </td>
                 </tr>
               ) : (
-                <tr key={t.id} className="hover:bg-gray-50">
+                <tr key={t.id} className="hover:bg-brand-gray">
                   <td className="px-3 py-3 font-medium">{t.name}</td>
                   <td className="px-3 py-3 text-right">{t.hours_value.toFixed(1)}</td>
                   <td className="px-3 py-3 text-right text-gray-500">

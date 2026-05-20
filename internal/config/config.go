@@ -11,6 +11,7 @@ type Config struct {
 	DBPath    string
 	JWTSecret string
 	BaseURL   string
+	UploadDir string
 	SMTP      SMTPConfig
 }
 
@@ -29,6 +30,7 @@ func Load() (*Config, error) {
 		DBPath:    getEnv("DB_PATH", "./teamwerk.db"),
 		JWTSecret: os.Getenv("JWT_SECRET"),
 		BaseURL:   getEnv("BASE_URL", "https://intern.team-stuttgart.org"),
+		UploadDir: getEnv("UPLOAD_DIR", "./storage/uploads"),
 		SMTP: SMTPConfig{
 			Host:     getEnv("SMTP_HOST", "mail.agenturserver.de"),
 			Port:     smtpPort,

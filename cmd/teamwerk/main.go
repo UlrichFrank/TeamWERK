@@ -24,6 +24,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
+	"github.com/teamstuttgart/teamwerk/internal/upload"
 )
 
 //go:embed all:web/dist
@@ -67,6 +68,7 @@ func serve() {
 	dutyH := duties.NewHandler(database)
 	gameH := games.NewHandler(database)
 	kaderH := kader.NewHandler(database)
+	uploadH := upload.NewHandler(database, cfg.UploadDir)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -98,12 +100,19 @@ func serve() {
 		r.Put("/api/members/{id}/status", membH.UpdateStatus)
 		r.Post("/api/members/{id}/team-assignment", membH.AssignTeam)
 		r.Get("/api/profile/me", membH.GetProfile)
+		r.Put("/api/profile/me", membH.UpdateProfile)
 		r.Get("/api/profile/vehicle", membH.GetVehicle)
 		r.Put("/api/profile/vehicle", membH.UpdateVehicle)
 		r.Get("/api/profile/account", authH.GetAccount)
 		r.Put("/api/profile/account", authH.UpdateAccount)
 		r.Post("/api/profile/password", authH.ChangePassword)
 		r.Post("/api/profile/email", authH.RequestEmailChange)
+		r.Post("/api/profile/phones", membH.AddPhone)
+		r.Put("/api/profile/phones/{id}", membH.UpdatePhone)
+		r.Delete("/api/profile/phones/{id}", membH.DeletePhone)
+		r.Put("/api/profile/visibility", membH.UpdateVisibility)
+		r.Post("/api/upload/user-photo", uploadH.UploadUserPhoto)
+		r.Get("/api/uploads/*", uploadH.ServeUpload)
 
 		// Duties
 		r.Get("/api/duty-board", dutyH.Board)
@@ -169,6 +178,8 @@ func serve() {
 			r.Get("/api/admin/game-template", gameH.GetTemplate)
 			r.Put("/api/admin/game-template", gameH.SetTemplate)
 			r.Get("/api/admin/game-template/preview", gameH.PreviewSlots)
+			r.Post("/api/upload/member-photo/{id}", uploadH.UploadMemberPhoto)
+			r.Post("/api/upload/sepa-mandat/{id}", uploadH.UploadSepaMandat)
 			// Kader (season-based teams)
 			r.Get("/api/admin/kader", kaderH.ListKader)
 			r.Post("/api/admin/kader", kaderH.InitializeKader)

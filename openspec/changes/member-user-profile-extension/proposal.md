@@ -5,10 +5,10 @@ Die Mitglieder- und Nutzerdaten in TeamWERK sind aktuell zu dünn: Vereinsreleva
 ## What Changes
 
 **Mitglied (Admin-Domäne):**
-- Adressfelder: `street`, `zip`, `city` — Fallback auf die Adresse des verknüpften Nutzers wenn leer (Nutzer: Fahrdienste; Mitglied: Anschreiben, Rechnung)
+- Adressfelder: `street`, `zip`, `city` — Nutzer-Adresse wird immer bevorzugt (auch wenn am Mitglied lokal gesetzt); bei Abweichung: ⚠-Icon + Tooltip zeigt beide Adressen. Nutzer ohne verknüpften Account → reine Mitgliederadresse.
 - `join_date` (Eintrittsdatum)
 - `iban` (nur Admin sichtbar, App-Level-Control)
-- `photo_path` (Passfoto für Identifikation: Trainer lernt Namen, Vorstand hat Gesicht zum Namen, Events — immer für alle eingeloggten Nutzer sichtbar, kein Visibility-Toggle)
+- `photo_path` + `photo_visible` (Passfoto für Identifikation: Trainer/Vorstand/Admin sehen es immer; andere Nutzer nur wenn `photo_visible=true` explizit freigegeben — Admin-Toggle)
 - `dsgvo_verarbeitung` + `dsgvo_verarbeitung_date`
 - `dsgvo_weitergabe` + `dsgvo_weitergabe_date` (betrifft Name + Foto)
 - `sepa_mandat` (bool) + `sepa_mandat_date` + `sepa_mandat_path` (PDF-Dokument-Upload des unterschriebenen Mandats)

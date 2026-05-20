@@ -1,8 +1,9 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import { usePaginatedFetch } from '../lib/usePaginatedFetch'
+import { usePagination } from '../lib/usePagination'
 import MobileCard from '../components/MobileCard'
+import Pagination from '../components/Pagination'
 
 interface Team { id: number; name: string }
 interface User { id: number; name: string; email: string; role: string; team_name: string }
@@ -20,7 +21,7 @@ const ALL_ROLES = ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] as c
 export default function AdminUsersPage() {
   const { user: self } = useAuth()
   const [teams, setTeams] = useState<Team[]>([])
-  const { items: users, setSearch, loadMore, total } = usePaginatedFetch<User>('/admin/users')
+  const { items: users, setSearch, total, currentPage, totalPages, goToPage } = usePagination<User>('/admin/users')
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [requests, setRequests] = useState<MembershipRequest[]>([])
   const [inviteEmail, setInviteEmail] = useState('')
@@ -166,7 +167,7 @@ export default function AdminUsersPage() {
             <table className="w-full text-sm">
               <tbody className="divide-y divide-gray-100">
                 {requests.map(req => (
-                  <tr key={`req-${req.id}`} className="hover:bg-gray-50">
+                  <tr key={`req-${req.id}`} className="hover:bg-brand-gray">
                     <td className="px-6 py-3 font-medium">{req.name}</td>
                     <td className="px-6 py-3 text-gray-600">{req.email}</td>
                     <td className="px-6 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-yellow">Anfrage</span></td>
@@ -180,7 +181,7 @@ export default function AdminUsersPage() {
                   </tr>
                 ))}
                 {invitations.map(inv => (
-                  <tr key={`inv-${inv.id}`} className="hover:bg-gray-50">
+                  <tr key={`inv-${inv.id}`} className="hover:bg-brand-gray">
                     <td className="px-6 py-3 text-gray-500 italic">{inv.email}</td>
                     <td className="px-6 py-3 text-gray-400">–</td>
                     <td className="px-6 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-200">Einladung</span></td>
@@ -258,7 +259,7 @@ export default function AdminUsersPage() {
                 const callerRank = ROLE_RANK[self?.role ?? ''] ?? 0
                 const canEdit = self?.id !== u.id && (ROLE_RANK[u.role] ?? 0) <= callerRank
                 return (
-                  <tr key={`user-${u.id}`} className="hover:bg-gray-50">
+                  <tr key={`user-${u.id}`} className="hover:bg-brand-gray">
                     <td className="px-6 py-3 font-medium">{u.name}</td>
                     <td className="px-6 py-3 text-gray-600">{u.email}</td>
                     <td className="px-6 py-3">
@@ -298,17 +299,7 @@ export default function AdminUsersPage() {
           </table>
         </div>
 
-        {/* Load More */}
-        {users.length < total && (
-          <div className="mt-6 text-center">
-            <button
-              onClick={loadMore}
-              className="px-6 py-2.5 sm:py-2 bg-brand-yellow text-brand-black rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
-            >
-              Mehr laden ({users.length}/{total})
-            </button>
-          </div>
-        )}
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} />
       </div>
     </div>
   )
