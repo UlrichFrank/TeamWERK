@@ -28,12 +28,13 @@ export default function BrandCheckbox({ checked, onChange, label, title, disable
         viewBox="0 0 16 16"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.5"
+        strokeWidth="2"
         strokeLinecap="round"
-        strokeLinejoin="round"
         style={{ opacity: checked ? 1 : 0.3 }}
       >
-        <polyline points="13 3 6 13 3 10"></polyline>
+        <line x1="1" y1="4" x2="15" y2="4" />
+        <line x1="3.5" y1="8" x2="12.5" y2="8" />
+        <line x1="6" y1="12" x2="10" y2="12" />
       </svg>
       {label && <span>{label}</span>}
     </label>
