@@ -3,7 +3,7 @@ interface Member {
   name: string
   birth_year: number
   gender: string
-  positions?: string[]
+  positions?: string | null
 }
 
 interface Position {
@@ -22,14 +22,18 @@ const POSITIONS: Position[] = [
 ]
 
 function countMembersForPosition(members: Member[], positionName: string): number {
-  return members.filter(m => m.positions?.includes(positionName)).length
+  return members.filter(m => {
+    if (!m.positions) return false
+    const positions = m.positions.split(',').map(p => p.trim())
+    return positions.includes(positionName)
+  }).length
 }
 
-function getCircleColor(count: number): string {
-  if (count === 0) return 'bg-red-500'
-  if (count === 1) return 'bg-brand-yellow'
-  if (count === 2) return 'bg-brand-green'
-  return 'bg-blue-500'
+function getCircleClass(count: number): string {
+  if (count === 0) return 'border-2 border-red-500'
+  if (count === 1) return 'border-2 border-brand-yellow'
+  if (count === 2) return 'border-2 border-brand-green'
+  return 'border-2 border-blue-500'
 }
 
 interface PositionStatusProps {
@@ -41,7 +45,7 @@ export default function PositionStatus({ members }: PositionStatusProps) {
     <div className="flex gap-3 items-start py-2 text-xs">
       {POSITIONS.map(pos => {
         const count = countMembersForPosition(members, pos.name)
-        const circleColor = getCircleColor(count)
+        const circleClass = getCircleClass(count)
         const circleCount = count === 0 ? 1 : count === 1 ? 1 : Math.min(count, 3)
 
         return (
@@ -51,7 +55,7 @@ export default function PositionStatus({ members }: PositionStatusProps) {
               {Array.from({ length: circleCount }).map((_, i) => (
                 <div
                   key={i}
-                  className={`w-3.5 h-3.5 rounded-full ${circleColor}`}
+                  className={`w-3.5 h-3.5 rounded-full bg-white ${circleClass}`}
                 />
               ))}
             </div>

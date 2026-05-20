@@ -23,10 +23,11 @@ type kaderRow struct {
 }
 
 type memberRow struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	BirthYear int    `json:"birth_year"`
-	Gender    string `json:"gender"`
+	ID        int     `json:"id"`
+	Name      string  `json:"name"`
+	BirthYear int     `json:"birth_year"`
+	Gender    string  `json:"gender"`
+	Positions *string `json:"positions"`
 }
 
 type trainerRow struct {
@@ -466,7 +467,8 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 		`SELECT m.id,
 		        m.first_name || ' ' || m.last_name,
 		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
-		        m.gender
+		        m.gender,
+		        m.position
 		 FROM kader_members km
 		 JOIN members m ON m.id=km.member_id
 		 WHERE km.kader_id=?
@@ -479,7 +481,7 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 	result := []memberRow{}
 	for rows.Next() {
 		var m memberRow
-		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender)
+		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions)
 		result = append(result, m)
 	}
 	return result, nil

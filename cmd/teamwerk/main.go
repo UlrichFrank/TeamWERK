@@ -117,6 +117,7 @@ func serve() {
 		// Duties
 		r.Get("/api/duty-board", dutyH.Board)
 		r.Post("/api/duty-board/{slotId}/claim", dutyH.Claim)
+		r.Delete("/api/duty-board/{slotId}/claim", dutyH.Unclaim)
 		r.Get("/api/duty-accounts", dutyH.Accounts)
 		r.Get("/api/duty-slots", dutyH.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", dutyH.ListAssignments)

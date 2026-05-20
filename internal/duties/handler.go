@@ -176,31 +176,149 @@ func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/duty-board  — open slots only
+// GET /api/duty-board — grouped by game, filtered to user's teams
 func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
-	rows, _ := h.db.QueryContext(r.Context(),
-		`SELECT ds.id, ds.event_name, ds.event_date, ds.slots_total - ds.slots_filled as vacancies,
-		        dt.name, COALESCE(ds.role_desc,'')
-		 FROM duty_slots ds JOIN duty_types dt ON dt.id = ds.duty_type_id
-		 WHERE ds.slots_filled < ds.slots_total AND ds.event_date >= date('now')
-		 ORDER BY ds.event_date`)
-	defer rows.Close()
-	type slot struct {
-		ID        int    `json:"id"`
-		EventName string `json:"event_name"`
-		EventDate string `json:"event_date"`
-		Vacancies int    `json:"vacancies"`
-		DutyType  string `json:"duty_type"`
-		RoleDesc  string `json:"role_desc,omitempty"`
+	claims := auth.ClaimsFromCtx(r.Context())
+	userID := claims.UserID
+
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT
+		    ds.id,
+		    COALESCE(ds.event_date, '') AS event_date,
+		    COALESCE(ds.event_time, '') AS event_time,
+		    ds.slots_total,
+		    ds.slots_filled,
+		    dt.name,
+		    COALESCE(ds.role_desc, ''),
+		    CASE WHEN da.id IS NOT NULL THEN 1 ELSE 0 END,
+		    ds.game_id,
+		    COALESCE(g.opponent, ''),
+		    COALESCE(g.time, ''),
+		    COALESCE(ds.team_id, 0),
+		    COALESCE(t.name, ''),
+		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END
+		 FROM duty_slots ds
+		 JOIN duty_types dt ON dt.id = ds.duty_type_id
+		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
+		 LEFT JOIN games g ON g.id = ds.game_id
+		 LEFT JOIN teams t ON t.id = ds.team_id
+		 WHERE ds.team_id IN (
+		     SELECT DISTINCT tm.team_id
+		     FROM team_memberships tm
+		     JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
+		     WHERE tm.member_id IN (
+		         SELECT id FROM members WHERE user_id = ?
+		         UNION
+		         SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
+		     )
+		 )
+		 AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)
+		 ORDER BY ds.event_date, COALESCE(ds.event_time, ''), ds.id`,
+		userID, userID, userID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
-	result := []slot{}
+	defer rows.Close()
+
+	type boardSlot struct {
+		ID          int    `json:"id"`
+		DutyType    string `json:"duty_type"`
+		EventTime   string `json:"event_time,omitempty"`
+		SlotsTotal  int    `json:"slots_total"`
+		Vacancies   int    `json:"vacancies"`
+		ClaimedByMe bool   `json:"claimed_by_me"`
+		RoleDesc    string `json:"role_desc,omitempty"`
+	}
+	type boardGroup struct {
+		GameID    *int        `json:"game_id"`
+		Date      string      `json:"date,omitempty"`
+		EventTime string      `json:"event_time,omitempty"`
+		Opponent  string      `json:"opponent,omitempty"`
+		TeamName  string      `json:"team_name"`
+		Label     string      `json:"label,omitempty"`
+		Past      bool        `json:"past"`
+		Slots     []boardSlot `json:"slots"`
+	}
+
+	groupOrder := []string{}
+	groupMap := map[string]*boardGroup{}
+
 	for rows.Next() {
-		var s slot
-		rows.Scan(&s.ID, &s.EventName, &s.EventDate, &s.Vacancies, &s.DutyType, &s.RoleDesc)
-		result = append(result, s)
+		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt int
+		var eventDate, eventTime, dutyType, roleDesc, opponent, gameTime, teamName string
+		var gameID sql.NullInt64
+		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
+			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &gameTime,
+			&teamID, &teamName, &isPastInt)
+
+		var key string
+		if gameID.Valid {
+			key = fmt.Sprintf("game-%d", gameID.Int64)
+		} else {
+			key = fmt.Sprintf("other-%d", teamID)
+		}
+
+		if _, ok := groupMap[key]; !ok {
+			g := &boardGroup{TeamName: teamName, Slots: []boardSlot{}, Past: isPastInt == 1}
+			if gameID.Valid {
+				id := int(gameID.Int64)
+				g.GameID = &id
+				g.Date = eventDate
+				g.EventTime = gameTime
+				g.Opponent = opponent
+			} else {
+				g.Label = "Sonstige Dienste"
+			}
+			groupMap[key] = g
+			groupOrder = append(groupOrder, key)
+		}
+		grp := groupMap[key]
+		if !gameID.Valid && isPastInt == 0 {
+			grp.Past = false
+		}
+		grp.Slots = append(grp.Slots, boardSlot{
+			ID:          slotID,
+			DutyType:    dutyType,
+			EventTime:   eventTime,
+			SlotsTotal:  slotsTotal,
+			Vacancies:   slotsTotal - slotsFilled,
+			ClaimedByMe: claimedInt == 1,
+			RoleDesc:    roleDesc,
+		})
+	}
+
+	result := make([]*boardGroup, 0, len(groupOrder))
+	for _, k := range groupOrder {
+		result = append(result, groupMap[k])
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// DELETE /api/duty-board/:slotId/claim
+func (h *Handler) Unclaim(w http.ResponseWriter, r *http.Request) {
+	slotID := r.PathValue("slotId")
+	claims := auth.ClaimsFromCtx(r.Context())
+	var status string
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT status FROM duty_assignments WHERE duty_slot_id=? AND user_id=?`,
+		slotID, claims.UserID).Scan(&status)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if status == "fulfilled" {
+		http.Error(w, "already fulfilled", http.StatusConflict)
+		return
+	}
+	h.db.ExecContext(r.Context(),
+		`DELETE FROM duty_assignments WHERE duty_slot_id=? AND user_id=?`,
+		slotID, claims.UserID)
+	h.db.ExecContext(r.Context(),
+		`UPDATE duty_slots SET slots_filled = slots_filled - 1 WHERE id=?`, slotID)
+	h.updateAccount(r, claims.UserID, slotID, false)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /api/duty-board/:slotId/claim
