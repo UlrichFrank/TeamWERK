@@ -9,7 +9,6 @@ interface Member {
   jersey_number?: number; position: string; status: string; user_id?: number
 }
 
-interface Season { id: number; name: string; is_active: number }
 interface User { id: number; name: string; email: string; role: string }
 
 const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'ausgetreten']
@@ -26,7 +25,6 @@ export default function MemberDetailPage() {
     first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
     jersey_number: undefined, position: '', status: 'aktiv',
   })
-  const [seasons, setSeasons] = useState<Season[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [selectedParentUser, setSelectedParentUser] = useState('')
   const [linkedParents, setLinkedParents] = useState<User[]>([])
@@ -44,10 +42,6 @@ export default function MemberDetailPage() {
   }
 
   useEffect(() => {
-    api.get('/admin/seasons').then(r => {
-      const s: Season[] = r.data ?? []
-      setSeasons(s)
-    })
     if (isAdmin) api.get('/admin/users').then(r => setUsers(r.data.items ?? []))
     if (!isNew && id) {
       api.get(`/members/${id}`).then(r => {

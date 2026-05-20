@@ -14,11 +14,7 @@ type Suggestion struct {
 	AlreadyInKader bool   `json:"already_in_kader"`
 }
 
-func suggestMembers(ctx context.Context, db *sql.DB, kaderID int, ageClass, gender string, seasonStartYear int, search string, filterByBracket bool) ([]Suggestion, error) {
-	brackets := ComputeAgeBrackets(seasonStartYear)
-	bracket := brackets[ageClass]
-
-	// Build gender filter: mixed kader accepts all genders
+func suggestMembers(ctx context.Context, db *sql.DB, kaderID int, ageClass, gender string, seasonStartYear int, dedicatedBirthYear *int, search string, filterByBracket bool) ([]Suggestion, error) {
 	var genderFilter string
 	var args []any
 
@@ -32,7 +28,6 @@ func suggestMembers(ctx context.Context, db *sql.DB, kaderID int, ageClass, gend
 	args = append(args, kaderID)
 
 	if gender != "mixed" {
-		// Include members matching the gender or with unspecified gender ('u')
 		genderFilter = " AND (m.gender=? OR m.gender='u')"
 		args = append(args, gender)
 	}
@@ -44,8 +39,15 @@ func suggestMembers(ctx context.Context, db *sql.DB, kaderID int, ageClass, gend
 	}
 
 	if filterByBracket {
-		query += ` AND CAST(strftime('%Y', m.date_of_birth) AS INTEGER) BETWEEN ? AND ?`
-		args = append(args, bracket[0], bracket[1])
+		if dedicatedBirthYear != nil {
+			query += ` AND CAST(strftime('%Y', m.date_of_birth) AS INTEGER) = ?`
+			args = append(args, *dedicatedBirthYear)
+		} else {
+			brackets := ComputeAgeBrackets(seasonStartYear)
+			bracket := brackets[ageClass]
+			query += ` AND CAST(strftime('%Y', m.date_of_birth) AS INTEGER) BETWEEN ? AND ?`
+			args = append(args, bracket[0], bracket[1])
+		}
 	}
 
 	query += ` ORDER BY m.last_name, m.first_name LIMIT 20`

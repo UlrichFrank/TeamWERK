@@ -14,10 +14,12 @@ type Handler struct{ db *sql.DB }
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
 type kaderRow struct {
-	ID       int    `json:"id"`
-	SeasonID int    `json:"season_id"`
-	AgeClass string `json:"age_class"`
-	Gender   string `json:"gender"`
+	ID                 int    `json:"id"`
+	SeasonID           int    `json:"season_id"`
+	AgeClass           string `json:"age_class"`
+	Gender             string `json:"gender"`
+	TeamNumber         int    `json:"team_number"`
+	DedicatedBirthYear *int   `json:"dedicated_birth_year"`
 }
 
 type memberRow struct {
@@ -29,9 +31,46 @@ type memberRow struct {
 
 type kaderDetail struct {
 	kaderRow
-	Members     []memberRow `json:"members"`
-	MemberCount int         `json:"member_count"`
+	BirthYears   []int       `json:"birth_years"`   // filtered: [dedicated] or [yr1, yr2]
+	BracketYears []int       `json:"bracket_years"` // always both bracket years [yr1, yr2]
+	Members      []memberRow `json:"members"`
+	MemberCount  int         `json:"member_count"`
 }
+
+func computeBirthYears(k kaderRow, seasonStartYear int) (birthYears []int, bracketYears []int) {
+	brackets := ComputeAgeBrackets(seasonStartYear)
+	r, ok := brackets[k.AgeClass]
+	bracketYears = []int{}
+	if ok {
+		bracketYears = []int{r[0], r[1]}
+	}
+	if k.DedicatedBirthYear != nil {
+		birthYears = []int{*k.DedicatedBirthYear}
+	} else {
+		birthYears = bracketYears
+	}
+	return
+}
+
+func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
+	var k kaderRow
+	var seasonStartYear int
+	var dedicatedBirthYear sql.NullInt64
+	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &dedicatedBirthYear, &seasonStartYear)
+	if err != nil {
+		return k, 0, err
+	}
+	if dedicatedBirthYear.Valid {
+		v := int(dedicatedBirthYear.Int64)
+		k.DedicatedBirthYear = &v
+	}
+	return k, seasonStartYear, nil
+}
+
+const kaderSelectSQL = `
+	SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.dedicated_birth_year,
+	       CAST(strftime('%Y', s.start_date) AS INTEGER)
+	FROM kader k JOIN seasons s ON s.id = k.season_id`
 
 // GET /api/admin/kader?season_id=N
 func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
@@ -40,10 +79,10 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	var args []any
 
 	if seasonID != "" {
-		query = `SELECT id, season_id, age_class, gender FROM kader WHERE season_id=? ORDER BY age_class, gender`
+		query = kaderSelectSQL + ` WHERE k.season_id=? ORDER BY k.age_class, k.gender, k.team_number`
 		args = append(args, seasonID)
 	} else {
-		query = `SELECT id, season_id, age_class, gender FROM kader WHERE season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) ORDER BY age_class, gender`
+		query = kaderSelectSQL + ` WHERE k.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) ORDER BY k.age_class, k.gender, k.team_number`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
@@ -55,25 +94,31 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 
 	result := []kaderDetail{}
 	for rows.Next() {
-		var k kaderDetail
-		rows.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender)
+		k, seasonStartYear, err := scanKaderRow(rows)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		members, _ := h.loadMembers(r.Context(), k.ID)
-		k.Members = members
-		k.MemberCount = len(members)
-		result = append(result, k)
+		bys, bkys := computeBirthYears(k, seasonStartYear)
+		result = append(result, kaderDetail{
+			kaderRow:     k,
+			BirthYears:   bys,
+			BracketYears: bkys,
+			Members:      members,
+			MemberCount:  len(members),
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
 
-// GET /api/admin/kader/:id
+// GET /api/admin/kader/{id}
 func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var k kaderDetail
-	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, season_id, age_class, gender FROM kader WHERE id=?`, id).
-		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender)
+	k, seasonStartYear, err := scanKaderRow(h.db.QueryRowContext(r.Context(),
+		kaderSelectSQL+` WHERE k.id=?`, id))
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -84,19 +129,25 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 	}
 
 	members, _ := h.loadMembers(r.Context(), k.ID)
-	k.Members = members
-	k.MemberCount = len(members)
-
+	bys, bkys := computeBirthYears(k, seasonStartYear)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(k)
+	json.NewEncoder(w).Encode(kaderDetail{
+		kaderRow:     k,
+		BirthYears:   bys,
+		BracketYears: bkys,
+		Members:      members,
+		MemberCount:  len(members),
+	})
 }
 
-// PUT /api/admin/kader/:id — add/remove members
+// PUT /api/admin/kader/{id} — add/remove members, optionally update dedicated_birth_year
 func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		MembersAdd    []int `json:"members_add"`
-		MembersRemove []int `json:"members_remove"`
+		MembersAdd          []int  `json:"members_add"`
+		MembersRemove       []int  `json:"members_remove"`
+		DedicatedBirthYear  *int   `json:"dedicated_birth_year"`
+		SetDedicatedBirthYear bool `json:"set_dedicated_birth_year"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -119,16 +170,29 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 			`DELETE FROM kader_members WHERE kader_id=? AND member_id=?`, id, memberID)
 	}
 
+	if req.DedicatedBirthYear != nil {
+		tx.ExecContext(r.Context(),
+			`UPDATE kader SET dedicated_birth_year=?, updated_at=? WHERE id=?`,
+			*req.DedicatedBirthYear, time.Now(), id)
+	} else if req.SetDedicatedBirthYear {
+		// explicit null — reset to mixed mode
+		tx.ExecContext(r.Context(),
+			`UPDATE kader SET dedicated_birth_year=NULL, updated_at=? WHERE id=?`,
+			time.Now(), id)
+	}
+
 	if err := tx.Commit(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	h.db.ExecContext(r.Context(), `UPDATE kader SET updated_at=? WHERE id=?`, time.Now(), id)
+	if len(req.MembersAdd) > 0 || len(req.MembersRemove) > 0 {
+		h.db.ExecContext(r.Context(), `UPDATE kader SET updated_at=? WHERE id=?`, time.Now(), id)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/admin/kader/:id/member-suggestions?search=&filter_age_bracket=true
+// GET /api/admin/kader/{id}/member-suggestions?search=&filter_age_bracket=true
 func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
@@ -136,12 +200,13 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 
 	var k kaderRow
 	var seasonStartYear int
+	var dedicatedBirthYear sql.NullInt64
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT k.id, k.season_id, k.age_class, k.gender,
+		`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.dedicated_birth_year,
 		        CAST(strftime('%Y', s.start_date) AS INTEGER)
 		 FROM kader k JOIN seasons s ON s.id=k.season_id
 		 WHERE k.id=?`, id).
-		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &seasonStartYear)
+		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &dedicatedBirthYear, &seasonStartYear)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -150,8 +215,12 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if dedicatedBirthYear.Valid {
+		v := int(dedicatedBirthYear.Int64)
+		k.DedicatedBirthYear = &v
+	}
 
-	suggestions, err := suggestMembers(r.Context(), h.db, k.ID, k.AgeClass, k.Gender, seasonStartYear, search, filterByBracket)
+	suggestions, err := suggestMembers(r.Context(), h.db, k.ID, k.AgeClass, k.Gender, seasonStartYear, k.DedicatedBirthYear, search, filterByBracket)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -161,16 +230,30 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"suggestions": suggestions})
 }
 
-// POST /api/admin/kader — create standard Kader set for a season (first-time setup)
+// POST /api/admin/kader — initialize standard kader OR create a single new kader
 func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SeasonID int `json:"season_id"`
+		SeasonID           int  `json:"season_id"`
+		AgeClass           string `json:"age_class"`
+		Gender             string `json:"gender"`
+		TeamNumber         int  `json:"team_number"`
+		DedicatedBirthYear *int `json:"dedicated_birth_year"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SeasonID == 0 {
 		http.Error(w, "season_id required", http.StatusBadRequest)
 		return
 	}
 
+	// Single kader creation when age_class and gender are provided
+	if req.AgeClass != "" && req.Gender != "" {
+		if req.TeamNumber == 0 {
+			req.TeamNumber = 1
+		}
+		h.createSingleKader(w, r, req.SeasonID, req.AgeClass, req.Gender, req.TeamNumber, req.DedicatedBirthYear)
+		return
+	}
+
+	// Bulk initialization: standard set of 7 kader with team_number=1
 	type kaderSpec struct{ ageClass, gender string }
 	specs := []kaderSpec{
 		{"A-Jugend", "m"}, {"A-Jugend", "f"},
@@ -178,14 +261,71 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 		{"C-Jugend", "m"}, {"C-Jugend", "f"},
 		{"D-Jugend", "mixed"},
 	}
-
 	for _, s := range specs {
 		h.db.ExecContext(r.Context(),
-			`INSERT OR IGNORE INTO kader (season_id, age_class, gender) VALUES (?,?,?)`,
+			`INSERT OR IGNORE INTO kader (season_id, age_class, gender, team_number) VALUES (?,?,?,1)`,
 			req.SeasonID, s.ageClass, s.gender)
 	}
-
 	w.WriteHeader(http.StatusCreated)
+}
+
+// createSingleKader inserts one kader entry and returns 201 with the new object, or 409 on conflict.
+func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seasonID int, ageClass, gender string, teamNumber int, dedicatedBirthYear *int) {
+	res, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO kader (season_id, age_class, gender, team_number, dedicated_birth_year) VALUES (?,?,?,?,?)`,
+		seasonID, ageClass, gender, teamNumber, dedicatedBirthYear)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			http.Error(w, `{"error":"Kader existiert bereits"}`, http.StatusConflict)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	newID, _ := res.LastInsertId()
+
+	k, seasonStartYear, err := scanKaderRow(h.db.QueryRowContext(r.Context(),
+		kaderSelectSQL+` WHERE k.id=?`, newID))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	bys, bkys := computeBirthYears(k, seasonStartYear)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(kaderDetail{
+		kaderRow:     k,
+		BirthYears:   bys,
+		BracketYears: bkys,
+		Members:      []memberRow{},
+		MemberCount:  0,
+	})
+}
+
+// DELETE /api/admin/kader/{id}
+func (h *Handler) DeleteKader(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var memberCount int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM kader_members WHERE kader_id=?`, id).Scan(&memberCount)
+
+	if memberCount > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]any{
+			"error":        "Kader hat noch Mitglieder",
+			"member_count": memberCount,
+		})
+		return
+	}
+
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM kader WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /api/admin/kader/copy-from-season

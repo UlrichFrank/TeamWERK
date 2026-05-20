@@ -14,6 +14,7 @@ interface Props {
   kaderId: number
   onMemberAdded: () => void
   filterByAgeBracket?: boolean
+  birthYears?: number[]
 }
 
 export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeBracket = true }: Props) {

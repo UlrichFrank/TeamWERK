@@ -8,10 +8,10 @@ type ageBracketRef struct {
 
 // Reference model for 2025/26 season (start year 2025).
 var ageBracketRef2025 = []ageBracketRef{
-	{AgeClass: "A-Jugend", StartYear: 2006, EndYear: 2007},
-	{AgeClass: "B-Jugend", StartYear: 2007, EndYear: 2008},
-	{AgeClass: "C-Jugend", StartYear: 2008, EndYear: 2009},
-	{AgeClass: "D-Jugend", StartYear: 2009, EndYear: 2010},
+	{AgeClass: "A-Jugend", StartYear: 2007, EndYear: 2008},
+	{AgeClass: "B-Jugend", StartYear: 2009, EndYear: 2010},
+	{AgeClass: "C-Jugend", StartYear: 2011, EndYear: 2012},
+	{AgeClass: "D-Jugend", StartYear: 2013, EndYear: 2014},
 }
 
 // ComputeAgeBrackets returns birth year ranges for each age class given the
