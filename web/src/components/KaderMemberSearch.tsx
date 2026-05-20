@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { api } from '../lib/api'
+import BrandCheckbox from './BrandCheckbox'
 
 interface Suggestion {
   id: number
@@ -81,15 +82,11 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
           placeholder="Mitglied suchen…"
           className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
         />
-        <label className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
-          <input
-            type="checkbox"
-            checked={filterAge}
-            onChange={e => setFilterAge(e.target.checked)}
-            className="accent-brand-blue"
-          />
-          Jahrgang filtern
-        </label>
+        <BrandCheckbox
+          checked={filterAge}
+          onChange={setFilterAge}
+          label="Jahrgang filtern"
+        />
       </div>
 
       {open && (

@@ -78,7 +78,7 @@ function AddressConflictTooltip({ stored }: { stored: AddressStored }) {
 export default function MemberDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const isNew = id === 'neu'
   const isAdmin = user?.role === 'admin'
 
@@ -117,9 +117,12 @@ export default function MemberDetailPage() {
   }
 
   useEffect(() => {
-    if (isAdmin) api.get('/admin/users').then(r => setUsers(r.data.items ?? []))
+    if (authLoading) return
+    let cancelled = false
+    if (isAdmin) api.get('/admin/users').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
     if (!isNew && id) {
       api.get(`/members/${id}`).then(r => {
+        if (cancelled) return
         const m: Member = r.data
         setForm({
           first_name: m.first_name, last_name: m.last_name,
@@ -150,7 +153,8 @@ export default function MemberDetailPage() {
       })
       loadLinkedParents()
     }
-  }, [id, isNew, isAdmin])
+    return () => { cancelled = true }
+  }, [id, isNew, isAdmin, authLoading])
 
   const handleSave = async () => {
     setSaving(true); setError('')
