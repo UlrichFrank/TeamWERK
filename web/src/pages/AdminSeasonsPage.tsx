@@ -113,14 +113,14 @@ export default function AdminSeasonsPage() {
                     <>
                       <button
                         onClick={() => handleActivate(s.id)}
-                        className="text-xs bg-brand-blue text-brand-white px-3 py-1.5 rounded-md hover:bg-brand-blue-dark transition-colors"
+                        className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
                       >
                         Aktivieren
                       </button>
                       <button
                         onClick={() => handleDelete(s.id)}
                         disabled={deleting === s.id}
-                        className="text-xs bg-brand-error text-brand-white px-3 py-1.5 rounded-md hover:bg-brand-error transition-colors disabled:opacity-50"
+                        className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-50"
                       >
                         {deleting === s.id ? 'Löschen…' : 'Löschen'}
                       </button>

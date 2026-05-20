@@ -152,6 +152,7 @@ func serve() {
 			r.Delete("/api/admin/users/{id}", authH.DeleteUser)
 			r.Get("/api/admin/invitations", authH.ListInvitations)
 			r.Delete("/api/admin/invitations/{id}", authH.DeleteInvitation)
+			r.Post("/api/members/import", membH.Import)
 			r.Put("/api/admin/members/{id}/user", membH.LinkUser)
 			r.Get("/api/admin/members/{id}/parents", membH.GetMemberParents)
 			r.Post("/api/admin/family-links", membH.CreateFamilyLink)

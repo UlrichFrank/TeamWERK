@@ -153,9 +153,9 @@ export default function DutySlotsPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => loadAssignments(s.id)}
-                      className="text-xs text-black hover:text-brand-yellow transition-colors"
+                      className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
                     >
-                      {expanded === s.id ? 'schließen' : 'Zuteilungen'}
+                      {expanded === s.id ? 'Schließen' : 'Zuteilungen'}
                     </button>
                   </td>
                 </tr>

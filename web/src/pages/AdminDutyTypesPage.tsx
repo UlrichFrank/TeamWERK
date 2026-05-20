@@ -220,12 +220,11 @@ export default function AdminDutyTypesPage() {
                   <td className="px-3 py-3">
                     <div className="flex gap-1 justify-end">
                       <button onClick={() => startEdit(t)}
-                        className="text-xs text-brand-yellow hover:underline">
+                        className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
                         Bearbeiten
                       </button>
-                      <span className="text-gray-300">|</span>
                       <button onClick={() => handleDelete(t.id, t.name)}
-                        className="text-xs text-red-600 hover:underline">
+                        className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors">
                         Löschen
                       </button>
                     </div>

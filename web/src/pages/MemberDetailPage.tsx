@@ -6,8 +6,22 @@ import { useAuth } from '../contexts/AuthContext'
 interface Member {
   id: number; first_name: string; last_name: string
   date_of_birth: string; member_number: string; pass_number: string
-  jersey_number?: number; position: string; status: string; user_id?: number
+  jersey_number?: number; position: string; gender: string; status: string; user_id?: number
+  club_function?: string
 }
+
+const GENDER_OPTIONS = [
+  { value: 'm', label: 'männlich' },
+  { value: 'f', label: 'weiblich' },
+  { value: 'u', label: 'divers' },
+]
+
+const CLUB_FUNCTION_OPTIONS = [
+  { value: '', label: '– keine –' },
+  { value: 'trainer', label: 'Trainer' },
+  { value: 'vorstand', label: 'Vorstand' },
+  { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
+]
 
 interface User { id: number; name: string; email: string; role: string }
 
@@ -23,7 +37,7 @@ export default function MemberDetailPage() {
 
   const [form, setForm] = useState<Omit<Member, 'id'>>({
     first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
-    jersey_number: undefined, position: '', status: 'aktiv',
+    jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_function: '',
   })
   const [users, setUsers] = useState<User[]>([])
   const [selectedParentUser, setSelectedParentUser] = useState('')
@@ -50,7 +64,9 @@ export default function MemberDetailPage() {
           first_name: m.first_name, last_name: m.last_name,
           date_of_birth: m.date_of_birth ?? '', member_number: m.member_number ?? '',
           pass_number: m.pass_number ?? '',
-          jersey_number: m.jersey_number, position: m.position ?? '', status: m.status,
+          jersey_number: m.jersey_number, position: m.position ?? '',
+          gender: m.gender ?? 'u', status: m.status,
+          club_function: m.club_function ?? '',
         })
         setCurrentUserID(m.user_id ?? null)
         setSelectedLinkedUser(m.user_id ? String(m.user_id) : '')
@@ -62,7 +78,11 @@ export default function MemberDetailPage() {
   const handleSave = async () => {
     setSaving(true); setError('')
     try {
-      const body = { ...form, jersey_number: form.jersey_number ? Number(form.jersey_number) : null }
+      const body = {
+        ...form,
+        jersey_number: form.jersey_number ? Number(form.jersey_number) : null,
+        club_function: form.club_function || null,
+      }
       if (isNew) {
         const r = await api.post('/members', body)
         navigate(`/mitglieder/${r.data.id}`, { replace: true })
@@ -188,6 +208,26 @@ export default function MemberDetailPage() {
         </div>
 
         <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Geschlecht</label>
+          <div className="flex gap-2">
+            {GENDER_OPTIONS.map(g => (
+              <button
+                key={g.value}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, gender: g.value }))}
+                className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                  form.gender === g.value
+                    ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                    : 'text-gray-600 border-gray-300 hover:border-brand-black hover:text-brand-black'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
           <div className="flex gap-2 flex-wrap">
             {STATUS_OPTIONS.map(s => (
@@ -201,6 +241,26 @@ export default function MemberDetailPage() {
                 }`}
               >
                 {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Vereinsfunktion</label>
+          <div className="flex gap-2 flex-wrap">
+            {CLUB_FUNCTION_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, club_function: opt.value }))}
+                className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                  (form.club_function ?? '') === opt.value
+                    ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                    : 'text-gray-600 border-gray-300 hover:border-brand-black hover:text-brand-black'
+                }`}
+              >
+                {opt.label}
               </button>
             ))}
           </div>

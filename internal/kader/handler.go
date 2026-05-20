@@ -29,12 +29,18 @@ type memberRow struct {
 	Gender    string `json:"gender"`
 }
 
+type trainerRow struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 type kaderDetail struct {
 	kaderRow
-	BirthYears   []int       `json:"birth_years"`   // filtered: [dedicated] or [yr1, yr2]
-	BracketYears []int       `json:"bracket_years"` // always both bracket years [yr1, yr2]
-	Members      []memberRow `json:"members"`
-	MemberCount  int         `json:"member_count"`
+	BirthYears   []int        `json:"birth_years"`   // filtered: [dedicated] or [yr1, yr2]
+	BracketYears []int        `json:"bracket_years"` // always both bracket years [yr1, yr2]
+	Members      []memberRow  `json:"members"`
+	MemberCount  int          `json:"member_count"`
+	Trainers     []trainerRow `json:"trainers"`
 }
 
 func computeBirthYears(k kaderRow, seasonStartYear int) (birthYears []int, bracketYears []int) {
@@ -100,6 +106,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		members, _ := h.loadMembers(r.Context(), k.ID)
+		trainers, _ := h.loadTrainers(r.Context(), k.ID)
 		bys, bkys := computeBirthYears(k, seasonStartYear)
 		result = append(result, kaderDetail{
 			kaderRow:     k,
@@ -107,6 +114,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 			BracketYears: bkys,
 			Members:      members,
 			MemberCount:  len(members),
+			Trainers:     trainers,
 		})
 	}
 
@@ -129,6 +137,7 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 	}
 
 	members, _ := h.loadMembers(r.Context(), k.ID)
+	trainers, _ := h.loadTrainers(r.Context(), k.ID)
 	bys, bkys := computeBirthYears(k, seasonStartYear)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(kaderDetail{
@@ -137,6 +146,7 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 		BracketYears: bkys,
 		Members:      members,
 		MemberCount:  len(members),
+		Trainers:     trainers,
 	})
 }
 
@@ -144,10 +154,12 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		MembersAdd          []int  `json:"members_add"`
-		MembersRemove       []int  `json:"members_remove"`
-		DedicatedBirthYear  *int   `json:"dedicated_birth_year"`
-		SetDedicatedBirthYear bool `json:"set_dedicated_birth_year"`
+		MembersAdd            []int  `json:"members_add"`
+		MembersRemove         []int  `json:"members_remove"`
+		DedicatedBirthYear    *int   `json:"dedicated_birth_year"`
+		SetDedicatedBirthYear bool   `json:"set_dedicated_birth_year"`
+		TrainersAdd           []int  `json:"trainers_add"`
+		TrainersRemove        []int  `json:"trainers_remove"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -168,6 +180,14 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	for _, memberID := range req.MembersRemove {
 		tx.ExecContext(r.Context(),
 			`DELETE FROM kader_members WHERE kader_id=? AND member_id=?`, id, memberID)
+	}
+	for _, memberID := range req.TrainersAdd {
+		tx.ExecContext(r.Context(),
+			`INSERT OR IGNORE INTO kader_trainers (kader_id, member_id) VALUES (?,?)`, id, memberID)
+	}
+	for _, memberID := range req.TrainersRemove {
+		tx.ExecContext(r.Context(),
+			`DELETE FROM kader_trainers WHERE kader_id=? AND member_id=?`, id, memberID)
 	}
 
 	if req.DedicatedBirthYear != nil {
@@ -299,6 +319,7 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 		BracketYears: bkys,
 		Members:      []memberRow{},
 		MemberCount:  0,
+		Trainers:     []trainerRow{},
 	})
 }
 
@@ -362,6 +383,26 @@ func (h *Handler) CopyFromSeason(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"created": created})
+}
+
+func (h *Handler) loadTrainers(ctx context.Context, kaderID int) ([]trainerRow, error) {
+	rows, err := h.db.QueryContext(ctx,
+		`SELECT m.id, m.first_name || ' ' || m.last_name
+		 FROM kader_trainers kt
+		 JOIN members m ON m.id = kt.member_id
+		 WHERE kt.kader_id = ?
+		 ORDER BY m.last_name, m.first_name`, kaderID)
+	if err != nil {
+		return []trainerRow{}, err
+	}
+	defer rows.Close()
+	result := []trainerRow{}
+	for rows.Next() {
+		var t trainerRow
+		rows.Scan(&t.ID, &t.Name)
+		result = append(result, t)
+	}
+	return result, nil
 }
 
 func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, error) {

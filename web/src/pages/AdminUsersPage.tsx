@@ -170,10 +170,12 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-3 font-medium">{req.name}</td>
                     <td className="px-6 py-3 text-gray-600">{req.email}</td>
                     <td className="px-6 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-yellow">Anfrage</span></td>
-                    <td className="px-6 py-3 text-right space-x-3">
-                      <button onClick={() => handleApproveRequest(req)} className="text-xs hover:underline">Genehmigen</button>
-                      <button onClick={() => handleRejectRequest(req)} className="text-xs hover:underline">Ablehnen</button>
-                      <button onClick={() => handleDeleteRequest(req)} className="text-xs text-red-600 hover:underline">Löschen</button>
+                    <td className="px-6 py-3 text-right">
+                      <div className="flex gap-1 justify-end">
+                        <button onClick={() => handleApproveRequest(req)} className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">Genehmigen</button>
+                        <button onClick={() => handleRejectRequest(req)} className="text-xs border border-gray-300 text-gray-700 px-3 py-1 rounded font-medium hover:border-gray-500 transition-colors">Ablehnen</button>
+                        <button onClick={() => handleDeleteRequest(req)} className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors">Löschen</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -183,7 +185,7 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-3 text-gray-400">–</td>
                     <td className="px-6 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-200">Einladung</span></td>
                     <td className="px-6 py-3 text-right">
-                      <button onClick={() => handleDeleteInvitation(inv)} className="text-xs text-red-600 hover:underline">Löschen</button>
+                      <button onClick={() => handleDeleteInvitation(inv)} className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors">Löschen</button>
                     </td>
                   </tr>
                 ))}
@@ -279,7 +281,7 @@ export default function AdminUsersPage() {
                       <button
                         onClick={() => handleDeleteUser(u)}
                         disabled={self?.id === u.id}
-                        className="text-xs text-red-600 hover:underline disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         Löschen
                       </button>

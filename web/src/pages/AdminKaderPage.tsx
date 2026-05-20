@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import KaderMemberSearch from '../components/KaderMemberSearch'
+import KaderTrainerSearch from '../components/KaderTrainerSearch'
 import CopyKaderModal from '../components/CopyKaderModal'
 
 interface Season {
@@ -27,6 +28,7 @@ interface Kader {
   bracket_years: number[]
   members: Member[]
   member_count: number
+  trainers: { id: number; name: string }[]
 }
 
 const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
@@ -96,6 +98,24 @@ export default function AdminKaderPage() {
       showToast('Fehler beim Entfernen')
     } finally {
       setRemoving(prev => ({ ...prev, [key]: false }))
+    }
+  }
+
+  const handleAddTrainer = async (kaderId: number, memberId: number) => {
+    try {
+      await api.put(`/admin/kader/${kaderId}`, { trainers_add: [memberId] })
+      await loadAll()
+    } catch {
+      showToast('Fehler beim Hinzufügen')
+    }
+  }
+
+  const handleRemoveTrainer = async (kaderId: number, memberId: number) => {
+    try {
+      await api.put(`/admin/kader/${kaderId}`, { trainers_remove: [memberId] })
+      await loadAll()
+    } catch {
+      showToast('Fehler beim Entfernen')
     }
   }
 
@@ -273,7 +293,7 @@ export default function AdminKaderPage() {
                 : `${k.age_class} ${GENDER_LABEL[k.gender]}`
 
               return (
-                <div key={k.id} className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow mb-3 overflow-hidden">
+                <div key={k.id} className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow mb-3">
                   {/* Card header */}
                   <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -324,6 +344,7 @@ export default function AdminKaderPage() {
                     </div>
                     {showDedicatedDropdown && (
                       <select
+                        key={k.dedicated_birth_year ?? 'empty'}
                         value={isDedicated && !isPending ? k.dedicated_birth_year! : ''}
                         onChange={e => {
                           const yr = parseInt(e.target.value)
@@ -339,8 +360,17 @@ export default function AdminKaderPage() {
                     )}
                   </div>
 
+                  {/* Trainer search + list */}
+                  <div className="px-5 py-2 border-t border-gray-100">
+                    <KaderTrainerSearch
+                      assignedTrainers={k.trainers ?? []}
+                      onAdd={(memberId) => handleAddTrainer(k.id, memberId)}
+                      onRemove={(memberId) => handleRemoveTrainer(k.id, memberId)}
+                    />
+                  </div>
+
                   {/* Member search */}
-                  <div className="px-5 pt-2 pb-2">
+                  <div className="px-5 pt-2 pb-2 border-t border-gray-100">
                     <KaderMemberSearch
                       kaderId={k.id}
                       onMemberAdded={loadAll}
