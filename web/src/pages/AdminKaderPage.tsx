@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import KaderMemberSearch from '../components/KaderMemberSearch'
 import KaderTrainerSearch from '../components/KaderTrainerSearch'
+import PositionStatus from '../components/PositionStatus'
 import CopyKaderModal from '../components/CopyKaderModal'
 import AutoAssignModal from '../components/AutoAssignModal'
 
@@ -368,6 +369,11 @@ export default function AdminKaderPage() {
                         ))}
                       </select>
                     )}
+                  </div>
+
+                  {/* Position status */}
+                  <div className="px-5 py-2 border-t border-gray-100">
+                    <PositionStatus members={k.members ?? []} />
                   </div>
 
                   {/* Trainer search + list */}
