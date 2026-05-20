@@ -15,8 +15,10 @@ const POSITIONS: Position[] = [
   { name: 'Torwart', abbr: 'TW' },
   { name: 'Linksaußen', abbr: 'LA' },
   { name: 'Rechtsaußen', abbr: 'RA' },
-  { name: 'Rückraum', abbr: 'RM' },
-  { name: 'Kreismitte', abbr: 'KL' },
+  { name: 'Rückraum Links', abbr: 'RL' },
+  { name: 'Rückraum Mitte', abbr: 'RM' },
+  { name: 'Rückraum Rechts', abbr: 'RR' },
+  { name: 'Kreisläufer', abbr: 'KL' },
 ]
 
 function countMembersForPosition(members: Member[], positionName: string): number {
@@ -28,10 +30,10 @@ function countMembersForPosition(members: Member[], positionName: string): numbe
 }
 
 function getCircleClass(count: number): string {
-  if (count === 0) return 'border-2 border-red-500'
-  if (count === 1) return 'border-2 border-brand-yellow'
-  if (count === 2) return 'border-2 border-brand-green'
-  return 'border-2 border-blue-500'
+  if (count === 0) return 'border-2 border-red-500 bg-white'
+  if (count === 1) return 'bg-brand-yellow'
+  if (count === 2) return 'bg-brand-green'
+  return 'bg-blue-500'
 }
 
 interface PositionStatusProps {
@@ -40,20 +42,20 @@ interface PositionStatusProps {
 
 export default function PositionStatus({ members }: PositionStatusProps) {
   return (
-    <div className="flex gap-3 items-start py-2 text-xs">
+    <div className="flex gap-3 items-end py-2 text-xs">
       {POSITIONS.map(pos => {
         const count = countMembersForPosition(members, pos.name)
         const circleClass = getCircleClass(count)
         const circleCount = count === 0 ? 1 : count === 1 ? 1 : Math.min(count, 3)
 
         return (
-          <div key={pos.abbr} className="flex items-center gap-1">
+          <div key={pos.abbr} className="flex items-end gap-1">
             <span className="font-medium text-gray-700 whitespace-nowrap">{pos.abbr}</span>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col-reverse gap-0.5">
               {Array.from({ length: circleCount }).map((_, i) => (
                 <div
                   key={i}
-                  className={`w-3.5 h-3.5 rounded-full bg-white ${circleClass}`}
+                  className={`w-2.5 h-2.5 rounded-full ${circleClass}`}
                 />
               ))}
             </div>
