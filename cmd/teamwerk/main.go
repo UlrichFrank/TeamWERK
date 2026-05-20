@@ -155,6 +155,7 @@ func serve() {
 			r.Put("/api/admin/members/{id}/user", membH.LinkUser)
 			r.Get("/api/admin/members/{id}/parents", membH.GetMemberParents)
 			r.Post("/api/admin/family-links", membH.CreateFamilyLink)
+			r.Delete("/api/admin/family-links", membH.DeleteFamilyLink)
 			r.Get("/api/admin/duty-types", dutyH.ListTypes)
 			r.Post("/api/admin/duty-types", dutyH.CreateType)
 			r.Put("/api/admin/duty-types/{id}", dutyH.UpdateType)

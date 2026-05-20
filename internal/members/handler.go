@@ -256,9 +256,43 @@ func (h *Handler) CreateFamilyLink(w http.ResponseWriter, r *http.Request) {
 		MemberID     int `json:"member_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+
+	var count int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM family_links WHERE member_id=?`, req.MemberID).Scan(&count)
+	if count >= 2 {
+		http.Error(w, "maximal zwei Erziehungsberechtigte erlaubt", http.StatusConflict)
+		return
+	}
+
 	h.db.ExecContext(r.Context(),
 		`INSERT OR IGNORE INTO family_links (parent_user_id, member_id) VALUES (?,?)`,
 		req.ParentUserID, req.MemberID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/admin/family-links
+func (h *Handler) DeleteFamilyLink(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ParentUserID int `json:"parent_user_id"`
+		MemberID     int `json:"member_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`DELETE FROM family_links WHERE parent_user_id=? AND member_id=?`,
+		req.ParentUserID, req.MemberID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

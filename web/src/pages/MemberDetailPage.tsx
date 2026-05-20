@@ -9,7 +9,6 @@ interface Member {
   jersey_number?: number; position: string; status: string; user_id?: number
 }
 
-interface Team { id: number; name: string }
 interface Season { id: number; name: string; is_active: number }
 interface User { id: number; name: string; email: string; role: string }
 
@@ -27,12 +26,8 @@ export default function MemberDetailPage() {
     first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
     jersey_number: undefined, position: '', status: 'aktiv',
   })
-  const [teams, setTeams] = useState<Team[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
   const [users, setUsers] = useState<User[]>([])
-  const [selectedTeam, setSelectedTeam] = useState('')
-  const [selectedSeason, setSelectedSeason] = useState('')
-  const [isPrimary, setIsPrimary] = useState(false)
   const [selectedParentUser, setSelectedParentUser] = useState('')
   const [linkedParents, setLinkedParents] = useState<User[]>([])
   const [selectedLinkedUser, setSelectedLinkedUser] = useState('')
@@ -40,6 +35,7 @@ export default function MemberDetailPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [removingParent, setRemovingParent] = useState<Record<number, boolean>>({})
 
   const loadLinkedParents = () => {
     if (isAdmin && !isNew && id) {
@@ -48,14 +44,11 @@ export default function MemberDetailPage() {
   }
 
   useEffect(() => {
-    api.get('/admin/teams').then(r => setTeams(r.data ?? []))
     api.get('/admin/seasons').then(r => {
       const s: Season[] = r.data ?? []
       setSeasons(s)
-      const active = s.find(x => x.is_active)
-      if (active) setSelectedSeason(String(active.id))
     })
-    if (isAdmin) api.get('/admin/users').then(r => setUsers(r.data ?? []))
+    if (isAdmin) api.get('/admin/users').then(r => setUsers(r.data.items ?? []))
     if (!isNew && id) {
       api.get(`/members/${id}`).then(r => {
         const m: Member = r.data
@@ -96,20 +89,29 @@ export default function MemberDetailPage() {
     if (!isNew && id) await api.put(`/members/${id}/status`, { status })
   }
 
-  const handleAssignTeam = async () => {
-    if (!selectedTeam || !selectedSeason || !id) return
-    await api.post(`/members/${id}/team-assignment`, {
-      team_id: Number(selectedTeam), season_id: Number(selectedSeason), is_primary: isPrimary,
-    })
-    setSaved(true); setTimeout(() => setSaved(false), 2000)
-  }
-
   const handleFamilyLink = async () => {
     if (!selectedParentUser || !id) return
-    await api.post('/admin/family-links', { parent_user_id: Number(selectedParentUser), member_id: Number(id) })
-    setSelectedParentUser('')
-    loadLinkedParents()
-    setSaved(true); setTimeout(() => setSaved(false), 2000)
+    try {
+      await api.post('/admin/family-links', { parent_user_id: Number(selectedParentUser), member_id: Number(id) })
+      setSelectedParentUser('')
+      loadLinkedParents()
+      setSaved(true); setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setError('Fehler beim Verknüpfen.')
+    }
+  }
+
+  const handleRemoveParent = async (parentUserId: number) => {
+    if (!id) return
+    setRemovingParent(prev => ({ ...prev, [parentUserId]: true }))
+    try {
+      await api.delete('/admin/family-links', { data: { parent_user_id: parentUserId, member_id: Number(id) } })
+      loadLinkedParents()
+    } catch {
+      setError('Fehler beim Entfernen.')
+    } finally {
+      setRemovingParent(prev => ({ ...prev, [parentUserId]: false }))
+    }
   }
 
   const handleLinkUser = async () => {
@@ -127,6 +129,7 @@ export default function MemberDetailPage() {
 
   const selectedPositions = form.position ? form.position.split(',').filter(Boolean) : []
   const isPassive = form.status === 'passiv'
+  const canAddParent = linkedParents.length < 2
 
   const field = (label: string, key: keyof typeof form, type = 'text') => (
     <div>
@@ -222,46 +225,6 @@ export default function MemberDetailPage() {
         </div>
       </div>
 
-      {/* Team-Zuordnung (nur bei existierendem, nicht-passivem Mitglied) */}
-      {!isNew && !isPassive && (
-        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
-          <h2 className="font-semibold text-gray-700 mb-4">Mannschaft zuweisen</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Mannschaft</label>
-              <select
-                value={selectedTeam}
-                onChange={e => setSelectedTeam(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                <option value="">– auswählen –</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Saison</label>
-              <select
-                value={selectedSeason}
-                onChange={e => setSelectedSeason(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                {seasons.map(s => <option key={s.id} value={s.id}>{s.name}{s.is_active ? ' (aktiv)' : ''}</option>)}
-              </select>
-            </div>
-          </div>
-          <label className="flex items-center gap-2 mt-3 text-sm text-gray-700">
-            <input type="checkbox" checked={isPrimary} onChange={e => setIsPrimary(e.target.checked)} />
-            Primärmannschaft
-          </label>
-          <button
-            onClick={handleAssignTeam}
-            className="mt-3 bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
-          >
-            Zuweisen
-          </button>
-        </div>
-      )}
-
       {/* Nutzer verknüpfen (Admin only, existierendes Mitglied) */}
       {isAdmin && !isNew && (
         <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-4">
@@ -297,41 +260,59 @@ export default function MemberDetailPage() {
         </div>
       )}
 
-      {/* Familien-Verlinkung (Admin only, existierendes Mitglied) */}
+      {/* Erziehungsberechtigte (Admin only, existierendes Mitglied) */}
       {isAdmin && !isNew && (
         <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Elternteile</h2>
+          <h2 className="font-semibold text-gray-700 mb-4">Erziehungsberechtigte</h2>
+
           {linkedParents.length > 0 && (
             <div className="mb-4 space-y-2">
               {linkedParents.map(p => (
                 <div key={p.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-2 text-sm">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-gray-400">{p.email}</span>
+                  <div>
+                    <span className="font-medium">{p.name}</span>
+                    <span className="ml-2 text-gray-400">{p.email}</span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveParent(p.id)}
+                    disabled={removingParent[p.id]}
+                    className="text-xs text-gray-400 hover:text-red-600 transition-colors disabled:opacity-40 px-2 py-1 rounded"
+                    title="Verknüpfung entfernen"
+                  >
+                    {removingParent[p.id] ? '…' : 'Entfernen'}
+                  </button>
                 </div>
               ))}
             </div>
           )}
-          <div className="flex gap-3 items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Weiteres Elternteil hinzufügen</label>
-              <select
-                value={selectedParentUser}
-                onChange={e => setSelectedParentUser(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+
+          {canAddParent ? (
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Erziehungsberechtigten hinzufügen</label>
+                <select
+                  value={selectedParentUser}
+                  onChange={e => setSelectedParentUser(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="">– auswählen –</option>
+                  {users.filter(u => !linkedParents.some(p => p.id === u.id)).map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={handleFamilyLink}
+                disabled={!selectedParentUser}
+                className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
               >
-                <option value="">– auswählen –</option>
-                {users.filter(u => u.role === 'elternteil' && !linkedParents.some(p => p.id === u.id)).map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-                ))}
-              </select>
+                Hinzufügen
+              </button>
             </div>
-            <button
-              onClick={handleFamilyLink}
-              className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
-            >
-              Verknüpfen
-            </button>
-          </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">Maximal zwei Erziehungsberechtigte möglich.</p>
+          )}
+
           {saved && <p className="mt-2 text-sm text-brand-success">Gespeichert</p>}
         </div>
       )}
