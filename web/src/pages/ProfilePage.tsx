@@ -10,6 +10,7 @@ export interface Member {
   id: number; first_name: string; last_name: string
   date_of_birth: string; pass_number: string
   jersey_number?: number; position: string; status: string
+  iban?: string
 }
 
 export interface Parent {

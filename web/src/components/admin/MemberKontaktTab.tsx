@@ -2,7 +2,6 @@ interface Member {
   street?: string
   zip?: string
   city?: string
-  email?: string
   iban?: string
 }
 
@@ -18,18 +17,17 @@ interface Props {
   isNew: boolean
   drafts: Draft[]
   onFormChange: (updates: Partial<Member>) => void
+  onDraftAccept: (draftId: number) => Promise<void>
+  onDraftReject: (draftId: number) => Promise<void>
   onSave: () => Promise<void>
   saving: boolean
   saved: boolean
   error: string
 }
 
-export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, onSave, saving, saved, error }: Props) {
+export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const addressDraft = drafts.find(d => d.field_name === 'address')
-
-  const handleAddressChange = (updates: any) => {
-    onFormChange(updates)
-  }
+  const ibanDraft = drafts.find(d => d.field_name === 'iban')
 
   return (
     <div className="space-y-6">
@@ -39,15 +37,12 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={form.street || ''}
-                onChange={e => handleAddressChange({ street: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-              {addressDraft && <span className="text-lg">⏳</span>}
-            </div>
+            <input
+              type="text"
+              value={form.street || ''}
+              onChange={e => onFormChange({ street: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -55,7 +50,7 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
               <input
                 type="text"
                 value={form.zip || ''}
-                onChange={e => handleAddressChange({ zip: e.target.value })}
+                onChange={e => onFormChange({ zip: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
               />
             </div>
@@ -64,47 +59,78 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
               <input
                 type="text"
                 value={form.city || ''}
-                onChange={e => handleAddressChange({ city: e.target.value })}
+                onChange={e => onFormChange({ city: e.target.value })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
               />
             </div>
           </div>
+
           {addressDraft && (
-            <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-              Angefordert: {addressDraft.new_value?.street} {addressDraft.new_value?.zip} {addressDraft.new_value?.city}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  <span className="font-medium text-blue-700">Angeforderte Adressänderung:</span>{' '}
+                  {addressDraft.new_value?.street}, {addressDraft.new_value?.zip} {addressDraft.new_value?.city}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onDraftAccept(addressDraft.id)}
+                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
+                  >
+                    ✓ Annehmen
+                  </button>
+                  <button
+                    onClick={() => onDraftReject(addressDraft.id)}
+                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
+                  >
+                    ✗ Ablehnen
+                  </button>
+                </div>
+              </div>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Kontaktdaten */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Kontaktdaten</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label>
-            <input
-              type="email"
-              value={form.email || ''}
-              onChange={e => onFormChange({ email: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            />
-          </div>
         </div>
       </div>
 
       {/* Bankdaten */}
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-gray-700 mb-4">Bankdaten</h2>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
-          <input
-            type="text"
-            value={form.iban || ''}
-            onChange={e => onFormChange({ iban: e.target.value })}
-            placeholder="DE__ ____ ____ ____ ____ ____"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
-          />
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
+            <input
+              type="text"
+              value={form.iban || ''}
+              onChange={e => onFormChange({ iban: e.target.value })}
+              placeholder="DE__ ____ ____ ____ ____ ____"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
+            />
+          </div>
+
+          {ibanDraft && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  <span className="font-medium text-blue-700">Angeforderte IBAN:</span>{' '}
+                  <span className="font-mono">{ibanDraft.new_value}</span>
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onDraftAccept(ibanDraft.id)}
+                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
+                  >
+                    ✓ Annehmen
+                  </button>
+                  <button
+                    onClick={() => onDraftReject(ibanDraft.id)}
+                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
+                  >
+                    ✗ Ablehnen
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

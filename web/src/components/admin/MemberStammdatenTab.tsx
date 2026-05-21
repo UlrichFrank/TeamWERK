@@ -94,35 +94,46 @@ export default function MemberStammdatenTab({ form, isNew, drafts, onFormChange,
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={form.first_name}
-                onChange={e => onFormChange({ first_name: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-              {nameDraft && <span className="text-lg">⏳</span>}
-            </div>
-            {nameDraft && (
-              <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-                Angefordert: {nameDraft.new_value?.first_name}
-                <button onClick={() => onDraftAccept(nameDraft.id)} className="ml-2 text-green-600 hover:text-green-800">✓</button>
-                <button onClick={() => onDraftReject(nameDraft.id)} className="ml-1 text-red-600 hover:text-red-800">✗</button>
-              </div>
-            )}
+            <input
+              type="text"
+              value={form.first_name}
+              onChange={e => onFormChange({ first_name: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={form.last_name}
-                onChange={e => onFormChange({ last_name: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-              {nameDraft && <span className="text-lg">⏳</span>}
-            </div>
+            <input
+              type="text"
+              value={form.last_name}
+              onChange={e => onFormChange({ last_name: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
           </div>
+          {nameDraft && (
+            <div className="col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  <span className="font-medium text-blue-700">Angeforderte Namensänderung:</span>{' '}
+                  {nameDraft.new_value?.first_name} {nameDraft.new_value?.last_name}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onDraftAccept(nameDraft.id)}
+                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
+                  >
+                    ✓ Annehmen
+                  </button>
+                  <button
+                    onClick={() => onDraftReject(nameDraft.id)}
+                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
+                  >
+                    ✗ Ablehnen
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
             <input

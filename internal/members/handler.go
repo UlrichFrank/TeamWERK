@@ -56,6 +56,8 @@ type Member struct {
 	// Linked user contact data (shown when user visibility allows)
 	UserPhones   []UserPhone `json:"user_phones,omitempty"`
 	UserPhotoURL *string     `json:"user_photo_url,omitempty"`
+
+	HasPendingDrafts bool `json:"has_pending_drafts,omitempty"`
 }
 
 type AddressStored struct {
@@ -161,6 +163,37 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, m)
 	}
+
+	// For admin: mark members with pending drafts
+	if claims.Role == "admin" && len(result) > 0 {
+		ids := make([]interface{}, len(result))
+		idxMap := make(map[int]int, len(result))
+		for i, m := range result {
+			ids[i] = m.ID
+			idxMap[m.ID] = i
+		}
+		placeholders := ""
+		for i := range ids {
+			if i > 0 {
+				placeholders += ","
+			}
+			placeholders += "?"
+		}
+		draftRows, err := h.db.QueryContext(r.Context(),
+			`SELECT DISTINCT member_id FROM member_change_drafts WHERE member_id IN (`+placeholders+`)`, ids...)
+		if err == nil {
+			defer draftRows.Close()
+			for draftRows.Next() {
+				var mid int
+				if draftRows.Scan(&mid) == nil {
+					if idx, ok := idxMap[mid]; ok {
+						result[idx].HasPendingDrafts = true
+					}
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"items": result, "total": total})
 }
@@ -636,13 +669,14 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	resp := ProfileResponse{Children: []Member{}, Parents: []ProfileParent{}, Phones: []UserPhone{}}
 
-	// Own linked member
-	m, err := scanMember(h.db.QueryRowContext(r.Context(),
-		`SELECT id, first_name, last_name, COALESCE(date_of_birth,''), COALESCE(member_number,''), COALESCE(pass_number,''),
-		        jersey_number, COALESCE(position,''), COALESCE(gender,'u'), status, user_id, club_function
-		 FROM members WHERE user_id=?`, claims.UserID))
+	// Own linked member (with extended fields for profile display)
+	var ownMemberID int
+	err := h.db.QueryRowContext(r.Context(), `SELECT id FROM members WHERE user_id=?`, claims.UserID).Scan(&ownMemberID)
 	if err == nil {
-		resp.OwnMember = &m
+		m, merr := h.getMember(ownMemberID)
+		if merr == nil {
+			resp.OwnMember = m
+		}
 	}
 
 	// Children (elternteil)

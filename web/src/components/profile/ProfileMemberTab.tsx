@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { Member, ChangeDraft } from '../../pages/ProfilePage'
 
@@ -8,225 +8,233 @@ interface Props {
 
 export default function ProfileMemberTab({ ownMember }: Props) {
   const [drafts, setDrafts] = useState<ChangeDraft[]>([])
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState('')
+
+  // Name-Änderung
+  const [nameFirst, setNameFirst] = useState('')
+  const [nameLast, setNameLast] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameError, setNameError] = useState('')
+  const [nameSaved, setNameSaved] = useState(false)
+
+  // IBAN-Änderung
+  const [iban, setIban] = useState('')
+  const [ibanSaving, setIbanSaving] = useState(false)
+  const [ibanError, setIbanError] = useState('')
+  const [ibanSaved, setIbanSaved] = useState(false)
+
+  const [cancelError, setCancelError] = useState('')
 
   useEffect(() => {
     if (ownMember) {
-      api.get(`/members/${ownMember.id}/change-drafts`).then(r => {
-        setDrafts(r.data?.drafts ?? [])
-      })
+      setNameFirst(ownMember.first_name)
+      setNameLast(ownMember.last_name)
+      setIban(ownMember.iban ?? '')
+      loadDrafts()
     }
   }, [ownMember?.id])
 
-  const getDraftForField = (fieldName: string) => drafts.find(d => d.field_name === fieldName)
+  const loadDrafts = async () => {
+    if (!ownMember) return
+    try {
+      const r = await api.get(`/members/${ownMember.id}/change-drafts`)
+      setDrafts(r.data?.drafts ?? [])
+    } catch {}
+  }
+
+  const getDraft = (field: string) => drafts.find(d => d.field_name === field)
 
   const handleCancelDraft = async (draftId: number) => {
     if (!ownMember) return
+    setCancelError('')
     try {
       await api.delete(`/members/${ownMember.id}/change-drafts/${draftId}`)
-      setDrafts(drafts.filter(d => d.id !== draftId))
-    } catch (err) {
-      setError('Fehler beim Löschen der Änderungsanfrage')
+      setDrafts(prev => prev.filter(d => d.id !== draftId))
+    } catch {
+      setCancelError('Fehler beim Abbrechen')
     }
   }
 
-  const handleSave = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!ownMember || drafts.length === 0) return
-
-    setSaving(true)
-    setError('')
+  const handleNameRequest = async () => {
+    if (!ownMember) return
+    if (!nameFirst.trim() || !nameLast.trim()) {
+      setNameError('Vor- und Nachname dürfen nicht leer sein.')
+      return
+    }
+    setNameSaving(true)
+    setNameError('')
     try {
-      await api.post(`/members/${ownMember.id}/change-request`, {})
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (err) {
-      setError('Fehler beim Speichern')
+      await api.post(`/members/${ownMember.id}/change-request`, {
+        field_name: 'name',
+        new_value: { first_name: nameFirst.trim(), last_name: nameLast.trim() },
+      })
+      await loadDrafts()
+      setNameSaved(true)
+      setTimeout(() => setNameSaved(false), 2000)
+    } catch {
+      setNameError('Fehler beim Senden der Änderungsanfrage.')
     } finally {
-      setSaving(false)
+      setNameSaving(false)
+    }
+  }
+
+  const handleIbanRequest = async () => {
+    if (!ownMember) return
+    if (!iban.trim()) {
+      setIbanError('IBAN darf nicht leer sein.')
+      return
+    }
+    setIbanSaving(true)
+    setIbanError('')
+    try {
+      await api.post(`/members/${ownMember.id}/change-request`, {
+        field_name: 'iban',
+        new_value: iban.trim(),
+      })
+      await loadDrafts()
+      setIbanSaved(true)
+      setTimeout(() => setIbanSaved(false), 2000)
+    } catch {
+      setIbanError('Fehler beim Senden der Änderungsanfrage.')
+    } finally {
+      setIbanSaving(false)
     }
   }
 
   if (!ownMember) {
-    return <div>Keine Mitgliedsdaten verfügbar</div>
+    return <div className="text-gray-500">Keine Mitgliedsdaten verfügbar.</div>
   }
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '–'
-    return new Date(dateStr).toLocaleDateString('de-DE')
+  const formatDate = (s: string) => {
+    if (!s) return '–'
+    return new Date(s).toLocaleDateString('de-DE')
   }
 
-  const nameDraft = getDraftForField('name')
-  const addressDraft = getDraftForField('address')
-  const emailDraft = getDraftForField('email')
-  const ibanDraft = getDraftForField('iban')
-  const photoDraft = getDraftForField('photo_url')
-  const dsgvoDraft = getDraftForField('dsgvo')
-  const sepaDraft = getDraftForField('sepa_mandat')
+  const nameDraft = getDraft('name')
+  const ibanDraft = getDraft('iban')
+
+  const nameChanged = nameFirst !== ownMember.first_name || nameLast !== ownMember.last_name
+  const ibanChanged = iban !== (ownMember.iban ?? '')
 
   return (
     <div className="space-y-6">
-      {/* Persönliche Daten */}
+      {/* Stammdaten — read-only */}
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Persönliche Daten</h2>
-        <div className="space-y-3">
+        <h2 className="font-semibold text-gray-700 mb-4">Stammdaten</h2>
+        <div className="space-y-3 text-sm">
+          <Row label="Vorname" value={ownMember.first_name} />
+          <Row label="Nachname" value={ownMember.last_name} />
+          <Row label="Geburtsdatum" value={formatDate(ownMember.date_of_birth)} />
+          <Row label="Passnummer" value={ownMember.pass_number || '–'} />
+          <Row label="Rückennummer" value={ownMember.jersey_number?.toString() ?? '–'} />
+          <Row label="Position" value={ownMember.position || '–'} />
+          <Row label="Status" value={ownMember.status || '–'} />
+        </div>
+      </div>
+
+      {/* Name ändern */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-gray-700 mb-1">Name ändern</h2>
+        <p className="text-xs text-gray-500 mb-4">Namensänderungen müssen vom Verein genehmigt werden.</p>
+
+        {nameDraft && (
+          <div className="mb-4 text-xs text-gray-600 p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <span className="font-medium text-blue-700">Ausstehend:</span>{' '}
+            {nameDraft.new_value?.first_name} {nameDraft.new_value?.last_name}
+            <button
+              onClick={() => handleCancelDraft(nameDraft.id)}
+              className="ml-3 text-red-600 hover:text-red-800 underline"
+            >
+              Abbrechen
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
-            <div className="flex items-center gap-2">
-              <input type="text" value={ownMember.first_name} disabled className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-              {nameDraft && <span className="text-lg">⏳</span>}
-            </div>
-            {nameDraft && (
-              <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-                Angefordert: {nameDraft.new_value?.first_name || '–'}
-                <button onClick={() => handleCancelDraft(nameDraft.id)} className="ml-2 text-red-600 hover:text-red-800">Abbrechen</button>
-              </div>
-            )}
+            <input
+              type="text"
+              value={nameFirst}
+              onChange={e => setNameFirst(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
-            <div className="flex items-center gap-2">
-              <input type="text" value={ownMember.last_name} disabled className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-              {nameDraft && <span className="text-lg">⏳</span>}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
-            <input type="text" value={formatDate(ownMember.date_of_birth)} disabled className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Passnummer</label>
-            <input type="text" value={ownMember.pass_number} disabled className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Rückennummer</label>
-            <input type="text" value={ownMember.jersey_number ?? '–'} disabled className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
-            <input type="text" value={ownMember.position ?? '–'} disabled className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <input type="text" value={ownMember.status ?? '–'} disabled className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
+            <input
+              type="text"
+              value={nameLast}
+              onChange={e => setNameLast(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
           </div>
         </div>
-      </div>
 
-      {/* Kontakt */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Kontakt</h2>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-            <div className="flex items-center gap-2">
-              <input type="text" disabled value="Adresse (read-only)" className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-              {addressDraft && <span className="text-lg">⏳</span>}
-            </div>
-            {addressDraft && (
-              <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-                Angefordert: {addressDraft.new_value?.street} {addressDraft.new_value?.house_number}, {addressDraft.new_value?.zip} {addressDraft.new_value?.city}
-                <button onClick={() => handleCancelDraft(addressDraft.id)} className="ml-2 text-red-600 hover:text-red-800">Abbrechen</button>
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Telefonnummern</label>
-            <div className="flex items-center gap-2">
-              <input type="text" disabled value="Telefon (read-only)" className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-              {getDraftForField('phones') && <span className="text-lg">⏳</span>}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label>
-            <div className="flex items-center gap-2">
-              <input type="text" disabled value="E-Mail (read-only)" className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600" />
-              {emailDraft && <span className="text-lg">⏳</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Passfoto */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Passfoto</h2>
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Foto</div>
-          {photoDraft && <span className="text-lg">⏳</span>}
-        </div>
-        {photoDraft && (
-          <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-            Foto-Änderung angefordert
-            <button onClick={() => handleCancelDraft(photoDraft.id)} className="ml-2 text-red-600 hover:text-red-800">Abbrechen</button>
-          </div>
-        )}
-      </div>
-
-      {/* Bankdaten */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Bankdaten</h2>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
-          <div className="flex items-center gap-2">
-            <input type="text" disabled value="IBAN (read-only)" className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-100 text-gray-600 font-mono" />
-            {ibanDraft && <span className="text-lg">⏳</span>}
-          </div>
-          {ibanDraft && (
-            <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-              Angefordert: {ibanDraft.new_value}
-              <button onClick={() => handleCancelDraft(ibanDraft.id)} className="ml-2 text-red-600 hover:text-red-800">Abbrechen</button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Datenschutz */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Datenschutz</h2>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" disabled className="w-4 h-4 accent-brand-yellow" />
-            <span className="text-sm text-gray-700">Datenverarbeitung {dsgvoDraft && <span className="text-lg">⏳</span>}</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" disabled className="w-4 h-4 accent-brand-yellow" />
-            <span className="text-sm text-gray-700">Datenweitergabe {dsgvoDraft && <span className="text-lg">⏳</span>}</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" disabled className="w-4 h-4 accent-brand-yellow" />
-            <span className="text-sm text-gray-700">SEPA-Mandat {sepaDraft && <span className="text-lg">⏳</span>}</span>
-          </label>
-          {dsgvoDraft && (
-            <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-              DSGVO-Änderung angefordert
-              <button onClick={() => handleCancelDraft(dsgvoDraft.id)} className="ml-2 text-red-600 hover:text-red-800">Abbrechen</button>
-            </div>
-          )}
-          {sepaDraft && (
-            <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-              SEPA-Änderung angefordert
-              <button onClick={() => handleCancelDraft(sepaDraft.id)} className="ml-2 text-red-600 hover:text-red-800">Abbrechen</button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Save Button */}
-      {drafts.length > 0 && (
         <div className="flex items-center gap-3">
           <button
-            onClick={handleSave}
-            disabled={saving}
+            onClick={handleNameRequest}
+            disabled={nameSaving || !nameChanged}
             className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
           >
-            {saving ? 'Speichern…' : 'Änderungen speichern'}
+            {nameSaving ? 'Senden…' : 'Änderung anfordern'}
           </button>
-          {saved && <span className="text-sm text-green-600">Gespeichert</span>}
-          {error && <span className="text-sm text-red-600">{error}</span>}
+          {nameSaved && <span className="text-sm text-green-600">Anfrage gesendet</span>}
+          {nameError && <span className="text-sm text-red-600">{nameError}</span>}
         </div>
-      )}
+      </div>
+
+      {/* IBAN ändern */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-gray-700 mb-1">IBAN</h2>
+        <p className="text-xs text-gray-500 mb-4">IBAN-Änderungen müssen vom Verein genehmigt werden.</p>
+
+        {ibanDraft && (
+          <div className="mb-4 text-xs text-gray-600 p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <span className="font-medium text-blue-700">Ausstehend:</span>{' '}
+            <span className="font-mono">{ibanDraft.new_value}</span>
+            <button
+              onClick={() => handleCancelDraft(ibanDraft.id)}
+              className="ml-3 text-red-600 hover:text-red-800 underline"
+            >
+              Abbrechen
+            </button>
+          </div>
+        )}
+
+        <div className="mb-3">
+          <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
+          <input
+            type="text"
+            value={iban}
+            onChange={e => setIban(e.target.value)}
+            placeholder="DE00 0000 0000 0000 0000 00"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleIbanRequest}
+            disabled={ibanSaving || !ibanChanged}
+            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
+          >
+            {ibanSaving ? 'Senden…' : 'Änderung anfordern'}
+          </button>
+          {ibanSaved && <span className="text-sm text-green-600">Anfrage gesendet</span>}
+          {ibanError && <span className="text-sm text-red-600">{ibanError}</span>}
+        </div>
+      </div>
+
+      {cancelError && <p className="text-sm text-red-600">{cancelError}</p>}
+    </div>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <span className="text-gray-500 w-36 shrink-0">{label}:</span>
+      <span className="text-gray-900">{value}</span>
     </div>
   )
 }

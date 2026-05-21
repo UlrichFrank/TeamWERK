@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -73,20 +73,56 @@ export default function MemberDetailPage() {
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
     sepa_mandat: false, sepa_mandat_date: '', sepa_mandat_url: '',
   })
-  const [addressSource, setAddressSource] = useState('')
-  const [addressConflict, setAddressConflict] = useState(false)
-  const [memberAddressStored, setMemberAddressStored] = useState<AddressStored | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [linkedParents, setLinkedParents] = useState<User[]>([])
   const [currentUserID, setCurrentUserID] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
-  const [removingParent, setRemovingParent] = useState<Record<number, boolean>>({})
+  const [drafts, setDrafts] = useState<Array<{ id: number; field_name: string; old_value: any; new_value: any }>>([])
 
   const loadLinkedParents = () => {
     if (isAdmin && !isNew && id) {
       api.get(`/admin/members/${id}/parents`).then(r => setLinkedParents(r.data ?? []))
+    }
+  }
+
+  const loadDrafts = () => {
+    if (!isNew && id) {
+      api.get(`/members/${id}/change-drafts`).then(r => setDrafts(r.data?.drafts ?? []))
+    }
+  }
+
+  const handleDraftAccept = async (draftId: number) => {
+    if (!id) return
+    try {
+      await api.post(`/members/${id}/change-drafts/${draftId}/accept`)
+      loadDrafts()
+      // Reload member data to reflect accepted changes
+      api.get(`/members/${id}`).then(r => {
+        const m: Member = r.data
+        setForm(f => ({
+          ...f,
+          first_name: m.first_name, last_name: m.last_name,
+          street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
+          iban: m.iban ?? '',
+          dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
+          dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,
+          sepa_mandat: m.sepa_mandat ?? false,
+        }))
+      })
+    } catch {
+      setError('Fehler beim Annehmen der Änderung.')
+    }
+  }
+
+  const handleDraftReject = async (draftId: number) => {
+    if (!id) return
+    try {
+      await api.delete(`/members/${id}/change-drafts/${draftId}`)
+      loadDrafts()
+    } catch {
+      setError('Fehler beim Ablehnen der Änderung.')
     }
   }
 
@@ -95,6 +131,7 @@ export default function MemberDetailPage() {
     let cancelled = false
     if (isAdmin) api.get('/admin/users').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
     if (!isNew && id) {
+      loadDrafts()
       api.get(`/members/${id}`).then(r => {
         if (cancelled) return
         const m: Member = r.data
@@ -119,9 +156,6 @@ export default function MemberDetailPage() {
           sepa_mandat_date: m.sepa_mandat_date?.slice(0, 10) ?? '',
           sepa_mandat_url: m.sepa_mandat_url ?? '',
         })
-        setAddressSource(m.address_source ?? '')
-        setAddressConflict(m.address_conflict ?? false)
-        setMemberAddressStored(m.member_address_stored ?? null)
         setCurrentUserID(m.user_id ?? null)
       })
       loadLinkedParents()
@@ -152,16 +186,10 @@ export default function MemberDetailPage() {
     }
   }
 
-  const handleStatusChange = async (status: string) => {
-    setForm(f => ({ ...f, status }))
-    if (!isNew && id) await api.put(`/members/${id}/status`, { status })
-  }
-
   const handleFamilyLink = async (parentUserId: number) => {
     if (!id) return
     try {
       await api.post('/admin/family-links', { parent_user_id: parentUserId, member_id: Number(id) })
-      setSelectedParentUser('')
       loadLinkedParents()
       setSaved(true); setTimeout(() => setSaved(false), 2000)
     } catch {
@@ -171,14 +199,11 @@ export default function MemberDetailPage() {
 
   const handleRemoveParent = async (parentUserId: number) => {
     if (!id) return
-    setRemovingParent(prev => ({ ...prev, [parentUserId]: true }))
     try {
       await api.delete('/admin/family-links', { data: { parent_user_id: parentUserId, member_id: Number(id) } })
       loadLinkedParents()
     } catch {
       setError('Fehler beim Entfernen.')
-    } finally {
-      setRemovingParent(prev => ({ ...prev, [parentUserId]: false }))
     }
   }
 
@@ -188,9 +213,6 @@ export default function MemberDetailPage() {
     setCurrentUserID(userId)
     setSaved(true); setTimeout(() => setSaved(false), 2000)
   }
-
-  const isPassive = form.status === 'passiv'
-  const canAddParent = linkedParents.length < 2
 
   const tabButtons: { name: TabName; label: string; show: boolean }[] = [
     { name: 'stammdaten', label: 'Stammdaten', show: true },
@@ -231,10 +253,10 @@ export default function MemberDetailPage() {
         <MemberStammdatenTab
           form={form}
           isNew={isNew}
-          drafts={[]}
+          drafts={drafts}
           onFormChange={updates => setForm(f => ({ ...f, ...updates }))}
-          onDraftAccept={() => {}}
-          onDraftReject={() => {}}
+          onDraftAccept={handleDraftAccept}
+          onDraftReject={handleDraftReject}
           onSave={handleSave}
           saving={saving}
           saved={saved}
@@ -246,8 +268,10 @@ export default function MemberDetailPage() {
         <MemberKontaktTab
           form={form}
           isNew={isNew}
-          drafts={[]}
+          drafts={drafts}
           onFormChange={updates => setForm(f => ({ ...f, ...updates }))}
+          onDraftAccept={handleDraftAccept}
+          onDraftReject={handleDraftReject}
           onSave={handleSave}
           saving={saving}
           saved={saved}
@@ -259,8 +283,10 @@ export default function MemberDetailPage() {
         <MemberDatenschutzTab
           form={form}
           isNew={isNew}
-          drafts={[]}
+          drafts={drafts}
           onFormChange={updates => setForm(f => ({ ...f, ...updates }))}
+          onDraftAccept={handleDraftAccept}
+          onDraftReject={handleDraftReject}
           onSave={handleSave}
           saving={saving}
           saved={saved}

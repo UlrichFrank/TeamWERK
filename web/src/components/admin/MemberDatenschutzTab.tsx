@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { api } from '../../lib/api'
 
 interface Member {
   dsgvo_verarbeitung?: boolean
@@ -23,13 +22,15 @@ interface Props {
   isNew: boolean
   drafts: Draft[]
   onFormChange: (updates: Partial<Member>) => void
+  onDraftAccept: (draftId: number) => Promise<void>
+  onDraftReject: (draftId: number) => Promise<void>
   onSave: () => Promise<void>
   saving: boolean
   saved: boolean
   error: string
 }
 
-export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange, onSave, saving, saved, error }: Props) {
+export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const sepaInputRef = useRef<HTMLInputElement>(null)
   const [sepaUploading, setSepaUploading] = useState(false)
 
@@ -87,8 +88,27 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
           )}
 
           {dsgvoDraft && (
-            <div className="mt-3 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-              DSGVO-Änderung angefordert
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  <span className="font-medium text-blue-700">Angeforderte DSGVO-Änderung:</span>{' '}
+                  Verarbeitung: {dsgvoDraft.new_value?.verarbeitung ? 'Ja' : 'Nein'}, Weitergabe: {dsgvoDraft.new_value?.weitergabe ? 'Ja' : 'Nein'}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onDraftAccept(dsgvoDraft.id)}
+                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
+                  >
+                    ✓ Annehmen
+                  </button>
+                  <button
+                    onClick={() => onDraftReject(dsgvoDraft.id)}
+                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
+                  >
+                    ✗ Ablehnen
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -127,8 +147,27 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
           )}
 
           {sepaDraft && (
-            <div className="mt-3 text-xs text-gray-600 p-2 bg-blue-50 rounded">
-              SEPA-Änderung angefordert
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  <span className="font-medium text-blue-700">Angeforderte SEPA-Mandat:</span>{' '}
+                  {sepaDraft.new_value ? 'Erteilt' : 'Nicht erteilt'}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onDraftAccept(sepaDraft.id)}
+                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
+                  >
+                    ✓ Annehmen
+                  </button>
+                  <button
+                    onClick={() => onDraftReject(sepaDraft.id)}
+                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
+                  >
+                    ✗ Ablehnen
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

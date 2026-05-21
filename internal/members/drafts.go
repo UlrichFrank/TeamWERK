@@ -214,6 +214,13 @@ func (h *Handler) extractFieldValue(m *Member, fieldName string) (json.RawMessag
 		return json.Marshal(m.PhotoURL)
 	case "iban":
 		return json.Marshal(m.IBAN)
+	case "dsgvo":
+		return json.Marshal(map[string]bool{
+			"verarbeitung": m.DsgvoVerarbeitung,
+			"weitergabe":   m.DsgvoWeitergabe,
+		})
+	case "sepa_mandat":
+		return json.Marshal(m.SepaMandat)
 	default:
 		return json.Marshal(nil)
 	}
@@ -260,6 +267,28 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 			return err
 		}
 		_, err := h.db.Exec(`UPDATE members SET iban = ? WHERE id = ?`, iban, memberID)
+		return err
+
+	case "dsgvo":
+		var data struct {
+			Verarbeitung bool `json:"verarbeitung"`
+			Weitergabe   bool `json:"weitergabe"`
+		}
+		if err := json.Unmarshal(newValue, &data); err != nil {
+			return err
+		}
+		_, err := h.db.Exec(
+			`UPDATE members SET dsgvo_verarbeitung = ?, dsgvo_weitergabe = ? WHERE id = ?`,
+			boolToInt(data.Verarbeitung), boolToInt(data.Weitergabe), memberID,
+		)
+		return err
+
+	case "sepa_mandat":
+		var val bool
+		if err := json.Unmarshal(newValue, &val); err != nil {
+			return err
+		}
+		_, err := h.db.Exec(`UPDATE members SET sepa_mandat = ? WHERE id = ?`, boolToInt(val), memberID)
 		return err
 
 	default:

@@ -9,6 +9,7 @@ import Pagination from '../components/Pagination'
 interface Member {
   id: number; first_name: string; last_name: string
   status: string; pass_number?: string; position?: string; gender?: string
+  has_pending_drafts?: boolean
 }
 
 interface ImportRow {
@@ -143,7 +144,7 @@ export default function MembersPage() {
         {items.map(m => (
           <Link key={m.id} to={`/mitglieder/${m.id}`} className="block">
             <MobileCard
-              title={`${m.last_name}, ${m.first_name}`}
+              title={`${m.last_name}, ${m.first_name}${isAdmin && m.has_pending_drafts ? ' ⏳' : ''}`}
               subtitle={m.position || '–'}
               badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
             />
@@ -167,7 +168,7 @@ export default function MembersPage() {
             {items.map(m => (
               <tr key={m.id} className="hover:bg-brand-gray cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
                 <td className="px-4 py-3 font-medium">
-                  {m.last_name}, {m.first_name}
+                  {m.last_name}, {m.first_name}{isAdmin && m.has_pending_drafts && <span className="ml-2">⏳</span>}
                 </td>
                 <td className="px-4 py-3 text-gray-500">{m.pass_number || '–'}</td>
                 <td className="px-4 py-3 text-gray-500">{genderLabel(m.gender)}</td>
