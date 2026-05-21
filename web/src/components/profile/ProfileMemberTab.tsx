@@ -134,7 +134,7 @@ export default function ProfileMemberTab({ ownMember }: Props) {
       {/* Name ändern */}
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-gray-700 mb-1">Name ändern</h2>
-        <p className="text-xs text-gray-500 mb-4">Namensänderungen müssen vom Verein genehmigt werden.</p>
+        <p className="text-xs text-gray-500 mb-4">Namensänderungen müssen vom Verein übernommen werden.</p>
 
         {nameDraft && (
           <div className="mb-4 text-xs text-gray-600 p-3 bg-blue-50 rounded-lg border border-blue-100">
@@ -186,7 +186,7 @@ export default function ProfileMemberTab({ ownMember }: Props) {
       {/* IBAN ändern */}
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-gray-700 mb-1">IBAN</h2>
-        <p className="text-xs text-gray-500 mb-4">IBAN-Änderungen müssen vom Verein genehmigt werden.</p>
+        <p className="text-xs text-gray-500 mb-4">IBAN-Änderungen müssen vom Verein übernommen werden.</p>
 
         {ibanDraft && (
           <div className="mb-4 text-xs text-gray-600 p-3 bg-blue-50 rounded-lg border border-blue-100">
