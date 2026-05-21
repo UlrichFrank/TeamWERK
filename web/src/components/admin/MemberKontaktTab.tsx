@@ -5,7 +5,7 @@ const formatIBAN = (raw: string) =>
 
 const validateIBAN = (iban: string): boolean => {
   const clean = iban.replace(/\s/g, '').toUpperCase()
-  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$/.test(clean)) return false
+  if (!/^DE[0-9]{20}$/.test(clean)) return false
   const rearranged = clean.slice(4) + clean.slice(0, 4)
   const numeric = rearranged.split('').map(c =>
     c >= 'A' ? (c.charCodeAt(0) - 55).toString() : c
@@ -56,7 +56,7 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
 
   const handleIbanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
-    if (raw.length > 34) return
+    if (raw.length > 22) return
     const display = raw.match(/.{1,4}/g)?.join(' ') ?? raw
     setIbanDisplay(display)
     setIbanError('')
