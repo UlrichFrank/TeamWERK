@@ -1,0 +1,8 @@
+Hallo {{.UserName}},
+
+deine Änderung bei "{{.FieldName}}" in deinen Mitgliedsdaten konnte nicht übernommen werden.
+
+Bitte wende dich an den Verein falls du Fragen hast oder der Änderung keine Bestätigung gegeben werden konnte.
+
+Viele Grüße,
+Team Stuttgart

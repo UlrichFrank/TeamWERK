@@ -427,7 +427,8 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, COALESCE(gti.role_desc,''), dt.consecutive_behavior, dt.consecutive_variant_id
+		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, COALESCE(gti.role_desc,''),
+		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -448,16 +449,19 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		var p preview
 		var anchor string
 		var offset int
-		var consB string
-		var consV sql.NullInt64
-		rows.Scan(&p.DutyTypeID, &p.DutyTypeName, &anchor, &offset, &p.SlotsCount, &p.RoleDesc, &consB, &consV)
+		var sdB string
+		var sdV sql.NullInt64
+		var adB string
+		var adV sql.NullInt64
+		rows.Scan(&p.DutyTypeID, &p.DutyTypeName, &anchor, &offset, &p.SlotsCount, &p.RoleDesc,
+			&sdB, &sdV, &adB, &adV)
 
 		if anchor == "end" {
 			offset += durationMins
 		}
 		p.EventTime = addMinutes(gameTime, offset)
 
-		// If game_id context provided, check applies_when
+		// If game_id context provided, apply behavior logic
 		if gameIDStr != "" && len(allGameTimes) > 0 {
 			// Determine if this is first/last game
 			isFirst := gameTime == allGameTimes[0]
@@ -471,22 +475,37 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 				appliesWhen = "day_close"
 			}
 
-			// Apply consecutive_behavior only for day_open/day_close
-			if appliesWhen != "always" && consB != "normal" {
-				shouldApplyConsecutive := false
-				if appliesWhen == "day_open" && hasPrevDay {
-					shouldApplyConsecutive = true
-				} else if appliesWhen == "day_close" && hasNextDay {
-					shouldApplyConsecutive = true
+			// Apply same_day_behavior first
+			skip := false
+			if len(allGameTimes) > 1 && sdB != "normal" {
+				if sdB == "skip" {
+					skip = true
+				} else if sdB == "reduced" && sdV.Valid {
+					p.DutyTypeID = int(sdV.Int64)
 				}
+			}
 
-				if shouldApplyConsecutive {
-					if consB == "skip" {
-						continue
-					} else if consB == "reduced" && consV.Valid {
-						p.DutyTypeID = int(consV.Int64)
+			// Apply adjacent_day_behavior second
+			shouldApplyAdjacent := false
+			if appliesWhen == "day_open" && hasPrevDay {
+				shouldApplyAdjacent = true
+			} else if appliesWhen == "day_close" && hasNextDay {
+				shouldApplyAdjacent = true
+			}
+
+			if shouldApplyAdjacent && adB != "normal" {
+				if adB == "skip" {
+					skip = true
+				} else if adB == "reduced" && adV.Valid {
+					// If both behaviors want to reduce, prefer same_day variant (primary)
+					if !(sdB == "reduced" && sdV.Valid) {
+						p.DutyTypeID = int(adV.Int64)
 					}
 				}
+			}
+
+			if skip {
+				continue
 			}
 		}
 
@@ -595,12 +614,14 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Load duty type info for consecutive_behavior
-		var consB string
-		var consV sql.NullInt64
+		// Load duty type behavior fields
+		var sdB string
+		var sdV sql.NullInt64
+		var adB string
+		var adV sql.NullInt64
 		tx.QueryRowContext(r.Context(),
-			`SELECT consecutive_behavior, consecutive_variant_id FROM duty_types WHERE id=?`,
-			s.DutyTypeID).Scan(&consB, &consV)
+			`SELECT same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id FROM duty_types WHERE id=?`,
+			s.DutyTypeID).Scan(&sdB, &sdV, &adB, &adV)
 
 		// Calculate applies_when
 		appliesWhen := "always"
@@ -610,22 +631,34 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 			appliesWhen = "day_close"
 		}
 
-		// Apply consecutive_behavior logic
+		// Apply behavior logic
 		dutyTypeID := s.DutyTypeID
 		skip := false
-		if appliesWhen != "always" && consB != "normal" {
-			shouldApplyConsecutive := false
-			if appliesWhen == "day_open" && hasPrevDay {
-				shouldApplyConsecutive = true
-			} else if appliesWhen == "day_close" && hasNextDay {
-				shouldApplyConsecutive = true
-			}
 
-			if shouldApplyConsecutive {
-				if consB == "skip" {
-					skip = true
-				} else if consB == "reduced" && consV.Valid {
-					dutyTypeID = int(consV.Int64)
+		// Apply same_day_behavior first
+		if len(allGameTimes) > 1 && sdB != "normal" {
+			if sdB == "skip" {
+				skip = true
+			} else if sdB == "reduced" && sdV.Valid {
+				dutyTypeID = int(sdV.Int64)
+			}
+		}
+
+		// Apply adjacent_day_behavior second
+		shouldApplyAdjacent := false
+		if appliesWhen == "day_open" && hasPrevDay {
+			shouldApplyAdjacent = true
+		} else if appliesWhen == "day_close" && hasNextDay {
+			shouldApplyAdjacent = true
+		}
+
+		if shouldApplyAdjacent && adB != "normal" {
+			if adB == "skip" {
+				skip = true
+			} else if adB == "reduced" && adV.Valid {
+				// If both behaviors want to reduce, prefer same_day variant (primary)
+				if !(sdB == "reduced" && sdV.Valid) {
+					dutyTypeID = int(adV.Int64)
 				}
 			}
 		}

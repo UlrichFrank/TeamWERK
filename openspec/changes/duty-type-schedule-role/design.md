@@ -1,26 +1,24 @@
 ## Context
 
-Heute generiert `RegenerateSlots` für jedes Heimspiel alle Template-Items ohne Kontext: kein Wissen darüber, ob es weitere Spiele am selben Tag gibt oder ob Vor-/Folgetag ebenfalls Spieltage sind. Aufbau und Abbau entstehen damit redundant bei Mehrfachspieltagen.
-
-Die Slot-Generierung erfolgt in zwei Schritten: Frontend ruft `GET /api/admin/game-template/preview` ab, zeigt dem Nutzer die geplanten Slots und sendet sie dann via `POST /api/admin/games/{id}/regenerate`. Die Intelligenz muss im Preview-Schritt eingebaut werden — dann stimmt die Darstellung und der gespeicherte Plan automatisch.
+`duty_slots` hat ein optionales `game_id`-Feld. Slots mit `game_id` gehören zu einem Heimspiel; Slots ohne gehören zu keinem konkreten Spiel. Die Verbindung User → Team läuft über `members.user_id` (Spieler) und `family_links` (Elternteil → Kind → `team_memberships`). Heute ignoriert der Board-Handler beides.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- `duty_types` trägt `consecutive_behavior` und `consecutive_variant_id` (nicht gespeichert: `applies_when` wird berechnet)
-- Preview und Regenerate **berechnen** `applies_when` basierend auf Spielposition und adjacent-day-Kontext
-- Admin-UI erlaubt Pflege von `consecutive_behavior` und `consecutive_variant_id`
+- `duty_types` trägt vier neue Verhaltensfelder: `same_day_behavior`, `same_day_variant_id`, `adjacent_day_behavior`, `adjacent_day_variant_id` (nicht gespeichert: `applies_when` wird berechnet)
+- Preview und Regenerate **berechnen** `applies_when` und wenden beide Verhaltensweisen orthogonal an
+- Admin-UI erlaubt Pflege der vier neuen Felder mit abhängiger Sichtbarkeit (variant-Felder nur bei `*_behavior='reduced'`)
 
 **Non-Goals:**
-- Keine Venue-Modellierung — alle Heimspiele teilen dieselbe Halle
-- Kein automatisches Neuberechnen bereits gespeicherter Slots
-- Kein Einfluss auf manuell erstellte Slots (ohne `game_id`)
+- Keine Pagination (Saison hat überschaubar viele Heimspiele)
+- Kein Eintragen für andere User (Claim bleibt immer für den eingeloggten User)
+- Kein Ändern der Claim-Logik selbst
 
 ## Decisions
 
-### 1. `consecutive_behavior` und `consecutive_variant_id` gehören auf `duty_types`, nicht auf `game_template_items`
+### 1. Vier Verhaltensfelder gehören auf `duty_types`, nicht auf `game_template_items`
 
-Die Semantik gehört zum Diensttyp selbst. „Aufbau skip bei Folgetag" ist eine intrinsische Eigenschaft des Diensttyps, keine Eigenheit eines bestimmten Templates. Jedes Template, das Aufbau enthält, soll automatisch dieselbe Regel erhalten.
+Die Semantik gehört zum Diensttyp selbst. „Aufbau skip bei mehreren Spielen am Tag" oder „skip bei Folgetag" sind intrinsische Eigenschaften des Diensttyps, keine Eigenheit eines bestimmten Templates. Jedes Template, das Aufbau enthält, soll automatisch dieselben Regeln erhalten.
 
 Alternative: Felder auf `game_template_items`. Nachteil: Bei mehreren Templates müsste man die Semantik duplizieren und könnte sie inkonsistent pflegen.
 
@@ -36,30 +34,43 @@ Beim Generieren von Slots wird `applies_when` für jeden Slot berechnet:
 'always'     ← alles andere (oder Spiel ist einziges am Tag)
 ```
 
-**Grund:** Dadurch entfällt ein gespeichertes Feld, das mit der Spielplanlogik konsistent bleiben müsste. Keine Chance für Inkonsistenzen — `applies_when` ergibt sich immer automatisch aus der Spielposition.
+**Grund:** Dadurch entfällt ein gespeichertes Feld, das mit der Spielplanlogik konsistent bleiben müsste. `applies_when` ergibt sich immer automatisch aus der Spielposition.
 
-### 3. `consecutive_behavior`: drei Werte + optionale FK
+### 3. Zwei orthogonale Verhaltensweisen
+
+**`same_day_behavior` + `same_day_variant_id`:** Wird angewendet, wenn mehrere Heimspiele am **gleichen Tag** existieren
 
 ```
-'normal'   → adjacent-day hat keinen Einfluss (Default)
-'skip'     → Slot weglassen wenn adjacent day condition zutrifft
-'reduced'  → anderen Diensttyp verwenden (consecutive_variant_id NOT NULL erforderlich)
+'normal'   → kein Einfluss (Default)
+'skip'     → Slot weglassen wenn mehrere Spiele am Tag
+'reduced'  → anderen Diensttyp verwenden wenn mehrere Spiele am Tag
+```
+
+**`adjacent_day_behavior` + `adjacent_day_variant_id`:** Wird angewendet, wenn Heimspiele am **Vortag/Folgetag** existieren
+
+```
+'normal'   → kein Einfluss (Default)
+'skip'     → Slot weglassen wenn adjacent day condition erfüllt
+'reduced'  → anderen Diensttyp verwenden wenn adjacent day condition erfüllt
 ```
 
 Adjacent day condition:
 - Für `day_open`-Dienste: gibt es Heimspiele am Vortag?
 - Für `day_close`-Dienste: gibt es Heimspiele am Folgetag?
 
-### 4. "Same day" und "adjacent day" = is_home=1 + season_id
+**Beispiele:**
+- Aufbau mit `same_day_behavior='skip'` → wenn 2+ Spiele am Tag, keinen Aufbau (weil beim 2. Spiel kein Aufbau nötig)
+- Aufbau mit `same_day_behavior='normal'` + `adjacent_day_behavior='reduced'` → beim 1. Spiel normaler Aufbau, aber wenn Vortag Spiele, kleinen Aufbau statt normalem
 
-Da alle Heimspiele in derselben Halle stattfinden, reicht: `WHERE date=? AND is_home=1 AND season_id=?`. Keine Venue-Tabelle nötig.
+### 4. Anwendungsreihenfolge der Verhaltensweisen
 
-### 5. Preview muss Spielkontext kennen
-
-`GET /api/admin/game-template/preview` bekommt neue optionale Query-Parameter `game_id` oder `date+season_id`, damit die same-day/adjacent-day-Logik auch im Preview greift. Ohne diese Parameter verhält sich Preview wie heute (kein Kontext = `always`-Modus).
+1. Prüfe `same_day_behavior`: Existieren mehrere Heimspiele am gleichen Tag?
+2. Prüfe `adjacent_day_behavior`: Existieren Heimspiele am Vortag/Folgetag?
+3. Kombiniere: Wenn einer `skip` sagt, wird der Slot übersprungen. Wenn beide `reduced` sind, wird `same_day_variant_id` bevorzugt (Primary variant).
 
 ## Risks / Trade-offs
 
-- [Bestehende Diensttypen] Alle vorhandenen `duty_types` haben nach der Migration `consecutive_behavior='normal'` — heutiges Verhalten bleibt erhalten. `applies_when` wird zur Laufzeit berechnet.
-- [consecutive_behavior='reduced' ohne variant_id] Muss im Backend validiert werden: wenn `reduced` gesetzt, muss `consecutive_variant_id` vorhanden sein. Sonst 400-Fehler.
+- [Leere Dienstbörse] Wenn User keiner Mannschaft zugeordnet ist, gibt das Backend eine leere Liste zurück. Frontend zeigt Hinweistext.
+- [Bestehende Diensttypen] Alle vorhandenen `duty_types` haben nach der Migration `same_day_behavior='normal'` und `adjacent_day_behavior='normal'` — heutiges Verhalten bleibt erhalten.
+- [Validierung bei 'reduced'] Muss im Backend validiert werden: wenn `*_behavior='reduced'`, muss entsprechende `*_variant_id` vorhanden sein. Sonst 400-Fehler.
 - [Preview ohne Kontext] Wenn Preview ohne `game_id` aufgerufen wird (z.B. Template-Konfigurationsseite), zeigt er alle Slots mit `applies_when='always'`. Das ist korrekt als "was wäre bei isoliertem Spiel".

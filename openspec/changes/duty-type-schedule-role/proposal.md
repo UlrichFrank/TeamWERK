@@ -4,20 +4,25 @@ Beim Generieren von Dienst-Slots aus einem Spielplan-Template werden heute für 
 
 ## What Changes
 
-- `duty_types` bekommt zwei neue Felder: `consecutive_behavior` (Verhalten bei aufeinanderfolgenden Spieltagen) und optionales `consecutive_variant_id` (Verweis auf reduzierten Ersatz-Diensttyp)
-- Die Slot-Generierung (Template-Anwendung via `RegenerateSlots`) **berechnet** `applies_when` beim Erzeugen: berücksichtigt die Position des Spiels im Tagesablauf und prüft ob Vor- oder Folgetag ebenfalls Heimspiele hat
+- `duty_types` bekommt vier neue Felder:
+  - `same_day_behavior`: Verhalten wenn mehrere Heimspiele am **gleichen Tag** existieren (`normal`, `skip`, `reduced`)
+  - `same_day_variant_id`: optionaler Verweis auf Ersatz-Diensttyp bei `same_day_behavior='reduced'`
+  - `adjacent_day_behavior`: Verhalten wenn Heimspiele am **Vortag/Folgetag** existieren (`normal`, `skip`, `reduced`)
+  - `adjacent_day_variant_id`: optionaler Verweis auf Ersatz-Diensttyp bei `adjacent_day_behavior='reduced'`
+- Die Slot-Generierung (Template-Anwendung via `RegenerateSlots`) **berechnet** `applies_when` beim Erzeugen: berücksichtigt die Position des Spiels im Tagesablauf
+- Beide Verhaltensweisen sind orthogonal und können kombiniert werden
 - Die Admin-Oberfläche für Diensttypen (`/admin/dienste`) zeigt und pflegt die neuen Felder (ohne `applies_when` — wird berechnet)
 
 ## Capabilities
 
 ### New Capabilities
 
-- `duty-type-schedule-role`: Konfiguration wann ein Diensttyp im Spieltagskontext aktiv ist (`applies_when`) und wie er sich bei aufeinanderfolgenden Spieltagen verhält (`consecutive_behavior` + `consecutive_variant_id`)
+- `duty-type-schedule-role`: Konfiguration wann ein Diensttyp im Spieltagskontext aktiv ist (`applies_when` — berechnet) und wie er sich bei mehreren Spielen am gleichen Tag oder an aufeinanderfolgenden Tagen verhält (separate Konfigurationen für beide Szenarien)
 
 ### Modified Capabilities
 
 ## Impact
 
-- DB-Migration: zwei neue Spalten auf `duty_types` (`consecutive_behavior`, `consecutive_variant_id` FK)
-- Backend: `internal/duties/handler.go` (CRUD für Diensttypen), `internal/games/handler.go` (berechnet `applies_when` bei Slot-Generierung)
-- Frontend: `AdminDutyTypesPage.tsx` (zeigt/bearbeitet `consecutive_behavior` und `consecutive_variant_id`), `AdminSpielplanPage.tsx` (Regenerate-Flow nutzt neue Logik automatisch)
+- DB-Migration: vier neue Spalten auf `duty_types` (`same_day_behavior`, `same_day_variant_id`, `adjacent_day_behavior`, `adjacent_day_variant_id`)
+- Backend: `internal/duties/handler.go` (CRUD für Diensttypen), `internal/games/handler.go` (berechnet `applies_when` und wendet beide Verhaltensweisen an)
+- Frontend: `AdminDutyTypesPage.tsx` (zeigt/bearbeitet vier neue Felder), `AdminSpielplanPage.tsx` (Regenerate-Flow nutzt neue Logik automatisch)

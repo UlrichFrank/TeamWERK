@@ -17,30 +17,40 @@ func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 // GET /api/admin/duty-types
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	rows, _ := h.db.QueryContext(r.Context(),
-		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes, consecutive_behavior, consecutive_variant_id FROM duty_types ORDER BY name`)
+		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
+		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id
+		 FROM duty_types ORDER BY name`)
 	defer rows.Close()
 	type dt struct {
-		ID                     int      `json:"id"`
-		Name                   string   `json:"name"`
-		HoursValue             float64  `json:"hours_value"`
-		CashSubstitute         *float64 `json:"cash_substitute,omitempty"`
-		DefaultAnchor          string   `json:"default_anchor"`
-		DefaultOffsetMinutes   int      `json:"default_offset_minutes"`
-		ConsecutiveBehavior    string   `json:"consecutive_behavior"`
-		ConsecutiveVariantID   *int     `json:"consecutive_variant_id,omitempty"`
+		ID                    int      `json:"id"`
+		Name                  string   `json:"name"`
+		HoursValue            float64  `json:"hours_value"`
+		CashSubstitute        *float64 `json:"cash_substitute,omitempty"`
+		DefaultAnchor         string   `json:"default_anchor"`
+		DefaultOffsetMinutes  int      `json:"default_offset_minutes"`
+		SameDayBehavior       string   `json:"same_day_behavior"`
+		SameDayVariantID      *int     `json:"same_day_variant_id,omitempty"`
+		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
+		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id,omitempty"`
 	}
 	result := []dt{}
 	for rows.Next() {
 		var d dt
 		var cs sql.NullFloat64
-		var cvi sql.NullInt64
-		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes, &d.ConsecutiveBehavior, &cvi)
+		var sdvi sql.NullInt64
+		var advi sql.NullInt64
+		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes,
+			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi)
 		if cs.Valid {
 			d.CashSubstitute = &cs.Float64
 		}
-		if cvi.Valid {
-			id := int(cvi.Int64)
-			d.ConsecutiveVariantID = &id
+		if sdvi.Valid {
+			id := int(sdvi.Int64)
+			d.SameDayVariantID = &id
+		}
+		if advi.Valid {
+			id := int(advi.Int64)
+			d.AdjacentDayVariantID = &id
 		}
 		result = append(result, d)
 	}
@@ -51,28 +61,40 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/duty-types
 func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name                 string   `json:"name"`
-		HoursValue           float64  `json:"hours_value"`
-		CashSubstitute       *float64 `json:"cash_substitute"`
-		DefaultAnchor        string   `json:"default_anchor"`
-		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
-		ConsecutiveBehavior  string   `json:"consecutive_behavior"`
-		ConsecutiveVariantID *int     `json:"consecutive_variant_id"`
+		Name                  string   `json:"name"`
+		HoursValue            float64  `json:"hours_value"`
+		CashSubstitute        *float64 `json:"cash_substitute"`
+		DefaultAnchor         string   `json:"default_anchor"`
+		DefaultOffsetMinutes  int      `json:"default_offset_minutes"`
+		SameDayBehavior       string   `json:"same_day_behavior"`
+		SameDayVariantID      *int     `json:"same_day_variant_id"`
+		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
+		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
 		req.DefaultAnchor = "start"
 	}
-	if req.ConsecutiveBehavior == "" {
-		req.ConsecutiveBehavior = "normal"
+	if req.SameDayBehavior == "" {
+		req.SameDayBehavior = "normal"
 	}
-	if req.ConsecutiveBehavior == "reduced" && req.ConsecutiveVariantID == nil {
-		http.Error(w, "consecutive_behavior 'reduced' requires consecutive_variant_id", http.StatusBadRequest)
+	if req.AdjacentDayBehavior == "" {
+		req.AdjacentDayBehavior = "normal"
+	}
+	if req.SameDayBehavior == "reduced" && req.SameDayVariantID == nil {
+		http.Error(w, "same_day_behavior 'reduced' requires same_day_variant_id", http.StatusBadRequest)
+		return
+	}
+	if req.AdjacentDayBehavior == "reduced" && req.AdjacentDayVariantID == nil {
+		http.Error(w, "adjacent_day_behavior 'reduced' requires adjacent_day_variant_id", http.StatusBadRequest)
 		return
 	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes, consecutive_behavior, consecutive_variant_id) VALUES (?,?,?,?,?,?,?)`,
-		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes, req.ConsecutiveBehavior, req.ConsecutiveVariantID)
+		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
+		                          same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id)
+		 VALUES (?,?,?,?,?,?,?,?,?)`,
+		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
+		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -80,28 +102,40 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Name                 string   `json:"name"`
-		HoursValue           float64  `json:"hours_value"`
-		CashSubstitute       *float64 `json:"cash_substitute"`
-		DefaultAnchor        string   `json:"default_anchor"`
-		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
-		ConsecutiveBehavior  string   `json:"consecutive_behavior"`
-		ConsecutiveVariantID *int     `json:"consecutive_variant_id"`
+		Name                  string   `json:"name"`
+		HoursValue            float64  `json:"hours_value"`
+		CashSubstitute        *float64 `json:"cash_substitute"`
+		DefaultAnchor         string   `json:"default_anchor"`
+		DefaultOffsetMinutes  int      `json:"default_offset_minutes"`
+		SameDayBehavior       string   `json:"same_day_behavior"`
+		SameDayVariantID      *int     `json:"same_day_variant_id"`
+		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
+		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
 		req.DefaultAnchor = "start"
 	}
-	if req.ConsecutiveBehavior == "" {
-		req.ConsecutiveBehavior = "normal"
+	if req.SameDayBehavior == "" {
+		req.SameDayBehavior = "normal"
 	}
-	if req.ConsecutiveBehavior == "reduced" && req.ConsecutiveVariantID == nil {
-		http.Error(w, "consecutive_behavior 'reduced' requires consecutive_variant_id", http.StatusBadRequest)
+	if req.AdjacentDayBehavior == "" {
+		req.AdjacentDayBehavior = "normal"
+	}
+	if req.SameDayBehavior == "reduced" && req.SameDayVariantID == nil {
+		http.Error(w, "same_day_behavior 'reduced' requires same_day_variant_id", http.StatusBadRequest)
+		return
+	}
+	if req.AdjacentDayBehavior == "reduced" && req.AdjacentDayVariantID == nil {
+		http.Error(w, "adjacent_day_behavior 'reduced' requires adjacent_day_variant_id", http.StatusBadRequest)
 		return
 	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=?, consecutive_behavior=?, consecutive_variant_id=? WHERE id=?`,
-		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes, req.ConsecutiveBehavior, req.ConsecutiveVariantID, id)
+		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=?,
+		                       same_day_behavior=?, same_day_variant_id=?, adjacent_day_behavior=?, adjacent_day_variant_id=?
+		 WHERE id=?`,
+		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
+		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -496,22 +530,13 @@ func (h *Handler) SetSeasonTargets(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// sameDayGames returns all kick-off times for home games on the given date in the season
-func (h *Handler) sameDayGames(date string, seasonID int) []string {
-	rows, err := h.db.Query(
-		`SELECT time FROM games WHERE date = ? AND is_home = 1 AND season_id = ? ORDER BY time`,
-		date, seasonID)
-	if err != nil {
-		return []string{}
-	}
-	defer rows.Close()
-	var times []string
-	for rows.Next() {
-		var t string
-		rows.Scan(&t)
-		times = append(times, t)
-	}
-	return times
+// sameDayGameCount returns the count of home games on the given date in the season
+func (h *Handler) sameDayGameCount(date string, seasonID int) int {
+	var count int
+	h.db.QueryRow(
+		`SELECT COUNT(*) FROM games WHERE date = ? AND is_home = 1 AND season_id = ?`,
+		date, seasonID).Scan(&count)
+	return count
 }
 
 // adjacentDayHasGames checks if there are home games on the adjacent day
@@ -530,48 +555,58 @@ func (h *Handler) adjacentDayHasGames(date string, seasonID int, direction int) 
 
 // DutyType holds the relevant fields for schedule-role calculation
 type DutyType struct {
-	ID                    int
-	ConsecutiveBehavior   string
-	ConsecutiveVariantID  *int
+	ID                   int
+	SameDayBehavior      string
+	SameDayVariantID     *int
+	AdjacentDayBehavior  string
+	AdjacentDayVariantID *int
 }
 
-// effectiveDutyType calculates applies_when based on game position and returns the effective duty type ID
-// isFirst: game is first on day, isLast: game is last on day
-// prevDay, nextDay: adjacent days have games
-func (h *Handler) effectiveDutyType(dt DutyType, isFirst bool, isLast bool, prevDay bool, nextDay bool) (dutyTypeID int, appliesWhen string, skip bool) {
-	// Calculate applies_when
+// effectiveDutyType calculates applies_when and applies both behavior systems orthogonally
+// Returns: dutyTypeID (may be changed by behaviors), appliesWhen, and skip flag
+// isFirst/isLast: position of game in day, sameDayCount: number of games same day
+// hasPrevDay/hasNextDay: whether adjacent days have games
+func (h *Handler) effectiveDutyType(dt DutyType, isFirst bool, isLast bool, sameDayCount int, hasPrevDay bool, hasNextDay bool) (dutyTypeID int, appliesWhen string, skip bool) {
+	// Calculate applies_when based on game position
 	appliesWhen = "always"
-	if isFirst && !prevDay {
+	if isFirst && !hasPrevDay {
 		appliesWhen = "day_open"
-	} else if isLast && !nextDay {
+	} else if isLast && !hasNextDay {
 		appliesWhen = "day_close"
 	}
 
-	// Apply consecutive_behavior only for day_open/day_close
-	if appliesWhen == "always" || dt.ConsecutiveBehavior == "normal" {
-		return dt.ID, appliesWhen, false
+	dutyTypeID = dt.ID
+	skip = false
+
+	// Apply same_day_behavior first (if multiple games on same day)
+	if sameDayCount > 1 && dt.SameDayBehavior != "normal" {
+		if dt.SameDayBehavior == "skip" {
+			skip = true
+		} else if dt.SameDayBehavior == "reduced" && dt.SameDayVariantID != nil {
+			dutyTypeID = *dt.SameDayVariantID
+		}
 	}
 
-	// Check adjacent day condition based on applies_when
-	shouldApplyConsecutive := false
-	if appliesWhen == "day_open" && prevDay {
-		shouldApplyConsecutive = true
-	} else if appliesWhen == "day_close" && nextDay {
-		shouldApplyConsecutive = true
+	// Apply adjacent_day_behavior second (based on applies_when and adjacent days)
+	shouldApplyAdjacent := false
+	if appliesWhen == "day_open" && hasPrevDay {
+		shouldApplyAdjacent = true
+	} else if appliesWhen == "day_close" && hasNextDay {
+		shouldApplyAdjacent = true
 	}
 
-	if !shouldApplyConsecutive {
-		return dt.ID, appliesWhen, false
+	if shouldApplyAdjacent && dt.AdjacentDayBehavior != "normal" {
+		if dt.AdjacentDayBehavior == "skip" {
+			skip = true
+		} else if dt.AdjacentDayBehavior == "reduced" && dt.AdjacentDayVariantID != nil {
+			// If both behaviors want to reduce, prefer same_day_variant (primary)
+			if dt.SameDayBehavior != "reduced" || dt.SameDayVariantID == nil {
+				dutyTypeID = *dt.AdjacentDayVariantID
+			}
+		}
 	}
 
-	// Apply consecutive behavior
-	if dt.ConsecutiveBehavior == "skip" {
-		return dt.ID, appliesWhen, true
-	} else if dt.ConsecutiveBehavior == "reduced" && dt.ConsecutiveVariantID != nil {
-		return *dt.ConsecutiveVariantID, appliesWhen, false
-	}
-
-	return dt.ID, appliesWhen, false
+	return dutyTypeID, appliesWhen, skip
 }
 
 func (h *Handler) updateAccount(r *http.Request, userID int, slotID string, add bool) {

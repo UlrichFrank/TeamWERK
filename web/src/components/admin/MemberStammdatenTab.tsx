@@ -1,0 +1,296 @@
+import { useRef, useState } from 'react'
+import { api } from '../../lib/api'
+
+interface Member {
+  id?: number
+  first_name: string
+  last_name: string
+  date_of_birth: string
+  member_number: string
+  pass_number: string
+  jersey_number?: number
+  position: string
+  gender: string
+  status: string
+  club_function?: string
+  photo_url?: string
+  photo_visible?: boolean
+}
+
+interface Draft {
+  id: number
+  field_name: string
+  old_value: any
+  new_value: any
+}
+
+interface Props {
+  form: Member
+  isNew: boolean
+  drafts: Draft[]
+  onFormChange: (updates: Partial<Member>) => void
+  onDraftAccept: (draftId: number) => Promise<void>
+  onDraftReject: (draftId: number) => Promise<void>
+  onSave: () => Promise<void>
+  saving: boolean
+  saved: boolean
+  error: string
+}
+
+const GENDER_OPTIONS = [
+  { value: 'm', label: 'männlich' },
+  { value: 'f', label: 'weiblich' },
+  { value: 'u', label: 'divers' },
+]
+
+const CLUB_FUNCTION_OPTIONS = [
+  { value: '', label: '– keine –' },
+  { value: 'trainer', label: 'Trainer' },
+  { value: 'vorstand', label: 'Vorstand' },
+  { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
+]
+
+const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'ausgetreten']
+const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']
+
+export default function MemberStammdatenTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoURL, setPhotoURL] = useState(form.photo_url || '')
+
+  const togglePosition = (pos: string) => {
+    const current = form.position ? form.position.split(',').filter(Boolean) : []
+    const next = current.includes(pos) ? current.filter(p => p !== pos) : [...current, pos]
+    onFormChange({ position: next.join(',') })
+  }
+
+  const selectedPositions = form.position ? form.position.split(',').filter(Boolean) : []
+  const isPassive = form.status === 'passiv'
+
+  const nameDraft = drafts.find(d => d.field_name === 'name')
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || isNew) return
+    setPhotoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await api.post(`/upload/member-photo/${form.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setPhotoURL(r.data.photo_url || '')
+    } catch {
+      // error handled by parent
+    } finally {
+      setPhotoUploading(false)
+      if (photoInputRef.current) photoInputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Persönliche Daten */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-gray-700 mb-4">Persönliche Daten</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={form.first_name}
+                onChange={e => onFormChange({ first_name: e.target.value })}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+              {nameDraft && <span className="text-lg">⏳</span>}
+            </div>
+            {nameDraft && (
+              <div className="mt-2 text-xs text-gray-600 p-2 bg-blue-50 rounded">
+                Angefordert: {nameDraft.new_value?.first_name}
+                <button onClick={() => onDraftAccept(nameDraft.id)} className="ml-2 text-green-600 hover:text-green-800">✓</button>
+                <button onClick={() => onDraftReject(nameDraft.id)} className="ml-1 text-red-600 hover:text-red-800">✗</button>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={form.last_name}
+                onChange={e => onFormChange({ last_name: e.target.value })}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+              {nameDraft && <span className="text-lg">⏳</span>}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
+            <input
+              type="date"
+              value={form.date_of_birth}
+              onChange={e => onFormChange({ date_of_birth: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mitgliedsnummer</label>
+            <input
+              type="text"
+              value={form.member_number}
+              onChange={e => onFormChange({ member_number: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+          {!isPassive && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Passnummer</label>
+                <input
+                  type="text"
+                  value={form.pass_number}
+                  onChange={e => onFormChange({ pass_number: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rückennummer</label>
+                <input
+                  type="number"
+                  value={form.jersey_number ?? ''}
+                  onChange={e => onFormChange({ jersey_number: e.target.value ? parseInt(e.target.value) : undefined })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Positionen */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Positionen</label>
+          {isPassive ? (
+            <p className="text-sm text-gray-400 italic">Nicht zutreffend (passiv)</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {HANDBALL_POSITIONS.map(pos => (
+                <button
+                  key={pos}
+                  type="button"
+                  onClick={() => togglePosition(pos)}
+                  className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                    selectedPositions.includes(pos)
+                      ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                      : 'text-gray-600 border-gray-300 hover:border-brand-black'
+                  }`}
+                >
+                  {pos}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Geschlecht */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Geschlecht</label>
+          <div className="flex gap-2">
+            {GENDER_OPTIONS.map(g => (
+              <button
+                key={g.value}
+                type="button"
+                onClick={() => onFormChange({ gender: g.value })}
+                className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                  form.gender === g.value
+                    ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                    : 'text-gray-600 border-gray-300'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Status */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+          <div className="flex gap-2 flex-wrap">
+            {STATUS_OPTIONS.map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onFormChange({ status: s })}
+                className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                  form.status === s
+                    ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                    : 'text-gray-600 border-gray-300'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Vereinsfunktion */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Vereinsfunktion</label>
+          <select
+            value={form.club_function || ''}
+            onChange={e => onFormChange({ club_function: e.target.value })}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+          >
+            {CLUB_FUNCTION_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Foto */}
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-gray-700 mb-4">Passfoto</h2>
+        <div className="flex items-center gap-4">
+          {photoURL && <img src={photoURL} alt="Passfoto" className="w-20 h-20 rounded-full object-cover" />}
+          {!photoURL && <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Kein Bild</div>}
+          {!isNew && (
+            <>
+              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoUpload} />
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoUploading}
+                className="bg-brand-yellow text-black px-3 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40"
+              >
+                {photoUploading ? 'Hochladen…' : 'Foto hochladen'}
+              </button>
+            </>
+          )}
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer mt-4">
+          <input
+            type="checkbox"
+            checked={form.photo_visible || false}
+            onChange={e => onFormChange({ photo_visible: e.target.checked })}
+            className="w-4 h-4 accent-brand-yellow"
+          />
+          <span className="text-sm text-gray-700">Sichtbar für Mitglieder</span>
+        </label>
+      </div>
+
+      {/* Save Button */}
+      {!isNew && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40"
+          >
+            {saving ? 'Speichern…' : 'Speichern'}
+          </button>
+          {saved && <span className="text-sm text-green-600">Gespeichert</span>}
+          {error && <span className="text-sm text-red-600">{error}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
