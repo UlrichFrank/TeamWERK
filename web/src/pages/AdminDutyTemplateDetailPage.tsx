@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useParams, Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
 
@@ -18,8 +19,9 @@ interface TemplateItem {
 }
 
 interface Template {
-  id?: number
+  id: number
   name: string
+  template_type: 'heim' | 'auswärts' | 'generisch'
   game_duration_minutes: number
   items: TemplateItem[]
 }
@@ -28,79 +30,106 @@ function newItem(): TemplateItem {
   return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, role_desc: '' }
 }
 
-export default function AdminGameTemplatePage() {
-  const [template, setTemplate] = useState<Template>({
-    name: 'Heimspiel Standard',
-    game_duration_minutes: 90,
-    items: [],
-  })
+export default function AdminDutyTemplateDetailPage() {
+  const { id } = useParams<{ id: string }>()
+
+  const [template, setTemplate] = useState<Template | null>(null)
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     Promise.all([
-      api.get('/admin/game-template').then(r => setTemplate(r.data)),
+      api.get(`/admin/duty-templates/${id}`).then(r => setTemplate(r.data)),
       api.get('/admin/duty-types').then(r => setDutyTypes(r.data ?? [])),
     ]).finally(() => setLoading(false))
-  }, [])
+  }, [id])
 
   const updateItem = (i: number, patch: Partial<TemplateItem>) => {
-    setTemplate(t => ({
-      ...t,
-      items: t.items.map((item, idx) => idx === i ? { ...item, ...patch } : item),
-    }))
+    setTemplate(t => t ? { ...t, items: t.items.map((item, idx) => idx === i ? { ...item, ...patch } : item) } : t)
   }
 
   const addItem = () => {
-    setTemplate(t => ({ ...t, items: [...t.items, newItem()] }))
+    setTemplate(t => t ? { ...t, items: [...t.items, newItem()] } : t)
   }
 
   const removeItem = (i: number) => {
-    setTemplate(t => ({ ...t, items: t.items.filter((_, idx) => idx !== i) }))
+    setTemplate(t => t ? { ...t, items: t.items.filter((_, idx) => idx !== i) } : t)
   }
 
   const handleSave = async () => {
-    setSaveError(null)
+    if (!template) return
     const invalid = template.items.filter(it => it.duty_type_id === 0)
     if (invalid.length > 0) {
       setSaveError('Bitte für alle Einträge einen Diensttyp auswählen.')
       return
     }
+    setSaveError('')
     setSaving(true)
     setSaved(false)
     try {
-      await api.put('/admin/game-template', template)
+      await api.put(`/admin/duty-templates/${id}`, template)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch {
-      setSaveError('Speichern fehlgeschlagen. Bitte Seite neu laden und erneut versuchen.')
+      setSaveError('Speichern fehlgeschlagen.')
     } finally {
       setSaving(false)
     }
   }
 
   if (loading) return <div className="text-gray-400 text-sm">Laden…</div>
+  if (!template) return <div className="text-red-500 text-sm">Vorlage nicht gefunden.</div>
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold mb-6">Spiel-Vorlage (Template)</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Diese Vorlage bestimmt, welche Dienste beim Anlegen eines Heimspiels automatisch generiert werden.
-        Zeitangaben sind relativ zum Anpfiff (Anker: Start) oder Spielende (Anker: Ende).
-      </p>
+      <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+        <Link to="/admin/dienstplan-vorlagen" className="hover:underline">Dienstplan-Vorlagen</Link>
+        <span>/</span>
+        <span className="text-gray-900">{template.name}</span>
+      </div>
 
-      {/* Template name */}
+      <h1 className="text-2xl font-bold mb-6">{template.name}</h1>
+
+      {/* Name + Typ + Dauer */}
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-5 mb-5">
-        <label className="block text-sm font-medium mb-1">Name der Vorlage</label>
-        <input
-          type="text"
-          value={template.name}
-          onChange={e => setTemplate(t => ({ ...t, name: e.target.value }))}
-          className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-        />
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name der Vorlage</label>
+            <input
+              type="text"
+              value={template.name}
+              onChange={e => setTemplate(t => t ? { ...t, name: e.target.value } : t)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
+              <select
+                value={template.template_type}
+                onChange={e => setTemplate(t => t ? { ...t, template_type: e.target.value as Template['template_type'] } : t)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              >
+                <option value="heim">Heim</option>
+                <option value="auswärts">Auswärts</option>
+                <option value="generisch">Generisch</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Spieldauer (min)</label>
+              <input
+                type="number"
+                min={1}
+                value={template.game_duration_minutes}
+                onChange={e => setTemplate(t => t ? { ...t, game_duration_minutes: Number(e.target.value) } : t)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Items */}
@@ -121,22 +150,16 @@ export default function AdminGameTemplatePage() {
           </p>
         ) : (
           <>
-            {/* Mobile: Card Layout */}
-            <div className="sm:hidden space-y-3">
+            {/* Mobile */}
+            <div className="sm:hidden space-y-3 p-3">
               {template.items.map((item, i) => {
                 const dutyType = dutyTypes.find(d => d.id === item.duty_type_id)
                 return (
-                  <div key={i} className="bg-white border border-brand-black/10 rounded p-4">
+                  <div key={i} className="bg-white border border-gray-200 rounded p-4">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <h3 className="font-medium text-sm flex-1">{dutyType?.name || 'Diensttyp auswählen'}</h3>
                       <ActionMenu
-                        actions={[
-                          {
-                            label: 'Löschen',
-                            onClick: () => removeItem(i),
-                            variant: 'danger',
-                          },
-                        ]}
+                        actions={[{ label: 'Löschen', onClick: () => removeItem(i), variant: 'danger' }]}
                       />
                     </div>
                     <div className="space-y-3">
@@ -145,14 +168,11 @@ export default function AdminGameTemplatePage() {
                         <select
                           value={item.duty_type_id}
                           onChange={e => {
-                            const id = Number(e.target.value)
-                            const dt = dutyTypes.find(d => d.id === id)
-                            updateItem(i, {
-                              duty_type_id: id,
-                              ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}),
-                            })
+                            const dtId = Number(e.target.value)
+                            const dt = dutyTypes.find(d => d.id === dtId)
+                            updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}) })
                           }}
-                          className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                          className="w-full border rounded-md px-2 py-1.5 text-sm"
                         >
                           <option value={0}>Auswählen…</option>
                           {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
@@ -164,7 +184,7 @@ export default function AdminGameTemplatePage() {
                           <select
                             value={item.anchor}
                             onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                            className="w-full border rounded-md px-2 py-1.5 text-sm"
                           >
                             <option value="start">Anpfiff</option>
                             <option value="end">Spielende</option>
@@ -176,7 +196,7 @@ export default function AdminGameTemplatePage() {
                             type="number"
                             value={item.offset_minutes}
                             onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                            className="w-full border rounded-md px-2 py-1.5 text-sm"
                           />
                         </div>
                       </div>
@@ -188,19 +208,19 @@ export default function AdminGameTemplatePage() {
                             min={1}
                             value={item.slots_count}
                             onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                            className="w-full border rounded-md px-2 py-1.5 text-sm"
                           />
                         </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Rollenbezeichnung</label>
-                        <input
-                          type="text"
-                          value={item.role_desc}
-                          onChange={e => updateItem(i, { role_desc: e.target.value })}
-                          placeholder="Optional"
-                          className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-                        />
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Rollenbezeichnung</label>
+                          <input
+                            type="text"
+                            value={item.role_desc}
+                            onChange={e => updateItem(i, { role_desc: e.target.value })}
+                            placeholder="Optional"
+                            className="w-full border rounded-md px-2 py-1.5 text-sm"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -208,7 +228,7 @@ export default function AdminGameTemplatePage() {
               })}
             </div>
 
-            {/* Desktop: Grid Layout */}
+            {/* Desktop */}
             <div className="hidden sm:block divide-y">
               {template.items.map((item, i) => (
                 <div key={i} className="p-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 items-center">
@@ -217,12 +237,9 @@ export default function AdminGameTemplatePage() {
                     <select
                       value={item.duty_type_id}
                       onChange={e => {
-                        const id = Number(e.target.value)
-                        const dt = dutyTypes.find(d => d.id === id)
-                        updateItem(i, {
-                          duty_type_id: id,
-                          ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}),
-                        })
+                        const dtId = Number(e.target.value)
+                        const dt = dutyTypes.find(d => d.id === dtId)
+                        updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}) })
                       }}
                       className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
                     >
@@ -272,7 +289,7 @@ export default function AdminGameTemplatePage() {
                   </div>
                   <button
                     onClick={() => removeItem(i)}
-                    className="text-gray-400 hover:text-brand-error transition-colors mt-4 px-1"
+                    className="text-gray-400 hover:text-red-500 transition-colors mt-4 px-1"
                     title="Eintrag entfernen"
                   >✕</button>
                 </div>
@@ -282,15 +299,12 @@ export default function AdminGameTemplatePage() {
         )}
       </div>
 
-      {/* Versatz info */}
       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 mb-5">
         <strong>Versatz:</strong> Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff).
         Positive Werte = nach dem Anker (z.B. +15 = 15 min nach Spielende).
       </div>
 
-      {saveError && (
-        <p className="text-brand-error text-sm mb-3">{saveError}</p>
-      )}
+      {saveError && <p className="text-red-600 text-sm mb-3">{saveError}</p>}
       <div className="flex items-center gap-3">
         <button
           onClick={handleSave}
@@ -299,7 +313,7 @@ export default function AdminGameTemplatePage() {
         >
           {saving ? 'Speichern…' : 'Vorlage speichern'}
         </button>
-        {saved && <span className="text-brand-success text-sm">✓ Gespeichert</span>}
+        {saved && <span className="text-green-600 text-sm">✓ Gespeichert</span>}
       </div>
     </div>
   )

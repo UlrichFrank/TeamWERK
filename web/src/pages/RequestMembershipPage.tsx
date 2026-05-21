@@ -38,12 +38,12 @@ export default function RequestMembershipPage() {
 
   if (sent) {
     return (
-      <div className="min-h-screen flex flex-col sm:flex-row bg-white">
+      <div className="min-h-screen flex flex-col sm:flex-row bg-brand-gray">
         <Sidebar />
-        <div className="flex-1 flex items-center justify-center bg-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
+        <div className="flex-1 flex items-center justify-center bg-brand-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
           <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
             <MobileLogo />
-            <div className="bg-white rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
+            <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
               <h2 className="text-xl font-bold mb-2">Antrag gesendet!</h2>
               <p className="text-sm text-gray-600">
                 Dein Antrag wurde weitergeleitet. Du erhältst eine E-Mail sobald er bearbeitet wurde.
@@ -61,12 +61,12 @@ export default function RequestMembershipPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col sm:flex-row bg-white">
+    <div className="min-h-screen flex flex-col sm:flex-row bg-brand-gray">
       <Sidebar />
-      <div className="flex-1 flex items-center justify-center bg-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
+      <div className="flex-1 flex items-center justify-center bg-brand-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
         <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
           <MobileLogo />
-          <div className="bg-white rounded-xl shadow border-t-4 border-brand-yellow p-8">
+          <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8">
             <h2 className="text-2xl font-bold mb-1">Beitrittsantrag</h2>
             <p className="text-sm text-gray-500 mb-6">Team Stuttgart – TeamWERK</p>
             <form onSubmit={handleSubmit} className="space-y-4">

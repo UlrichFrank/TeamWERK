@@ -19,7 +19,8 @@ import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import MembershipRequestsPage from './pages/MembershipRequestsPage'
 import SpielplanPage from './pages/SpielplanPage'
 import SpieltagDetailPage from './pages/SpieltagDetailPage'
-import AdminGameTemplatePage from './pages/AdminGameTemplatePage'
+import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
+import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminSeasonsPage from './pages/AdminSeasonsPage'
 import AdminKaderPage from './pages/AdminKaderPage'
 
@@ -59,7 +60,8 @@ export default function App() {
             <Route path="admin/diensttypen" element={<AdminDutyTypesPage />} />
             <Route path="spielplan" element={<SpielplanPage />} />
             <Route path="spielplan/:gameId" element={<SpieltagDetailPage />} />
-            <Route path="admin/spielplan-template" element={<AdminGameTemplatePage />} />
+            <Route path="admin/dienstplan-vorlagen" element={<AdminDutyTemplatesPage />} />
+            <Route path="admin/dienstplan-vorlagen/:id" element={<AdminDutyTemplateDetailPage />} />
             <Route path="admin/saisons" element={<AdminSeasonsPage />} />
           </Route>
 

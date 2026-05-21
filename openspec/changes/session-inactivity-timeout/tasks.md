@@ -22,4 +22,4 @@
 
 ## 4. Build & Deploy
 
-- [ ] 4.1 `make deploy` ausführen und Funktion im Browser prüfen  ← manuell
+- [x] 4.1 `make deploy` ausführen und Funktion im Browser prüfen  ← manuell
