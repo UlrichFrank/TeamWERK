@@ -1,3 +1,20 @@
+import { useEffect, useState } from 'react'
+
+const formatIBAN = (raw: string) =>
+  raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
+
+const validateIBAN = (iban: string): boolean => {
+  const clean = iban.replace(/\s/g, '').toUpperCase()
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$/.test(clean)) return false
+  const rearranged = clean.slice(4) + clean.slice(0, 4)
+  const numeric = rearranged.split('').map(c =>
+    c >= 'A' ? (c.charCodeAt(0) - 55).toString() : c
+  ).join('')
+  let remainder = 0
+  for (const ch of numeric) remainder = (remainder * 10 + parseInt(ch)) % 97
+  return remainder === 1
+}
+
 interface Member {
   street?: string
   zip?: string
@@ -29,6 +46,27 @@ interface Props {
 export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const addressDraft = drafts.find(d => d.field_name === 'address')
   const ibanDraft = drafts.find(d => d.field_name === 'iban')
+
+  const [ibanDisplay, setIbanDisplay] = useState(formatIBAN(form.iban || ''))
+  const [ibanError, setIbanError] = useState('')
+
+  useEffect(() => {
+    setIbanDisplay(formatIBAN(form.iban || ''))
+  }, [form.iban])
+
+  const handleIbanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    const display = raw.match(/.{1,4}/g)?.join(' ') ?? raw
+    setIbanDisplay(display)
+    setIbanError('')
+    onFormChange({ iban: raw })
+  }
+
+  const handleIbanBlur = () => {
+    const raw = ibanDisplay.replace(/\s/g, '')
+    if (raw && !validateIBAN(raw)) setIbanError('Ungültige IBAN')
+    else setIbanError('')
+  }
 
   return (
     <div className="space-y-6">
@@ -110,11 +148,14 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
             <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
             <input
               type="text"
-              value={form.iban || ''}
-              onChange={e => onFormChange({ iban: e.target.value })}
-              placeholder="DE__ ____ ____ ____ ____ ____"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
+              value={ibanDisplay}
+              onChange={handleIbanChange}
+              onBlur={handleIbanBlur}
+              placeholder="DE89 3704 0044 0532 0130 00"
+              maxLength={42}
+              className={`w-full border rounded-md px-3 py-2 text-sm font-mono tracking-wider ${ibanError ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
             />
+            {ibanError && <p className="text-xs text-red-600 mt-1">{ibanError}</p>}
           </div>
 
           {ibanDraft && (
