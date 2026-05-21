@@ -44,52 +44,54 @@ export default function LoginPage() {
             <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
           </div>
 
-          <h2 className="text-xl font-bold text-brand-black mb-6">Anmelden</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <p className="text-brand-error text-sm">{error}</p>}
-            <div>
-              <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-brand-black mb-1">Passwort</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
-            >
-              Anmelden
-            </button>
-          </form>
-          <div className="mt-4 text-center text-sm space-y-1">
-            <div>
-              <Link
-                to="/passwort-vergessen"
-                className="text-brand-black hover:text-brand-yellow transition-colors"
+          <div className="bg-white rounded-xl shadow border-t-4 border-brand-yellow p-8">
+            <h2 className="text-xl font-bold text-brand-black mb-6">Anmelden</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && <p className="text-brand-error text-sm">{error}</p>}
+              <div>
+                <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-black mb-1">Passwort</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
               >
-                Passwort vergessen?
-              </Link>
-            </div>
-            <div>
-              <Link
-                to="/beitritt"
-                className="text-brand-black hover:text-brand-yellow transition-colors"
-              >
-                Beitrittsantrag stellen
-              </Link>
+                Anmelden
+              </button>
+            </form>
+            <div className="mt-4 text-center text-sm space-y-1">
+              <div>
+                <Link
+                  to="/passwort-vergessen"
+                  className="text-brand-black hover:text-brand-yellow transition-colors"
+                >
+                  Passwort vergessen?
+                </Link>
+              </div>
+              <div>
+                <Link
+                  to="/join"
+                  className="text-brand-black hover:text-brand-yellow transition-colors"
+                >
+                  Beitrittsantrag stellen
+                </Link>
+              </div>
             </div>
           </div>
         </div>
