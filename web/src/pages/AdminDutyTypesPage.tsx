@@ -149,7 +149,6 @@ export default function AdminDutyTypesPage() {
   const [types, setTypes] = useState<DutyType[]>([])
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [create, setCreate] = useState<EditState>(emptyCreate())
-  const [editId, setEditId] = useState<number | null>(null)
   const [edit, setEdit] = useState<EditState | null>(null)
   const [modalId, setModalId] = useState<number | null>(null)
 
@@ -174,9 +173,8 @@ export default function AdminDutyTypesPage() {
     load()
   }
 
-  const startEdit = (t: DutyType) => { setEditId(t.id); setEdit(toEditState(t)) }
-  const startModalEdit = (t: DutyType) => { setModalId(t.id); setEdit(toEditState(t)) }
-  const cancelEdit = () => { setEditId(null); setEdit(null); setModalId(null) }
+  const startEdit = (t: DutyType) => { setModalId(t.id); setEdit(toEditState(t)) }
+  const cancelEdit = () => { setEdit(null); setModalId(null) }
 
   const saveEdit = async (id: number) => {
     if (!edit) return
@@ -191,7 +189,7 @@ export default function AdminDutyTypesPage() {
       adjacent_day_behavior: edit.adjacent_day_behavior,
       adjacent_day_variant_id: edit.adjacent_day_variant_id ? parseInt(edit.adjacent_day_variant_id) : null,
     })
-    setEditId(null); setEdit(null); setModalId(null)
+    setEdit(null); setModalId(null)
     load()
   }
 
@@ -200,8 +198,6 @@ export default function AdminDutyTypesPage() {
     await api.delete(`/admin/duty-types/${id}`)
     load()
   }
-
-  const inputCls = 'border border-gray-300 rounded px-2 py-1 text-sm w-full'
 
   return (
     <div>
@@ -263,7 +259,7 @@ export default function AdminDutyTypesPage() {
             title={t.name}
             subtitle={`${t.hours_value.toFixed(1)}h${t.cash_substitute ? ` · ${t.cash_substitute.toFixed(2)}€` : ''}`}
             actions={[
-              { label: 'Bearbeiten', onClick: () => startModalEdit(t) },
+              { label: 'Bearbeiten', onClick: () => startEdit(t) },
               { label: 'Löschen', onClick: () => handleDelete(t.id, t.name), variant: 'danger' },
             ]}
           >
@@ -290,57 +286,7 @@ export default function AdminDutyTypesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {types.map(t => editId === t.id && edit ? (
-              <tr key={t.id} className="bg-blue-50">
-                <td className="px-3 py-2">
-                  <input value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} className={inputCls} />
-                </td>
-                <td className="px-3 py-2">
-                  <input value={edit.hours} onChange={e => setEdit({ ...edit, hours: e.target.value })}
-                    type="number" step="0.5" min="0.5" className={inputCls + ' text-right'} />
-                </td>
-                <td className="px-3 py-2">
-                  <input value={edit.cash} onChange={e => setEdit({ ...edit, cash: e.target.value })}
-                    type="number" step="0.01" placeholder="–" className={inputCls + ' text-right'} />
-                </td>
-                <td className="px-3 py-2">
-                  <select value={edit.anchor} onChange={e => setEdit({ ...edit, anchor: e.target.value as 'start' | 'end' })} className={inputCls}>
-                    <option value="start">Anpfiff</option>
-                    <option value="end">Spielende</option>
-                  </select>
-                </td>
-                <td className="px-3 py-2">
-                  <input value={edit.offset} onChange={e => setEdit({ ...edit, offset: e.target.value })}
-                    type="number" className={inputCls + ' text-right font-mono'} />
-                </td>
-                <td className="px-3 py-2" colSpan={2}>
-                  <div className="space-y-1">
-                    <select value={edit.same_day_behavior} onChange={e => setEdit({ ...edit, same_day_behavior: e.target.value })} className={inputCls + ' text-xs'}>
-                      <option value="normal">Normal (Tag)</option>
-                      <option value="skip">Skip (Tag)</option>
-                      <option value="reduced">Red. (Tag)</option>
-                    </select>
-                    <select value={edit.adjacent_day_behavior} onChange={e => setEdit({ ...edit, adjacent_day_behavior: e.target.value })} className={inputCls + ' text-xs'}>
-                      <option value="normal">Normal (Adj.)</option>
-                      <option value="skip">Skip (Adj.)</option>
-                      <option value="reduced">Red. (Adj.)</option>
-                    </select>
-                  </div>
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex gap-1 justify-end">
-                    <button onClick={() => saveEdit(t.id)}
-                      className="text-xs bg-brand-yellow text-brand-black rounded px-2 py-1 hover:opacity-80">
-                      Speichern
-                    </button>
-                    <button onClick={cancelEdit}
-                      className="text-xs bg-gray-200 text-gray-700 rounded px-2 py-1 hover:bg-gray-300">
-                      Abbrechen
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ) : (
+            {types.map(t => (
               <tr key={t.id} className="hover:bg-brand-gray">
                 <td className="px-3 py-3 font-medium">{t.name}</td>
                 <td className="px-3 py-3 text-right">{t.hours_value.toFixed(1)}</td>
@@ -389,7 +335,6 @@ export default function AdminDutyTypesPage() {
         </table>
       </div>
 
-      {/* Edit Modal for Mobile */}
       {edit && (
         <EditModal
           isOpen={modalId !== null}

@@ -18,7 +18,7 @@ export default function EditModal({ isOpen, title, onClose, onSave, isSaving = f
         className="fixed inset-0 bg-black/40"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded shadow-lg p-6 max-w-sm mx-4 w-full max-h-96 overflow-y-auto">
+      <div className="relative bg-white rounded shadow-lg p-6 max-w-sm mx-4 w-full max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold mb-4">{title}</h2>
         <div className="mb-6 space-y-4">
           {children}
