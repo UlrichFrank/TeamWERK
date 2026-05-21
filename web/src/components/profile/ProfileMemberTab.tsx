@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { Member, ChangeDraft } from '../../pages/ProfilePage'
 
+const formatIBAN = (raw: string) =>
+  raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
+
 interface Props {
   ownMember: Member | null
 }
@@ -18,6 +21,7 @@ export default function ProfileMemberTab({ ownMember }: Props) {
 
   // IBAN-Änderung
   const [iban, setIban] = useState('')
+  const [ibanDisplay, setIbanDisplay] = useState('')
   const [ibanSaving, setIbanSaving] = useState(false)
   const [ibanError, setIbanError] = useState('')
   const [ibanSaved, setIbanSaved] = useState(false)
@@ -28,7 +32,9 @@ export default function ProfileMemberTab({ ownMember }: Props) {
     if (ownMember) {
       setNameFirst(ownMember.first_name)
       setNameLast(ownMember.last_name)
-      setIban(ownMember.iban ?? '')
+      const rawIban = ownMember.iban ?? ''
+      setIban(rawIban)
+      setIbanDisplay(formatIBAN(rawIban))
       loadDrafts()
     }
   }, [ownMember?.id])
@@ -77,6 +83,14 @@ export default function ProfileMemberTab({ ownMember }: Props) {
     }
   }
 
+  const handleIbanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    if (raw.length > 22) return
+    setIban(raw)
+    setIbanDisplay(raw.match(/.{1,4}/g)?.join(' ') ?? raw)
+    setIbanError('')
+  }
+
   const handleIbanRequest = async () => {
     if (!ownMember) return
     if (!iban.trim()) {
@@ -88,7 +102,7 @@ export default function ProfileMemberTab({ ownMember }: Props) {
     try {
       await api.post(`/members/${ownMember.id}/change-request`, {
         field_name: 'iban',
-        new_value: iban.trim(),
+        new_value: iban,
       })
       await loadDrafts()
       setIbanSaved(true)
@@ -201,14 +215,19 @@ export default function ProfileMemberTab({ ownMember }: Props) {
           </div>
         )}
 
+        <div className="mb-3 text-sm">
+          <span className="font-medium text-gray-700">Kontoinhaber: </span>
+          <span className="text-gray-900">{ownMember.account_holder || '–'}</span>
+        </div>
         <div className="mb-3">
           <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
           <input
             type="text"
-            value={iban}
-            onChange={e => setIban(e.target.value)}
-            placeholder="DE00 0000 0000 0000 0000 00"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
+            value={ibanDisplay}
+            onChange={handleIbanChange}
+            placeholder="DE89 3704 0044 0532 0130 00"
+            maxLength={27}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono tracking-wider"
           />
         </div>
 

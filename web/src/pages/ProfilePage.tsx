@@ -11,6 +11,7 @@ export interface Member {
   date_of_birth: string; pass_number: string
   jersey_number?: number; position: string; status: string
   iban?: string
+  account_holder?: string
 }
 
 export interface Parent {
