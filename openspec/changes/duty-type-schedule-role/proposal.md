@@ -4,10 +4,9 @@ Beim Generieren von Dienst-Slots aus einem Spielplan-Template werden heute für 
 
 ## What Changes
 
-- `duty_types` bekommt zwei neue Felder: `applies_when` (wann der Dienst generiert wird) und `consecutive_behavior` (Verhalten bei aufeinanderfolgenden Spieltagen)
-- `duty_types` bekommt ein optionales `consecutive_variant_id`-Feld (Verweis auf reduzierten Ersatz-Diensttyp)
-- Die Slot-Generierung (Template-Anwendung via `RegenerateSlots`) berücksichtigt beim Erzeugen von Slots die Position des Spiels im Tagesablauf und prüft ob Vor- oder Folgetag ebenfalls Heimspiele hat
-- Die Admin-Oberfläche für Diensttypen (`/admin/dienste`) zeigt und pflegt die neuen Felder
+- `duty_types` bekommt zwei neue Felder: `consecutive_behavior` (Verhalten bei aufeinanderfolgenden Spieltagen) und optionales `consecutive_variant_id` (Verweis auf reduzierten Ersatz-Diensttyp)
+- Die Slot-Generierung (Template-Anwendung via `RegenerateSlots`) **berechnet** `applies_when` beim Erzeugen: berücksichtigt die Position des Spiels im Tagesablauf und prüft ob Vor- oder Folgetag ebenfalls Heimspiele hat
+- Die Admin-Oberfläche für Diensttypen (`/admin/dienste`) zeigt und pflegt die neuen Felder (ohne `applies_when` — wird berechnet)
 
 ## Capabilities
 
@@ -19,6 +18,6 @@ Beim Generieren von Dienst-Slots aus einem Spielplan-Template werden heute für 
 
 ## Impact
 
-- DB-Migration: zwei neue Spalten auf `duty_types` + optionale FK-Spalte
-- Backend: `internal/duties/handler.go` (CRUD für Diensttypen), `internal/games/handler.go` (Slot-Generierung)
-- Frontend: `AdminDutyTypesPage.tsx` (neue Felder anzeigen/bearbeiten), `AdminSpielplanPage.tsx` (Regenerate-Flow nutzt neue Logik automatisch)
+- DB-Migration: zwei neue Spalten auf `duty_types` (`consecutive_behavior`, `consecutive_variant_id` FK)
+- Backend: `internal/duties/handler.go` (CRUD für Diensttypen), `internal/games/handler.go` (berechnet `applies_when` bei Slot-Generierung)
+- Frontend: `AdminDutyTypesPage.tsx` (zeigt/bearbeitet `consecutive_behavior` und `consecutive_variant_id`), `AdminSpielplanPage.tsx` (Regenerate-Flow nutzt neue Logik automatisch)

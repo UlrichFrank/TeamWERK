@@ -171,7 +171,7 @@ export default function SpieltagDetailPage() {
     setRegenLoading(true)
     setRegenKeptSlots(null)
     try {
-      const r = await api.get(`/admin/game-template/preview?date=${game.date.slice(0, 10)}&time=${game.time}`)
+      const r = await api.get(`/admin/game-template/preview?date=${game.date.slice(0, 10)}&time=${game.time}&game_id=${gameId}`)
       const p: SlotPreview[] = r.data ?? []
       setRegenPreview(p)
       setRegenSelectedIndices(new Set(p.map((_, i) => i)))

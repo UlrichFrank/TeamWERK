@@ -55,7 +55,7 @@ export default function PositionStatus({ members }: PositionStatusProps) {
               {Array.from({ length: circleCount }).map((_, i) => (
                 <div
                   key={i}
-                  className={`w-2 h-2 rounded-full ${circleClass}`}
+                  className={`w-1.5 h-1.5 rounded-full ${circleClass}`}
                 />
               ))}
             </div>

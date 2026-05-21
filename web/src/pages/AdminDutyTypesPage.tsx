@@ -10,6 +10,8 @@ interface DutyType {
   cash_substitute?: number
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
+  consecutive_behavior?: string
+  consecutive_variant_id?: number | null
 }
 
 interface EditState {
@@ -18,6 +20,8 @@ interface EditState {
   cash: string
   anchor: 'start' | 'end'
   offset: string
+  consecutive_behavior: string
+  consecutive_variant_id: string
 }
 
 function toEditState(t: DutyType): EditState {
@@ -27,6 +31,8 @@ function toEditState(t: DutyType): EditState {
     cash: t.cash_substitute != null ? t.cash_substitute.toString() : '',
     anchor: t.default_anchor,
     offset: t.default_offset_minutes.toString(),
+    consecutive_behavior: t.consecutive_behavior || 'normal',
+    consecutive_variant_id: t.consecutive_variant_id ? t.consecutive_variant_id.toString() : '',
   }
 }
 
@@ -37,6 +43,8 @@ export default function AdminDutyTypesPage() {
   const [cash, setCash] = useState('')
   const [anchor, setAnchor] = useState<'start' | 'end'>('start')
   const [offset, setOffset] = useState('0')
+  const [consec, setConsec] = useState('normal')
+  const [consecVar, setConsecVar] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [edit, setEdit] = useState<EditState | null>(null)
   const [modalId, setModalId] = useState<number | null>(null)
@@ -52,8 +60,10 @@ export default function AdminDutyTypesPage() {
       cash_substitute: cash ? parseFloat(cash) : null,
       default_anchor: anchor,
       default_offset_minutes: parseInt(offset),
+      consecutive_behavior: consec,
+      consecutive_variant_id: consecVar ? parseInt(consecVar) : null,
     })
-    setName(''); setHours('1'); setCash(''); setAnchor('start'); setOffset('0')
+    setName(''); setHours('1'); setCash(''); setAnchor('start'); setOffset('0'); setConsec('normal'); setConsecVar('')
     load()
   }
 
@@ -77,6 +87,8 @@ export default function AdminDutyTypesPage() {
       cash_substitute: edit.cash ? parseFloat(edit.cash) : null,
       default_anchor: edit.anchor,
       default_offset_minutes: parseInt(edit.offset),
+      consecutive_behavior: edit.consecutive_behavior,
+      consecutive_variant_id: edit.consecutive_variant_id ? parseInt(edit.consecutive_variant_id) : null,
     })
     setEditId(null); setEdit(null); setModalId(null)
     load()
@@ -121,6 +133,25 @@ export default function AdminDutyTypesPage() {
             <p className="text-xs text-gray-400">
               Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff)
             </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Spieltag-Verhalten</label>
+              <select value={consec} onChange={e => setConsec(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                <option value="normal">Normal (immer)</option>
+                <option value="skip">Überspringen bei Folge-/Vortag</option>
+                <option value="reduced">Reduziert bei Folge-/Vortag</option>
+              </select>
+            </div>
+            {consec === 'reduced' && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Ersatz-Diensttyp (bei reduziert)</label>
+                <select value={consecVar} onChange={e => setConsecVar(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                  <option value="">-- Wählen --</option>
+                  {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            )}
             <button type="submit" className="w-full sm:w-auto bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
               Anlegen
             </button>
@@ -164,6 +195,7 @@ export default function AdminDutyTypesPage() {
                 <th className="px-3 py-3 text-right">Geldersatz</th>
                 <th className="px-3 py-3 text-right">Anker</th>
                 <th className="px-3 py-3 text-right">Versatz</th>
+                <th className="px-3 py-3">Spieltag</th>
                 <th className="px-3 py-3"></th>
               </tr>
             </thead>
@@ -192,6 +224,13 @@ export default function AdminDutyTypesPage() {
                       type="number" className={inputCls + ' text-right font-mono'} />
                   </td>
                   <td className="px-3 py-2">
+                    <select value={edit.consecutive_behavior} onChange={e => setEdit({ ...edit, consecutive_behavior: e.target.value })} className={inputCls + ' text-xs'}>
+                      <option value="normal">Normal</option>
+                      <option value="skip">Skip</option>
+                      <option value="reduced">Reduziert</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
                     <div className="flex gap-1 justify-end">
                       <button onClick={() => saveEdit(t.id)}
                         className="text-xs bg-brand-yellow text-brand-black rounded px-2 py-1 hover:opacity-80">
@@ -216,6 +255,13 @@ export default function AdminDutyTypesPage() {
                   </td>
                   <td className="px-3 py-3 text-right font-mono text-gray-500">
                     {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes}
+                  </td>
+                  <td className="px-3 py-3 text-sm">
+                    {t.consecutive_behavior && t.consecutive_behavior !== 'normal' ? (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                        {t.consecutive_behavior === 'skip' ? 'Überspringen' : 'Reduziert'}
+                      </span>
+                    ) : <span className="text-gray-400 text-xs">Normal</span>}
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1 justify-end">
@@ -294,6 +340,31 @@ export default function AdminDutyTypesPage() {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             />
           </label>
+          <label className="block">
+            <span className="text-xs text-gray-600 mb-1">Spieltag-Verhalten</span>
+            <select
+              value={edit.consecutive_behavior}
+              onChange={e => setEdit({ ...edit, consecutive_behavior: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            >
+              <option value="normal">Normal (immer)</option>
+              <option value="skip">Überspringen bei Folge-/Vortag</option>
+              <option value="reduced">Reduziert bei Folge-/Vortag</option>
+            </select>
+          </label>
+          {edit.consecutive_behavior === 'reduced' && (
+            <label className="block">
+              <span className="text-xs text-gray-600 mb-1">Ersatz-Diensttyp</span>
+              <select
+                value={edit.consecutive_variant_id}
+                onChange={e => setEdit({ ...edit, consecutive_variant_id: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+              >
+                <option value="">-- Wählen --</option>
+                {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+          )}
         </EditModal>
       )}
     </div>

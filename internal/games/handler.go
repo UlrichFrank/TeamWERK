@@ -375,6 +375,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "time is required", http.StatusBadRequest)
 		return
 	}
+	gameIDStr := r.URL.Query().Get("game_id")
 
 	var templateID, durationMins int
 	err := h.db.QueryRowContext(r.Context(),
@@ -390,8 +391,43 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If game_id provided, load game context (date, season) for applies_when calculation
+	var gameDate string
+	var seasonID int
+	var allGameTimes []string
+	var hasPrevDay, hasNextDay bool
+	if gameIDStr != "" {
+		err := h.db.QueryRowContext(r.Context(),
+			`SELECT date, season_id FROM games WHERE id=?`, gameIDStr).
+			Scan(&gameDate, &seasonID)
+		if err == nil {
+			// Get all games on the same day
+			gameRows, _ := h.db.QueryContext(r.Context(),
+				`SELECT time FROM games WHERE date=? AND is_home=1 AND season_id=? ORDER BY time`,
+				gameDate, seasonID)
+			if gameRows != nil {
+				defer gameRows.Close()
+				for gameRows.Next() {
+					var t string
+					gameRows.Scan(&t)
+					allGameTimes = append(allGameTimes, t)
+				}
+			}
+			// Check adjacent days
+			var prevCount, nextCount int
+			h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM games WHERE date=date(?, '-1 days') AND is_home=1 AND season_id=?`,
+				gameDate, seasonID).Scan(&prevCount)
+			h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM games WHERE date=date(?, '+1 days') AND is_home=1 AND season_id=?`,
+				gameDate, seasonID).Scan(&nextCount)
+			hasPrevDay = prevCount > 0
+			hasNextDay = nextCount > 0
+		}
+	}
+
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, COALESCE(gti.role_desc,'')
+		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, COALESCE(gti.role_desc,''), dt.consecutive_behavior, dt.consecutive_variant_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -412,11 +448,48 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		var p preview
 		var anchor string
 		var offset int
-		rows.Scan(&p.DutyTypeID, &p.DutyTypeName, &anchor, &offset, &p.SlotsCount, &p.RoleDesc)
+		var consB string
+		var consV sql.NullInt64
+		rows.Scan(&p.DutyTypeID, &p.DutyTypeName, &anchor, &offset, &p.SlotsCount, &p.RoleDesc, &consB, &consV)
+
 		if anchor == "end" {
 			offset += durationMins
 		}
 		p.EventTime = addMinutes(gameTime, offset)
+
+		// If game_id context provided, check applies_when
+		if gameIDStr != "" && len(allGameTimes) > 0 {
+			// Determine if this is first/last game
+			isFirst := gameTime == allGameTimes[0]
+			isLast := gameTime == allGameTimes[len(allGameTimes)-1]
+
+			// Calculate applies_when
+			appliesWhen := "always"
+			if isFirst && !hasPrevDay {
+				appliesWhen = "day_open"
+			} else if isLast && !hasNextDay {
+				appliesWhen = "day_close"
+			}
+
+			// Apply consecutive_behavior only for day_open/day_close
+			if appliesWhen != "always" && consB != "normal" {
+				shouldApplyConsecutive := false
+				if appliesWhen == "day_open" && hasPrevDay {
+					shouldApplyConsecutive = true
+				} else if appliesWhen == "day_close" && hasNextDay {
+					shouldApplyConsecutive = true
+				}
+
+				if shouldApplyConsecutive {
+					if consB == "skip" {
+						continue
+					} else if consB == "reduced" && consV.Valid {
+						p.DutyTypeID = int(consV.Int64)
+					}
+				}
+			}
+		}
+
 		result = append(result, p)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -472,6 +545,35 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	tx.ExecContext(r.Context(),
 		`DELETE FROM duty_slots WHERE game_id=? AND slots_filled = 0`, gameID)
 
+	// Load game's time and all games on same day for applies_when calculation
+	var gameTime string
+	tx.QueryRowContext(r.Context(),
+		`SELECT time FROM games WHERE id=?`, gameID).Scan(&gameTime)
+
+	allGameTimes := []string{}
+	gtRows, _ := tx.QueryContext(r.Context(),
+		`SELECT time FROM games WHERE date=? AND is_home=1 AND season_id=? ORDER BY time`,
+		game.Date, game.SeasonID)
+	if gtRows != nil {
+		defer gtRows.Close()
+		for gtRows.Next() {
+			var t string
+			gtRows.Scan(&t)
+			allGameTimes = append(allGameTimes, t)
+		}
+	}
+
+	// Check adjacent days
+	var prevCount, nextCount int
+	tx.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM games WHERE date=date(?, '-1 days') AND is_home=1 AND season_id=?`,
+		game.Date, game.SeasonID).Scan(&prevCount)
+	tx.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM games WHERE date=date(?, '+1 days') AND is_home=1 AND season_id=?`,
+		game.Date, game.SeasonID).Scan(&nextCount)
+	hasPrevDay := prevCount > 0
+	hasNextDay := nextCount > 0
+
 	eventName := "Heimspiel"
 	if game.Opponent != "" {
 		eventName = "Heimspiel vs. " + game.Opponent
@@ -481,10 +583,61 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		if n <= 0 {
 			n = 1
 		}
+
+		// Determine if this is first/last game and apply applies_when logic
+		isFirst := false
+		isLast := false
+		for i, t := range allGameTimes {
+			if t == gameTime {
+				isFirst = (i == 0)
+				isLast = (i == len(allGameTimes)-1)
+				break
+			}
+		}
+
+		// Load duty type info for consecutive_behavior
+		var consB string
+		var consV sql.NullInt64
+		tx.QueryRowContext(r.Context(),
+			`SELECT consecutive_behavior, consecutive_variant_id FROM duty_types WHERE id=?`,
+			s.DutyTypeID).Scan(&consB, &consV)
+
+		// Calculate applies_when
+		appliesWhen := "always"
+		if isFirst && !hasPrevDay {
+			appliesWhen = "day_open"
+		} else if isLast && !hasNextDay {
+			appliesWhen = "day_close"
+		}
+
+		// Apply consecutive_behavior logic
+		dutyTypeID := s.DutyTypeID
+		skip := false
+		if appliesWhen != "always" && consB != "normal" {
+			shouldApplyConsecutive := false
+			if appliesWhen == "day_open" && hasPrevDay {
+				shouldApplyConsecutive = true
+			} else if appliesWhen == "day_close" && hasNextDay {
+				shouldApplyConsecutive = true
+			}
+
+			if shouldApplyConsecutive {
+				if consB == "skip" {
+					skip = true
+				} else if consB == "reduced" && consV.Valid {
+					dutyTypeID = int(consV.Int64)
+				}
+			}
+		}
+
+		if skip {
+			continue
+		}
+
 		_, err = tx.ExecContext(r.Context(),
 			`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
 			 VALUES (?,?,?,?,?,?,?,?,?)`,
-			eventName, game.Date, s.EventTime, s.DutyTypeID, s.RoleDesc, n, game.TeamID, game.SeasonID, gameID)
+			eventName, game.Date, s.EventTime, dutyTypeID, s.RoleDesc, n, game.TeamID, game.SeasonID, gameID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

@@ -7,9 +7,9 @@ Die Slot-Generierung erfolgt in zwei Schritten: Frontend ruft `GET /api/admin/ga
 ## Goals / Non-Goals
 
 **Goals:**
-- `duty_types` trägt `applies_when`, `consecutive_behavior`, `consecutive_variant_id`
-- Preview und Regenerate berücksichtigen same-day-Position und adjacent-day-Kontext
-- Admin-UI erlaubt Pflege der neuen Felder
+- `duty_types` trägt `consecutive_behavior` und `consecutive_variant_id` (nicht gespeichert: `applies_when` wird berechnet)
+- Preview und Regenerate **berechnen** `applies_when` basierend auf Spielposition und adjacent-day-Kontext
+- Admin-UI erlaubt Pflege von `consecutive_behavior` und `consecutive_variant_id`
 
 **Non-Goals:**
 - Keine Venue-Modellierung — alle Heimspiele teilen dieselbe Halle
@@ -18,21 +18,25 @@ Die Slot-Generierung erfolgt in zwei Schritten: Frontend ruft `GET /api/admin/ga
 
 ## Decisions
 
-### 1. Neue Felder auf `duty_types`, nicht auf `game_template_items`
+### 1. `consecutive_behavior` und `consecutive_variant_id` gehören auf `duty_types`, nicht auf `game_template_items`
 
-Die Semantik gehört zum Diensttyp selbst. „Aufbau ist immer day_open" ist eine intrinsische Eigenschaft des Diensttyps, keine Eigenheit eines bestimmten Templates. Jedes Template, das Aufbau enthält, soll automatisch dieselbe Regel erhalten.
+Die Semantik gehört zum Diensttyp selbst. „Aufbau skip bei Folgetag" ist eine intrinsische Eigenschaft des Diensttyps, keine Eigenheit eines bestimmten Templates. Jedes Template, das Aufbau enthält, soll automatisch dieselbe Regel erhalten.
 
 Alternative: Felder auf `game_template_items`. Nachteil: Bei mehreren Templates müsste man die Semantik duplizieren und könnte sie inkonsistent pflegen.
 
-### 2. `applies_when`: drei Werte
+`applies_when` ist hingegen **nicht** eine Eigenschaft des Diensttyps, sondern eine Berechnung basierend auf Spielposition. Sie wird zur Laufzeit berechnet, nicht gespeichert.
+
+### 2. `applies_when`: **berechnet**, nicht gespeichert
+
+Beim Generieren von Slots wird `applies_when` für jeden Slot berechnet:
 
 ```
-'always'     → jedes Heimspiel (Default — heutiges Verhalten)
-'day_open'   → nur wenn kein Heimspiel mit früherem Anpfiff am selben Tag
-'day_close'  → nur wenn kein Heimspiel mit späterem Anpfiff am selben Tag
+'day_open'   ← Spiel ist erstes am Tag UND kein Heimspiel am Vortag
+'day_close'  ← Spiel ist letztes am Tag UND kein Heimspiel am Folgetag
+'always'     ← alles andere (oder Spiel ist einziges am Tag)
 ```
 
-Ein Spiel das als einziges am Tag stattfindet ist gleichzeitig `day_open` und `day_close`.
+**Grund:** Dadurch entfällt ein gespeichertes Feld, das mit der Spielplanlogik konsistent bleiben müsste. Keine Chance für Inkonsistenzen — `applies_when` ergibt sich immer automatisch aus der Spielposition.
 
 ### 3. `consecutive_behavior`: drei Werte + optionale FK
 
@@ -56,6 +60,6 @@ Da alle Heimspiele in derselben Halle stattfinden, reicht: `WHERE date=? AND is_
 
 ## Risks / Trade-offs
 
-- [Bestehende Diensttypen] Alle vorhandenen `duty_types` haben nach der Migration `applies_when='always'` und `consecutive_behavior='normal'` — heutiges Verhalten bleibt erhalten. Kein Datenverlust.
+- [Bestehende Diensttypen] Alle vorhandenen `duty_types` haben nach der Migration `consecutive_behavior='normal'` — heutiges Verhalten bleibt erhalten. `applies_when` wird zur Laufzeit berechnet.
 - [consecutive_behavior='reduced' ohne variant_id] Muss im Backend validiert werden: wenn `reduced` gesetzt, muss `consecutive_variant_id` vorhanden sein. Sonst 400-Fehler.
-- [Preview ohne Kontext] Wenn Preview ohne `game_id` aufgerufen wird (z.B. Template-Konfigurationsseite), zeigt er alle Slots ohne Filterung. Das ist korrekt als "was wäre bei isoliertem Spiel".
+- [Preview ohne Kontext] Wenn Preview ohne `game_id` aufgerufen wird (z.B. Template-Konfigurationsseite), zeigt er alle Slots mit `applies_when='always'`. Das ist korrekt als "was wäre bei isoliertem Spiel".

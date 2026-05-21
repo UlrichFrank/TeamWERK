@@ -17,23 +17,30 @@ func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 // GET /api/admin/duty-types
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	rows, _ := h.db.QueryContext(r.Context(),
-		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes FROM duty_types ORDER BY name`)
+		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes, consecutive_behavior, consecutive_variant_id FROM duty_types ORDER BY name`)
 	defer rows.Close()
 	type dt struct {
-		ID                   int      `json:"id"`
-		Name                 string   `json:"name"`
-		HoursValue           float64  `json:"hours_value"`
-		CashSubstitute       *float64 `json:"cash_substitute,omitempty"`
-		DefaultAnchor        string   `json:"default_anchor"`
-		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		ID                     int      `json:"id"`
+		Name                   string   `json:"name"`
+		HoursValue             float64  `json:"hours_value"`
+		CashSubstitute         *float64 `json:"cash_substitute,omitempty"`
+		DefaultAnchor          string   `json:"default_anchor"`
+		DefaultOffsetMinutes   int      `json:"default_offset_minutes"`
+		ConsecutiveBehavior    string   `json:"consecutive_behavior"`
+		ConsecutiveVariantID   *int     `json:"consecutive_variant_id,omitempty"`
 	}
 	result := []dt{}
 	for rows.Next() {
 		var d dt
 		var cs sql.NullFloat64
-		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes)
+		var cvi sql.NullInt64
+		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes, &d.ConsecutiveBehavior, &cvi)
 		if cs.Valid {
 			d.CashSubstitute = &cs.Float64
+		}
+		if cvi.Valid {
+			id := int(cvi.Int64)
+			d.ConsecutiveVariantID = &id
 		}
 		result = append(result, d)
 	}
@@ -49,14 +56,23 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 		CashSubstitute       *float64 `json:"cash_substitute"`
 		DefaultAnchor        string   `json:"default_anchor"`
 		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		ConsecutiveBehavior  string   `json:"consecutive_behavior"`
+		ConsecutiveVariantID *int     `json:"consecutive_variant_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
 		req.DefaultAnchor = "start"
 	}
+	if req.ConsecutiveBehavior == "" {
+		req.ConsecutiveBehavior = "normal"
+	}
+	if req.ConsecutiveBehavior == "reduced" && req.ConsecutiveVariantID == nil {
+		http.Error(w, "consecutive_behavior 'reduced' requires consecutive_variant_id", http.StatusBadRequest)
+		return
+	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes) VALUES (?,?,?,?,?)`,
-		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes)
+		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes, consecutive_behavior, consecutive_variant_id) VALUES (?,?,?,?,?,?,?)`,
+		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes, req.ConsecutiveBehavior, req.ConsecutiveVariantID)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -69,14 +85,23 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 		CashSubstitute       *float64 `json:"cash_substitute"`
 		DefaultAnchor        string   `json:"default_anchor"`
 		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		ConsecutiveBehavior  string   `json:"consecutive_behavior"`
+		ConsecutiveVariantID *int     `json:"consecutive_variant_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
 		req.DefaultAnchor = "start"
 	}
+	if req.ConsecutiveBehavior == "" {
+		req.ConsecutiveBehavior = "normal"
+	}
+	if req.ConsecutiveBehavior == "reduced" && req.ConsecutiveVariantID == nil {
+		http.Error(w, "consecutive_behavior 'reduced' requires consecutive_variant_id", http.StatusBadRequest)
+		return
+	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=? WHERE id=?`,
-		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes, id)
+		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=?, consecutive_behavior=?, consecutive_variant_id=? WHERE id=?`,
+		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes, req.ConsecutiveBehavior, req.ConsecutiveVariantID, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -469,6 +494,84 @@ func (h *Handler) SetSeasonTargets(w http.ResponseWriter, r *http.Request) {
 			seasonID, t.DutyTypeID, t.TargetHours)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// sameDayGames returns all kick-off times for home games on the given date in the season
+func (h *Handler) sameDayGames(date string, seasonID int) []string {
+	rows, err := h.db.Query(
+		`SELECT time FROM games WHERE date = ? AND is_home = 1 AND season_id = ? ORDER BY time`,
+		date, seasonID)
+	if err != nil {
+		return []string{}
+	}
+	defer rows.Close()
+	var times []string
+	for rows.Next() {
+		var t string
+		rows.Scan(&t)
+		times = append(times, t)
+	}
+	return times
+}
+
+// adjacentDayHasGames checks if there are home games on the adjacent day
+// direction: -1 for previous day, +1 for next day
+func (h *Handler) adjacentDayHasGames(date string, seasonID int, direction int) bool {
+	dayOffset := 1
+	if direction == -1 {
+		dayOffset = -1
+	}
+	var count int
+	h.db.QueryRow(
+		`SELECT COUNT(*) FROM games WHERE date = date(?, ? || ' days') AND is_home = 1 AND season_id = ?`,
+		date, dayOffset, seasonID).Scan(&count)
+	return count > 0
+}
+
+// DutyType holds the relevant fields for schedule-role calculation
+type DutyType struct {
+	ID                    int
+	ConsecutiveBehavior   string
+	ConsecutiveVariantID  *int
+}
+
+// effectiveDutyType calculates applies_when based on game position and returns the effective duty type ID
+// isFirst: game is first on day, isLast: game is last on day
+// prevDay, nextDay: adjacent days have games
+func (h *Handler) effectiveDutyType(dt DutyType, isFirst bool, isLast bool, prevDay bool, nextDay bool) (dutyTypeID int, appliesWhen string, skip bool) {
+	// Calculate applies_when
+	appliesWhen = "always"
+	if isFirst && !prevDay {
+		appliesWhen = "day_open"
+	} else if isLast && !nextDay {
+		appliesWhen = "day_close"
+	}
+
+	// Apply consecutive_behavior only for day_open/day_close
+	if appliesWhen == "always" || dt.ConsecutiveBehavior == "normal" {
+		return dt.ID, appliesWhen, false
+	}
+
+	// Check adjacent day condition based on applies_when
+	shouldApplyConsecutive := false
+	if appliesWhen == "day_open" && prevDay {
+		shouldApplyConsecutive = true
+	} else if appliesWhen == "day_close" && nextDay {
+		shouldApplyConsecutive = true
+	}
+
+	if !shouldApplyConsecutive {
+		return dt.ID, appliesWhen, false
+	}
+
+	// Apply consecutive behavior
+	if dt.ConsecutiveBehavior == "skip" {
+		return dt.ID, appliesWhen, true
+	} else if dt.ConsecutiveBehavior == "reduced" && dt.ConsecutiveVariantID != nil {
+		return *dt.ConsecutiveVariantID, appliesWhen, false
+	}
+
+	return dt.ID, appliesWhen, false
 }
 
 func (h *Handler) updateAccount(r *http.Request, userID int, slotID string, add bool) {
