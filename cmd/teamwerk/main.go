@@ -77,6 +77,7 @@ func serve() {
 	r.Use(corsMiddleware)
 
 	// Public routes
+	r.Get("/api/uploads/*", uploadH.ServeUpload)
 	r.Get("/api/teams", cfgH.ListTeams)
 	r.Post("/api/auth/login", authH.Login)
 	r.Post("/api/auth/refresh", authH.Refresh)
@@ -116,7 +117,6 @@ func serve() {
 		r.Delete("/api/profile/phones/{id}", membH.DeletePhone)
 		r.Put("/api/profile/visibility", membH.UpdateVisibility)
 		r.Post("/api/upload/user-photo", uploadH.UploadUserPhoto)
-		r.Get("/api/uploads/*", uploadH.ServeUpload)
 
 		// Duties
 		r.Get("/api/duty-board", dutyH.Board)
