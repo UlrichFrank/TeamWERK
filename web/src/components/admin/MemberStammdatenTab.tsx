@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
 
 interface Member {
@@ -58,6 +58,12 @@ export default function MemberStammdatenTab({ form, isNew, drafts, onFormChange,
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoURL, setPhotoURL] = useState(form.photo_url || '')
 
+  useEffect(() => {
+    if (form.photo_url && form.photo_url !== photoURL) {
+      setPhotoURL(form.photo_url)
+    }
+  }, [form.photo_url, photoURL])
+
   const togglePosition = (pos: string) => {
     const current = form.position ? form.position.split(',').filter(Boolean) : []
     const next = current.includes(pos) ? current.filter(p => p !== pos) : [...current, pos]
@@ -78,6 +84,7 @@ export default function MemberStammdatenTab({ form, isNew, drafts, onFormChange,
       fd.append('file', file)
       const r = await api.post(`/upload/member-photo/${form.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       setPhotoURL(r.data.photo_url || '')
+      onFormChange({ photo_url: r.data.photo_url || '' })
     } catch {
       // error handled by parent
     } finally {
