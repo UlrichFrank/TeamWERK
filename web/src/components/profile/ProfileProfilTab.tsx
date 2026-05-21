@@ -87,7 +87,7 @@ export default function ProfileProfilTab({ children, parents }: Props) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await api.post('/upload/user-photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const r = await api.post('/upload/user-photo', fd)
       setPhotoURL(r.data.photo_url ?? '')
       setChanged(true)
     } catch (err) {

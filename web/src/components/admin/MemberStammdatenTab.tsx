@@ -26,6 +26,7 @@ interface Draft {
 
 interface Props {
   form: Member
+  memberId?: number
   isNew: boolean
   drafts: Draft[]
   onFormChange: (updates: Partial<Member>) => void
@@ -53,7 +54,7 @@ const CLUB_FUNCTION_OPTIONS = [
 const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'ausgetreten']
 const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']
 
-export default function MemberStammdatenTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
+export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoURL, setPhotoURL] = useState(form.photo_url || '')
@@ -77,12 +78,12 @@ export default function MemberStammdatenTab({ form, isNew, drafts, onFormChange,
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || isNew) return
+    if (!file || isNew || !memberId) return
     setPhotoUploading(true)
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await api.post(`/upload/member-photo/${form.id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const r = await api.post(`/upload/member-photo/${memberId}`, fd)
       setPhotoURL(r.data.photo_url || '')
       onFormChange({ photo_url: r.data.photo_url || '' })
     } catch {

@@ -252,6 +252,7 @@ export default function MemberDetailPage() {
       {activeTab === 'stammdaten' && (
         <MemberStammdatenTab
           form={form}
+          memberId={isNew ? undefined : Number(id)}
           isNew={isNew}
           drafts={drafts}
           onFormChange={updates => setForm(f => ({ ...f, ...updates }))}
