@@ -25,9 +25,10 @@ init: ## Abhängigkeiten installieren (go mod tidy, pnpm install)
 	go mod tidy
 	cd web && pnpm install
 
-dev: ## Backend + Vite Dev-Server lokal starten
-	@echo "Starting backend on :8080 and frontend dev server..."
-	@go run ./cmd/teamwerk &
+dev: ## Backend (mit air Auto-Reload) + Vite Dev-Server lokal starten
+	@echo "Starting backend on :8080 (with auto-reload) and frontend dev server..."
+	@air &
+	@sleep 1
 	@cd web && pnpm dev
 
 dev-remote: ## SSH-Tunnel zum VPS + Vite Dev-Server (kein lokales Backend)

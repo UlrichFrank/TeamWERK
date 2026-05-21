@@ -22,6 +22,10 @@ web/tsconfig.tsbuildinfo
 *.test
 coverage.out
 
+# air (auto-reload tool)
+tmp/
+build-errors.log
+
 # macOS
 .DS_Store
 
