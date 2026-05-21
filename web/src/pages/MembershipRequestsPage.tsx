@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 
-interface Request { id: number; name: string; email: string; team_id: number; created_at: string }
+interface Request { id: number; name: string; email: string; comment: string; created_at: string }
 
 export default function MembershipRequestsPage() {
   const [requests, setRequests] = useState<Request[]>([])
@@ -22,6 +22,7 @@ export default function MembershipRequestsPage() {
             <div>
               <div className="font-medium">{r.name}</div>
               <div className="text-sm text-gray-500">{r.email}</div>
+              {r.comment && <div className="text-xs text-gray-400 mt-0.5">{r.comment}</div>}
               <div className="text-xs text-gray-400 mt-0.5">{new Date(r.created_at).toLocaleDateString('de-DE')}</div>
             </div>
             <div className="flex gap-2">

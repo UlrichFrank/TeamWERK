@@ -1,29 +1,18 @@
-import { useState, FormEvent, useEffect } from 'react'
+import { useState, FormEvent } from 'react'
 import axios from 'axios'
 
-interface Team { id: number; name: string }
-
 export default function RequestMembershipPage() {
-  const [teams, setTeams] = useState<Team[]>([])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [teamID, setTeamID] = useState('')
+  const [comment, setComment] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    axios.get('/api/teams').then(r => setTeams(r.data)).catch(() => {})
-  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     try {
-      await axios.post('/api/auth/request-membership', {
-        name,
-        email,
-        team_id: teamID ? Number(teamID) : null,
-      })
+      await axios.post('/api/auth/request-membership', { name, email, comment: comment || undefined })
       setSent(true)
     } catch {
       setError('Fehler beim Senden. Bitte versuche es erneut.')
@@ -66,15 +55,13 @@ export default function RequestMembershipPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Mannschaft <span className="text-gray-400 font-normal">(optional)</span>
+              Kommentar <span className="text-gray-400 font-normal">(optional)</span>
             </label>
-            <select
-              value={teamID} onChange={e => setTeamID(e.target.value)}
+            <input
+              type="text" value={comment} onChange={e => setComment(e.target.value)}
+              placeholder="z.B. Mannschaft, Ansprechpartner …"
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            >
-              <option value="">– keine Angabe –</option>
-              {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            />
           </div>
           <button
             type="submit"

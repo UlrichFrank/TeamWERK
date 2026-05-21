@@ -30,6 +30,7 @@ interface Member {
   city?: string
   join_date?: string
   iban?: string
+  account_holder?: string
   photo_url?: string
   photo_visible?: boolean
   dsgvo_verarbeitung?: boolean
@@ -67,7 +68,7 @@ export default function MemberDetailPage() {
   const [form, setForm] = useState<Omit<Member, 'id'>>({
     first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
     jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_function: '',
-    street: '', zip: '', city: '', join_date: '', iban: '',
+    street: '', zip: '', city: '', join_date: '', iban: '', account_holder: '',
     photo_url: '', photo_visible: false,
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
@@ -106,6 +107,7 @@ export default function MemberDetailPage() {
           first_name: m.first_name, last_name: m.last_name,
           street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
           iban: m.iban ?? '',
+          account_holder: m.account_holder ?? '',
           dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
           dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,
           sepa_mandat: m.sepa_mandat ?? false,
@@ -146,6 +148,7 @@ export default function MemberDetailPage() {
           street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
           join_date: m.join_date?.slice(0, 10) ?? '',
           iban: m.iban ?? '',
+          account_holder: m.account_holder ?? '',
           photo_url: m.photo_url ?? '',
           photo_visible: m.photo_visible ?? false,
           dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,

@@ -37,8 +37,9 @@ type Member struct {
 	Zip      *string `json:"zip,omitempty"`
 	City     *string `json:"city,omitempty"`
 	JoinDate *string `json:"join_date,omitempty"`
-	IBAN     *string `json:"iban,omitempty"`
-	PhotoURL *string `json:"photo_url,omitempty"`
+	IBAN          *string `json:"iban,omitempty"`
+	AccountHolder *string `json:"account_holder,omitempty"`
+	PhotoURL      *string `json:"photo_url,omitempty"`
 	PhotoVisible bool `json:"photo_visible,omitempty"`
 
 	DsgvoVerarbeitung     bool    `json:"dsgvo_verarbeitung,omitempty"`
@@ -259,7 +260,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		SELECT m.id, m.first_name, m.last_name,
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function,
-		       m.street, m.zip, m.city, m.join_date, m.iban,
+		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
@@ -273,7 +274,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var jerseyNum, userID sql.NullInt64
 	var clubFunc sql.NullString
 	var mStreet, mZip, mCity sql.NullString
-	var joinDate, iban sql.NullString
+	var joinDate, iban, accountHolder sql.NullString
 	var photoPath sql.NullString
 	var photoVisible int64
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
@@ -284,7 +285,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
 		&base.MemberNumber, &base.PassNumber,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunc,
-		&mStreet, &mZip, &mCity, &joinDate, &iban,
+		&mStreet, &mZip, &mCity, &joinDate, &iban, &accountHolder,
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
@@ -369,10 +370,13 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// IBAN + SEPA document URL: admin only
+	// IBAN, account holder + SEPA document URL: admin only
 	if isAdmin {
 		if iban.Valid {
 			base.IBAN = &iban.String
+		}
+		if accountHolder.Valid {
+			base.AccountHolder = &accountHolder.String
 		}
 		if sepaMandatPath.Valid && sepaMandatPath.String != "" {
 			url := "/api/uploads/" + sepaMandatPath.String
@@ -435,8 +439,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Street   string `json:"street"`
 		Zip      string `json:"zip"`
 		City     string `json:"city"`
-		JoinDate string `json:"join_date"`
-		IBAN     string `json:"iban"`
+		JoinDate      string `json:"join_date"`
+		IBAN          string `json:"iban"`
+		AccountHolder string `json:"account_holder"`
 
 		PhotoVisible bool `json:"photo_visible"`
 
@@ -457,11 +462,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		ibanVal = req.IBAN
 	}
 
+	accountHolderVal := interface{}(nil)
+	if claims.Role == "admin" {
+		accountHolderVal = nullableString(req.AccountHolder)
+	}
+
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET
 			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
 			jersey_number=?, position=?, gender=?, club_function=?,
-			street=?, zip=?, city=?, join_date=?, iban=COALESCE(?, iban),
+			street=?, zip=?, city=?, join_date=?, iban=COALESCE(?, iban), account_holder=?,
 			photo_visible=?,
 			dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
 			dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
@@ -471,7 +481,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender, req.ClubFunction,
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
-		nullableString(req.JoinDate), ibanVal,
+		nullableString(req.JoinDate), ibanVal, accountHolderVal,
 		boolToInt(req.PhotoVisible),
 		boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 		boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),

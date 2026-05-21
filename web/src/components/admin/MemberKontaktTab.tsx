@@ -3,6 +3,7 @@ interface Member {
   zip?: string
   city?: string
   iban?: string
+  account_holder?: string
 }
 
 interface Draft {
@@ -96,6 +97,15 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-gray-700 mb-4">Bankdaten</h2>
         <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Kontoinhaber</label>
+            <input
+              type="text"
+              value={form.account_holder || ''}
+              onChange={e => onFormChange({ account_holder: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
             <input

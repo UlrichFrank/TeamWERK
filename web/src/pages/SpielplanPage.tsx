@@ -70,7 +70,7 @@ export default function SpielplanPage() {
   const loadGames = () => api.get('/games').then(r => setGames(r.data ?? []))
 
   useEffect(() => {
-    Promise.all([loadGames(), api.get('/teams').then(r => setTeams(r.data ?? []))]).finally(() => setLoading(false))
+    Promise.all([loadGames(), api.get('/admin/teams').then(r => setTeams(r.data ?? []))]).finally(() => setLoading(false))
   }, [])
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)

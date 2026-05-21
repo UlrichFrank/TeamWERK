@@ -46,6 +46,7 @@ const GENDER_OPTIONS = [
 
 const CLUB_FUNCTION_OPTIONS = [
   { value: '', label: '– keine –' },
+  { value: 'spieler', label: 'Spieler' },
   { value: 'trainer', label: 'Trainer' },
   { value: 'vorstand', label: 'Vorstand' },
   { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
@@ -72,7 +73,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   }
 
   const selectedPositions = form.position ? form.position.split(',').filter(Boolean) : []
-  const isPassive = form.status === 'passiv'
+  const isSpieler = form.club_function === 'spieler'
 
   const nameDraft = drafts.find(d => d.field_name === 'name')
 
@@ -160,7 +161,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
-          {!isPassive && (
+          {isSpieler && (
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Passnummer</label>
@@ -184,12 +185,10 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           )}
         </div>
 
-        {/* Positionen */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Positionen</label>
-          {isPassive ? (
-            <p className="text-sm text-gray-400 italic">Nicht zutreffend (passiv)</p>
-          ) : (
+        {/* Positionen — nur für Spieler */}
+        {isSpieler && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Positionen</label>
             <div className="flex flex-wrap gap-2">
               {HANDBALL_POSITIONS.map(pos => (
                 <button
@@ -206,29 +205,31 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                 </button>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Geschlecht */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Geschlecht</label>
-          <div className="flex gap-2">
-            {GENDER_OPTIONS.map(g => (
-              <button
-                key={g.value}
-                type="button"
-                onClick={() => onFormChange({ gender: g.value })}
-                className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                  form.gender === g.value
-                    ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                    : 'text-gray-600 border-gray-300'
-                }`}
-              >
-                {g.label}
-              </button>
-            ))}
           </div>
-        </div>
+        )}
+
+        {/* Geschlecht — nur für Spieler */}
+        {isSpieler && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Geschlecht</label>
+            <div className="flex gap-2">
+              {GENDER_OPTIONS.map(g => (
+                <button
+                  key={g.value}
+                  type="button"
+                  onClick={() => onFormChange({ gender: g.value })}
+                  className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                    form.gender === g.value
+                      ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                      : 'text-gray-600 border-gray-300'
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Status */}
         <div className="mt-4">

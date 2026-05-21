@@ -78,7 +78,6 @@ func serve() {
 
 	// Public routes
 	r.Get("/api/uploads/*", uploadH.ServeUpload)
-	r.Get("/api/teams", cfgH.ListTeams)
 	r.Post("/api/auth/login", authH.Login)
 	r.Post("/api/auth/refresh", authH.Refresh)
 	r.Post("/api/auth/logout", authH.Logout)

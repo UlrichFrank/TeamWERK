@@ -132,42 +132,31 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name   string `json:"name"`
-		Email  string `json:"email"`
-		TeamID *int   `json:"team_id"`
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Comment string `json:"comment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || req.Email == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	var commentVal interface{}
+	if req.Comment != "" {
+		commentVal = req.Comment
+	}
 	if _, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO membership_requests (name, email, team_id) VALUES (?,?,?)`,
-		req.Name, req.Email, req.TeamID,
+		`INSERT INTO membership_requests (name, email, comment) VALUES (?,?,?)`,
+		req.Name, req.Email, commentVal,
 	); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
-	}
-	if req.TeamID != nil {
-		h.notifyTrainersOfRequest(r, *req.TeamID, req.Name, req.Email)
 	}
 	w.WriteHeader(http.StatusCreated)
 }
 
 func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request) {
-	claims := ClaimsFromCtx(r.Context())
-	var rows *sql.Rows
-	var err error
-	if claims.Role == "admin" {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT id, name, email, team_id, status, created_at FROM membership_requests WHERE status = 'pending' ORDER BY created_at`)
-	} else {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT mr.id, mr.name, mr.email, mr.team_id, mr.status, mr.created_at
-			 FROM membership_requests mr
-			 JOIN team_trainers tt ON tt.team_id = mr.team_id
-			 WHERE tt.user_id = ? AND mr.status = 'pending'
-			 ORDER BY mr.created_at`, claims.UserID)
-	}
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT id, name, email, COALESCE(comment,''), status, created_at FROM membership_requests WHERE status = 'pending' ORDER BY created_at`)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -177,19 +166,14 @@ func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request)
 		ID        int    `json:"id"`
 		Name      string `json:"name"`
 		Email     string `json:"email"`
-		TeamID    *int   `json:"team_id"`
+		Comment   string `json:"comment,omitempty"`
 		Status    string `json:"status"`
 		CreatedAt string `json:"created_at"`
 	}
 	results := []row{}
 	for rows.Next() {
 		var r row
-		var teamID sql.NullInt64
-		rows.Scan(&r.ID, &r.Name, &r.Email, &teamID, &r.Status, &r.CreatedAt)
-		if teamID.Valid {
-			n := int(teamID.Int64)
-			r.TeamID = &n
-		}
+		rows.Scan(&r.ID, &r.Name, &r.Email, &r.Comment, &r.Status, &r.CreatedAt)
 		results = append(results, r)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -200,23 +184,18 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	claims := ClaimsFromCtx(r.Context())
 	var name, email string
-	var teamID sql.NullInt64
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT name, email, team_id FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
-	).Scan(&name, &email, &teamID)
+		`SELECT name, email FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
+	).Scan(&name, &email)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	plain, tokenHash, _ := GenerateOpaqueToken()
 	expiry := InvitationExpiry()
-	var teamIDVal *int64
-	if teamID.Valid {
-		teamIDVal = &teamID.Int64
-	}
 	if _, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at) VALUES (?,?,?,?,?)`,
-		email, teamIDVal, "elternteil", tokenHash, expiry,
+		email, nil, "elternteil", tokenHash, expiry,
 	); err != nil {
 		log.Printf("DB ERROR (ApproveMembership token for %s): %v", email, err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -258,9 +237,9 @@ func (h *Handler) RejectMembershipRequest(w http.ResponseWriter, r *http.Request
 
 func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email  string  `json:"email"`
-		TeamID *int    `json:"team_id"` // pointer so JSON null → SQL NULL (not 0)
-		Role   string  `json:"role"`
+		Email   string `json:"email"`
+		Role    string `json:"role"`
+		Comment string `json:"comment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -269,11 +248,15 @@ func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = "elternteil"
 	}
+	var commentVal interface{}
+	if req.Comment != "" {
+		commentVal = req.Comment
+	}
 	plain, tokenHash, _ := GenerateOpaqueToken()
 	expiry := InvitationExpiry()
 	if _, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at) VALUES (?,?,?,?,?)`,
-		req.Email, req.TeamID, req.Role, tokenHash, expiry,
+		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at, comment) VALUES (?,?,?,?,?,?)`,
+		req.Email, nil, req.Role, tokenHash, expiry, commentVal,
 	); err != nil {
 		log.Printf("DB ERROR (Invite for %s): %v", req.Email, err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -403,10 +386,10 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	searchFilter := ""
 	if search != "" {
-		searchFilter = ` WHERE u.name LIKE ? OR u.email LIKE ?`
+		searchFilter = ` WHERE name LIKE ? OR email LIKE ?`
 	}
 
-	countQuery := `SELECT COUNT(*) FROM users u` + searchFilter
+	countQuery := `SELECT COUNT(*) FROM users` + searchFilter
 	var total int
 	if search != "" {
 		err := h.db.QueryRowContext(r.Context(), countQuery, "%"+search+"%", "%"+search+"%").Scan(&total)
@@ -422,8 +405,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := `SELECT u.id, u.name, u.email, u.role, COALESCE(t.name, '') AS team_name
-	 FROM users u LEFT JOIN teams t ON t.id = u.team_id` + searchFilter + ` ORDER BY u.name LIMIT ? OFFSET ?`
+	query := `SELECT id, name, email, role FROM users` + searchFilter + ` ORDER BY name LIMIT ? OFFSET ?`
 	var rows *sql.Rows
 	var err error
 	if search != "" {
@@ -437,16 +419,15 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type user struct {
-		ID       int    `json:"id"`
-		Name     string `json:"name"`
-		Email    string `json:"email"`
-		Role     string `json:"role"`
-		TeamName string `json:"team_name"`
+		ID    int    `json:"id"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
+		Role  string `json:"role"`
 	}
 	result := []user{}
 	for rows.Next() {
 		var u user
-		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.TeamName)
+		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role)
 		result = append(result, u)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -551,10 +532,10 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 // GET /api/admin/invitations
 func (h *Handler) ListInvitations(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT it.id, it.email, it.role, COALESCE(t.name,'') AS team_name, it.expires_at
-		 FROM invitation_tokens it LEFT JOIN teams t ON t.id = it.team_id
-		 WHERE it.used_at IS NULL AND it.expires_at > CURRENT_TIMESTAMP
-		 ORDER BY it.expires_at`)
+		`SELECT id, email, role, COALESCE(comment,''), expires_at
+		 FROM invitation_tokens
+		 WHERE used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+		 ORDER BY expires_at`)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -564,13 +545,13 @@ func (h *Handler) ListInvitations(w http.ResponseWriter, r *http.Request) {
 		ID        int    `json:"id"`
 		Email     string `json:"email"`
 		Role      string `json:"role"`
-		TeamName  string `json:"team_name"`
+		Comment   string `json:"comment,omitempty"`
 		ExpiresAt string `json:"expires_at"`
 	}
 	result := []invitation{}
 	for rows.Next() {
 		var inv invitation
-		rows.Scan(&inv.ID, &inv.Email, &inv.Role, &inv.TeamName, &inv.ExpiresAt)
+		rows.Scan(&inv.ID, &inv.Email, &inv.Role, &inv.Comment, &inv.ExpiresAt)
 		result = append(result, inv)
 	}
 	w.Header().Set("Content-Type", "application/json")
