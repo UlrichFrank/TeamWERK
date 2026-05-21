@@ -56,6 +56,7 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
 
   const handleIbanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    if (raw.length > 34) return
     const display = raw.match(/.{1,4}/g)?.join(' ') ?? raw
     setIbanDisplay(display)
     setIbanError('')
