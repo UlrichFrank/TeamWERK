@@ -27,7 +27,9 @@ init: ## Abhängigkeiten installieren (go mod tidy, pnpm install)
 
 dev: ## Backend (mit air Auto-Reload) + Vite Dev-Server lokal starten
 	@echo "Starting backend on :8080 (with auto-reload) and frontend dev server..."
-	@air &
+	@if command -v air > /dev/null 2>&1; then air & \
+	elif [ -x "$$(go env GOPATH)/bin/air" ]; then $$(go env GOPATH)/bin/air & \
+	else echo "air not found, using go run (no auto-reload)"; go run ./cmd/teamwerk & fi
 	@sleep 1
 	@cd web && pnpm dev
 
