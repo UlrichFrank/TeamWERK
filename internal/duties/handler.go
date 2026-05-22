@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 )
@@ -16,10 +17,15 @@ func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
 // GET /api/admin/duty-types
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
-	rows, _ := h.db.QueryContext(r.Context(),
+	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
 		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id
 		 FROM duty_types ORDER BY name`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ListTypes query error: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	defer rows.Close()
 	type dt struct {
 		ID                    int      `json:"id"`

@@ -155,6 +155,7 @@ func serve() {
 			r.Get("/api/admin/seasons", cfgH.ListSeasons)
 			r.Post("/api/admin/seasons", cfgH.CreateSeason)
 			r.Put("/api/admin/seasons/{id}/activate", cfgH.ActivateSeason)
+			r.Delete("/api/admin/seasons/{id}", cfgH.DeleteSeason)
 			r.Put("/api/admin/seasons/{id}/duty-targets", dutyH.SetSeasonTargets)
 			r.Get("/api/admin/teams", cfgH.ListTeams)
 			r.Post("/api/admin/teams", cfgH.CreateTeam)

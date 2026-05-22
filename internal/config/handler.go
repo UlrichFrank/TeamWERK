@@ -82,6 +82,26 @@ func (h *Handler) ActivateSeason(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// DELETE /api/admin/seasons/:id
+func (h *Handler) DeleteSeason(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	// Prevent deleting the active season
+	var isActive int
+	if err := h.db.QueryRowContext(r.Context(), `SELECT is_active FROM seasons WHERE id=?`, id).Scan(&isActive); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if isActive == 1 {
+		http.Error(w, "aktive Saison kann nicht gelöscht werden", http.StatusConflict)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(), `DELETE FROM seasons WHERE id=?`, id); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GET /api/admin/teams
 func (h *Handler) ListTeams(w http.ResponseWriter, r *http.Request) {
 	rows, _ := h.db.QueryContext(r.Context(), `SELECT id, name, age_class, gender, is_active FROM teams ORDER BY name`)

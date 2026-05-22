@@ -64,7 +64,7 @@ export default function AdminDutyTemplatesPage() {
       const r = await api.post('/admin/duty-templates', {
         name: newName.trim(),
         template_type: newType,
-        game_duration_minutes: 90,
+        game_duration_minutes: 60,
       })
       navigate(`/admin/dienstplan-vorlagen/${r.data.id}`)
     } catch {
