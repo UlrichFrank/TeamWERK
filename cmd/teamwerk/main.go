@@ -182,6 +182,7 @@ func serve() {
 			r.Post("/api/members/import", membH.Import)
 			r.Put("/api/admin/members/{id}/user", membH.LinkUser)
 			r.Get("/api/admin/members/{id}/parents", membH.GetMemberParents)
+			r.Post("/api/admin/users/{id}/create-member", membH.CreateMemberFromUser)
 			r.Post("/api/admin/family-links", membH.CreateFamilyLink)
 			r.Delete("/api/admin/family-links", membH.DeleteFamilyLink)
 			r.Get("/api/admin/duty-types", dutyH.ListTypes)

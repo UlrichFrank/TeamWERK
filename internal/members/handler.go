@@ -1278,6 +1278,51 @@ func (h *Handler) applyLinkUpdates(r *http.Request, memberID int, row []string, 
 	return notes
 }
 
+// POST /api/admin/users/{id}/create-member
+func (h *Handler) CreateMemberFromUser(w http.ResponseWriter, r *http.Request) {
+	userID := r.PathValue("id")
+
+	var userName string
+	err := h.db.QueryRowContext(r.Context(), `SELECT name FROM users WHERE id=?`, userID).Scan(&userName)
+	if err == sql.ErrNoRows {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var existingMemberID int
+	err = h.db.QueryRowContext(r.Context(), `SELECT id FROM members WHERE user_id=?`, userID).Scan(&existingMemberID)
+	if err == nil {
+		http.Error(w, "user already has a member record", http.StatusConflict)
+		return
+	}
+	if err != sql.ErrNoRows {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	firstName, lastName := userName, ""
+	if idx := strings.Index(userName, " "); idx >= 0 {
+		firstName = userName[:idx]
+		lastName = userName[idx+1:]
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO members (first_name, last_name, status, user_id) VALUES (?,?,?,?)`,
+		firstName, lastName, "aktiv", userID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	memberID, _ := res.LastInsertId()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]any{"member_id": memberID})
+}
+
 func parseOptionalInt(s string) (interface{}, bool) {
 	if s == "" {
 		return nil, false

@@ -5,7 +5,7 @@ import { usePagination } from '../lib/usePagination'
 import MobileCard from '../components/MobileCard'
 import Pagination from '../components/Pagination'
 
-interface User { id: number; name: string; email: string; role: string }
+interface User { id: number; name: string; email: string; role: string; member_id?: number | null }
 interface Invitation { id: number; email: string; role: string; comment: string; expires_at: string }
 interface MembershipRequest { id: number; name: string; email: string; comment: string; status: string; created_at: string }
 
@@ -22,6 +22,10 @@ export default function AdminUsersPage() {
   const { items: users, setSearch, total, currentPage, totalPages, goToPage } = usePagination<User>('/admin/users')
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [requests, setRequests] = useState<MembershipRequest[]>([])
+
+  const [createdMemberUserIds, setCreatedMemberUserIds] = useState<Set<number>>(new Set())
+  const [createMemberLoading, setCreateMemberLoading] = useState<Set<number>>(new Set())
+  const [createMemberErrors, setCreateMemberErrors] = useState<Map<number, string>>(new Map())
 
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -90,6 +94,19 @@ export default function AdminUsersPage() {
     if (!window.confirm(`Beitrittsanfrage von ${req.name} löschen?`)) return
     await api.delete(`/admin/membership-requests/${req.id}`)
     setRequests(prev => prev.filter(x => x.id !== req.id))
+  }
+
+  const handleCreateMember = async (u: User) => {
+    setCreateMemberLoading(prev => new Set(prev).add(u.id))
+    setCreateMemberErrors(prev => { const m = new Map(prev); m.delete(u.id); return m })
+    try {
+      await api.post(`/admin/users/${u.id}/create-member`)
+      setCreatedMemberUserIds(prev => new Set(prev).add(u.id))
+    } catch {
+      setCreateMemberErrors(prev => new Map(prev).set(u.id, 'Fehler beim Anlegen'))
+    } finally {
+      setCreateMemberLoading(prev => { const s = new Set(prev); s.delete(u.id); return s })
+    }
   }
 
   const handleRoleChange = async (u: User, newRole: string) => {
@@ -294,13 +311,27 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                   <td className="px-6 py-3 text-right">
-                    <button
-                      onClick={() => handleDeleteUser(u)}
-                      disabled={self?.id === u.id}
-                      className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Löschen
-                    </button>
+                    <div className="flex gap-1 justify-end items-center">
+                      {!u.member_id && !createdMemberUserIds.has(u.id) && (
+                        <button
+                          onClick={() => handleCreateMember(u)}
+                          disabled={createMemberLoading.has(u.id)}
+                          className="text-xs border border-brand-blue text-brand-blue px-3 py-1 rounded font-medium hover:bg-brand-blue hover:text-white transition-colors disabled:opacity-50"
+                        >
+                          {createMemberLoading.has(u.id) ? '…' : 'Mitglied anlegen'}
+                        </button>
+                      )}
+                      {createMemberErrors.get(u.id) && (
+                        <span className="text-xs text-red-500">{createMemberErrors.get(u.id)}</span>
+                      )}
+                      <button
+                        onClick={() => handleDeleteUser(u)}
+                        disabled={self?.id === u.id}
+                        className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        Löschen
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -326,6 +357,10 @@ export default function AdminUsersPage() {
               subtitle={u.email}
               badge={{ label: ROLE_LABELS[u.role], variant: 'blue' }}
               actions={[
+                ...(!u.member_id && !createdMemberUserIds.has(u.id) ? [{
+                  label: 'Mitglied anlegen',
+                  onClick: () => handleCreateMember(u),
+                }] : []),
                 ...(canEdit ? [{
                   label: 'Rolle ändern',
                   onClick: () => {

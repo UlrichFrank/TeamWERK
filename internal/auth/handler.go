@@ -386,10 +386,10 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	searchFilter := ""
 	if search != "" {
-		searchFilter = ` WHERE name LIKE ? OR email LIKE ?`
+		searchFilter = ` WHERE u.name LIKE ? OR u.email LIKE ?`
 	}
 
-	countQuery := `SELECT COUNT(*) FROM users` + searchFilter
+	countQuery := `SELECT COUNT(*) FROM users u` + searchFilter
 	var total int
 	if search != "" {
 		err := h.db.QueryRowContext(r.Context(), countQuery, "%"+search+"%", "%"+search+"%").Scan(&total)
@@ -405,7 +405,8 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := `SELECT id, name, email, role FROM users` + searchFilter + ` ORDER BY name LIMIT ? OFFSET ?`
+	query := `SELECT u.id, u.name, u.email, u.role, m.id
+		FROM users u LEFT JOIN members m ON m.user_id = u.id` + searchFilter + ` ORDER BY u.name LIMIT ? OFFSET ?`
 	var rows *sql.Rows
 	var err error
 	if search != "" {
@@ -419,15 +420,21 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type user struct {
-		ID    int    `json:"id"`
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		Role  string `json:"role"`
+		ID       int      `json:"id"`
+		Name     string   `json:"name"`
+		Email    string   `json:"email"`
+		Role     string   `json:"role"`
+		MemberID *int     `json:"member_id"`
 	}
 	result := []user{}
 	for rows.Next() {
 		var u user
-		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role)
+		var memberID sql.NullInt64
+		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &memberID)
+		if memberID.Valid {
+			id := int(memberID.Int64)
+			u.MemberID = &id
+		}
 		result = append(result, u)
 	}
 	w.Header().Set("Content-Type", "application/json")
