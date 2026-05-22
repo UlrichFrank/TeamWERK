@@ -11,9 +11,11 @@ CREATE TABLE game_teams (
     PRIMARY KEY (game_id, team_id)
 );
 
--- Migrate existing games.team_id to game_teams
+-- Migrate existing games.team_id to game_teams (only where team still exists)
 INSERT INTO game_teams (game_id, team_id)
-SELECT id, team_id FROM games WHERE team_id IS NOT NULL;
+SELECT g.id, g.team_id FROM games g
+INNER JOIN teams t ON t.id = g.team_id
+WHERE g.team_id IS NOT NULL;
 
 -- Rebuild games table without team_id
 CREATE TABLE games_new (
