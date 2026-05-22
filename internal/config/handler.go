@@ -125,6 +125,7 @@ func (h *Handler) ListTeams(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+
 // POST /api/admin/teams
 func (h *Handler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	var req struct {

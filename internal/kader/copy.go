@@ -75,19 +75,26 @@ func copyKader(ctx context.Context, db *sql.DB, fromSeasonID, toSeasonID, target
 
 	var created []createdKader
 	for _, a := range assignments {
+		teamID, err := ensureTeam(ctx, tx, a.AgeClass, a.Gender, 1)
+		if err != nil {
+			return nil, fmt.Errorf("ensure team %s/%s: %w", a.AgeClass, a.Gender, err)
+		}
 		// Insert kader for target season with team_number=1, dedicated_birth_year=NULL (mixed mode)
 		res, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO kader (season_id, age_class, gender, team_number) VALUES (?,?,?,1)`,
-			toSeasonID, a.AgeClass, a.Gender)
+			`INSERT OR IGNORE INTO kader (season_id, age_class, gender, team_number, team_id) VALUES (?,?,?,1,?)`,
+			toSeasonID, a.AgeClass, a.Gender, teamID)
 		if err != nil {
 			return nil, fmt.Errorf("insert kader %s/%s: %w", a.AgeClass, a.Gender, err)
 		}
 		newKaderID, _ := res.LastInsertId()
 		if newKaderID == 0 {
-			// Already exists — fetch its id
+			// Already exists — fetch its id and ensure team_id is set
 			tx.QueryRowContext(ctx,
 				`SELECT id FROM kader WHERE season_id=? AND age_class=? AND gender=? AND team_number=1`,
 				toSeasonID, a.AgeClass, a.Gender).Scan(&newKaderID)
+			tx.ExecContext(ctx,
+				`UPDATE kader SET team_id=? WHERE id=? AND team_id IS NULL`,
+				teamID, newKaderID)
 		}
 
 		memberCount := 0

@@ -13,7 +13,6 @@ import DutyBoardPage from './pages/DutyBoardPage'
 import DutyAccountsPage from './pages/DutyAccountsPage'
 import DutySlotsPage from './pages/DutySlotsPage'
 import AdminClubPage from './pages/AdminClubPage'
-import AdminTeamsPage from './pages/AdminTeamsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import MembershipRequestsPage from './pages/MembershipRequestsPage'
@@ -54,7 +53,6 @@ export default function App() {
             <Route path="dienste" element={<DutySlotsPage />} />
             <Route path="anfragen" element={<MembershipRequestsPage />} />
             <Route path="admin/verein" element={<AdminClubPage />} />
-            <Route path="admin/teams" element={<AdminTeamsPage />} />
             <Route path="admin/kader" element={<AdminKaderPage />} />
             <Route path="admin/nutzer" element={<AdminUsersPage />} />
             <Route path="admin/diensttypen" element={<AdminDutyTypesPage />} />

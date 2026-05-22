@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+
+	"github.com/teamstuttgart/teamwerk/internal/auth"
 )
 
 type Handler struct{ db *sql.DB }
@@ -143,10 +146,9 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
 
 	const base = `
-		SELECT g.id, g.date, g.time, g.opponent, g.team_id, t.name,
-		       COUNT(ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0)
+		SELECT g.id, g.date, g.time, g.opponent, g.event_type,
+		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0)
 		FROM games g
-		JOIN teams t ON t.id = g.team_id
 		LEFT JOIN duty_slots ds ON ds.game_id = g.id`
 	const suffix = ` GROUP BY g.id ORDER BY g.date, g.time`
 
@@ -166,23 +168,51 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	type team struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
 	type game struct {
 		ID          int    `json:"id"`
 		Date        string `json:"date"`
 		Time        string `json:"time"`
 		Opponent    string `json:"opponent"`
-		TeamID      int    `json:"team_id"`
-		TeamName    string `json:"team_name"`
+		EventType   string `json:"event_type"`
+		Teams       []team `json:"teams"`
 		SlotCount   int    `json:"slot_count"`
 		FilledCount int    `json:"filled_count"`
 		TotalCount  int    `json:"total_count"`
 	}
-	result := []game{}
+
+	var games []*game
 	for rows.Next() {
 		var g game
-		rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.TeamID, &g.TeamName,
-			&g.SlotCount, &g.FilledCount, &g.TotalCount)
-		result = append(result, g)
+		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType,
+			&g.SlotCount, &g.FilledCount, &g.TotalCount); err != nil {
+			continue
+		}
+		g.Teams = []team{}
+		games = append(games, &g)
+	}
+
+	for _, g := range games {
+		teamRows, _ := h.db.QueryContext(r.Context(),
+			`SELECT t.id, t.name FROM teams t
+			 JOIN game_teams gt ON gt.team_id = t.id
+			 WHERE gt.game_id = ?`, g.ID)
+		if teamRows != nil {
+			for teamRows.Next() {
+				var t team
+				teamRows.Scan(&t.ID, &t.Name)
+				g.Teams = append(g.Teams, t)
+			}
+			teamRows.Close()
+		}
+	}
+
+	result := make([]game, len(games))
+	for i, g := range games {
+		result[i] = *g
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
@@ -193,18 +223,21 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var g struct {
-		ID       int    `json:"id"`
-		Date     string `json:"date"`
-		Time     string `json:"time"`
-		Opponent string `json:"opponent"`
-		TeamID   int    `json:"team_id"`
-		TeamName string `json:"team_name"`
-		SeasonID int    `json:"season_id"`
+		ID        int    `json:"id"`
+		Date      string `json:"date"`
+		Time      string `json:"time"`
+		Opponent  string `json:"opponent"`
+		EventType string `json:"event_type"`
+		SeasonID  int    `json:"season_id"`
+		Teams     []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"teams"`
 	}
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT g.id, g.date, g.time, g.opponent, g.team_id, t.name, g.season_id
-		 FROM games g JOIN teams t ON t.id = g.team_id WHERE g.id=?`, id).
-		Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.TeamID, &g.TeamName, &g.SeasonID)
+		`SELECT g.id, g.date, g.time, g.opponent, g.event_type, g.season_id
+		 FROM games g WHERE g.id=?`, id).
+		Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &g.SeasonID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -212,6 +245,22 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	teamRows, _ := h.db.QueryContext(r.Context(),
+		`SELECT t.id, t.name FROM teams t
+		 JOIN game_teams gt ON gt.team_id = t.id
+		 WHERE gt.game_id = ?`, id)
+	if teamRows != nil {
+		for teamRows.Next() {
+			var t struct {
+				ID   int    `json:"id"`
+				Name string `json:"name"`
+			}
+			teamRows.Scan(&t.ID, &t.Name)
+			g.Teams = append(g.Teams, t)
+		}
+		teamRows.Close()
 	}
 
 	rows, _ := h.db.QueryContext(r.Context(),
@@ -243,31 +292,60 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/games
 func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Date     string `json:"date"`
-		Time     string `json:"time"`
-		Opponent string `json:"opponent"`
-		TeamID   int    `json:"team_id"`
-		SeasonID int    `json:"season_id"`
-		IsHome   *bool  `json:"is_home"`
-		Slots    []struct {
+		Date       string `json:"date"`
+		Time       string `json:"time"`
+		Opponent   string `json:"opponent"`
+		TeamIDs    []int  `json:"team_ids"`
+		EventType  string `json:"event_type"`
+		SeasonID   int    `json:"season_id"`
+		TemplateID *int   `json:"template_id"`
+		Slots      []struct {
 			DutyTypeID int    `json:"duty_type_id"`
 			EventTime  string `json:"event_time"`
 			SlotsCount int    `json:"slots_count"`
 			RoleDesc   string `json:"role_desc"`
 		} `json:"slots"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Date == "" || req.TeamID == 0 {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Date == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+
+	if len(req.TeamIDs) == 0 {
+		http.Error(w, "team_ids required", http.StatusBadRequest)
+		return
+	}
+
+	if req.EventType != "heim" && req.EventType != "auswärts" && req.EventType != "generisch" {
+		http.Error(w, "invalid event_type", http.StatusBadRequest)
+		return
+	}
+
 	if req.SeasonID == 0 {
 		h.db.QueryRowContext(r.Context(),
 			`SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&req.SeasonID)
 	}
-	isHome := true
-	if req.IsHome != nil {
-		isHome = *req.IsHome
+
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims != nil && claims.Role == "trainer" {
+		placeholders := strings.Repeat("?,", len(req.TeamIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+		args := append([]any{claims.UserID}, toAny(req.TeamIDs)...)
+		var count int
+		err := h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(DISTINCT k.team_id) FROM kader k
+			 JOIN kader_trainers kt ON kt.kader_id = k.id
+			 JOIN members m ON m.id = kt.member_id
+			 WHERE m.user_id = ? AND k.team_id IN (`+placeholders+`)
+			   AND k.season_id = (SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`,
+			args...).Scan(&count)
+		if err == nil && count != len(req.TeamIDs) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 	}
+
+	isHome := req.EventType == "heim"
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -277,33 +355,46 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO games (team_id, season_id, opponent, date, time, is_home) VALUES (?,?,?,?,?,?)`,
-		req.TeamID, req.SeasonID, req.Opponent, req.Date, req.Time, isHome)
+		`INSERT INTO games (season_id, opponent, date, time, is_home, event_type) VALUES (?,?,?,?,?,?)`,
+		req.SeasonID, req.Opponent, req.Date, req.Time, isHome, req.EventType)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	gameID, _ := res.LastInsertId()
 
-	eventName := "Heimspiel"
-	if !isHome {
-		eventName = "Auswärtsspiel"
+	for _, teamID := range req.TeamIDs {
+		tx.ExecContext(r.Context(),
+			`INSERT INTO game_teams (game_id, team_id) VALUES (?,?)`, gameID, teamID)
 	}
-	if req.Opponent != "" {
+
+	eventName := ""
+	switch req.EventType {
+	case "heim":
+		eventName = "Heimspiel"
+	case "auswärts":
+		eventName = "Auswärtsspiel"
+	case "generisch":
+		eventName = req.Opponent
+	}
+	if req.EventType != "generisch" && req.Opponent != "" {
 		eventName += " vs. " + req.Opponent
 	}
+
 	for _, s := range req.Slots {
 		n := s.SlotsCount
 		if n <= 0 {
 			n = 1
 		}
-		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-			 VALUES (?,?,?,?,?,?,?,?,?)`,
-			eventName, req.Date, s.EventTime, s.DutyTypeID, s.RoleDesc, n, req.TeamID, req.SeasonID, gameID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
+		for _, teamID := range req.TeamIDs {
+			_, err = tx.ExecContext(r.Context(),
+				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
+				 VALUES (?,?,?,?,?,?,?,?,?)`,
+				eventName, req.Date, s.EventTime, s.DutyTypeID, s.RoleDesc, n, teamID, req.SeasonID, gameID)
+			if err != nil {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 
@@ -316,6 +407,14 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"id": gameID})
 }
 
+func toAny(teamIDs []int) []any {
+	result := make([]any, len(teamIDs))
+	for i, id := range teamIDs {
+		result[i] = id
+	}
+	return result
+}
+
 // PUT /api/admin/games/{id}
 func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -323,9 +422,18 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		Date     string `json:"date"`
 		Time     string `json:"time"`
 		Opponent string `json:"opponent"`
+		TeamIDs  []int  `json:"team_ids"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	res, err := h.db.ExecContext(r.Context(),
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(r.Context(),
 		`UPDATE games SET date=?, time=?, opponent=? WHERE id=?`,
 		req.Date, req.Time, req.Opponent, id)
 	if err != nil {
@@ -335,6 +443,19 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if len(req.TeamIDs) > 0 {
+		tx.ExecContext(r.Context(), `DELETE FROM game_teams WHERE game_id=?`, id)
+		for _, teamID := range req.TeamIDs {
+			tx.ExecContext(r.Context(),
+				`INSERT INTO game_teams (game_id, team_id) VALUES (?,?)`, id, teamID)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -354,6 +475,59 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/teams — filtered by user role
+func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	type team struct {
+		ID       int    `json:"id"`
+		Name     string `json:"name"`
+		AgeClass string `json:"age_class"`
+		Gender   string `json:"gender"`
+		IsActive bool   `json:"is_active"`
+	}
+
+	const activeSeasonSub = `(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
+
+	var rows *sql.Rows
+	var err error
+	if claims.Role == "trainer" {
+		rows, err = h.db.QueryContext(r.Context(),
+			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
+			 FROM teams t
+			 JOIN kader k ON k.team_id = t.id
+			 JOIN kader_trainers kt ON kt.kader_id = k.id
+			 JOIN members m ON m.id = kt.member_id
+			 WHERE k.season_id = `+activeSeasonSub+` AND m.user_id = ?
+			 ORDER BY t.name`, claims.UserID)
+	} else {
+		rows, err = h.db.QueryContext(r.Context(),
+			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
+			 FROM teams t
+			 JOIN kader k ON k.team_id = t.id
+			 WHERE k.season_id = `+activeSeasonSub+`
+			 ORDER BY t.name`)
+	}
+
+	result := []team{}
+	if err == nil && rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var t team
+			var active int
+			rows.Scan(&t.ID, &t.Name, &t.AgeClass, &t.Gender, &active)
+			t.IsActive = active == 1
+			result = append(result, t)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // ── Duty Templates ───────────────────────────────────────────────────────────
@@ -664,15 +838,14 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var game struct {
-		TeamID   int
 		SeasonID int
 		Date     string
 		Opponent string
 		IsHome   bool
 	}
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id, date, opponent, is_home FROM games WHERE id=?`, gameID).
-		Scan(&game.TeamID, &game.SeasonID, &game.Date, &game.Opponent, &game.IsHome)
+		`SELECT season_id, date, opponent, is_home FROM games WHERE id=?`, gameID).
+		Scan(&game.SeasonID, &game.Date, &game.Opponent, &game.IsHome)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -680,6 +853,21 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	teamRows, err := h.db.QueryContext(r.Context(),
+		`SELECT team_id FROM game_teams WHERE game_id=?`, gameID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer teamRows.Close()
+
+	var teamIDs []int
+	for teamRows.Next() {
+		var tid int
+		teamRows.Scan(&tid)
+		teamIDs = append(teamIDs, tid)
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -734,13 +922,15 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-			 VALUES (?,?,?,?,?,?,?,?,?)`,
-			eventName, game.Date, s.EventTime, dutyTypeID, s.RoleDesc, n, game.TeamID, game.SeasonID, gameID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
+		for _, teamID := range teamIDs {
+			_, err = tx.ExecContext(r.Context(),
+				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
+				 VALUES (?,?,?,?,?,?,?,?,?)`,
+				eventName, game.Date, s.EventTime, dutyTypeID, s.RoleDesc, n, teamID, game.SeasonID, gameID)
+			if err != nil {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 

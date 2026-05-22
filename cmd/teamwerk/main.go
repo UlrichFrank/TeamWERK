@@ -38,7 +38,11 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		runMigrate()
+		if len(os.Args) > 2 && os.Args[2] == "force" {
+			runMigrateForce()
+		} else {
+			runMigrate()
+		}
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "create-admin" {
@@ -125,12 +129,12 @@ func serve() {
 		r.Get("/api/duty-slots", dutyH.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", dutyH.ListAssignments)
 
-		// Games (admin + trainer)
-		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireRole("admin", "trainer"))
-			r.Get("/api/games", gameH.ListGames)
-			r.Get("/api/games/{id}", gameH.GetGame)
-		})
+		// Games
+		r.Get("/api/games", gameH.ListGames)
+		r.Get("/api/games/{id}", gameH.GetGame)
+
+		// Teams (filtered by user role)
+		r.Get("/api/teams", gameH.ListTeamsForUser)
 
 		// Admin + Trainer
 		r.Group(func(r chi.Router) {
@@ -145,6 +149,15 @@ func serve() {
 			r.Post("/api/admin/membership-requests/{id}/reject", authH.RejectMembershipRequest)
 			r.Delete("/api/admin/membership-requests/{id}", authH.DeleteMembershipRequest)
 			r.Post("/api/auth/invite", authH.Invite)
+		})
+
+		// Admin + Vorstand + Trainer
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireRole("admin", "vorstand", "trainer"))
+			r.Post("/api/admin/games", gameH.CreateGame)
+			r.Put("/api/admin/games/{id}", gameH.UpdateGame)
+			r.Delete("/api/admin/games/{id}", gameH.DeleteGame)
+			r.Post("/api/admin/games/{id}/regenerate", gameH.RegenerateSlots)
 		})
 
 		// Admin + Vorstand
@@ -176,10 +189,6 @@ func serve() {
 			r.Put("/api/admin/duty-types/{id}", dutyH.UpdateType)
 			r.Delete("/api/admin/duty-types/{id}", dutyH.DeleteType)
 			r.Get("/api/admin/duty-accounts/export", dutyH.ExportAccounts)
-			r.Post("/api/admin/games", gameH.CreateGame)
-			r.Put("/api/admin/games/{id}", gameH.UpdateGame)
-			r.Delete("/api/admin/games/{id}", gameH.DeleteGame)
-			r.Post("/api/admin/games/{id}/regenerate", gameH.RegenerateSlots)
 			r.Get("/api/admin/duty-templates", gameH.ListTemplates)
 			r.Post("/api/admin/duty-templates", gameH.CreateTemplate)
 			r.Get("/api/admin/duty-templates/{id}", gameH.GetTemplateByID)
@@ -254,6 +263,29 @@ func runScheduler() {
 	}
 	defer database.Close()
 	scheduler.New(database).Run()
+}
+
+func runMigrateForce() {
+	_ = godotenv.Load()
+	dbPath := getEnvOrDefault("DB_PATH", "./teamwerk.db")
+	var version int
+	for i, arg := range os.Args {
+		if arg == "--db" && i+1 < len(os.Args) {
+			dbPath = os.Args[i+1]
+		}
+		if arg == "force" && i+1 < len(os.Args) {
+			fmt.Sscan(os.Args[i+1], &version)
+		}
+	}
+	database, err := db.Open(dbPath)
+	if err != nil {
+		log.Fatalf("migrate force: open db: %v", err)
+	}
+	defer database.Close()
+	if err := db.MigrateForce(database, db.MigrationsFS, version); err != nil {
+		log.Fatalf("migrate force: %v", err)
+	}
+	log.Printf("forced migration version to %d", version)
 }
 
 func runMigrate() {

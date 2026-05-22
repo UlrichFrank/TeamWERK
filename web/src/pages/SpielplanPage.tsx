@@ -8,8 +8,8 @@ interface Game {
   date: string
   time: string
   opponent: string
-  team_id: number
-  team_name: string
+  teams: Array<{ id: number; name: string }>
+  event_type: string
   slot_count: number
   filled_count: number
   total_count: number
@@ -54,15 +54,18 @@ export default function SpielplanPage() {
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Create dialog
+  // Wizard dialog
   const [showCreate, setShowCreate] = useState(false)
-  const [newDate, setNewDate] = useState('')
-  const [newTime, setNewTime] = useState('15:00')
-  const [newOpponent, setNewOpponent] = useState('')
-  const [newTeamId, setNewTeamId] = useState<number | ''>('')
+  const [wizardStep, setWizardStep] = useState(1)
+  const [eventType, setEventType] = useState<'heim' | 'auswärts' | 'generisch' | ''>('')
+  const [selectedDate, setSelectedDate] = useState('')
+  const [selectedTime, setSelectedTime] = useState('15:00')
+  const [selectedOpponent, setSelectedOpponent] = useState('')
+  const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
+  const [templates, setTemplates] = useState<any[]>([])
   const [preview, setPreview] = useState<SlotPreview[]>([])
-  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
-  const [showPreview, setShowPreview] = useState(false)
+  const [selectedSlotIndices, setSelectedSlotIndices] = useState<Set<number>>(new Set())
   const [previewLoading, setPreviewLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -70,7 +73,7 @@ export default function SpielplanPage() {
   const loadGames = () => api.get('/games').then(r => setGames(r.data ?? []))
 
   useEffect(() => {
-    Promise.all([loadGames(), api.get('/admin/teams').then(r => setTeams(r.data ?? []))]).finally(() => setLoading(false))
+    Promise.all([loadGames(), api.get('/teams').then(r => setTeams(r.data ?? []))]).finally(() => setLoading(false))
   }, [])
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
@@ -98,10 +101,11 @@ export default function SpielplanPage() {
     setCreateError(null)
     try {
       await api.post('/admin/games', {
-        date: newDate,
-        time: newTime,
-        opponent: newOpponent,
-        team_id: newTeamId,
+        date: selectedDate,
+        time: selectedTime,
+        opponent: selectedOpponent,
+        team_ids: selectedTeamIds,
+        event_type: eventType,
         slots: slots.map(s => ({
           duty_type_id: s.duty_type_id,
           event_time: s.event_time,
@@ -112,37 +116,41 @@ export default function SpielplanPage() {
       await loadGames()
       closeDialog()
     } catch {
-      setCreateError('Spiel konnte nicht angelegt werden. Ist eine aktive Saison vorhanden?')
+      setCreateError('Event konnte nicht angelegt werden. Ist eine aktive Saison vorhanden?')
     } finally {
       setCreating(false)
     }
   }
 
+  const loadTemplates = async () => {
+    try {
+      const r = await api.get('/admin/duty-templates')
+      setTemplates(r.data ?? [])
+    } catch {
+      setTemplates([])
+    }
+  }
+
   const handleFetchPreview = async () => {
-    if (!newDate || !newTeamId) return
+    if (!selectedTemplate || !selectedDate || selectedTeamIds.length === 0) return
     setPreviewLoading(true)
     try {
-      const r = await api.get(`/admin/game-template/preview?date=${newDate}&time=${newTime}`)
+      const r = await api.get(`/admin/duty-templates/${selectedTemplate}/preview?time=${selectedTime}`)
       const slots: SlotPreview[] = r.data ?? []
-      if (slots.length === 0) {
-        // No template configured — create directly without slots (per spec)
-        await doCreateGame([])
-      } else {
-        setPreview(slots)
-        setSelectedIndices(new Set(slots.map((_, i) => i)))
-        setShowPreview(true)
-      }
+      setPreview(slots)
+      setSelectedSlotIndices(new Set(slots.map((_, i) => i)))
+      setWizardStep(4)
     } catch {
       setPreview([])
-      setSelectedIndices(new Set())
-      setShowPreview(true)
+      setSelectedSlotIndices(new Set())
+      setWizardStep(4)
     } finally {
       setPreviewLoading(false)
     }
   }
 
   const toggleSlot = (i: number) => {
-    setSelectedIndices(prev => {
+    setSelectedSlotIndices(prev => {
       const next = new Set(prev)
       next.has(i) ? next.delete(i) : next.add(i)
       return next
@@ -151,13 +159,15 @@ export default function SpielplanPage() {
 
   const closeDialog = () => {
     setShowCreate(false)
-    setShowPreview(false)
-    setNewDate('')
-    setNewTime('15:00')
-    setNewOpponent('')
-    setNewTeamId('')
+    setWizardStep(1)
+    setEventType('')
+    setSelectedDate('')
+    setSelectedTime('15:00')
+    setSelectedOpponent('')
+    setSelectedTeamIds([])
+    setSelectedTemplate(null)
     setPreview([])
-    setSelectedIndices(new Set())
+    setSelectedSlotIndices(new Set())
     setCreateError(null)
   }
 
@@ -165,12 +175,12 @@ export default function SpielplanPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Spielplan</h1>
-        {user?.role === 'admin' && (
+        {user && ['admin', 'vorstand', 'trainer'].includes(user.role) && (
           <button
             onClick={() => setShowCreate(true)}
             className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
           >
-            + Heimspiel anlegen
+            + Event anlegen
           </button>
         )}
       </div>
@@ -209,7 +219,7 @@ export default function SpielplanPage() {
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${trafficColor(g.filled_count, g.total_count, g.slot_count)}`} />
-                      <span className="font-semibold truncate">{g.team_name}</span>
+                      <span className="font-semibold truncate">{g.teams.map(t => t.name).join(', ')}</span>
                     </div>
                     <div className="truncate text-gray-500 leading-tight">vs. {g.opponent || '–'}</div>
                     <div className="text-gray-400 leading-tight">{g.time}</div>
@@ -225,86 +235,197 @@ export default function SpielplanPage() {
         <p className="text-gray-400 text-center mt-10 text-sm">Keine Heimspiele in diesem Monat</p>
       )}
 
-      {/* Create dialog */}
+      {/* Event Wizard Dialog */}
       {showCreate && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-lg font-bold mb-4">Heimspiel anlegen</h2>
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            {wizardStep === 1 && (
+              <div>
+                <h2 className="text-lg font-bold mb-6">Welche Art von Event?</h2>
+                <div className="space-y-3">
+                  {['heim', 'auswärts', 'generisch'].map(type => (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        setEventType(type as 'heim' | 'auswärts' | 'generisch')
+                        setWizardStep(2)
+                      }}
+                      className="w-full p-4 border-2 rounded-lg text-left hover:bg-gray-50 hover:border-brand-yellow transition-colors"
+                    >
+                      <div className="font-semibold">
+                        {type === 'heim' && '⚽ Heimspiel'}
+                        {type === 'auswärts' && '✈️ Auswärtsspiel'}
+                        {type === 'generisch' && '📋 Sonstiges Event'}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {type === 'heim' && 'Heimspiel gegen eine Mannschaft'}
+                        {type === 'auswärts' && 'Auswärtsspiel gegen eine Mannschaft'}
+                        {type === 'generisch' && 'Event für mehrere Mannschaften'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <button onClick={closeDialog} className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                </div>
+              </div>
+            )}
 
-            {!showPreview ? (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Datum *</label>
-                  <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-                    className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+            {wizardStep === 2 && (
+              <div>
+                <h2 className="text-lg font-bold mb-4">Event-Details</h2>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Datum *</label>
+                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                      className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Anstoßzeit</label>
+                    <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)}
+                      className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                  </div>
+                  {eventType !== 'generisch' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Gegner *</label>
+                      <input type="text" value={selectedOpponent} onChange={e => setSelectedOpponent(e.target.value)}
+                        placeholder="Name des Gegners" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                    </div>
+                  )}
+                  {eventType === 'generisch' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Event-Name *</label>
+                      <input type="text" value={selectedOpponent} onChange={e => setSelectedOpponent(e.target.value)}
+                        placeholder="Name des Events" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      {eventType === 'generisch' ? 'Mannschaften *' : 'Mannschaft *'}
+                    </label>
+                    {eventType === 'generisch' ? (
+                      <div className="space-y-2">
+                        {teams.filter(t => t.is_active).map(t => (
+                          <label key={t.id} className="flex items-center gap-2">
+                            <input type="checkbox" checked={selectedTeamIds.includes(t.id)}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setSelectedTeamIds([...selectedTeamIds, t.id])
+                                } else {
+                                  setSelectedTeamIds(selectedTeamIds.filter(id => id !== t.id))
+                                }
+                              }} className="rounded" />
+                            <span className="text-sm">{t.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <select value={selectedTeamIds[0] ?? ''} onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
+                        className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow">
+                        <option value="">Auswählen…</option>
+                        {teams.filter(t => t.is_active).map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  {createError && <p className="text-brand-error text-sm">{createError}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Anstoßzeit</label>
-                  <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)}
-                    className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Gegner</label>
-                  <input type="text" value={newOpponent} onChange={e => setNewOpponent(e.target.value)}
-                    placeholder="Name des Gegners" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Mannschaft *</label>
-                  <select value={newTeamId} onChange={e => setNewTeamId(Number(e.target.value))}
-                    className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow">
-                    <option value="">Auswählen…</option>
-                    {teams.filter(t => t.is_active).map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {createError && (
-                  <p className="text-brand-error text-sm mt-2">{createError}</p>
-                )}
-                <div className="flex gap-2 pt-2">
-                  <button onClick={closeDialog}
-                    className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                <div className="flex gap-2 pt-4">
+                  <button onClick={() => setWizardStep(1)} className="border rounded-md px-4 py-2 text-sm hover:bg-gray-50">← Zurück</button>
                   <button
-                    onClick={handleFetchPreview}
-                    disabled={!newDate || !newTeamId || previewLoading || creating}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    onClick={() => {
+                      if (selectedDate && selectedTeamIds.length > 0) {
+                        loadTemplates().then(() => setWizardStep(3))
+                      }
+                    }}
+                    disabled={!selectedDate || selectedTeamIds.length === 0}
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                  >Weiter →</button>
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 3 && (
+              <div>
+                <h2 className="text-lg font-bold mb-4">Dienstplan-Vorlage</h2>
+                {(() => {
+                  const filteredTemplates = templates.filter(t => t.template_type === eventType)
+                  return filteredTemplates.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-gray-500">Keine passende Vorlage — Event wird ohne Dienste angelegt.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 mb-4">
+                      {filteredTemplates.map(t => (
+                        <label key={t.id} className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                          <input type="radio" name="template" checked={selectedTemplate === t.id}
+                            onChange={() => setSelectedTemplate(t.id)} className="rounded-full" />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{t.name}</div>
+                            <div className="text-xs text-gray-500">{t.game_duration_minutes} Min</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )
+                })()}
+                <div className="flex gap-2 pt-4">
+                  <button onClick={() => setWizardStep(2)} className="border rounded-md px-4 py-2 text-sm hover:bg-gray-50">← Zurück</button>
+                  <button
+                    onClick={() => {
+                      const filteredTemplates = templates.filter(t => t.template_type === eventType)
+                      if (selectedTemplate) {
+                        handleFetchPreview()
+                      } else if (filteredTemplates.length === 0) {
+                        setWizardStep(4)
+                      }
+                    }}
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    disabled={previewLoading || creating}
                   >
                     {previewLoading || creating ? 'Laden…' : 'Weiter →'}
                   </button>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {wizardStep === 4 && (
               <div>
-                <p className="text-sm text-gray-500 mb-3">
-                  Dienste, die automatisch angelegt werden ({selectedIndices.size} ausgewählt):
-                </p>
-                <div className="space-y-1.5 mb-4 max-h-56 overflow-y-auto">
-                  {preview.map((s, i) => (
-                    <label key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <input type="checkbox" checked={selectedIndices.has(i)} onChange={() => toggleSlot(i)}
-                        className="rounded" />
-                      <span className="font-mono text-sm font-semibold w-12">{s.event_time}</span>
-                      <span className="text-sm flex-1">{s.duty_type_name}</span>
-                      {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
-                      <span className="text-xs text-gray-400 ml-auto">{s.slots_count}×</span>
-                    </label>
-                  ))}
-                </div>
-                {createError && (
-                  <p className="text-brand-error text-sm mb-3">{createError}</p>
+                <h2 className="text-lg font-bold mb-4">Dienste bestätigen</h2>
+                {preview.length === 0 ? (
+                  <p className="text-sm text-gray-500 mb-4">Keine Dienste vorhanden.</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-500 mb-3">
+                      Dienste ({selectedSlotIndices.size} ausgewählt):
+                    </p>
+                    <div className="space-y-1.5 mb-4 max-h-56 overflow-y-auto">
+                      {preview.map((s, i) => (
+                        <label key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                          <input type="checkbox" checked={selectedSlotIndices.has(i)} onChange={() => toggleSlot(i)}
+                            className="rounded" />
+                          <span className="font-mono text-sm font-semibold w-12">{s.event_time}</span>
+                          <span className="text-sm flex-1">{s.duty_type_name}</span>
+                          {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
+                          <span className="text-xs text-gray-400 ml-auto">{s.slots_count}×</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
                 )}
-                <div className="flex gap-2">
-                  <button onClick={() => setShowPreview(false)}
-                    className="border rounded-md px-3 py-2 text-sm hover:bg-gray-50">← Zurück</button>
+                {createError && <p className="text-brand-error text-sm mb-3">{createError}</p>}
+                <div className="flex gap-2 pt-2">
+                  <button onClick={() => setWizardStep(3)} className="border rounded-md px-3 py-2 text-sm hover:bg-gray-50">← Zurück</button>
                   <button
                     onClick={() => doCreateGame([])}
                     disabled={creating}
                     className="border rounded-md px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >Ohne Dienste</button>
                   <button
-                    onClick={() => doCreateGame(preview.filter((_, i) => selectedIndices.has(i)))}
+                    onClick={() => doCreateGame(preview.filter((_, i) => selectedSlotIndices.has(i)))}
                     disabled={creating}
-                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Bestätigen'}
                   </button>

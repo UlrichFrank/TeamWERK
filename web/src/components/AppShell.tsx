@@ -19,7 +19,7 @@ const navModules: NavModule[] = [
   {
     label: 'Dienste',
     items: [
-      { to: '/spielplan', label: 'Spielplan', roles: ['admin', 'vorstand', 'trainer'] },
+      { to: '/spielplan', label: 'Spielplan', roles: [] },
       { to: '/dienstboerse', label: 'Dienstbörse', roles: ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] },
       { to: '/dienstkonten', label: 'Dienstkonten', roles: ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] },
       { to: '/dienste', label: 'Dienst-Planung', roles: ['admin', 'vorstand', 'trainer'] },
@@ -86,7 +86,7 @@ export default function AppShell() {
       </div>
       <nav className="flex-1 py-4">
         {navModules.map(mod => {
-          const visibleItems = mod.items.filter(item => user && item.roles.includes(user.role))
+          const visibleItems = mod.items.filter(item => user && (item.roles.length === 0 || item.roles.includes(user.role)))
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))
           const isOpen = openModules[mod.label]

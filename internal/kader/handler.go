@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +13,40 @@ import (
 type Handler struct{ db *sql.DB }
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+
+type dbq interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func teamLabel(ageClass, gender string, teamNumber int) string {
+	g := map[string]string{"m": "männlich", "f": "weiblich", "mixed": "gemischt"}
+	name := ageClass + " " + g[gender]
+	if teamNumber > 1 {
+		name += " " + fmt.Sprintf("%d", teamNumber)
+	}
+	return name
+}
+
+// ensureTeam returns the id of the team matching ageClass/gender/teamNumber,
+// creating it if it doesn't exist yet.
+func ensureTeam(ctx context.Context, db dbq, ageClass, gender string, teamNumber int) (int64, error) {
+	name := teamLabel(ageClass, gender, teamNumber)
+	var id int64
+	err := db.QueryRowContext(ctx,
+		`SELECT id FROM teams WHERE name=? AND age_class=? AND gender=? LIMIT 1`,
+		name, ageClass, gender).Scan(&id)
+	if err == sql.ErrNoRows {
+		res, err := db.ExecContext(ctx,
+			`INSERT INTO teams (name, age_class, gender, is_active) VALUES (?,?,?,1)`,
+			name, ageClass, gender)
+		if err != nil {
+			return 0, err
+		}
+		return res.LastInsertId()
+	}
+	return id, err
+}
 
 type kaderRow struct {
 	ID                 int    `json:"id"`
@@ -283,18 +318,27 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 		{"D-Jugend", "mixed"},
 	}
 	for _, s := range specs {
+		teamID, _ := ensureTeam(r.Context(), h.db, s.ageClass, s.gender, 1)
 		h.db.ExecContext(r.Context(),
-			`INSERT OR IGNORE INTO kader (season_id, age_class, gender, team_number) VALUES (?,?,?,1)`,
-			req.SeasonID, s.ageClass, s.gender)
+			`INSERT OR IGNORE INTO kader (season_id, age_class, gender, team_number, team_id) VALUES (?,?,?,1,?)`,
+			req.SeasonID, s.ageClass, s.gender, teamID)
+		h.db.ExecContext(r.Context(),
+			`UPDATE kader SET team_id=? WHERE season_id=? AND age_class=? AND gender=? AND team_number=1 AND team_id IS NULL`,
+			teamID, req.SeasonID, s.ageClass, s.gender)
 	}
 	w.WriteHeader(http.StatusCreated)
 }
 
 // createSingleKader inserts one kader entry and returns 201 with the new object, or 409 on conflict.
 func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seasonID int, ageClass, gender string, teamNumber int, dedicatedBirthYear *int) {
+	teamID, err := ensureTeam(r.Context(), h.db, ageClass, gender, teamNumber)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO kader (season_id, age_class, gender, team_number, dedicated_birth_year) VALUES (?,?,?,?,?)`,
-		seasonID, ageClass, gender, teamNumber, dedicatedBirthYear)
+		`INSERT INTO kader (season_id, age_class, gender, team_number, dedicated_birth_year, team_id) VALUES (?,?,?,?,?,?)`,
+		seasonID, ageClass, gender, teamNumber, dedicatedBirthYear, teamID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			http.Error(w, `{"error":"Kader existiert bereits"}`, http.StatusConflict)
