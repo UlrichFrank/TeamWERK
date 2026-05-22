@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -51,7 +51,8 @@ function ProgressBar({ filled, total }: { filled: number; total: number }) {
 export default function SpieltagDetailPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const navigate = useNavigate()
+  const canEdit = user?.role === 'admin' || user?.role === 'vorstand' || user?.role === 'trainer'
 
   const [game, setGame] = useState<GameDetail | null>(null)
   const [slots, setSlots] = useState<SlotDetail[]>([])
@@ -78,6 +79,10 @@ export default function SpieltagDetailPage() {
   const [deleteSlotId, setDeleteSlotId] = useState<number | null>(null)
   const [deleteSaving, setDeleteSaving] = useState(false)
 
+  // Delete game
+  const [showDeleteGame, setShowDeleteGame] = useState(false)
+  const [deletingGame, setDeletingGame] = useState(false)
+
   // Regenerate flow
   const [showRegen, setShowRegen] = useState(false)
   const [regenPreview, setRegenPreview] = useState<SlotPreview[]>([])
@@ -99,7 +104,7 @@ export default function SpieltagDetailPage() {
   useEffect(() => {
     Promise.all([
       loadGame(),
-      isAdmin ? api.get('/admin/duty-types').then(r => setDutyTypes(r.data ?? [])) : Promise.resolve(),
+      canEdit ? api.get('/admin/duty-types').then(r => setDutyTypes(r.data ?? [])) : Promise.resolve(),
     ]).finally(() => setLoading(false))
   }, [gameId])
 
@@ -163,6 +168,17 @@ export default function SpieltagDetailPage() {
       setDeleteSlotId(null)
     } finally {
       setDeleteSaving(false)
+    }
+  }
+
+  const handleDeleteGame = async () => {
+    if (!gameId) return
+    setDeletingGame(true)
+    try {
+      await api.delete(`/admin/games/${gameId}`)
+      navigate('/spielplan')
+    } finally {
+      setDeletingGame(false)
     }
   }
 
@@ -235,7 +251,7 @@ export default function SpieltagDetailPage() {
             <p className="text-gray-500 mt-1">{game.team_name}</p>
             <p className="text-gray-500 text-sm mt-1">{dateFormatted} · {game.time} Uhr</p>
           </div>
-          {isAdmin && (
+          {canEdit && (
             <div className="flex gap-2 flex-shrink-0">
               <button
                 onClick={handleOpenRegen}
@@ -243,6 +259,12 @@ export default function SpieltagDetailPage() {
                 className="text-sm border rounded-md px-3 py-1.5 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
               >
                 {regenLoading ? 'Laden…' : '↺ Dienste neu generieren'}
+              </button>
+              <button
+                onClick={() => setShowDeleteGame(true)}
+                className="text-sm border border-brand-error rounded-md px-3 py-1.5 hover:bg-red-50 text-brand-error disabled:opacity-50"
+              >
+                🗑 Event löschen
               </button>
             </div>
           )}
@@ -258,7 +280,7 @@ export default function SpieltagDetailPage() {
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-4">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="font-semibold">Dienste</h2>
-          {isAdmin && (
+          {canEdit && (
             <button
               onClick={() => setShowAddSlot(true)}
               className="text-sm bg-brand-yellow text-brand-black px-3 py-1.5 rounded-md font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
@@ -286,7 +308,7 @@ export default function SpieltagDetailPage() {
                     <ProgressBar filled={s.slots_filled} total={s.slots_total} />
                   </div>
                 </div>
-                {isAdmin && (
+                {canEdit && (
                   <div className="flex gap-1 flex-shrink-0">
                     <button
                       onClick={() => openEditSlot(s)}
@@ -433,6 +455,29 @@ export default function SpieltagDetailPage() {
               <button onClick={handleRegen} disabled={regenSaving}
                 className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                 {regenSaving ? 'Generieren…' : 'Bestätigen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete game confirmation */}
+      {showDeleteGame && (
+        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-bold mb-2">Event löschen?</h3>
+            <p className="text-sm text-gray-500 mb-1">
+              <strong>vs. {game.opponent || '(kein Gegner)'}</strong> ({dateFormatted})
+            </p>
+            <p className="text-sm text-gray-500 mb-5">
+              Dieses Event und alle zugehörigen Dienste werden endgültig gelöscht.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowDeleteGame(false)}
+                className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+              <button onClick={handleDeleteGame} disabled={deletingGame}
+                className="flex-1 bg-brand-error hover:bg-red-700 text-brand-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50">
+                {deletingGame ? 'Löschen…' : 'Endgültig löschen'}
               </button>
             </div>
           </div>
