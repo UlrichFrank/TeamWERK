@@ -12,10 +12,11 @@ interface MobileCardProps {
   subtitle?: string
   badge?: { label: string; variant?: 'yellow' | 'green' | 'red' | 'blue' }
   actions?: Action[]
+  onClick?: () => void
   children?: ReactNode
 }
 
-export default function MobileCard({ title, subtitle, badge, actions, children }: MobileCardProps) {
+export default function MobileCard({ title, subtitle, badge, actions, onClick, children }: MobileCardProps) {
   const badgeStyles = {
     yellow: 'bg-brand-yellow text-brand-black',
     green: 'bg-brand-green text-white',
@@ -24,7 +25,7 @@ export default function MobileCard({ title, subtitle, badge, actions, children }
   }
 
   return (
-    <div className="bg-white border border-brand-black/10 rounded p-4 mb-3">
+    <div className={`bg-white border border-brand-black/10 rounded p-4 mb-3${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="flex-1 min-w-0">
           <div className="font-medium text-brand-black">{title}</div>

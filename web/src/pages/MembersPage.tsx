@@ -58,6 +58,21 @@ export default function MembersPage() {
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members')
   const isAdmin = user?.role === 'admin'
 
+  const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
+
+  const handleDelete = async (m: Member) => {
+    if (!confirm(`Mitglied „${m.first_name} ${m.last_name}" wirklich löschen?`)) return
+    setDeletingIds(prev => new Set(prev).add(m.id))
+    try {
+      await api.delete(`/admin/members/${m.id}`)
+      refresh()
+    } catch {
+      alert('Löschen fehlgeschlagen.')
+    } finally {
+      setDeletingIds(prev => { const s = new Set(prev); s.delete(m.id); return s })
+    }
+  }
+
   const [showImport, setShowImport] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<'append' | 'update'>('append')
@@ -142,13 +157,24 @@ export default function MembersPage() {
       {/* Mobile: Cards */}
       <div className="sm:hidden space-y-0">
         {items.map(m => (
-          <Link key={m.id} to={`/mitglieder/${m.id}`} className="block">
+          isAdmin ? (
             <MobileCard
-              title={`${m.last_name}, ${m.first_name}${isAdmin && m.has_pending_drafts ? ' ⏳' : ''}`}
+              key={m.id}
+              title={`${m.last_name}, ${m.first_name}${m.has_pending_drafts ? ' ⏳' : ''}`}
               subtitle={m.position || '–'}
               badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
+              onClick={() => navigate(`/mitglieder/${m.id}`)}
+              actions={[{ label: deletingIds.has(m.id) ? '…' : 'Löschen', onClick: () => handleDelete(m), variant: 'danger' }]}
             />
-          </Link>
+          ) : (
+            <Link key={m.id} to={`/mitglieder/${m.id}`} className="block">
+              <MobileCard
+                title={`${m.last_name}, ${m.first_name}`}
+                subtitle={m.position || '–'}
+                badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
+              />
+            </Link>
+          )
         ))}
       </div>
 
@@ -162,6 +188,7 @@ export default function MembersPage() {
               <th className="px-4 py-3 text-left">Gesch.</th>
               <th className="px-4 py-3 text-left">Position</th>
               <th className="px-4 py-3 text-left">Status</th>
+              {isAdmin && <th className="px-4 py-3" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -178,6 +205,17 @@ export default function MembersPage() {
                     {m.status}
                   </span>
                 </td>
+                {isAdmin && (
+                  <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleDelete(m)}
+                      disabled={deletingIds.has(m.id)}
+                      className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                    >
+                      Löschen
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

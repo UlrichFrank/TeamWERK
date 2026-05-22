@@ -11,6 +11,7 @@ interface GameDetail {
   team_id: number
   team_name: string
   season_id: number
+  template_id?: number | null
 }
 
 interface SlotDetail {
@@ -33,6 +34,13 @@ interface SlotPreview {
   event_time: string
   slots_count: number
   role_desc: string
+}
+
+interface Template {
+  id: number
+  name: string
+  template_type: string
+  game_duration_minutes: number
 }
 
 function ProgressBar({ filled, total }: { filled: number; total: number }) {
@@ -83,12 +91,14 @@ export default function SpieltagDetailPage() {
   const [showDeleteGame, setShowDeleteGame] = useState(false)
   const [deletingGame, setDeletingGame] = useState(false)
 
-  // Regenerate flow
+  // Regenerate dialog
   const [showRegen, setShowRegen] = useState(false)
+  const [regenTemplates, setRegenTemplates] = useState<Template[]>([])
+  const [regenTemplateID, setRegenTemplateID] = useState<number | null>(null)
   const [regenPreview, setRegenPreview] = useState<SlotPreview[]>([])
-  const [regenSelectedIndices, setRegenSelectedIndices] = useState<Set<number>>(new Set())
-  const [regenLoading, setRegenLoading] = useState(false)
+  const [regenPreviewLoading, setRegenPreviewLoading] = useState(false)
   const [regenSaving, setRegenSaving] = useState(false)
+  const [regenError, setRegenError] = useState<string | null>(null)
   const [regenKeptSlots, setRegenKeptSlots] = useState<number | null>(null)
 
   const loadGame = async () => {
@@ -184,41 +194,61 @@ export default function SpieltagDetailPage() {
 
   const handleOpenRegen = async () => {
     if (!game) return
-    setRegenLoading(true)
+    setRegenError(null)
+    setRegenPreview([])
     setRegenKeptSlots(null)
+    const initialTemplateID = game.template_id ?? null
+    setRegenTemplateID(initialTemplateID)
     try {
-      const r = await api.get(`/admin/game-template/preview?date=${game.date.slice(0, 10)}&time=${game.time}&game_id=${gameId}`)
-      const p: SlotPreview[] = r.data ?? []
-      setRegenPreview(p)
-      setRegenSelectedIndices(new Set(p.map((_, i) => i)))
-      setShowRegen(true)
-    } finally {
-      setRegenLoading(false)
+      const r = await api.get('/admin/duty-templates')
+      setRegenTemplates(r.data ?? [])
+    } catch {
+      setRegenTemplates([])
+    }
+    setShowRegen(true)
+    if (initialTemplateID && game) {
+      fetchRegenPreview(initialTemplateID, game.time)
     }
   }
 
-  const toggleRegenSlot = (i: number) => {
-    setRegenSelectedIndices(prev => {
-      const next = new Set(prev)
-      next.has(i) ? next.delete(i) : next.add(i)
-      return next
-    })
+  const fetchRegenPreview = async (templateID: number, gameTime: string) => {
+    setRegenPreviewLoading(true)
+    setRegenError(null)
+    try {
+      const r = await api.get(`/admin/duty-templates/${templateID}/preview?time=${gameTime}&game_id=${gameId}`)
+      setRegenPreview(r.data ?? [])
+    } catch {
+      setRegenPreview([])
+      setRegenError('Vorschau konnte nicht geladen werden.')
+    } finally {
+      setRegenPreviewLoading(false)
+    }
+  }
+
+  const handleRegenTemplateChange = (templateID: number | null) => {
+    setRegenTemplateID(templateID)
+    setRegenPreview([])
+    setRegenError(null)
+    if (templateID && game) {
+      fetchRegenPreview(templateID, game.time)
+    }
   }
 
   const handleRegen = async () => {
+    if (!regenTemplateID) {
+      setRegenError('Bitte ein Template auswählen.')
+      return
+    }
     setRegenSaving(true)
+    setRegenError(null)
     try {
-      const r = await api.post(`/admin/games/${gameId}/regenerate`, {
-        slots: regenPreview.filter((_, i) => regenSelectedIndices.has(i)).map(s => ({
-          duty_type_id: s.duty_type_id,
-          event_time: s.event_time,
-          slots_count: s.slots_count,
-          role_desc: s.role_desc,
-        })),
-      })
+      const r = await api.post(`/admin/games/${gameId}/regenerate`, { template_id: regenTemplateID })
       await loadGame()
       setRegenKeptSlots(r.data.kept_slots)
       setShowRegen(false)
+    } catch (e: any) {
+      const msg = e?.response?.data || 'Regenerierung fehlgeschlagen.'
+      setRegenError(typeof msg === 'string' ? msg : 'Regenerierung fehlgeschlagen.')
     } finally {
       setRegenSaving(false)
     }
@@ -255,10 +285,9 @@ export default function SpieltagDetailPage() {
             <div className="flex gap-2 flex-shrink-0">
               <button
                 onClick={handleOpenRegen}
-                disabled={regenLoading}
-                className="text-sm border rounded-md px-3 py-1.5 hover:bg-gray-50 text-gray-600 disabled:opacity-50"
+                className="text-sm border rounded-md px-3 py-1.5 hover:bg-gray-50 text-gray-600"
               >
-                {regenLoading ? 'Laden…' : '↺ Dienste neu generieren'}
+                ↺ Dienste neu generieren
               </button>
               <button
                 onClick={() => setShowDeleteGame(true)}
@@ -425,36 +454,64 @@ export default function SpieltagDetailPage() {
       {/* Regenerate dialog */}
       {showRegen && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold mb-1">Dienste neu generieren</h3>
-            <p className="text-sm text-gray-500 mb-3">
-              Unbesetzte Dienste werden gelöscht und durch diese ersetzt:
+            <p className="text-sm text-gray-500 mb-4">
+              Unbesetzte Dienste werden gelöscht und durch die Vorlage ersetzt.
             </p>
-            {regenPreview.length === 0 ? (
-              <p className="text-sm text-gray-400 mb-4 italic">Kein Template konfiguriert.</p>
-            ) : (
-              <div className="space-y-1.5 mb-4 max-h-56 overflow-y-auto">
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Dienstplan-Vorlage *</label>
+              <select
+                value={regenTemplateID ?? ''}
+                onChange={e => handleRegenTemplateChange(e.target.value ? Number(e.target.value) : null)}
+                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              >
+                <option value="">Auswählen…</option>
+                {regenTemplates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.template_type}, {t.game_duration_minutes} Min)</option>
+                ))}
+              </select>
+            </div>
+
+            {regenPreviewLoading && (
+              <p className="text-sm text-gray-400 mb-4">Vorschau wird geladen…</p>
+            )}
+
+            {!regenPreviewLoading && regenTemplateID && regenPreview.length === 0 && !regenError && (
+              <p className="text-sm text-gray-400 mb-4 italic">Keine Dienste in dieser Vorlage.</p>
+            )}
+
+            {!regenPreviewLoading && regenPreview.length > 0 && (
+              <div className="space-y-1 mb-4 max-h-48 overflow-y-auto border rounded-lg p-2 bg-gray-50">
                 {regenPreview.map((s, i) => (
-                  <label key={i} className="flex items-center gap-2.5 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
-                    <input type="checkbox" checked={regenSelectedIndices.has(i)} onChange={() => toggleRegenSlot(i)}
-                      className="rounded" />
-                    <span className="font-mono text-sm font-semibold w-12">{s.event_time}</span>
-                    <span className="text-sm flex-1">{s.duty_type_name}</span>
+                  <div key={i} className="flex items-center gap-2.5 px-1 py-1 text-sm">
+                    <span className="font-mono font-semibold w-12 text-gray-700">{s.event_time}</span>
+                    <span className="flex-1">{s.duty_type_name}</span>
                     {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
                     <span className="text-xs text-gray-400 ml-auto">{s.slots_count}×</span>
-                  </label>
+                  </div>
                 ))}
               </div>
             )}
-            <div className="p-3 bg-brand-warning-light border border-brand-warning rounded-lg text-xs text-brand-warning mb-4">
+
+            {regenError && (
+              <p className="text-sm text-red-600 mb-3">{regenError}</p>
+            )}
+
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-700 mb-4">
               Bereits belegte Dienste werden nicht überschrieben.
             </div>
+
             <div className="flex gap-2">
               <button onClick={() => setShowRegen(false)}
                 className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
-              <button onClick={handleRegen} disabled={regenSaving}
-                className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
-                {regenSaving ? 'Generieren…' : 'Bestätigen'}
+              <button
+                onClick={handleRegen}
+                disabled={regenSaving || !regenTemplateID || regenPreviewLoading}
+                className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+              >
+                {regenSaving ? 'Generieren…' : 'Anwenden'}
               </button>
             </div>
           </div>

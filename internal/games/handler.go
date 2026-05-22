@@ -28,6 +28,60 @@ func addMinutes(t string, offset int) string {
 	return fmt.Sprintf("%02d:%02d", total/60, total%60)
 }
 
+// compareTime compares two time strings in HH:MM format (returns -1 if t1 < t2, 0 if equal, 1 if t1 > t2)
+func compareTime(t1, t2 string) int {
+	if len(t1) < 5 || len(t2) < 5 {
+		return 0
+	}
+	h1, m1 := timeComponents(t1)
+	h2, m2 := timeComponents(t2)
+	total1 := h1*60 + m1
+	total2 := h2*60 + m2
+	if total1 < total2 {
+		return -1
+	} else if total1 > total2 {
+		return 1
+	}
+	return 0
+}
+
+func timeComponents(t string) (h, m int) {
+	h, _ = strconv.Atoi(t[:2])
+	m, _ = strconv.Atoi(t[3:])
+	return
+}
+
+// classifySlotPosition determines if a slot is before, between, or after games on the same day.
+// Classification is based on the game's position in the day (first/last/middle) and whether
+// the slot falls before or after the game's kick-off time.
+// allGameTimes must be sorted ascending.
+func classifySlotPosition(slotTime string, gameTime string, allGameTimes []string) (
+	isBeforeAllGames, isAfterAllGames, isBetweenGames bool) {
+
+	if len(allGameTimes) <= 1 {
+		return false, false, false
+	}
+
+	isFirstGame := compareTime(gameTime, allGameTimes[0]) == 0
+	isLastGame := compareTime(gameTime, allGameTimes[len(allGameTimes)-1]) == 0
+
+	slotBeforeGame := compareTime(slotTime, gameTime) < 0
+	slotAfterGame := compareTime(slotTime, gameTime) > 0
+
+	switch {
+	case slotBeforeGame && isFirstGame:
+		isBeforeAllGames = true
+	case slotBeforeGame && !isFirstGame:
+		isBetweenGames = true
+	case slotAfterGame && isLastGame:
+		isAfterAllGames = true
+	case slotAfterGame && !isLastGame:
+		isBetweenGames = true
+	}
+
+	return isBeforeAllGames, isAfterAllGames, isBetweenGames
+}
+
 // findTemplateForGame returns the best-matching template for a game.
 // For home games: tries 'heim', falls back to 'generisch'.
 // For away games: tries 'auswärts', falls back to 'generisch'.
@@ -86,11 +140,19 @@ func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]temp
 
 // applyBehavior returns the effective dutyTypeID after applying same-day/adjacent-day rules,
 // or -1 if the slot should be skipped.
-func applyBehavior(it templateItemRow, isMultiGame, hasPrevDay, hasNextDay, isFirst, isLast bool) int {
+// slotTime: Uhrzeit des Dienstes (berechnet aus game time + offset)
+// gameTime: Uhrzeit des aktuellen Spiels
+// allGameTimes: Alle Spielzeiten am gleichen Tag (sortiert)
+// isBeforeAllGames: Liegt der Service vor allen Spielen des Tages?
+// isAfterAllGames: Liegt der Service nach allen Spielen des Tages?
+// isBetweenGames: Liegt der Service zwischen zwei Spielen am gleichen Tag?
+func applyBehavior(it templateItemRow, gameTime, slotTime string, allGameTimes []string,
+	hasPrevDay, hasNextDay, isBeforeAllGames, isAfterAllGames, isBetweenGames bool) int {
 	dutyTypeID := it.DutyTypeID
 	skip := false
 
-	if isMultiGame && it.SameDayBehavior != "normal" {
+	// Dienste zwischen zwei Spielen am gleichen Tag: same_day_behavior
+	if isBetweenGames && it.SameDayBehavior != "normal" {
 		if it.SameDayBehavior == "skip" {
 			skip = true
 		} else if it.SameDayBehavior == "reduced" && it.SameDayVariantID.Valid {
@@ -98,12 +160,14 @@ func applyBehavior(it templateItemRow, isMultiGame, hasPrevDay, hasNextDay, isFi
 		}
 	}
 
-	shouldApplyAdjacent := (isFirst && hasPrevDay) || (isLast && hasNextDay)
+	// Dienste am Anfang (vor allen Spielen) oder am Ende (nach allen Spielen): adjacent_day_behavior
+	shouldApplyAdjacent := (isBeforeAllGames && hasPrevDay) || (isAfterAllGames && hasNextDay)
 	if shouldApplyAdjacent && it.AdjacentDayBehavior != "normal" {
 		if it.AdjacentDayBehavior == "skip" {
 			skip = true
 		} else if it.AdjacentDayBehavior == "reduced" && it.AdjacentDayVariantID.Valid {
-			if !(it.SameDayBehavior == "reduced" && it.SameDayVariantID.Valid) {
+			// Nicht doppelt reduzieren, wenn schon same_day_behavior reduziert wurde
+			if !(isBetweenGames && it.SameDayBehavior == "reduced" && it.SameDayVariantID.Valid) {
 				dutyTypeID = int(it.AdjacentDayVariantID.Int64)
 			}
 		}
@@ -118,8 +182,9 @@ func applyBehavior(it templateItemRow, isMultiGame, hasPrevDay, hasNextDay, isFi
 func (h *Handler) loadSameDayContext(ctx context.Context, gameDate string, seasonID int) (
 	allGameTimes []string, hasPrevDay, hasNextDay bool,
 ) {
+	// Load all games (home and away) on the same date
 	gtRows, _ := h.db.QueryContext(ctx,
-		`SELECT time FROM games WHERE date=? AND is_home=1 AND season_id=? ORDER BY time`,
+		`SELECT time FROM games WHERE date=? AND season_id=? ORDER BY time`,
 		gameDate, seasonID)
 	if gtRows != nil {
 		defer gtRows.Close()
@@ -129,6 +194,18 @@ func (h *Handler) loadSameDayContext(ctx context.Context, gameDate string, seaso
 			allGameTimes = append(allGameTimes, t)
 		}
 	}
+	// Remove duplicates and sort
+	uniqueTimes := make([]string, 0, len(allGameTimes))
+	seen := make(map[string]bool)
+	for _, t := range allGameTimes {
+		if !seen[t] {
+			seen[t] = true
+			uniqueTimes = append(uniqueTimes, t)
+		}
+	}
+	allGameTimes = uniqueTimes
+
+	// Check if there are home games on previous/next days (for adjacent_day_behavior)
 	var prevCount, nextCount int
 	h.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM games WHERE date=date(?, '-1 days') AND is_home=1 AND season_id=?`,
@@ -223,21 +300,27 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var g struct {
-		ID        int    `json:"id"`
-		Date      string `json:"date"`
-		Time      string `json:"time"`
-		Opponent  string `json:"opponent"`
-		EventType string `json:"event_type"`
-		SeasonID  int    `json:"season_id"`
-		Teams     []struct {
+		ID         int    `json:"id"`
+		Date       string `json:"date"`
+		Time       string `json:"time"`
+		Opponent   string `json:"opponent"`
+		EventType  string `json:"event_type"`
+		SeasonID   int    `json:"season_id"`
+		TemplateID *int   `json:"template_id"`
+		Teams      []struct {
 			ID   int    `json:"id"`
 			Name string `json:"name"`
 		} `json:"teams"`
 	}
+	var templateIDNull sql.NullInt64
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT g.id, g.date, g.time, g.opponent, g.event_type, g.season_id
+		`SELECT g.id, g.date, g.time, g.opponent, g.event_type, g.season_id, g.template_id
 		 FROM games g WHERE g.id=?`, id).
-		Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &g.SeasonID)
+		Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &g.SeasonID, &templateIDNull)
+	if templateIDNull.Valid {
+		v := int(templateIDNull.Int64)
+		g.TemplateID = &v
+	}
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -354,9 +437,13 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var templateIDVal interface{}
+	if req.TemplateID != nil {
+		templateIDVal = *req.TemplateID
+	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO games (season_id, opponent, date, time, is_home, event_type) VALUES (?,?,?,?,?,?)`,
-		req.SeasonID, req.Opponent, req.Date, req.Time, isHome, req.EventType)
+		`INSERT INTO games (season_id, opponent, date, time, is_home, event_type, template_id) VALUES (?,?,?,?,?,?,?)`,
+		req.SeasonID, req.Opponent, req.Date, req.Time, isHome, req.EventType, templateIDVal)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -654,7 +741,12 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/admin/duty-templates/{id}
 func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid template id", http.StatusBadRequest)
+		return
+	}
 	var req struct {
 		Name                string         `json:"name"`
 		TemplateType        string         `json:"template_type"`
@@ -701,7 +793,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx.ExecContext(r.Context(), `DELETE FROM game_template_items WHERE template_id=?`, id)
+	_, err = tx.ExecContext(r.Context(), `DELETE FROM game_template_items WHERE template_id=?`, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	for i, it := range req.Items {
 		_, err = tx.ExecContext(r.Context(),
 			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, role_desc, sort_order)
@@ -745,6 +841,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	gameIDStr := r.URL.Query().Get("game_id")
+	dateStr := r.URL.Query().Get("date")
 
 	var templateID, durationMins int
 	err := h.db.QueryRowContext(r.Context(),
@@ -759,15 +856,36 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var gameDate string
-	var seasonID int
 	var allGameTimes []string
 	var hasPrevDay, hasNextDay bool
 	if gameIDStr != "" {
+		// Regeneration context: load from existing game
+		var gameDate string
+		var seasonID int
 		if h.db.QueryRowContext(r.Context(),
 			`SELECT date, season_id FROM games WHERE id=?`, gameIDStr).
 			Scan(&gameDate, &seasonID) == nil {
 			allGameTimes, hasPrevDay, hasNextDay = h.loadSameDayContext(r.Context(), gameDate, seasonID)
+		}
+	} else if dateStr != "" {
+		// New game context: load by date from active season, then insert new game's time sorted
+		var seasonID int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&seasonID)
+		if seasonID > 0 {
+			allGameTimes, hasPrevDay, hasNextDay = h.loadSameDayContext(r.Context(), dateStr, seasonID)
+			// Insert the new game's own time into the sorted list
+			inserted := false
+			for i, t := range allGameTimes {
+				if gameTime <= t {
+					allGameTimes = append(allGameTimes[:i], append([]string{gameTime}, allGameTimes[i:]...)...)
+					inserted = true
+					break
+				}
+			}
+			if !inserted {
+				allGameTimes = append(allGameTimes, gameTime)
+			}
 		}
 	}
 
@@ -793,16 +911,10 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		eventTime := addMinutes(gameTime, offset)
 
 		dutyTypeID := it.DutyTypeID
-		if gameIDStr != "" && len(allGameTimes) > 0 {
-			isFirst, isLast := false, false
-			for i, t := range allGameTimes {
-				if t == gameTime {
-					isFirst = i == 0
-					isLast = i == len(allGameTimes)-1
-					break
-				}
-			}
-			dutyTypeID = applyBehavior(it, len(allGameTimes) > 1, hasPrevDay, hasNextDay, isFirst, isLast)
+		if len(allGameTimes) > 0 {
+			isBeforeAllGames, isAfterAllGames, isBetweenGames := classifySlotPosition(eventTime, gameTime, allGameTimes)
+			dutyTypeID = applyBehavior(it, gameTime, eventTime, allGameTimes, hasPrevDay, hasNextDay,
+				isBeforeAllGames, isAfterAllGames, isBetweenGames)
 			if dutyTypeID == -1 {
 				continue
 			}
@@ -825,27 +937,21 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	gameID := r.PathValue("id")
 
 	var req struct {
-		Slots []struct {
-			DutyTypeID int    `json:"duty_type_id"`
-			EventTime  string `json:"event_time"`
-			SlotsCount int    `json:"slots_count"`
-			RoleDesc   string `json:"role_desc"`
-		} `json:"slots"`
+		TemplateID *int `json:"template_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
+	json.NewDecoder(r.Body).Decode(&req)
 
 	var game struct {
-		SeasonID int
-		Date     string
-		Opponent string
-		IsHome   bool
+		SeasonID   int
+		Date       string
+		Time       string
+		Opponent   string
+		IsHome     bool
+		TemplateID sql.NullInt64
 	}
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT season_id, date, opponent, is_home FROM games WHERE id=?`, gameID).
-		Scan(&game.SeasonID, &game.Date, &game.Opponent, &game.IsHome)
+		`SELECT season_id, date, time, opponent, is_home, template_id FROM games WHERE id=?`, gameID).
+		Scan(&game.SeasonID, &game.Date, &game.Time, &game.Opponent, &game.IsHome, &game.TemplateID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -854,6 +960,27 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
+	// Resolve template: body takes precedence over stored value
+	var resolvedTemplateID int
+	if req.TemplateID != nil {
+		resolvedTemplateID = *req.TemplateID
+	} else if game.TemplateID.Valid {
+		resolvedTemplateID = int(game.TemplateID.Int64)
+	} else {
+		http.Error(w, "kein Template angegeben und keines gespeichert", http.StatusBadRequest)
+		return
+	}
+
+	items, err := h.loadTemplateItems(r.Context(), resolvedTemplateID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var durationMins int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT game_duration_minutes FROM game_templates WHERE id=?`, resolvedTemplateID).Scan(&durationMins)
 
 	teamRows, err := h.db.QueryContext(r.Context(),
 		`SELECT team_id FROM game_teams WHERE game_id=?`, gameID)
@@ -870,6 +997,8 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		teamIDs = append(teamIDs, tid)
 	}
 
+	allGameTimes, hasPrevDay, hasNextDay := h.loadSameDayContext(r.Context(), game.Date, game.SeasonID)
+
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -883,11 +1012,6 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	tx.ExecContext(r.Context(),
 		`DELETE FROM duty_slots WHERE game_id=? AND slots_filled = 0`, gameID)
 
-	var gameTime string
-	tx.QueryRowContext(r.Context(), `SELECT time FROM games WHERE id=?`, gameID).Scan(&gameTime)
-
-	allGameTimes, hasPrevDay, hasNextDay := h.loadSameDayContext(r.Context(), game.Date, game.SeasonID)
-
 	eventName := "Heimspiel"
 	if !game.IsHome {
 		eventName = "Auswärtsspiel"
@@ -896,43 +1020,39 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		eventName += " vs. " + game.Opponent
 	}
 
-	for _, s := range req.Slots {
-		n := s.SlotsCount
-		if n <= 0 {
-			n = 1
+	for _, it := range items {
+		offset := it.OffsetMinutes
+		if it.Anchor == "end" {
+			offset += durationMins
 		}
+		eventTime := addMinutes(game.Time, offset)
 
-		isFirst, isLast := false, false
-		for i, t := range allGameTimes {
-			if t == gameTime {
-				isFirst = i == 0
-				isLast = i == len(allGameTimes)-1
-				break
-			}
-		}
-
-		var it templateItemRow
-		it.DutyTypeID = s.DutyTypeID
-		h.db.QueryRowContext(r.Context(),
-			`SELECT same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id FROM duty_types WHERE id=?`,
-			s.DutyTypeID).Scan(&it.SameDayBehavior, &it.SameDayVariantID, &it.AdjacentDayBehavior, &it.AdjacentDayVariantID)
-
-		dutyTypeID := applyBehavior(it, len(allGameTimes) > 1, hasPrevDay, hasNextDay, isFirst, isLast)
+		isBeforeAllGames, isAfterAllGames, isBetweenGames := classifySlotPosition(eventTime, game.Time, allGameTimes)
+		dutyTypeID := applyBehavior(it, game.Time, eventTime, allGameTimes, hasPrevDay, hasNextDay,
+			isBeforeAllGames, isAfterAllGames, isBetweenGames)
 		if dutyTypeID == -1 {
 			continue
 		}
 
+		n := it.SlotsCount
+		if n <= 0 {
+			n = 1
+		}
 		for _, teamID := range teamIDs {
 			_, err = tx.ExecContext(r.Context(),
 				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
 				 VALUES (?,?,?,?,?,?,?,?,?)`,
-				eventName, game.Date, s.EventTime, dutyTypeID, s.RoleDesc, n, teamID, game.SeasonID, gameID)
+				eventName, game.Date, eventTime, dutyTypeID, it.RoleDesc, n, teamID, game.SeasonID, gameID)
 			if err != nil {
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
 		}
 	}
+
+	// Update stored template_id if a different one was used
+	tx.ExecContext(r.Context(),
+		`UPDATE games SET template_id=? WHERE id=?`, resolvedTemplateID, gameID)
 
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)

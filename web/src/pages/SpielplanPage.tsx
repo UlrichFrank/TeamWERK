@@ -106,6 +106,7 @@ export default function SpielplanPage() {
         opponent: selectedOpponent,
         team_ids: selectedTeamIds,
         event_type: eventType,
+        template_id: selectedTemplate ?? undefined,
         slots: slots.map(s => ({
           duty_type_id: s.duty_type_id,
           event_time: s.event_time,
@@ -135,7 +136,8 @@ export default function SpielplanPage() {
     if (!selectedTemplate || !selectedDate || selectedTeamIds.length === 0) return
     setPreviewLoading(true)
     try {
-      const r = await api.get(`/admin/duty-templates/${selectedTemplate}/preview?time=${selectedTime}`)
+      const dateParam = eventType === 'heim' ? `&date=${selectedDate}` : ''
+      const r = await api.get(`/admin/duty-templates/${selectedTemplate}/preview?time=${selectedTime}${dateParam}`)
       const slots: SlotPreview[] = r.data ?? []
       setPreview(slots)
       setSelectedSlotIndices(new Set(slots.map((_, i) => i)))

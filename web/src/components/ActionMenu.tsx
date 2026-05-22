@@ -29,7 +29,7 @@ export default function ActionMenu({ actions }: ActionMenuProps) {
   return (
     <div ref={menuRef} className="relative">
       <button
-        onClick={() => setOpen(!open)}
+        onClick={e => { e.stopPropagation(); setOpen(!open) }}
         className="px-2 py-1 text-brand-black/60 hover:text-brand-black"
       >
         ⋮

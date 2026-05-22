@@ -1323,6 +1323,21 @@ func (h *Handler) CreateMemberFromUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"member_id": memberID})
 }
 
+func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM members WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func parseOptionalInt(s string) (interface{}, bool) {
 	if s == "" {
 		return nil, false

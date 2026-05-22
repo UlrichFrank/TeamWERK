@@ -78,7 +78,7 @@ func serve() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.CleanPath)
-	r.Use(corsMiddleware)
+	r.Use(corsMiddleware(cfg.BaseURL))
 
 	// Public routes
 	r.Get("/api/uploads/*", uploadH.ServeUpload)
@@ -180,6 +180,7 @@ func serve() {
 			r.Get("/api/admin/invitations", authH.ListInvitations)
 			r.Delete("/api/admin/invitations/{id}", authH.DeleteInvitation)
 			r.Post("/api/members/import", membH.Import)
+			r.Delete("/api/admin/members/{id}", membH.DeleteMember)
 			r.Put("/api/admin/members/{id}/user", membH.LinkUser)
 			r.Get("/api/admin/members/{id}/parents", membH.GetMemberParents)
 			r.Post("/api/admin/users/{id}/create-member", membH.CreateMemberFromUser)
@@ -308,18 +309,20 @@ func runMigrate() {
 	log.Println("migrations applied")
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "https://intern.team-stuttgart.org")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+func corsMiddleware(baseURL string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", baseURL)
+			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func spaHandler(static fs.FS) http.HandlerFunc {
