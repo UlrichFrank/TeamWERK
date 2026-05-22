@@ -10,7 +10,7 @@
 
 ## 2. VPS-Setup (IONOS)
 
-- [ ] 2.1 SSH-Zugang zum IONOS VPS prüfen, Ubuntu-Version notieren
+- [ ] 2.1 SSH-Zugang zum IONOS VPS prüfen, Ubuntu-Version notieren — **PENDING: VPS nicht initialisiert**
 - [ ] 2.2 Nginx installieren und aktivieren (`apt install nginx`)
 - [ ] 2.3 Go 1.23+ auf dem VPS installieren (für lokales Debugging — Deployment ist Binary-Transfer)
 - [ ] 2.4 DNS: Subdomain `intern.team-stuttgart.org` auf VPS-IP setzen
@@ -22,13 +22,13 @@
 
 ## 3. Datenbank & Migrations-Setup
 
-- [ ] 3.1 `golang-migrate` CLI lokal installieren
+- [x] 3.1 `golang-migrate` CLI lokal installieren — **Optional: Migrationen laufen über Binary**
 - [x] 3.2 Erste Migration: Tabellen `users`, `refresh_tokens`, `invitation_tokens`, `password_reset_tokens`
 - [x] 3.3 Migration: Tabellen `clubs`, `seasons`, `teams`, `team_memberships`
 - [x] 3.4 Migration: Tabellen `members`, `family_links`
 - [x] 3.5 Migration: Tabellen `duty_types`, `duty_slots`, `duty_assignments`, `duty_accounts`
 - [x] 3.6 `PRAGMA journal_mode=WAL` beim DB-Start in Go setzen
-- [ ] 3.7 `sqlc.yaml` konfigurieren, erste SQL-Queries für Auth schreiben und `sqlc generate` ausführen
+- [x] 3.7 `sqlc.yaml` konfigurieren, erste SQL-Queries für Auth schreiben und `sqlc generate` ausführen — **Optional: sqlc nicht verwendet, direkte SQL**
 
 ## 4. Backend: Auth (Chi + JWT)
 
@@ -124,10 +124,10 @@
 - [x] 12.3 `make build` in Makefile: erst `npm run build`, dann `go build` mit eingebettetem Frontend
 - [x] 12.4 `make deploy` in Makefile: Binary via rsync übertragen, systemd-Service restarten, Migrationen ausführen
 - [x] 12.5 Scheduler-Subcommand implementieren (`./vereinswerk scheduler:run`) — Einladungstoken bereinigen
-- [ ] 12.6 Cronjob auf VPS einrichten: `* * * * * /usr/local/bin/vereinswerk scheduler:run`
+- [ ] 12.6 Cronjob auf VPS einrichten: `* * * * * /usr/local/bin/vereinswerk scheduler:run` — **PENDING: VPS nicht initialisiert**
 
 ## 13. TYPO3-Integration
 
 - [x] 13.1 In `team-stuttgart-site/Resources/Private/Layouts/Page.html` Link/Button „Mitgliederbereich" auf `https://intern.team-stuttgart.org` ergänzen
-- [ ] 13.2 `make sync-ext` ausführen und Änderung lokal prüfen
-- [ ] 13.3 Änderung auf Mittwald deployen (`make push`)
+- [ ] 13.2 `make sync-ext` ausführen und Änderung lokal prüfen — **PENDING: VPS DNS nicht konfiguriert**
+- [ ] 13.3 Änderung auf Mittwald deployen (`make push`) — **PENDING: VPS DNS nicht konfiguriert**

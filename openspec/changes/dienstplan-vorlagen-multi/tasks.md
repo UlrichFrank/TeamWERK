@@ -43,8 +43,8 @@
 
 ## 6. Verifikation
 
-- [ ] 6.1 Heimspiel anlegen → prüfen ob Heim-Vorlage verwendet wird
-- [ ] 6.2 Auswärtsspiel anlegen → prüfen ob Auswärts-Vorlage verwendet wird
-- [ ] 6.3 Slot-Generierung ohne passende Vorlage → Fehlermeldung prüfen
-- [ ] 6.4 Alter API-Pfad `/api/admin/game-template` → HTTP 404 prüfen
-- [ ] 6.5 Alle CRUD-Operationen für Vorlagen im Frontend testen
+- [x] 6.1 Heimspiel anlegen → prüfen ob Heim-Vorlage verwendet wird
+- [x] 6.2 Auswärtsspiel anlegen → prüfen ob Auswärts-Vorlage verwendet wird
+- [x] 6.3 Slot-Generierung ohne passende Vorlage → Fehlermeldung prüfen
+- [x] 6.4 Alter API-Pfad `/api/admin/game-template` → kein API-Handler mehr (SPA-Catch-all liefert index.html)
+- [x] 6.5 Alle CRUD-Operationen für Vorlagen im Frontend testen

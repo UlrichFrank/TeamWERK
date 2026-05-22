@@ -48,11 +48,18 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /^\/api\/auth\/.*/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'auth-cache',
+            },
+          },
+          {
             urlPattern: /^\/api\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
-              networkTimeoutSeconds: 3,
+              networkTimeoutSeconds: 10,
             },
           },
         ],
