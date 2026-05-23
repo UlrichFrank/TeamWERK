@@ -425,7 +425,7 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListAssignments(w http.ResponseWriter, r *http.Request) {
 	slotID := r.PathValue("id")
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT da.id, u.name, da.status, COALESCE(da.cash_amount,0)
+		`SELECT da.id, u.first_name || ' ' || u.last_name, da.status, COALESCE(da.cash_amount,0)
 		 FROM duty_assignments da JOIN users u ON u.id = da.user_id
 		 WHERE da.duty_slot_id=? ORDER BY da.created_at`, slotID)
 	if err != nil {
@@ -508,13 +508,13 @@ func (h *Handler) Accounts(w http.ResponseWriter, r *http.Request) {
 // GET /api/admin/duty-accounts/export
 func (h *Handler) ExportAccounts(w http.ResponseWriter, r *http.Request) {
 	rows, _ := h.db.QueryContext(r.Context(),
-		`SELECT u.name, da.soll, da.ist, da.soll - da.ist as balance,
+		`SELECT u.first_name || ' ' || u.last_name, da.soll, da.ist, da.soll - da.ist as balance,
 		        COALESCE(SUM(CASE WHEN dassign.status='cash_substitute' THEN dassign.cash_amount ELSE 0 END), 0)
 		 FROM duty_accounts da
 		 JOIN users u ON u.id = da.user_id
 		 LEFT JOIN duty_assignments dassign ON dassign.user_id = da.user_id
 		 GROUP BY da.user_id, da.season_id
-		 ORDER BY u.name`)
+		 ORDER BY u.last_name, u.first_name`)
 	defer rows.Close()
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", `attachment; filename="dienstkonten.csv"`)

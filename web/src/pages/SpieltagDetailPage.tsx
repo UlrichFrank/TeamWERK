@@ -104,7 +104,7 @@ export default function SpieltagDetailPage() {
 
   const loadGame = async () => {
     try {
-      const r = await api.get(`/games/${gameId}`)
+      const r = await api.get(`/kalender/${gameId}`)
       setGame(r.data.game)
       setSlots(r.data.slots ?? [])
     } catch (e: any) {
@@ -187,10 +187,10 @@ export default function SpieltagDetailPage() {
     setDeletingGame(true)
     try {
       const url = deleteWithSlots
-        ? `/admin/games/${gameId}?delete_slots=true`
-        : `/admin/games/${gameId}`
+        ? `/admin/kalender/${gameId}?delete_slots=true`
+        : `/admin/kalender/${gameId}`
       await api.delete(url)
-      navigate('/spielplan')
+      navigate('/kalender')
     } finally {
       setDeletingGame(false)
     }
@@ -273,8 +273,8 @@ export default function SpieltagDetailPage() {
 
   return (
     <div className="max-w-2xl">
-      <Link to="/spielplan" className="text-sm text-brand-text-muted hover:text-brand-text mb-4 inline-block">
-        ← Spielplan
+      <Link to="/kalender" className="text-sm text-brand-text-muted hover:text-brand-text mb-4 inline-block">
+        ← Kalender
       </Link>
 
       {/* Game header */}

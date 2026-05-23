@@ -285,9 +285,10 @@ Team Stuttgart`, link)
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Token    string `json:"token"`
-		Name     string `json:"name"`
-		Password string `json:"password"`
+		Token     string `json:"token"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Password  string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" || req.Password == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -308,8 +309,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO users (email, name, password, role, team_id) VALUES (?,?,?,?,?)`,
-		email, req.Name, string(hash), role, teamID,
+		`INSERT INTO users (email, first_name, last_name, password, role, team_id) VALUES (?,?,?,?,?,?)`,
+		email, req.FirstName, req.LastName, string(hash), role, teamID,
 	)
 	if err != nil {
 		http.Error(w, "email already registered", http.StatusConflict)
@@ -326,10 +327,10 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	var userID int
-	var name string
+	var firstName, lastName string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, name FROM users WHERE email = ?`, req.Email,
-	).Scan(&userID, &name)
+		`SELECT id, first_name, last_name FROM users WHERE email = ?`, req.Email,
+	).Scan(&userID, &firstName, &lastName)
 	w.WriteHeader(http.StatusNoContent) // always same response
 	if err != nil {
 		return
@@ -341,8 +342,12 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		userID, tokenHash, expiry,
 	)
 	link := fmt.Sprintf("%s/reset-password?token=%s", h.baseURL, plain)
+	fullName := firstName
+	if lastName != "" {
+		fullName += " " + lastName
+	}
 	h.mailer.Send(req.Email, "Passwort zurücksetzen – TeamWERK",
-		fmt.Sprintf("Hallo %s,\n\nPasswort zurücksetzen:\n%s\n\nDer Link ist 1 Stunde gültig.", name, link))
+		fmt.Sprintf("Hallo %s,\n\nPasswort zurücksetzen:\n%s\n\nDer Link ist 1 Stunde gültig.", fullName, link))
 }
 
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
@@ -386,13 +391,13 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	searchFilter := ""
 	if search != "" {
-		searchFilter = ` WHERE u.name LIKE ? OR u.email LIKE ?`
+		searchFilter = ` WHERE u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?`
 	}
 
 	countQuery := `SELECT COUNT(*) FROM users u` + searchFilter
 	var total int
 	if search != "" {
-		err := h.db.QueryRowContext(r.Context(), countQuery, "%"+search+"%", "%"+search+"%").Scan(&total)
+		err := h.db.QueryRowContext(r.Context(), countQuery, "%"+search+"%", "%"+search+"%", "%"+search+"%").Scan(&total)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -405,12 +410,12 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := `SELECT u.id, u.name, u.email, u.role, m.id
-		FROM users u LEFT JOIN members m ON m.user_id = u.id` + searchFilter + ` ORDER BY u.name LIMIT ? OFFSET ?`
+	query := `SELECT u.id, u.first_name, u.last_name, u.email, u.role, m.id
+		FROM users u LEFT JOIN members m ON m.user_id = u.id` + searchFilter + ` ORDER BY u.last_name, u.first_name LIMIT ? OFFSET ?`
 	var rows *sql.Rows
 	var err error
 	if search != "" {
-		rows, err = h.db.QueryContext(r.Context(), query, "%"+search+"%", "%"+search+"%", limit, offset)
+		rows, err = h.db.QueryContext(r.Context(), query, "%"+search+"%", "%"+search+"%", "%"+search+"%", limit, offset)
 	} else {
 		rows, err = h.db.QueryContext(r.Context(), query, limit, offset)
 	}
@@ -420,17 +425,18 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type user struct {
-		ID       int      `json:"id"`
-		Name     string   `json:"name"`
-		Email    string   `json:"email"`
-		Role     string   `json:"role"`
-		MemberID *int     `json:"member_id"`
+		ID        int  `json:"id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Email     string `json:"email"`
+		Role      string `json:"role"`
+		MemberID  *int   `json:"member_id"`
 	}
 	result := []user{}
 	for rows.Next() {
 		var u user
 		var memberID sql.NullInt64
-		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &memberID)
+		rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Role, &memberID)
 		if memberID.Valid {
 			id := int(memberID.Int64)
 			u.MemberID = &id
@@ -606,30 +612,35 @@ func (h *Handler) DeleteMembershipRequest(w http.ResponseWriter, r *http.Request
 // GET /api/profile/account
 func (h *Handler) GetAccount(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromCtx(r.Context())
-	var name string
+	var firstName, lastName string
 	if err := h.db.QueryRowContext(r.Context(),
-		`SELECT name FROM users WHERE id=?`, claims.UserID,
-	).Scan(&name); err != nil {
+		`SELECT first_name, last_name FROM users WHERE id=?`, claims.UserID,
+	).Scan(&firstName, &lastName); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"name": name, "email": claims.Email})
+	json.NewEncoder(w).Encode(map[string]string{
+		"first_name": firstName,
+		"last_name":  lastName,
+		"email":      claims.Email,
+	})
 }
 
 // PUT /api/profile/account
 func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFromCtx(r.Context())
 	var req struct {
-		Name string `json:"name"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FirstName == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	if _, err := h.db.ExecContext(r.Context(),
-		`UPDATE users SET name=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-		req.Name, claims.UserID,
+		`UPDATE users SET first_name=?, last_name=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		req.FirstName, req.LastName, claims.UserID,
 	); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

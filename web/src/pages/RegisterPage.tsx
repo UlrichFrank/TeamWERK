@@ -8,7 +8,8 @@ export default function RegisterPage() {
   const [params] = useSearchParams()
   const token = params.get('token') ?? ''
   const navigate = useNavigate()
-  const [name, setName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -23,7 +24,7 @@ export default function RegisterPage() {
     e.preventDefault()
     setError('')
     try {
-      await axios.post('/api/auth/register', { token, name, password })
+      await axios.post('/api/auth/register', { token, first_name: firstName, last_name: lastName, password })
       setDone(true)
       setTimeout(() => navigate('/login'), 2000)
     } catch {
@@ -48,8 +49,12 @@ export default function RegisterPage() {
             </p>
           )}
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">Vor- und Nachname</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} required className={INPUT} />
+            <label className="block text-sm font-medium text-brand-text mb-1">Vorname</label>
+            <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required className={INPUT} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">Nachname</label>
+            <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} required className={INPUT} />
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">Passwort</label>

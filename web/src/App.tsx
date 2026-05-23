@@ -15,7 +15,7 @@ import AdminClubPage from './pages/AdminClubPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import MembershipRequestsPage from './pages/MembershipRequestsPage'
-import SpielplanPage from './pages/SpielplanPage'
+import KalenderPage from './pages/KalenderPage'
 import SpieltagDetailPage from './pages/SpieltagDetailPage'
 import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
@@ -53,8 +53,8 @@ export default function App() {
             <Route path="admin/kader" element={<AdminKaderPage />} />
             <Route path="admin/nutzer" element={<AdminUsersPage />} />
             <Route path="admin/diensttypen" element={<AdminDutyTypesPage />} />
-            <Route path="spielplan" element={<SpielplanPage />} />
-            <Route path="spielplan/:gameId" element={<SpieltagDetailPage />} />
+            <Route path="kalender" element={<KalenderPage />} />
+            <Route path="kalender/:gameId" element={<SpieltagDetailPage />} />
             <Route path="admin/dienstplan-vorlagen" element={<AdminDutyTemplatesPage />} />
             <Route path="admin/dienstplan-vorlagen/:id" element={<AdminDutyTemplateDetailPage />} />
             <Route path="admin/saisons" element={<AdminSeasonsPage />} />

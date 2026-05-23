@@ -21,20 +21,32 @@ const navModules: NavModule[] = [
   {
     label: 'Dienste',
     items: [
-      { to: '/spielplan', label: 'Spielplan', roles: [] },
+      { to: '/kalender', label: 'Kalender', roles: [] },
       { to: '/dienste', label: 'Dienste', roles: [] },
+    ],
+  },
+  {
+    label: 'Dienstplanung',
+    items: [
+      { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
+      { to: '/admin/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
+    ],
+  },
+  {
+    label: 'Kaderplanung',
+    items: [
+      { to: '/admin/verein', label: 'Verein', roles: ['admin', 'vorstand'] },
+      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand'] },
+      { to: '/admin/saisons', label: 'Saisons', roles: ['admin', 'vorstand'] },
+      { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
+      { to: '/admin/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
     ],
   },
   {
     label: 'Administration',
     items: [
       { to: '/anfragen', label: 'Beitrittsanfragen', roles: ['admin', 'vorstand', 'trainer'] },
-      { to: '/admin/verein', label: 'Verein', roles: ['admin', 'vorstand'] },
-      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand'] },
       { to: '/admin/nutzer', label: 'Nutzer', roles: ['admin', 'vorstand'] },
-      { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
-      { to: '/admin/saisons', label: 'Saisons', roles: ['admin', 'vorstand'] },
-      { to: '/admin/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
     ],
   },
 ]

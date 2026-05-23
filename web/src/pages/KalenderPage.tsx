@@ -48,7 +48,7 @@ function padDate(year: number, month: number, day: number): string {
 const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
-export default function SpielplanPage() {
+export default function KalenderPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const now = new Date()
@@ -84,7 +84,7 @@ export default function SpielplanPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  const loadGames = () => api.get('/games').then(r => setGames(r.data ?? []))
+  const loadGames = () => api.get('/kalender').then(r => setGames(r.data ?? []))
 
   useEffect(() => {
     Promise.all([loadGames(), api.get('/teams').then(r => setTeams(r.data ?? []))]).finally(() => setLoading(false))
@@ -114,7 +114,7 @@ export default function SpielplanPage() {
     setCreating(true)
     setCreateError(null)
     try {
-      await api.post('/admin/games', {
+      await api.post('/admin/kalender', {
         date: selectedDate,
         time: selectedTime,
         opponent: selectedOpponent,
@@ -192,7 +192,7 @@ export default function SpielplanPage() {
     setDayRegenError(null)
     setDayRegenResult(null)
     try {
-      const r = await api.post(`/admin/games/regenerate-day?date=${dayRegenDate}`)
+      const r = await api.post(`/admin/kalender/regenerate-day?date=${dayRegenDate}`)
       setDayRegenResult(r.data)
       await loadGames()
     } catch {
@@ -219,7 +219,7 @@ export default function SpielplanPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Spielplan</h1>
+        <h1 className="text-2xl font-bold">Kalender</h1>
         {user && ['admin', 'vorstand', 'trainer'].includes(user.role) && (
           <button
             onClick={() => setShowCreate(true)}
@@ -260,7 +260,7 @@ export default function SpielplanPage() {
                 {dayGames.map(g => (
                   <button
                     key={g.id}
-                    onClick={() => navigate(`/spielplan/${g.id}`)}
+                    onClick={() => navigate(`/kalender/${g.id}`)}
                     className="w-full text-left mb-1 p-1.5 rounded-md text-xs bg-brand-border-subtle hover:bg-brand-border transition-colors border border-brand-border-subtle"
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
@@ -402,7 +402,7 @@ export default function SpielplanPage() {
                     <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Anstoßzeit</label>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Anwurfzeit</label>
                     <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)} className={INPUT_WIZ} />
                   </div>
                   {eventType !== 'generisch' && (

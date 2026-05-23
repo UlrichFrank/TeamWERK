@@ -691,7 +691,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	// Parents (spieler)
 	if claims.Role == "spieler" {
 		rows, err := h.db.QueryContext(r.Context(),
-			`SELECT u.id, u.name, u.email
+			`SELECT u.id, u.first_name || ' ' || u.last_name, u.email
 			 FROM users u
 			 JOIN family_links fl ON fl.parent_user_id = u.id
 			 JOIN members mem ON mem.id = fl.member_id
@@ -853,7 +853,7 @@ func (h *Handler) GetMemberParents(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	id := r.PathValue("id")
 
-	query := `SELECT u.id, u.name, u.email
+	query := `SELECT u.id, u.first_name || ' ' || u.last_name, u.email
 		 FROM users u
 		 JOIN family_links fl ON fl.parent_user_id = u.id
 		 WHERE fl.member_id=?`
@@ -1263,8 +1263,8 @@ func (h *Handler) applyLinkUpdates(r *http.Request, memberID int, row []string, 
 func (h *Handler) CreateMemberFromUser(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("id")
 
-	var userName string
-	err := h.db.QueryRowContext(r.Context(), `SELECT name FROM users WHERE id=?`, userID).Scan(&userName)
+	var firstName, lastName string
+	err := h.db.QueryRowContext(r.Context(), `SELECT first_name, last_name FROM users WHERE id=?`, userID).Scan(&firstName, &lastName)
 	if err == sql.ErrNoRows {
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
@@ -1283,12 +1283,6 @@ func (h *Handler) CreateMemberFromUser(w http.ResponseWriter, r *http.Request) {
 	if err != sql.ErrNoRows {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
-	}
-
-	firstName, lastName := userName, ""
-	if idx := strings.Index(userName, " "); idx >= 0 {
-		firstName = userName[:idx]
-		lastName = userName[idx+1:]
 	}
 
 	res, err := h.db.ExecContext(r.Context(),

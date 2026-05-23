@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import PasswordChangeModal from './PasswordChangeModal'
 import EmailChangeModal from './EmailChangeModal'
@@ -9,8 +9,9 @@ interface Props {
 }
 
 export default function ProfileAccountTab({ user, logout }: Props) {
-  const [accountName, setAccountName] = useState('')
-  const [accountNameChanged, setAccountNameChanged] = useState(false)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [original, setOriginal] = useState({ firstName: '', lastName: '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -18,21 +19,26 @@ export default function ProfileAccountTab({ user, logout }: Props) {
   const [showPwModal, setShowPwModal] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
 
-  const handleNameChange = (value: string) => {
-    setAccountName(value)
-    setAccountNameChanged(value !== accountName)
-  }
+  useEffect(() => {
+    api.get('/profile/account').then(r => {
+      setFirstName(r.data.first_name ?? '')
+      setLastName(r.data.last_name ?? '')
+      setOriginal({ firstName: r.data.first_name ?? '', lastName: r.data.last_name ?? '' })
+    })
+  }, [])
+
+  const changed = firstName !== original.firstName || lastName !== original.lastName
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      await api.put('/profile/account', { name: accountName })
+      await api.put('/profile/account', { first_name: firstName, last_name: lastName })
+      setOriginal({ firstName, lastName })
       setSaved(true)
-      setAccountNameChanged(false)
       setTimeout(() => setSaved(false), 2000)
-    } catch (err) {
+    } catch {
       setError('Fehler beim Speichern')
     } finally {
       setSaving(false)
@@ -45,14 +51,25 @@ export default function ProfileAccountTab({ user, logout }: Props) {
       <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-gray-700 mb-4">Kontoangaben</h2>
         <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
-              type="text"
-              value={accountName}
-              onChange={(e) => handleNameChange(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label>
@@ -89,7 +106,7 @@ export default function ProfileAccountTab({ user, logout }: Props) {
       <div className="flex items-center gap-3">
         <button
           onClick={handleSave}
-          disabled={!accountNameChanged || saving}
+          disabled={!changed || saving}
           className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
         >
           {saving ? 'Speichern…' : 'Speichern'}

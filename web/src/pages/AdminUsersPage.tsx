@@ -6,7 +6,7 @@ import { usePagination } from '../lib/usePagination'
 import MobileCard from '../components/MobileCard'
 import Pagination from '../components/Pagination'
 
-interface User { id: number; name: string; email: string; role: string; member_id?: number | null }
+interface User { id: number; first_name: string; last_name: string; email: string; role: string; member_id?: number | null }
 interface Invitation { id: number; email: string; role: string; comment: string; expires_at: string }
 interface MembershipRequest { id: number; name: string; email: string; comment: string; status: string; created_at: string }
 
@@ -73,7 +73,7 @@ export default function AdminUsersPage() {
   }
 
   const handleDeleteUser = async (u: User) => {
-    if (!window.confirm(`Nutzer „${u.name}" (${u.email}) wirklich löschen?`)) return
+    if (!window.confirm(`Nutzer „${u.first_name} ${u.last_name}" (${u.email}) wirklich löschen?`)) return
     await api.delete(`/admin/users/${u.id}`)
   }
 
@@ -312,7 +312,7 @@ export default function AdminUsersPage() {
               const canEdit = self?.id !== u.id && (ROLE_RANK[u.role] ?? 0) <= callerRank
               return (
                 <tr key={`user-${u.id}`} className="hover:bg-brand-table-select transition-colors">
-                  <td className="px-6 py-3 font-medium text-brand-text">{u.name}</td>
+                  <td className="px-6 py-3 font-medium text-brand-text">{u.first_name} {u.last_name}</td>
                   <td className="px-6 py-3 text-brand-text-muted">{u.email}</td>
                   <td className="px-6 py-3">
                     {canEdit ? (
@@ -372,7 +372,7 @@ export default function AdminUsersPage() {
           return (
             <MobileCard
               key={`user-${u.id}`}
-              title={u.name}
+              title={`${u.first_name} ${u.last_name}`}
               subtitle={u.email}
               badge={{ label: ROLE_LABELS[u.role], variant: 'blue' }}
               actions={[
@@ -383,7 +383,7 @@ export default function AdminUsersPage() {
                 ...(canEdit ? [{
                   label: 'Rolle ändern',
                   onClick: () => {
-                    const newRole = prompt(`Neue Rolle für ${u.name}:`, u.role)
+                    const newRole = prompt(`Neue Rolle für ${u.first_name} ${u.last_name}:`, u.role)
                     if (newRole && allowedRoles(self?.role ?? '').includes(newRole as typeof ALL_ROLES[number])) {
                       handleRoleChange(u, newRole)
                     }

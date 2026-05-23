@@ -133,9 +133,9 @@ func serve() {
 		r.Get("/api/duty-slots", dutyH.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", dutyH.ListAssignments)
 
-		// Games
-		r.Get("/api/games", gameH.ListGames)
-		r.Get("/api/games/{id}", gameH.GetGame)
+		// Kalender
+		r.Get("/api/kalender", gameH.ListGames)
+		r.Get("/api/kalender/{id}", gameH.GetGame)
 
 		// Teams (filtered by user role)
 		r.Get("/api/teams", gameH.ListTeamsForUser)
@@ -158,11 +158,11 @@ func serve() {
 		// Admin + Vorstand + Trainer
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole("admin", "vorstand", "trainer"))
-			r.Post("/api/admin/games", gameH.CreateGame)
-			r.Put("/api/admin/games/{id}", gameH.UpdateGame)
-			r.Delete("/api/admin/games/{id}", gameH.DeleteGame)
-			r.Post("/api/admin/games/{id}/regenerate", gameH.RegenerateSlots)
-			r.Post("/api/admin/games/regenerate-day", gameH.RegenerateDaySlots)
+			r.Post("/api/admin/kalender", gameH.CreateGame)
+			r.Put("/api/admin/kalender/{id}", gameH.UpdateGame)
+			r.Delete("/api/admin/kalender/{id}", gameH.DeleteGame)
+			r.Post("/api/admin/kalender/{id}/regenerate", gameH.RegenerateSlots)
+			r.Post("/api/admin/kalender/regenerate-day", gameH.RegenerateDaySlots)
 		})
 
 		// Admin + Vorstand
