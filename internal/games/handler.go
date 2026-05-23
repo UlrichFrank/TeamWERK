@@ -300,26 +300,31 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var g struct {
-		ID         int    `json:"id"`
-		Date       string `json:"date"`
-		Time       string `json:"time"`
-		Opponent   string `json:"opponent"`
-		EventType  string `json:"event_type"`
-		SeasonID   int    `json:"season_id"`
-		TemplateID *int   `json:"template_id"`
+		ID         int     `json:"id"`
+		Date       string  `json:"date"`
+		Time       string  `json:"time"`
+		EndTime    *string `json:"end_time,omitempty"`
+		Opponent   string  `json:"opponent"`
+		EventType  string  `json:"event_type"`
+		SeasonID   int     `json:"season_id"`
+		TemplateID *int    `json:"template_id"`
 		Teams      []struct {
 			ID   int    `json:"id"`
 			Name string `json:"name"`
 		} `json:"teams"`
 	}
 	var templateIDNull sql.NullInt64
+	var endTimeNull sql.NullString
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT g.id, g.date, g.time, g.opponent, g.event_type, g.season_id, g.template_id
+		`SELECT g.id, g.date, g.time, g.end_time, g.opponent, g.event_type, g.season_id, g.template_id
 		 FROM games g WHERE g.id=?`, id).
-		Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &g.SeasonID, &templateIDNull)
+		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &g.Opponent, &g.EventType, &g.SeasonID, &templateIDNull)
 	if templateIDNull.Valid {
 		v := int(templateIDNull.Int64)
 		g.TemplateID = &v
+	}
+	if endTimeNull.Valid {
+		g.EndTime = &endTimeNull.String
 	}
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -375,13 +380,14 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/games
 func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Date       string `json:"date"`
-		Time       string `json:"time"`
-		Opponent   string `json:"opponent"`
-		TeamIDs    []int  `json:"team_ids"`
-		EventType  string `json:"event_type"`
-		SeasonID   int    `json:"season_id"`
-		TemplateID *int   `json:"template_id"`
+		Date       string  `json:"date"`
+		Time       string  `json:"time"`
+		EndTime    *string `json:"end_time"`
+		Opponent   string  `json:"opponent"`
+		TeamIDs    []int   `json:"team_ids"`
+		EventType  string  `json:"event_type"`
+		SeasonID   int     `json:"season_id"`
+		TemplateID *int    `json:"template_id"`
 		Slots      []struct {
 			DutyTypeID int    `json:"duty_type_id"`
 			EventTime  string `json:"event_time"`
@@ -441,9 +447,13 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	if req.TemplateID != nil {
 		templateIDVal = *req.TemplateID
 	}
+	var endTimeVal interface{}
+	if req.EndTime != nil && *req.EndTime != "" {
+		endTimeVal = *req.EndTime
+	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO games (season_id, opponent, date, time, is_home, event_type, template_id) VALUES (?,?,?,?,?,?,?)`,
-		req.SeasonID, req.Opponent, req.Date, req.Time, isHome, req.EventType, templateIDVal)
+		`INSERT INTO games (season_id, opponent, date, time, end_time, is_home, event_type, template_id) VALUES (?,?,?,?,?,?,?,?)`,
+		req.SeasonID, req.Opponent, req.Date, req.Time, endTimeVal, isHome, req.EventType, templateIDVal)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -506,10 +516,11 @@ func toAny(teamIDs []int) []any {
 func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Date     string `json:"date"`
-		Time     string `json:"time"`
-		Opponent string `json:"opponent"`
-		TeamIDs  []int  `json:"team_ids"`
+		Date     string  `json:"date"`
+		Time     string  `json:"time"`
+		EndTime  *string `json:"end_time"`
+		Opponent string  `json:"opponent"`
+		TeamIDs  []int   `json:"team_ids"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
@@ -520,9 +531,13 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var endTimeVal interface{}
+	if req.EndTime != nil && *req.EndTime != "" {
+		endTimeVal = *req.EndTime
+	}
 	res, err := tx.ExecContext(r.Context(),
-		`UPDATE games SET date=?, time=?, opponent=? WHERE id=?`,
-		req.Date, req.Time, req.Opponent, id)
+		`UPDATE games SET date=?, time=?, end_time=?, opponent=? WHERE id=?`,
+		req.Date, req.Time, endTimeVal, req.Opponent, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -869,6 +884,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "time is required", http.StatusBadRequest)
 		return
 	}
+	gameEndTime := r.URL.Query().Get("end_time")
 	gameIDStr := r.URL.Query().Get("game_id")
 	dateStr := r.URL.Query().Get("date")
 
@@ -891,9 +907,13 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		// Regeneration context: load from existing game
 		var gameDate string
 		var seasonID int
+		var dbEndTime sql.NullString
 		if h.db.QueryRowContext(r.Context(),
-			`SELECT date, season_id FROM games WHERE id=?`, gameIDStr).
-			Scan(&gameDate, &seasonID) == nil {
+			`SELECT date, season_id, end_time FROM games WHERE id=?`, gameIDStr).
+			Scan(&gameDate, &seasonID, &dbEndTime) == nil {
+			if gameEndTime == "" && dbEndTime.Valid {
+				gameEndTime = dbEndTime.String
+			}
 			allGameTimes, hasPrevDay, hasNextDay = h.loadSameDayContext(r.Context(), gameDate, seasonID)
 		}
 	} else if dateStr != "" {
