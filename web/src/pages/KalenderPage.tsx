@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, MapPin, Calendar } from 'lucide-react'
+import { Home, MapPin, Calendar, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -114,16 +114,59 @@ export default function KalenderPage() {
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
   const nextMonth = () => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)
 
-  const dragStartX = useRef<number | null>(null)
+  const calendarRef = useRef<HTMLDivElement>(null)
+  const pointerStart = useRef<{ x: number; y: number; committed: boolean } | null>(null)
   const SWIPE_THRESHOLD = 50
 
-  const onDragStart = (x: number) => { dragStartX.current = x }
-  const onDragEnd = (x: number) => {
-    if (dragStartX.current === null) return
-    const delta = x - dragStartX.current
-    dragStartX.current = null
-    if (Math.abs(delta) < SWIPE_THRESHOLD) return
-    delta < 0 ? nextMonth() : prevMonth()
+  const setCalendarTransform = (x: number, animated: boolean) => {
+    const el = calendarRef.current
+    if (!el) return
+    el.style.transition = animated ? 'transform 220ms ease-out' : 'none'
+    el.style.transform = x === 0 ? '' : `translateX(${x}px)`
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointerStart.current = { x: e.clientX, y: e.clientY, committed: false }
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointerStart.current) return
+    const dx = e.clientX - pointerStart.current.x
+    const dy = e.clientY - pointerStart.current.y
+    if (!pointerStart.current.committed) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+      if (Math.abs(dy) > Math.abs(dx)) { pointerStart.current = null; return }
+      pointerStart.current.committed = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+    }
+    setCalendarTransform(dx, false)
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointerStart.current?.committed) { pointerStart.current = null; return }
+    const delta = e.clientX - pointerStart.current.x
+    pointerStart.current = null
+    const width = calendarRef.current?.offsetWidth ?? 400
+    if (Math.abs(delta) < SWIPE_THRESHOLD) { setCalendarTransform(0, true); return }
+    const isNext = delta < 0
+    setCalendarTransform(isNext ? -width : width, true)
+    setTimeout(() => {
+      setCalendarTransform(isNext ? width : -width, false)
+      isNext ? nextMonth() : prevMonth()
+      requestAnimationFrame(() => requestAnimationFrame(() => setCalendarTransform(0, true)))
+    }, 220)
+  }
+
+  const handlePointerCancel = () => {
+    pointerStart.current = null
+    setCalendarTransform(0, true)
+  }
+
+  const openWizardWithDate = (dateStr: string) => {
+    setSelectedDate(dateStr)
+    setShowCreate(true)
+    setWizardStep(1)
+    loadTemplates()
   }
 
   const safeGames = Array.isArray(games) ? games : []
@@ -275,13 +318,15 @@ export default function KalenderPage() {
       </div>
 
       {/* Calendar */}
+      <div className="rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
       <div
-        className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden select-none"
-        onTouchStart={e => onDragStart(e.touches[0].clientX)}
-        onTouchEnd={e => onDragEnd(e.changedTouches[0].clientX)}
-        onMouseDown={e => onDragStart(e.clientX)}
-        onMouseUp={e => onDragEnd(e.clientX)}
-        onMouseLeave={() => { dragStartX.current = null }}
+        ref={calendarRef}
+        className="bg-brand-surface-card select-none"
+        style={{ touchAction: 'pan-y' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
       >
         <div className="grid grid-cols-7 bg-brand-surface-card border-b border-brand-border-subtle">
           {WEEKDAYS.map(d => (
@@ -297,13 +342,27 @@ export default function KalenderPage() {
             const dateStr = padDate(year, month, day)
             const dayGames = gamesByDate[dateStr] ?? []
             const isToday = dateStr === todayStr
-            const canRegen = user && ['admin', 'vorstand', 'trainer'].includes(user.role) && dayGames.length > 0
+            const canEdit = user && ['admin', 'vorstand', 'trainer'].includes(user.role)
+            const canRegen = canEdit && dayGames.length > 0
             return (
-              <div key={day} className={`min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle ${isToday ? 'bg-brand-yellow/20' : ''}`}>
-                <div className={`text-xs mb-1 ${isToday ? 'font-bold text-brand-text' : 'text-brand-text-subtle'}`}>{day}</div>
+              <div key={day} className={`group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle ${isToday ? 'bg-brand-yellow/20' : ''}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-xs ${isToday ? 'font-bold text-brand-text' : 'text-brand-text-subtle'}`}>{day}</span>
+                  {canEdit && (
+                    <button
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); openWizardWithDate(dateStr) }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-brand-text-subtle hover:text-brand-text hover:bg-brand-border-subtle"
+                      title="Event anlegen"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
                 {dayGames.map(g => (
                   <button
                     key={g.id}
+                    onPointerDown={e => e.stopPropagation()}
                     onClick={() => navigate(`/kalender/${g.id}`)}
                     className="w-full text-left mb-1 p-1.5 rounded-md text-xs bg-brand-border-subtle hover:bg-brand-border transition-colors border border-brand-border-subtle"
                   >
@@ -319,6 +378,7 @@ export default function KalenderPage() {
                 ))}
                 {canRegen && (
                   <button
+                    onPointerDown={e => e.stopPropagation()}
                     onClick={() => openDayRegen(dateStr)}
                     className="w-full mt-0.5 text-center text-[10px] text-brand-blue hover:underline leading-tight py-0.5"
                   >
@@ -329,6 +389,7 @@ export default function KalenderPage() {
             )
           })}
         </div>
+      </div>
       </div>
 
       {!loading && monthGames.length === 0 && (
