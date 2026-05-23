@@ -15,21 +15,21 @@ export default function MembershipRequestsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Beitrittsanfragen</h1>
-      {requests.length === 0 && <p className="text-gray-500">Keine offenen Anfragen.</p>}
+      {requests.length === 0 && <p className="text-brand-text-muted">Keine offenen Anfragen.</p>}
       <div className="space-y-3">
         {requests.map(r => (
-          <div key={r.id} className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-4 flex items-center justify-between">
+          <div key={r.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 flex items-center justify-between">
             <div>
-              <div className="font-medium">{r.name}</div>
-              <div className="text-sm text-gray-500">{r.email}</div>
-              {r.comment && <div className="text-xs text-gray-400 mt-0.5">{r.comment}</div>}
-              <div className="text-xs text-gray-400 mt-0.5">{new Date(r.created_at).toLocaleDateString('de-DE')}</div>
+              <div className="font-medium text-brand-text">{r.name}</div>
+              <div className="text-sm text-brand-text-muted">{r.email}</div>
+              {r.comment && <div className="text-xs text-brand-text-subtle mt-0.5">{r.comment}</div>}
+              <div className="text-xs text-brand-text-subtle mt-0.5">{new Date(r.created_at).toLocaleDateString('de-DE')}</div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => approve(r.id)} className="bg-brand-yellow text-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors">
+              <button onClick={() => approve(r.id)} className="bg-brand-yellow text-brand-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
                 Genehmigen
               </button>
-              <button onClick={() => reject(r.id)} className="bg-black text-white rounded-md px-3 py-1.5 text-sm hover:bg-gray-800 transition-colors">
+              <button onClick={() => reject(r.id)} className="bg-brand-danger text-white rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-danger/90 transition-colors">
                 Ablehnen
               </button>
             </div>

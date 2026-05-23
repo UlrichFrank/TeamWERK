@@ -1,4 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import MobileCard from '../components/MobileCard'
 import EditModal from '../components/EditModal'
@@ -48,6 +49,9 @@ const emptyCreate = (): EditState => ({
   adjacent_day_behavior: 'normal', adjacent_day_variant_id: '',
 })
 
+const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
+
 function DutyTypeForm({ state, onChange, types, excludeId }: {
   state: EditState
   onChange: (s: EditState) => void
@@ -58,53 +62,47 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+        <label className="block text-sm font-medium text-brand-text-muted mb-1">Name</label>
         <input value={state.name} onChange={e => onChange({ ...state, name: e.target.value })}
-          placeholder="z.B. Kassierer" required
-          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+          placeholder="z.B. Kassierer" required className={INPUT} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Stundenwert</label>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Stundenwert</label>
           <input value={state.hours} onChange={e => onChange({ ...state, hours: e.target.value })}
-            type="number" step="0.5" min="0.5"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+            type="number" step="0.5" min="0.5" className={INPUT} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">
             Geldersatz €{' '}
-            <span className="text-gray-400 font-normal text-xs">(optional)</span>
+            <span className="text-brand-text-subtle font-normal text-xs">(optional)</span>
           </label>
           <input value={state.cash} onChange={e => onChange({ ...state, cash: e.target.value })}
-            type="number" step="0.01" placeholder="–"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+            type="number" step="0.01" placeholder="–" className={INPUT} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Standard-Anker</label>
-          <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Standard-Anker</label>
+          <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
             <option value="start">Anpfiff</option>
             <option value="end">Spielende</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Versatz (min)</label>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz (min)</label>
           <input value={state.offset} onChange={e => onChange({ ...state, offset: e.target.value })}
-            type="number"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+            type="number" className={INPUT} />
         </div>
       </div>
-      <p className="text-xs text-gray-400">Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff)</p>
+      <p className="text-xs text-brand-text-subtle">Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff)</p>
 
-      <div className="border-t pt-3 mt-1">
-        <p className="text-xs font-semibold text-gray-600 mb-2">Spieltag-Verhalten</p>
+      <div className="border-t border-brand-border-subtle pt-3 mt-1">
+        <p className="text-xs font-semibold text-brand-text-muted mb-2">Spieltag-Verhalten</p>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Mehrere Spiele am gleichen Tag</label>
-            <select value={state.same_day_behavior} onChange={e => onChange({ ...state, same_day_behavior: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+            <label className="block text-xs text-brand-text-muted mb-1">Mehrere Spiele am gleichen Tag</label>
+            <select value={state.same_day_behavior} onChange={e => onChange({ ...state, same_day_behavior: e.target.value })} className={INPUT_SM}>
               <option value="normal">Normal (immer)</option>
               <option value="skip">Überspringen</option>
               <option value="reduced">Reduziert</option>
@@ -112,18 +110,16 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
           </div>
           {state.same_day_behavior === 'reduced' && (
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Ersatz-Diensttyp</label>
-              <select value={state.same_day_variant_id} onChange={e => onChange({ ...state, same_day_variant_id: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+              <label className="block text-xs text-brand-text-muted mb-1">Ersatz-Diensttyp</label>
+              <select value={state.same_day_variant_id} onChange={e => onChange({ ...state, same_day_variant_id: e.target.value })} className={INPUT_SM}>
                 <option value="">– Wählen –</option>
                 {variantOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
           )}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Spiele am Vortag / Folgetag</label>
-            <select value={state.adjacent_day_behavior} onChange={e => onChange({ ...state, adjacent_day_behavior: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+            <label className="block text-xs text-brand-text-muted mb-1">Spiele am Vortag / Folgetag</label>
+            <select value={state.adjacent_day_behavior} onChange={e => onChange({ ...state, adjacent_day_behavior: e.target.value })} className={INPUT_SM}>
               <option value="normal">Normal (immer)</option>
               <option value="skip">Überspringen</option>
               <option value="reduced">Reduziert</option>
@@ -131,9 +127,8 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
           </div>
           {state.adjacent_day_behavior === 'reduced' && (
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Ersatz-Diensttyp</label>
-              <select value={state.adjacent_day_variant_id} onChange={e => onChange({ ...state, adjacent_day_variant_id: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+              <label className="block text-xs text-brand-text-muted mb-1">Ersatz-Diensttyp</label>
+              <select value={state.adjacent_day_variant_id} onChange={e => onChange({ ...state, adjacent_day_variant_id: e.target.value })} className={INPUT_SM}>
                 <option value="">– Wählen –</option>
                 {variantOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
@@ -207,7 +202,7 @@ export default function AdminDutyTypesPage() {
           <h1 className="text-2xl font-bold">Diensttypen</h1>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
           >
             + Neuer Diensttyp
           </button>
@@ -218,30 +213,31 @@ export default function AdminDutyTypesPage() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-              <h2 className="font-semibold text-lg">Neuer Diensttyp</h2>
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
+              <h2 className="font-semibold text-lg text-brand-text">Neuer Diensttyp</h2>
               <button
                 onClick={() => { setShowCreateModal(false); setCreate(emptyCreate()) }}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                aria-label="Schließen"
+                className="text-brand-text-muted hover:text-brand-text transition-colors"
               >
-                &times;
+                <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleCreate} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto px-6 pb-2 flex-1">
+              <div className="overflow-y-auto px-6 py-4 flex-1">
                 <DutyTypeForm state={create} onChange={setCreate} types={types} />
               </div>
-              <div className="flex gap-2 px-6 py-4 border-t shrink-0">
+              <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle shrink-0">
                 <button
                   type="submit"
-                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
                 >
                   Anlegen
                 </button>
                 <button
                   type="button"
                   onClick={() => { setShowCreateModal(false); setCreate(emptyCreate()) }}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2.5 sm:py-2 text-sm border border-brand-border rounded-md text-brand-text hover:bg-brand-surface-card transition-colors"
                 >
                   Abbrechen
                 </button>
@@ -263,7 +259,7 @@ export default function AdminDutyTypesPage() {
               { label: 'Löschen', onClick: () => handleDelete(t.id, t.name), variant: 'danger' },
             ]}
           >
-            <div className="text-xs text-gray-500 space-y-1">
+            <div className="text-xs text-brand-text-muted space-y-1">
               <div>Anker: {t.default_anchor === 'start' ? 'Anpfiff' : 'Spielende'}</div>
               <div>Versatz: {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes} min</div>
             </div>
@@ -272,45 +268,45 @@ export default function AdminDutyTypesPage() {
       </div>
 
       {/* Desktop: Table */}
-      <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-6">
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-6">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+          <thead>
             <tr>
-              <th className="px-3 py-3 text-left">Name</th>
-              <th className="px-3 py-3 text-right">Stunden</th>
-              <th className="px-3 py-3 text-right">Geldersatz</th>
-              <th className="px-3 py-3 text-right">Anker</th>
-              <th className="px-3 py-3 text-right">Versatz</th>
-              <th className="px-3 py-3">Spieltag</th>
-              <th className="px-3 py-3"></th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left">Name</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Stunden</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Geldersatz</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Anker</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Versatz</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3">Spieltag</th>
+              <th className="bg-brand-surface-card px-3 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-brand-border-subtle">
             {types.map(t => (
-              <tr key={t.id} className="hover:bg-brand-gray">
-                <td className="px-3 py-3 font-medium">{t.name}</td>
-                <td className="px-3 py-3 text-right">{t.hours_value.toFixed(1)}</td>
-                <td className="px-3 py-3 text-right text-gray-500">
+              <tr key={t.id} className="hover:bg-brand-table-select transition-colors">
+                <td className="px-3 py-3 font-medium text-brand-text">{t.name}</td>
+                <td className="px-3 py-3 text-right text-brand-text">{t.hours_value.toFixed(1)}</td>
+                <td className="px-3 py-3 text-right text-brand-text-muted">
                   {t.cash_substitute != null ? `${t.cash_substitute.toFixed(2)} €` : '–'}
                 </td>
-                <td className="px-3 py-3 text-right text-gray-500">
+                <td className="px-3 py-3 text-right text-brand-text-muted">
                   {t.default_anchor === 'start' ? 'Anpfiff' : 'Spielende'}
                 </td>
-                <td className="px-3 py-3 text-right font-mono text-gray-500">
+                <td className="px-3 py-3 text-right font-mono text-brand-text-muted">
                   {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes}
                 </td>
                 <td className="px-3 py-3 text-sm space-x-1">
                   {(!t.same_day_behavior || t.same_day_behavior === 'normal') && (!t.adjacent_day_behavior || t.adjacent_day_behavior === 'normal') ? (
-                    <span className="text-gray-400 text-xs">Normal</span>
+                    <span className="text-brand-text-subtle text-xs">Normal</span>
                   ) : (
                     <>
                       {t.same_day_behavior && t.same_day_behavior !== 'normal' && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                        <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
                           {t.same_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Tag)
                         </span>
                       )}
                       {t.adjacent_day_behavior && t.adjacent_day_behavior !== 'normal' && (
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                        <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
                           {t.adjacent_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Adj.)
                         </span>
                       )}
@@ -320,11 +316,11 @@ export default function AdminDutyTypesPage() {
                 <td className="px-3 py-3">
                   <div className="flex gap-1 justify-end">
                     <button onClick={() => startEdit(t)}
-                      className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
+                      className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
                       Bearbeiten
                     </button>
                     <button onClick={() => handleDelete(t.id, t.name)}
-                      className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors">
+                      className="bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors">
                       Löschen
                     </button>
                   </div>

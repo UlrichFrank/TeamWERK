@@ -14,6 +14,8 @@ const AGE_CLASS_OPTIONS = [
   { label: 'D-Jugend gemischt', ageClass: 'D-Jugend', gender: 'mixed' as const },
 ]
 
+const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+
 export default function AdminTeamsPage() {
   const [teams, setTeams] = useState<Team[]>([])
   const [name, setName] = useState('')
@@ -44,13 +46,11 @@ export default function AdminTeamsPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Teams</h1>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow px-4 sm:px-6 py-6">
-          <h2 className="font-semibold mb-4">Neues Team</h2>
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-4 sm:px-6 py-6">
+          <h2 className="font-semibold mb-4 text-brand-text">Neues Team</h2>
           <form onSubmit={handleCreate} className="space-y-3">
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Teamname" required
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
-            <select value={ageGenderPreset} onChange={e => handleAgeGenderChange(e.target.value)} required
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Teamname" required className={INPUT} />
+            <select value={ageGenderPreset} onChange={e => handleAgeGenderChange(e.target.value)} required className={INPUT}>
               <option value="">Altersklasse wählen…</option>
               {AGE_CLASS_OPTIONS.map(opt => (
                 <option key={`${opt.ageClass}|${opt.gender}`} value={`${opt.ageClass}|${opt.gender}`}>
@@ -77,22 +77,22 @@ export default function AdminTeamsPage() {
         </div>
 
         {/* Desktop: Table */}
-        <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left">Name</th>
-                <th className="px-4 py-3 text-left">Klasse</th>
-                <th className="px-4 py-3 text-left">Status</th>
+                <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Name</th>
+                <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Klasse</th>
+                <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-brand-border-subtle">
               {teams.map(t => (
-                <tr key={t.id} className="hover:bg-brand-gray">
-                  <td className="px-4 py-3 font-medium">{t.name}</td>
-                  <td className="px-4 py-3 text-gray-500">{t.age_class}</td>
+                <tr key={t.id} className="hover:bg-brand-table-select transition-colors">
+                  <td className="px-4 py-3 font-medium text-brand-text">{t.name}</td>
+                  <td className="px-4 py-3 text-brand-text-muted">{t.age_class}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${t.is_active ? 'bg-brand-yellow text-brand-black' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${t.is_active ? 'bg-brand-yellow text-brand-black' : 'bg-brand-border-subtle text-brand-text-muted'}`}>
                       {t.is_active ? 'aktiv' : 'inaktiv'}
                     </span>
                   </td>

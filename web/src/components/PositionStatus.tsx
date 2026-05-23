@@ -30,10 +30,10 @@ function countMembersForPosition(members: Member[], positionName: string): numbe
 }
 
 function getCircleClass(count: number): string {
-  if (count === 0) return 'border-2 border-red-500 bg-white'
+  if (count === 0) return 'border-2 border-brand-danger bg-white'
   if (count === 1) return 'bg-brand-yellow'
   if (count === 2) return 'bg-brand-green'
-  return 'bg-blue-500'
+  return 'bg-brand-blue'
 }
 
 interface PositionStatusProps {
@@ -50,7 +50,7 @@ export default function PositionStatus({ members }: PositionStatusProps) {
 
         return (
           <div key={pos.abbr} className="flex items-end gap-1">
-            <span className="font-medium text-gray-700 whitespace-nowrap">{pos.abbr}</span>
+            <span className="font-medium text-brand-text-muted whitespace-nowrap">{pos.abbr}</span>
             <div className="flex flex-col-reverse gap-0.5">
               {Array.from({ length: circleCount }).map((_, i) => (
                 <div

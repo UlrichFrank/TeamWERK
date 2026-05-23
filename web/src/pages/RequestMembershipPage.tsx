@@ -43,9 +43,9 @@ export default function RequestMembershipPage() {
         <div className="flex-1 flex items-center justify-center bg-brand-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
           <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
             <MobileLogo />
-            <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
+            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
               <h2 className="text-xl font-bold mb-2">Antrag gesendet!</h2>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-brand-text-muted">
                 Dein Antrag wurde weitergeleitet. Du erhältst eine E-Mail sobald er bearbeitet wurde.
               </p>
               <div className="mt-6">
@@ -66,23 +66,23 @@ export default function RequestMembershipPage() {
       <div className="flex-1 flex items-center justify-center bg-brand-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
         <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
           <MobileLogo />
-          <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8">
+          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8">
             <h2 className="text-2xl font-bold mb-1">Beitrittsantrag</h2>
-            <p className="text-sm text-gray-500 mb-6">Team Stuttgart – TeamWERK</p>
+            <p className="text-sm text-brand-text-muted mb-6">Team Stuttgart – TeamWERK</p>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && <p className="text-brand-error text-sm">{error}</p>}
+              {error && <p className="text-brand-danger text-sm">{error}</p>}
               <div>
                 <label className="block text-sm font-medium text-brand-black mb-1">Vor- und Nachname</label>
                 <input
                   type="text" value={name} onChange={e => setName(e.target.value)} required
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
                 <input
                   type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <div>
@@ -92,7 +92,7 @@ export default function RequestMembershipPage() {
                 <input
                   type="text" value={comment} onChange={e => setComment(e.target.value)}
                   placeholder="z.B. Mannschaft, Ansprechpartner …"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <button

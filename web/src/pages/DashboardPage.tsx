@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Zap, Calendar, BarChart2, Users, Car,
-  CircleDot, ArrowRight, Download, ChevronDown, ChevronRight
+  CircleDot, ArrowRight, Download, ChevronDown, ChevronRight,
+  Home, MapPin
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -35,14 +36,14 @@ function formatDate(iso: string) {
 }
 
 function statusLabel(status: string) {
-  if (status === 'fulfilled') return { label: 'Erfüllt', cls: 'bg-green-100 text-green-800' }
-  if (status === 'cash_substitute') return { label: 'Ablöse', cls: 'bg-yellow-100 text-yellow-800' }
-  return { label: 'Zugesagt', cls: 'bg-blue-100 text-blue-800' }
+  if (status === 'fulfilled') return { label: 'Erfüllt', cls: 'bg-brand-success-light text-brand-success' }
+  if (status === 'cash_substitute') return { label: 'Ablöse', cls: 'bg-brand-warning-light text-brand-text' }
+  return { label: 'Zugesagt', cls: 'bg-brand-info/10 text-brand-blue' }
 }
 
 function ActionsList({ actions }: { actions: Action[] }) {
   if (actions.length === 0) {
-    return <p className="text-sm text-black/50 py-1">Alles erledigt! 🎉</p>
+    return <p className="text-sm text-brand-text-muted py-1">Alles erledigt! 🎉</p>
   }
   return (
     <ul className="space-y-2">
@@ -51,10 +52,10 @@ function ActionsList({ actions }: { actions: Action[] }) {
           <CircleDot size={16} className="mt-0.5 flex-shrink-0 text-brand-blue" />
           <Link
             to={a.link}
-            className="flex-1 text-sm text-black hover:underline flex items-center justify-between gap-1 py-1 sm:py-0.5"
+            className="flex-1 text-sm text-brand-text hover:underline flex items-center justify-between gap-1 py-1 sm:py-0.5"
           >
             <span>{a.text}</span>
-            <ArrowRight size={14} className="flex-shrink-0 text-black/40" />
+            <ArrowRight size={14} className="flex-shrink-0 text-brand-text-subtle" />
           </Link>
         </li>
       ))}
@@ -64,23 +65,27 @@ function ActionsList({ actions }: { actions: Action[] }) {
 
 function NextGamesList({ games }: { games: Game[] }) {
   if (games.length === 0) {
-    return <p className="text-sm text-black/50 py-1">Keine Spiele geplant.</p>
+    return <p className="text-sm text-brand-text-muted py-1">Keine Spiele geplant.</p>
   }
   return (
     <ul className="space-y-2">
       {games.map(g => (
         <li key={g.id}>
-          <Link to={g.link} className="block hover:bg-black/5 rounded px-2 py-2 -mx-2 transition-colors">
+          <Link to={g.link} className="block hover:bg-brand-border-subtle rounded px-2 py-2 -mx-2 transition-colors">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <span className="text-xs text-black/50 mr-2">{formatDate(g.date)}</span>
-                <span className="text-sm font-medium">
-                  {g.isHome ? '🏠' : '🚌'} vs. {g.opponent}
+                <span className="text-xs text-brand-text-muted mr-2">{formatDate(g.date)}</span>
+                <span className="text-sm font-medium inline-flex items-center gap-1">
+                  {g.isHome
+                    ? <Home className="w-4 h-4 flex-shrink-0" />
+                    : <MapPin className="w-4 h-4 flex-shrink-0" />
+                  }
+                  vs. {g.opponent}
                 </span>
               </div>
-              <ArrowRight size={14} className="text-black/40 flex-shrink-0" />
+              <ArrowRight size={14} className="text-brand-text-subtle flex-shrink-0" />
             </div>
-            <div className="mt-0.5 text-xs text-black/40">
+            <div className="mt-0.5 text-xs text-brand-text-subtle">
               {g.team} · Dienste: {g.slotsFilled}/{g.slotsCount}
             </div>
           </Link>
@@ -101,14 +106,14 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
     <div>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between py-2 hover:bg-black/5 rounded px-2 -mx-2 transition-colors min-h-[44px]"
+        className="w-full flex items-center justify-between py-2 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors min-h-[44px]"
       >
         <div>
-          <span className="text-sm font-medium">
+          <span className="text-sm font-medium text-brand-text">
             Dienstleistungen: {account.ist}{account.soll != null ? `/${account.soll}` : ''}
           </span>
           {account.soll != null && (
-            <div className="mt-1 h-2 w-32 bg-black/10 rounded-full overflow-hidden">
+            <div className="mt-1 h-2 w-32 bg-brand-border-subtle rounded-full overflow-hidden">
               <div
                 className="h-full bg-brand-blue rounded-full transition-all"
                 style={{ width: `${pct}%` }}
@@ -120,7 +125,7 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
       </button>
 
       {role === 'elternteil' && account.children > 0 && (
-        <p className="text-xs text-black/50 mt-1">
+        <p className="text-xs text-brand-text-muted mt-1">
           Ziel: 5 Dienste × {account.children} Kinder = {account.soll}
         </p>
       )}
@@ -128,13 +133,13 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
       {open && (
         <div className="mt-2 space-y-1">
           {account.recentAssignments.length === 0 ? (
-            <p className="text-xs text-black/50">Noch keine Dienste diese Saison.</p>
+            <p className="text-xs text-brand-text-muted">Noch keine Dienste diese Saison.</p>
           ) : (
             account.recentAssignments.map((a, i) => {
               const { label, cls } = statusLabel(a.status)
               return (
-                <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-black/5 last:border-0">
-                  <span className="text-black/60">{formatDate(a.date)} — {a.dutyType}</span>
+                <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-brand-border-subtle last:border-0">
+                  <span className="text-brand-text-muted">{formatDate(a.date)} — {a.dutyType}</span>
                   <span className={`px-1.5 py-0.5 rounded text-xs ${cls}`}>{label}</span>
                 </div>
               )
@@ -147,7 +152,7 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
         <a
           href="/api/admin/duty-accounts/export"
           download
-          className="mt-3 inline-flex items-center gap-1 text-xs text-black/60 hover:text-black transition-colors"
+          className="mt-3 inline-flex items-center gap-1 text-xs text-brand-text-muted hover:text-brand-text transition-colors"
         >
           <Download size={14} />
           Dienstkonten exportieren
@@ -159,20 +164,20 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
 
 function TeamStatsCard({ stats }: { stats: TeamStats }) {
   return (
-    <div className="mt-3 pt-3 border-t border-black/10">
-      <p className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-2">{stats.team}</p>
+    <div className="mt-3 pt-3 border-t border-brand-border-subtle">
+      <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-2">{stats.team}</p>
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
           <div className="text-lg font-bold text-brand-green">{stats.activeMembers}</div>
-          <div className="text-xs text-black/50">Aktiv</div>
+          <div className="text-xs text-brand-text-muted">Aktiv</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-red-500">{stats.injuredCount}</div>
-          <div className="text-xs text-black/50">Verletzt</div>
+          <div className="text-lg font-bold text-brand-danger">{stats.injuredCount}</div>
+          <div className="text-xs text-brand-text-muted">Verletzt</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-yellow-500">{stats.pausedCount}</div>
-          <div className="text-xs text-black/50">Pausiert</div>
+          <div className="text-lg font-bold text-brand-warning">{stats.pausedCount}</div>
+          <div className="text-xs text-brand-text-muted">Pausiert</div>
         </div>
       </div>
     </div>
@@ -184,17 +189,17 @@ function VehicleSection({ vehicleInfo }: { vehicleInfo: VehicleInfo | null }) {
     return (
       <div className="flex items-start gap-2">
         <CircleDot size={16} className="mt-0.5 flex-shrink-0 text-brand-blue" />
-        <Link to="/profil" className="flex-1 text-sm text-black hover:underline flex items-center justify-between gap-1 py-1">
+        <Link to="/profil" className="flex-1 text-sm text-brand-text hover:underline flex items-center justify-between gap-1 py-1">
           <span>Fahrzeuginfo fehlt — bitte eintragen</span>
-          <ArrowRight size={14} className="flex-shrink-0 text-black/40" />
+          <ArrowRight size={14} className="flex-shrink-0 text-brand-text-subtle" />
         </Link>
       </div>
     )
   }
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="text-sm">{vehicleInfo.seats} Plätze gemeldet</span>
-      <Link to="/profil" className="text-xs text-black/50 hover:text-black transition-colors flex items-center gap-1">
+      <span className="text-sm text-brand-text">{vehicleInfo.seats} Plätze gemeldet</span>
+      <Link to="/profil" className="text-xs text-brand-text-muted hover:text-brand-text transition-colors flex items-center gap-1">
         Ändern <ArrowRight size={12} />
       </Link>
     </div>
@@ -210,7 +215,6 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Mobile: only one section open at a time; Desktop: all open
   const [openSection, setOpenSection] = useState<string>('actions')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     actions: true, games: true, konto: true, team: true, fahrt: true,
@@ -241,7 +245,7 @@ export default function DashboardPage() {
     return (
       <div className="max-w-2xl mx-auto space-y-3">
         {[1, 2, 3].map(i => (
-          <div key={i} className="h-14 bg-black/5 rounded-lg animate-pulse" />
+          <div key={i} className="h-14 bg-brand-border-subtle rounded-lg animate-pulse" />
         ))}
       </div>
     )
@@ -250,11 +254,11 @@ export default function DashboardPage() {
   if (state === 'error' || !data) {
     return (
       <div className="text-center py-8">
-        <p className="text-sm text-black/60 mb-3">Dashboard konnte nicht geladen werden.</p>
-        <p className="text-xs text-black/40">{error}</p>
+        <p className="text-sm text-brand-text-muted mb-3">Dashboard konnte nicht geladen werden.</p>
+        <p className="text-xs text-brand-text-subtle">{error}</p>
         <button
           onClick={() => { setState('loading'); setError(null); api.get('/dashboard').then(r => { setData(r.data); setState('loaded') }).catch(e => { setError(e.message); setState('error') }) }}
-          className="mt-4 px-4 py-2 bg-brand-yellow hover:bg-black hover:text-brand-yellow text-sm font-medium rounded transition-colors"
+          className="mt-4 px-4 py-2 bg-brand-yellow hover:bg-brand-black hover:text-brand-yellow text-sm font-medium rounded transition-colors"
         >
           Erneut versuchen
         </button>
@@ -269,31 +273,27 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="mb-5">
-        <h1 className="text-xl font-bold">Übersicht</h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-brand-text">Übersicht</h1>
         {data.currentSeason && (
-          <p className="text-sm text-black/50 mt-0.5">Saison {data.currentSeason.name}</p>
+          <p className="text-sm text-brand-text-muted mt-0.5">Saison {data.currentSeason.name}</p>
         )}
         {data.nextGameDate && (
-          <p className="text-sm text-black/60 mt-1">
+          <p className="text-sm text-brand-text-muted mt-1">
             Nächster Termin: {formatDate(data.nextGameDate)}
           </p>
         )}
       </div>
 
       <div className="space-y-2">
-        {/* DIESE WOCHE */}
         <Accordion id="actions" title="Diese Woche" icon={Zap} isOpen={isOpen('actions')} onToggle={() => toggle('actions')}>
           <ActionsList actions={data.actions} />
         </Accordion>
 
-        {/* NÄCHSTE SPIELE */}
         <Accordion id="games" title="Nächste Spiele" icon={Calendar} isOpen={isOpen('games')} onToggle={() => toggle('games')}>
           <NextGamesList games={data.nextGames} />
         </Accordion>
 
-        {/* KONTO / TEAM-STATS */}
         {hasKontoSection && (
           <Accordion id="konto" title="Dienstkonto" icon={BarChart2} isOpen={isOpen('konto')} onToggle={() => toggle('konto')}>
             {data.dutyAccount && <DutyAccountTile account={data.dutyAccount} role={role} />}
@@ -301,22 +301,20 @@ export default function DashboardPage() {
           </Accordion>
         )}
 
-        {/* DEIN TEAM */}
         {hasTeamSection && (
           <Accordion id="team" title="Dein Team" icon={Users} isOpen={isOpen('team')} onToggle={() => toggle('team')}>
             {user?.role === 'trainer' || user?.role === 'vorstand' || user?.role === 'admin' ? (
-              <Link to="/mitglieder" className="inline-flex items-center gap-1 text-sm text-black hover:underline py-1">
+              <Link to="/mitglieder" className="inline-flex items-center gap-1 text-sm text-brand-text hover:underline py-1">
                 Zur Mitgliederliste <ArrowRight size={14} />
               </Link>
             ) : (
-              <Link to="/profil" className="inline-flex items-center gap-1 text-sm text-black hover:underline py-1">
+              <Link to="/profil" className="inline-flex items-center gap-1 text-sm text-brand-text hover:underline py-1">
                 Mein Profil <ArrowRight size={14} />
               </Link>
             )}
           </Accordion>
         )}
 
-        {/* FAHRTGEMEINSCHAFTEN */}
         {hasFahrtSection && (
           <Accordion id="fahrt" title="Fahrtgemeinschaften" icon={Car} isOpen={isOpen('fahrt')} onToggle={() => toggle('fahrt')}>
             <VehicleSection vehicleInfo={data.vehicleInfo} />

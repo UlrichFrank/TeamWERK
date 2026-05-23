@@ -80,7 +80,7 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
           onChange={e => setQuery(e.target.value)}
           onFocus={() => fetchSuggestions(query, filterAge)}
           placeholder="Mitglied suchen…"
-          className="w-full border border-gray-300 rounded-md px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          className="w-full border border-brand-border rounded-md px-3 py-2 pr-9 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2">
           <BrandCheckbox
@@ -92,12 +92,12 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
       </div>
 
       {open && (
-        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-brand-border-subtle rounded-lg shadow-lg max-h-48 overflow-y-auto">
           {loading && (
-            <div className="px-4 py-2 text-xs text-gray-400">Suche…</div>
+            <div className="px-4 py-2 text-xs text-brand-text-subtle">Suche…</div>
           )}
           {!loading && suggestions.length === 0 && (
-            <div className="px-4 py-2 text-xs text-gray-400 italic">Keine Vorschläge</div>
+            <div className="px-4 py-2 text-xs text-brand-text-subtle italic">Keine Vorschläge</div>
           )}
           {!loading && suggestions.map(s => (
             <button
@@ -107,11 +107,11 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
               className={`w-full text-left px-4 py-2 text-sm hover:bg-brand-gray transition-colors flex items-center justify-between gap-2
                 ${s.already_in_kader ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
-              <span>
+              <span className="text-brand-text">
                 {s.name}{' '}
-                <span className="text-gray-400 text-xs">({s.birth_year}/{genderLabel(s.gender)})</span>
+                <span className="text-brand-text-subtle text-xs">({s.birth_year}/{genderLabel(s.gender)})</span>
               </span>
-              {s.already_in_kader && <span className="text-xs text-gray-400">bereits im Kader</span>}
+              {s.already_in_kader && <span className="text-xs text-brand-text-subtle">bereits im Kader</span>}
             </button>
           ))}
         </div>

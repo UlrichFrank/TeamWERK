@@ -44,10 +44,10 @@ export default function LoginPage() {
             <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
           </div>
 
-          <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8">
+          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8">
             <h2 className="text-xl font-bold text-brand-black mb-6">Anmelden</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && <p className="text-brand-error text-sm">{error}</p>}
+              {error && <p className="text-brand-danger text-sm">{error}</p>}
               <div>
                 <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
                 <input
@@ -55,7 +55,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <div>
@@ -65,7 +65,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <button

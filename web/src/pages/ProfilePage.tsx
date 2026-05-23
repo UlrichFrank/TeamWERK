@@ -66,49 +66,23 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold mb-6">Mein Profil</h1>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200 sm:flex-wrap">
-        <button
-          onClick={() => setActiveTab('account')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'account'
-              ? 'border-brand-yellow text-brand-black'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Konto
-        </button>
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'profile'
-              ? 'border-brand-yellow text-brand-black'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Profil
-        </button>
-        {showMemberTab && (
-          <button
-            onClick={() => setActiveTab('member')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'member'
-                ? 'border-brand-yellow text-brand-black'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Mitgliedsdaten
-          </button>
-        )}
-        <button
-          onClick={() => setActiveTab('misc')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'misc'
-              ? 'border-brand-yellow text-brand-black'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Sonstiges
-        </button>
+      <div className="flex gap-1 mb-6 border-b border-brand-border-subtle sm:flex-wrap">
+        {(['account', 'profile', ...(showMemberTab ? ['member'] : []), 'misc'] as TabName[]).map(tab => {
+          const labels: Record<TabName, string> = { account: 'Konto', profile: 'Profil', member: 'Mitgliedsdaten', misc: 'Sonstiges' }
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab
+                  ? 'border-brand-yellow text-brand-text'
+                  : 'border-transparent text-brand-text-muted hover:text-brand-text'
+              }`}
+            >
+              {labels[tab]}
+            </button>
+          )
+        })}
       </div>
 
       {/* Tab Content */}

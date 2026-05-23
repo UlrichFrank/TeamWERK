@@ -20,16 +20,16 @@ export default function MobileCard({ title, subtitle, badge, actions, onClick, c
   const badgeStyles = {
     yellow: 'bg-brand-yellow text-brand-black',
     green: 'bg-brand-green text-white',
-    red: 'bg-red-500 text-white',
+    red: 'bg-brand-danger text-white',
     blue: 'bg-brand-blue text-white',
   }
 
   return (
-    <div className={`bg-white border border-brand-black/10 rounded p-4 mb-3${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
+    <div className={`bg-white border border-brand-border-subtle rounded p-4 mb-3${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-brand-black">{title}</div>
-          {subtitle && <div className="text-sm text-brand-black/60">{subtitle}</div>}
+          <div className="font-medium text-brand-text">{title}</div>
+          {subtitle && <div className="text-sm text-brand-text-muted">{subtitle}</div>}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {badge && (
@@ -40,7 +40,7 @@ export default function MobileCard({ title, subtitle, badge, actions, onClick, c
           {actions && <ActionMenu actions={actions} />}
         </div>
       </div>
-      {children && <div className="mt-3 text-sm">{children}</div>}
+      {children && <div className="mt-3 text-sm text-brand-text">{children}</div>}
     </div>
   )
 }

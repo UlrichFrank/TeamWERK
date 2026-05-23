@@ -23,17 +23,17 @@ export default function AdminClubPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Vereinseinstellungen</h1>
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow px-4 sm:px-6 py-6 max-w-lg">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-4 sm:px-6 py-6 max-w-lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Vereinsname</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Vereinsname</label>
             <input value={name} onChange={e => setName(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Adresse</label>
             <input value={address} onChange={e => setAddress(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow" />
           </div>
           <button type="submit" className="w-full sm:w-auto bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
             {saved ? 'Gespeichert ✓' : 'Speichern'}

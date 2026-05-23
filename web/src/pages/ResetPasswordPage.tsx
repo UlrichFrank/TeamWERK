@@ -20,17 +20,21 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-8">
-        <h1 className="text-xl font-bold mb-6">Neues Passwort setzen</h1>
+    <div className="min-h-screen flex items-center justify-center bg-brand-surface-card">
+      <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8">
+        <h1 className="text-xl font-bold mb-6 text-brand-text">Neues Passwort setzen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <p className="text-brand-error text-sm">{error}</p>}
+          {error && (
+            <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+              {error}
+            </p>
+          )}
           <input
             type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
             placeholder="Neues Passwort"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
           />
-          <button type="submit" className="w-full bg-brand-yellow text-black rounded-md py-2 text-sm font-semibold hover:bg-black hover:text-brand-yellow transition-colors">
+          <button type="submit" className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
             Passwort speichern
           </button>
         </form>

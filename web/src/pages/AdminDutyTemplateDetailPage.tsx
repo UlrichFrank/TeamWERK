@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { Trash2, Check } from 'lucide-react'
 import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
 
@@ -29,6 +30,9 @@ interface Template {
 function newItem(): TemplateItem {
   return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, role_desc: '' }
 }
+
+const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
 
 export default function AdminDutyTemplateDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -80,38 +84,38 @@ export default function AdminDutyTemplateDetailPage() {
     }
   }
 
-  if (loading) return <div className="text-gray-400 text-sm">Laden…</div>
-  if (!template) return <div className="text-red-500 text-sm">Vorlage nicht gefunden.</div>
+  if (loading) return <div className="text-brand-text-muted text-sm">Laden…</div>
+  if (!template) return <div className="text-brand-danger text-sm">Vorlage nicht gefunden.</div>
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+      <div className="flex items-center gap-2 text-sm text-brand-text-muted mb-4">
         <Link to="/admin/dienstplan-vorlagen" className="hover:underline">Dienstplan-Vorlagen</Link>
         <span>/</span>
-        <span className="text-gray-900">{template.name}</span>
+        <span className="text-brand-text">{template.name}</span>
       </div>
 
       <h1 className="text-2xl font-bold mb-6">{template.name}</h1>
 
       {/* Name + Typ + Dauer */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-5 mb-5">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-5 mb-5">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name der Vorlage</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Name der Vorlage</label>
             <input
               type="text"
               value={template.name}
               onChange={e => setTemplate(t => t ? { ...t, name: e.target.value } : t)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              className={INPUT}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
               <select
                 value={template.template_type}
                 onChange={e => setTemplate(t => t ? { ...t, template_type: e.target.value as Template['template_type'] } : t)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                className={INPUT}
               >
                 <option value="heim">Heim</option>
                 <option value="auswärts">Auswärts</option>
@@ -119,13 +123,13 @@ export default function AdminDutyTemplateDetailPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Spieldauer (min)</label>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Spieldauer (min)</label>
               <input
                 type="number"
                 min={1}
                 value={template.game_duration_minutes}
                 onChange={e => setTemplate(t => t ? { ...t, game_duration_minutes: Number(e.target.value) } : t)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                className={INPUT}
               />
             </div>
           </div>
@@ -133,19 +137,19 @@ export default function AdminDutyTemplateDetailPage() {
       </div>
 
       {/* Items */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-5">
-        <div className="flex items-center justify-between px-5 py-3 border-b">
-          <h2 className="font-semibold">Dienst-Einträge</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-5">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-brand-border-subtle">
+          <h2 className="font-semibold text-brand-text">Dienst-Einträge</h2>
           <button
             onClick={addItem}
-            className="text-sm bg-brand-yellow text-black px-3 py-1.5 rounded-md font-medium hover:bg-black hover:text-brand-yellow transition-colors"
+            className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
           >
             + Eintrag hinzufügen
           </button>
         </div>
 
         {template.items.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8 italic">
+          <p className="text-sm text-brand-text-subtle text-center py-8 italic">
             Keine Einträge — klicke auf „+ Eintrag hinzufügen"
           </p>
         ) : (
@@ -155,16 +159,16 @@ export default function AdminDutyTemplateDetailPage() {
               {template.items.map((item, i) => {
                 const dutyType = dutyTypes.find(d => d.id === item.duty_type_id)
                 return (
-                  <div key={i} className="bg-white border border-gray-200 rounded p-4">
+                  <div key={i} className="bg-white border border-brand-border-subtle rounded p-4">
                     <div className="flex items-start justify-between gap-2 mb-3">
-                      <h3 className="font-medium text-sm flex-1">{dutyType?.name || 'Diensttyp auswählen'}</h3>
+                      <h3 className="font-medium text-sm flex-1 text-brand-text">{dutyType?.name || 'Diensttyp auswählen'}</h3>
                       <ActionMenu
                         actions={[{ label: 'Löschen', onClick: () => removeItem(i), variant: 'danger' }]}
                       />
                     </div>
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Diensttyp</label>
+                        <label className="block text-xs text-brand-text-muted mb-1">Diensttyp</label>
                         <select
                           value={item.duty_type_id}
                           onChange={e => {
@@ -172,7 +176,7 @@ export default function AdminDutyTemplateDetailPage() {
                             const dt = dutyTypes.find(d => d.id === dtId)
                             updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}) })
                           }}
-                          className="w-full border rounded-md px-2 py-1.5 text-sm"
+                          className={INPUT_SM}
                         >
                           <option value={0}>Auswählen…</option>
                           {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
@@ -180,45 +184,45 @@ export default function AdminDutyTemplateDetailPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Anker</label>
+                          <label className="block text-xs text-brand-text-muted mb-1">Anker</label>
                           <select
                             value={item.anchor}
                             onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm"
+                            className={INPUT_SM}
                           >
                             <option value="start">Anpfiff</option>
                             <option value="end">Spielende</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Versatz (min)</label>
+                          <label className="block text-xs text-brand-text-muted mb-1">Versatz (min)</label>
                           <input
                             type="number"
                             value={item.offset_minutes}
                             onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm"
+                            className={INPUT_SM}
                           />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Personen</label>
+                          <label className="block text-xs text-brand-text-muted mb-1">Personen</label>
                           <input
                             type="number"
                             min={1}
                             value={item.slots_count}
                             onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                            className="w-full border rounded-md px-2 py-1.5 text-sm"
+                            className={INPUT_SM}
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Rollenbezeichnung</label>
+                          <label className="block text-xs text-brand-text-muted mb-1">Rollenbezeichnung</label>
                           <input
                             type="text"
                             value={item.role_desc}
                             onChange={e => updateItem(i, { role_desc: e.target.value })}
                             placeholder="Optional"
-                            className="w-full border rounded-md px-2 py-1.5 text-sm"
+                            className={INPUT_SM}
                           />
                         </div>
                       </div>
@@ -229,11 +233,11 @@ export default function AdminDutyTemplateDetailPage() {
             </div>
 
             {/* Desktop */}
-            <div className="hidden sm:block divide-y">
+            <div className="hidden sm:block divide-y divide-brand-border-subtle">
               {template.items.map((item, i) => (
                 <div key={i} className="p-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 items-center">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Diensttyp</label>
+                    <label className="block text-xs text-brand-text-muted mb-1">Diensttyp</label>
                     <select
                       value={item.duty_type_id}
                       onChange={e => {
@@ -241,57 +245,59 @@ export default function AdminDutyTemplateDetailPage() {
                         const dt = dutyTypes.find(d => d.id === dtId)
                         updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}) })
                       }}
-                      className="w-full border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                      className="w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     >
                       <option value={0}>Auswählen…</option>
                       {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Anker</label>
+                    <label className="block text-xs text-brand-text-muted mb-1">Anker</label>
                     <select
                       value={item.anchor}
                       onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
-                      className="border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                      className="border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     >
                       <option value="start">Anpfiff</option>
                       <option value="end">Spielende</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Versatz (min)</label>
+                    <label className="block text-xs text-brand-text-muted mb-1">Versatz (min)</label>
                     <input
                       type="number"
                       value={item.offset_minutes}
                       onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
-                      className="w-20 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                      className="w-20 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Personen</label>
+                    <label className="block text-xs text-brand-text-muted mb-1">Personen</label>
                     <input
                       type="number"
                       min={1}
                       value={item.slots_count}
                       onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                      className="w-16 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                      className="w-16 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Rollenbezeichnung</label>
+                    <label className="block text-xs text-brand-text-muted mb-1">Rollenbezeichnung</label>
                     <input
                       type="text"
                       value={item.role_desc}
                       onChange={e => updateItem(i, { role_desc: e.target.value })}
                       placeholder="Optional"
-                      className="w-36 border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                      className="w-36 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     />
                   </div>
                   <button
                     onClick={() => removeItem(i)}
-                    className="text-gray-400 hover:text-red-500 transition-colors mt-4 px-1"
-                    title="Eintrag entfernen"
-                  >✕</button>
+                    aria-label="Eintrag entfernen"
+                    className="text-brand-text-muted hover:text-brand-danger transition-colors mt-4 p-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -299,21 +305,29 @@ export default function AdminDutyTemplateDetailPage() {
         )}
       </div>
 
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 mb-5">
+      <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text mb-5">
         <strong>Versatz:</strong> Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff).
         Positive Werte = nach dem Anker (z.B. +15 = 15 min nach Spielende).
       </div>
 
-      {saveError && <p className="text-red-600 text-sm mb-3">{saveError}</p>}
+      {saveError && (
+        <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger mb-3">
+          {saveError}
+        </p>
+      )}
       <div className="flex items-center gap-3">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="bg-brand-yellow text-black px-6 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+          className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {saving ? 'Speichern…' : 'Vorlage speichern'}
         </button>
-        {saved && <span className="text-green-600 text-sm">✓ Gespeichert</span>}
+        {saved && (
+          <span className="text-brand-success text-sm flex items-center gap-1">
+            <Check className="w-4 h-4" /> Gespeichert
+          </span>
+        )}
       </div>
     </div>
   )

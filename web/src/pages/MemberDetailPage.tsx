@@ -228,21 +228,21 @@ export default function MemberDetailPage() {
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/mitglieder" className="text-sm text-gray-500 hover:text-gray-700">← Mitglieder</Link>
+        <Link to="/mitglieder" className="text-sm text-brand-text-muted hover:text-brand-text">← Mitglieder</Link>
         <h1 className="text-2xl font-bold">{isNew ? 'Mitglied anlegen' : 'Mitglied bearbeiten'}</h1>
       </div>
 
       {/* Tab Navigation */}
       {!isNew && (
-        <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
+        <div className="flex gap-2 mb-6 border-b border-brand-border-subtle overflow-x-auto">
           {tabButtons.filter(t => t.show).map(tab => (
             <button
               key={tab.name}
               onClick={() => setActiveTab(tab.name)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.name
-                  ? 'border-brand-yellow text-gray-900'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-brand-yellow text-brand-text'
+                  : 'border-transparent text-brand-text-muted hover:text-brand-text'
               }`}
             >
               {tab.label}

@@ -57,7 +57,7 @@ teamwerk/
 go run ./cmd/teamwerk
 
 # Terminal 2 — Vite Dev-Server auf :5173 (proxyt /api → :8080)
-cd web && npm run dev
+cd web && pnpm dev
 ```
 
 `make dev` startet beide, aber das Go-Backend läuft dann im Hintergrund ohne sauberes Beenden.
@@ -68,7 +68,7 @@ cd web && npm run dev
 ### Build & Deploy
 
 ```bash
-make build    # npm run build + go build → bin/teamwerk
+make build    # pnpm build + go build → bin/teamwerk
 make deploy   # build + rsync auf VPS + systemctl restart
 ```
 
@@ -308,13 +308,69 @@ Alle Pfade relativ zu `/api/` (der Prefix wird in api.ts gesetzt: `baseURL: '/ap
 
 ### Styling
 
-Tailwind v3 via CDN-Klassen. Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`-Direktiven).  
-Marken-Primärfarben: Schwarz `#000000`, Gelb `#FAE806`, Weiß `#FFFFFF`.  
-Marken-Sekundärfarben: Blau `#3E4A98`, Grün `#6EB42E`.  
-Sidebar-Hintergrund: `bg-brand-gray` (`#E5E7EB`). Primär-Buttons: `bg-brand-yellow hover:bg-black`.
-Tailwind-Config: `brand.yellow=#FAE806`, `brand.gray=#E5E7EB`, `brand.blue=#3E4A98`, `brand.green=#6EB42E`  
-Logo-SVG: `../team-stuttgart-org/team-stuttgart-site/Resources/Public/Images/logo.svg`  
-Schrift: Hanken Grotesk (Google Fonts, entspricht TYPO3-Site)
+Tailwind v3. Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`-Direktiven).  
+Marken-Primärfarben: Schwarz `#000000`, Gelb `#FAE806`, Weiß `#FFFFFF`. Sekundär: Blau `#3E4A98`, Grün `#6EB42E`.  
+Schrift: Hanken Grotesk (Google Fonts). Logo: `../team-stuttgart-org/team-stuttgart-site/Resources/Public/Images/logo.svg`
+
+**Keine raw Tailwind-Farben** (`bg-gray-50`, `text-gray-700`, `text-red-600` etc.) — immer `brand-*`-Tokens verwenden.
+
+#### Semantische Tokens (`tailwind.config.js`)
+
+| Token | Wert | Ersetzt |
+|---|---|---|
+| `brand-surface-card` | `#F9FAFB` | `bg-gray-50` (Card/Tabellen-BG) |
+| `brand-text` | `#111827` | `text-gray-900`, `text-black` |
+| `brand-text-muted` | `#6B7280` | `text-gray-500`, `text-black/50` |
+| `brand-text-subtle` | `#9CA3AF` | `text-gray-400`, Placeholder |
+| `brand-border` | `#D1D5DB` | `border-gray-300` |
+| `brand-border-subtle` | `#E5E7EB` | `border-gray-200`, Divider |
+| `brand-danger` | `#C0253A` | `text-red-600`, destruktive Aktionen |
+| `brand-danger-light` | `#FCEEF1` | `bg-red-50`/`bg-red-100` in Alerts |
+| `brand-info` | `#3B82F6` | Info-Alert-Farbe |
+| `brand-table-select` | `#E5E7EB` | Row-Hover in Tabellen |
+
+#### Verbindliche Klassen-Strings
+
+**Button — Primary:** `bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+
+**Button — Small (Tabellen):** `bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+
+**Button — Danger:** `bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+
+**Input — Standard:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+
+**Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6`  
+**Card — Tabellen-Container:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden`  
+**Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6`  
+**Alert — Info:** `p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text`  
+**Alert — Fehler:** `p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger`  
+**Tabellen-Header (th):** `bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left`  
+**Tabellen-Row (tr/td):** `hover:bg-brand-table-select transition-colors` / `px-4 py-3 text-sm text-brand-text`
+
+#### Icons (Lucide React)
+
+`lucide-react` ist installiert. Keine Unicode-Zeichen (`☰`, `✕`, `⋮`, `▸`, `▾`, `✓`, `⚠`, `«`, `»`) oder Emojis in JSX.
+
+| Alt | Lucide |
+|---|---|
+| `☰` | `<Menu>` |
+| `✕` / `✗` | `<X>` |
+| `⋮` | `<MoreVertical>` |
+| `▸` / `▾` | `<ChevronRight>` / `<ChevronDown>` |
+| `✓` | `<Check>` |
+| `⚠` | `<AlertTriangle>` |
+| `🗑` | `<Trash2>` |
+| `«` / `»` | `<ChevronsLeft>` / `<ChevronsRight>` |
+| Heimspiel | `<Home>` |
+| Auswärtsspiel | `<MapPin>` |
+
+Größen: `w-4 h-4` (Inline/Tabelle) · `w-5 h-5` (Buttons/Nav) · `w-6 h-6` (Standalone). Farbe via `currentColor`. Icon-only-Buttons brauchen `aria-label`.
+
+#### Button-Position
+
+- **Listen-Seiten** (Tabellen): Primär-Button oben rechts neben `<h1>` → „Neu anlegen"
+- **Formular-Seiten**: Primär-Button unten im Formular → „Speichern"
+- **Karten mit Inline-Form**: Button unten in der Karte
 
 ---
 

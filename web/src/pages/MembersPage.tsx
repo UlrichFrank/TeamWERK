@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
@@ -35,7 +36,7 @@ const genderLabel = (g?: string) => g === 'm' ? 'm' : g === 'f' ? 'w' : 'd'
 const statusBadgeStyles = (status: string) => {
   if (status === 'aktiv') return 'bg-brand-black text-white'
   if (status === 'verletzt') return 'bg-brand-yellow text-brand-black'
-  return 'bg-gray-200 text-gray-600'
+  return 'bg-brand-border-subtle text-brand-text-muted'
 }
 
 const rowStatusIcon = (s: ImportRow['status']) => {
@@ -46,10 +47,10 @@ const rowStatusIcon = (s: ImportRow['status']) => {
 }
 
 const rowStatusColor = (s: ImportRow['status']) => {
-  if (s === 'created') return 'text-green-700'
+  if (s === 'created') return 'text-brand-success'
   if (s === 'updated') return 'text-brand-blue'
-  if (s === 'unchanged') return 'text-gray-400'
-  return 'text-red-600'
+  if (s === 'unchanged') return 'text-brand-text-subtle'
+  return 'text-brand-danger'
 }
 
 export default function MembersPage() {
@@ -126,7 +127,7 @@ export default function MembersPage() {
               type="search"
               placeholder="Suchen…"
               onChange={e => setSearch(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2.5 sm:py-1.5 text-sm w-full sm:w-auto"
+              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
             />
             {isAdmin && (
               <>
@@ -179,27 +180,27 @@ export default function MembersPage() {
       </div>
 
       {/* Desktop: Table */}
-      <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left">Name</th>
-              <th className="px-4 py-3 text-left">Passnummer</th>
-              <th className="px-4 py-3 text-left">Gesch.</th>
-              <th className="px-4 py-3 text-left">Position</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              {isAdmin && <th className="px-4 py-3" />}
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Name</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Passnummer</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Gesch.</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Position</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Status</th>
+              {isAdmin && <th className="bg-brand-surface-card px-4 py-3" />}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-brand-border-subtle">
             {items.map(m => (
-              <tr key={m.id} className="hover:bg-brand-gray cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
-                <td className="px-4 py-3 font-medium">
+              <tr key={m.id} className="hover:bg-brand-table-select transition-colors cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
+                <td className="px-4 py-3 font-medium text-brand-text">
                   {m.last_name}, {m.first_name}{isAdmin && m.has_pending_drafts && <span className="ml-2">⏳</span>}
                 </td>
-                <td className="px-4 py-3 text-gray-500">{m.pass_number || '–'}</td>
-                <td className="px-4 py-3 text-gray-500">{genderLabel(m.gender)}</td>
-                <td className="px-4 py-3 text-gray-500">{m.position || '–'}</td>
+                <td className="px-4 py-3 text-brand-text-muted">{m.pass_number || '–'}</td>
+                <td className="px-4 py-3 text-brand-text-muted">{genderLabel(m.gender)}</td>
+                <td className="px-4 py-3 text-brand-text-muted">{m.position || '–'}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeStyles(m.status)}`}>
                     {m.status}
@@ -210,7 +211,7 @@ export default function MembersPage() {
                     <button
                       onClick={() => handleDelete(m)}
                       disabled={deletingIds.has(m.id)}
-                      className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                      className="text-xs bg-brand-danger text-white px-3 py-1 rounded font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50"
                     >
                       Löschen
                     </button>
@@ -227,28 +228,30 @@ export default function MembersPage() {
       {/* Import Modal */}
       {showImport && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="font-semibold text-base">CSV-Import</h2>
-              <button onClick={resetImport} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
+              <h2 className="font-semibold text-base text-brand-text">CSV-Import</h2>
+              <button onClick={resetImport} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             {!importResult ? (
               <div className="px-6 py-5 space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CSV-Datei</label>
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">CSV-Datei</label>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".csv"
                     onChange={e => setImportFile(e.target.files?.[0] ?? null)}
-                    className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-brand-yellow file:text-brand-black hover:file:bg-black hover:file:text-white cursor-pointer"
+                    className="block w-full text-sm text-brand-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-brand-yellow file:text-brand-black hover:file:bg-black hover:file:text-white cursor-pointer"
                   />
-                  <p className="text-xs text-gray-400 mt-1">Erwartet: Semikolon-getrennt, UTF-8. Spalten: Mitgliedsnummer, Vorname, Nachname, Geburtsdatum, Geschlecht, Passnummer, Trikotnummer, Position, Status, Benutzer_Email, Erziehungsberechtigter1_Email, Erziehungsberechtigter2_Email</p>
+                  <p className="text-xs text-brand-text-subtle mt-1">Erwartet: Semikolon-getrennt, UTF-8. Spalten: Mitgliedsnummer, Vorname, Nachname, Geburtsdatum, Geschlecht, Passnummer, Trikotnummer, Position, Status, Benutzer_Email, Erziehungsberechtigter1_Email, Erziehungsberechtigter2_Email</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Modus</label>
+                  <label className="block text-sm font-medium text-brand-text-muted mb-2">Modus</label>
                   <div className="space-y-2">
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input
@@ -257,11 +260,11 @@ export default function MembersPage() {
                         value="append"
                         checked={importMode === 'append'}
                         onChange={() => setImportMode('append')}
-                        className="mt-0.5"
+                        className="mt-0.5 accent-brand-yellow"
                       />
                       <div>
-                        <span className="text-sm font-medium">Nur ergänzen</span>
-                        <p className="text-xs text-gray-400">Neue Mitglieder anlegen, bestehende unverändert lassen</p>
+                        <span className="text-sm font-medium text-brand-text">Nur ergänzen</span>
+                        <p className="text-xs text-brand-text-subtle">Neue Mitglieder anlegen, bestehende unverändert lassen</p>
                       </div>
                     </label>
                     <label className="flex items-start gap-2 cursor-pointer">
@@ -271,18 +274,18 @@ export default function MembersPage() {
                         value="update"
                         checked={importMode === 'update'}
                         onChange={() => setImportMode('update')}
-                        className="mt-0.5"
+                        className="mt-0.5 accent-brand-yellow"
                       />
                       <div>
-                        <span className="text-sm font-medium">Fehlende + geänderte Felder aktualisieren</span>
-                        <p className="text-xs text-gray-400">Bestehende Mitglieder werden mit nicht-leeren CSV-Werten aktualisiert. Felder werden nie geleert.</p>
+                        <span className="text-sm font-medium text-brand-text">Fehlende + geänderte Felder aktualisieren</span>
+                        <p className="text-xs text-brand-text-subtle">Bestehende Mitglieder werden mit nicht-leeren CSV-Werten aktualisiert. Felder werden nie geleert.</p>
                       </div>
                     </label>
                   </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-1">
-                  <button onClick={resetImport} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-500 transition-colors">
+                  <button onClick={resetImport} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
                     Abbrechen
                   </button>
                   <button
@@ -297,13 +300,13 @@ export default function MembersPage() {
             ) : (
               <div className="flex flex-col flex-1 min-h-0">
                 {/* Summary */}
-                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                  <p className="text-sm font-medium mb-2">{importResult.total} Zeilen verarbeitet</p>
+                <div className="px-6 py-4 border-b border-brand-border-subtle bg-brand-surface-card">
+                  <p className="text-sm font-medium text-brand-text mb-2">{importResult.total} Zeilen verarbeitet</p>
                   <div className="flex flex-wrap gap-3 text-xs">
-                    {importResult.created > 0 && <span className="text-green-700 font-medium">+ {importResult.created} neu</span>}
+                    {importResult.created > 0 && <span className="text-brand-success font-medium">+ {importResult.created} neu</span>}
                     {importResult.updated > 0 && <span className="text-brand-blue font-medium">~ {importResult.updated} aktualisiert</span>}
-                    {importResult.unchanged > 0 && <span className="text-gray-400">= {importResult.unchanged} unverändert</span>}
-                    {importResult.errors > 0 && <span className="text-red-600 font-medium">✗ {importResult.errors} Fehler</span>}
+                    {importResult.unchanged > 0 && <span className="text-brand-text-subtle">= {importResult.unchanged} unverändert</span>}
+                    {importResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {importResult.errors} Fehler</span>}
                   </div>
                 </div>
 
@@ -314,17 +317,17 @@ export default function MembersPage() {
                       <span className="font-bold">{rowStatusIcon(row.status)}</span>{' '}
                       <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
                       {row.changes?.map((c, j) => (
-                        <div key={j} className="pl-4 text-gray-500">{c}</div>
+                        <div key={j} className="pl-4 text-brand-text-muted">{c}</div>
                       ))}
                       {row.message && <span className="pl-4 italic">{row.message}</span>}
                     </div>
                   ))}
                   {importResult.unchanged > 0 && (
-                    <div className="text-gray-400">= {importResult.unchanged}× unverändert</div>
+                    <div className="text-brand-text-subtle">= {importResult.unchanged}× unverändert</div>
                   )}
                 </div>
 
-                <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+                <div className="px-6 py-4 border-t border-brand-border-subtle flex justify-end">
                   <button onClick={resetImport} className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors">
                     Schließen
                   </button>

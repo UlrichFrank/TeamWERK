@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import BrandCheckbox from './BrandCheckbox'
 
@@ -90,7 +91,7 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
             onChange={e => setQuery(e.target.value)}
             onFocus={() => fetchSuggestions(query, filterTrainer)}
             placeholder="Trainer suchen…"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
+            className="w-full border border-brand-border rounded-md px-3 py-2 pr-9 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
             <BrandCheckbox
@@ -102,16 +103,16 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
         </div>
 
         {open && (
-          <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-            {loading && <div className="px-4 py-2 text-xs text-gray-400">Suche…</div>}
+          <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-brand-border-subtle rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            {loading && <div className="px-4 py-2 text-xs text-brand-text-subtle">Suche…</div>}
             {!loading && visibleSuggestions.length === 0 && (
-              <div className="px-4 py-2 text-xs text-gray-400 italic">Keine Vorschläge</div>
+              <div className="px-4 py-2 text-xs text-brand-text-subtle italic">Keine Vorschläge</div>
             )}
             {!loading && visibleSuggestions.map(s => (
               <button
                 key={s.id}
                 onMouseDown={e => { e.preventDefault(); handleSelect(s) }}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-brand-gray transition-colors"
+                className="w-full text-left px-4 py-2 text-sm text-brand-text hover:bg-brand-gray transition-colors"
               >
                 {s.name}
               </button>
@@ -121,17 +122,17 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
       </div>
 
       {assignedTrainers.length > 0 && (
-        <ul className="divide-y divide-gray-100 mt-1">
+        <ul className="divide-y divide-brand-border-subtle mt-1">
           {assignedTrainers.map(t => (
             <li key={t.id} className="flex items-center justify-between py-2 gap-2">
               <span className="text-sm font-medium text-brand-blue">{t.name}</span>
               <button
                 onClick={() => handleRemove(t.id)}
                 disabled={busy[t.id]}
-                className="text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40 px-1.5 py-0.5 rounded"
-                title="Trainer entfernen"
+                aria-label={`${t.name} entfernen`}
+                className="text-brand-text-subtle hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
               >
-                ×
+                <X className="w-4 h-4" />
               </button>
             </li>
           ))}

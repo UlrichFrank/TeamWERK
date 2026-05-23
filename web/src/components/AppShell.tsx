@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { Menu, X, ChevronRight, ChevronDown } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 
 interface NavModule {
   label: string
-  items: { to: string; label: string; roles: string[] }[]
+  items: { to: string; label: string; roles: string[]; end?: boolean }[]
 }
 
 const navModules: NavModule[] = [
   {
     label: 'Mitglieder',
     items: [
+      { to: '/', label: 'Dashboard', roles: [], end: true },
       { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand', 'trainer'] },
       { to: '/profil', label: 'Mein Profil', roles: ['elternteil', 'spieler'] },
     ],
@@ -72,13 +74,13 @@ export default function AppShell() {
   const Sidebar = () => (
     <aside className="w-56 bg-brand-gray text-brand-black flex flex-col">
       <div className="px-4 py-5 border-b border-brand-black/10 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <NavLink to="/" onClick={closeSidebar} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <img src="/logo.svg" alt="Team Stuttgart" className="h-8 w-8" />
           <span className="font-bold text-lg">TeamWERK</span>
-        </div>
+        </NavLink>
         {isMobile && (
-          <button onClick={closeSidebar} className="text-xl leading-none">
-            ✕
+          <button onClick={closeSidebar} aria-label="Schließen" className="text-brand-black/60 hover:text-brand-black transition-colors">
+            <X className="w-5 h-5" />
           </button>
         )}
       </div>
@@ -95,12 +97,16 @@ export default function AppShell() {
                 className={`px-4 py-2 w-full text-left flex items-center justify-between text-xs font-semibold uppercase tracking-wider ${isModuleActive ? 'text-brand-black' : 'text-brand-black/40'}`}
               >
                 {mod.label}
-                <span>{isOpen ? '▾' : '▸'}</span>
+                {isOpen
+                  ? <ChevronDown className="w-4 h-4" />
+                  : <ChevronRight className="w-4 h-4" />
+                }
               </button>
               {isOpen && visibleItems.map(item => (
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.end}
                   onClick={closeSidebar}
                   className={({ isActive }) =>
                     `block pl-7 pr-4 py-2 text-sm transition-colors ${isActive ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-black/60 hover:bg-brand-black hover:text-brand-yellow'}`
@@ -147,9 +153,10 @@ export default function AppShell() {
         <header className="sm:hidden bg-brand-white border-b border-brand-black/10 px-4 py-4 flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-2xl leading-none"
+            aria-label="Menü öffnen"
+            className="text-brand-black/60 hover:text-brand-black transition-colors"
           >
-            ☰
+            <Menu className="w-6 h-6" />
           </button>
           <span className="font-bold text-lg">TeamWERK</span>
         </header>

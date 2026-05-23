@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Home, MapPin, Calendar } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -34,15 +35,18 @@ const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 
 function trafficColor(filledCount: number, totalCount: number, slotCount: number): string {
-  if (slotCount === 0) return 'bg-brand-error'
+  if (slotCount === 0) return 'bg-brand-danger'
   if (totalCount > 0 && filledCount >= totalCount) return 'bg-brand-success'
   if (filledCount > 0) return 'bg-brand-warning'
-  return 'bg-brand-error'
+  return 'bg-brand-danger'
 }
 
 function padDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
+
+const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
+const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function SpielplanPage() {
   const { user } = useAuth()
@@ -228,21 +232,21 @@ export default function SpielplanPage() {
 
       {/* Month navigation */}
       <div className="flex items-center gap-4 mb-4">
-        <button onClick={prevMonth} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">◀</button>
+        <button onClick={prevMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">◀</button>
         <span className="text-lg font-semibold w-44 text-center">{MONTHS[month]} {year}</span>
-        <button onClick={nextMonth} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">▶</button>
+        <button onClick={nextMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">▶</button>
       </div>
 
       {/* Calendar */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
-        <div className="grid grid-cols-7 bg-gray-50 border-b">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <div className="grid grid-cols-7 bg-brand-surface-card border-b border-brand-border-subtle">
           {WEEKDAYS.map(d => (
-            <div key={d} className="text-center text-xs font-semibold py-2 text-gray-500 uppercase tracking-wide">{d}</div>
+            <div key={d} className="text-center text-xs font-semibold py-2 text-brand-text-muted uppercase tracking-wide">{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
           {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-            <div key={`pad-${i}`} className="min-h-[90px] border-r border-b bg-gray-50/50" />
+            <div key={`pad-${i}`} className="min-h-[90px] border-r border-b border-brand-border-subtle" />
           ))}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1
@@ -251,20 +255,20 @@ export default function SpielplanPage() {
             const isToday = dateStr === todayStr
             const canRegen = user && ['admin', 'vorstand', 'trainer'].includes(user.role) && dayGames.length > 0
             return (
-              <div key={day} className={`min-h-[90px] p-1.5 border-r border-b ${isToday ? 'bg-brand-yellow/20' : ''}`}>
-                <div className={`text-xs mb-1 ${isToday ? 'font-bold' : 'text-gray-400'}`}>{day}</div>
+              <div key={day} className={`min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle ${isToday ? 'bg-brand-yellow/20' : ''}`}>
+                <div className={`text-xs mb-1 ${isToday ? 'font-bold text-brand-text' : 'text-brand-text-subtle'}`}>{day}</div>
                 {dayGames.map(g => (
                   <button
                     key={g.id}
                     onClick={() => navigate(`/spielplan/${g.id}`)}
-                    className="w-full text-left mb-1 p-1.5 rounded-md text-xs bg-gray-100 hover:bg-gray-200 transition-colors border border-gray-200"
+                    className="w-full text-left mb-1 p-1.5 rounded-md text-xs bg-brand-border-subtle hover:bg-brand-border transition-colors border border-brand-border-subtle"
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${trafficColor(g.filled_count, g.total_count, g.slot_count)}`} />
-                      <span className="font-semibold truncate">{g.teams.map(t => t.name).join(', ')}</span>
+                      <span className="font-semibold truncate text-brand-text">{g.teams.map(t => t.name).join(', ')}</span>
                     </div>
-                    <div className="truncate text-gray-500 leading-tight">vs. {g.opponent || '–'}</div>
-                    <div className="text-gray-400 leading-tight">{g.time}</div>
+                    <div className="truncate text-brand-text-muted leading-tight">vs. {g.opponent || '–'}</div>
+                    <div className="text-brand-text-subtle leading-tight">{g.time}</div>
                   </button>
                 ))}
                 {canRegen && (
@@ -282,31 +286,31 @@ export default function SpielplanPage() {
       </div>
 
       {!loading && monthGames.length === 0 && (
-        <p className="text-gray-400 text-center mt-10 text-sm">Keine Heimspiele in diesem Monat</p>
+        <p className="text-brand-text-subtle text-center mt-10 text-sm">Keine Heimspiele in diesem Monat</p>
       )}
 
       {/* Day Regeneration Dialog */}
       {showDayRegen && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold mb-1">Dienste generieren</h2>
-            <p className="text-sm text-gray-500 mb-4">{dayRegenDate}</p>
+          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold mb-1 text-brand-text">Dienste generieren</h2>
+            <p className="text-sm text-brand-text-muted mb-4">{dayRegenDate}</p>
 
             <div className="space-y-2 mb-4">
               {(gamesByDate[dayRegenDate] ?? []).map(g => (
-                <div key={g.id} className="p-3 border rounded-lg bg-gray-50 text-sm">
-                  <div className="font-semibold">{g.time} — {g.teams.map(t => t.name).join(', ')}</div>
-                  <div className="text-gray-500 text-xs">vs. {g.opponent || '–'} · {g.event_type}</div>
+                <div key={g.id} className="p-3 border border-brand-border-subtle rounded-lg bg-brand-surface-card text-sm">
+                  <div className="font-semibold text-brand-text">{g.time} — {g.teams.map(t => t.name).join(', ')}</div>
+                  <div className="text-brand-text-muted text-xs">vs. {g.opponent || '–'} · {g.event_type}</div>
                 </div>
               ))}
             </div>
 
             {dayRegenResult && (
               <div className="mb-4 space-y-2">
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-                  <div className="font-semibold text-green-800 mb-1">Generierung abgeschlossen</div>
+                <div className="p-3 bg-brand-success-light border border-brand-success/30 rounded-lg text-sm">
+                  <div className="font-semibold text-brand-success mb-1">Generierung abgeschlossen</div>
                   {dayRegenResult.games.map(gr => (
-                    <div key={gr.game_id} className="text-green-700 text-xs">
+                    <div key={gr.game_id} className="text-brand-success text-xs">
                       {gr.skipped
                         ? `Spiel #${gr.game_id}: kein Template — übersprungen`
                         : `Spiel #${gr.game_id}: ${gr.slots_created} Dienste erstellt, ${gr.kept_slots} behalten`}
@@ -314,13 +318,13 @@ export default function SpielplanPage() {
                   ))}
                 </div>
                 {dayRegenResult.conflicts.length > 0 && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
-                    <div className="font-semibold text-red-800 mb-1">Konflikte erkannt</div>
-                    <p className="text-red-700 text-xs mb-1">
+                  <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm">
+                    <div className="font-semibold text-brand-danger mb-1">Konflikte erkannt</div>
+                    <p className="text-brand-danger text-xs mb-1">
                       Gleicher Diensttyp zur gleichen Zeit bei mehreren Spielen — bitte Optimierungsregeln prüfen.
                     </p>
                     {dayRegenResult.conflicts.map((c, i) => (
-                      <div key={i} className="text-red-600 text-xs">
+                      <div key={i} className="text-brand-danger text-xs">
                         {c.event_time} · Diensttyp #{c.duty_type_id} bei Spielen {c.game_ids.join(', ')}
                       </div>
                     ))}
@@ -330,13 +334,13 @@ export default function SpielplanPage() {
             )}
 
             {dayRegenError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <div className="mb-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
                 {dayRegenError}
               </div>
             )}
 
             <div className="flex gap-2 pt-2">
-              <button onClick={closeDayRegen} className="border rounded-md px-4 py-2 text-sm hover:bg-gray-50">
+              <button onClick={closeDayRegen} className={BTN_SECONDARY}>
                 {dayRegenResult ? 'Schließen' : 'Abbrechen'}
               </button>
               {!dayRegenResult && (
@@ -356,26 +360,26 @@ export default function SpielplanPage() {
       {/* Event Wizard Dialog */}
       {showCreate && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
             {wizardStep === 1 && (
               <div>
-                <h2 className="text-lg font-bold mb-6">Welche Art von Event?</h2>
+                <h2 className="text-lg font-bold mb-6 text-brand-text">Welche Art von Event?</h2>
                 <div className="space-y-3">
-                  {['heim', 'auswärts', 'generisch'].map(type => (
+                  {(['heim', 'auswärts', 'generisch'] as const).map(type => (
                     <button
                       key={type}
                       onClick={() => {
-                        setEventType(type as 'heim' | 'auswärts' | 'generisch')
+                        setEventType(type)
                         setWizardStep(2)
                       }}
-                      className="w-full p-4 border-2 rounded-lg text-left hover:bg-gray-50 hover:border-brand-yellow transition-colors"
+                      className="w-full p-4 border-2 border-brand-border rounded-lg text-left hover:bg-brand-border-subtle hover:border-brand-yellow transition-colors"
                     >
-                      <div className="font-semibold">
-                        {type === 'heim' && '⚽ Heimspiel'}
-                        {type === 'auswärts' && '✈️ Auswärtsspiel'}
-                        {type === 'generisch' && '📋 Sonstiges Event'}
+                      <div className="font-semibold flex items-center gap-2 text-brand-text">
+                        {type === 'heim' && <><Home className="w-4 h-4" /> Heimspiel</>}
+                        {type === 'auswärts' && <><MapPin className="w-4 h-4" /> Auswärtsspiel</>}
+                        {type === 'generisch' && <><Calendar className="w-4 h-4" /> Sonstiges Event</>}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-brand-text-muted mt-1">
                         {type === 'heim' && 'Heimspiel gegen eine Mannschaft'}
                         {type === 'auswärts' && 'Auswärtsspiel gegen eine Mannschaft'}
                         {type === 'generisch' && 'Event für mehrere Mannschaften'}
@@ -384,41 +388,39 @@ export default function SpielplanPage() {
                   ))}
                 </div>
                 <div className="flex gap-2 pt-4">
-                  <button onClick={closeDialog} className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                  <button onClick={closeDialog} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 </div>
               </div>
             )}
 
             {wizardStep === 2 && (
               <div>
-                <h2 className="text-lg font-bold mb-4">Event-Details</h2>
+                <h2 className="text-lg font-bold mb-4 text-brand-text">Event-Details</h2>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Datum *</label>
-                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                      className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
+                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Anstoßzeit</label>
-                    <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)}
-                      className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Anstoßzeit</label>
+                    <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)} className={INPUT_WIZ} />
                   </div>
                   {eventType !== 'generisch' && (
                     <div>
-                      <label className="block text-sm font-medium mb-1">Gegner *</label>
+                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Gegner *</label>
                       <input type="text" value={selectedOpponent} onChange={e => setSelectedOpponent(e.target.value)}
-                        placeholder="Name des Gegners" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                        placeholder="Name des Gegners" className={INPUT_WIZ} />
                     </div>
                   )}
                   {eventType === 'generisch' && (
                     <div>
-                      <label className="block text-sm font-medium mb-1">Event-Name *</label>
+                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Event-Name *</label>
                       <input type="text" value={selectedOpponent} onChange={e => setSelectedOpponent(e.target.value)}
-                        placeholder="Name des Events" className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                        placeholder="Name des Events" className={INPUT_WIZ} />
                     </div>
                   )}
                   <div>
-                    <label className="block text-sm font-medium mb-2">
+                    <label className="block text-sm font-medium text-brand-text-muted mb-2">
                       {eventType === 'generisch' ? 'Mannschaften *' : 'Mannschaft *'}
                     </label>
                     {eventType === 'generisch' ? (
@@ -432,14 +434,14 @@ export default function SpielplanPage() {
                                 } else {
                                   setSelectedTeamIds(selectedTeamIds.filter(id => id !== t.id))
                                 }
-                              }} className="rounded" />
-                            <span className="text-sm">{t.name}</span>
+                              }} className="rounded accent-brand-yellow" />
+                            <span className="text-sm text-brand-text">{t.name}</span>
                           </label>
                         ))}
                       </div>
                     ) : (
                       <select value={selectedTeamIds[0] ?? ''} onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
-                        className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow">
+                        className={INPUT_WIZ}>
                         <option value="">Auswählen…</option>
                         {teams.filter(t => t.is_active).map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
@@ -447,10 +449,10 @@ export default function SpielplanPage() {
                       </select>
                     )}
                   </div>
-                  {createError && <p className="text-brand-error text-sm">{createError}</p>}
+                  {createError && <p className="text-brand-danger text-sm">{createError}</p>}
                 </div>
                 <div className="flex gap-2 pt-4">
-                  <button onClick={() => setWizardStep(1)} className="border rounded-md px-4 py-2 text-sm hover:bg-gray-50">← Zurück</button>
+                  <button onClick={() => setWizardStep(1)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
                     onClick={() => {
                       if (selectedDate && selectedTeamIds.length > 0) {
@@ -466,22 +468,22 @@ export default function SpielplanPage() {
 
             {wizardStep === 3 && (
               <div>
-                <h2 className="text-lg font-bold mb-4">Dienstplan-Vorlage</h2>
+                <h2 className="text-lg font-bold mb-4 text-brand-text">Dienstplan-Vorlage</h2>
                 {(() => {
                   const filteredTemplates = templates.filter(t => t.template_type === eventType)
                   return filteredTemplates.length === 0 ? (
                     <div className="text-center py-6">
-                      <p className="text-gray-500">Keine passende Vorlage — Event wird ohne Dienste angelegt.</p>
+                      <p className="text-brand-text-muted">Keine passende Vorlage — Event wird ohne Dienste angelegt.</p>
                     </div>
                   ) : (
                     <div className="space-y-2 mb-4">
                       {filteredTemplates.map(t => (
-                        <label key={t.id} className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <label key={t.id} className="flex items-center gap-2 p-3 border border-brand-border-subtle rounded-lg hover:bg-brand-border-subtle cursor-pointer">
                           <input type="radio" name="template" checked={selectedTemplate === t.id}
-                            onChange={() => setSelectedTemplate(t.id)} className="rounded-full" />
+                            onChange={() => setSelectedTemplate(t.id)} className="rounded-full accent-brand-yellow" />
                           <div className="flex-1">
-                            <div className="font-medium text-sm">{t.name}</div>
-                            <div className="text-xs text-gray-500">{t.game_duration_minutes} Min</div>
+                            <div className="font-medium text-sm text-brand-text">{t.name}</div>
+                            <div className="text-xs text-brand-text-muted">{t.game_duration_minutes} Min</div>
                           </div>
                         </label>
                       ))}
@@ -489,7 +491,7 @@ export default function SpielplanPage() {
                   )
                 })()}
                 <div className="flex gap-2 pt-4">
-                  <button onClick={() => setWizardStep(2)} className="border rounded-md px-4 py-2 text-sm hover:bg-gray-50">← Zurück</button>
+                  <button onClick={() => setWizardStep(2)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
                     onClick={() => {
                       const filteredTemplates = templates.filter(t => t.template_type === eventType)
@@ -510,40 +512,40 @@ export default function SpielplanPage() {
 
             {wizardStep === 4 && (
               <div>
-                <h2 className="text-lg font-bold mb-4">Dienste bestätigen</h2>
+                <h2 className="text-lg font-bold mb-4 text-brand-text">Dienste bestätigen</h2>
                 {preview.length === 0 ? (
-                  <p className="text-sm text-gray-500 mb-4">Keine Dienste vorhanden.</p>
+                  <p className="text-sm text-brand-text-muted mb-4">Keine Dienste vorhanden.</p>
                 ) : (
                   <>
-                    <p className="text-sm text-gray-500 mb-3">
+                    <p className="text-sm text-brand-text-muted mb-3">
                       Dienste ({selectedSlotIndices.size} ausgewählt):
                     </p>
                     <div className="space-y-1.5 mb-4 max-h-56 overflow-y-auto">
                       {preview.map((s, i) => (
-                        <label key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <label key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-brand-border-subtle cursor-pointer">
                           <input type="checkbox" checked={selectedSlotIndices.has(i)} onChange={() => toggleSlot(i)}
-                            className="rounded" />
-                          <span className="font-mono text-sm font-semibold w-12">{s.event_time}</span>
-                          <span className="text-sm flex-1">{s.duty_type_name}</span>
-                          {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
-                          <span className="text-xs text-gray-400 ml-auto">{s.slots_count}×</span>
+                            className="rounded accent-brand-yellow" />
+                          <span className="font-mono text-sm font-semibold w-12 text-brand-text">{s.event_time}</span>
+                          <span className="text-sm flex-1 text-brand-text">{s.duty_type_name}</span>
+                          {s.role_desc && <span className="text-xs text-brand-text-subtle">({s.role_desc})</span>}
+                          <span className="text-xs text-brand-text-subtle ml-auto">{s.slots_count}×</span>
                         </label>
                       ))}
                     </div>
                   </>
                 )}
-                {createError && <p className="text-brand-error text-sm mb-3">{createError}</p>}
+                {createError && <p className="text-brand-danger text-sm mb-3">{createError}</p>}
                 <div className="flex gap-2 pt-2">
-                  <button onClick={() => setWizardStep(3)} className="border rounded-md px-3 py-2 text-sm hover:bg-gray-50">← Zurück</button>
+                  <button onClick={() => setWizardStep(3)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
                     onClick={() => doCreateGame([])}
                     disabled={creating}
-                    className="border rounded-md px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    className="border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text-muted hover:bg-brand-border-subtle hover:text-brand-text transition-colors disabled:opacity-50"
                   >Ohne Dienste</button>
                   <button
                     onClick={() => doCreateGame(preview.filter((_, i) => selectedSlotIndices.has(i)))}
                     disabled={creating}
-                    className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Bestätigen'}
                   </button>

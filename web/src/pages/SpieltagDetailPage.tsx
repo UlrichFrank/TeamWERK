@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
+import { Trash2, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -44,15 +45,18 @@ interface Template {
   game_duration_minutes: number
 }
 
+const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
+
 function ProgressBar({ filled, total }: { filled: number; total: number }) {
   const pct = total > 0 ? Math.round((filled / total) * 100) : 0
-  const color = pct === 100 ? 'bg-brand-success' : pct > 0 ? 'bg-brand-warning' : 'bg-brand-error'
+  const color = pct === 100 ? 'bg-brand-success' : pct > 0 ? 'bg-brand-warning' : 'bg-brand-danger'
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-brand-border-subtle rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-gray-500 w-10 text-right">{filled}/{total}</span>
+      <span className="text-xs text-brand-text-muted w-10 text-right">{filled}/{total}</span>
     </div>
   )
 }
@@ -69,7 +73,6 @@ export default function SpieltagDetailPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
-  // Add slot form
   const [showAddSlot, setShowAddSlot] = useState(false)
   const [addDutyTypeId, setAddDutyTypeId] = useState<number | ''>('')
   const [addEventTime, setAddEventTime] = useState('')
@@ -77,23 +80,19 @@ export default function SpieltagDetailPage() {
   const [addRoleDesc, setAddRoleDesc] = useState('')
   const [addSaving, setAddSaving] = useState(false)
 
-  // Edit slot modal
   const [editSlot, setEditSlot] = useState<SlotDetail | null>(null)
   const [editEventTime, setEditEventTime] = useState('')
   const [editSlotsTotal, setEditSlotsTotal] = useState(1)
   const [editRoleDesc, setEditRoleDesc] = useState('')
   const [editSaving, setEditSaving] = useState(false)
 
-  // Delete slot
   const [deleteSlotId, setDeleteSlotId] = useState<number | null>(null)
   const [deleteSaving, setDeleteSaving] = useState(false)
 
-  // Delete game
   const [showDeleteGame, setShowDeleteGame] = useState(false)
   const [deletingGame, setDeletingGame] = useState(false)
   const [deleteWithSlots, setDeleteWithSlots] = useState(true)
 
-  // Regenerate dialog
   const [showRegen, setShowRegen] = useState(false)
   const [regenTemplates, setRegenTemplates] = useState<Template[]>([])
   const [regenTemplateID, setRegenTemplateID] = useState<number | null>(null)
@@ -259,11 +258,11 @@ export default function SpieltagDetailPage() {
     }
   }
 
-  if (loading) return <div className="text-gray-400 text-sm">Laden…</div>
+  if (loading) return <div className="text-brand-text-muted text-sm">Laden…</div>
   if (notFound) return (
     <div className="text-center py-12">
-      <p className="text-gray-500 mb-4">Spiel nicht gefunden.</p>
-      <Link to="/spielplan" className="text-brand-black hover:underline text-sm">← Zurück zum Spielplan</Link>
+      <p className="text-brand-text-muted mb-4">Spiel nicht gefunden.</p>
+      <Link to="/spielplan" className="text-brand-text hover:underline text-sm">← Zurück zum Spielplan</Link>
     </div>
   )
   if (!game) return null
@@ -274,46 +273,46 @@ export default function SpieltagDetailPage() {
 
   return (
     <div className="max-w-2xl">
-      <Link to="/spielplan" className="text-sm text-gray-400 hover:text-black mb-4 inline-block">
+      <Link to="/spielplan" className="text-sm text-brand-text-muted hover:text-brand-text mb-4 inline-block">
         ← Spielplan
       </Link>
 
       {/* Game header */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold">vs. {game.opponent || '(kein Gegner)'}</h1>
-            <p className="text-gray-500 mt-1">{game.team_name}</p>
-            <p className="text-gray-500 text-sm mt-1">{dateFormatted} · {game.time} Uhr</p>
+            <h1 className="text-2xl font-bold text-brand-text">vs. {game.opponent || '(kein Gegner)'}</h1>
+            <p className="text-brand-text-muted mt-1">{game.team_name}</p>
+            <p className="text-brand-text-muted text-sm mt-1">{dateFormatted} · {game.time} Uhr</p>
           </div>
           {canEdit && (
             <div className="flex gap-2 flex-shrink-0">
               <button
                 onClick={handleOpenRegen}
-                className="text-sm border rounded-md px-3 py-1.5 hover:bg-gray-50 text-gray-600"
+                className="text-sm border border-brand-border rounded-md px-3 py-1.5 text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
               >
                 ↺ Dienste neu generieren
               </button>
               <button
                 onClick={() => setShowDeleteGame(true)}
-                className="text-sm border border-brand-error rounded-md px-3 py-1.5 hover:bg-red-50 text-brand-error disabled:opacity-50"
+                className="text-sm bg-brand-danger text-white rounded-md px-3 py-1.5 hover:bg-brand-danger/90 transition-colors flex items-center gap-1.5"
               >
-                🗑 Event löschen
+                <Trash2 className="w-4 h-4" /> Event löschen
               </button>
             </div>
           )}
         </div>
         {regenKeptSlots !== null && regenKeptSlots > 0 && (
-          <div className="mt-3 p-3 bg-brand-warning-light border border-brand-warning rounded-lg text-sm text-brand-warning">
+          <div className="mt-3 p-3 bg-brand-warning-light border border-brand-warning/40 rounded-lg text-sm text-brand-text">
             Hinweis: {regenKeptSlots} belegte Dienst{regenKeptSlots !== 1 ? 'e' : ''} wurden nicht überschrieben.
           </div>
         )}
       </div>
 
       {/* Slots */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-4">
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h2 className="font-semibold">Dienste</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-4">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border-subtle">
+          <h2 className="font-semibold text-brand-text">Dienste</h2>
           {canEdit && (
             <button
               onClick={() => setShowAddSlot(true)}
@@ -325,18 +324,18 @@ export default function SpieltagDetailPage() {
         </div>
 
         {slots.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8 italic">Keine Dienste für dieses Spiel angelegt</p>
+          <p className="text-sm text-brand-text-subtle text-center py-8 italic">Keine Dienste für dieses Spiel angelegt</p>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-brand-border-subtle">
             {slots.map(s => (
               <div key={s.id} className="px-4 py-3 flex items-start gap-4">
-                <div className="font-mono text-sm font-semibold w-12 flex-shrink-0 pt-0.5">
+                <div className="font-mono text-sm font-semibold w-12 flex-shrink-0 pt-0.5 text-brand-text">
                   {s.event_time || '–'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">{s.duty_type_name}</div>
+                  <div className="font-medium text-sm text-brand-text">{s.duty_type_name}</div>
                   {s.role_description && (
-                    <div className="text-xs text-gray-400 mt-0.5">{s.role_description}</div>
+                    <div className="text-xs text-brand-text-subtle mt-0.5">{s.role_description}</div>
                   )}
                   <div className="mt-1.5">
                     <ProgressBar filled={s.slots_filled} total={s.slots_total} />
@@ -346,11 +345,11 @@ export default function SpieltagDetailPage() {
                   <div className="flex gap-1 flex-shrink-0">
                     <button
                       onClick={() => openEditSlot(s)}
-                      className="text-xs text-gray-400 hover:text-black px-2 py-1 rounded hover:bg-gray-100"
+                      className="text-xs text-brand-text-muted hover:text-brand-text px-2 py-1 rounded hover:bg-brand-border-subtle transition-colors"
                     >Bearbeiten</button>
                     <button
                       onClick={() => setDeleteSlotId(s.id)}
-                      className="text-xs text-gray-400 hover:text-brand-error px-2 py-1 rounded hover:bg-red-50"
+                      className="text-xs text-brand-text-muted hover:text-brand-danger px-2 py-1 rounded hover:bg-brand-danger-light transition-colors"
                     >Löschen</button>
                   </div>
                 )}
@@ -363,38 +362,33 @@ export default function SpieltagDetailPage() {
       {/* Add slot modal */}
       {showAddSlot && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="font-bold mb-4">Dienst hinzufügen</h3>
+          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-bold mb-4 text-brand-text">Dienst hinzufügen</h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Diensttyp *</label>
-                <select value={addDutyTypeId} onChange={e => setAddDutyTypeId(Number(e.target.value))}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow">
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Diensttyp *</label>
+                <select value={addDutyTypeId} onChange={e => setAddDutyTypeId(Number(e.target.value))} className={INPUT_WIZ}>
                   <option value="">Auswählen…</option>
                   {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Uhrzeit</label>
-                <input type="time" value={addEventTime} onChange={e => setAddEventTime(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
+                <input type="time" value={addEventTime} onChange={e => setAddEventTime(e.target.value)} className={INPUT_WIZ} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Personen</label>
-                <input type="number" min={1} value={addSlotsTotal} onChange={e => setAddSlotsTotal(Number(e.target.value))}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Personen</label>
+                <input type="number" min={1} value={addSlotsTotal} onChange={e => setAddSlotsTotal(Number(e.target.value))} className={INPUT_WIZ} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Rollenbezeichnung</label>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Rollenbezeichnung</label>
                 <input type="text" value={addRoleDesc} onChange={e => setAddRoleDesc(e.target.value)}
-                  placeholder="z.B. Aufbau, Bewirtung…"
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                  placeholder="z.B. Aufbau, Bewirtung…" className={INPUT_WIZ} />
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowAddSlot(false)}
-                  className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                <button onClick={() => setShowAddSlot(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 <button onClick={handleAddSlot} disabled={!addDutyTypeId || addSaving}
-                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                   {addSaving ? 'Speichern…' : 'Hinzufügen'}
                 </button>
               </div>
@@ -406,30 +400,26 @@ export default function SpieltagDetailPage() {
       {/* Edit slot modal */}
       {editSlot && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="font-bold mb-4">Dienst bearbeiten</h3>
-            <p className="text-sm text-gray-500 mb-3 font-medium">{editSlot.duty_type_name}</p>
+          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-bold mb-4 text-brand-text">Dienst bearbeiten</h3>
+            <p className="text-sm text-brand-text-muted mb-3 font-medium">{editSlot.duty_type_name}</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Uhrzeit</label>
-                <input type="time" value={editEventTime} onChange={e => setEditEventTime(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
+                <input type="time" value={editEventTime} onChange={e => setEditEventTime(e.target.value)} className={INPUT_WIZ} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Personen</label>
-                <input type="number" min={1} value={editSlotsTotal} onChange={e => setEditSlotsTotal(Number(e.target.value))}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Personen</label>
+                <input type="number" min={1} value={editSlotsTotal} onChange={e => setEditSlotsTotal(Number(e.target.value))} className={INPUT_WIZ} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Rollenbezeichnung</label>
-                <input type="text" value={editRoleDesc} onChange={e => setEditRoleDesc(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow" />
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Rollenbezeichnung</label>
+                <input type="text" value={editRoleDesc} onChange={e => setEditRoleDesc(e.target.value)} className={INPUT_WIZ} />
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setEditSlot(null)}
-                  className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+                <button onClick={() => setEditSlot(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 <button onClick={handleEditSlot} disabled={editSaving}
-                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50">
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50">
                   {editSaving ? 'Speichern…' : 'Speichern'}
                 </button>
               </div>
@@ -441,14 +431,13 @@ export default function SpieltagDetailPage() {
       {/* Delete slot confirmation */}
       {deleteSlotId !== null && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="font-bold mb-2">Dienst löschen?</h3>
-            <p className="text-sm text-gray-500 mb-5">Dieser Dienst wird endgültig gelöscht.</p>
+          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-bold mb-2 text-brand-text">Dienst löschen?</h3>
+            <p className="text-sm text-brand-text-muted mb-5">Dieser Dienst wird endgültig gelöscht.</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeleteSlotId(null)}
-                className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+              <button onClick={() => setDeleteSlotId(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
               <button onClick={handleDeleteSlot} disabled={deleteSaving}
-                className="flex-1 bg-brand-error hover:bg-brand-error text-brand-white rounded-md px-4 py-2 text-sm disabled:opacity-50">
+                className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50">
                 {deleteSaving ? 'Löschen…' : 'Löschen'}
               </button>
             </div>
@@ -459,18 +448,18 @@ export default function SpieltagDetailPage() {
       {/* Regenerate dialog */}
       {showRegen && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold mb-1">Dienste neu generieren</h3>
-            <p className="text-sm text-gray-500 mb-4">
+          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold mb-1 text-brand-text">Dienste neu generieren</h3>
+            <p className="text-sm text-brand-text-muted mb-4">
               Unbesetzte Dienste werden gelöscht und durch die Vorlage ersetzt.
             </p>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Dienstplan-Vorlage *</label>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Dienstplan-Vorlage *</label>
               <select
                 value={regenTemplateID ?? ''}
                 onChange={e => handleRegenTemplateChange(e.target.value ? Number(e.target.value) : null)}
-                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                className={INPUT_WIZ}
               >
                 <option value="">Auswählen…</option>
                 {regenTemplates.map(t => (
@@ -480,32 +469,32 @@ export default function SpieltagDetailPage() {
             </div>
 
             {regenPreviewLoading && (
-              <p className="text-sm text-gray-400 mb-4">Vorschau wird geladen…</p>
+              <p className="text-sm text-brand-text-subtle mb-4">Vorschau wird geladen…</p>
             )}
 
             {!regenPreviewLoading && regenTemplateID && regenPreview.length === 0 && !regenError && (
-              <p className="text-sm text-gray-400 mb-4 italic">Keine Dienste in dieser Vorlage.</p>
+              <p className="text-sm text-brand-text-subtle mb-4 italic">Keine Dienste in dieser Vorlage.</p>
             )}
 
             {!regenPreviewLoading && regenPreview.length > 0 && (
               <>
                 {regenPreview.some(s => s.conflict) && (
-                  <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
-                    <span className="shrink-0 mt-0.5">⚠</span>
+                  <div className="mb-3 p-2.5 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-xs text-brand-danger flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <span>
                       Gleicher Diensttyp zur selben Uhrzeit existiert bereits für ein anderes Spiel an diesem Tag.
                       Bitte Optimierungsregeln prüfen.
                     </span>
                   </div>
                 )}
-                <div className="space-y-1 mb-4 max-h-48 overflow-y-auto border rounded-lg p-2 bg-gray-50">
+                <div className="space-y-1 mb-4 max-h-48 overflow-y-auto border border-brand-border-subtle rounded-lg p-2 bg-brand-surface-card">
                   {regenPreview.map((s, i) => (
-                    <div key={i} className={`flex items-center gap-2.5 px-1 py-1 text-sm rounded ${s.conflict ? 'bg-red-50' : ''}`}>
-                      <span className="font-mono font-semibold w-12 text-gray-700">{s.event_time}</span>
-                      <span className={`flex-1 ${s.conflict ? 'text-red-700' : ''}`}>{s.duty_type_name}</span>
-                      {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
-                      <span className="text-xs text-gray-400">{s.slots_count}×</span>
-                      {s.conflict && <span className="text-red-500 text-xs font-medium">⚠ Konflikt</span>}
+                    <div key={i} className={`flex items-center gap-2.5 px-1 py-1 text-sm rounded ${s.conflict ? 'bg-brand-danger-light' : ''}`}>
+                      <span className="font-mono font-semibold w-12 text-brand-text">{s.event_time}</span>
+                      <span className={`flex-1 ${s.conflict ? 'text-brand-danger' : 'text-brand-text'}`}>{s.duty_type_name}</span>
+                      {s.role_desc && <span className="text-xs text-brand-text-subtle">({s.role_desc})</span>}
+                      <span className="text-xs text-brand-text-subtle">{s.slots_count}×</span>
+                      {s.conflict && <span className="text-brand-danger text-xs font-medium flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" /> Konflikt</span>}
                     </div>
                   ))}
                 </div>
@@ -513,20 +502,19 @@ export default function SpieltagDetailPage() {
             )}
 
             {regenError && (
-              <p className="text-sm text-red-600 mb-3">{regenError}</p>
+              <p className="text-sm text-brand-danger mb-3">{regenError}</p>
             )}
 
-            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-700 mb-4">
+            <div className="p-3 bg-brand-warning-light border border-brand-warning/40 rounded-lg text-xs text-brand-text mb-4">
               Bereits belegte Dienste werden nicht überschrieben.
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => setShowRegen(false)}
-                className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+              <button onClick={() => setShowRegen(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
               <button
                 onClick={handleRegen}
                 disabled={regenSaving || !regenTemplateID || regenPreviewLoading}
-                className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
               >
                 {regenSaving ? 'Generieren…' : 'Anwenden'}
               </button>
@@ -538,12 +526,12 @@ export default function SpieltagDetailPage() {
       {/* Delete game confirmation */}
       {showDeleteGame && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="font-bold mb-2">Spiel löschen?</h3>
-            <p className="text-sm text-gray-500 mb-1">
+          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="font-bold mb-2 text-brand-text">Spiel löschen?</h3>
+            <p className="text-sm text-brand-text-muted mb-1">
               <strong>vs. {game.opponent || '(kein Gegner)'}</strong> ({dateFormatted})
             </p>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-brand-text-muted mb-4">
               Dieses Spiel wird endgültig gelöscht.
             </p>
             {slots.length > 0 && (
@@ -554,16 +542,15 @@ export default function SpieltagDetailPage() {
                   checked={deleteWithSlots}
                   onChange={e => setDeleteWithSlots(e.target.checked)}
                 />
-                <span className="text-sm text-gray-700">
+                <span className="text-sm text-brand-text">
                   Verknüpfte Dienste ebenfalls löschen ({slots.length} {slots.length === 1 ? 'Dienst' : 'Dienste'})
                 </span>
               </label>
             )}
             <div className="flex gap-2">
-              <button onClick={() => setShowDeleteGame(false)}
-                className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>
+              <button onClick={() => setShowDeleteGame(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
               <button onClick={handleDeleteGame} disabled={deletingGame}
-                className="flex-1 bg-brand-error hover:bg-red-700 text-brand-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50">
+                className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50">
                 {deletingGame ? 'Löschen…' : 'Endgültig löschen'}
               </button>
             </div>

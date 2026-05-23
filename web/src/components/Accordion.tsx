@@ -11,19 +11,22 @@ interface Props {
 
 export default function Accordion({ id: _id, title, icon: Icon, isOpen, onToggle, children }: Props) {
   return (
-    <div className="border border-black/10 rounded-lg overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-brand-gray hover:bg-brand-gray/80 transition-colors min-h-[44px]"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-brand-border-subtle transition-colors min-h-[44px]"
       >
-        <div className="flex items-center gap-2 font-semibold text-sm uppercase tracking-wider">
+        <div className="flex items-center gap-2 font-semibold text-sm uppercase tracking-wider text-brand-text">
           <Icon size={18} />
           {title}
         </div>
-        {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        {isOpen
+          ? <ChevronDown className="w-4 h-4 text-brand-text-muted" />
+          : <ChevronRight className="w-4 h-4 text-brand-text-muted" />
+        }
       </button>
       {isOpen && (
-        <div className="bg-white px-4 py-3">
+        <div className="px-4 py-3 border-t border-brand-border-subtle">
           {children}
         </div>
       )}

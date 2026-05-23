@@ -21,6 +21,16 @@ export default {
           'warning-light': '#FEF3C7',
           info: '#3B82F6',
           'info-light': '#DBEAFE',
+          // semantic tokens
+          'surface-card': '#F9FAFB',
+          'text': '#111827',
+          'text-muted': '#6B7280',
+          'text-subtle': '#9CA3AF',
+          'border': '#D1D5DB',
+          'border-subtle': '#E5E7EB',
+          'table-select': '#E5E7EB',
+          'danger': '#C0253A',
+          'danger-light': '#FCEEF1',
         },
       },
       fontFamily: {

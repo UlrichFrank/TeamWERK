@@ -1,3 +1,5 @@
+import { ChevronsLeft, ChevronsRight } from 'lucide-react'
+
 interface Props {
   currentPage: number
   totalPages: number
@@ -26,9 +28,9 @@ function buildSlots(currentPage: number, totalPages: number): SlotDef[] {
 }
 
 const BASE = 'w-10 h-10 flex items-center justify-center rounded-full text-sm font-medium'
-const ACTIVE = `${BASE} bg-black text-white font-semibold`
-const NAVIGABLE = `${BASE} bg-brand-yellow text-black transition-colors hover:bg-black hover:text-brand-yellow cursor-pointer`
-const DISABLED = `${BASE} bg-brand-yellow text-black opacity-30 cursor-not-allowed`
+const ACTIVE = `${BASE} bg-brand-black text-white font-semibold`
+const NAVIGABLE = `${BASE} bg-brand-yellow text-brand-black transition-colors hover:bg-brand-black hover:text-brand-yellow cursor-pointer`
+const DISABLED = `${BASE} bg-brand-yellow text-brand-black opacity-30 cursor-not-allowed`
 
 export default function Pagination({ currentPage, totalPages, onPageChange }: Props) {
   if (totalPages <= 1) return null
@@ -38,17 +40,23 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pr
   return (
     <nav aria-label="Seitennavigation" className="flex justify-center items-center gap-2 mt-8 mb-4">
       {slots.map((slot, i) => {
+        const content = slot.type === 'first'
+          ? <ChevronsLeft className="w-4 h-4" />
+          : slot.type === 'last'
+            ? <ChevronsRight className="w-4 h-4" />
+            : slot.label
+
         if (slot.isActive) {
-          return <span key={i} className={ACTIVE}>{slot.label}</span>
+          return <span key={i} className={ACTIVE}>{content}</span>
         }
         if (slot.target !== null) {
           return (
             <button key={i} className={NAVIGABLE} onClick={() => onPageChange(slot.target!)}>
-              {slot.label}
+              {content}
             </button>
           )
         }
-        return <span key={i} className={DISABLED}>{slot.label}</span>
+        return <span key={i} className={DISABLED}>{content}</span>
       })}
     </nav>
   )

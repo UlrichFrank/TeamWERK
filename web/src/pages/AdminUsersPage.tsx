@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react'
+import { X, Check } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
@@ -16,6 +17,8 @@ const ROLE_RANK: Record<string, number> = {
   admin: 5, vorstand: 4, trainer: 3, elternteil: 2, spieler: 1,
 }
 const ALL_ROLES = ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] as const
+
+const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function AdminUsersPage() {
   const { user: self } = useAuth()
@@ -127,7 +130,7 @@ export default function AdminUsersPage() {
               type="search"
               placeholder="Nutzer suchen…"
               onChange={e => setSearch(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2.5 sm:py-1.5 text-sm w-full sm:w-auto"
+              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
             />
             <button
               onClick={() => setShowInviteModal(true)}
@@ -142,67 +145,79 @@ export default function AdminUsersPage() {
       {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg">Einladung versenden</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              <button onClick={closeModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            {sent && <p className="text-green-600 text-sm mb-3">Einladung gesendet ✓</p>}
-            {inviteError && <p className="text-red-600 text-sm mb-3">{inviteError}</p>}
-            <form onSubmit={handleInvite} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label>
-                <input
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  type="email"
-                  placeholder="name@beispiel.de"
-                  required
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rolle</label>
-                <select
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="elternteil">Elternteil</option>
-                  <option value="spieler">Spieler</option>
-                  <option value="trainer">Trainer</option>
-                  <option value="vorstand">Vorstand</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Kommentar <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  value={inviteComment}
-                  onChange={e => setInviteComment(e.target.value)}
-                  type="text"
-                  placeholder="z.B. Elternteil von Max Mustermann"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="submit"
-                  className="flex-1 bg-brand-yellow text-black rounded-md px-4 py-2 text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors"
-                >
-                  Einladung senden
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </form>
+            <div className="px-6 py-5 space-y-3">
+              {sent && (
+                <p className="text-brand-success text-sm flex items-center gap-1">
+                  <Check className="w-4 h-4" /> Einladung gesendet
+                </p>
+              )}
+              {inviteError && (
+                <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+                  {inviteError}
+                </p>
+              )}
+              <form onSubmit={handleInvite} className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">E-Mail</label>
+                  <input
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    type="email"
+                    placeholder="name@beispiel.de"
+                    required
+                    className={INPUT}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Rolle</label>
+                  <select
+                    value={inviteRole}
+                    onChange={e => setInviteRole(e.target.value)}
+                    className={INPUT}
+                  >
+                    <option value="elternteil">Elternteil</option>
+                    <option value="spieler">Spieler</option>
+                    <option value="trainer">Trainer</option>
+                    <option value="vorstand">Vorstand</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                    Kommentar <span className="text-brand-text-subtle font-normal">(optional)</span>
+                  </label>
+                  <input
+                    value={inviteComment}
+                    onChange={e => setInviteComment(e.target.value)}
+                    type="text"
+                    placeholder="z.B. Elternteil von Max Mustermann"
+                    className={INPUT}
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  >
+                    Einladung senden
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -238,32 +253,36 @@ export default function AdminUsersPage() {
             ))}
           </div>
 
-          <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
             <table className="w-full text-sm">
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-brand-border-subtle">
                 {requests.map(req => (
-                  <tr key={`req-${req.id}`} className="hover:bg-brand-gray">
-                    <td className="px-6 py-3 font-medium">{req.name}</td>
-                    <td className="px-6 py-3 text-gray-600">{req.email}</td>
-                    <td className="px-6 py-3 text-gray-500 text-xs">{req.comment || '–'}</td>
-                    <td className="px-6 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-yellow">Anfrage</span></td>
+                  <tr key={`req-${req.id}`} className="hover:bg-brand-table-select transition-colors">
+                    <td className="px-6 py-3 font-medium text-brand-text">{req.name}</td>
+                    <td className="px-6 py-3 text-brand-text-muted">{req.email}</td>
+                    <td className="px-6 py-3 text-brand-text-subtle text-xs">{req.comment || '–'}</td>
+                    <td className="px-6 py-3">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-yellow text-brand-black">Anfrage</span>
+                    </td>
                     <td className="px-6 py-3 text-right">
                       <div className="flex gap-1 justify-end">
                         <button onClick={() => handleApproveRequest(req)} className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">Genehmigen</button>
-                        <button onClick={() => handleRejectRequest(req)} className="text-xs border border-gray-300 text-gray-700 px-3 py-1 rounded font-medium hover:border-gray-500 transition-colors">Ablehnen</button>
-                        <button onClick={() => handleDeleteRequest(req)} className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors">Löschen</button>
+                        <button onClick={() => handleRejectRequest(req)} className="text-xs border border-brand-border text-brand-text-muted px-3 py-1 rounded font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors">Ablehnen</button>
+                        <button onClick={() => handleDeleteRequest(req)} className="text-xs bg-brand-danger text-white px-3 py-1 rounded font-medium hover:bg-brand-danger/90 transition-colors">Löschen</button>
                       </div>
                     </td>
                   </tr>
                 ))}
                 {invitations.map(inv => (
-                  <tr key={`inv-${inv.id}`} className="hover:bg-brand-gray">
-                    <td className="px-6 py-3 text-gray-500 italic">{inv.email}</td>
-                    <td className="px-6 py-3 text-gray-400">{ROLE_LABELS[inv.role] || inv.role}</td>
-                    <td className="px-6 py-3 text-gray-500 text-xs">{inv.comment || '–'}</td>
-                    <td className="px-6 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-200">Einladung</span></td>
+                  <tr key={`inv-${inv.id}`} className="hover:bg-brand-table-select transition-colors">
+                    <td className="px-6 py-3 text-brand-text-muted italic">{inv.email}</td>
+                    <td className="px-6 py-3 text-brand-text-subtle">{ROLE_LABELS[inv.role] || inv.role}</td>
+                    <td className="px-6 py-3 text-brand-text-subtle text-xs">{inv.comment || '–'}</td>
+                    <td className="px-6 py-3">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Einladung</span>
+                    </td>
                     <td className="px-6 py-3 text-right">
-                      <button onClick={() => handleDeleteInvitation(inv)} className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors">Löschen</button>
+                      <button onClick={() => handleDeleteInvitation(inv)} className="text-xs bg-brand-danger text-white px-3 py-1 rounded font-medium hover:bg-brand-danger/90 transition-colors">Löschen</button>
                     </td>
                   </tr>
                 ))}
@@ -274,40 +293,40 @@ export default function AdminUsersPage() {
       )}
 
       {/* Registered users */}
-      <div className="hidden sm:block bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-6">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold">Registrierte Nutzer ({total})</h2>
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-6">
+        <div className="px-6 py-4 border-b border-brand-border-subtle">
+          <h2 className="font-semibold text-brand-text">Registrierte Nutzer ({total})</h2>
         </div>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead>
             <tr>
-              <th className="px-6 py-3 text-left">Name</th>
-              <th className="px-6 py-3 text-left">E-Mail</th>
-              <th className="px-6 py-3 text-left">Rolle</th>
-              <th className="px-6 py-3 text-left"></th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-6 py-3 text-left">Name</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-6 py-3 text-left">E-Mail</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-6 py-3 text-left">Rolle</th>
+              <th className="bg-brand-surface-card px-6 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-brand-border-subtle">
             {users.map(u => {
               const callerRank = ROLE_RANK[self?.role ?? ''] ?? 0
               const canEdit = self?.id !== u.id && (ROLE_RANK[u.role] ?? 0) <= callerRank
               return (
-                <tr key={`user-${u.id}`} className="hover:bg-brand-gray">
-                  <td className="px-6 py-3 font-medium">{u.name}</td>
-                  <td className="px-6 py-3 text-gray-600">{u.email}</td>
+                <tr key={`user-${u.id}`} className="hover:bg-brand-table-select transition-colors">
+                  <td className="px-6 py-3 font-medium text-brand-text">{u.name}</td>
+                  <td className="px-6 py-3 text-brand-text-muted">{u.email}</td>
                   <td className="px-6 py-3">
                     {canEdit ? (
                       <select
                         value={u.role}
                         onChange={e => handleRoleChange(u, e.target.value)}
-                        className="border border-gray-300 rounded px-2 py-0.5 text-xs"
+                        className="border border-brand-border rounded px-2 py-0.5 text-xs text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                       >
                         {allowedRoles(self?.role ?? '').map(r => (
                           <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-xs text-gray-500">{ROLE_LABELS[u.role]}</span>
+                      <span className="text-xs text-brand-text-muted">{ROLE_LABELS[u.role]}</span>
                     )}
                   </td>
                   <td className="px-6 py-3 text-right">
@@ -322,12 +341,12 @@ export default function AdminUsersPage() {
                         </button>
                       )}
                       {createMemberErrors.get(u.id) && (
-                        <span className="text-xs text-red-500">{createMemberErrors.get(u.id)}</span>
+                        <span className="text-xs text-brand-danger">{createMemberErrors.get(u.id)}</span>
                       )}
                       <button
                         onClick={() => handleDeleteUser(u)}
                         disabled={self?.id === u.id}
-                        className="text-xs border border-red-300 text-red-600 px-3 py-1 rounded font-medium hover:bg-red-50 hover:border-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="text-xs bg-brand-danger text-white px-3 py-1 rounded font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         Löschen
                       </button>
@@ -338,7 +357,7 @@ export default function AdminUsersPage() {
             })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-6 text-center text-gray-400">Keine Nutzer vorhanden</td>
+                <td colSpan={4} className="px-6 py-6 text-center text-brand-text-subtle">Keine Nutzer vorhanden</td>
               </tr>
             )}
           </tbody>

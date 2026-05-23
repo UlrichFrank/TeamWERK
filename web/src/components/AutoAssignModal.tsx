@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 
 interface Kader {
@@ -54,12 +55,9 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
       await api.post('/admin/kader/auto-assign', {
         kader_ids: Array.from(selectedIds),
       })
-      // Show success message and reload
-      const message = `Auto-Assign für ${selectedIds.size} Kader abgeschlossen`
-      // Use a simple alert for now; in production, use a toast library
-      alert(message)
+      alert(`Auto-Assign für ${selectedIds.size} Kader abgeschlossen`)
       onDone()
-    } catch (err) {
+    } catch {
       setError('Fehler beim Auto-Assign. Bitte erneut versuchen.')
     } finally {
       setSaving(false)
@@ -68,48 +66,59 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <h2 className="font-semibold text-base">Auto-Assign</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+      <div className="bg-white rounded-xl shadow-2xl border-t-4 border-brand-yellow w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
+          <h2 className="font-semibold text-base text-brand-text">Auto-Assign</h2>
+          <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="p-6">
           {loading ? (
-            <p className="text-sm text-gray-500 italic">Kader werden geladen…</p>
+            <p className="text-sm text-brand-text-muted italic">Kader werden geladen…</p>
           ) : kader.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">Keine Kader in dieser Saison vorhanden.</p>
+            <p className="text-sm text-brand-text-subtle italic">Keine Kader in dieser Saison vorhanden.</p>
           ) : (
             <>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-brand-text-muted mb-4">
                 Wähle die Kader, die mit Mitgliedern nach Jahrgang und Geschlecht befüllt werden sollen:
               </p>
               <div className="space-y-2 mb-6">
                 {kader.map(k => (
-                  <label key={k.id} className="flex items-center gap-3 text-sm p-2 rounded hover:bg-gray-50 cursor-pointer">
+                  <label key={k.id} className="flex items-center gap-3 text-sm p-2 rounded hover:bg-brand-surface-card cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(k.id)}
                       onChange={() => toggleKader(k.id)}
-                      className="accent-brand-blue"
+                      className="accent-brand-yellow"
                     />
-                    <span className="font-medium">{k.age_class} {GENDER_LABEL[k.gender]}</span>
+                    <span className="font-medium text-brand-text">{k.age_class} {GENDER_LABEL[k.gender]}</span>
                     {k.bracket_years.length === 2 && (
-                      <span className="text-gray-400 text-xs">Jg. {k.bracket_years[0]}/{k.bracket_years[1]}</span>
+                      <span className="text-brand-text-subtle text-xs">Jg. {k.bracket_years[0]}/{k.bracket_years[1]}</span>
                     )}
                   </label>
                 ))}
               </div>
-              {error && <p className="text-brand-error text-sm mb-4">{error}</p>}
+              {error && (
+                <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger mb-4">
+                  {error}
+                </p>
+              )}
             </>
           )}
           <div className="flex justify-end gap-2">
-            <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Abbrechen</button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+            >
+              Abbrechen
+            </button>
             {!loading && kader.length > 0 && (
               <button
                 onClick={handleConfirm}
                 disabled={selectedIds.size === 0 || saving}
-                className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40"
+                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saving ? 'Auto-Assign läuft…' : 'Auto-Assign starten'}
               </button>

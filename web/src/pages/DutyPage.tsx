@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -41,13 +42,13 @@ function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     assigned: 'bg-brand-yellow text-brand-black',
     fulfilled: 'bg-brand-black text-brand-white',
-    cash_substitute: 'bg-gray-200 text-gray-700',
+    cash_substitute: 'bg-brand-border-subtle text-brand-text-muted',
   }
   const label: Record<string, string> = {
     assigned: 'ausstehend', fulfilled: 'erfüllt', cash_substitute: 'Geldersatz',
   }
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${map[status] ?? 'bg-brand-border-subtle text-brand-text-muted'}`}>
       {label[status] ?? status}
     </span>
   )
@@ -151,16 +152,16 @@ export default function DutyPage() {
         <h1 className="text-2xl font-bold">Dienste</h1>
         <div className="flex items-center gap-3 flex-wrap">
           {isAdminOrTrainer && (
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+            <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-sm">
               <button
                 onClick={() => setViewMine(false)}
-                className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
               >
                 Alle Dienste
               </button>
               <button
                 onClick={() => setViewMine(true)}
-                className={`px-3 py-1.5 border-l border-gray-200 ${viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`px-3 py-1.5 border-l border-brand-border-subtle ${viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
               >
                 Meine Dienste
               </button>
@@ -168,7 +169,7 @@ export default function DutyPage() {
           )}
           <button
             onClick={() => setShowPast(p => !p)}
-            className="text-sm text-gray-500 hover:text-brand-blue transition-colors"
+            className="text-sm text-brand-text-muted hover:text-brand-blue transition-colors"
           >
             {showPast ? 'Vergangene ausblenden' : 'Vergangene einblenden'}
           </button>
@@ -176,7 +177,7 @@ export default function DutyPage() {
       </div>
 
       {visible.length === 0 && (
-        <p className="text-gray-500">
+        <p className="text-brand-text-muted">
           {groups.length === 0
             ? 'Keine Dienste für deine Mannschaften.'
             : 'Keine aktuellen Dienste. Vergangene können oben eingeblendet werden.'}
@@ -187,41 +188,41 @@ export default function DutyPage() {
         {visible.map((g, i) => (
           <div
             key={i}
-            className={`bg-white rounded-xl shadow border-t-4 overflow-hidden ${g.past ? 'border-gray-300 opacity-70' : 'border-brand-yellow'}`}
+            className={`bg-brand-surface-card rounded-xl shadow border-t-4 overflow-hidden ${g.past ? 'border-brand-border opacity-70' : 'border-brand-yellow'}`}
           >
             {/* Group header */}
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-4 py-3 bg-brand-surface-card border-b border-brand-border-subtle flex items-center justify-between">
               <div>
                 {g.game_id ? (
-                  <span className="font-semibold text-sm">
+                  <span className="font-semibold text-sm text-brand-text">
                     {g.date ? formatDate(g.date) : ''}
                     {g.event_time ? ` · ${g.event_time} Uhr` : ''}
                     {g.opponent ? ` · vs. ${g.opponent}` : ''}
                   </span>
                 ) : (
-                  <span className="font-semibold text-sm">{g.label}</span>
+                  <span className="font-semibold text-sm text-brand-text">{g.label}</span>
                 )}
               </div>
-              <span className="text-xs text-gray-400 font-medium">{g.team_name}</span>
+              <span className="text-xs text-brand-text-muted font-medium">{g.team_name}</span>
             </div>
 
             {/* Slots */}
             <table className="w-full text-sm">
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-brand-border-subtle">
                 {g.slots.map(s => (
                   <>
                     <tr key={s.id}>
-                      <td className="px-4 py-2.5 font-medium text-gray-800">
+                      <td className="px-4 py-2.5 font-medium text-brand-text">
                         {s.duty_type}
-                        {s.role_desc ? <span className="text-gray-400 font-normal"> · {s.role_desc}</span> : null}
+                        {s.role_desc ? <span className="text-brand-text-subtle font-normal"> · {s.role_desc}</span> : null}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-500 w-20">{s.event_time || '—'}</td>
-                      <td className="px-4 py-2.5 text-gray-500 w-24 text-right">
+                      <td className="px-4 py-2.5 text-brand-text-muted w-20">{s.event_time || '—'}</td>
+                      <td className="px-4 py-2.5 text-brand-text-muted w-24 text-right">
                         {s.claimed_by_me
                           ? <span className="text-brand-blue text-xs font-medium">Eingetragen</span>
                           : s.vacancies > 0
                             ? <span className="text-xs">{s.vacancies} frei</span>
-                            : <span className="text-xs text-gray-400">Besetzt</span>
+                            : <span className="text-xs text-brand-text-subtle">Besetzt</span>
                         }
                       </td>
                       <td className="px-4 py-2.5 text-right">
@@ -229,7 +230,7 @@ export default function DutyPage() {
                           {s.claimed_by_me && !g.past && (
                             <button
                               onClick={() => unclaim(s.id)}
-                              className="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded border border-gray-200 hover:border-red-300"
+                              className="text-xs text-brand-text-muted hover:text-brand-danger transition-colors px-2 py-1 rounded border border-brand-border-subtle hover:border-brand-danger"
                             >
                               Austragen
                             </button>
@@ -237,7 +238,7 @@ export default function DutyPage() {
                           {!s.claimed_by_me && s.vacancies > 0 && !g.past && (
                             <button
                               onClick={() => claim(s.id)}
-                              className="text-xs bg-brand-yellow text-black font-medium px-2 py-1 rounded hover:bg-black hover:text-brand-yellow transition-colors"
+                              className="text-xs bg-brand-yellow text-brand-black font-medium px-2 py-1 rounded hover:bg-brand-black hover:text-brand-yellow transition-colors"
                             >
                               Eintragen
                             </button>
@@ -245,7 +246,7 @@ export default function DutyPage() {
                           {isAdminOrTrainer && (
                             <button
                               onClick={() => toggleExpand(s.id)}
-                              className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+                              className="text-xs bg-brand-border-subtle text-brand-text-muted px-2 py-1 rounded hover:bg-brand-border transition-colors"
                             >
                               {expanded === s.id ? 'Schließen' : 'Zuteilungen'}
                             </button>
@@ -253,10 +254,11 @@ export default function DutyPage() {
                           {isAdminOrTrainer && (
                             <button
                               onClick={() => handleDeleteClick(s)}
-                              className="text-xs text-gray-300 hover:text-red-500 transition-colors px-1"
+                              className="text-brand-text-subtle hover:text-brand-danger transition-colors p-1"
                               title="Slot löschen"
+                              aria-label="Slot löschen"
                             >
-                              🗑
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -266,26 +268,26 @@ export default function DutyPage() {
                     {/* Expanded assignments */}
                     {expanded === s.id && (
                       <tr key={`${s.id}-assignments`}>
-                        <td colSpan={4} className="bg-gray-50 px-6 py-4">
+                        <td colSpan={4} className="bg-brand-surface-card px-6 py-4">
                           {!(assignments[s.id]?.length) ? (
-                            <p className="text-sm text-gray-400">Keine Zuteilungen</p>
+                            <p className="text-sm text-brand-text-subtle">Keine Zuteilungen</p>
                           ) : (
                             <table className="w-full text-sm">
                               <thead>
-                                <tr className="text-gray-500 text-xs">
+                                <tr className="text-brand-text-muted text-xs">
                                   <th className="text-left pb-2">Nutzer</th>
                                   <th className="text-left pb-2">Status</th>
                                   <th className="text-right pb-2">Aktionen</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-100">
+                              <tbody className="divide-y divide-brand-border-subtle">
                                 {(assignments[s.id] ?? []).map(a => (
                                   <tr key={a.id}>
-                                    <td className="py-2">{a.user_name}</td>
+                                    <td className="py-2 text-brand-text">{a.user_name}</td>
                                     <td className="py-2">
                                       <StatusBadge status={a.status} />
                                       {a.status === 'cash_substitute' && a.cash_amount > 0 && (
-                                        <span className="ml-2 text-xs text-gray-500">{a.cash_amount.toFixed(2)} €</span>
+                                        <span className="ml-2 text-xs text-brand-text-muted">{a.cash_amount.toFixed(2)} €</span>
                                       )}
                                     </td>
                                     <td className="py-2 text-right">
@@ -293,7 +295,7 @@ export default function DutyPage() {
                                         <div className="flex items-center justify-end gap-2">
                                           <button
                                             onClick={() => fulfill(a.id, s.id)}
-                                            className="text-xs bg-brand-yellow text-black px-2 py-1 rounded font-medium hover:bg-black hover:text-brand-yellow transition-colors"
+                                            className="text-xs bg-brand-yellow text-brand-black px-2 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
                                           >
                                             Erfüllt
                                           </button>
@@ -301,11 +303,11 @@ export default function DutyPage() {
                                             type="number" min="0" step="0.01" placeholder="Betrag €"
                                             value={cashAmount[a.id] ?? ''}
                                             onChange={e => setCashAmount(c => ({ ...c, [a.id]: e.target.value }))}
-                                            className="w-24 border border-gray-300 rounded px-2 py-1 text-xs"
+                                            className="w-24 border border-brand-border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                                           />
                                           <button
                                             onClick={() => cashSub(a.id, s.id)}
-                                            className="text-xs border border-black text-black px-2 py-1 rounded hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
+                                            className="text-xs border border-brand-black text-brand-text px-2 py-1 rounded hover:bg-brand-yellow hover:border-brand-yellow transition-colors"
                                           >
                                             Geldersatz
                                           </button>
@@ -331,21 +333,21 @@ export default function DutyPage() {
       {/* Delete confirmation modal */}
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
-            <h2 className="text-lg font-bold mb-2">Slot löschen?</h2>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4">
+            <h2 className="text-lg font-bold mb-2 text-brand-text">Slot löschen?</h2>
+            <p className="text-sm text-brand-text-muted mb-4">
               Dieser Slot hat bereits Zuteilungen. Alle Zuteilungen werden ebenfalls gelöscht.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="text-sm px-4 py-2 rounded border border-gray-200 text-gray-600 hover:bg-gray-50"
+                className="text-sm px-4 py-2 rounded border border-brand-border text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
               >
                 Abbrechen
               </button>
               <button
                 onClick={() => deleteSlot(deleteConfirm)}
-                className="text-sm px-4 py-2 rounded bg-red-500 text-white font-medium hover:bg-red-600"
+                className="text-sm px-4 py-2 rounded bg-brand-danger text-white font-medium hover:bg-brand-danger/90 transition-colors"
               >
                 Löschen
               </button>

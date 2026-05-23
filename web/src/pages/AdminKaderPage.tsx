@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import KaderMemberSearch from '../components/KaderMemberSearch'
 import KaderTrainerSearch from '../components/KaderTrainerSearch'
@@ -54,10 +55,8 @@ export default function AdminKaderPage() {
   const [initializing, setInitializing] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
-  // Per-kader mode toggle state: kader IDs where user clicked "Dediziert" but not yet picked a year
   const [pendingDedicated, setPendingDedicated] = useState<Set<number>>(new Set())
 
-  // Create new team modal
   const [createModal, setCreateModal] = useState<{
     ageClass: string
     gender: string
@@ -67,7 +66,6 @@ export default function AdminKaderPage() {
   const [createDedicatedYear, setCreateDedicatedYear] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
 
-  // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<Kader | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -147,7 +145,6 @@ export default function AdminKaderPage() {
 
   const handleSetMixed = async (k: Kader) => {
     if (pendingDedicated.has(k.id)) {
-      // Just cancel pending mode, no API call needed
       setPendingDedicated(prev => { const s = new Set(prev); s.delete(k.id); return s })
       return
     }
@@ -204,9 +201,8 @@ export default function AdminKaderPage() {
     }
   }
 
-  if (loading) return <div className="text-gray-400 text-sm">Laden…</div>
+  if (loading) return <div className="text-brand-text-muted text-sm">Laden…</div>
 
-  // Group kader by age_class|gender
   const groups = new Map<string, Kader[]>()
   for (const k of kaderList) {
     const key = groupKey(k)
@@ -214,7 +210,6 @@ export default function AdminKaderPage() {
     groups.get(key)!.push(k)
   }
 
-  // Ordered unique group keys (preserving sort order from API)
   const groupOrder: string[] = []
   for (const k of kaderList) {
     const key = groupKey(k)
@@ -235,20 +230,20 @@ export default function AdminKaderPage() {
         <h1 className="text-2xl font-bold">
           Kader
           {activeSeason && (
-            <span className="ml-2 text-base font-normal text-gray-500">{activeSeason.name}</span>
+            <span className="ml-2 text-base font-normal text-brand-text-muted">{activeSeason.name}</span>
           )}
         </h1>
         {activeSeason && kaderList.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setShowCopyModal(true)}
-              className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
+              className="bg-brand-yellow text-brand-black px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
             >
               Aus vorheriger Saison kopieren
             </button>
             <button
               onClick={() => setShowAutoAssignModal(true)}
-              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:border-gray-500 transition-colors whitespace-nowrap"
+              className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
             >
               Auto-Assign
             </button>
@@ -258,26 +253,26 @@ export default function AdminKaderPage() {
 
       {/* No active season */}
       {!activeSeason && (
-        <div className="bg-gray-50 rounded-xl border-t-4 border-brand-yellow p-8 text-center">
-          <p className="text-gray-500 text-sm">Bitte aktivieren Sie eine Saison unter <strong>Saisons</strong>.</p>
+        <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow p-8 text-center">
+          <p className="text-brand-text-muted text-sm">Bitte aktivieren Sie eine Saison unter <strong>Saisons</strong>.</p>
         </div>
       )}
 
       {/* No kader yet */}
       {activeSeason && kaderList.length === 0 && (
-        <div className="bg-gray-50 rounded-xl border-t-4 border-brand-yellow p-8 text-center space-y-4">
-          <p className="text-gray-500 text-sm">Noch keine Kader für <strong>{activeSeason.name}</strong> vorhanden.</p>
+        <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow p-8 text-center space-y-4">
+          <p className="text-brand-text-muted text-sm">Noch keine Kader für <strong>{activeSeason.name}</strong> vorhanden.</p>
           <div className="flex gap-3 justify-center flex-wrap">
             <button
               onClick={handleInitialize}
               disabled={initializing}
-              className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+              className="bg-brand-yellow text-brand-black px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
             >
               {initializing ? 'Anlegen…' : 'Kader für Saison anlegen'}
             </button>
             <button
               onClick={() => setShowCopyModal(true)}
-              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:border-gray-500 transition-colors"
+              className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors"
             >
               Aus vorheriger Saison kopieren
             </button>
@@ -294,7 +289,6 @@ export default function AdminKaderPage() {
 
         return (
           <div key={key} className="mb-6">
-            {/* Kader cards for this group */}
             {group.map(k => {
               const isDedicated = k.dedicated_birth_year !== null
               const isPending = pendingDedicated.has(k.id)
@@ -304,11 +298,11 @@ export default function AdminKaderPage() {
                 : `${k.age_class} ${GENDER_LABEL[k.gender]}`
 
               return (
-                <div key={k.id} className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow mb-3">
+                <div key={k.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow mb-3">
                   {/* Card header */}
-                  <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between gap-2">
+                  <div className="px-5 py-3 border-b border-brand-border-subtle flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <h2 className="font-semibold text-sm truncate">{title}</h2>
+                      <h2 className="font-semibold text-sm truncate text-brand-text">{title}</h2>
                       {k.birth_years.length > 0 && (
                         <span className="text-xs bg-brand-yellow text-brand-black px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
                           {birthYearLabel(k.birth_years)}
@@ -316,27 +310,28 @@ export default function AdminKaderPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-gray-400">{k.member_count} Mitgl.</span>
+                      <span className="text-xs text-brand-text-muted">{k.member_count} Mitgl.</span>
                       <button
                         onClick={() => k.member_count === 0 ? setDeleteConfirm(k) : showToast('Erst alle Mitglieder entfernen')}
                         disabled={k.member_count > 0}
                         title={k.member_count > 0 ? 'Erst alle Mitglieder entfernen' : 'Kader löschen'}
-                        className="text-gray-300 hover:text-red-500 transition-colors disabled:cursor-not-allowed disabled:opacity-40 px-1 py-0.5 rounded text-sm leading-none"
+                        aria-label="Kader löschen"
+                        className="text-brand-text-subtle hover:text-brand-danger transition-colors disabled:cursor-not-allowed disabled:opacity-40 p-0.5 rounded"
                       >
-                        ×
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
                   {/* Mode toggle */}
                   <div className="px-5 pt-3 pb-2 flex items-center gap-3 flex-wrap">
-                    <span className="text-xs text-gray-500 font-medium">Jahrgänge:</span>
-                    <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs">
+                    <span className="text-xs text-brand-text-muted font-medium">Jahrgänge:</span>
+                    <div className="flex rounded-md border border-brand-border-subtle overflow-hidden text-xs">
                       <button
                         onClick={() => handleSetMixed(k)}
                         className={`px-3 py-1 transition-colors ${!showDedicatedDropdown
                           ? 'bg-brand-yellow text-brand-black font-medium'
-                          : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                          : 'bg-white text-brand-text-muted hover:bg-brand-border-subtle'}`}
                       >
                         Gemischt
                       </button>
@@ -346,9 +341,9 @@ export default function AdminKaderPage() {
                             setPendingDedicated(prev => new Set(prev).add(k.id))
                           }
                         }}
-                        className={`px-3 py-1 transition-colors border-l border-gray-200 ${showDedicatedDropdown
+                        className={`px-3 py-1 transition-colors border-l border-brand-border-subtle ${showDedicatedDropdown
                           ? 'bg-brand-yellow text-brand-black font-medium'
-                          : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                          : 'bg-white text-brand-text-muted hover:bg-brand-border-subtle'}`}
                       >
                         Dediziert
                       </button>
@@ -361,7 +356,7 @@ export default function AdminKaderPage() {
                           const yr = parseInt(e.target.value)
                           if (!isNaN(yr)) handleSetDedicatedYear(k, yr)
                         }}
-                        className="border border-gray-200 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue"
+                        className="border border-brand-border-subtle rounded px-2 py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                       >
                         <option value="">Jahrgang wählen…</option>
                         {k.bracket_years.map(yr => (
@@ -372,12 +367,12 @@ export default function AdminKaderPage() {
                   </div>
 
                   {/* Position status */}
-                  <div className="px-5 py-2 border-t border-gray-100">
+                  <div className="px-5 py-2 border-t border-brand-border-subtle">
                     <PositionStatus members={k.members ?? []} />
                   </div>
 
                   {/* Trainer search + list */}
-                  <div className="px-5 py-2 border-t border-gray-100">
+                  <div className="px-5 py-2 border-t border-brand-border-subtle">
                     <KaderTrainerSearch
                       assignedTrainers={k.trainers ?? []}
                       onAdd={(memberId) => handleAddTrainer(k.id, memberId)}
@@ -386,7 +381,7 @@ export default function AdminKaderPage() {
                   </div>
 
                   {/* Member search */}
-                  <div className="px-5 pt-2 pb-2 border-t border-gray-100">
+                  <div className="px-5 pt-2 pb-2 border-t border-brand-border-subtle">
                     <KaderMemberSearch
                       kaderId={k.id}
                       onMemberAdded={loadAll}
@@ -396,24 +391,25 @@ export default function AdminKaderPage() {
 
                   {/* Member list */}
                   {(k.members ?? []).length === 0 ? (
-                    <p className="text-xs text-gray-400 italic px-5 py-3">Keine Mitglieder</p>
+                    <p className="text-xs text-brand-text-subtle italic px-5 py-3">Keine Mitglieder</p>
                   ) : (
-                    <ul className="divide-y divide-gray-100 px-5 pb-4">
+                    <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
                       {(k.members ?? []).map(m => (
                         <li key={m.id} className="flex items-center justify-between py-2 gap-2">
-                          <span className="text-sm">
+                          <span className="text-sm text-brand-text">
                             {m.name}{' '}
-                            <span className="text-gray-400 text-xs">
+                            <span className="text-brand-text-muted text-xs">
                               ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
                             </span>
                           </span>
                           <button
                             onClick={() => handleRemoveMember(k.id, m.id)}
                             disabled={removing[`${k.id}-${m.id}`]}
-                            className="text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40 px-1.5 py-0.5 rounded"
+                            className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
+                            aria-label="Mitglied entfernen"
                             title="Mitglied entfernen"
                           >
-                            ×
+                            <X className="w-3 h-3" />
                           </button>
                         </li>
                       ))}
@@ -450,20 +446,22 @@ export default function AdminKaderPage() {
       {/* Create team modal */}
       {createModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-            <h3 className="font-semibold text-base mb-4">
-              Neue Mannschaft — {createModal.ageClass} {GENDER_LABEL[createModal.gender]} #{createModal.nextTeamNumber}
-            </h3>
-            <div className="space-y-3">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
+            <div className="px-6 py-4 border-b border-brand-border-subtle">
+              <h3 className="font-semibold text-base text-brand-text">
+                Neue Mannschaft — {createModal.ageClass} {GENDER_LABEL[createModal.gender]} #{createModal.nextTeamNumber}
+              </h3>
+            </div>
+            <div className="px-6 py-5 space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Jahrgang</label>
+                <label className="text-xs font-medium text-brand-text-muted block mb-1">Jahrgang</label>
                 <select
                   value={createDedicatedYear ?? ''}
                   onChange={e => {
                     const v = e.target.value
                     setCreateDedicatedYear(v === '' ? null : parseInt(v))
                   }}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 >
                   <option value="">Gemischt (alle Jahrgänge)</option>
                   {createModal.bracketYears.map(yr => (
@@ -472,10 +470,10 @@ export default function AdminKaderPage() {
                 </select>
               </div>
             </div>
-            <div className="flex gap-2 mt-5 justify-end">
+            <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle justify-end">
               <button
                 onClick={() => { setCreateModal(null); setCreateDedicatedYear(null) }}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-500 transition-colors"
+                className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
               >
                 Abbrechen
               </button>
@@ -494,22 +492,26 @@ export default function AdminKaderPage() {
       {/* Delete confirmation dialog */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-            <h3 className="font-semibold text-base mb-2">Kader löschen?</h3>
-            <p className="text-sm text-gray-600 mb-5">
-              {deleteConfirm.age_class}{deleteConfirm.team_number > 1 ? ` ${deleteConfirm.team_number}` : ''} {GENDER_LABEL[deleteConfirm.gender]} wird unwiderruflich gelöscht.
-            </p>
-            <div className="flex gap-2 justify-end">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
+            <div className="px-6 py-4 border-b border-brand-border-subtle">
+              <h3 className="font-semibold text-base text-brand-text">Kader löschen?</h3>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-brand-text-muted">
+                {deleteConfirm.age_class}{deleteConfirm.team_number > 1 ? ` ${deleteConfirm.team_number}` : ''} {GENDER_LABEL[deleteConfirm.gender]} wird unwiderruflich gelöscht.
+              </p>
+            </div>
+            <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle justify-end">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-500 transition-colors"
+                className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
               >
                 Abbrechen
               </button>
               <button
                 onClick={handleDeleteKader}
                 disabled={deleting}
-                className="px-4 py-2 text-sm bg-red-500 text-white font-medium rounded-md hover:bg-red-600 transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm bg-brand-danger text-white font-medium rounded-md hover:bg-brand-danger/90 transition-colors disabled:opacity-50"
               >
                 {deleting ? 'Löschen…' : 'Löschen'}
               </button>
