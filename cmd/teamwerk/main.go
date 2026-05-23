@@ -158,6 +158,7 @@ func serve() {
 			r.Put("/api/admin/games/{id}", gameH.UpdateGame)
 			r.Delete("/api/admin/games/{id}", gameH.DeleteGame)
 			r.Post("/api/admin/games/{id}/regenerate", gameH.RegenerateSlots)
+			r.Post("/api/admin/games/regenerate-day", gameH.RegenerateDaySlots)
 		})
 
 		// Admin + Vorstand

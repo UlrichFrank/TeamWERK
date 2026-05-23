@@ -34,6 +34,7 @@ interface SlotPreview {
   event_time: string
   slots_count: number
   role_desc: string
+  conflict?: boolean
 }
 
 interface Template {
@@ -90,6 +91,7 @@ export default function SpieltagDetailPage() {
   // Delete game
   const [showDeleteGame, setShowDeleteGame] = useState(false)
   const [deletingGame, setDeletingGame] = useState(false)
+  const [deleteWithSlots, setDeleteWithSlots] = useState(true)
 
   // Regenerate dialog
   const [showRegen, setShowRegen] = useState(false)
@@ -185,7 +187,10 @@ export default function SpieltagDetailPage() {
     if (!gameId) return
     setDeletingGame(true)
     try {
-      await api.delete(`/admin/games/${gameId}`)
+      const url = deleteWithSlots
+        ? `/admin/games/${gameId}?delete_slots=true`
+        : `/admin/games/${gameId}`
+      await api.delete(url)
       navigate('/spielplan')
     } finally {
       setDeletingGame(false)
@@ -483,16 +488,28 @@ export default function SpieltagDetailPage() {
             )}
 
             {!regenPreviewLoading && regenPreview.length > 0 && (
-              <div className="space-y-1 mb-4 max-h-48 overflow-y-auto border rounded-lg p-2 bg-gray-50">
-                {regenPreview.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2.5 px-1 py-1 text-sm">
-                    <span className="font-mono font-semibold w-12 text-gray-700">{s.event_time}</span>
-                    <span className="flex-1">{s.duty_type_name}</span>
-                    {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
-                    <span className="text-xs text-gray-400 ml-auto">{s.slots_count}×</span>
+              <>
+                {regenPreview.some(s => s.conflict) && (
+                  <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
+                    <span className="shrink-0 mt-0.5">⚠</span>
+                    <span>
+                      Gleicher Diensttyp zur selben Uhrzeit existiert bereits für ein anderes Spiel an diesem Tag.
+                      Bitte Optimierungsregeln prüfen.
+                    </span>
                   </div>
-                ))}
-              </div>
+                )}
+                <div className="space-y-1 mb-4 max-h-48 overflow-y-auto border rounded-lg p-2 bg-gray-50">
+                  {regenPreview.map((s, i) => (
+                    <div key={i} className={`flex items-center gap-2.5 px-1 py-1 text-sm rounded ${s.conflict ? 'bg-red-50' : ''}`}>
+                      <span className="font-mono font-semibold w-12 text-gray-700">{s.event_time}</span>
+                      <span className={`flex-1 ${s.conflict ? 'text-red-700' : ''}`}>{s.duty_type_name}</span>
+                      {s.role_desc && <span className="text-xs text-gray-400">({s.role_desc})</span>}
+                      <span className="text-xs text-gray-400">{s.slots_count}×</span>
+                      {s.conflict && <span className="text-red-500 text-xs font-medium">⚠ Konflikt</span>}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
 
             {regenError && (
@@ -522,13 +539,26 @@ export default function SpieltagDetailPage() {
       {showDeleteGame && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-brand-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="font-bold mb-2">Event löschen?</h3>
+            <h3 className="font-bold mb-2">Spiel löschen?</h3>
             <p className="text-sm text-gray-500 mb-1">
               <strong>vs. {game.opponent || '(kein Gegner)'}</strong> ({dateFormatted})
             </p>
-            <p className="text-sm text-gray-500 mb-5">
-              Dieses Event und alle zugehörigen Dienste werden endgültig gelöscht.
+            <p className="text-sm text-gray-500 mb-4">
+              Dieses Spiel wird endgültig gelöscht.
             </p>
+            {slots.length > 0 && (
+              <label className="flex items-start gap-2 mb-5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-brand-yellow"
+                  checked={deleteWithSlots}
+                  onChange={e => setDeleteWithSlots(e.target.checked)}
+                />
+                <span className="text-sm text-gray-700">
+                  Verknüpfte Dienste ebenfalls löschen ({slots.length} {slots.length === 1 ? 'Dienst' : 'Dienste'})
+                </span>
+              </label>
+            )}
             <div className="flex gap-2">
               <button onClick={() => setShowDeleteGame(false)}
                 className="flex-1 border rounded-md px-4 py-2 text-sm hover:bg-gray-50">Abbrechen</button>

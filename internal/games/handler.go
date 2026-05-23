@@ -548,18 +548,47 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/admin/games/{id}
+// DELETE /api/admin/games/{id}?delete_slots=true
 func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	res, err := h.db.ExecContext(r.Context(), `DELETE FROM games WHERE id=?`, id)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
+	deleteSlots := r.URL.Query().Get("delete_slots") == "true"
+
+	if deleteSlots {
+		tx, err := h.db.BeginTx(r.Context(), nil)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+		if _, err = tx.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE game_id=?`, id); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		res, err := tx.ExecContext(r.Context(), `DELETE FROM games WHERE id=?`, id)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if err = tx.Commit(); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		res, err := h.db.ExecContext(r.Context(), `DELETE FROM games WHERE id=?`, id)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -901,6 +930,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		EventTime    string `json:"event_time"`
 		SlotsCount   int    `json:"slots_count"`
 		RoleDesc     string `json:"role_desc"`
+		Conflict     bool   `json:"conflict,omitempty"`
 	}
 	result := []preview{}
 	for _, it := range items {
@@ -928,8 +958,220 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 			RoleDesc:     it.RoleDesc,
 		})
 	}
+
+	// Konflikte markieren: gleicher Diensttyp zur gleichen Zeit an diesem Tag für ein anderes Spiel
+	if gameIDStr != "" {
+		var gameDate string
+		h.db.QueryRowContext(r.Context(), `SELECT date FROM games WHERE id=?`, gameIDStr).Scan(&gameDate)
+		if gameDate != "" {
+			for i, p := range result {
+				var count int
+				h.db.QueryRowContext(r.Context(),
+					`SELECT COUNT(*) FROM duty_slots
+					 WHERE duty_type_id=? AND event_time=? AND event_date=? AND game_id != ?`,
+					p.DutyTypeID, p.EventTime, gameDate, gameIDStr).Scan(&count)
+				if count > 0 {
+					result[i].Conflict = true
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// POST /api/admin/games/regenerate-day
+func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
+	date := r.URL.Query().Get("date")
+	if date == "" {
+		http.Error(w, "date is required", http.StatusBadRequest)
+		return
+	}
+
+	var seasonID int
+	if s := r.URL.Query().Get("season_id"); s != "" {
+		seasonID, _ = strconv.Atoi(s)
+	}
+	if seasonID == 0 {
+		h.db.QueryRowContext(r.Context(), `SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&seasonID)
+	}
+
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT id, time, opponent, is_home, template_id FROM games WHERE date=? AND season_id=? ORDER BY time`,
+		date, seasonID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	type dayGame struct {
+		ID         int
+		Time       string
+		Opponent   string
+		IsHome     bool
+		TemplateID sql.NullInt64
+	}
+	var dayGames []dayGame
+	for rows.Next() {
+		var g dayGame
+		var isHome int
+		rows.Scan(&g.ID, &g.Time, &g.Opponent, &isHome, &g.TemplateID)
+		g.IsHome = isHome == 1
+		dayGames = append(dayGames, g)
+	}
+	rows.Close()
+
+	type gameResult struct {
+		GameID       int  `json:"game_id"`
+		SlotsCreated int  `json:"slots_created"`
+		KeptSlots    int  `json:"kept_slots"`
+		Skipped      bool `json:"skipped,omitempty"`
+	}
+	type conflictEntry struct {
+		DutyTypeID int    `json:"duty_type_id"`
+		EventTime  string `json:"event_time"`
+		GameIDs    []int  `json:"game_ids"`
+	}
+
+	results := []gameResult{}
+	if len(dayGames) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"games": results, "conflicts": []conflictEntry{}})
+		return
+	}
+
+	allGameTimes, hasPrevDay, hasNextDay := h.loadSameDayContext(r.Context(), date, seasonID)
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for _, g := range dayGames {
+		res := gameResult{GameID: g.ID}
+
+		var templateID, durationMins int
+		if g.TemplateID.Valid {
+			templateID = int(g.TemplateID.Int64)
+			h.db.QueryRowContext(r.Context(),
+				`SELECT game_duration_minutes FROM game_templates WHERE id=?`, templateID).Scan(&durationMins)
+		} else {
+			templateID, durationMins, err = h.findTemplateForGame(r.Context(), g.IsHome)
+			if err != nil {
+				res.Skipped = true
+				results = append(results, res)
+				continue
+			}
+		}
+
+		items, err := h.loadTemplateItems(r.Context(), templateID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		teamRows, _ := h.db.QueryContext(r.Context(), `SELECT team_id FROM game_teams WHERE game_id=?`, g.ID)
+		var teamIDs []int
+		if teamRows != nil {
+			for teamRows.Next() {
+				var tid int
+				teamRows.Scan(&tid)
+				teamIDs = append(teamIDs, tid)
+			}
+			teamRows.Close()
+		}
+
+		tx.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM duty_slots WHERE game_id=? AND slots_filled > 0`, g.ID).Scan(&res.KeptSlots)
+		tx.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE game_id=? AND slots_filled = 0`, g.ID)
+
+		eventName := "Heimspiel"
+		if !g.IsHome {
+			eventName = "Auswärtsspiel"
+		}
+		if g.Opponent != "" {
+			eventName += " vs. " + g.Opponent
+		}
+
+		for _, it := range items {
+			offset := it.OffsetMinutes
+			if it.Anchor == "end" {
+				offset += durationMins
+			}
+			eventTime := addMinutes(g.Time, offset)
+
+			isBeforeAllGames, isAfterAllGames, isBetweenGames := classifySlotPosition(eventTime, g.Time, allGameTimes)
+			dutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes, hasPrevDay, hasNextDay,
+				isBeforeAllGames, isAfterAllGames, isBetweenGames)
+			if dutyTypeID == -1 {
+				continue
+			}
+
+			n := it.SlotsCount
+			if n <= 0 {
+				n = 1
+			}
+			for _, teamID := range teamIDs {
+				if _, err = tx.ExecContext(r.Context(),
+					`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
+					 VALUES (?,?,?,?,?,?,?,?,?)`,
+					eventName, date, eventTime, dutyTypeID, it.RoleDesc, n, teamID, seasonID, g.ID); err != nil {
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
+				res.SlotsCreated++
+			}
+		}
+		results = append(results, res)
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Detect conflicts: same duty_type_id + event_time across different game_ids
+	type slotKey struct {
+		DutyTypeID int
+		EventTime  string
+	}
+	slotMap := map[slotKey]map[int]struct{}{}
+	conflictRows, _ := h.db.QueryContext(r.Context(),
+		`SELECT duty_type_id, event_time, game_id FROM duty_slots
+		 WHERE event_date=? AND game_id IS NOT NULL`, date)
+	if conflictRows != nil {
+		for conflictRows.Next() {
+			var dtID, gID int
+			var et string
+			conflictRows.Scan(&dtID, &et, &gID)
+			key := slotKey{dtID, et}
+			if slotMap[key] == nil {
+				slotMap[key] = map[int]struct{}{}
+			}
+			slotMap[key][gID] = struct{}{}
+		}
+		conflictRows.Close()
+	}
+	conflicts := []conflictEntry{}
+	for key, gameSet := range slotMap {
+		if len(gameSet) > 1 {
+			gids := make([]int, 0, len(gameSet))
+			for gid := range gameSet {
+				gids = append(gids, gid)
+			}
+			conflicts = append(conflicts, conflictEntry{
+				DutyTypeID: key.DutyTypeID,
+				EventTime:  key.EventTime,
+				GameIDs:    gids,
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"games": results, "conflicts": conflicts})
 }
 
 // POST /api/admin/games/{id}/regenerate

@@ -54,6 +54,16 @@ export default function SpielplanPage() {
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Day-regen dialog
+  const [showDayRegen, setShowDayRegen] = useState(false)
+  const [dayRegenDate, setDayRegenDate] = useState('')
+  const [dayRegenLoading, setDayRegenLoading] = useState(false)
+  const [dayRegenResult, setDayRegenResult] = useState<{
+    games: Array<{ game_id: number; slots_created: number; kept_slots: number; skipped?: boolean }>
+    conflicts: Array<{ duty_type_id: number; event_time: string; game_ids: number[] }>
+  } | null>(null)
+  const [dayRegenError, setDayRegenError] = useState<string | null>(null)
+
   // Wizard dialog
   const [showCreate, setShowCreate] = useState(false)
   const [wizardStep, setWizardStep] = useState(1)
@@ -159,6 +169,35 @@ export default function SpielplanPage() {
     })
   }
 
+  const openDayRegen = (dateStr: string) => {
+    setDayRegenDate(dateStr)
+    setDayRegenResult(null)
+    setDayRegenError(null)
+    setShowDayRegen(true)
+  }
+
+  const closeDayRegen = () => {
+    setShowDayRegen(false)
+    setDayRegenDate('')
+    setDayRegenResult(null)
+    setDayRegenError(null)
+  }
+
+  const doRegenDay = async () => {
+    setDayRegenLoading(true)
+    setDayRegenError(null)
+    setDayRegenResult(null)
+    try {
+      const r = await api.post(`/admin/games/regenerate-day?date=${dayRegenDate}`)
+      setDayRegenResult(r.data)
+      await loadGames()
+    } catch {
+      setDayRegenError('Generierung fehlgeschlagen. Ist eine aktive Saison vorhanden?')
+    } finally {
+      setDayRegenLoading(false)
+    }
+  }
+
   const closeDialog = () => {
     setShowCreate(false)
     setWizardStep(1)
@@ -210,6 +249,7 @@ export default function SpielplanPage() {
             const dateStr = padDate(year, month, day)
             const dayGames = gamesByDate[dateStr] ?? []
             const isToday = dateStr === todayStr
+            const canRegen = user && ['admin', 'vorstand', 'trainer'].includes(user.role) && dayGames.length > 0
             return (
               <div key={day} className={`min-h-[90px] p-1.5 border-r border-b ${isToday ? 'bg-brand-yellow/20' : ''}`}>
                 <div className={`text-xs mb-1 ${isToday ? 'font-bold' : 'text-gray-400'}`}>{day}</div>
@@ -227,6 +267,14 @@ export default function SpielplanPage() {
                     <div className="text-gray-400 leading-tight">{g.time}</div>
                   </button>
                 ))}
+                {canRegen && (
+                  <button
+                    onClick={() => openDayRegen(dateStr)}
+                    className="w-full mt-0.5 text-center text-[10px] text-brand-blue hover:underline leading-tight py-0.5"
+                  >
+                    Dienste generieren
+                  </button>
+                )}
               </div>
             )
           })}
@@ -235,6 +283,74 @@ export default function SpielplanPage() {
 
       {!loading && monthGames.length === 0 && (
         <p className="text-gray-400 text-center mt-10 text-sm">Keine Heimspiele in diesem Monat</p>
+      )}
+
+      {/* Day Regeneration Dialog */}
+      {showDayRegen && (
+        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold mb-1">Dienste generieren</h2>
+            <p className="text-sm text-gray-500 mb-4">{dayRegenDate}</p>
+
+            <div className="space-y-2 mb-4">
+              {(gamesByDate[dayRegenDate] ?? []).map(g => (
+                <div key={g.id} className="p-3 border rounded-lg bg-gray-50 text-sm">
+                  <div className="font-semibold">{g.time} — {g.teams.map(t => t.name).join(', ')}</div>
+                  <div className="text-gray-500 text-xs">vs. {g.opponent || '–'} · {g.event_type}</div>
+                </div>
+              ))}
+            </div>
+
+            {dayRegenResult && (
+              <div className="mb-4 space-y-2">
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                  <div className="font-semibold text-green-800 mb-1">Generierung abgeschlossen</div>
+                  {dayRegenResult.games.map(gr => (
+                    <div key={gr.game_id} className="text-green-700 text-xs">
+                      {gr.skipped
+                        ? `Spiel #${gr.game_id}: kein Template — übersprungen`
+                        : `Spiel #${gr.game_id}: ${gr.slots_created} Dienste erstellt, ${gr.kept_slots} behalten`}
+                    </div>
+                  ))}
+                </div>
+                {dayRegenResult.conflicts.length > 0 && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
+                    <div className="font-semibold text-red-800 mb-1">Konflikte erkannt</div>
+                    <p className="text-red-700 text-xs mb-1">
+                      Gleicher Diensttyp zur gleichen Zeit bei mehreren Spielen — bitte Optimierungsregeln prüfen.
+                    </p>
+                    {dayRegenResult.conflicts.map((c, i) => (
+                      <div key={i} className="text-red-600 text-xs">
+                        {c.event_time} · Diensttyp #{c.duty_type_id} bei Spielen {c.game_ids.join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {dayRegenError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {dayRegenError}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={closeDayRegen} className="border rounded-md px-4 py-2 text-sm hover:bg-gray-50">
+                {dayRegenResult ? 'Schließen' : 'Abbrechen'}
+              </button>
+              {!dayRegenResult && (
+                <button
+                  onClick={doRegenDay}
+                  disabled={dayRegenLoading}
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                >
+                  {dayRegenLoading ? 'Generiere…' : 'Generieren'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Event Wizard Dialog */}
