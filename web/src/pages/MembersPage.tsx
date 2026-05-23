@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
 import MobileCard from '../components/MobileCard'
 import Pagination from '../components/Pagination'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Member {
   id: number; first_name: string; last_name: string
@@ -116,6 +117,8 @@ export default function MembersPage() {
     setImportResult(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
+
+  useEscapeKey(showImport ? resetImport : null)
 
   return (
     <div>

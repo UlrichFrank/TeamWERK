@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface BoardSlot {
   id: number
@@ -66,6 +67,8 @@ export default function DutyPage() {
   const [assignments, setAssignments] = useState<Record<number, Assignment[]>>({})
   const [cashAmount, setCashAmount] = useState<Record<number, string>>({})
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+
+  useEscapeKey(deleteConfirm !== null ? () => setDeleteConfirm(null) : null)
 
   const load = () => {
     const url = viewMine ? '/duty-board?view=mine' : '/duty-board'

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Season {
   id: number
@@ -31,6 +32,7 @@ interface Props {
 const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
 
 export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClose }: Props) {
+  useEscapeKey(onClose)
   const [step, setStep] = useState(1)
   const [seasons, setSeasons] = useState<Season[]>([])
   const [fromSeasonId, setFromSeasonId] = useState<number | ''>('')

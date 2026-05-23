@@ -6,6 +6,7 @@ import KaderTrainerSearch from '../components/KaderTrainerSearch'
 import PositionStatus from '../components/PositionStatus'
 import CopyKaderModal from '../components/CopyKaderModal'
 import AutoAssignModal from '../components/AutoAssignModal'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Season {
   id: number
@@ -68,6 +69,12 @@ export default function AdminKaderPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<Kader | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  useEscapeKey(
+    deleteConfirm ? () => setDeleteConfirm(null) :
+    createModal ? () => setCreateModal(null) :
+    null
+  )
 
   const showToast = (msg: string) => {
     setToast(msg)

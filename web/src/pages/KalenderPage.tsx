@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Home, MapPin, Calendar, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Game {
   id: number
@@ -295,6 +296,12 @@ export default function KalenderPage() {
     setSelectedSlotIndices(new Set())
     setCreateError(null)
   }
+
+  useEscapeKey(
+    showDayRegen ? () => setShowDayRegen(false) :
+    showCreate ? closeDialog :
+    null
+  )
 
   return (
     <div>

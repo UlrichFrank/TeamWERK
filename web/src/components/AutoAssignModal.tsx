@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Kader {
   id: number
@@ -18,6 +19,7 @@ interface Props {
 const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
 
 export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
+  useEscapeKey(onClose)
   const [kader, setKader] = useState<Kader[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)

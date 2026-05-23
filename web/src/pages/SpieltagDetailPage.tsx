@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Trash2, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface GameDetail {
   id: number
@@ -102,6 +103,15 @@ export default function SpieltagDetailPage() {
   const [regenPreviewLoading, setRegenPreviewLoading] = useState(false)
   const [regenSaving, setRegenSaving] = useState(false)
   const [regenError, setRegenError] = useState<string | null>(null)
+
+  useEscapeKey(
+    showDeleteGame ? () => setShowDeleteGame(false) :
+    showRegen ? () => setShowRegen(false) :
+    deleteSlotId !== null ? () => setDeleteSlotId(null) :
+    editSlot ? () => setEditSlot(null) :
+    showAddSlot ? () => setShowAddSlot(false) :
+    null
+  )
   const [regenKeptSlots, setRegenKeptSlots] = useState<number | null>(null)
 
   const loadGame = async () => {

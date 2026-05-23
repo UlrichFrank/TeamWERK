@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
 import MobileCard from '../components/MobileCard'
 import Pagination from '../components/Pagination'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface User { id: number; first_name: string; last_name: string; email: string; role: string; member_id?: number | null }
 interface Invitation { id: number; email: string; role: string; comment: string; expires_at: string }
@@ -71,6 +72,8 @@ export default function AdminUsersPage() {
     setSent(false)
     setInviteError('')
   }
+
+  useEscapeKey(showInviteModal ? closeModal : null)
 
   const handleDeleteUser = async (u: User) => {
     if (!window.confirm(`Nutzer „${u.first_name} ${u.last_name}" (${u.email}) wirklich löschen?`)) return

@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react'
 import { api } from '../../lib/api'
+import { useEscapeKey } from '../../lib/useEscapeKey'
 
 interface Props {
   onClose: () => void
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export default function PasswordChangeModal({ onClose, logout }: Props) {
+  useEscapeKey(onClose)
   const [pwCurrent, setPwCurrent] = useState('')
   const [pwNew, setPwNew] = useState('')
   const [pwConfirm, setPwConfirm] = useState('')

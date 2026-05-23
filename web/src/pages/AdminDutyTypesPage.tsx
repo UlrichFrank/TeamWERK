@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import MobileCard from '../components/MobileCard'
 import EditModal from '../components/EditModal'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface DutyType {
   id: number
@@ -179,6 +180,8 @@ export default function AdminDutyTypesPage() {
     setShowCreateModal(false)
     load()
   }
+
+  useEscapeKey(showCreateModal ? () => { setShowCreateModal(false); setCreate(emptyCreate()) } : null)
 
   const startEdit = (t: DutyType) => { setModalId(t.id); setEdit(toEditState(t)) }
   const cancelEdit = () => { setEdit(null); setModalId(null) }

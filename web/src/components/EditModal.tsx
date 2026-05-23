@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface EditModalProps {
   isOpen: boolean
@@ -12,6 +13,7 @@ interface EditModalProps {
 }
 
 export default function EditModal({ isOpen, title, onClose, onSave, isSaving = false, maxWidthClass = 'max-w-sm', children }: EditModalProps) {
+  useEscapeKey(isOpen && !isSaving ? onClose : null)
   if (!isOpen) return null
 
   return (

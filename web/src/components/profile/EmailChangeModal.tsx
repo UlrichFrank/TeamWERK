@@ -1,11 +1,13 @@
 import { useState, FormEvent } from 'react'
 import { api } from '../../lib/api'
+import { useEscapeKey } from '../../lib/useEscapeKey'
 
 interface Props {
   onClose: () => void
 }
 
 export default function EmailChangeModal({ onClose }: Props) {
+  useEscapeKey(onClose)
   const [emailNew, setEmailNew] = useState('')
   const [emailPw, setEmailPw] = useState('')
   const [error, setError] = useState('')
