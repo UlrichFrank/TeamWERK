@@ -413,7 +413,9 @@ export default function AdminDutyTemplatesPage() {
                         <AlertTriangle className="inline w-3.5 h-3.5 ml-1 text-brand-warning" aria-label="Doppelter Typ" />
                       )}
                     </td>
-                    <td className="px-4 py-3 text-brand-text-muted">{t.game_duration_minutes} min</td>
+                    <td className="px-4 py-3 text-brand-text-muted">
+                      {t.template_type !== 'generisch' ? `${t.game_duration_minutes} min` : '–'}
+                    </td>
                     <td className="px-4 py-3 text-brand-text-muted">{t.item_count}</td>
                     <td className="px-4 py-3 text-right">
                       {deleteId === t.id ? (
@@ -449,7 +451,7 @@ export default function AdminDutyTemplatesPage() {
                 <MobileCard
                   key={t.id}
                   title={t.name}
-                  subtitle={`${typeLabel[t.template_type] ?? t.template_type} · ${t.item_count} Einträge · ${t.game_duration_minutes} min`}
+                  subtitle={`${typeLabel[t.template_type] ?? t.template_type} · ${t.item_count} Einträge${t.template_type !== 'generisch' ? ` · ${t.game_duration_minutes} min` : ''}`}
                   badge={{ label: typeLabel[t.template_type] ?? t.template_type, variant: t.template_type === 'heim' ? 'blue' : t.template_type === 'auswärts' ? 'yellow' : 'red' }}
                   actions={[
                     { label: 'Bearbeiten', onClick: () => openEditModal(t.id) },

@@ -12,7 +12,7 @@ import Accordion from '../components/Accordion'
 
 interface Season { id: number; name: string; isActive: boolean }
 interface Action { id: string; type: string; text: string; link: string; dueDate?: string; actionNeeded?: boolean }
-interface Game { id: number; date: string; opponent: string; isHome: boolean; team: string; slotsCount: number; slotsFilled: number; link: string }
+interface Game { id: number; date: string; opponent: string; isHome: boolean; eventType: string; team: string; slotsCount: number; slotsFilled: number; link: string }
 interface TeamStats { team: string; activeMembers: number; totalMembers: number; injuredCount: number; pausedCount: number }
 interface RecentAssignment { date: string; dutyType: string; status: string }
 interface DutyAccount { season: string; ist: number; soll: number | null; children: number; recentAssignments: RecentAssignment[] }
@@ -80,7 +80,7 @@ function NextGamesList({ games }: { games: Game[] }) {
                     ? <Home className="w-4 h-4 flex-shrink-0" />
                     : <MapPin className="w-4 h-4 flex-shrink-0" />
                   }
-                  Team vs {g.opponent}
+                  {g.eventType === 'generisch' ? g.opponent : `Team vs ${g.opponent}`}
                 </span>
               </div>
               <ArrowRight size={14} className="text-brand-text-subtle flex-shrink-0" />

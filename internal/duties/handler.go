@@ -252,18 +252,33 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "admin" {
 		whereParts = `WHERE ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
 	} else {
-		whereParts = `WHERE ds.team_id IN (
-		     SELECT DISTINCT tm.team_id
-		     FROM team_memberships tm
-		     JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
-		     WHERE tm.member_id IN (
-		         SELECT id FROM members WHERE user_id = ?
-		         UNION
-		         SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
+		whereParts = `WHERE (
+		     ds.team_id IN (
+		         SELECT DISTINCT tm.team_id
+		         FROM team_memberships tm
+		         JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
+		         WHERE tm.member_id IN (
+		             SELECT id FROM members WHERE user_id = ?
+		             UNION
+		             SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
+		         )
 		     )
+		     OR (ds.team_id IS NULL AND ds.game_id IN (
+		         SELECT gt.game_id FROM game_teams gt
+		         WHERE gt.team_id IN (
+		             SELECT DISTINCT tm2.team_id
+		             FROM team_memberships tm2
+		             JOIN seasons s2 ON s2.id = tm2.season_id AND s2.is_active = 1
+		             WHERE tm2.member_id IN (
+		                 SELECT id FROM members WHERE user_id = ?
+		                 UNION
+		                 SELECT fl2.member_id FROM family_links fl2 WHERE fl2.parent_user_id = ?
+		             )
+		         )
+		     ))
 		 )
 		 AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
-		args = append(args, userID, userID)
+		args = append(args, userID, userID, userID, userID)
 	}
 
 	if r.URL.Query().Get("view") == "mine" {
@@ -282,6 +297,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    CASE WHEN da.id IS NOT NULL THEN 1 ELSE 0 END,
 		    ds.game_id,
 		    COALESCE(g.opponent, ''),
+		    COALESCE(g.event_type, ''),
 		    COALESCE(g.time, ''),
 		    COALESCE(ds.team_id, 0),
 		    COALESCE(t.name, ''),
@@ -313,6 +329,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		Date      string      `json:"date,omitempty"`
 		EventTime string      `json:"event_time,omitempty"`
 		Opponent  string      `json:"opponent,omitempty"`
+		EventType string      `json:"event_type,omitempty"`
 		TeamName  string      `json:"team_name"`
 		Label     string      `json:"label,omitempty"`
 		Past      bool        `json:"past"`
@@ -324,10 +341,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt int
-		var eventDate, eventTime, dutyType, roleDesc, opponent, gameTime, teamName string
+		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, teamName string
 		var gameID sql.NullInt64
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
-			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &gameTime,
+			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime,
 			&teamID, &teamName, &isPastInt)
 
 		var key string
@@ -345,6 +362,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 				g.Date = eventDate
 				g.EventTime = gameTime
 				g.Opponent = opponent
+				g.EventType = eventType
 			} else {
 				g.Label = "Sonstige Dienste"
 			}

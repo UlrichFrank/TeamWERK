@@ -18,6 +18,7 @@ interface BoardGroup {
   date: string | null
   event_time: string | null
   opponent: string | null
+  event_type: string | null
   team_name: string
   label: string | null
   past: boolean
@@ -197,7 +198,7 @@ export default function DutyPage() {
                   <span className="font-semibold text-sm text-brand-text">
                     {g.date ? formatDate(g.date) : ''}
                     {g.event_time ? ` · ${g.event_time} Uhr` : ''}
-                    {g.opponent ? ` · Team vs ${g.opponent}` : ''}
+                    {g.opponent ? ` · ${g.event_type === 'generisch' ? g.opponent : `Team vs ${g.opponent}`}` : ''}
                   </span>
                 ) : (
                   <span className="font-semibold text-sm text-brand-text">{g.label}</span>

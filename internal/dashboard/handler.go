@@ -33,6 +33,7 @@ type Game struct {
 	Date        string `json:"date"`
 	Opponent    string `json:"opponent"`
 	IsHome      bool   `json:"isHome"`
+	EventType   string `json:"eventType"`
 	Team        string `json:"team"`
 	SlotsCount  int    `json:"slotsCount"`
 	SlotsFilled int    `json:"slotsFilled"`
@@ -346,7 +347,7 @@ func (h *Handler) queryNextGames(r *http.Request, userID int, role string, seaso
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), fmt.Sprintf(`
-		SELECT g.id, g.date, g.time, g.opponent, g.is_home, t.name,
+		SELECT g.id, g.date, g.time, g.opponent, g.is_home, g.event_type, t.name,
 		       COALESCE((SELECT SUM(slots_total) FROM duty_slots WHERE game_id = g.id AND season_id = ?), 0),
 		       COALESCE((SELECT SUM(slots_filled) FROM duty_slots WHERE game_id = g.id AND season_id = ?), 0)
 		FROM games g
@@ -370,7 +371,7 @@ func (h *Handler) queryNextGames(r *http.Request, userID int, role string, seaso
 		var g Game
 		var isHome int
 		var gameTime string
-		rows.Scan(&g.ID, &g.Date, &gameTime, &g.Opponent, &isHome, &g.Team, &g.SlotsCount, &g.SlotsFilled)
+		rows.Scan(&g.ID, &g.Date, &gameTime, &g.Opponent, &isHome, &g.EventType, &g.Team, &g.SlotsCount, &g.SlotsFilled)
 		g.IsHome = isHome == 1
 		g.Link = fmt.Sprintf("/spielplan/%d", g.ID)
 		games = append(games, g)

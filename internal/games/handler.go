@@ -300,26 +300,31 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var g struct {
-		ID         int    `json:"id"`
-		Date       string `json:"date"`
-		Time       string `json:"time"`
-		Opponent   string `json:"opponent"`
-		EventType  string `json:"event_type"`
-		SeasonID   int    `json:"season_id"`
-		TemplateID *int   `json:"template_id"`
+		ID         int     `json:"id"`
+		Date       string  `json:"date"`
+		Time       string  `json:"time"`
+		EndTime    *string `json:"end_time,omitempty"`
+		Opponent   string  `json:"opponent"`
+		EventType  string  `json:"event_type"`
+		SeasonID   int     `json:"season_id"`
+		TemplateID *int    `json:"template_id"`
 		Teams      []struct {
 			ID   int    `json:"id"`
 			Name string `json:"name"`
 		} `json:"teams"`
 	}
 	var templateIDNull sql.NullInt64
+	var endTimeNull sql.NullString
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT g.id, g.date, g.time, g.opponent, g.event_type, g.season_id, g.template_id
+		`SELECT g.id, g.date, g.time, g.end_time, g.opponent, g.event_type, g.season_id, g.template_id
 		 FROM games g WHERE g.id=?`, id).
-		Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &g.SeasonID, &templateIDNull)
+		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &g.Opponent, &g.EventType, &g.SeasonID, &templateIDNull)
 	if templateIDNull.Valid {
 		v := int(templateIDNull.Int64)
 		g.TemplateID = &v
+	}
+	if endTimeNull.Valid {
+		g.EndTime = &endTimeNull.String
 	}
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -375,13 +380,14 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/games
 func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Date       string `json:"date"`
-		Time       string `json:"time"`
-		Opponent   string `json:"opponent"`
-		TeamIDs    []int  `json:"team_ids"`
-		EventType  string `json:"event_type"`
-		SeasonID   int    `json:"season_id"`
-		TemplateID *int   `json:"template_id"`
+		Date       string  `json:"date"`
+		Time       string  `json:"time"`
+		EndTime    *string `json:"end_time"`
+		Opponent   string  `json:"opponent"`
+		TeamIDs    []int   `json:"team_ids"`
+		EventType  string  `json:"event_type"`
+		SeasonID   int     `json:"season_id"`
+		TemplateID *int    `json:"template_id"`
 		Slots      []struct {
 			DutyTypeID int    `json:"duty_type_id"`
 			EventTime  string `json:"event_time"`
@@ -441,9 +447,13 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	if req.TemplateID != nil {
 		templateIDVal = *req.TemplateID
 	}
+	var endTimeVal interface{}
+	if req.EndTime != nil && *req.EndTime != "" {
+		endTimeVal = *req.EndTime
+	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO games (season_id, opponent, date, time, is_home, event_type, template_id) VALUES (?,?,?,?,?,?,?)`,
-		req.SeasonID, req.Opponent, req.Date, req.Time, isHome, req.EventType, templateIDVal)
+		`INSERT INTO games (season_id, opponent, date, time, end_time, is_home, event_type, template_id) VALUES (?,?,?,?,?,?,?,?)`,
+		req.SeasonID, req.Opponent, req.Date, req.Time, endTimeVal, isHome, req.EventType, templateIDVal)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -473,14 +483,25 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		if n <= 0 {
 			n = 1
 		}
-		for _, teamID := range req.TeamIDs {
+		if req.EventType == "generisch" {
 			_, err = tx.ExecContext(r.Context(),
 				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-				 VALUES (?,?,?,?,?,?,?,?,?)`,
-				eventName, req.Date, s.EventTime, s.DutyTypeID, s.RoleDesc, n, teamID, req.SeasonID, gameID)
+				 VALUES (?,?,?,?,?,?,NULL,?,?)`,
+				eventName, req.Date, s.EventTime, s.DutyTypeID, s.RoleDesc, n, req.SeasonID, gameID)
 			if err != nil {
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
+			}
+		} else {
+			for _, teamID := range req.TeamIDs {
+				_, err = tx.ExecContext(r.Context(),
+					`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
+					 VALUES (?,?,?,?,?,?,?,?,?)`,
+					eventName, req.Date, s.EventTime, s.DutyTypeID, s.RoleDesc, n, teamID, req.SeasonID, gameID)
+				if err != nil {
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 	}
@@ -506,10 +527,11 @@ func toAny(teamIDs []int) []any {
 func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Date     string `json:"date"`
-		Time     string `json:"time"`
-		Opponent string `json:"opponent"`
-		TeamIDs  []int  `json:"team_ids"`
+		Date     string  `json:"date"`
+		Time     string  `json:"time"`
+		EndTime  *string `json:"end_time"`
+		Opponent string  `json:"opponent"`
+		TeamIDs  []int   `json:"team_ids"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
@@ -520,9 +542,13 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var endTimeVal interface{}
+	if req.EndTime != nil && *req.EndTime != "" {
+		endTimeVal = *req.EndTime
+	}
 	res, err := tx.ExecContext(r.Context(),
-		`UPDATE games SET date=?, time=?, opponent=? WHERE id=?`,
-		req.Date, req.Time, req.Opponent, id)
+		`UPDATE games SET date=?, time=?, end_time=?, opponent=? WHERE id=?`,
+		req.Date, req.Time, endTimeVal, req.Opponent, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -869,6 +895,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "time is required", http.StatusBadRequest)
 		return
 	}
+	gameEndTime := r.URL.Query().Get("end_time")
 	gameIDStr := r.URL.Query().Get("game_id")
 	dateStr := r.URL.Query().Get("date")
 
@@ -891,9 +918,13 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		// Regeneration context: load from existing game
 		var gameDate string
 		var seasonID int
+		var dbEndTime sql.NullString
 		if h.db.QueryRowContext(r.Context(),
-			`SELECT date, season_id FROM games WHERE id=?`, gameIDStr).
-			Scan(&gameDate, &seasonID) == nil {
+			`SELECT date, season_id, end_time FROM games WHERE id=?`, gameIDStr).
+			Scan(&gameDate, &seasonID, &dbEndTime) == nil {
+			if gameEndTime == "" && dbEndTime.Valid {
+				gameEndTime = dbEndTime.String
+			}
 			allGameTimes, hasPrevDay, hasNextDay = h.loadSameDayContext(r.Context(), gameDate, seasonID)
 		}
 	} else if dateStr != "" {
@@ -934,11 +965,16 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	}
 	result := []preview{}
 	for _, it := range items {
-		offset := it.OffsetMinutes
-		if it.Anchor == "end" {
-			offset += durationMins
+		var eventTime string
+		if it.Anchor == "end" && gameEndTime != "" {
+			eventTime = addMinutes(gameEndTime, it.OffsetMinutes)
+		} else {
+			offset := it.OffsetMinutes
+			if it.Anchor == "end" {
+				offset += durationMins
+			}
+			eventTime = addMinutes(gameTime, offset)
 		}
-		eventTime := addMinutes(gameTime, offset)
 
 		dutyTypeID := it.DutyTypeID
 		if len(allGameTimes) > 0 {
@@ -998,7 +1034,7 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, time, opponent, is_home, template_id FROM games WHERE date=? AND season_id=? ORDER BY time`,
+		`SELECT id, time, end_time, opponent, is_home, event_type, template_id FROM games WHERE date=? AND season_id=? ORDER BY time`,
 		date, seasonID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -1008,15 +1044,17 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 	type dayGame struct {
 		ID         int
 		Time       string
+		EndTime    sql.NullString
 		Opponent   string
 		IsHome     bool
+		EventType  string
 		TemplateID sql.NullInt64
 	}
 	var dayGames []dayGame
 	for rows.Next() {
 		var g dayGame
 		var isHome int
-		rows.Scan(&g.ID, &g.Time, &g.Opponent, &isHome, &g.TemplateID)
+		rows.Scan(&g.ID, &g.Time, &g.EndTime, &g.Opponent, &isHome, &g.EventType, &g.TemplateID)
 		g.IsHome = isHome == 1
 		dayGames = append(dayGames, g)
 	}
@@ -1088,20 +1126,29 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 			`SELECT COUNT(*) FROM duty_slots WHERE game_id=? AND slots_filled > 0`, g.ID).Scan(&res.KeptSlots)
 		tx.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE game_id=? AND slots_filled = 0`, g.ID)
 
-		eventName := "Heimspiel"
-		if !g.IsHome {
-			eventName = "Auswärtsspiel"
-		}
-		if g.Opponent != "" {
-			eventName += " vs. " + g.Opponent
+		eventName := g.Opponent
+		if g.EventType != "generisch" {
+			if g.IsHome {
+				eventName = "Heimspiel"
+			} else {
+				eventName = "Auswärtsspiel"
+			}
+			if g.Opponent != "" {
+				eventName += " vs. " + g.Opponent
+			}
 		}
 
 		for _, it := range items {
-			offset := it.OffsetMinutes
-			if it.Anchor == "end" {
-				offset += durationMins
+			var eventTime string
+			if it.Anchor == "end" && g.EndTime.Valid {
+				eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
+			} else {
+				offset := it.OffsetMinutes
+				if it.Anchor == "end" {
+					offset += durationMins
+				}
+				eventTime = addMinutes(g.Time, offset)
 			}
-			eventTime := addMinutes(g.Time, offset)
 
 			isBeforeAllGames, isAfterAllGames, isBetweenGames := classifySlotPosition(eventTime, g.Time, allGameTimes)
 			dutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes, hasPrevDay, hasNextDay,
@@ -1114,15 +1161,26 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 			if n <= 0 {
 				n = 1
 			}
-			for _, teamID := range teamIDs {
+			if g.EventType == "generisch" {
 				if _, err = tx.ExecContext(r.Context(),
 					`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-					 VALUES (?,?,?,?,?,?,?,?,?)`,
-					eventName, date, eventTime, dutyTypeID, it.RoleDesc, n, teamID, seasonID, g.ID); err != nil {
+					 VALUES (?,?,?,?,?,?,NULL,?,?)`,
+					eventName, date, eventTime, dutyTypeID, it.RoleDesc, n, seasonID, g.ID); err != nil {
 					http.Error(w, "internal error", http.StatusInternalServerError)
 					return
 				}
 				res.SlotsCreated++
+			} else {
+				for _, teamID := range teamIDs {
+					if _, err = tx.ExecContext(r.Context(),
+						`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
+						 VALUES (?,?,?,?,?,?,?,?,?)`,
+						eventName, date, eventTime, dutyTypeID, it.RoleDesc, n, teamID, seasonID, g.ID); err != nil {
+						http.Error(w, "internal error", http.StatusInternalServerError)
+						return
+					}
+					res.SlotsCreated++
+				}
 			}
 		}
 		results = append(results, res)
@@ -1187,13 +1245,15 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		SeasonID   int
 		Date       string
 		Time       string
+		EndTime    sql.NullString
 		Opponent   string
 		IsHome     bool
+		EventType  string
 		TemplateID sql.NullInt64
 	}
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT season_id, date, time, opponent, is_home, template_id FROM games WHERE id=?`, gameID).
-		Scan(&game.SeasonID, &game.Date, &game.Time, &game.Opponent, &game.IsHome, &game.TemplateID)
+		`SELECT season_id, date, time, end_time, opponent, is_home, event_type, template_id FROM games WHERE id=?`, gameID).
+		Scan(&game.SeasonID, &game.Date, &game.Time, &game.EndTime, &game.Opponent, &game.IsHome, &game.EventType, &game.TemplateID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1263,11 +1323,16 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, it := range items {
-		offset := it.OffsetMinutes
-		if it.Anchor == "end" {
-			offset += durationMins
+		var eventTime string
+		if it.Anchor == "end" && game.EndTime.Valid {
+			eventTime = addMinutes(game.EndTime.String, it.OffsetMinutes)
+		} else {
+			offset := it.OffsetMinutes
+			if it.Anchor == "end" {
+				offset += durationMins
+			}
+			eventTime = addMinutes(game.Time, offset)
 		}
-		eventTime := addMinutes(game.Time, offset)
 
 		isBeforeAllGames, isAfterAllGames, isBetweenGames := classifySlotPosition(eventTime, game.Time, allGameTimes)
 		dutyTypeID := applyBehavior(it, game.Time, eventTime, allGameTimes, hasPrevDay, hasNextDay,
@@ -1280,14 +1345,25 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		if n <= 0 {
 			n = 1
 		}
-		for _, teamID := range teamIDs {
+		if game.EventType == "generisch" {
 			_, err = tx.ExecContext(r.Context(),
 				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-				 VALUES (?,?,?,?,?,?,?,?,?)`,
-				eventName, game.Date, eventTime, dutyTypeID, it.RoleDesc, n, teamID, game.SeasonID, gameID)
+				 VALUES (?,?,?,?,?,?,NULL,?,?)`,
+				eventName, game.Date, eventTime, dutyTypeID, it.RoleDesc, n, game.SeasonID, gameID)
 			if err != nil {
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
+			}
+		} else {
+			for _, teamID := range teamIDs {
+				_, err = tx.ExecContext(r.Context(),
+					`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
+					 VALUES (?,?,?,?,?,?,?,?,?)`,
+					eventName, game.Date, eventTime, dutyTypeID, it.RoleDesc, n, teamID, game.SeasonID, gameID)
+				if err != nil {
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 	}
