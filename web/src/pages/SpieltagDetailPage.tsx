@@ -124,7 +124,7 @@ export default function SpieltagDetailPage() {
     setAddSaving(true)
     try {
       await api.post('/duty-slots', {
-        event_name: `Heimspiel vs. ${game.opponent || ''}`.trim(),
+        event_name: `Heimspiel Team vs ${game.opponent || ''}`.trim(),
         event_date: game.date.slice(0, 10),
         event_time: addEventTime || null,
         duty_type_id: addDutyTypeId,
@@ -157,7 +157,7 @@ export default function SpieltagDetailPage() {
     setEditSaving(true)
     try {
       await api.put(`/duty-slots/${editSlot.id}`, {
-        event_name: `Heimspiel vs. ${game?.opponent || ''}`.trim(),
+        event_name: `Heimspiel Team vs ${game?.opponent || ''}`.trim(),
         event_date: game?.date.slice(0, 10),
         event_time: editEventTime || null,
         role_desc: editRoleDesc,
@@ -281,7 +281,7 @@ export default function SpieltagDetailPage() {
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 mb-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-brand-text">vs. {game.opponent || '(kein Gegner)'}</h1>
+            <h1 className="text-2xl font-bold text-brand-text">Team vs {game.opponent || '(kein Gegner)'}</h1>
             <p className="text-brand-text-muted mt-1">{game.team_name}</p>
             <p className="text-brand-text-muted text-sm mt-1">{dateFormatted} · {game.time} Uhr</p>
           </div>
@@ -529,7 +529,7 @@ export default function SpieltagDetailPage() {
           <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
             <h3 className="font-bold mb-2 text-brand-text">Spiel löschen?</h3>
             <p className="text-sm text-brand-text-muted mb-1">
-              <strong>vs. {game.opponent || '(kein Gegner)'}</strong> ({dateFormatted})
+              <strong>Team vs {game.opponent || '(kein Gegner)'}</strong> ({dateFormatted})
             </p>
             <p className="text-sm text-brand-text-muted mb-4">
               Dieses Spiel wird endgültig gelöscht.

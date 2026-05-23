@@ -267,7 +267,7 @@ export default function KalenderPage() {
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${trafficColor(g.filled_count, g.total_count, g.slot_count)}`} />
                       <span className="font-semibold truncate text-brand-text">{g.teams.map(t => t.name).join(', ')}</span>
                     </div>
-                    <div className="truncate text-brand-text-muted leading-tight">vs. {g.opponent || '–'}</div>
+                    <div className="truncate text-brand-text-muted leading-tight">Team vs {g.opponent || '–'}</div>
                     <div className="text-brand-text-subtle leading-tight">{g.time}</div>
                   </button>
                 ))}
@@ -300,7 +300,7 @@ export default function KalenderPage() {
               {(gamesByDate[dayRegenDate] ?? []).map(g => (
                 <div key={g.id} className="p-3 border border-brand-border-subtle rounded-lg bg-brand-surface-card text-sm">
                   <div className="font-semibold text-brand-text">{g.time} — {g.teams.map(t => t.name).join(', ')}</div>
-                  <div className="text-brand-text-muted text-xs">vs. {g.opponent || '–'} · {g.event_type}</div>
+                  <div className="text-brand-text-muted text-xs">Team vs {g.opponent || '–'} · {g.event_type}</div>
                 </div>
               ))}
             </div>

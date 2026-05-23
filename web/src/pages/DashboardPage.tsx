@@ -80,7 +80,7 @@ function NextGamesList({ games }: { games: Game[] }) {
                     ? <Home className="w-4 h-4 flex-shrink-0" />
                     : <MapPin className="w-4 h-4 flex-shrink-0" />
                   }
-                  vs. {g.opponent}
+                  Team vs {g.opponent}
                 </span>
               </div>
               <ArrowRight size={14} className="text-brand-text-subtle flex-shrink-0" />

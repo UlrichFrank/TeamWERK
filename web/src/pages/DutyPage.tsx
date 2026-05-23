@@ -197,7 +197,7 @@ export default function DutyPage() {
                   <span className="font-semibold text-sm text-brand-text">
                     {g.date ? formatDate(g.date) : ''}
                     {g.event_time ? ` · ${g.event_time} Uhr` : ''}
-                    {g.opponent ? ` · vs. ${g.opponent}` : ''}
+                    {g.opponent ? ` · Team vs ${g.opponent}` : ''}
                   </span>
                 ) : (
                   <span className="font-semibold text-sm text-brand-text">{g.label}</span>
