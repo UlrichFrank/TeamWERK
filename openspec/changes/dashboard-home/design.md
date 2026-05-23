@@ -12,8 +12,8 @@ interface DashboardResponse {
   nextGameDate: string | null // ISO timestamp
   actions: Action[]
   nextGames: Game[]
-  teamStats: TeamStats | null // Trainer only
-  dutyAccount: DutyAccount | null // Elternteil only
+  teamStats: TeamStats | null // Trainer + Vorstand (Vorstand: aggregate across all teams)
+  dutyAccount: DutyAccount | null // all authenticated roles
   vehicleInfo: VehicleInfo | null
 }
 
@@ -27,7 +27,7 @@ interface Action {
   id: string // "duty-1", "vehicle-1", etc.
   type: "duty" | "vehicle" | "team" // action type
   text: string // "Dienst 'Getränke' SA 10:00 — wir brauchen dich!"
-  link: string // "/dienstboerse", "/profil", etc.
+  link: string // "/dienste", "/profil", etc.
   dueDate?: string // ISO date
   actionNeeded?: boolean // for vehicle, true if user should respond
 }
@@ -51,11 +51,17 @@ interface TeamStats {
   pausedCount?: number
 }
 
+// Migration required: ALTER TABLE duty_types ADD COLUMN target_role TEXT NOT NULL DEFAULT 'elternteil'
+//   CHECK (target_role IN ('spieler','elternteil','trainer','admin','vorstand'))
+// duty_types.target_role bestimmt, welche Nutzer-Rolle den Dienst erbringt.
+// Dienste werden in duty_assignments gezählt (kein Pre-Compute mehr in duty_accounts.ist).
+
 interface DutyAccount {
-  season: string // "2025/26"
-  soll: number // hours target
-  ist: number // hours fulfilled
-  offen: number // = soll - ist
+  season: string       // "2025/26"
+  ist: number          // COUNT duty_assignments this season where duty_type.target_role = user.role
+  soll: number | null  // null for trainer/admin/vorstand; 5*children for elternteil; 5 for spieler
+  children: number     // for elternteil: number of family_links (explains soll); 0 for other roles
+  recentAssignments: { date: string; dutyType: string; status: string }[]  // last 5, for expandable tile
 }
 
 interface VehicleInfo {
@@ -69,6 +75,38 @@ interface VehicleInfo {
 
 ## Action Calculation Logic
 
+### DutyAccount Query (all roles)
+
+```sql
+-- ist: count of assignments for this user where duty type targets their role
+SELECT COUNT(*) as ist
+FROM duty_assignments da
+JOIN duty_slots ds ON da.duty_slot_id = ds.id
+JOIN duty_types dt ON ds.duty_type_id = dt.id
+WHERE da.user_id = ?
+  AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)
+  AND dt.target_role = ?  -- user's role
+  AND da.status IN ('assigned', 'fulfilled', 'cash_substitute')
+
+-- recentAssignments: last 5
+SELECT ds.event_date, dt.name, da.status
+FROM duty_assignments da
+JOIN duty_slots ds ON da.duty_slot_id = ds.id
+JOIN duty_types dt ON ds.duty_type_id = dt.id
+WHERE da.user_id = ?
+  AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)
+  AND dt.target_role = ?
+ORDER BY ds.event_date DESC
+LIMIT 5
+
+-- soll calculation (in Go):
+-- if role == "elternteil": SELECT COUNT(*) FROM family_links WHERE parent_user_id = ? → 5 * count
+-- if role == "spieler": 5
+-- else: nil (no target)
+```
+
+---
+
 ### For Trainer
 
 **Action: Offene Dienste**
@@ -76,7 +114,12 @@ interface VehicleInfo {
 SELECT DISTINCT dt.name, COUNT(*) as open_count
 FROM duty_slots ds
 JOIN duty_types dt ON ds.duty_type_id = dt.id
-WHERE ds.team_id = ? -- trainer's team
+WHERE ds.team_id IN (
+    SELECT team_id FROM kader_trainers kt
+    JOIN kader k ON k.id = kt.kader_id
+    WHERE kt.member_id IN (SELECT id FROM members WHERE user_id = ?)
+      AND k.season_id = (SELECT id FROM seasons WHERE is_active = 1)
+  )
   AND DATE(ds.event_date) >= DATE('now')
   AND DATE(ds.event_date) < DATE('now', '+7 days') -- this week
   AND ds.slots_filled < ds.slots_total
@@ -85,7 +128,26 @@ HAVING COUNT(*) >= 1
 ```
 
 **Format:** "3 Dienste diese Woche nicht besetzt — bitte zuweisen"  
-**Link:** `/dienste` (DutySlotsPage, filtered to this team/week)
+**Link:** `/dienste` (DutyPage)
+
+---
+
+### For Vorstand
+
+**Action: Offene Dienste (alle Teams)**
+```sql
+SELECT COUNT(*) as open_count
+FROM duty_slots ds
+WHERE DATE(ds.event_date) >= DATE('now')
+  AND DATE(ds.event_date) < DATE('now', '+7 days')
+  AND ds.slots_filled < ds.slots_total
+  AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)
+```
+
+Vorstand hat keine Team-Zuordnung — sieht offene Slots vereinsweit.
+
+**Format:** "X Dienste diese Woche nicht besetzt (alle Mannschaften)"  
+**Link:** `/dienste`
 
 **Action: Fahrzeug für Auswärts**
 ```sql
@@ -116,6 +178,7 @@ LEFT JOIN duty_assignments da ON ds.id = da.duty_slot_id
   AND da.user_id = ? -- current user
 WHERE ds.slots_filled < ds.slots_total -- still has openings
   AND da.id IS NULL -- user hasn't already accepted
+  AND dt.target_role = 'elternteil'  -- only duties for this role
   AND DATE(ds.event_date) >= DATE('now')
   AND DATE(ds.event_date) < DATE('now', '+7 days')
   AND EXISTS (
@@ -134,7 +197,7 @@ LIMIT 3
 ```
 
 **Format:** "Dienst '{duty_type}' SA 10:00 — wir brauchen dich!"  
-**Link:** `/dienstboerse`
+**Link:** `/dienste`
 
 **Action: Fahrzeug für Auswärts**
 ```sql
@@ -153,6 +216,8 @@ LIMIT 1
 **Check:** Does user have `vehicle_info` recorded?  
 **Format:** "DI 20:00 vs. HC Ludwigsburg — Hast du Plätze? [→ Eintragen]"  
 **Link:** `/profil` (vehicle section)
+
+---
 
 ---
 
@@ -195,8 +260,26 @@ LIMIT 1
 - **Section Header:** 14px, bold, uppercase tracking, `#000000` (active) / `#00000066` (inactive)
 - **Action Text:** 14px, regular, `#000000`
 - **Link:** inherit text, underline on hover
-- **Icons:** Emoji (⚡ 📅 🏠 👥 🚗) for simplicity
+- **Icons:** Lucide React (`lucide-react` package, neue Dependency)
 - **Spacing:** 16px padding on mobile, 24px on desktop
+
+### Icon Mapping (Lucide React)
+
+| Bereich | Lucide-Icon | Import |
+|---------|-------------|--------|
+| Diese Woche | `Zap` | `import { Zap } from 'lucide-react'` |
+| Nächste Spiele | `Calendar` | `import { Calendar } from 'lucide-react'` |
+| Konto / Team-Stats | `BarChart2` | `import { BarChart2 } from 'lucide-react'` |
+| Dein Team | `Users` | `import { Users } from 'lucide-react'` |
+| Fahrtgemeinschaften | `Car` | `import { Car } from 'lucide-react'` |
+| Accordion Toggle offen | `ChevronDown` | `import { ChevronDown } from 'lucide-react'` |
+| Accordion Toggle zu | `ChevronRight` | `import { ChevronRight } from 'lucide-react'` |
+| Action-Item | `CircleDot` | `import { CircleDot } from 'lucide-react'` |
+| Link-Pfeil | `ArrowRight` | `import { ArrowRight } from 'lucide-react'` |
+| Export | `Download` | `import { Download } from 'lucide-react'` |
+| Nutzer (Header) | `User` | `import { User } from 'lucide-react'` |
+
+Icon-Größe: `size={16}` inline mit Text, `size={18}` als Section-Header-Icon. Farbe erbt vom Parent (`currentColor`).
 
 ### Component Hierarchy
 
@@ -205,18 +288,21 @@ DashboardPage
 ├── Header (title + user greeting)
 ├── NextEventHint (optional: "Dein nächster Termin...")
 ├── Accordion
-│   ├── AccordionSection (⚡ DIESE WOCHE)
+│   ├── AccordionSection (icon=<Zap> · DIESE WOCHE)
 │   │   └── ActionsList
-│   │       └── ActionItem
-│   ├── AccordionSection (📅 NÄCHSTE SPIELE)
+│   │       └── ActionItem (icon=<CircleDot> + text + <ArrowRight>)
+│   ├── AccordionSection (icon=<Calendar> · NÄCHSTE SPIELE)
 │   │   └── GamesList
 │   │       └── GameItem
-│   ├── AccordionSection (🏠 KONTO / TEAM-STATS)
-│   │   ├── DutyAccountCard (Elternteil)
-│   │   └── TeamStatsCard (Trainer)
-│   ├── AccordionSection (👥 DEIN TEAM)
+│   ├── AccordionSection (icon=<BarChart2> · KONTO / TEAM-STATS)
+│   │   ├── DutyAccountTile (alle Rollen) ← aufklappbar mit <ChevronDown>/<ChevronRight>
+│   │   │   ├── DutyAccountSummary (ist / soll-Fortschrittsbalken, oder nur Zähler wenn soll=null)
+│   │   │   ├── [Aufgeklappt] RecentAssignmentsList (letzte 5: Datum, Diensttyp, Status-Badge)
+│   │   │   └── [Admin/Vorstand] ExportButton (icon=<Download>) → GET /api/admin/duty-accounts/export
+│   │   └── TeamStatsCard (Trainer + Vorstand)
+│   ├── AccordionSection (icon=<Users> · DEIN TEAM)
 │   │   └── TeamCard
-│   └── AccordionSection (🚗 FAHRTGEMEINSCHAFTEN)
+│   └── AccordionSection (icon=<Car> · FAHRTGEMEINSCHAFTEN)
 │       └── VehicleList
 ```
 

@@ -505,25 +505,6 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// POST /api/members/:id/team-assignment
-func (h *Handler) AssignTeam(w http.ResponseWriter, r *http.Request) {
-	memberID := r.PathValue("id")
-	var req struct {
-		TeamID    int  `json:"team_id"`
-		SeasonID  int  `json:"season_id"`
-		IsPrimary bool `json:"is_primary"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-	if req.IsPrimary {
-		h.db.ExecContext(r.Context(),
-			`UPDATE team_memberships SET is_primary=0 WHERE member_id=? AND season_id=?`, memberID, req.SeasonID)
-	}
-	h.db.ExecContext(r.Context(),
-		`INSERT OR REPLACE INTO team_memberships (member_id, team_id, season_id, is_primary) VALUES (?,?,?,?)`,
-		memberID, req.TeamID, req.SeasonID, boolToInt(req.IsPrimary))
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // PUT /api/admin/members/:id/user
 func (h *Handler) LinkUser(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

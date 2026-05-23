@@ -28,8 +28,10 @@ Neue **Dashboard-Seite** (`/dashboard` oder `/`) mit:
    - 🚗 Fahrtgemeinschaften
 
 4. **Rollen-Differentiation:**
-   - **Trainer:** Sieht Team-Status, offene Dienste zu verwalten, Spielplan
-   - **Elternteil:** Sieht Kind-Status, Dienste zu erfüllen, nächste Spiele
+   - **Trainer:** Sieht Team-Status, offene Dienste zu verwalten, Spielplan; Dienstkonto (gezählt, kein Ziel)
+   - **Elternteil:** Sieht Kind-Status, Dienste zu erfüllen, nächste Spiele; Dienstkonto (Ziel: 5 × Anzahl Kinder)
+   - **Spieler:** Dienstkonto (Ziel: 5/Saison)
+   - **Admin/Vorstand:** Dashboard-Zugang + Dienstkonto (gezählt, kein Ziel) + Export-Button
 
 5. **Backend-Aggregation:** Neuer `/api/dashboard`-Endpoint liefert rollen-spezifische Daten (Actions, nächste Events, Statistiken)
 
@@ -43,11 +45,14 @@ Neue **Dashboard-Seite** (`/dashboard` oder `/`) mit:
 - ✅ Action-Berechnung (welche Tasks pro Rolle?)
 - ✅ Mobile-optimiert (< 640px = eine Section offen)
 - ✅ Logo-Click führt zu Dashboard
+- ✅ `duty_types.target_role` — Klassifizierung welche Rolle den Dienst erbringt (Migration)
+- ✅ Dienstkonto für **alle** eingeloggten Rollen (count-based; Soll nur für Elternteil + Spieler)
+- ✅ DutyAccountsPage (`/dienstkonten`) entfernen + Nav-Eintrag "Dienstkonten" entfernen
 
 ### Out of Scope
 - ❌ Inline-Actions (alles führt zu Detail-Seiten)
 - ❌ Real-time Updates (1-2x weekly Daten OK)
-- ❌ Admin/Vorstand Dashboard (separater Task, falls gewünscht)
+- ❌ Separates Admin/Vorstand-spezifisches Dashboard (Admin+Vorstand sehen standard-Dashboard mit Dienstkonto ohne Ziel)
 - ❌ Offline-Caching für Dashboard
 
 ---
@@ -64,9 +69,10 @@ Neue **Dashboard-Seite** (`/dashboard` oder `/`) mit:
 
 ### Elternteil
 > Als Elternteil öffne ich die App und sehe:
-> - "Dienst 'Getränke' SA 10:00 — wir brauchen dich! [→ Zur Dienstbörse]"
+> - "Dienst 'Getränke' SA 10:00 — wir brauchen dich! [→ Zu Diensten]"
 > - "Fahrzeug: Hast du 3 Plätze für Auswärts? [→ Zu meinen Angaben]"
 > - "Nächstes Spiel: SA 10:00, mein Kind spielt"
+> - "Dienstkonto: 3 von 10 Diensten geleistet" (aufklappbar)
 >
 > Ein Click auf jede Action bringt mich zur passenden Seite, wo ich handeln kann.
 
@@ -127,7 +133,7 @@ WEB (Desktop)                              MOBILE (< 640px)
       "id": "duty-1",
       "type": "duty",
       "text": "Dienst 'Getränke' SA 10:00 — wir brauchen dich!",
-      "link": "/dienstboerse",
+      "link": "/dienste",
       "dueDate": "2026-05-24"
     },
     {
@@ -157,9 +163,9 @@ WEB (Desktop)                              MOBILE (< 640px)
   },
   "dutyAccount": {
     "season": "2025/26",
-    "soll": 25,
-    "ist": 12,
-    "offen": 13
+    "ist": 3,
+    "soll": 10,
+    "children": 2
   },
   "vehicleInfo": {
     "seats": 4,
@@ -169,8 +175,9 @@ WEB (Desktop)                              MOBILE (< 640px)
 ```
 
 **Action-Logik (Backend zu berechnen):**
-- Für TRAINER: "X offene Dienste diese Woche" (checke: Slots ohne Zuweisungen in seinem Team)
-- Für ELTERNTEIL: "Dienst X — wir brauchen dich!" (checke: Slot passt zu parent/child, nicht schon erfüllt/zugewiesen)
+- Für TRAINER und VORSTAND: "X offene Dienste diese Woche" (Slots ohne Zuweisungen in seinem Team)
+- Für ELTERNTEIL: "Dienst X — wir brauchen dich!" (Slot mit `duty_types.target_role='elternteil'`, passt zu child, noch nicht zugewiesen)
+- Für SPIELER: Offene Dienste mit `target_role='spieler'` in seinen Teams
 - Fahrzeug: Für nächsten Auswärts-Spieltag, checke Fahrtgemeinschafts-Status
 
 ### Frontend
@@ -224,7 +231,9 @@ WEB (Desktop)                              MOBILE (< 640px)
 
 ## Deployment Notes
 
-- `/api/dashboard` wird direkt nach Release verfügbar (keine Migration nötig)
+- Migration `006_duty_types_target_role` erforderlich (neues `target_role`-Feld auf `duty_types`)
+- `/api/dashboard` wird direkt nach Release verfügbar
+- DutyAccountsPage (`/dienstkonten`) wird entfernt — keine Breaking Change für externe Clients
 - Dashboard-Seite ist eine neue Route, keine Breaking Changes
 - Logo-Click ändert sich automatisch (Index-Route Redirect)
 

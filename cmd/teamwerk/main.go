@@ -17,6 +17,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/games"
@@ -70,6 +71,7 @@ func serve() {
 	cfgH := appconfig.NewHandler(database)
 	membH := members.NewHandler(database)
 	dutyH := duties.NewHandler(database)
+	dashH := dashboard.NewHandler(database)
 	gameH := games.NewHandler(database)
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
@@ -102,7 +104,6 @@ func serve() {
 		r.Get("/api/members/{id}", membH.Get)
 		r.Put("/api/members/{id}", membH.Update)
 		r.Put("/api/members/{id}/status", membH.UpdateStatus)
-		r.Post("/api/members/{id}/team-assignment", membH.AssignTeam)
 		r.Get("/api/members/{id}/change-drafts", membH.GetChangeRequestsHandler)
 		r.Post("/api/members/{id}/change-request", membH.CreateChangeRequestHandler)
 		r.Post("/api/members/{id}/change-drafts/{draftId}/accept", membH.AcceptChangeRequestHandler)
@@ -120,6 +121,9 @@ func serve() {
 		r.Delete("/api/profile/phones/{id}", membH.DeletePhone)
 		r.Put("/api/profile/visibility", membH.UpdateVisibility)
 		r.Post("/api/upload/user-photo", uploadH.UploadUserPhoto)
+
+		// Dashboard
+		r.Get("/api/dashboard", dashH.Get)
 
 		// Duties
 		r.Get("/api/duty-board", dutyH.Board)

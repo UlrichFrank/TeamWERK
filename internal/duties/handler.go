@@ -246,8 +246,32 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	userID := claims.UserID
 
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT
+	args := []any{userID} // first ? is for the da LEFT JOIN
+	var whereParts string
+
+	if claims.Role == "admin" {
+		whereParts = `WHERE ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
+	} else {
+		whereParts = `WHERE ds.team_id IN (
+		     SELECT DISTINCT tm.team_id
+		     FROM team_memberships tm
+		     JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
+		     WHERE tm.member_id IN (
+		         SELECT id FROM members WHERE user_id = ?
+		         UNION
+		         SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
+		     )
+		 )
+		 AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
+		args = append(args, userID, userID)
+	}
+
+	if r.URL.Query().Get("view") == "mine" {
+		whereParts += ` AND EXISTS (SELECT 1 FROM duty_assignments da2 WHERE da2.duty_slot_id = ds.id AND da2.user_id = ?)`
+		args = append(args, userID)
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), `SELECT
 		    ds.id,
 		    COALESCE(ds.event_date, '') AS event_date,
 		    COALESCE(ds.event_time, '') AS event_time,
@@ -267,19 +291,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
 		 LEFT JOIN games g ON g.id = ds.game_id
 		 LEFT JOIN teams t ON t.id = ds.team_id
-		 WHERE ds.team_id IN (
-		     SELECT DISTINCT tm.team_id
-		     FROM team_memberships tm
-		     JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
-		     WHERE tm.member_id IN (
-		         SELECT id FROM members WHERE user_id = ?
-		         UNION
-		         SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
-		     )
-		 )
-		 AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)
-		 ORDER BY ds.event_date, COALESCE(ds.event_time, ''), ds.id`,
-		userID, userID, userID)
+		 `+whereParts+`
+		 ORDER BY ds.event_date, COALESCE(ds.event_time, ''), ds.id`, args...)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -382,7 +395,6 @@ func (h *Handler) Unclaim(w http.ResponseWriter, r *http.Request) {
 		slotID, claims.UserID)
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_slots SET slots_filled = slots_filled - 1 WHERE id=?`, slotID)
-	h.updateAccount(r, claims.UserID, slotID, false)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -406,7 +418,6 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_slots SET slots_filled = slots_filled + 1 WHERE id=?`, slotID)
-	h.updateAccount(r, claims.UserID, slotID, true)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -615,22 +626,6 @@ func (h *Handler) effectiveDutyType(dt DutyType, isFirst bool, isLast bool, same
 	return dutyTypeID, appliesWhen, skip
 }
 
-func (h *Handler) updateAccount(r *http.Request, userID int, slotID string, add bool) {
-	var hours float64
-	var seasonID int
-	h.db.QueryRowContext(r.Context(),
-		`SELECT dt.hours_value, ds.season_id FROM duty_slots ds
-		 JOIN duty_types dt ON dt.id = ds.duty_type_id WHERE ds.id=?`, slotID).
-		Scan(&hours, &seasonID)
-	delta := hours
-	if !add {
-		delta = -hours
-	}
-	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?,?,0,?)
-		 ON CONFLICT(user_id, season_id) DO UPDATE SET ist = ist + excluded.ist`,
-		userID, seasonID, delta)
-}
 
 func fmtFloat(f float64) string {
 	return fmt.Sprintf("%.2f", f)

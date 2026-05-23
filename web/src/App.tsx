@@ -6,12 +6,11 @@ import RequestMembershipPage from './pages/RequestMembershipPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import AppShell from './components/AppShell'
+import DashboardPage from './pages/DashboardPage'
 import MembersPage from './pages/MembersPage'
 import MemberDetailPage from './pages/MemberDetailPage'
 import ProfilePage from './pages/ProfilePage'
-import DutyBoardPage from './pages/DutyBoardPage'
-import DutyAccountsPage from './pages/DutyAccountsPage'
-import DutySlotsPage from './pages/DutySlotsPage'
+import DutyPage from './pages/DutyPage'
 import AdminClubPage from './pages/AdminClubPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
@@ -44,13 +43,11 @@ export default function App() {
 
           {/* Protected */}
           <Route path="/" element={<PrivateRoute><AppShell /></PrivateRoute>}>
-            <Route index element={<Navigate to="/mitglieder" replace />} />
+            <Route index element={<DashboardPage />} />
             <Route path="mitglieder" element={<MembersPage />} />
             <Route path="mitglieder/:id" element={<MemberDetailPage />} />
             <Route path="profil" element={<ProfilePage />} />
-            <Route path="dienstboerse" element={<DutyBoardPage />} />
-            <Route path="dienstkonten" element={<DutyAccountsPage />} />
-            <Route path="dienste" element={<DutySlotsPage />} />
+            <Route path="dienste" element={<DutyPage />} />
             <Route path="anfragen" element={<MembershipRequestsPage />} />
             <Route path="admin/verein" element={<AdminClubPage />} />
             <Route path="admin/kader" element={<AdminKaderPage />} />

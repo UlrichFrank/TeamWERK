@@ -58,7 +58,7 @@ func timeComponents(t string) (h, m int) {
 func classifySlotPosition(slotTime string, gameTime string, allGameTimes []string) (
 	isBeforeAllGames, isAfterAllGames, isBetweenGames bool) {
 
-	if len(allGameTimes) <= 1 {
+	if len(allGameTimes) == 0 {
 		return false, false, false
 	}
 

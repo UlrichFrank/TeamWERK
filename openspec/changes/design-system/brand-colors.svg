@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="580" viewBox="0 0 720 580" font-family="'Helvetica Neue', Arial, sans-serif">
+
+  <!-- Background -->
+  <rect width="720" height="580" fill="#F9FAFB"/>
+
+  <!-- Title -->
+  <text x="32" y="44" font-size="18" font-weight="700" fill="#111827">TeamWERK — Brand Colors</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SECTION: PRIMARY -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <text x="32" y="80" font-size="11" font-weight="600" fill="#6B7280" letter-spacing="1.5">PRIMÄR</text>
+
+  <!-- Schwarz -->
+  <rect x="32" y="92" width="80" height="64" rx="8" fill="#000000"/>
+  <text x="72" y="178" font-size="11" font-weight="600" fill="#111827" text-anchor="middle">Schwarz</text>
+  <text x="72" y="192" font-size="10" fill="#6B7280" text-anchor="middle">#000000</text>
+
+  <!-- Gelb -->
+  <rect x="128" y="92" width="80" height="64" rx="8" fill="#FAE806"/>
+  <rect x="128" y="92" width="80" height="64" rx="8" fill="none" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="168" y="178" font-size="11" font-weight="600" fill="#111827" text-anchor="middle">Gelb</text>
+  <text x="168" y="192" font-size="10" fill="#6B7280" text-anchor="middle">#FAE806</text>
+
+  <!-- Weiß -->
+  <rect x="224" y="92" width="80" height="64" rx="8" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="264" y="178" font-size="11" font-weight="600" fill="#111827" text-anchor="middle">Weiß</text>
+  <text x="264" y="192" font-size="10" fill="#6B7280" text-anchor="middle">#FFFFFF</text>
+
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SECTION: SECONDARY -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <text x="32" y="228" font-size="11" font-weight="600" fill="#6B7280" letter-spacing="1.5">SEKUNDÄR</text>
+
+  <!-- Blau -->
+  <rect x="32" y="240" width="80" height="64" rx="8" fill="#3E4A98"/>
+  <text x="72" y="326" font-size="11" font-weight="600" fill="#111827" text-anchor="middle">Blau</text>
+  <text x="72" y="340" font-size="10" fill="#6B7280" text-anchor="middle">#3E4A98</text>
+  <text x="72" y="353" font-size="9" fill="#9CA3AF" text-anchor="middle">HSL 234° 42% 42%</text>
+
+  <!-- Grün -->
+  <rect x="128" y="240" width="80" height="64" rx="8" fill="#6EB42E"/>
+  <text x="168" y="326" font-size="11" font-weight="600" fill="#111827" text-anchor="middle">Grün</text>
+  <text x="168" y="340" font-size="10" fill="#6B7280" text-anchor="middle">#6EB42E</text>
+  <text x="168" y="353" font-size="9" fill="#9CA3AF" text-anchor="middle">HSL 90° 60% 44%</text>
+
+  <!-- Karmesin / Danger -->
+  <rect x="224" y="236" width="88" height="72" rx="10" fill="#FAE806"/>
+  <rect x="228" y="240" width="80" height="64" rx="8" fill="#C0253A"/>
+  <text x="268" y="326" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">Danger</text>
+  <text x="268" y="340" font-size="10" fill="#6B7280" text-anchor="middle">#C0253A</text>
+  <text x="268" y="353" font-size="9" fill="#9CA3AF" text-anchor="middle">HSL 350° 68% 45%</text>
+  <text x="268" y="366" font-size="9" fill="#C0253A" font-weight="600" text-anchor="middle">✓ Karmesin</text>
+
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SECTION: ALLE ZUSAMMEN -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <line x1="32" y1="390" x2="688" y2="390" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="32" y="412" font-size="11" font-weight="600" fill="#6B7280" letter-spacing="1.5">ZUSAMMEN</text>
+
+  <rect x="32"  y="424" width="80" height="80" rx="8" fill="#000000"/>
+  <rect x="128" y="424" width="80" height="80" rx="8" fill="#FAE806" stroke="#E5E7EB" stroke-width="1"/>
+  <rect x="224" y="424" width="80" height="80" rx="8" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1"/>
+  <rect x="336" y="424" width="80" height="80" rx="8" fill="#3E4A98"/>
+  <rect x="432" y="424" width="80" height="80" rx="8" fill="#6EB42E"/>
+  <rect x="528" y="424" width="80" height="80" rx="8" fill="#C0253A"/>
+
+  <text x="72"  y="522" font-size="10" fill="#6B7280" text-anchor="middle">Schwarz</text>
+  <text x="168" y="522" font-size="10" fill="#6B7280" text-anchor="middle">Gelb</text>
+  <text x="264" y="522" font-size="10" fill="#6B7280" text-anchor="middle">Weiß</text>
+  <text x="376" y="522" font-size="10" fill="#6B7280" text-anchor="middle">Blau</text>
+  <text x="472" y="522" font-size="10" fill="#6B7280" text-anchor="middle">Grün</text>
+  <text x="568" y="522" font-size="10" fill="#6B7280" text-anchor="middle">Danger</text>
+
+  <text x="72"  y="536" font-size="9" fill="#9CA3AF" text-anchor="middle">#000000</text>
+  <text x="168" y="536" font-size="9" fill="#9CA3AF" text-anchor="middle">#FAE806</text>
+  <text x="264" y="536" font-size="9" fill="#9CA3AF" text-anchor="middle">#FFFFFF</text>
+  <text x="376" y="536" font-size="9" fill="#9CA3AF" text-anchor="middle">#3E4A98</text>
+  <text x="472" y="536" font-size="9" fill="#9CA3AF" text-anchor="middle">#6EB42E</text>
+  <text x="568" y="536" font-size="9" fill="#9CA3AF" text-anchor="middle">#C0253A</text>
+
+  <!-- Label Primär / Sekundär -->
+  <rect x="32" y="548" width="272" height="2" rx="1" fill="#111827"/>
+  <rect x="336" y="548" width="272" height="2" rx="1" fill="#6B7280"/>
+  <text x="168" y="562" font-size="9" fill="#111827" font-weight="600" text-anchor="middle">Primär</text>
+  <text x="472" y="562" font-size="9" fill="#6B7280" font-weight="600" text-anchor="middle">Sekundär</text>
+
+</svg>

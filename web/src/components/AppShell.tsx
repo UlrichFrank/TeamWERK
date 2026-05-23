@@ -20,9 +20,7 @@ const navModules: NavModule[] = [
     label: 'Dienste',
     items: [
       { to: '/spielplan', label: 'Spielplan', roles: [] },
-      { to: '/dienstboerse', label: 'Dienstbörse', roles: ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] },
-      { to: '/dienstkonten', label: 'Dienstkonten', roles: ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] },
-      { to: '/dienste', label: 'Dienst-Planung', roles: ['admin', 'vorstand', 'trainer'] },
+      { to: '/dienste', label: 'Dienste', roles: [] },
     ],
   },
   {
