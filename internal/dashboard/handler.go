@@ -214,9 +214,13 @@ func (h *Handler) vorstandDutyActions(r *http.Request, seasonID int) []Action {
 	}}
 }
 
-// T3: Elternteil/Spieler — find applicable open duty slots this week
+// T3: Elternteil/Spieler — find applicable open duty slots this week for their teams
 func (h *Handler) memberDutyActions(r *http.Request, userID int, role string, seasonID int) []Action {
-	rows, err := h.db.QueryContext(r.Context(), `
+	teamSubquery := h.teamQueryForUser(role)
+	if teamSubquery == "" {
+		return nil
+	}
+	rows, err := h.db.QueryContext(r.Context(), fmt.Sprintf(`
 		SELECT ds.id, dt.name, ds.event_date, COALESCE(ds.event_time, '')
 		FROM duty_slots ds
 		JOIN duty_types dt ON ds.duty_type_id = dt.id
@@ -225,11 +229,12 @@ func (h *Handler) memberDutyActions(r *http.Request, userID int, role string, se
 		  AND da.id IS NULL
 		  AND dt.target_role = ?
 		  AND ds.season_id = ?
+		  AND ds.team_id IN (%s)
 		  AND DATE(ds.event_date) >= DATE('now')
 		  AND DATE(ds.event_date) < DATE('now', '+7 days')
 		ORDER BY ds.event_date ASC
-		LIMIT 3`,
-		userID, role, seasonID,
+		LIMIT 3`, teamSubquery),
+		userID, role, seasonID, userID, seasonID,
 	)
 	if err != nil {
 		return nil
