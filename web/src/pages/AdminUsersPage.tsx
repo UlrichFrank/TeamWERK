@@ -225,7 +225,9 @@ export default function AdminUsersPage() {
       {/* Pending requests and invitations */}
       {(requests.length > 0 || invitations.length > 0) && (
         <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">Ausstehende Anfragen & Einladungen</h2>
+          <div className="sm:hidden mb-3">
+            <h2 className="text-lg font-semibold">Ausstehende Anfragen & Einladungen</h2>
+          </div>
           <div className="sm:hidden space-y-0">
             {requests.map(req => (
               <MobileCard
@@ -254,6 +256,9 @@ export default function AdminUsersPage() {
           </div>
 
           <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+            <div className="px-6 py-4 border-b border-brand-border-subtle">
+              <h2 className="font-semibold text-brand-text">Ausstehende Anfragen & Einladungen ({requests.length + invitations.length})</h2>
+            </div>
             <table className="w-full text-sm">
               <tbody className="divide-y divide-brand-border-subtle">
                 {requests.map(req => (
@@ -298,14 +303,6 @@ export default function AdminUsersPage() {
           <h2 className="font-semibold text-brand-text">Registrierte Nutzer ({total})</h2>
         </div>
         <table className="w-full text-sm">
-          <thead>
-            <tr>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-6 py-3 text-left">Name</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-6 py-3 text-left">E-Mail</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-6 py-3 text-left">Rolle</th>
-              <th className="bg-brand-surface-card px-6 py-3"></th>
-            </tr>
-          </thead>
           <tbody className="divide-y divide-brand-border-subtle">
             {users.map(u => {
               const callerRank = ROLE_RANK[self?.role ?? ''] ?? 0

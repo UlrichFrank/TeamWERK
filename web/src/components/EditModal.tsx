@@ -7,16 +7,17 @@ interface EditModalProps {
   onClose: () => void
   onSave: () => void
   isSaving?: boolean
+  maxWidthClass?: string
   children: ReactNode
 }
 
-export default function EditModal({ isOpen, title, onClose, onSave, isSaving = false, children }: EditModalProps) {
+export default function EditModal({ isOpen, title, onClose, onSave, isSaving = false, maxWidthClass = 'max-w-sm', children }: EditModalProps) {
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow max-w-sm mx-4 w-full max-h-[90vh] overflow-y-auto">
+      <div className={`relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow ${maxWidthClass} mx-4 w-full max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
           <h2 className="text-lg font-bold text-brand-text">{title}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">

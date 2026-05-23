@@ -14,7 +14,6 @@ import DutyPage from './pages/DutyPage'
 import AdminClubPage from './pages/AdminClubPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
-import MembershipRequestsPage from './pages/MembershipRequestsPage'
 import KalenderPage from './pages/KalenderPage'
 import SpieltagDetailPage from './pages/SpieltagDetailPage'
 import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
@@ -48,7 +47,7 @@ export default function App() {
             <Route path="mitglieder/:id" element={<MemberDetailPage />} />
             <Route path="profil" element={<ProfilePage />} />
             <Route path="dienste" element={<DutyPage />} />
-            <Route path="anfragen" element={<MembershipRequestsPage />} />
+            <Route path="anfragen" element={<Navigate to="/admin/nutzer" replace />} />
             <Route path="admin/verein" element={<AdminClubPage />} />
             <Route path="admin/kader" element={<AdminKaderPage />} />
             <Route path="admin/nutzer" element={<AdminUsersPage />} />
