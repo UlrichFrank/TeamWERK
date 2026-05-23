@@ -109,7 +109,7 @@ export default function AdminDutyTemplateDetailPage() {
               className={INPUT}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${template.template_type !== 'generisch' ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div>
               <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
               <select
@@ -122,16 +122,18 @@ export default function AdminDutyTemplateDetailPage() {
                 <option value="generisch">Generisch</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Spieldauer (min)</label>
-              <input
-                type="number"
-                min={1}
-                value={template.game_duration_minutes}
-                onChange={e => setTemplate(t => t ? { ...t, game_duration_minutes: Number(e.target.value) } : t)}
-                className={INPUT}
-              />
-            </div>
+            {template.template_type !== 'generisch' && (
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Spieldauer (min)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={template.game_duration_minutes}
+                  onChange={e => setTemplate(t => t ? { ...t, game_duration_minutes: Number(e.target.value) } : t)}
+                  className={INPUT}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -190,8 +192,8 @@ export default function AdminDutyTemplateDetailPage() {
                             onChange={e => updateItem(i, { anchor: e.target.value as 'start' | 'end' })}
                             className={INPUT_SM}
                           >
-                            <option value="start">Anpfiff</option>
-                            <option value="end">Spielende</option>
+                            <option value="start">Anpfiff/Beginn</option>
+                            <option value="end">Abpfiff/Ende</option>
                           </select>
                         </div>
                         <div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Home, MapPin, Calendar } from 'lucide-react'
 import { api } from '../lib/api'
@@ -76,6 +76,7 @@ export default function KalenderPage() {
   const [selectedTime, setSelectedTime] = useState('15:00')
   const [selectedOpponent, setSelectedOpponent] = useState('')
   const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>([])
+  const [selectedEndTime, setSelectedEndTime] = useState('16:00')
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
   const [templates, setTemplates] = useState<any[]>([])
   const [preview, setPreview] = useState<SlotPreview[]>([])
@@ -84,16 +85,49 @@ export default function KalenderPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  const loadGames = () => api.get('/kalender').then(r => setGames(r.data ?? []))
+  const loadGames = async () => {
+    try {
+      const r = await api.get('/kalender')
+      const data = r.data
+      const payload = Array.isArray(data) ? data : (data?.games ?? [])
+      setGames(payload)
+      return payload
+    } catch {
+      setGames([])
+      return []
+    }
+  }
 
   useEffect(() => {
-    Promise.all([loadGames(), api.get('/teams').then(r => setTeams(r.data ?? []))]).finally(() => setLoading(false))
+    const loadInitialData = async () => {
+      await Promise.all([
+        loadGames(),
+        api.get('/teams')
+          .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
+          .catch(() => setTeams([])),
+      ])
+      setLoading(false)
+    }
+    loadInitialData()
   }, [])
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
   const nextMonth = () => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)
 
-  const monthGames = games.filter(g => {
+  const dragStartX = useRef<number | null>(null)
+  const SWIPE_THRESHOLD = 50
+
+  const onDragStart = (x: number) => { dragStartX.current = x }
+  const onDragEnd = (x: number) => {
+    if (dragStartX.current === null) return
+    const delta = x - dragStartX.current
+    dragStartX.current = null
+    if (Math.abs(delta) < SWIPE_THRESHOLD) return
+    delta < 0 ? nextMonth() : prevMonth()
+  }
+
+  const safeGames = Array.isArray(games) ? games : []
+  const monthGames = safeGames.filter(g => {
     const y = parseInt(g.date.slice(0, 4))
     const m = parseInt(g.date.slice(5, 7)) - 1
     return y === year && m === month
@@ -117,6 +151,7 @@ export default function KalenderPage() {
       await api.post('/admin/kalender', {
         date: selectedDate,
         time: selectedTime,
+        end_time: eventType === 'generisch' ? selectedEndTime : undefined,
         opponent: selectedOpponent,
         team_ids: selectedTeamIds,
         event_type: eventType,
@@ -151,7 +186,8 @@ export default function KalenderPage() {
     setPreviewLoading(true)
     try {
       const dateParam = eventType === 'heim' ? `&date=${selectedDate}` : ''
-      const r = await api.get(`/admin/duty-templates/${selectedTemplate}/preview?time=${selectedTime}${dateParam}`)
+      const endTimeParam = eventType === 'generisch' ? `&end_time=${selectedEndTime}` : ''
+      const r = await api.get(`/admin/duty-templates/${selectedTemplate}/preview?time=${selectedTime}${dateParam}${endTimeParam}`)
       const slots: SlotPreview[] = r.data ?? []
       setPreview(slots)
       setSelectedSlotIndices(new Set(slots.map((_, i) => i)))
@@ -208,6 +244,7 @@ export default function KalenderPage() {
     setEventType('')
     setSelectedDate('')
     setSelectedTime('15:00')
+    setSelectedEndTime('16:00')
     setSelectedOpponent('')
     setSelectedTeamIds([])
     setSelectedTemplate(null)
@@ -238,7 +275,14 @@ export default function KalenderPage() {
       </div>
 
       {/* Calendar */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      <div
+        className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden select-none"
+        onTouchStart={e => onDragStart(e.touches[0].clientX)}
+        onTouchEnd={e => onDragEnd(e.changedTouches[0].clientX)}
+        onMouseDown={e => onDragStart(e.clientX)}
+        onMouseUp={e => onDragEnd(e.clientX)}
+        onMouseLeave={() => { dragStartX.current = null }}
+      >
         <div className="grid grid-cols-7 bg-brand-surface-card border-b border-brand-border-subtle">
           {WEEKDAYS.map(d => (
             <div key={d} className="text-center text-xs font-semibold py-2 text-brand-text-muted uppercase tracking-wide">{d}</div>
@@ -267,7 +311,9 @@ export default function KalenderPage() {
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${trafficColor(g.filled_count, g.total_count, g.slot_count)}`} />
                       <span className="font-semibold truncate text-brand-text">{g.teams.map(t => t.name).join(', ')}</span>
                     </div>
-                    <div className="truncate text-brand-text-muted leading-tight">Team vs {g.opponent || '–'}</div>
+                    <div className="truncate text-brand-text-muted leading-tight">
+                      {g.event_type === 'generisch' ? (g.opponent || '–') : `Team vs ${g.opponent || '–'}`}
+                    </div>
                     <div className="text-brand-text-subtle leading-tight">{g.time}</div>
                   </button>
                 ))}
@@ -300,7 +346,9 @@ export default function KalenderPage() {
               {(gamesByDate[dayRegenDate] ?? []).map(g => (
                 <div key={g.id} className="p-3 border border-brand-border-subtle rounded-lg bg-brand-surface-card text-sm">
                   <div className="font-semibold text-brand-text">{g.time} — {g.teams.map(t => t.name).join(', ')}</div>
-                  <div className="text-brand-text-muted text-xs">Team vs {g.opponent || '–'} · {g.event_type}</div>
+                  <div className="text-brand-text-muted text-xs">
+                    {g.event_type === 'generisch' ? (g.opponent || '–') : `Team vs ${g.opponent || '–'}`} · {g.event_type}
+                  </div>
                 </div>
               ))}
             </div>
@@ -402,9 +450,17 @@ export default function KalenderPage() {
                     <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Anwurfzeit</label>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                      {eventType === 'generisch' ? 'Beginn' : 'Anwurfzeit'}
+                    </label>
                     <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)} className={INPUT_WIZ} />
                   </div>
+                  {eventType === 'generisch' && (
+                    <div>
+                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Ende</label>
+                      <input type="time" value={selectedEndTime} onChange={e => setSelectedEndTime(e.target.value)} className={INPUT_WIZ} />
+                    </div>
+                  )}
                   {eventType !== 'generisch' && (
                     <div>
                       <label className="block text-sm font-medium text-brand-text-muted mb-1">Gegner *</label>
@@ -483,7 +539,9 @@ export default function KalenderPage() {
                             onChange={() => setSelectedTemplate(t.id)} className="rounded-full accent-brand-yellow" />
                           <div className="flex-1">
                             <div className="font-medium text-sm text-brand-text">{t.name}</div>
-                            <div className="text-xs text-brand-text-muted">{t.game_duration_minutes} Min</div>
+                            {t.template_type !== 'generisch' && (
+                              <div className="text-xs text-brand-text-muted">{t.game_duration_minutes} Min</div>
+                            )}
                           </div>
                         </label>
                       ))}

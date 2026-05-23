@@ -8,7 +8,6 @@ interface DutyType {
   id: number
   name: string
   hours_value: number
-  cash_substitute?: number
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
   same_day_behavior?: string
@@ -20,7 +19,6 @@ interface DutyType {
 interface EditState {
   name: string
   hours: string
-  cash: string
   anchor: 'start' | 'end'
   offset: string
   same_day_behavior: string
@@ -29,11 +27,26 @@ interface EditState {
   adjacent_day_variant_id: string
 }
 
+function hoursToDisplay(h: number): string {
+  const totalMins = Math.round(h * 60)
+  const hrs = Math.floor(totalMins / 60)
+  const mins = totalMins % 60
+  if (hrs === 0) return `${mins}min`
+  if (mins === 0) return `${hrs}h`
+  return `${hrs}h ${mins}min`
+}
+
+function parseHoursInput(s: string): number {
+  const m = s.trim().match(/^(?:(\d+)h\s*)?(?:(\d+)min)?$/)
+  if (m && (m[1] || m[2])) return (parseInt(m[1] || '0')) + parseInt(m[2] || '0') / 60
+  const n = parseFloat(s)
+  return isNaN(n) ? 1 : n
+}
+
 function toEditState(t: DutyType): EditState {
   return {
     name: t.name,
-    hours: t.hours_value.toString(),
-    cash: t.cash_substitute != null ? t.cash_substitute.toString() : '',
+    hours: hoursToDisplay(t.hours_value),
     anchor: t.default_anchor,
     offset: t.default_offset_minutes.toString(),
     same_day_behavior: t.same_day_behavior || 'normal',
@@ -44,7 +57,7 @@ function toEditState(t: DutyType): EditState {
 }
 
 const emptyCreate = (): EditState => ({
-  name: '', hours: '1', cash: '', anchor: 'start', offset: '0',
+  name: '', hours: '1h', anchor: 'start', offset: '0',
   same_day_behavior: 'normal', same_day_variant_id: '',
   adjacent_day_behavior: 'normal', adjacent_day_variant_id: '',
 })
@@ -68,32 +81,32 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Stundenwert</label>
-          <input value={state.hours} onChange={e => onChange({ ...state, hours: e.target.value })}
-            type="number" step="0.5" min="0.5" className={INPUT} />
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+          <input
+            list="hours-presets"
+            value={state.hours}
+            onChange={e => onChange({ ...state, hours: e.target.value })}
+            placeholder="z.B. 1h 30min"
+            className={INPUT}
+          />
+          <datalist id="hours-presets">
+            {['30min','45min','1h','1h 15min','1h 30min','1h 45min','2h','2h 30min','3h'].map(v => (
+              <option key={v} value={v} />
+            ))}
+          </datalist>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">
-            Geldersatz €{' '}
-            <span className="text-brand-text-subtle font-normal text-xs">(optional)</span>
-          </label>
-          <input value={state.cash} onChange={e => onChange({ ...state, cash: e.target.value })}
-            type="number" step="0.01" placeholder="–" className={INPUT} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-brand-text-muted mb-1">Standard-Anker</label>
           <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
-            <option value="start">Anpfiff</option>
-            <option value="end">Spielende</option>
+            <option value="start">Anpfiff/Beginn</option>
+            <option value="end">Abpfiff/Ende</option>
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz (min)</label>
-          <input value={state.offset} onChange={e => onChange({ ...state, offset: e.target.value })}
-            type="number" className={INPUT} />
-        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz (min)</label>
+        <input value={state.offset} onChange={e => onChange({ ...state, offset: e.target.value })}
+          type="number" className={INPUT} />
       </div>
       <p className="text-xs text-brand-text-subtle">Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff)</p>
 
@@ -154,8 +167,7 @@ export default function AdminDutyTypesPage() {
     e.preventDefault()
     await api.post('/admin/duty-types', {
       name: create.name,
-      hours_value: parseFloat(create.hours),
-      cash_substitute: create.cash ? parseFloat(create.cash) : null,
+      hours_value: parseHoursInput(create.hours),
       default_anchor: create.anchor,
       default_offset_minutes: parseInt(create.offset),
       same_day_behavior: create.same_day_behavior,
@@ -175,8 +187,7 @@ export default function AdminDutyTypesPage() {
     if (!edit) return
     await api.put(`/admin/duty-types/${id}`, {
       name: edit.name,
-      hours_value: parseFloat(edit.hours),
-      cash_substitute: edit.cash ? parseFloat(edit.cash) : null,
+      hours_value: parseHoursInput(edit.hours),
       default_anchor: edit.anchor,
       default_offset_minutes: parseInt(edit.offset),
       same_day_behavior: edit.same_day_behavior,
@@ -253,14 +264,14 @@ export default function AdminDutyTypesPage() {
           <MobileCard
             key={t.id}
             title={t.name}
-            subtitle={`${t.hours_value.toFixed(1)}h${t.cash_substitute ? ` · ${t.cash_substitute.toFixed(2)}€` : ''}`}
+            subtitle={hoursToDisplay(t.hours_value)}
             actions={[
               { label: 'Bearbeiten', onClick: () => startEdit(t) },
               { label: 'Löschen', onClick: () => handleDelete(t.id, t.name), variant: 'danger' },
             ]}
           >
             <div className="text-xs text-brand-text-muted space-y-1">
-              <div>Anker: {t.default_anchor === 'start' ? 'Anpfiff' : 'Spielende'}</div>
+              <div>Anker: {t.default_anchor === 'start' ? 'Anpfiff/Beginn' : 'Abpfiff/Ende'}</div>
               <div>Versatz: {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes} min</div>
             </div>
           </MobileCard>
@@ -273,8 +284,7 @@ export default function AdminDutyTypesPage() {
           <thead>
             <tr>
               <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left">Name</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Stunden</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Geldersatz</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Dauer</th>
               <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Anker</th>
               <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Versatz</th>
               <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3">Spieltag</th>
@@ -285,12 +295,9 @@ export default function AdminDutyTypesPage() {
             {types.map(t => (
               <tr key={t.id} className="hover:bg-brand-table-select transition-colors">
                 <td className="px-3 py-3 font-medium text-brand-text">{t.name}</td>
-                <td className="px-3 py-3 text-right text-brand-text">{t.hours_value.toFixed(1)}</td>
+                <td className="px-3 py-3 text-right text-brand-text">{hoursToDisplay(t.hours_value)}</td>
                 <td className="px-3 py-3 text-right text-brand-text-muted">
-                  {t.cash_substitute != null ? `${t.cash_substitute.toFixed(2)} €` : '–'}
-                </td>
-                <td className="px-3 py-3 text-right text-brand-text-muted">
-                  {t.default_anchor === 'start' ? 'Anpfiff' : 'Spielende'}
+                  {t.default_anchor === 'start' ? 'Anpfiff/Beginn' : 'Abpfiff/Ende'}
                 </td>
                 <td className="px-3 py-3 text-right font-mono text-brand-text-muted">
                   {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes}
