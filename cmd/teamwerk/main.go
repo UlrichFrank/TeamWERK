@@ -191,7 +191,6 @@ func serve() {
 			r.Put("/api/members/{id}/status", membH.UpdateStatus)
 			r.Get("/api/admin/club", cfgH.GetClub)
 			r.Put("/api/admin/club", cfgH.UpdateClub)
-			r.Get("/api/admin/seasons", cfgH.ListSeasons)
 			r.Post("/api/admin/seasons", cfgH.CreateSeason)
 			r.Put("/api/admin/seasons/{id}", cfgH.UpdateSeason)
 			r.Put("/api/admin/seasons/{id}/activate", cfgH.ActivateSeason)
@@ -233,6 +232,7 @@ func serve() {
 		// Admin + Vorstand + Trainer
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole("admin", "vorstand", "trainer"))
+			r.Get("/api/admin/seasons", cfgH.ListSeasons)
 			// Kader (season-based teams)
 			r.Get("/api/admin/kader", kaderH.ListKader)
 			r.Post("/api/admin/kader", kaderH.InitializeKader)
