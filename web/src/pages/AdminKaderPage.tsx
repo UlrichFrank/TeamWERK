@@ -55,6 +55,7 @@ export default function AdminKaderPage() {
   const [removing, setRemoving] = useState<Record<string, boolean>>({})
   const [initializing, setInitializing] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [activeAgeClass, setActiveAgeClass] = useState<string | null>(null)
 
   const [pendingDedicated, setPendingDedicated] = useState<Set<number>>(new Set())
 
@@ -88,8 +89,14 @@ export default function AdminKaderPage() {
     ])
     const seasons: Season[] = seasonsRes.data ?? []
     setActiveSeason(seasons.find(s => s.is_active) ?? null)
-    setKaderList(Array.isArray(kaderRes.data) ? kaderRes.data : [])
+    const list: Kader[] = Array.isArray(kaderRes.data) ? kaderRes.data : []
+    setKaderList(list)
     setPendingDedicated(new Set())
+    setActiveAgeClass(prev => {
+      const classes = [...new Set(list.map(k => k.age_class))].sort()
+      if (prev && classes.includes(prev)) return prev
+      return classes[0] ?? null
+    })
   }
 
   useEffect(() => {
@@ -217,11 +224,16 @@ export default function AdminKaderPage() {
     groups.get(key)!.push(k)
   }
 
-  const groupOrder: string[] = []
+  const allGroupOrder: string[] = []
   for (const k of kaderList) {
     const key = groupKey(k)
-    if (!groupOrder.includes(key)) groupOrder.push(key)
+    if (!allGroupOrder.includes(key)) allGroupOrder.push(key)
   }
+
+  const ageClassTabs = [...new Set(kaderList.map(k => k.age_class))].sort()
+  const groupOrder = activeAgeClass
+    ? allGroupOrder.filter(key => key.startsWith(`${activeAgeClass}|`))
+    : allGroupOrder
 
   return (
     <div className="max-w-3xl">
@@ -257,6 +269,25 @@ export default function AdminKaderPage() {
           </div>
         )}
       </div>
+
+      {/* Age class tabs */}
+      {ageClassTabs.length > 0 && (
+        <div className="flex gap-1 mb-6 flex-wrap">
+          {ageClassTabs.map(ac => (
+            <button
+              key={ac}
+              onClick={() => setActiveAgeClass(ac)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeAgeClass === ac
+                  ? 'bg-brand-yellow text-brand-black'
+                  : 'bg-brand-surface-card text-brand-text-muted border border-brand-border hover:bg-brand-table-select'
+              }`}
+            >
+              {ac}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* No active season */}
       {!activeSeason && (
