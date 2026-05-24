@@ -215,6 +215,12 @@ func serve() {
 			r.Get("/api/admin/duty-templates/{id}/preview", gameH.PreviewSlots)
 			r.Post("/api/upload/member-photo/{id}", uploadH.UploadMemberPhoto)
 			r.Post("/api/upload/sepa-mandat/{id}", uploadH.UploadSepaMandat)
+			r.Put("/api/admin/age-class-rules/{ageClass}", cfgH.UpdateAgeClassRuleHandler)
+		})
+
+		// Admin + Vorstand + Trainer
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireRole("admin", "vorstand", "trainer"))
 			// Kader (season-based teams)
 			r.Get("/api/admin/kader", kaderH.ListKader)
 			r.Post("/api/admin/kader", kaderH.InitializeKader)
@@ -224,7 +230,6 @@ func serve() {
 			r.Get("/api/admin/kader/{id}/member-suggestions", kaderH.MemberSuggestions)
 			r.Post("/api/admin/kader/copy-from-season", kaderH.CopyFromSeason)
 			r.Post("/api/admin/kader/auto-assign", kaderH.AutoAssign)
-			r.Put("/api/admin/age-class-rules/{ageClass}", cfgH.UpdateAgeClassRuleHandler)
 		})
 	})
 

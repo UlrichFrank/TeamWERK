@@ -6,7 +6,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 
 interface NavModule {
   label: string
-  items: { to: string; label: string; roles: string[]; end?: boolean }[]
+  items: { to: string; label: string; roles: string[]; excludeRoles?: string[]; end?: boolean }[]
 }
 
 const navModules: NavModule[] = [
@@ -14,8 +14,8 @@ const navModules: NavModule[] = [
     label: 'Mitglieder',
     items: [
       { to: '/', label: 'Dashboard', roles: [], end: true },
-      { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand', 'trainer'] },
-      { to: '/profil', label: 'Mein Profil', roles: ['elternteil', 'spieler'] },
+      { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand'] },
+      { to: '/profil', label: 'Mein Profil', roles: [], excludeRoles: ['admin'] },
     ],
   },
   {
@@ -36,7 +36,7 @@ const navModules: NavModule[] = [
   {
     label: 'Kaderplanung',
     items: [
-      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand'] },
+      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer'] },
       { to: '/admin/einstellungen', label: 'Einstellungen', roles: ['admin', 'vorstand'] },
     ],
   },
@@ -95,7 +95,7 @@ export default function AppShell() {
       </div>
       <nav className="flex-1 py-4">
         {navModules.map(mod => {
-          const visibleItems = mod.items.filter(item => user && (item.roles.length === 0 || item.roles.includes(user.role)))
+          const visibleItems = mod.items.filter(item => user && (item.roles.length === 0 || item.roles.includes(user.role)) && !item.excludeRoles?.includes(user.role))
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))
           const isOpen = openModules[mod.label]
