@@ -77,6 +77,7 @@ func serve() {
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
 	carpoolH := carpooling.NewHandler(database)
+	welcomeH := members.NewWelcomeEmailHandler(database, m)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -196,6 +197,7 @@ func serve() {
 			r.Post("/api/members/import", membH.Import)
 			r.Delete("/api/admin/members/{id}", membH.DeleteMember)
 			r.Put("/api/admin/members/{id}/user", membH.LinkUser)
+			r.Post("/api/admin/members/{id}/welcome-email", welcomeH.Send)
 			r.Get("/api/admin/members/{id}/parents", membH.GetMemberParents)
 			r.Post("/api/admin/users/{id}/create-member", membH.CreateMemberFromUser)
 			r.Post("/api/admin/family-links", membH.CreateFamilyLink)

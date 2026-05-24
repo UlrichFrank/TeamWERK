@@ -43,6 +43,7 @@ interface Member {
   address_source?: string
   address_conflict?: boolean
   member_address_stored?: AddressStored
+  welcome_email_sent_at?: string
 }
 
 interface User { id: number; name: string; email: string; role: string }
@@ -77,6 +78,7 @@ export default function MemberDetailPage() {
   const [users, setUsers] = useState<User[]>([])
   const [linkedParents, setLinkedParents] = useState<User[]>([])
   const [currentUserID, setCurrentUserID] = useState<number | null>(null)
+  const [welcomeEmailSentAt, setWelcomeEmailSentAt] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -160,6 +162,7 @@ export default function MemberDetailPage() {
           sepa_mandat_url: m.sepa_mandat_url ?? '',
         })
         setCurrentUserID(m.user_id ?? null)
+        setWelcomeEmailSentAt(m.welcome_email_sent_at ?? null)
       })
       loadLinkedParents()
     }
@@ -314,8 +317,11 @@ export default function MemberDetailPage() {
       {activeTab === 'admin' && (
         <MemberAdminTab
           isNew={isNew}
+          memberId={id && !isNew ? Number(id) : undefined}
           users={users}
           currentUserId={currentUserID}
+          welcomeEmailSentAt={welcomeEmailSentAt}
+          onWelcomeEmailSent={sentAt => setWelcomeEmailSentAt(sentAt)}
           onLinkUser={handleLinkUser}
           saving={saving}
           saved={saved}

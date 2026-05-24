@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { CheckCircle, Mail } from 'lucide-react'
+import { api } from '../../lib/api'
 
 interface User {
   id: number
@@ -8,16 +10,29 @@ interface User {
 
 interface Props {
   isNew: boolean
+  memberId?: number
   users: User[]
   currentUserId: number | null
+  welcomeEmailSentAt: string | null
+  onWelcomeEmailSent: (sentAt: string) => void
   onLinkUser: (userId: number | null) => Promise<void>
   saving: boolean
   saved: boolean
   error: string
 }
 
-export default function MemberAdminTab({ isNew, users, currentUserId, onLinkUser, saving, saved, error }: Props) {
+function formatSentAt(iso: string) {
+  const d = new Date(iso)
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+export default function MemberAdminTab({
+  isNew, memberId, users, currentUserId, welcomeEmailSentAt, onWelcomeEmailSent,
+  onLinkUser, saving, saved, error,
+}: Props) {
   const [selectedUser, setSelectedUser] = useState<string>(currentUserId ? String(currentUserId) : '')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
 
   const currentUser = currentUserId ? users.find(u => u.id === currentUserId) : null
 
@@ -26,28 +41,43 @@ export default function MemberAdminTab({ isNew, users, currentUserId, onLinkUser
     await onLinkUser(userId)
   }
 
+  const handleSendWelcome = async () => {
+    if (!memberId) return
+    setSending(true)
+    setSendError('')
+    try {
+      const res = await api.post<{ sent_at: string }>(`/admin/members/${memberId}/welcome-email`)
+      onWelcomeEmailSent(res.data.sent_at)
+    } catch {
+      setSendError('Fehler beim Senden der Willkommensmail. Bitte erneut versuchen.')
+    } finally {
+      setSending(false)
+    }
+  }
+
   if (isNew) {
-    return <div className="text-gray-600">Nutzer-Verknüpfung kann nach dem Erstellen vorgenommen werden.</div>
+    return <div className="text-brand-text-muted">Nutzer-Verknüpfung kann nach dem Erstellen vorgenommen werden.</div>
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Nutzer verknüpfen</h2>
+      {/* Nutzer verknüpfen */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text mb-4">Nutzer verknüpfen</h2>
 
         {currentUser && (
-          <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-            <p className="font-medium text-blue-900">Aktuell verknüpft:</p>
-            <p className="text-blue-700">{currentUser.name} ({currentUser.email})</p>
+          <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm">
+            <p className="font-medium text-brand-text">Aktuell verknüpft:</p>
+            <p className="text-brand-text-muted">{currentUser.name} ({currentUser.email})</p>
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Nutzer ändern</label>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Nutzer ändern</label>
           <select
             value={selectedUser}
             onChange={e => setSelectedUser(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm mb-3"
+            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
           >
             <option value="">– Keine Verknüpfung –</option>
             {users.map(u => (
@@ -58,14 +88,48 @@ export default function MemberAdminTab({ isNew, users, currentUserId, onLinkUser
           <button
             onClick={handleSave}
             disabled={saving}
-            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40"
+            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
         </div>
 
-        {saved && <p className="text-sm text-green-600 mt-3">Gespeichert</p>}
-        {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+        {saved && <p className="text-sm text-brand-success mt-3">Gespeichert</p>}
+        {error && <p className="text-sm text-brand-danger mt-3">{error}</p>}
+      </div>
+
+      {/* Willkommensmail */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text mb-4">Willkommensmail</h2>
+
+        {welcomeEmailSentAt ? (
+          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <span className="text-green-800">
+              Mail wurde am {formatSentAt(welcomeEmailSentAt)} versendet.
+            </span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-brand-text-muted">
+              Sendet die Willkommensmail mit Vereinssatzung, Gebührenordnung und Leitbild an das Mitglied.
+            </p>
+            {!currentUserId && (
+              <p className="text-sm text-brand-text-subtle italic">
+                Bitte zuerst einen Nutzeraccount verknüpfen.
+              </p>
+            )}
+            <button
+              onClick={handleSendWelcome}
+              disabled={!currentUserId || sending}
+              className="inline-flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Mail className="w-4 h-4" />
+              {sending ? 'Wird gesendet…' : 'Willkommensmail senden'}
+            </button>
+            {sendError && <p className="text-sm text-brand-danger">{sendError}</p>}
+          </div>
+        )}
       </div>
     </div>
   )

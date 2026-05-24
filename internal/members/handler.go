@@ -58,6 +58,8 @@ type Member struct {
 	UserPhones   []UserPhone `json:"user_phones,omitempty"`
 	UserPhotoURL *string     `json:"user_photo_url,omitempty"`
 
+	WelcomeEmailSentAt *string `json:"welcome_email_sent_at,omitempty"`
+
 	HasPendingDrafts bool `json:"has_pending_drafts,omitempty"`
 }
 
@@ -265,7 +267,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
 		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path,
-		       u.street, u.zip, u.city
+		       u.street, u.zip, u.city,
+		       m.welcome_email_sent_at
 		FROM members m
 		LEFT JOIN users u ON u.id = m.user_id
 		WHERE m.id=?`, id)
@@ -280,6 +283,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
 	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
 	var uStreet, uZip, uCity sql.NullString
+	var welcomeEmailSentAt sql.NullString
 
 	err := row.Scan(
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
@@ -291,6 +295,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&dsgvoWeiter, &dsgvoWeiterDate,
 		&sepaMandat, &sepaMandatDate, &sepaMandatPath,
 		&uStreet, &uZip, &uCity,
+		&welcomeEmailSentAt,
 	)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -368,6 +373,11 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		if sepaMandatDate.Valid {
 			base.SepaMandatDate = &sepaMandatDate.String
 		}
+	}
+
+	// welcome_email_sent_at: admin only
+	if isAdmin && welcomeEmailSentAt.Valid {
+		base.WelcomeEmailSentAt = &welcomeEmailSentAt.String
 	}
 
 	// IBAN, account holder + SEPA document URL: admin only
