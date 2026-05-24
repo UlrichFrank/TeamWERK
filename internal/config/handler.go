@@ -127,6 +127,44 @@ func (h *Handler) ActivateSeason(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// PUT /api/admin/seasons/:id
+func (h *Handler) UpdateSeason(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		Name      string `json:"name"`
+		StartDate string `json:"start_date"`
+		EndDate   string `json:"end_date"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" || req.StartDate == "" || req.EndDate == "" {
+		http.Error(w, "name, start_date und end_date sind erforderlich", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE seasons SET name=?, start_date=?, end_date=? WHERE id=?`,
+		req.Name, req.StartDate, req.EndDate, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	type season struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		StartDate string `json:"start_date"`
+		EndDate   string `json:"end_date"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(season{ID: id, Name: req.Name, StartDate: req.StartDate, EndDate: req.EndDate})
+}
+
 // DELETE /api/admin/seasons/:id
 func (h *Handler) DeleteSeason(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

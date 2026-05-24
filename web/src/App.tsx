@@ -11,16 +11,14 @@ import MembersPage from './pages/MembersPage'
 import MemberDetailPage from './pages/MemberDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import DutyPage from './pages/DutyPage'
-import AdminClubPage from './pages/AdminClubPage'
+import AdminSettingsPage from './pages/AdminSettingsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
 import SpieltagDetailPage from './pages/SpieltagDetailPage'
 import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
-import AdminSeasonsPage from './pages/AdminSeasonsPage'
 import AdminKaderPage from './pages/AdminKaderPage'
-import AdminAgeClassRulesPage from './pages/AdminAgeClassRulesPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -56,7 +54,10 @@ export default function App() {
             <Route path="profil" element={<ProfilePage />} />
             <Route path="dienste" element={<DutyPage />} />
             <Route path="anfragen" element={<Navigate to="/admin/nutzer" replace />} />
-            <Route path="admin/verein" element={<RoleRoute roles={['admin','vorstand']}><AdminClubPage /></RoleRoute>} />
+            <Route path="admin/einstellungen" element={<RoleRoute roles={['admin','vorstand']}><AdminSettingsPage /></RoleRoute>} />
+            <Route path="admin/verein" element={<Navigate to="/admin/einstellungen?tab=verein" replace />} />
+            <Route path="admin/saisons" element={<Navigate to="/admin/einstellungen?tab=saisons" replace />} />
+            <Route path="admin/altersklassen" element={<Navigate to="/admin/einstellungen?tab=altersklassen" replace />} />
             <Route path="admin/kader" element={<RoleRoute roles={['admin','vorstand','trainer']}><AdminKaderPage /></RoleRoute>} />
             <Route path="admin/nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
             <Route path="admin/diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
@@ -64,8 +65,6 @@ export default function App() {
             <Route path="kalender/:gameId" element={<SpieltagDetailPage />} />
             <Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
             <Route path="admin/dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
-            <Route path="admin/saisons" element={<RoleRoute roles={['admin','vorstand']}><AdminSeasonsPage /></RoleRoute>} />
-            <Route path="admin/altersklassen" element={<RoleRoute roles={['admin']}><AdminAgeClassRulesPage /></RoleRoute>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

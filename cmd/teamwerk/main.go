@@ -173,6 +173,7 @@ func serve() {
 			r.Put("/api/admin/club", cfgH.UpdateClub)
 			r.Get("/api/admin/seasons", cfgH.ListSeasons)
 			r.Post("/api/admin/seasons", cfgH.CreateSeason)
+			r.Put("/api/admin/seasons/{id}", cfgH.UpdateSeason)
 			r.Put("/api/admin/seasons/{id}/activate", cfgH.ActivateSeason)
 			r.Delete("/api/admin/seasons/{id}", cfgH.DeleteSeason)
 			r.Put("/api/admin/seasons/{id}/duty-targets", dutyH.SetSeasonTargets)
