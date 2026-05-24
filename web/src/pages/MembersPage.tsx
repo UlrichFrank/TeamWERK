@@ -10,7 +10,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Member {
   id: number; first_name: string; last_name: string
-  status: string; pass_number?: string; position?: string; gender?: string
+  status: string; pass_number?: string; position?: string; gender?: string; club_function?: string
   has_pending_drafts?: boolean
 }
 
@@ -227,7 +227,7 @@ export default function MembersPage() {
                   {m.last_name}, {m.first_name}{isAdmin && m.has_pending_drafts && <span className="ml-2">⏳</span>}
                 </td>
                 <td className="px-4 py-3 text-brand-text-muted">{m.pass_number || '–'}</td>
-                <td className="px-4 py-3 text-brand-text-muted">{genderLabel(m.gender)}</td>
+                <td className="px-4 py-3 text-brand-text-muted">{m.club_function === 'spieler' ? genderLabel(m.gender) : '–'}</td>
                 <td className="px-4 py-3 text-brand-text-muted">{m.position || '–'}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeStyles(m.status)}`}>
