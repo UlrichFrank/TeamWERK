@@ -7,12 +7,15 @@ import (
 )
 
 type Config struct {
-	Port      string
-	DBPath    string
-	JWTSecret string
-	BaseURL   string
-	UploadDir string
-	SMTP      SMTPConfig
+	Port           string
+	DBPath         string
+	JWTSecret      string
+	BaseURL        string
+	UploadDir      string
+	SMTP           SMTPConfig
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	VAPIDEmail      string
 }
 
 type SMTPConfig struct {
@@ -38,6 +41,9 @@ func Load() (*Config, error) {
 			Password: os.Getenv("SMTP_PASS"),
 			From:     getEnv("SMTP_FROM", "TeamWERK <vorstand@team-stuttgart.org>"),
 		},
+		VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
+		VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
+		VAPIDEmail:      getEnv("VAPID_EMAIL", "mailto:vorstand@team-stuttgart.org"),
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")

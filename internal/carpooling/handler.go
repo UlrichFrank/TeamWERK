@@ -9,11 +9,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/notifications"
 )
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db  *sql.DB
+	cfg *appconfig.Config
+}
 
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+func NewHandler(db *sql.DB, cfg *appconfig.Config) *Handler { return &Handler{db: db, cfg: cfg} }
 
 type GameEntry struct {
 	ID        int    `json:"id"`
@@ -43,70 +48,18 @@ type ListResponse struct {
 	VehicleSeats *int              `json:"vehicleSeats"`
 }
 
-// teamQueryForRole returns a subquery for team_ids the user belongs to,
-// plus the bind args (userID, seasonID). Returns "" if role has no team filter (admin/vorstand).
-func teamQueryForRole(role string) string {
-	switch role {
-	case "trainer":
-		return `SELECT k.team_id
-			FROM kader_trainers kt
-			JOIN kader k ON k.id = kt.kader_id
-			JOIN members m ON m.id = kt.member_id
-			WHERE m.user_id = ? AND k.season_id = ? AND k.team_id IS NOT NULL`
-	case "elternteil":
-		return `SELECT tm.team_id
-			FROM team_memberships tm
-			JOIN family_links fl ON fl.member_id = tm.member_id
-			WHERE fl.parent_user_id = ? AND tm.season_id = ?`
-	case "spieler":
-		return `SELECT tm.team_id
-			FROM team_memberships tm
-			JOIN members m ON m.id = tm.member_id
-			WHERE m.user_id = ? AND tm.season_id = ?`
-	}
-	return ""
-}
-
 // GET /api/mitfahrgelegenheiten
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	userID := claims.UserID
-	role := claims.Role
 
-	var seasonID int
-	if err := h.db.QueryRowContext(r.Context(),
-		`SELECT id FROM seasons WHERE is_active = 1 LIMIT 1`,
-	).Scan(&seasonID); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListResponse{Games: []CarpoolResponse{}})
-		return
-	}
-
-	teamSub := teamQueryForRole(role)
-
-	var (
-		queryStr string
-		args     []interface{}
-	)
-	if teamSub == "" {
-		queryStr = `SELECT DISTINCT g.id, g.date, g.opponent, g.event_type, t.name
-			FROM games g
-			JOIN game_teams gt ON g.id = gt.game_id
-			JOIN teams t ON t.id = gt.team_id
-			WHERE DATE(g.date) >= DATE('now')
-			ORDER BY g.date ASC, g.event_type ASC`
-	} else {
-		queryStr = fmt.Sprintf(`SELECT DISTINCT g.id, g.date, g.opponent, g.event_type, t.name
-			FROM games g
-			JOIN game_teams gt ON g.id = gt.game_id
-			JOIN teams t ON t.id = gt.team_id
-			WHERE DATE(g.date) >= DATE('now')
-			  AND gt.team_id IN (%s)
-			ORDER BY g.date ASC, g.event_type ASC`, teamSub)
-		args = []interface{}{userID, seasonID}
-	}
-
-	rows, err := h.db.QueryContext(r.Context(), queryStr, args...)
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT DISTINCT g.id, g.date, g.opponent, t.name, g.event_type
+		FROM games g
+		JOIN game_teams gt ON g.id = gt.game_id
+		JOIN teams t ON t.id = gt.team_id
+		WHERE DATE(g.date) >= DATE('now')
+		ORDER BY g.date ASC`)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -116,42 +69,30 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	var games []GameEntry
 	for rows.Next() {
 		var g GameEntry
-		rows.Scan(&g.ID, &g.Date, &g.Opponent, &g.EventType, &g.Team)
+		rows.Scan(&g.ID, &g.Date, &g.Opponent, &g.Team, &g.EventType)
 		games = append(games, g)
 	}
 
-	result := make([]CarpoolResponse, 0, len(games))
+	gamesList := make([]CarpoolResponse, 0, len(games))
 	for _, g := range games {
 		biete, suche := h.queryEntries(r, g.ID, userID)
-		result = append(result, CarpoolResponse{
+		gamesList = append(gamesList, CarpoolResponse{
 			Game:  g,
 			Biete: biete,
 			Suche: suche,
 		})
 	}
 
-	vehicleSeats := h.queryVehicleSeats(r, userID)
+	var vehicleSeats *int
+	h.db.QueryRowContext(r.Context(), `SELECT seats FROM vehicle_info WHERE user_id = ?`, userID).Scan(&vehicleSeats)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ListResponse{
-		Games:        result,
-		VehicleSeats: vehicleSeats,
-	})
-}
-
-func (h *Handler) queryVehicleSeats(r *http.Request, userID int) *int {
-	var seats int
-	if err := h.db.QueryRowContext(r.Context(),
-		`SELECT seats FROM vehicle_info WHERE user_id = ?`, userID,
-	).Scan(&seats); err != nil {
-		return nil
-	}
-	return &seats
+	json.NewEncoder(w).Encode(ListResponse{Games: gamesList, VehicleSeats: vehicleSeats})
 }
 
 func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]CarpoolEntry, []CarpoolEntry) {
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, u.first_name || ' ' || u.last_name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id
+		SELECT m.id, u.name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id
 		FROM mitfahrgelegenheiten m
 		JOIN users u ON u.id = m.user_id
 		WHERE m.game_id = ?
@@ -234,6 +175,18 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+
+	// notify users with the opposite typ
+	oppositeTyp := "suche"
+	if body.Typ == "suche" {
+		oppositeTyp = "biete"
+	}
+	senderTyp := body.Typ
+	gameID := body.GameID
+	go func() {
+		name := h.userName(userID)
+		h.notifyOpposite(gameID, userID, name, senderTyp, oppositeTyp)
+	}()
 }
 
 // DELETE /api/mitfahrgelegenheiten/{id}
@@ -247,6 +200,13 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// fetch typ and game_id before deleting (needed for notification)
+	var typ string
+	var gameID int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT typ, game_id FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID).
+		Scan(&typ, &gameID)
+
 	res, err := h.db.ExecContext(r.Context(),
 		`DELETE FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID)
 	if err != nil {
@@ -258,5 +218,83 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
+
+	// only notify when a "biete" offer is withdrawn
+	if typ == "biete" && gameID != 0 {
+		go func() {
+			name := h.userName(userID)
+			h.notifyWithdrawn(gameID, userID, name)
+		}()
+	}
+}
+
+// notifyOpposite sends a push to all users with oppositeTyp for the same game (excluding self).
+func (h *Handler) notifyOpposite(gameID, senderID int, senderName, senderTyp, targetTyp string) {
+	userIDs := h.usersWithTyp(gameID, targetTyp, senderID)
+	if len(userIDs) == 0 {
+		return
+	}
+	opponent, date := h.gameInfo(gameID)
+	var title, body string
+	if senderTyp == "biete" {
+		title = "Mitfahrgelegenheit"
+		body = fmt.Sprintf("%s bietet Plätze an — %s, %s", senderName, opponent, date)
+	} else {
+		title = "Mitfahrgelegenheit"
+		body = fmt.Sprintf("%s sucht noch einen Platz — %s, %s", senderName, opponent, date)
+	}
+	notifications.SendToUsers(h.db, h.cfg, userIDs, title, body, "/mitfahrgelegenheiten")
+}
+
+// notifyWithdrawn sends a push to all "suche" users when a "biete" entry is deleted.
+func (h *Handler) notifyWithdrawn(gameID, senderID int, senderName string) {
+	userIDs := h.usersWithTyp(gameID, "suche", senderID)
+	if len(userIDs) == 0 {
+		return
+	}
+	opponent, date := h.gameInfo(gameID)
+	body := fmt.Sprintf("%s hat sein Angebot zurückgezogen — %s, %s", senderName, opponent, date)
+	notifications.SendToUsers(h.db, h.cfg, userIDs, "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
+}
+
+// usersWithTyp returns user IDs with the given typ for a game, excluding excludeID.
+func (h *Handler) usersWithTyp(gameID int, typ string, excludeID int) []int {
+	rows, err := h.db.Query(
+		`SELECT user_id FROM mitfahrgelegenheiten WHERE game_id = ? AND typ = ? AND user_id != ?`,
+		gameID, typ, excludeID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// gameInfo returns opponent and formatted date for a game.
+func (h *Handler) gameInfo(gameID int) (opponent, date string) {
+	h.db.QueryRow(
+		`SELECT opponent, date FROM games WHERE id = ?`, gameID).
+		Scan(&opponent, &date)
+	if len(date) >= 10 {
+		date = date[:10]
+	}
+	return opponent, date
+}
+
+// userName returns the display name for a user.
+func (h *Handler) userName(userID int) string {
+	var firstName, lastName string
+	h.db.QueryRow(`SELECT first_name, last_name FROM users WHERE id = ?`, userID).
+		Scan(&firstName, &lastName)
+	if firstName == "" {
+		return lastName
+	}
+	return firstName + " " + lastName
 }

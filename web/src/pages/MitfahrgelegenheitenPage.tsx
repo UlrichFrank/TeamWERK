@@ -301,7 +301,7 @@ export default function MitfahrgelegenheitenPage() {
     setLoading(true)
     api.get('/mitfahrgelegenheiten')
       .then(res => {
-        setResponse(res.data ?? { games: [] })
+        setResponse({ games: res.data?.games ?? [], vehicleSeats: res.data?.vehicleSeats })
         setLoading(false)
       })
       .catch(() => { setError('Fehler beim Laden.'); setLoading(false) })

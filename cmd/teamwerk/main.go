@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	webpush "github.com/SherClockHolmes/webpush-go"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/go-chi/chi/v5"
@@ -16,8 +17,8 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
-	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
+	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
@@ -25,6 +26,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
+	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 )
@@ -49,6 +51,10 @@ func main() {
 	}
 	if len(os.Args) > 1 && os.Args[1] == "create-admin" {
 		runCreateAdmin()
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "gen-vapid" {
+		runGenVapid()
 		return
 	}
 
@@ -76,7 +82,8 @@ func serve() {
 	gameH := games.NewHandler(database)
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
-	carpoolH := carpooling.NewHandler(database)
+	carpoolH := carpooling.NewHandler(database, cfg)
+	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
 
 	r := chi.NewRouter()
@@ -134,6 +141,11 @@ func serve() {
 		r.Get("/api/mitfahrgelegenheiten", carpoolH.List)
 		r.Post("/api/mitfahrgelegenheiten", carpoolH.Upsert)
 		r.Delete("/api/mitfahrgelegenheiten/{id}", carpoolH.Delete)
+
+		// Push Notifications
+		r.Get("/api/push/vapid-public-key", notifH.GetVAPIDPublicKey)
+		r.Post("/api/push/subscribe", notifH.Subscribe)
+		r.Delete("/api/push/subscribe", notifH.Unsubscribe)
 
 		// Kalender
 		r.Get("/api/kalender", gameH.ListGames)
@@ -242,6 +254,14 @@ func serve() {
 
 	log.Printf("listening on :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, r))
+}
+
+func runGenVapid() {
+	priv, pub, err := webpush.GenerateVAPIDKeys()
+	if err != nil {
+		log.Fatalf("gen-vapid: %v", err)
+	}
+	fmt.Printf("VAPID_PRIVATE_KEY=%s\nVAPID_PUBLIC_KEY=%s\n", priv, pub)
 }
 
 func runCreateAdmin() {

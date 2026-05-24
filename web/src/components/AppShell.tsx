@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X, ChevronRight, ChevronDown } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
+import { usePushSubscription } from '../hooks/usePushSubscription'
 
 interface NavModule {
   label: string
@@ -62,6 +63,7 @@ export default function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
+  usePushSubscription()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
 
