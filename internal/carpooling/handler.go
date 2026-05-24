@@ -92,7 +92,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]CarpoolEntry, []CarpoolEntry) {
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, u.name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id
+		SELECT m.id, u.first_name || ' ' || u.last_name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id
 		FROM mitfahrgelegenheiten m
 		JOIN users u ON u.id = m.user_id
 		WHERE m.game_id = ?
