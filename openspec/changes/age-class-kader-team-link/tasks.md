@@ -18,6 +18,6 @@
 ## 4. Verifikation
 
 - [x] 4.1 Lokal: `make migrate-up` ausführen, prüfen ob Migration fehlerfrei durchläuft
-- [ ] 4.2 Spieltag-Detailseite: Dienste neu generieren für ein B-Jugend-Heimspiel — kein Fehler mehr, korrekte Slot-Zeiten
-- [ ] 4.3 Teams-Admin: Team mit 'B-Jugend' aus Dropdown anlegen und bearbeiten — Auswahl wird korrekt gespeichert und angezeigt
-- [ ] 4.4 Altersklassen-Regeln-Seite: Labels zeigen 'A-Jugend' statt 'A-Jugend-Jugend'
+- [x] 4.2 Spieltag-Detailseite: Dienste neu generieren für ein B-Jugend-Heimspiel — kein Fehler mehr, korrekte Slot-Zeiten
+- [x] 4.3 Teams-Admin: Team mit 'B-Jugend' aus Dropdown anlegen und bearbeiten — Auswahl wird korrekt gespeichert und angezeigt
+- [x] 4.4 Altersklassen-Regeln-Seite: Labels zeigen 'A-Jugend' statt 'A-Jugend-Jugend'
