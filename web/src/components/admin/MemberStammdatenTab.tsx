@@ -154,6 +154,42 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               </div>
             </div>
           )}
+        </div>
+
+        {/* Adresse */}
+        <div className="mt-4 grid grid-cols-1 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
+            <input
+              type="text"
+              value={form.street || ''}
+              onChange={e => onFormChange({ street: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+              <input
+                type="text"
+                value={form.zip || ''}
+                onChange={e => onFormChange({ zip: e.target.value })}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ort</label>
+              <input
+                type="text"
+                value={form.city || ''}
+                onChange={e => onFormChange({ city: e.target.value })}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
             <input
@@ -194,39 +230,6 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               </div>
             </>
           )}
-        </div>
-
-        {/* Adresse */}
-        <div className="mt-4 grid grid-cols-1 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
-            <input
-              type="text"
-              value={form.street || ''}
-              onChange={e => onFormChange({ street: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
-              <input
-                type="text"
-                value={form.zip || ''}
-                onChange={e => onFormChange({ zip: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ort</label>
-              <input
-                type="text"
-                value={form.city || ''}
-                onChange={e => onFormChange({ city: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
         </div>
 
         {/* Positionen — nur für Spieler */}
