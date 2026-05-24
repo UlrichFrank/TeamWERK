@@ -20,12 +20,14 @@ type Season struct {
 }
 
 type Action struct {
-	ID           string `json:"id"`
-	Type         string `json:"type"`
-	Text         string `json:"text"`
-	Link         string `json:"link"`
-	DueDate      string `json:"dueDate,omitempty"`
-	ActionNeeded bool   `json:"actionNeeded,omitempty"`
+	ID            string `json:"id"`
+	Type          string `json:"type"`
+	Text          string `json:"text"`
+	Link          string `json:"link"`
+	DueDate       string `json:"dueDate,omitempty"`
+	EventTime     string `json:"eventTime,omitempty"`
+	DutyTypeName  string `json:"dutyTypeName,omitempty"`
+	ActionNeeded  bool   `json:"actionNeeded,omitempty"`
 }
 
 type Game struct {
@@ -233,8 +235,7 @@ func (h *Handler) memberDutyActions(r *http.Request, userID int, role string, se
 		  AND ds.team_id IN (%s)
 		  AND DATE(ds.event_date) >= DATE('now')
 		  AND DATE(ds.event_date) < DATE('now', '+7 days')
-		ORDER BY ds.event_date ASC
-		LIMIT 3`, teamSubquery),
+		ORDER BY ds.event_date ASC, ds.event_time ASC`, teamSubquery),
 		userID, role, seasonID, userID, seasonID,
 	)
 	if err != nil {
@@ -245,19 +246,16 @@ func (h *Handler) memberDutyActions(r *http.Request, userID int, role string, se
 	var actions []Action
 	for rows.Next() {
 		var slotID int
-		var typeName, date, time string
-		rows.Scan(&slotID, &typeName, &date, &time)
-		text := fmt.Sprintf("Dienst '%s' am %s", typeName, formatDate(date))
-		if time != "" {
-			text += " " + time
-		}
-		text += " — wir brauchen dich!"
+		var typeName, date, eventTime string
+		rows.Scan(&slotID, &typeName, &date, &eventTime)
 		actions = append(actions, Action{
-			ID:      fmt.Sprintf("duty-%d", slotID),
-			Type:    "duty",
-			Text:    text,
-			Link:    "/dienste",
-			DueDate: date,
+			ID:           fmt.Sprintf("duty-%d", slotID),
+			Type:         "duty",
+			Text:         typeName,
+			Link:         "/dienste",
+			DueDate:      date,
+			EventTime:    eventTime,
+			DutyTypeName: typeName,
 		})
 	}
 	return actions

@@ -11,7 +11,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import Accordion from '../components/Accordion'
 
 interface Season { id: number; name: string; isActive: boolean }
-interface Action { id: string; type: string; text: string; link: string; dueDate?: string; actionNeeded?: boolean }
+interface Action { id: string; type: string; text: string; link: string; dueDate?: string; eventTime?: string; dutyTypeName?: string; actionNeeded?: boolean }
 interface Game { id: number; date: string; opponent: string; isHome: boolean; eventType: string; team: string; slotsCount: number; slotsFilled: number; link: string }
 interface TeamStats { team: string; activeMembers: number; totalMembers: number; injuredCount: number; pausedCount: number }
 interface RecentAssignment { date: string; dutyType: string; status: string }
@@ -41,25 +41,79 @@ function statusLabel(status: string) {
   return { label: 'Zugesagt', cls: 'bg-brand-info/10 text-brand-blue' }
 }
 
+function DutyDateGroup({ date, duties }: { date: string; duties: Action[] }) {
+  const [open, setOpen] = useState(true)
+  const label = formatDate(date)
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between py-1.5 hover:bg-brand-border-subtle rounded px-1 -mx-1 transition-colors min-h-[36px]"
+      >
+        <span className="text-sm font-semibold text-brand-text">{label}</span>
+        {open ? <ChevronDown size={15} className="text-brand-text-muted" /> : <ChevronRight size={15} className="text-brand-text-muted" />}
+      </button>
+      {open && (
+        <ul className="mt-1 mb-2 space-y-1 pl-2 border-l-2 border-brand-border-subtle">
+          {duties.map(a => (
+            <li key={a.id}>
+              <Link
+                to={a.link}
+                className="flex items-center gap-2 py-1 text-sm text-brand-text hover:text-brand-blue transition-colors"
+              >
+                <span className="font-mono text-xs text-brand-text-muted w-11 flex-shrink-0">
+                  {a.eventTime || '–'}
+                </span>
+                <span className="flex-1">{a.dutyTypeName || a.text}</span>
+                <ArrowRight size={13} className="flex-shrink-0 text-brand-text-subtle" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function ActionsList({ actions }: { actions: Action[] }) {
+  const dutyActions = actions.filter(a => a.type === 'duty' && a.dueDate)
+  const otherActions = actions.filter(a => a.type !== 'duty' || !a.dueDate)
+
   if (actions.length === 0) {
     return <p className="text-sm text-brand-text-muted py-1">Alles erledigt! 🎉</p>
   }
+
+  // Group duty actions by date
+  const byDate = new Map<string, Action[]>()
+  for (const a of dutyActions) {
+    const d = a.dueDate!
+    if (!byDate.has(d)) byDate.set(d, [])
+    byDate.get(d)!.push(a)
+  }
+  const sortedDates = [...byDate.keys()].sort()
+
   return (
-    <ul className="space-y-2">
-      {actions.map(a => (
-        <li key={a.id} className="flex items-start gap-2">
-          <CircleDot size={16} className="mt-0.5 flex-shrink-0 text-brand-blue" />
-          <Link
-            to={a.link}
-            className="flex-1 text-sm text-brand-text hover:underline flex items-center justify-between gap-1 py-1 sm:py-0.5"
-          >
-            <span>{a.text}</span>
-            <ArrowRight size={14} className="flex-shrink-0 text-brand-text-subtle" />
-          </Link>
-        </li>
+    <div className="space-y-1">
+      {sortedDates.map(date => (
+        <DutyDateGroup key={date} date={date} duties={byDate.get(date)!} />
       ))}
-    </ul>
+      {otherActions.length > 0 && (
+        <ul className="space-y-2 mt-2">
+          {otherActions.map(a => (
+            <li key={a.id} className="flex items-start gap-2">
+              <CircleDot size={16} className="mt-0.5 flex-shrink-0 text-brand-blue" />
+              <Link
+                to={a.link}
+                className="flex-1 text-sm text-brand-text hover:underline flex items-center justify-between gap-1 py-1 sm:py-0.5"
+              >
+                <span>{a.text}</span>
+                <ArrowRight size={14} className="flex-shrink-0 text-brand-text-subtle" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
