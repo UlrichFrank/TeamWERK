@@ -13,6 +13,9 @@ interface Member {
   gender: string
   status: string
   club_function?: string
+  street?: string
+  zip?: string
+  city?: string
   photo_url?: string
   photo_visible?: boolean
 }
@@ -76,6 +79,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const isSpieler = form.club_function === 'spieler'
 
   const nameDraft = drafts.find(d => d.field_name === 'name')
+  const profilDraft = drafts.find(d => d.field_name === 'profil')
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -127,18 +131,25 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                   {nameDraft.new_value?.first_name} {nameDraft.new_value?.last_name}
                 </span>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => onDraftAccept(nameDraft.id)}
-                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
-                  >
-                    ✓ Annehmen
-                  </button>
-                  <button
-                    onClick={() => onDraftReject(nameDraft.id)}
-                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
-                  >
-                    ✗ Ablehnen
-                  </button>
+                  <button onClick={() => onDraftAccept(nameDraft.id)} className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium">✓ Annehmen</button>
+                  <button onClick={() => onDraftReject(nameDraft.id)} className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium">✗ Ablehnen</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {profilDraft && (
+            <div className="col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <span className="font-medium text-blue-700">Angeforderte Profiländerung:</span>
+                  <span className="ml-1">{profilDraft.new_value?.first_name} {profilDraft.new_value?.last_name}</span>
+                  {profilDraft.new_value?.street && (
+                    <span className="ml-2 text-gray-500">{profilDraft.new_value.street}, {profilDraft.new_value.zip} {profilDraft.new_value.city}</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => onDraftAccept(profilDraft.id)} className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium">✓ Annehmen</button>
+                  <button onClick={() => onDraftReject(profilDraft.id)} className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium">✗ Ablehnen</button>
                 </div>
               </div>
             </div>
@@ -183,6 +194,39 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               </div>
             </>
           )}
+        </div>
+
+        {/* Adresse */}
+        <div className="mt-4 grid grid-cols-1 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
+            <input
+              type="text"
+              value={form.street || ''}
+              onChange={e => onFormChange({ street: e.target.value })}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+              <input
+                type="text"
+                value={form.zip || ''}
+                onChange={e => onFormChange({ zip: e.target.value })}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ort</label>
+              <input
+                type="text"
+                value={form.city || ''}
+                onChange={e => onFormChange({ city: e.target.value })}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Positionen — nur für Spieler */}

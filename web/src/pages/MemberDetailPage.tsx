@@ -219,7 +219,7 @@ export default function MemberDetailPage() {
 
   const tabButtons: { name: TabName; label: string; show: boolean }[] = [
     { name: 'stammdaten', label: 'Stammdaten', show: true },
-    { name: 'kontakt', label: 'Kontakt', show: !isNew },
+    { name: 'kontakt', label: 'Bankdaten', show: !isNew },
     { name: 'datenschutz', label: 'Datenschutz', show: !isNew && isAdmin },
     { name: 'familie', label: 'Familie', show: !isNew && isAdmin },
     { name: 'admin', label: 'Admin', show: !isNew && isAdmin },

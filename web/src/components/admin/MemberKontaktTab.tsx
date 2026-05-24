@@ -16,9 +16,6 @@ const validateIBAN = (iban: string): boolean => {
 }
 
 interface Member {
-  street?: string
-  zip?: string
-  city?: string
   iban?: string
   account_holder?: string
 }
@@ -44,7 +41,6 @@ interface Props {
 }
 
 export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
-  const addressDraft = drafts.find(d => d.field_name === 'address')
   const ibanDraft = drafts.find(d => d.field_name === 'iban')
 
   const [ibanDisplay, setIbanDisplay] = useState(formatIBAN(form.iban || ''))
@@ -57,8 +53,7 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
   const handleIbanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
     if (raw.length > 22) return
-    const display = raw.match(/.{1,4}/g)?.join(' ') ?? raw
-    setIbanDisplay(display)
+    setIbanDisplay(raw.match(/.{1,4}/g)?.join(' ') ?? raw)
     setIbanError('')
     onFormChange({ iban: raw })
   }
@@ -71,82 +66,21 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
 
   return (
     <div className="space-y-6">
-      {/* Adresse */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Adresse</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
-            <input
-              type="text"
-              value={form.street || ''}
-              onChange={e => onFormChange({ street: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
-              <input
-                type="text"
-                value={form.zip || ''}
-                onChange={e => onFormChange({ zip: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ort</label>
-              <input
-                type="text"
-                value={form.city || ''}
-                onChange={e => onFormChange({ city: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
-          {addressDraft && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span>
-                  <span className="font-medium text-blue-700">Angeforderte Adressänderung:</span>{' '}
-                  {addressDraft.new_value?.street}, {addressDraft.new_value?.zip} {addressDraft.new_value?.city}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onDraftAccept(addressDraft.id)}
-                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
-                  >
-                    ✓ Annehmen
-                  </button>
-                  <button
-                    onClick={() => onDraftReject(addressDraft.id)}
-                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
-                  >
-                    ✗ Ablehnen
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Bankdaten */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Bankdaten</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Kontoinhaber</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
             <input
               type="text"
               value={form.account_holder || ''}
               onChange={e => onFormChange({ account_holder: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
             <input
               type="text"
               value={ibanDisplay}
@@ -154,17 +88,19 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
               onBlur={handleIbanBlur}
               placeholder="DE89 3704 0044 0532 0130 00"
               maxLength={42}
-              className={`w-full border rounded-md px-3 py-2 text-sm font-mono tracking-wider ${ibanError ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+              className={`w-full border rounded-md px-3 py-2 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-yellow ${
+                ibanError ? 'border-brand-danger bg-brand-danger-light' : 'border-brand-border'
+              }`}
             />
-            {ibanError && <p className="text-xs text-red-600 mt-1">{ibanError}</p>}
+            {ibanError && <p className="text-xs text-brand-danger mt-1">{ibanError}</p>}
           </div>
 
           {ibanDraft && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+            <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span>
-                  <span className="font-medium text-blue-700">Angeforderte IBAN:</span>{' '}
-                  <span className="font-mono">{ibanDraft.new_value}</span>
+                  <span className="font-medium">Angeforderte IBAN:</span>{' '}
+                  <span className="font-mono">{formatIBAN(ibanDraft.new_value ?? '')}</span>
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -175,7 +111,7 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
                   </button>
                   <button
                     onClick={() => onDraftReject(ibanDraft.id)}
-                    className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
+                    className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 font-medium"
                   >
                     ✗ Ablehnen
                   </button>
@@ -186,18 +122,17 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
         </div>
       </div>
 
-      {/* Save Button */}
       {!isNew && (
         <div className="flex items-center gap-3">
           <button
             onClick={onSave}
             disabled={saving}
-            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40"
+            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
           {saved && <span className="text-sm text-green-600">Gespeichert</span>}
-          {error && <span className="text-sm text-red-600">{error}</span>}
+          {error && <span className="text-sm text-brand-danger">{error}</span>}
         </div>
       )}
     </div>
