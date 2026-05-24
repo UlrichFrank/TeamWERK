@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 
-interface Request { id: number; name: string; email: string; comment: string; created_at: string }
+interface Request { id: number; first_name: string; last_name: string; email: string; comment: string; created_at: string }
 
 export default function MembershipRequestsPage() {
   const [requests, setRequests] = useState<Request[]>([])
@@ -20,7 +20,7 @@ export default function MembershipRequestsPage() {
         {requests.map(r => (
           <div key={r.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 flex items-center justify-between">
             <div>
-              <div className="font-medium text-brand-text">{r.name}</div>
+              <div className="font-medium text-brand-text">{r.first_name} {r.last_name}</div>
               <div className="text-sm text-brand-text-muted">{r.email}</div>
               {r.comment && <div className="text-xs text-brand-text-subtle mt-0.5">{r.comment}</div>}
               <div className="text-xs text-brand-text-subtle mt-0.5">{new Date(r.created_at).toLocaleDateString('de-DE')}</div>

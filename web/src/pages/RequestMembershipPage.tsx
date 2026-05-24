@@ -19,7 +19,8 @@ const MobileLogo = () => (
 )
 
 export default function RequestMembershipPage() {
-  const [name, setName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [comment, setComment] = useState('')
   const [sent, setSent] = useState(false)
@@ -29,7 +30,7 @@ export default function RequestMembershipPage() {
     e.preventDefault()
     setError('')
     try {
-      await axios.post('/api/auth/request-membership', { name, email, comment: comment || undefined })
+      await axios.post('/api/auth/request-membership', { first_name: firstName, last_name: lastName, email, comment: comment || undefined })
       setSent(true)
     } catch {
       setError('Fehler beim Senden. Bitte versuche es erneut.')
@@ -72,9 +73,16 @@ export default function RequestMembershipPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <p className="text-brand-danger text-sm">{error}</p>}
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">Vor- und Nachname</label>
+                <label className="block text-sm font-medium text-brand-black mb-1">Vorname</label>
                 <input
-                  type="text" value={name} onChange={e => setName(e.target.value)} required
+                  type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-black mb-1">Nachname</label>
+                <input
+                  type="text" value={lastName} onChange={e => setLastName(e.target.value)}
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>

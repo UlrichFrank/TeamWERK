@@ -132,11 +132,12 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name    string `json:"name"`
-		Email   string `json:"email"`
-		Comment string `json:"comment"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Email     string `json:"email"`
+		Comment   string `json:"comment"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || req.Email == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FirstName == "" || req.Email == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -145,8 +146,8 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 		commentVal = req.Comment
 	}
 	if _, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO membership_requests (name, email, comment) VALUES (?,?,?)`,
-		req.Name, req.Email, commentVal,
+		`INSERT INTO membership_requests (first_name, last_name, email, comment) VALUES (?,?,?,?)`,
+		req.FirstName, req.LastName, req.Email, commentVal,
 	); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -156,7 +157,7 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, name, email, COALESCE(comment,''), status, created_at FROM membership_requests WHERE status = 'pending' ORDER BY created_at`)
+		`SELECT id, first_name, last_name, email, COALESCE(comment,''), status, created_at FROM membership_requests WHERE status = 'pending' ORDER BY created_at`)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -164,7 +165,8 @@ func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request)
 	defer rows.Close()
 	type row struct {
 		ID        int    `json:"id"`
-		Name      string `json:"name"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
 		Email     string `json:"email"`
 		Comment   string `json:"comment,omitempty"`
 		Status    string `json:"status"`
@@ -173,7 +175,7 @@ func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request)
 	results := []row{}
 	for rows.Next() {
 		var r row
-		rows.Scan(&r.ID, &r.Name, &r.Email, &r.Comment, &r.Status, &r.CreatedAt)
+		rows.Scan(&r.ID, &r.FirstName, &r.LastName, &r.Email, &r.Comment, &r.Status, &r.CreatedAt)
 		results = append(results, r)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -183,10 +185,10 @@ func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request)
 func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	claims := ClaimsFromCtx(r.Context())
-	var name, email string
+	var firstName, lastName, email string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT name, email FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
-	).Scan(&name, &email)
+		`SELECT first_name, last_name, email FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
+	).Scan(&firstName, &lastName, &email)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -207,7 +209,7 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 	)
 	link := fmt.Sprintf("%s/register?token=%s", h.baseURL, plain)
 	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK wurde bestätigt",
-		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", name, link)); err != nil {
+		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", firstName, link)); err != nil {
 		log.Printf("SMTP ERROR (ApproveMembership to %s): %v", email, err)
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -216,10 +218,10 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 func (h *Handler) RejectMembershipRequest(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	claims := ClaimsFromCtx(r.Context())
-	var name, email string
+	var firstName, email string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT name, email FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
-	).Scan(&name, &email)
+		`SELECT first_name, email FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
+	).Scan(&firstName, &email)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -229,7 +231,7 @@ func (h *Handler) RejectMembershipRequest(w http.ResponseWriter, r *http.Request
 		claims.UserID, id,
 	)
 	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK",
-		fmt.Sprintf("Hallo %s,\n\nLeider konnte deine Anfrage nicht bestätigt werden. Wende dich an den Vereinsvorstand.", name)); err != nil {
+		fmt.Sprintf("Hallo %s,\n\nLeider konnte deine Anfrage nicht bestätigt werden. Wende dich an den Vereinsvorstand.", firstName)); err != nil {
 		log.Printf("SMTP ERROR (RejectMembership to %s): %v", email, err)
 	}
 	w.WriteHeader(http.StatusNoContent)
