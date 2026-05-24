@@ -56,6 +56,7 @@ func (h *Handler) CreateChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 	allowedFields := map[string]bool{
 		"name": true, "address": true, "phones": true, "email": true,
 		"photo_url": true, "iban": true, "sepa_mandat": true, "dsgvo": true,
+		"profil": true,
 	}
 	if !allowedFields[req.FieldName] {
 		http.Error(w, "Invalid field name", http.StatusBadRequest)

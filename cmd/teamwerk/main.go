@@ -99,15 +99,9 @@ func serve() {
 
 		// Members
 		r.Get("/api/members", membH.List)
-		r.Post("/api/members", membH.Create)
-		r.Get("/api/members/export", membH.Export)
 		r.Get("/api/members/{id}", membH.Get)
-		r.Put("/api/members/{id}", membH.Update)
-		r.Put("/api/members/{id}/status", membH.UpdateStatus)
 		r.Get("/api/members/{id}/change-drafts", membH.GetChangeRequestsHandler)
 		r.Post("/api/members/{id}/change-request", membH.CreateChangeRequestHandler)
-		r.Post("/api/members/{id}/change-drafts/{draftId}/accept", membH.AcceptChangeRequestHandler)
-		r.Delete("/api/members/{id}/change-drafts/{draftId}", membH.RejectChangeRequestHandler)
 		r.Get("/api/profile/me", membH.GetProfile)
 		r.Put("/api/profile/me", membH.UpdateProfile)
 		r.Get("/api/profile/vehicle", membH.GetVehicle)
@@ -163,11 +157,17 @@ func serve() {
 			r.Delete("/api/admin/kalender/{id}", gameH.DeleteGame)
 			r.Post("/api/admin/kalender/{id}/regenerate", gameH.RegenerateSlots)
 			r.Post("/api/admin/kalender/regenerate-day", gameH.RegenerateDaySlots)
+			r.Post("/api/members/{id}/change-drafts/{draftId}/accept", membH.AcceptChangeRequestHandler)
+			r.Delete("/api/members/{id}/change-drafts/{draftId}", membH.RejectChangeRequestHandler)
 		})
 
 		// Admin + Vorstand
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole("admin", "vorstand"))
+			r.Post("/api/members", membH.Create)
+			r.Get("/api/members/export", membH.Export)
+			r.Put("/api/members/{id}", membH.Update)
+			r.Put("/api/members/{id}/status", membH.UpdateStatus)
 			r.Get("/api/admin/club", cfgH.GetClub)
 			r.Put("/api/admin/club", cfgH.UpdateClub)
 			r.Get("/api/admin/seasons", cfgH.ListSeasons)

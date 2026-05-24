@@ -5,15 +5,19 @@ import { Member, Parent, Phone, Visibility } from '../../pages/ProfilePage'
 interface Props {
   children: Member[]
   parents: Parent[]
+  ownMember: Member | null
+  draftRefreshKey?: number
 }
 
-export default function ProfileProfilTab({ children, parents }: Props) {
-  const [address, setAddress] = useState({ street: '', zip: '', city: '', house_number: '' })
+export default function ProfileProfilTab({ children, parents, ownMember, draftRefreshKey }: Props) {
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [address, setAddress] = useState({ street: '', zip: '', city: '' })
+  const [iban, setIban] = useState('')
   const [phones, setPhones] = useState<Phone[]>([])
   const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false })
   const [photoURL, setPhotoURL] = useState('')
-  const [iban, setIban] = useState('')
-  const [sepaMandat, setSepaMandat] = useState(false)
+  const [profilDraft, setProfilDraft] = useState<any>(null)
 
   const [changed, setChanged] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -29,28 +33,67 @@ export default function ProfileProfilTab({ children, parents }: Props) {
 
   useEffect(() => {
     api.get('/profile/me').then(r => {
-      setAddress({ street: r.data?.street ?? '', zip: r.data?.zip ?? '', city: r.data?.city ?? '', house_number: r.data?.house_number ?? '' })
+      setAddress({ street: r.data?.street ?? '', zip: r.data?.zip ?? '', city: r.data?.city ?? '' })
       setPhones(r.data?.phones ?? [])
       setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false })
-      setIban(r.data?.iban ?? '')
-      setSepaMandat(r.data?.sepa_mandat ?? false)
       if (r.data?.photo_url) setPhotoURL(r.data.photo_url)
     })
   }, [])
 
+  useEffect(() => {
+    if (ownMember) {
+      setFirstName(ownMember.first_name)
+      setLastName(ownMember.last_name)
+      setIban(ownMember.iban ?? '')
+    } else {
+      api.get('/profile/account').then(r => {
+        setFirstName(r.data.first_name ?? '')
+        setLastName(r.data.last_name ?? '')
+      })
+    }
+  }, [ownMember?.id])
+
+  useEffect(() => {
+    if (!ownMember) return
+    api.get(`/members/${ownMember.id}/change-drafts`).then(r => {
+      const drafts: any[] = r.data?.drafts ?? []
+      const draft = drafts.find(d => d.field_name === 'profil') ?? null
+      setProfilDraft(draft)
+      if (draft) {
+        const nv = draft.new_value ?? {}
+        setFirstName(nv.first_name ?? ownMember.first_name)
+        setLastName(nv.last_name ?? ownMember.last_name)
+        setAddress({ street: nv.street ?? '', zip: nv.zip ?? '', city: nv.city ?? '' })
+        setIban(nv.iban ?? ownMember.iban ?? '')
+      }
+    }).catch(() => {})
+  }, [ownMember?.id, draftRefreshKey])
+
+  const readonly = !!profilDraft
   const handleChange = () => setChanged(true)
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault()
+    if (readonly) return
     setSaving(true)
     setError('')
     try {
-      await api.put('/profile/me', { street: address.street, zip: address.zip, city: address.city, house_number: address.house_number, iban })
+      if (ownMember) {
+        await api.post(`/members/${ownMember.id}/change-request`, {
+          field_name: 'profil',
+          new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city, iban },
+        })
+        const r = await api.get(`/members/${ownMember.id}/change-drafts`)
+        const drafts: any[] = r.data?.drafts ?? []
+        setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
+      } else {
+        await api.put('/profile/me', { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city })
+      }
       await api.put('/profile/visibility', visibility)
       setSaved(true)
       setChanged(false)
       setTimeout(() => setSaved(false), 2000)
-    } catch (err) {
+    } catch {
       setError('Fehler beim Speichern')
     } finally {
       setSaving(false)
@@ -64,8 +107,7 @@ export default function ProfileProfilTab({ children, parents }: Props) {
       setPhones([...phones, { id: r.data.id, label: newPhone.label, number: newPhone.number, sort_order: phones.length }])
       setNewPhone({ label: '', number: '' })
       setShowAddPhone(false)
-      setChanged(true)
-    } catch (err) {
+    } catch {
       setError('Fehler beim Hinzufügen')
     }
   }
@@ -74,8 +116,7 @@ export default function ProfileProfilTab({ children, parents }: Props) {
     try {
       await api.delete(`/profile/phones/${phoneId}`)
       setPhones(phones.filter(p => p.id !== phoneId))
-      setChanged(true)
-    } catch (err) {
+    } catch {
       setError('Fehler beim Löschen')
     }
   }
@@ -89,8 +130,7 @@ export default function ProfileProfilTab({ children, parents }: Props) {
       fd.append('file', file)
       const r = await api.post('/upload/user-photo', fd)
       setPhotoURL(r.data.photo_url ?? '')
-      setChanged(true)
-    } catch (err) {
+    } catch {
       setError('Foto-Upload fehlgeschlagen')
     } finally {
       setPhotoUploading(false)
@@ -98,129 +138,192 @@ export default function ProfileProfilTab({ children, parents }: Props) {
     }
   }
 
+  const inputCls = `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+  const inputReadonlyCls = `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text-muted bg-gray-50 cursor-not-allowed`
+
   return (
     <div className="space-y-6">
+      {/* Pending draft banner */}
+      {profilDraft && (
+        <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+          Eine Änderungsanfrage ist ausstehend — das Formular ist gesperrt. Du kannst die Anfrage im Tab „Mitgliedsdaten" zurückziehen.
+        </div>
+      )}
+
       {/* Profilbild */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Profilbild</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Profilbild</h2>
         <div className="flex gap-4 items-start">
           {photoURL ? (
-            <img src={photoURL} alt="Profilbild" className="w-20 h-20 rounded-full object-cover border border-gray-200" />
+            <img src={photoURL} alt="Profilbild" className="w-20 h-20 rounded-full object-cover border border-brand-border" />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Kein Bild</div>
+            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-brand-text-subtle text-xs">Kein Bild</div>
           )}
           <div>
             <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoUpload} />
             <button
               onClick={() => photoInputRef.current?.click()}
               disabled={photoUploading}
-              className="bg-brand-yellow text-black px-3 py-1.5 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
+              className="bg-brand-yellow text-brand-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {photoUploading ? 'Hochladen…' : photoURL ? 'Bild ersetzen' : 'Bild hochladen'}
             </button>
-            <p className="text-xs text-gray-400 mt-1">JPEG, PNG oder WebP, max. 5 MB</p>
+            <p className="text-xs text-brand-text-subtle mt-1">JPEG, PNG oder WebP, max. 5 MB</p>
           </div>
         </div>
       </div>
 
-      {/* Kontaktinformationen */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Kontaktinformationen</h2>
-        <div className="space-y-3">
+      {/* Persönliche Daten */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Persönliche Daten</h2>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+              <input
+                type="text"
+                value={firstName}
+                readOnly={readonly}
+                onChange={e => { setFirstName(e.target.value); handleChange() }}
+                className={readonly ? inputReadonlyCls : inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+              <input
+                type="text"
+                value={lastName}
+                readOnly={readonly}
+                onChange={e => { setLastName(e.target.value); handleChange() }}
+                className={readonly ? inputReadonlyCls : inputCls}
+              />
+            </div>
+          </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Straße</label>
             <input
               type="text"
               value={address.street}
-              onChange={(e) => { setAddress({...address, street: e.target.value}); handleChange() }}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              readOnly={readonly}
+              onChange={e => { setAddress({ ...address, street: e.target.value }); handleChange() }}
+              className={readonly ? inputReadonlyCls : inputCls}
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">PLZ</label>
               <input
                 type="text"
                 value={address.zip}
-                onChange={(e) => { setAddress({...address, zip: e.target.value}); handleChange() }}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                readOnly={readonly}
+                onChange={e => { setAddress({ ...address, zip: e.target.value }); handleChange() }}
+                className={readonly ? inputReadonlyCls : inputCls}
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ort</label>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
               <input
                 type="text"
                 value={address.city}
-                onChange={(e) => { setAddress({...address, city: e.target.value}); handleChange() }}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                readOnly={readonly}
+                onChange={e => { setAddress({ ...address, city: e.target.value }); handleChange() }}
+                className={readonly ? inputReadonlyCls : inputCls}
               />
             </div>
           </div>
+        </form>
+      </div>
 
+      {/* IBAN — nur für Mitglieder */}
+      {ownMember !== null && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+          <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Telefonnummern</label>
-            {phones.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {phones.map(p => (
-                  <div key={p.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-2 text-sm">
-                    <div>
-                      {p.label && <span className="text-gray-400 mr-2">{p.label}:</span>}
-                      <span className="font-mono">{p.number}</span>
-                    </div>
-                    <button onClick={() => handleDeletePhone(p.id)} className="text-xs text-gray-400 hover:text-red-600">×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {showAddPhone ? (
-              <div className="border border-gray-200 rounded-lg p-3 space-y-2">
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Bezeichnung</label>
-                    <input
-                      list="phone-label-suggestions"
-                      value={newPhone.label}
-                      onChange={(e) => setNewPhone({...newPhone, label: e.target.value})}
-                      placeholder="z.B. Mobil"
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                    />
-                    <datalist id="phone-label-suggestions">
-                      {PHONE_LABEL_SUGGESTIONS.map(s => <option key={s} value={s} />)}
-                    </datalist>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Nummer</label>
-                    <input
-                      type="tel"
-                      value={newPhone.number}
-                      onChange={(e) => setNewPhone({...newPhone, number: e.target.value})}
-                      placeholder="+49 711 …"
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={handleAddPhone} disabled={!newPhone.number} className="bg-brand-yellow text-black px-3 py-1.5 rounded text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40">
-                    Hinzufügen
-                  </button>
-                  <button onClick={() => { setShowAddPhone(false); setNewPhone({ label: '', number: '' }) }} className="text-sm text-gray-500 hover:text-gray-700 px-2">
-                    Abbrechen
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button onClick={() => setShowAddPhone(true)} className="text-sm text-brand-blue underline hover:text-brand-black">
-                + Nummer hinzufügen
-              </button>
-            )}
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
+            <input
+              type="text"
+              value={iban}
+              readOnly={readonly}
+              onChange={e => { setIban(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()); handleChange() }}
+              placeholder="DE89 3704 0044 0532 0130 00"
+              className={readonly ? inputReadonlyCls + ' font-mono' : inputCls + ' font-mono'}
+            />
           </div>
+        </div>
+      )}
+
+      {/* Telefonnummern */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Telefonnummern</h2>
+        <div className="space-y-3">
+          {phones.length > 0 && (
+            <div className="space-y-2">
+              {phones.map(p => (
+                <div key={p.id} className="flex items-center justify-between border border-brand-border-subtle rounded-lg px-4 py-2 text-sm">
+                  <div>
+                    {p.label && <span className="text-brand-text-muted mr-2">{p.label}:</span>}
+                    <span className="font-mono">{p.number}</span>
+                  </div>
+                  <button onClick={() => handleDeletePhone(p.id)} className="text-xs text-brand-text-subtle hover:text-brand-danger">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {showAddPhone ? (
+            <div className="border border-brand-border-subtle rounded-lg p-3 space-y-2">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs text-brand-text-muted mb-1">Bezeichnung</label>
+                  <input
+                    list="phone-label-suggestions"
+                    value={newPhone.label}
+                    onChange={e => setNewPhone({ ...newPhone, label: e.target.value })}
+                    placeholder="z.B. Mobil"
+                    className="w-full border border-brand-border rounded px-2 py-1.5 text-sm"
+                  />
+                  <datalist id="phone-label-suggestions">
+                    {PHONE_LABEL_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-brand-text-muted mb-1">Nummer</label>
+                  <input
+                    type="tel"
+                    value={newPhone.number}
+                    onChange={e => setNewPhone({ ...newPhone, number: e.target.value })}
+                    placeholder="+49 711 …"
+                    className="w-full border border-brand-border rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddPhone}
+                  disabled={!newPhone.number}
+                  className="bg-brand-yellow text-brand-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Hinzufügen
+                </button>
+                <button
+                  onClick={() => { setShowAddPhone(false); setNewPhone({ label: '', number: '' }) }}
+                  className="text-sm text-brand-text-muted hover:text-brand-text px-2"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowAddPhone(true)} className="text-sm text-brand-blue underline hover:text-brand-black">
+              + Nummer hinzufügen
+            </button>
+          )}
         </div>
       </div>
 
       {/* Sichtbarkeit */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Sichtbarkeit für Mitglieder</h2>
-        <p className="text-xs text-gray-500 mb-4">Wähle, welche Kontaktdaten andere Mitglieder sehen dürfen.</p>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Sichtbarkeit für Mitglieder</h2>
+        <p className="text-xs text-brand-text-subtle mb-4">Wähle, welche Kontaktdaten andere Mitglieder sehen dürfen.</p>
         <div className="space-y-2">
           {[
             { key: 'phones_visible' as const, label: 'Telefonnummern sichtbar' },
@@ -231,56 +334,35 @@ export default function ProfileProfilTab({ children, parents }: Props) {
               <input
                 type="checkbox"
                 checked={visibility[key]}
-                onChange={(e) => { setVisibility({...visibility, [key]: e.target.checked}); handleChange() }}
+                onChange={e => { setVisibility({ ...visibility, [key]: e.target.checked }); handleChange() }}
                 className="w-4 h-4 accent-brand-yellow"
               />
-              <span className="text-sm text-gray-700">{label}</span>
+              <span className="text-sm text-brand-text">{label}</span>
             </label>
           ))}
         </div>
       </div>
 
-      {/* Bankdaten */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Bankdaten</h2>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
-            <input
-              type="text"
-              value={iban}
-              onChange={(e) => { setIban(e.target.value); handleChange() }}
-              placeholder="DE00 0000 0000 0000 0000 00"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-            />
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={sepaMandat} disabled className="w-4 h-4 accent-brand-yellow" />
-            <span className="text-sm text-gray-700">SEPA-Mandat erteilt (read-only)</span>
-          </label>
-        </div>
-      </div>
-
       {/* Familie */}
       {(children.length > 0 || parents.length > 0) && (
-        <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Familie</h2>
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+          <h2 className="font-semibold text-brand-text-muted mb-4">Familie</h2>
           {children.length > 0 && (
             <div className="mb-4">
-              <h3 className="text-sm font-medium text-gray-600 mb-2">Meine Kinder</h3>
+              <h3 className="text-sm font-medium text-brand-text-muted mb-2">Meine Kinder</h3>
               <div className="space-y-1">
                 {children.map(c => (
-                  <p key={c.id} className="text-sm text-gray-700">• {c.first_name} {c.last_name}</p>
+                  <p key={c.id} className="text-sm text-brand-text">• {c.first_name} {c.last_name}</p>
                 ))}
               </div>
             </div>
           )}
           {parents.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-2">Meine Elternteile</h3>
+              <h3 className="text-sm font-medium text-brand-text-muted mb-2">Meine Elternteile</h3>
               <div className="space-y-1">
                 {parents.map(p => (
-                  <p key={p.id} className="text-sm text-gray-700">• {p.name} ({p.email})</p>
+                  <p key={p.id} className="text-sm text-brand-text">• {p.name} ({p.email})</p>
                 ))}
               </div>
             </div>
@@ -288,18 +370,20 @@ export default function ProfileProfilTab({ children, parents }: Props) {
         </div>
       )}
 
-      {/* Save Button */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleSave}
-          disabled={!changed || saving}
-          className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
-        >
-          {saving ? 'Speichern…' : 'Speichern'}
-        </button>
-        {saved && <span className="text-sm text-green-600">Gespeichert</span>}
-        {error && <span className="text-sm text-red-600">{error}</span>}
-      </div>
+      {/* Save / Request button */}
+      {!readonly && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={!changed || saving}
+            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Speichern…' : ownMember ? 'Änderung anfordern' : 'Speichern'}
+          </button>
+          {saved && <span className="text-sm text-green-600">{ownMember ? 'Anfrage gesendet' : 'Gespeichert'}</span>}
+          {error && <span className="text-sm text-brand-danger">{error}</span>}
+        </div>
+      )}
     </div>
   )
 }

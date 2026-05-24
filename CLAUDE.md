@@ -226,12 +226,9 @@ POST /api/auth/reset-password
 ### Authenticated (alle eingeloggt)
 ```
 GET  /api/members
-POST /api/members
-GET  /api/members/export
 GET  /api/members/{id}
-PUT  /api/members/{id}
-PUT  /api/members/{id}/status
-POST /api/members/{id}/team-assignment
+GET  /api/members/{id}/change-drafts
+POST /api/members/{id}/change-request
 GET  /api/profile/me
 GET  /api/profile/vehicle
 PUT  /api/profile/vehicle
@@ -244,8 +241,6 @@ GET  /api/duty-slots/{id}/assignments
 
 ### Admin + Trainer
 ```
-GET  /api/games
-GET  /api/games/{id}
 POST /api/duty-slots
 PUT  /api/duty-slots/{id}
 DELETE /api/duty-slots/{id}
@@ -255,7 +250,18 @@ GET  /api/admin/membership-requests
 POST /api/admin/membership-requests/{id}/approve
 POST /api/admin/membership-requests/{id}/reject
 POST /api/auth/invite
+POST /api/members/{id}/change-drafts/{draftId}/accept
+DELETE /api/members/{id}/change-drafts/{draftId}
 ```
+
+### Admin + Vorstand
+```
+POST /api/members
+GET  /api/members/export
+PUT  /api/members/{id}
+PUT  /api/members/{id}/status
+```
+(plus alle weiteren Admin+Vorstand-Routen unten)
 
 ### Admin only
 ```

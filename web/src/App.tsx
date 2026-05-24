@@ -28,6 +28,13 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function RoleRoute({ roles, children }: { roles: string[]; children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="flex items-center justify-center h-screen">Laden…</div>
+  if (!user || !roles.includes(user.role)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -43,20 +50,20 @@ export default function App() {
           {/* Protected */}
           <Route path="/" element={<PrivateRoute><AppShell /></PrivateRoute>}>
             <Route index element={<DashboardPage />} />
-            <Route path="mitglieder" element={<MembersPage />} />
-            <Route path="mitglieder/:id" element={<MemberDetailPage />} />
+            <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand','trainer']}><MembersPage /></RoleRoute>} />
+            <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand','trainer']}><MemberDetailPage /></RoleRoute>} />
             <Route path="profil" element={<ProfilePage />} />
             <Route path="dienste" element={<DutyPage />} />
             <Route path="anfragen" element={<Navigate to="/admin/nutzer" replace />} />
-            <Route path="admin/verein" element={<AdminClubPage />} />
-            <Route path="admin/kader" element={<AdminKaderPage />} />
-            <Route path="admin/nutzer" element={<AdminUsersPage />} />
-            <Route path="admin/diensttypen" element={<AdminDutyTypesPage />} />
+            <Route path="admin/verein" element={<RoleRoute roles={['admin','vorstand']}><AdminClubPage /></RoleRoute>} />
+            <Route path="admin/kader" element={<RoleRoute roles={['admin','vorstand','trainer']}><AdminKaderPage /></RoleRoute>} />
+            <Route path="admin/nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
+            <Route path="admin/diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
             <Route path="kalender" element={<KalenderPage />} />
             <Route path="kalender/:gameId" element={<SpieltagDetailPage />} />
-            <Route path="admin/dienstplan-vorlagen" element={<AdminDutyTemplatesPage />} />
-            <Route path="admin/dienstplan-vorlagen/:id" element={<AdminDutyTemplateDetailPage />} />
-            <Route path="admin/saisons" element={<AdminSeasonsPage />} />
+            <Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
+            <Route path="admin/dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
+            <Route path="admin/saisons" element={<RoleRoute roles={['admin','vorstand']}><AdminSeasonsPage /></RoleRoute>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

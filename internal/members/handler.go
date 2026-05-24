@@ -744,17 +744,20 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// PUT /api/profile/me — update address fields
+// PUT /api/profile/me — update profile fields (name + address)
 func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
-		Street string `json:"street"`
-		Zip    string `json:"zip"`
-		City   string `json:"city"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Street    string `json:"street"`
+		Zip       string `json:"zip"`
+		City      string `json:"city"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	h.db.ExecContext(r.Context(),
-		`UPDATE users SET street=?, zip=?, city=?, updated_at=? WHERE id=?`,
+		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, updated_at=? WHERE id=?`,
+		nullableString(req.FirstName), nullableString(req.LastName),
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), time.Now(), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }

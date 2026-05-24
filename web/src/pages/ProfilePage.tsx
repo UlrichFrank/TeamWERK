@@ -46,6 +46,7 @@ export default function ProfilePage() {
   const [ownMember, setOwnMember] = useState<Member | null>(null)
   const [children, setChildren] = useState<Member[]>([])
   const [parents, setParents] = useState<Parent[]>([])
+  const [draftRefreshKey, setDraftRefreshKey] = useState(0)
 
   useEffect(() => {
     localStorage.setItem('profileTab', activeTab)
@@ -60,6 +61,10 @@ export default function ProfilePage() {
   }, [])
 
   const showMemberTab = ownMember !== null
+
+  const handleDraftWithdrawn = () => {
+    setDraftRefreshKey(k => k + 1)
+  }
 
   return (
     <div className="max-w-4xl">
@@ -87,8 +92,17 @@ export default function ProfilePage() {
 
       {/* Tab Content */}
       {activeTab === 'account' && <ProfileAccountTab user={user} logout={logout} />}
-      {activeTab === 'profile' && <ProfileProfilTab children={children} parents={parents} />}
-      {showMemberTab && activeTab === 'member' && <ProfileMemberTab ownMember={ownMember} />}
+      {activeTab === 'profile' && (
+        <ProfileProfilTab
+          children={children}
+          parents={parents}
+          ownMember={ownMember}
+          draftRefreshKey={draftRefreshKey}
+        />
+      )}
+      {showMemberTab && activeTab === 'member' && (
+        <ProfileMemberTab ownMember={ownMember} onDraftWithdrawn={handleDraftWithdrawn} />
+      )}
       {activeTab === 'misc' && <ProfileMiscTab />}
     </div>
   )
