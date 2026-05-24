@@ -54,6 +54,7 @@ type kaderRow struct {
 	AgeClass           string `json:"age_class"`
 	Gender             string `json:"gender"`
 	TeamNumber         int    `json:"team_number"`
+	TeamID             int64  `json:"team_id"`
 	DedicatedBirthYear *int   `json:"dedicated_birth_year"`
 }
 
@@ -98,7 +99,7 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 	var k kaderRow
 	var seasonStartYear int
 	var dedicatedBirthYear sql.NullInt64
-	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &dedicatedBirthYear, &seasonStartYear)
+	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &seasonStartYear)
 	if err != nil {
 		return k, 0, err
 	}
@@ -110,7 +111,7 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 }
 
 const kaderSelectSQL = `
-	SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.dedicated_birth_year,
+	SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year,
 	       CAST(strftime('%Y', s.start_date) AS INTEGER)
 	FROM kader k JOIN seasons s ON s.id = k.season_id`
 
@@ -190,12 +191,13 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		MembersAdd            []int  `json:"members_add"`
-		MembersRemove         []int  `json:"members_remove"`
-		DedicatedBirthYear    *int   `json:"dedicated_birth_year"`
-		SetDedicatedBirthYear bool   `json:"set_dedicated_birth_year"`
-		TrainersAdd           []int  `json:"trainers_add"`
-		TrainersRemove        []int  `json:"trainers_remove"`
+		MembersAdd            []int   `json:"members_add"`
+		MembersRemove         []int   `json:"members_remove"`
+		DedicatedBirthYear    *int    `json:"dedicated_birth_year"`
+		SetDedicatedBirthYear bool    `json:"set_dedicated_birth_year"`
+		TrainersAdd           []int   `json:"trainers_add"`
+		TrainersRemove        []int   `json:"trainers_remove"`
+		AgeClass              *string `json:"age_class"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -237,6 +239,20 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 			time.Now(), id)
 	}
 
+	if req.AgeClass != nil && *req.AgeClass != "" {
+		var gender string
+		var teamNumber int
+		tx.QueryRowContext(r.Context(), `SELECT gender, team_number FROM kader WHERE id=?`, id).Scan(&gender, &teamNumber)
+		newTeamID, err := ensureTeam(r.Context(), tx, *req.AgeClass, gender, teamNumber)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tx.ExecContext(r.Context(),
+			`UPDATE kader SET age_class=?, team_id=?, updated_at=? WHERE id=?`,
+			*req.AgeClass, newTeamID, time.Now(), id)
+	}
+
 	if err := tx.Commit(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -258,11 +274,11 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 	var seasonStartYear int
 	var dedicatedBirthYear sql.NullInt64
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.dedicated_birth_year,
+		`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year,
 		        CAST(strftime('%Y', s.start_date) AS INTEGER)
 		 FROM kader k JOIN seasons s ON s.id=k.season_id
 		 WHERE k.id=?`, id).
-		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &dedicatedBirthYear, &seasonStartYear)
+		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &seasonStartYear)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -452,11 +468,11 @@ func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
 		var seasonStartYear int
 		var dedicatedBirthYear sql.NullInt64
 		err := tx.QueryRowContext(r.Context(),
-			`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.dedicated_birth_year,
+			`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year,
 			        CAST(strftime('%Y', s.start_date) AS INTEGER)
 			 FROM kader k JOIN seasons s ON s.id=k.season_id
 			 WHERE k.id=?`, kaderID).
-			Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &dedicatedBirthYear, &seasonStartYear)
+			Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &seasonStartYear)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				continue

@@ -27,6 +27,7 @@ interface Kader {
   age_class: string
   gender: string
   team_number: number
+  team_id: number
   dedicated_birth_year: number | null
   birth_years: number[]
   bracket_years: number[]
@@ -56,6 +57,7 @@ export default function AdminKaderPage() {
   const [initializing, setInitializing] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [activeAgeClass, setActiveAgeClass] = useState<string | null>(null)
+  const [ageClassOptions, setAgeClassOptions] = useState<string[]>([])
 
   const [pendingDedicated, setPendingDedicated] = useState<Set<number>>(new Set())
 
@@ -83,15 +85,18 @@ export default function AdminKaderPage() {
   }
 
   const loadAll = async () => {
-    const [seasonsRes, kaderRes] = await Promise.all([
+    const [seasonsRes, kaderRes, ageClassRes] = await Promise.all([
       api.get('/admin/seasons'),
       api.get('/admin/kader'),
+      api.get('/admin/age-class-rules'),
     ])
     const seasons: Season[] = seasonsRes.data ?? []
     setActiveSeason(seasons.find(s => s.is_active) ?? null)
     const list: Kader[] = Array.isArray(kaderRes.data) ? kaderRes.data : []
     setKaderList(list)
     setPendingDedicated(new Set())
+    const options: string[] = (ageClassRes.data ?? []).map((r: { age_class: string }) => r.age_class)
+    setAgeClassOptions(options)
     setActiveAgeClass(prev => {
       const classes = [...new Set(list.map(k => k.age_class))].sort()
       if (prev && classes.includes(prev)) return prev
@@ -196,6 +201,17 @@ export default function AdminKaderPage() {
     }
   }
 
+  const handleSetAgeClass = async (k: Kader, newAgeClass: string) => {
+    if (newAgeClass === k.age_class) return
+    try {
+      await api.put(`/admin/kader/${k.id}`, { age_class: newAgeClass })
+      setActiveAgeClass(newAgeClass)
+      await loadAll()
+    } catch {
+      showToast('Fehler beim Speichern der Altersklasse')
+    }
+  }
+
   const handleDeleteKader = async () => {
     if (!deleteConfirm) return
     setDeleting(true)
@@ -272,15 +288,15 @@ export default function AdminKaderPage() {
 
       {/* Age class tabs */}
       {ageClassTabs.length > 0 && (
-        <div className="flex gap-1 mb-6 flex-wrap">
+        <div className="flex gap-2 mb-6 border-b border-brand-border-subtle overflow-x-auto">
           {ageClassTabs.map(ac => (
             <button
               key={ac}
               onClick={() => setActiveAgeClass(ac)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeAgeClass === ac
-                  ? 'bg-brand-yellow text-brand-black'
-                  : 'bg-brand-surface-card text-brand-text-muted border border-brand-border hover:bg-brand-table-select'
+                  ? 'border-brand-yellow text-brand-text'
+                  : 'border-transparent text-brand-text-muted hover:text-brand-text'
               }`}
             >
               {ac}
@@ -401,6 +417,20 @@ export default function AdminKaderPage() {
                           <option key={yr} value={yr}>{yr}</option>
                         ))}
                       </select>
+                    )}
+                    {ageClassOptions.length > 0 && (
+                      <>
+                        <span className="text-xs text-brand-text-muted font-medium ml-2">Altersklasse:</span>
+                        <select
+                          value={k.age_class}
+                          onChange={e => handleSetAgeClass(k, e.target.value)}
+                          className="border border-brand-border-subtle rounded px-2 py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                        >
+                          {ageClassOptions.map(ac => (
+                            <option key={ac} value={ac}>{ac}</option>
+                          ))}
+                        </select>
+                      </>
                     )}
                   </div>
 
