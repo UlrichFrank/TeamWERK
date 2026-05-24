@@ -302,6 +302,7 @@ export default function MitfahrgelegenheitenPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<EventTab>('auswärts')
   const [modal, setModal] = useState<{ gameId: number; typ: 'biete' | 'suche' } | null>(null)
+  const [viewMine, setViewMine] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -324,15 +325,33 @@ export default function MitfahrgelegenheitenPage() {
     }
   }
 
-  const tabGames = response.games.filter(d => d.game.eventType === activeTab)
-
-  const countForTab = (tab: EventTab) => response.games.filter(d => d.game.eventType === tab).length
+  const filteredGames = viewMine
+    ? response.games.filter(d => [...d.biete, ...d.suche].some(e => e.isOwn))
+    : response.games
+  const tabGames = filteredGames.filter(d => d.game.eventType === activeTab)
+  const countForTab = (tab: EventTab) => filteredGames.filter(d => d.game.eventType === tab).length
 
   const tabs: EventTab[] = ['auswärts', 'heim', 'generisch']
 
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-brand-text mb-6">Mitfahrgelegenheiten</h1>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+        <h1 className="text-2xl font-bold text-brand-text">Mitfahrgelegenheiten</h1>
+        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-sm">
+          <button
+            onClick={() => setViewMine(false)}
+            className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+          >
+            Alle
+          </button>
+          <button
+            onClick={() => setViewMine(true)}
+            className={`px-3 py-1.5 border-l border-brand-border-subtle ${viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+          >
+            Meine
+          </button>
+        </div>
+      </div>
 
       {loading && (
         <div className="space-y-3">
@@ -368,9 +387,11 @@ export default function MitfahrgelegenheitenPage() {
 
           {tabGames.length === 0 ? (
             <p className="text-sm text-brand-text-muted">
-              {activeTab === 'auswärts' && 'Keine Auswärtsspiele geplant.'}
-              {activeTab === 'heim' && 'Keine Heimspiele geplant.'}
-              {activeTab === 'generisch' && 'Keine Events geplant.'}
+              {viewMine
+                ? 'Du bist bei keinem Spiel eingetragen.'
+                : activeTab === 'auswärts' ? 'Keine Auswärtsspiele geplant.'
+                : activeTab === 'heim' ? 'Keine Heimspiele geplant.'
+                : 'Keine Events geplant.'}
             </p>
           ) : (
             <div className="space-y-4">
