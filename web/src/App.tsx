@@ -19,6 +19,7 @@ import SpieltagDetailPage from './pages/SpieltagDetailPage'
 import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminKaderPage from './pages/AdminKaderPage'
+import MitfahrgelegenheitenPage from './pages/MitfahrgelegenheitenPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand','trainer']}><MemberDetailPage /></RoleRoute>} />
             <Route path="profil" element={<ProfilePage />} />
             <Route path="dienste" element={<DutyPage />} />
+            <Route path="mitfahrgelegenheiten" element={<MitfahrgelegenheitenPage />} />
             <Route path="anfragen" element={<Navigate to="/admin/nutzer" replace />} />
             <Route path="admin/einstellungen" element={<RoleRoute roles={['admin','vorstand']}><AdminSettingsPage /></RoleRoute>} />
             <Route path="admin/verein" element={<Navigate to="/admin/einstellungen?tab=verein" replace />} />

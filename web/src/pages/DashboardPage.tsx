@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   Zap, Calendar, BarChart2, Users, Car,
   CircleDot, ArrowRight, Download, ChevronDown, ChevronRight,
-  Home, MapPin
+  Home, MapPin, MapPinned
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -17,6 +17,7 @@ interface TeamStats { team: string; activeMembers: number; totalMembers: number;
 interface RecentAssignment { date: string; dutyType: string; status: string }
 interface DutyAccount { season: string; ist: number; soll: number | null; children: number; recentAssignments: RecentAssignment[] }
 interface VehicleInfo { seats: number; notes: string; upToDate: boolean }
+interface CarpoolingHint { gameId: number; date: string; opponent: string; bieteCount: number; sucheCount: number }
 interface DashboardData {
   currentSeason: Season | null
   nextGameDate: string | null
@@ -25,6 +26,7 @@ interface DashboardData {
   teamStats: TeamStats | null
   dutyAccount: DutyAccount | null
   vehicleInfo: VehicleInfo | null
+  carpoolingHint?: CarpoolingHint | null
 }
 
 function formatDate(iso: string) {
@@ -238,27 +240,42 @@ function TeamStatsCard({ stats }: { stats: TeamStats }) {
   )
 }
 
-function VehicleSection({ vehicleInfo }: { vehicleInfo: VehicleInfo | null }) {
-  if (!vehicleInfo) {
+function CarpoolingHintCard({ hint }: { hint: CarpoolingHint | null | undefined }) {
+  if (!hint) {
     return (
       <div className="flex items-start gap-2">
-        <CircleDot size={16} className="mt-0.5 flex-shrink-0 text-brand-blue" />
-        <Link to="/profil" className="flex-1 text-sm text-brand-text hover:underline flex items-center justify-between gap-1 py-1">
-          <span>Fahrzeuginfo fehlt — bitte eintragen</span>
-          <ArrowRight size={14} className="flex-shrink-0 text-brand-text-subtle" />
-        </Link>
+        <MapPinned size={16} className="mt-0.5 flex-shrink-0 text-brand-text-muted" />
+        <div className="flex-1">
+          <p className="text-sm text-brand-text-muted">Keine Auswärtsfahrten geplant.</p>
+          <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text transition-colors flex items-center gap-1 mt-1">
+            Zur Übersicht <ArrowRight size={12} />
+          </Link>
+        </div>
       </div>
     )
   }
   return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-sm text-brand-text">{vehicleInfo.seats} Plätze gemeldet</span>
-      <Link to="/profil" className="text-xs text-brand-text-muted hover:text-brand-text transition-colors flex items-center gap-1">
-        Ändern <ArrowRight size={12} />
-      </Link>
+    <div>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs text-brand-text-muted">{formatDate(hint.date)}</p>
+          <p className="text-sm font-medium text-brand-text">vs. {hint.opponent}</p>
+        </div>
+        <Link
+          to="/mitfahrgelegenheiten"
+          className="flex-shrink-0 text-xs text-brand-text-muted hover:text-brand-text transition-colors flex items-center gap-1"
+        >
+          Alle <ArrowRight size={12} />
+        </Link>
+      </div>
+      <div className="flex gap-4 mt-2 text-xs text-brand-text-muted">
+        <span><span className="font-medium text-brand-text">{hint.bieteCount}</span> Angebot{hint.bieteCount !== 1 ? 'e' : ''}</span>
+        <span><span className="font-medium text-brand-text">{hint.sucheCount}</span> Gesuch{hint.sucheCount !== 1 ? 'e' : ''}</span>
+      </div>
     </div>
   )
 }
+
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -371,7 +388,7 @@ export default function DashboardPage() {
 
         {hasFahrtSection && (
           <Accordion id="fahrt" title="Fahrtgemeinschaften" icon={Car} isOpen={isOpen('fahrt')} onToggle={() => toggle('fahrt')}>
-            <VehicleSection vehicleInfo={data.vehicleInfo} />
+            <CarpoolingHintCard hint={data.carpoolingHint} />
           </Accordion>
         )}
       </div>

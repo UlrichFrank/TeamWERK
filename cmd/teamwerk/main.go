@@ -17,6 +17,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
@@ -75,6 +76,7 @@ func serve() {
 	gameH := games.NewHandler(database)
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
+	carpoolH := carpooling.NewHandler(database)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -126,6 +128,11 @@ func serve() {
 		r.Get("/api/duty-accounts", dutyH.Accounts)
 		r.Get("/api/duty-slots", dutyH.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", dutyH.ListAssignments)
+
+		// Mitfahrgelegenheiten
+		r.Get("/api/mitfahrgelegenheiten", carpoolH.List)
+		r.Post("/api/mitfahrgelegenheiten", carpoolH.Upsert)
+		r.Delete("/api/mitfahrgelegenheiten/{id}", carpoolH.Delete)
 
 		// Kalender
 		r.Get("/api/kalender", gameH.ListGames)

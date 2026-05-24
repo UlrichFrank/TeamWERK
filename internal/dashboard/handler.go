@@ -70,14 +70,23 @@ type VehicleInfo struct {
 	UpToDate bool   `json:"upToDate"`
 }
 
+type CarpoolingHint struct {
+	GameID    int    `json:"gameId"`
+	Date      string `json:"date"`
+	Opponent  string `json:"opponent"`
+	BieteCount int   `json:"bieteCount"`
+	SucheCount int   `json:"sucheCount"`
+}
+
 type Response struct {
-	CurrentSeason *Season      `json:"currentSeason"`
-	NextGameDate  *string      `json:"nextGameDate"`
-	Actions       []Action     `json:"actions"`
-	NextGames     []Game       `json:"nextGames"`
-	TeamStats     *TeamStats   `json:"teamStats"`
-	DutyAccount   *DutyAccount `json:"dutyAccount"`
-	VehicleInfo   *VehicleInfo `json:"vehicleInfo"`
+	CurrentSeason  *Season         `json:"currentSeason"`
+	NextGameDate   *string         `json:"nextGameDate"`
+	Actions        []Action        `json:"actions"`
+	NextGames      []Game          `json:"nextGames"`
+	TeamStats      *TeamStats      `json:"teamStats"`
+	DutyAccount    *DutyAccount    `json:"dutyAccount"`
+	VehicleInfo    *VehicleInfo    `json:"vehicleInfo"`
+	CarpoolingHint *CarpoolingHint `json:"carpoolingHint"`
 }
 
 // GET /api/dashboard
@@ -137,6 +146,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// T7: VehicleInfo
 	resp.VehicleInfo = h.queryVehicleInfo(r, userID)
+
+	// CarpoolingHint
+	resp.CarpoolingHint = h.queryCarpoolingHint(r, userID, role, seasonID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -481,6 +493,37 @@ func (h *Handler) queryVehicleInfo(r *http.Request, userID int) *VehicleInfo {
 	vi.Notes = notes.String
 	vi.UpToDate = true
 	return &vi
+}
+
+func (h *Handler) queryCarpoolingHint(r *http.Request, userID int, role string, seasonID int) *CarpoolingHint {
+	teamQuery := h.teamQueryForUser(role)
+	if teamQuery == "" {
+		return nil
+	}
+
+	var hint CarpoolingHint
+	err := h.db.QueryRowContext(r.Context(), fmt.Sprintf(`
+		SELECT g.id, g.date, g.opponent
+		FROM games g
+		JOIN game_teams gt ON g.id = gt.game_id
+		WHERE gt.team_id IN (%s)
+		  AND g.is_home = 0
+		  AND g.season_id = ?
+		  AND DATE(g.date) >= DATE('now')
+		ORDER BY g.date ASC
+		LIMIT 1`, teamQuery),
+		userID, seasonID, seasonID,
+	).Scan(&hint.GameID, &hint.Date, &hint.Opponent)
+	if err != nil {
+		return nil
+	}
+
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(CASE WHEN typ='biete' THEN 1 END), COUNT(CASE WHEN typ='suche' THEN 1 END)
+		 FROM mitfahrgelegenheiten WHERE game_id = ?`, hint.GameID,
+	).Scan(&hint.BieteCount, &hint.SucheCount)
+
+	return &hint
 }
 
 func formatDate(date string) string {
