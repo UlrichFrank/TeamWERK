@@ -92,17 +92,12 @@ func (h *Handler) effectiveEventDuration(ctx context.Context, eventType string, 
 		if !ageClass.Valid || ageClass.String == "" {
 			return 0, fmt.Errorf("Team hat keine Altersklasse — Slot-Zeitberechnung nicht möglich")
 		}
-		// Normalize "B-Jugend" → "B" to match age_class_game_rules primary keys.
-		ageClassKey := ageClass.String
-		if len(ageClassKey) > 1 && ageClassKey[1] == '-' {
-			ageClassKey = ageClassKey[:1]
-		}
 		var half, brk int
 		err := h.db.QueryRowContext(ctx,
 			`SELECT half_duration_minutes, break_minutes FROM age_class_game_rules WHERE age_class=?`,
-			ageClassKey).Scan(&half, &brk)
+			ageClass.String).Scan(&half, &brk)
 		if err == sql.ErrNoRows {
-			return 0, fmt.Errorf("keine Altersklassen-Regel für Klasse %s gefunden", ageClassKey)
+			return 0, fmt.Errorf("keine Altersklassen-Regel für Klasse %s gefunden", ageClass.String)
 		}
 		if err != nil {
 			return 0, err

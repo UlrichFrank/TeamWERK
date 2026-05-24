@@ -110,7 +110,7 @@ export default function AdminAgeClassRulesPage() {
                 return (
                   <tr key={rule.age_class} className="border-t border-brand-border-subtle">
                     <td className="px-4 py-3 text-sm font-semibold text-brand-text">
-                      {rule.age_class}-Jugend
+                      {rule.age_class}
                     </td>
                     <td className="px-4 py-3">
                       <input

@@ -30,7 +30,7 @@ func GetAgeClassRules(db *sql.DB) ([]AgeClassRule, error) {
 	return result, nil
 }
 
-var validAgeClasses = map[string]bool{"A": true, "B": true, "C": true, "D": true}
+var validAgeClasses = map[string]bool{"A-Jugend": true, "B-Jugend": true, "C-Jugend": true, "D-Jugend": true}
 
 func UpdateAgeClassRule(db *sql.DB, ageClass string, half, brk int) error {
 	if !validAgeClasses[ageClass] {
@@ -174,13 +174,23 @@ func (h *Handler) ListTeams(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/teams
 func (h *Handler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name     string `json:"name"`
-		AgeClass string `json:"age_class"`
-		Gender   string `json:"gender"`
+		Name     string  `json:"name"`
+		AgeClass *string `json:"age_class"`
+		Gender   string  `json:"gender"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	if req.AgeClass != nil && *req.AgeClass != "" {
+		if !validAgeClasses[*req.AgeClass] {
+			http.Error(w, "ungültige Altersklasse", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	var ageClassVal interface{}
+	if req.AgeClass != nil && *req.AgeClass != "" {
+		ageClassVal = *req.AgeClass
+	}
 	h.db.ExecContext(r.Context(), `INSERT INTO teams (name, age_class, gender) VALUES (?,?,?)`,
-		req.Name, req.AgeClass, req.Gender)
+		req.Name, ageClassVal, req.Gender)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -188,18 +198,28 @@ func (h *Handler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Name     string `json:"name"`
-		AgeClass string `json:"age_class"`
-		Gender   string `json:"gender"`
-		IsActive *bool  `json:"is_active"`
+		Name     string  `json:"name"`
+		AgeClass *string `json:"age_class"`
+		Gender   string  `json:"gender"`
+		IsActive *bool   `json:"is_active"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	if req.AgeClass != nil && *req.AgeClass != "" {
+		if !validAgeClasses[*req.AgeClass] {
+			http.Error(w, "ungültige Altersklasse", http.StatusUnprocessableEntity)
+			return
+		}
+	}
 	active := 1
 	if req.IsActive != nil && !*req.IsActive {
 		active = 0
 	}
+	var ageClassVal interface{}
+	if req.AgeClass != nil && *req.AgeClass != "" {
+		ageClassVal = *req.AgeClass
+	}
 	h.db.ExecContext(r.Context(), `UPDATE teams SET name=?, age_class=?, gender=?, is_active=? WHERE id=?`,
-		req.Name, req.AgeClass, req.Gender, active, id)
+		req.Name, ageClassVal, req.Gender, active, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
