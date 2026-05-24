@@ -376,7 +376,7 @@ func (h *Handler) queryNextGames(r *http.Request, userID int, role string, seaso
 	}
 	defer rows.Close()
 
-	var games []Game
+	games := []Game{}
 	for rows.Next() {
 		var g Game
 		var isHome int

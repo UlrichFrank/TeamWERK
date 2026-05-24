@@ -12,10 +12,17 @@ interface CarpoolEntry {
 }
 
 interface GameCarpoolData {
-  game: { id: number; date: string; opponent: string; team: string }
+  game: { id: number; date: string; opponent: string; team: string; eventType: string }
   biete: CarpoolEntry[]
   suche: CarpoolEntry[]
 }
+
+interface ListResponse {
+  games: GameCarpoolData[]
+  vehicleSeats?: number | null
+}
+
+type EventTab = 'auswärts' | 'heim' | 'generisch'
 
 function formatDate(iso: string) {
   if (iso.length >= 10) {
@@ -56,13 +63,16 @@ function EntryCard({ entry, onDelete }: { entry: CarpoolEntry; onDelete: (id: nu
 interface FormModalProps {
   gameId: number
   initialTyp?: 'biete' | 'suche'
+  vehicleSeats?: number | null
   onClose: () => void
   onSaved: () => void
 }
 
-function FormModal({ gameId, initialTyp, onClose, onSaved }: FormModalProps) {
+function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormModalProps) {
   const [typ, setTyp] = useState<'biete' | 'suche'>(initialTyp ?? 'biete')
-  const [plaetze, setPlaetze] = useState('')
+  const [plaetze, setPlaetze] = useState(() =>
+    initialTyp === 'biete' && vehicleSeats ? String(vehicleSeats) : ''
+  )
   const [treffpunkt, setTreffpunkt] = useState('')
   const [notiz, setNotiz] = useState('')
   const [saving, setSaving] = useState(false)
@@ -102,7 +112,7 @@ function FormModal({ gameId, initialTyp, onClose, onSaved }: FormModalProps) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setTyp('biete')}
+              onClick={() => { setTyp('biete'); if (!plaetze && vehicleSeats) setPlaetze(String(vehicleSeats)) }}
               className={`flex-1 py-2.5 sm:py-2 text-sm font-medium rounded-md border transition-colors ${typ === 'biete' ? 'bg-brand-yellow text-brand-black border-brand-yellow' : 'border-brand-border text-brand-text-muted hover:border-brand-text'}`}
             >
               Ich biete Mitfahrt
@@ -127,6 +137,11 @@ function FormModal({ gameId, initialTyp, onClose, onSaved }: FormModalProps) {
                 placeholder="z. B. 3"
                 className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
               />
+              {vehicleSeats && !plaetze && (
+                <p className="text-xs text-brand-text-muted mt-1">
+                  Laut Profil: {vehicleSeats} Plätze
+                </p>
+              )}
             </div>
           )}
 
@@ -177,7 +192,6 @@ interface GameCardProps {
 
 function GameCard({ data, onDelete, onOpenForm }: GameCardProps) {
   const [activeTab, setActiveTab] = useState<'biete' | 'suche'>('biete')
-
   const hasOwn = [...data.biete, ...data.suche].some(e => e.isOwn)
 
   return (
@@ -226,15 +240,14 @@ function GameCard({ data, onDelete, onOpenForm }: GameCardProps) {
           </button>
         </div>
         <div className="px-4 py-2">
-          {activeTab === 'biete' ? (
-            data.biete.length === 0
+          {activeTab === 'biete'
+            ? data.biete.length === 0
               ? <p className="text-sm text-brand-text-muted py-2">Noch keine Fahrangebote.</p>
               : data.biete.map(e => <EntryCard key={e.id} entry={e} onDelete={onDelete} />)
-          ) : (
-            data.suche.length === 0
+            : data.suche.length === 0
               ? <p className="text-sm text-brand-text-muted py-2">Noch keine Mitfahrgesuche.</p>
               : data.suche.map(e => <EntryCard key={e.id} entry={e} onDelete={onDelete} />)
-          )}
+          }
         </div>
       </div>
 
@@ -258,7 +271,7 @@ function GameCard({ data, onDelete, onOpenForm }: GameCardProps) {
 
       {hasOwn && (
         <div className="px-4 py-2 border-t border-brand-border-subtle bg-brand-surface-card">
-          <p className="text-xs text-brand-text-muted inline">Du bist eingetragen.{' '}</p>
+          <span className="text-xs text-brand-text-muted">Du bist eingetragen.{' '}</span>
           <button
             onClick={() => onOpenForm(data.game.id, 'biete')}
             className="text-xs text-brand-text underline hover:no-underline"
@@ -271,16 +284,26 @@ function GameCard({ data, onDelete, onOpenForm }: GameCardProps) {
   )
 }
 
+const TAB_LABELS: Record<EventTab, string> = {
+  'auswärts': 'Auswärtsspiele',
+  'heim': 'Heimspiele',
+  'generisch': 'Events',
+}
+
 export default function MitfahrgelegenheitenPage() {
-  const [data, setData] = useState<GameCarpoolData[]>([])
+  const [response, setResponse] = useState<ListResponse>({ games: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<EventTab>('auswärts')
   const [modal, setModal] = useState<{ gameId: number; typ: 'biete' | 'suche' } | null>(null)
 
   const load = () => {
     setLoading(true)
     api.get('/mitfahrgelegenheiten')
-      .then(res => { setData(res.data ?? []); setLoading(false) })
+      .then(res => {
+        setResponse(res.data ?? { games: [] })
+        setLoading(false)
+      })
       .catch(() => { setError('Fehler beim Laden.'); setLoading(false) })
   }
 
@@ -294,6 +317,12 @@ export default function MitfahrgelegenheitenPage() {
       alert('Fehler beim Löschen.')
     }
   }
+
+  const tabGames = response.games.filter(d => d.game.eventType === activeTab)
+
+  const countForTab = (tab: EventTab) => response.games.filter(d => d.game.eventType === tab).length
+
+  const tabs: EventTab[] = ['auswärts', 'heim', 'generisch']
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -309,27 +338,54 @@ export default function MitfahrgelegenheitenPage() {
         <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</p>
       )}
 
-      {!loading && !error && data.length === 0 && (
-        <p className="text-sm text-brand-text-muted">Keine Auswärtsfahrten geplant.</p>
-      )}
+      {!loading && !error && (
+        <>
+          {/* Tab navigation */}
+          <div className="flex gap-1 mb-6 border-b border-brand-border-subtle">
+            {tabs.map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab
+                    ? 'border-brand-yellow text-brand-text'
+                    : 'border-transparent text-brand-text-muted hover:text-brand-text'
+                }`}
+              >
+                {TAB_LABELS[tab]}
+                {countForTab(tab) > 0 && (
+                  <span className="ml-1.5 text-xs text-brand-text-subtle">({countForTab(tab)})</span>
+                )}
+              </button>
+            ))}
+          </div>
 
-      {!loading && !error && data.length > 0 && (
-        <div className="space-y-4">
-          {data.map(d => (
-            <GameCard
-              key={d.game.id}
-              data={d}
-              onDelete={handleDelete}
-              onOpenForm={(gameId, typ) => setModal({ gameId, typ })}
-            />
-          ))}
-        </div>
+          {tabGames.length === 0 ? (
+            <p className="text-sm text-brand-text-muted">
+              {activeTab === 'auswärts' && 'Keine Auswärtsspiele geplant.'}
+              {activeTab === 'heim' && 'Keine Heimspiele geplant.'}
+              {activeTab === 'generisch' && 'Keine Events geplant.'}
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {tabGames.map(d => (
+                <GameCard
+                  key={d.game.id}
+                  data={d}
+                  onDelete={handleDelete}
+                  onOpenForm={(gameId, typ) => setModal({ gameId, typ })}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {modal && (
         <FormModal
           gameId={modal.gameId}
           initialTyp={modal.typ}
+          vehicleSeats={response.vehicleSeats}
           onClose={() => setModal(null)}
           onSaved={load}
         />

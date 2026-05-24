@@ -3,6 +3,7 @@ package carpooling
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -15,19 +16,20 @@ type Handler struct{ db *sql.DB }
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
 type GameEntry struct {
-	ID       int    `json:"id"`
-	Date     string `json:"date"`
-	Opponent string `json:"opponent"`
-	Team     string `json:"team"`
+	ID        int    `json:"id"`
+	Date      string `json:"date"`
+	Opponent  string `json:"opponent"`
+	Team      string `json:"team"`
+	EventType string `json:"eventType"`
 }
 
 type CarpoolEntry struct {
-	ID        int    `json:"id"`
-	UserName  string `json:"userName"`
-	Plaetze   *int   `json:"plaetze,omitempty"`
+	ID         int    `json:"id"`
+	UserName   string `json:"userName"`
+	Plaetze    *int   `json:"plaetze,omitempty"`
 	Treffpunkt string `json:"treffpunkt,omitempty"`
-	Notiz     string `json:"notiz,omitempty"`
-	IsOwn     bool   `json:"isOwn"`
+	Notiz      string `json:"notiz,omitempty"`
+	IsOwn      bool   `json:"isOwn"`
 }
 
 type CarpoolResponse struct {
@@ -36,19 +38,75 @@ type CarpoolResponse struct {
 	Suche []CarpoolEntry `json:"suche"`
 }
 
+type ListResponse struct {
+	Games        []CarpoolResponse `json:"games"`
+	VehicleSeats *int              `json:"vehicleSeats"`
+}
+
+// teamQueryForRole returns a subquery for team_ids the user belongs to,
+// plus the bind args (userID, seasonID). Returns "" if role has no team filter (admin/vorstand).
+func teamQueryForRole(role string) string {
+	switch role {
+	case "trainer":
+		return `SELECT k.team_id
+			FROM kader_trainers kt
+			JOIN kader k ON k.id = kt.kader_id
+			JOIN members m ON m.id = kt.member_id
+			WHERE m.user_id = ? AND k.season_id = ? AND k.team_id IS NOT NULL`
+	case "elternteil":
+		return `SELECT tm.team_id
+			FROM team_memberships tm
+			JOIN family_links fl ON fl.member_id = tm.member_id
+			WHERE fl.parent_user_id = ? AND tm.season_id = ?`
+	case "spieler":
+		return `SELECT tm.team_id
+			FROM team_memberships tm
+			JOIN members m ON m.id = tm.member_id
+			WHERE m.user_id = ? AND tm.season_id = ?`
+	}
+	return ""
+}
+
 // GET /api/mitfahrgelegenheiten
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	userID := claims.UserID
+	role := claims.Role
 
-	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT DISTINCT g.id, g.date, g.opponent, t.name
-		FROM games g
-		JOIN game_teams gt ON g.id = gt.game_id
-		JOIN teams t ON t.id = gt.team_id
-		WHERE g.is_home = 0
-		  AND DATE(g.date) >= DATE('now')
-		ORDER BY g.date ASC`)
+	var seasonID int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT id FROM seasons WHERE is_active = 1 LIMIT 1`,
+	).Scan(&seasonID); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ListResponse{Games: []CarpoolResponse{}})
+		return
+	}
+
+	teamSub := teamQueryForRole(role)
+
+	var (
+		queryStr string
+		args     []interface{}
+	)
+	if teamSub == "" {
+		queryStr = `SELECT DISTINCT g.id, g.date, g.opponent, g.event_type, t.name
+			FROM games g
+			JOIN game_teams gt ON g.id = gt.game_id
+			JOIN teams t ON t.id = gt.team_id
+			WHERE DATE(g.date) >= DATE('now')
+			ORDER BY g.date ASC, g.event_type ASC`
+	} else {
+		queryStr = fmt.Sprintf(`SELECT DISTINCT g.id, g.date, g.opponent, g.event_type, t.name
+			FROM games g
+			JOIN game_teams gt ON g.id = gt.game_id
+			JOIN teams t ON t.id = gt.team_id
+			WHERE DATE(g.date) >= DATE('now')
+			  AND gt.team_id IN (%s)
+			ORDER BY g.date ASC, g.event_type ASC`, teamSub)
+		args = []interface{}{userID, seasonID}
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), queryStr, args...)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -58,7 +116,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	var games []GameEntry
 	for rows.Next() {
 		var g GameEntry
-		rows.Scan(&g.ID, &g.Date, &g.Opponent, &g.Team)
+		rows.Scan(&g.ID, &g.Date, &g.Opponent, &g.EventType, &g.Team)
 		games = append(games, g)
 	}
 
@@ -72,13 +130,28 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	vehicleSeats := h.queryVehicleSeats(r, userID)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(ListResponse{
+		Games:        result,
+		VehicleSeats: vehicleSeats,
+	})
+}
+
+func (h *Handler) queryVehicleSeats(r *http.Request, userID int) *int {
+	var seats int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT seats FROM vehicle_info WHERE user_id = ?`, userID,
+	).Scan(&seats); err != nil {
+		return nil
+	}
+	return &seats
 }
 
 func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]CarpoolEntry, []CarpoolEntry) {
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, u.name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id
+		SELECT m.id, u.first_name || ' ' || u.last_name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id
 		FROM mitfahrgelegenheiten m
 		JOIN users u ON u.id = m.user_id
 		WHERE m.game_id = ?
