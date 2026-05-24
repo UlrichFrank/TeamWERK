@@ -184,6 +184,12 @@ function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormM
   )
 }
 
+function gameTitle(game: GameCarpoolData['game']): string {
+  if (game.eventType === 'generisch') return game.opponent
+  if (game.eventType === 'heim') return `${game.team} - Team Stuttgart vs ${game.opponent}`
+  return `${game.team} - ${game.opponent} vs Team Stuttgart`
+}
+
 interface GameCardProps {
   data: GameCarpoolData
   onDelete: (id: number) => void
@@ -200,7 +206,7 @@ function GameCard({ data, onDelete, onOpenForm }: GameCardProps) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-xs text-brand-text-muted">{formatDate(data.game.date)}</p>
-            <h2 className="text-sm font-semibold text-brand-text">{data.game.team} vs. {data.game.opponent}</h2>
+            <h2 className="text-sm font-semibold text-brand-text">{gameTitle(data.game)}</h2>
           </div>
           {!hasOwn && (
             <div className="flex gap-2 flex-shrink-0">
