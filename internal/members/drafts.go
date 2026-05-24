@@ -235,9 +235,6 @@ func (h *Handler) extractFieldValue(m *Member, fieldName string) (json.RawMessag
 		if m.City != nil {
 			p["city"] = *m.City
 		}
-		if m.IBAN != nil {
-			p["iban"] = *m.IBAN
-		}
 		return json.Marshal(p)
 	default:
 		return json.Marshal(nil)
@@ -316,14 +313,13 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 			Street    string `json:"street"`
 			Zip       string `json:"zip"`
 			City      string `json:"city"`
-			IBAN      string `json:"iban"`
 		}
 		if err := json.Unmarshal(newValue, &data); err != nil {
 			return err
 		}
 		_, err := h.db.Exec(
-			`UPDATE members SET first_name=?, last_name=?, street=?, zip=?, city=?, iban=? WHERE id=?`,
-			data.FirstName, data.LastName, data.Street, data.Zip, data.City, data.IBAN, memberID)
+			`UPDATE members SET first_name=?, last_name=?, street=?, zip=?, city=? WHERE id=?`,
+			data.FirstName, data.LastName, data.Street, data.Zip, data.City, memberID)
 		return err
 
 	default:

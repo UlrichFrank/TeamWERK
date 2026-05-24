@@ -13,7 +13,6 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [address, setAddress] = useState({ street: '', zip: '', city: '' })
-  const [iban, setIban] = useState('')
   const [phones, setPhones] = useState<Phone[]>([])
   const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false })
   const [photoURL, setPhotoURL] = useState('')
@@ -44,7 +43,6 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
     if (ownMember) {
       setFirstName(ownMember.first_name)
       setLastName(ownMember.last_name)
-      setIban(ownMember.iban ?? '')
     } else {
       api.get('/profile/account').then(r => {
         setFirstName(r.data.first_name ?? '')
@@ -64,7 +62,6 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
         setFirstName(nv.first_name ?? ownMember.first_name)
         setLastName(nv.last_name ?? ownMember.last_name)
         setAddress({ street: nv.street ?? '', zip: nv.zip ?? '', city: nv.city ?? '' })
-        setIban(nv.iban ?? ownMember.iban ?? '')
       }
     }).catch(() => {})
   }, [ownMember?.id, draftRefreshKey])
@@ -81,7 +78,7 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
       if (ownMember) {
         await api.post(`/members/${ownMember.id}/change-request`, {
           field_name: 'profil',
-          new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city, iban },
+          new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city },
         })
         const r = await api.get(`/members/${ownMember.id}/change-drafts`)
         const drafts: any[] = r.data?.drafts ?? []
@@ -233,24 +230,6 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
           </div>
         </form>
       </div>
-
-      {/* IBAN — nur für Mitglieder */}
-      {ownMember !== null && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
-          <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
-          <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
-            <input
-              type="text"
-              value={iban}
-              readOnly={readonly}
-              onChange={e => { setIban(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()); handleChange() }}
-              placeholder="DE89 3704 0044 0532 0130 00"
-              className={readonly ? inputReadonlyCls + ' font-mono' : inputCls + ' font-mono'}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Telefonnummern */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">

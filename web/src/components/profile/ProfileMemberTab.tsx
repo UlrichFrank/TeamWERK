@@ -68,6 +68,9 @@ export default function ProfileMemberTab({ ownMember, onDraftWithdrawn }: Props)
           <Row label="Rückennummer" value={ownMember.jersey_number?.toString() ?? '–'} />
           <Row label="Position" value={ownMember.position || '–'} />
           <Row label="Status" value={ownMember.status || '–'} />
+          {(ownMember.street || ownMember.zip || ownMember.city) && (
+            <Row label="Adresse" value={[ownMember.street, [ownMember.zip, ownMember.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')} />
+          )}
         </div>
       </div>
 
