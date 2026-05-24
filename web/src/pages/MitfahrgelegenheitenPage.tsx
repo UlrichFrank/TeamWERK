@@ -185,7 +185,7 @@ function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormM
 }
 
 function gameTitle(game: GameCarpoolData['game']): string {
-  if (game.eventType === 'generisch') return game.opponent
+  if (game.eventType === 'generisch') return `${game.team} - ${game.opponent}`
   if (game.eventType === 'heim') return `${game.team} - Team Stuttgart vs ${game.opponent}`
   return `${game.team} - ${game.opponent} vs Team Stuttgart`
 }
