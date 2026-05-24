@@ -1,6 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { formatOffset, parseOffset } from '../lib/time'
 import MobileCard from '../components/MobileCard'
 import EditModal from '../components/EditModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -49,7 +50,7 @@ function toEditState(t: DutyType): EditState {
     name: t.name,
     hours: hoursToDisplay(t.hours_value),
     anchor: t.default_anchor,
-    offset: t.default_offset_minutes.toString(),
+    offset: formatOffset(t.default_offset_minutes),
     same_day_behavior: t.same_day_behavior || 'normal',
     same_day_variant_id: t.same_day_variant_id ? t.same_day_variant_id.toString() : '',
     adjacent_day_behavior: t.adjacent_day_behavior || 'normal',
@@ -105,11 +106,11 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz (min)</label>
+        <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz</label>
         <input value={state.offset} onChange={e => onChange({ ...state, offset: e.target.value })}
-          type="number" className={INPUT} />
+          placeholder="z.B. -1h 30min" className={INPUT} />
       </div>
-      <p className="text-xs text-brand-text-subtle">Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff)</p>
+      <p className="text-xs text-brand-text-subtle">Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
 
       <div className="border-t border-brand-border-subtle pt-3 mt-1">
         <p className="text-xs font-semibold text-brand-text-muted mb-2">Spieltag-Verhalten</p>
@@ -170,7 +171,7 @@ export default function AdminDutyTypesPage() {
       name: create.name,
       hours_value: parseHoursInput(create.hours),
       default_anchor: create.anchor,
-      default_offset_minutes: parseInt(create.offset),
+      default_offset_minutes: parseOffset(create.offset),
       same_day_behavior: create.same_day_behavior,
       same_day_variant_id: create.same_day_variant_id ? parseInt(create.same_day_variant_id) : null,
       adjacent_day_behavior: create.adjacent_day_behavior,
@@ -192,7 +193,7 @@ export default function AdminDutyTypesPage() {
       name: edit.name,
       hours_value: parseHoursInput(edit.hours),
       default_anchor: edit.anchor,
-      default_offset_minutes: parseInt(edit.offset),
+      default_offset_minutes: parseOffset(edit.offset),
       same_day_behavior: edit.same_day_behavior,
       same_day_variant_id: edit.same_day_variant_id ? parseInt(edit.same_day_variant_id) : null,
       adjacent_day_behavior: edit.adjacent_day_behavior,
@@ -275,7 +276,7 @@ export default function AdminDutyTypesPage() {
           >
             <div className="text-xs text-brand-text-muted space-y-1">
               <div>Anker: {t.default_anchor === 'start' ? 'Anpfiff/Beginn' : 'Abpfiff/Ende'}</div>
-              <div>Versatz: {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes} min</div>
+              <div>Versatz: {formatOffset(t.default_offset_minutes)}</div>
             </div>
           </MobileCard>
         ))}
@@ -303,7 +304,7 @@ export default function AdminDutyTypesPage() {
                   {t.default_anchor === 'start' ? 'Anpfiff/Beginn' : 'Abpfiff/Ende'}
                 </td>
                 <td className="px-3 py-3 text-right font-mono text-brand-text-muted">
-                  {t.default_offset_minutes > 0 ? `+${t.default_offset_minutes}` : t.default_offset_minutes}
+                  {formatOffset(t.default_offset_minutes)}
                 </td>
                 <td className="px-3 py-3 text-sm space-x-1">
                   {(!t.same_day_behavior || t.same_day_behavior === 'normal') && (!t.adjacent_day_behavior || t.adjacent_day_behavior === 'normal') ? (

@@ -7,7 +7,7 @@ EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down create-admin create-admin-remote env clean
+.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down create-admin create-admin-remote env clean backup restore-local pull-db
 
 .DEFAULT_GOAL := help
 
@@ -81,6 +81,29 @@ create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
 
 create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
 	ssh $(REMOTE) "/usr/local/bin/teamwerk create-admin --db $(DB_PATH) --email=$(EMAIL) --password=$(PASSWORD) --name='$(NAME)'"
+
+backup: ## Prod-DB auf VPS sichern und lokal herunterladen (./teamwerk-backup.db)
+	@echo "Erstelle Backup auf VPS..."
+	ssh $(REMOTE) "sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-backup.db'"
+	scp $(REMOTE):/tmp/teamwerk-backup.db ./teamwerk-backup.db
+	ssh $(REMOTE) "rm -f /tmp/teamwerk-backup.db"
+	@echo "Backup gespeichert: ./teamwerk-backup.db"
+
+restore-local: ## Backup (teamwerk-backup.db) als lokale Entwicklungsdatenbank einspielen
+	@if [ ! -f ./teamwerk-backup.db ]; then echo "Fehler: teamwerk-backup.db nicht gefunden. Zuerst 'make backup' ausführen."; exit 1; fi
+	@echo "WARNUNG: ./teamwerk.db wird mit dem Backup überschrieben."
+	@printf "Fortfahren? [y/N] "; \
+	read ans; \
+	if [ "$$ans" = "y" ]; then \
+		cp ./teamwerk-backup.db ./teamwerk.db; \
+		rm -f ./teamwerk.db-wal ./teamwerk.db-shm; \
+		echo "Restore abgeschlossen."; \
+	else \
+		echo "Abgebrochen."; \
+		exit 1; \
+	fi
+
+pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal einspielen
 
 clean: ## Build-Artefakte löschen
 	rm -rf $(BUILD_DIR) cmd/teamwerk/web/dist

@@ -4,6 +4,8 @@ import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import MobileCard from '../components/MobileCard'
 import EditModal from '../components/EditModal'
+import OffsetInput from '../components/OffsetInput'
+import DurationInput from '../components/DurationInput'
 
 interface DutyType {
   id: number
@@ -24,14 +26,14 @@ interface DutyTemplate {
   id: number
   name: string
   template_type: 'heim' | 'auswärts' | 'generisch'
-  game_duration_minutes: number
+  duration_minutes: number
   item_count: number
 }
 
 interface TemplateFormState {
   name: string
   template_type: 'heim' | 'auswärts' | 'generisch'
-  game_duration_minutes: number
+  duration_minutes: number
   items: TemplateItem[]
 }
 
@@ -54,7 +56,7 @@ function newTemplate(): TemplateFormState {
   return {
     name: '',
     template_type: 'heim',
-    game_duration_minutes: 60,
+    duration_minutes: 60,
     items: [],
   }
 }
@@ -112,16 +114,16 @@ function TemplateForm({ template, onChange, dutyTypes }: {
               <option value="generisch">Generisch</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Spieldauer (min)</label>
-            <input
-              type="number"
-              min={1}
-              value={template.game_duration_minutes}
-              onChange={e => onChange({ ...template, game_duration_minutes: Number(e.target.value) })}
-              className={INPUT}
-            />
-          </div>
+          {template.template_type === 'generisch' && (
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+              <DurationInput
+                value={template.duration_minutes}
+                onChange={v => onChange({ ...template, duration_minutes: v })}
+                className={INPUT}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -216,11 +218,10 @@ function TemplateForm({ template, onChange, dutyTypes }: {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">Versatz (min)</label>
-                      <input
-                        type="number"
+                      <label className="block text-xs text-brand-text-muted mb-1">Versatz</label>
+                      <OffsetInput
                         value={item.offset_minutes}
-                        onChange={e => updateItem(index, { offset_minutes: Number(e.target.value) })}
+                        onChange={v => updateItem(index, { offset_minutes: v })}
                         className={INPUT_SM}
                       />
                     </div>
@@ -233,7 +234,7 @@ function TemplateForm({ template, onChange, dutyTypes }: {
       </div>
 
       <p className="text-xs text-brand-text-subtle">
-        Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff). Positive Werte = nach dem Anker.
+        Versatz-Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code>
       </p>
     </div>
   )
@@ -282,7 +283,7 @@ export default function AdminDutyTemplatesPage() {
       setModalTemplate({
         name: r.data.name,
         template_type: r.data.template_type,
-        game_duration_minutes: r.data.game_duration_minutes,
+        duration_minutes: r.data.duration_minutes,
         items: r.data.items,
       })
     } catch {
@@ -326,14 +327,14 @@ export default function AdminDutyTemplatesPage() {
         const createResponse = await api.post('/admin/duty-templates', {
           name: modalTemplate.name.trim(),
           template_type: modalTemplate.template_type,
-          game_duration_minutes: modalTemplate.game_duration_minutes,
+          duration_minutes: modalTemplate.duration_minutes,
         })
         const createdId = createResponse.data.id
         if (modalTemplate.items.length > 0) {
           await api.put(`/admin/duty-templates/${createdId}`, {
             name: modalTemplate.name.trim(),
             template_type: modalTemplate.template_type,
-            game_duration_minutes: modalTemplate.game_duration_minutes,
+            duration_minutes: modalTemplate.duration_minutes,
             items: modalTemplate.items,
           })
         }
@@ -341,7 +342,7 @@ export default function AdminDutyTemplatesPage() {
         await api.put(`/admin/duty-templates/${editingTemplateId}`, {
           name: modalTemplate.name.trim(),
           template_type: modalTemplate.template_type,
-          game_duration_minutes: modalTemplate.game_duration_minutes,
+          duration_minutes: modalTemplate.duration_minutes,
           items: modalTemplate.items,
         })
       }
@@ -414,7 +415,7 @@ export default function AdminDutyTemplatesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-brand-text-muted">
-                      {t.template_type !== 'generisch' ? `${t.game_duration_minutes} min` : '–'}
+                      {t.template_type === 'generisch' ? `${t.duration_minutes} min` : '–'}
                     </td>
                     <td className="px-4 py-3 text-brand-text-muted">{t.item_count}</td>
                     <td className="px-4 py-3 text-right">
@@ -451,7 +452,7 @@ export default function AdminDutyTemplatesPage() {
                 <MobileCard
                   key={t.id}
                   title={t.name}
-                  subtitle={`${typeLabel[t.template_type] ?? t.template_type} · ${t.item_count} Einträge${t.template_type !== 'generisch' ? ` · ${t.game_duration_minutes} min` : ''}`}
+                  subtitle={`${typeLabel[t.template_type] ?? t.template_type} · ${t.item_count} Einträge${t.template_type === 'generisch' ? ` · ${t.duration_minutes} min` : ''}`}
                   badge={{ label: typeLabel[t.template_type] ?? t.template_type, variant: t.template_type === 'heim' ? 'blue' : t.template_type === 'auswärts' ? 'yellow' : 'red' }}
                   actions={[
                     { label: 'Bearbeiten', onClick: () => openEditModal(t.id) },

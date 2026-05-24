@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 import { Trash2, Check } from 'lucide-react'
 import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
+import OffsetInput from '../components/OffsetInput'
+import DurationInput from '../components/DurationInput'
 
 interface DutyType {
   id: number
@@ -23,7 +25,7 @@ interface Template {
   id: number
   name: string
   template_type: 'heim' | 'auswärts' | 'generisch'
-  game_duration_minutes: number
+  duration_minutes: number
   items: TemplateItem[]
 }
 
@@ -109,7 +111,7 @@ export default function AdminDutyTemplateDetailPage() {
               className={INPUT}
             />
           </div>
-          <div className={`grid gap-4 ${template.template_type !== 'generisch' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-4 ${template.template_type === 'generisch' ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div>
               <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
               <select
@@ -122,14 +124,12 @@ export default function AdminDutyTemplateDetailPage() {
                 <option value="generisch">Generisch</option>
               </select>
             </div>
-            {template.template_type !== 'generisch' && (
+            {template.template_type === 'generisch' && (
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Spieldauer (min)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={template.game_duration_minutes}
-                  onChange={e => setTemplate(t => t ? { ...t, game_duration_minutes: Number(e.target.value) } : t)}
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+                <DurationInput
+                  value={template.duration_minutes}
+                  onChange={v => setTemplate(t => t ? { ...t, duration_minutes: v } : t)}
                   className={INPUT}
                 />
               </div>
@@ -197,11 +197,10 @@ export default function AdminDutyTemplateDetailPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs text-brand-text-muted mb-1">Versatz (min)</label>
-                          <input
-                            type="number"
+                          <label className="block text-xs text-brand-text-muted mb-1">Versatz</label>
+                          <OffsetInput
                             value={item.offset_minutes}
-                            onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
+                            onChange={v => updateItem(i, { offset_minutes: v })}
                             className={INPUT_SM}
                           />
                         </div>
@@ -265,12 +264,11 @@ export default function AdminDutyTemplateDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-brand-text-muted mb-1">Versatz (min)</label>
-                    <input
-                      type="number"
+                    <label className="block text-xs text-brand-text-muted mb-1">Versatz</label>
+                    <OffsetInput
                       value={item.offset_minutes}
-                      onChange={e => updateItem(i, { offset_minutes: Number(e.target.value) })}
-                      className="w-20 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                      onChange={v => updateItem(i, { offset_minutes: v })}
+                      className="w-28 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     />
                   </div>
                   <div>
@@ -308,8 +306,7 @@ export default function AdminDutyTemplateDetailPage() {
       </div>
 
       <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text mb-5">
-        <strong>Versatz:</strong> Negative Werte = vor dem Anker (z.B. −60 = 60 min vor Anpfiff).
-        Positive Werte = nach dem Anker (z.B. +15 = 15 min nach Spielende).
+        <strong>Versatz:</strong> Format <code>-1h 30min</code> (vor Anker) · <code>+15min</code> (nach Anker) · <code>0</code>. Tage, Stunden und Minuten können kombiniert werden, z.B. <code>-2d 3h</code>.
       </div>
 
       {saveError && (

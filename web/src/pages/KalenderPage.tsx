@@ -607,8 +607,8 @@ export default function KalenderPage() {
                             onChange={() => setSelectedTemplate(t.id)} className="rounded-full accent-brand-yellow" />
                           <div className="flex-1">
                             <div className="font-medium text-sm text-brand-text">{t.name}</div>
-                            {t.template_type !== 'generisch' && (
-                              <div className="text-xs text-brand-text-muted">{t.game_duration_minutes} Min</div>
+                            {t.template_type === 'generisch' && (
+                              <div className="text-xs text-brand-text-muted">{t.duration_minutes} Min</div>
                             )}
                           </div>
                         </label>

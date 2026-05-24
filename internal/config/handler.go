@@ -3,9 +3,54 @@ package config
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 )
+
+type AgeClassRule struct {
+	AgeClass             string `json:"age_class"`
+	HalfDurationMinutes  int    `json:"half_duration_minutes"`
+	BreakMinutes         int    `json:"break_minutes"`
+}
+
+func GetAgeClassRules(db *sql.DB) ([]AgeClassRule, error) {
+	rows, err := db.Query(
+		`SELECT age_class, half_duration_minutes, break_minutes FROM age_class_game_rules ORDER BY age_class`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []AgeClassRule{}
+	for rows.Next() {
+		var r AgeClassRule
+		rows.Scan(&r.AgeClass, &r.HalfDurationMinutes, &r.BreakMinutes)
+		result = append(result, r)
+	}
+	return result, nil
+}
+
+var validAgeClasses = map[string]bool{"A": true, "B": true, "C": true, "D": true}
+
+func UpdateAgeClassRule(db *sql.DB, ageClass string, half, brk int) error {
+	if !validAgeClasses[ageClass] {
+		return errors.New("ungültige Altersklasse")
+	}
+	if half <= 0 || brk <= 0 {
+		return errors.New("Werte müssen größer als 0 sein")
+	}
+	res, err := db.Exec(
+		`UPDATE age_class_game_rules SET half_duration_minutes=?, break_minutes=? WHERE age_class=?`,
+		half, brk, ageClass)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return errors.New("Altersklasse nicht gefunden")
+	}
+	return nil
+}
 
 type Handler struct{ db *sql.DB }
 
@@ -155,6 +200,35 @@ func (h *Handler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(), `UPDATE teams SET name=?, age_class=?, gender=?, is_active=? WHERE id=?`,
 		req.Name, req.AgeClass, req.Gender, active, id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/admin/age-class-rules
+func (h *Handler) GetAgeClassRulesHandler(w http.ResponseWriter, r *http.Request) {
+	rules, err := GetAgeClassRules(h.db)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rules)
+}
+
+// PUT /api/admin/age-class-rules/{ageClass}
+func (h *Handler) UpdateAgeClassRuleHandler(w http.ResponseWriter, r *http.Request) {
+	ageClass := r.PathValue("ageClass")
+	var req struct {
+		HalfDurationMinutes int `json:"half_duration_minutes"`
+		BreakMinutes        int `json:"break_minutes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := UpdateAgeClassRule(h.db, ageClass, req.HalfDurationMinutes, req.BreakMinutes); err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

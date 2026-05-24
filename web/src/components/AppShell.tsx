@@ -36,6 +36,7 @@ const navModules: NavModule[] = [
     label: 'Kaderplanung',
     items: [
       { to: '/admin/verein', label: 'Verein', roles: ['admin', 'vorstand'] },
+      { to: '/admin/altersklassen', label: 'Altersklassen', roles: ['admin', 'vorstand'] },
       { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand'] },
       { to: '/admin/saisons', label: 'Saisons', roles: ['admin', 'vorstand'] },
     ],

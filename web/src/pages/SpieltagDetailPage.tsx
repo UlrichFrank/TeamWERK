@@ -45,7 +45,7 @@ interface Template {
   id: number
   name: string
   template_type: string
-  game_duration_minutes: number
+  duration_minutes: number
 }
 
 const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -486,7 +486,7 @@ export default function SpieltagDetailPage() {
                 <option value="">Auswählen…</option>
                 {regenTemplates.map(t => (
                   <option key={t.id} value={t.id}>
-                    {t.name} ({t.template_type}{t.template_type !== 'generisch' ? `, ${t.game_duration_minutes} Min` : ''})
+                    {t.name} ({t.template_type}{t.template_type === 'generisch' ? `, ${t.duration_minutes} Min` : ''})
                   </option>
                 ))}
               </select>

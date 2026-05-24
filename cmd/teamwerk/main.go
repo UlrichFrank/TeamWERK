@@ -159,6 +159,7 @@ func serve() {
 			r.Post("/api/admin/kalender/regenerate-day", gameH.RegenerateDaySlots)
 			r.Post("/api/members/{id}/change-drafts/{draftId}/accept", membH.AcceptChangeRequestHandler)
 			r.Delete("/api/members/{id}/change-drafts/{draftId}", membH.RejectChangeRequestHandler)
+			r.Get("/api/admin/age-class-rules", cfgH.GetAgeClassRulesHandler)
 		})
 
 		// Admin + Vorstand
@@ -213,6 +214,7 @@ func serve() {
 			r.Get("/api/admin/kader/{id}/member-suggestions", kaderH.MemberSuggestions)
 			r.Post("/api/admin/kader/copy-from-season", kaderH.CopyFromSeason)
 			r.Post("/api/admin/kader/auto-assign", kaderH.AutoAssign)
+			r.Put("/api/admin/age-class-rules/{ageClass}", cfgH.UpdateAgeClassRuleHandler)
 		})
 	})
 

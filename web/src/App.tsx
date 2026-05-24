@@ -20,6 +20,7 @@ import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminSeasonsPage from './pages/AdminSeasonsPage'
 import AdminKaderPage from './pages/AdminKaderPage'
+import AdminAgeClassRulesPage from './pages/AdminAgeClassRulesPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
             <Route path="admin/dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
             <Route path="admin/saisons" element={<RoleRoute roles={['admin','vorstand']}><AdminSeasonsPage /></RoleRoute>} />
+            <Route path="admin/altersklassen" element={<RoleRoute roles={['admin']}><AdminAgeClassRulesPage /></RoleRoute>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

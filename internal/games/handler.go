@@ -82,6 +82,45 @@ func classifySlotPosition(slotTime string, gameTime string, allGameTimes []strin
 	return isBeforeAllGames, isAfterAllGames, isBetweenGames
 }
 
+// effectiveEventDuration returns the total event duration in minutes for slot-time calculations.
+// For heim/auswärts events it reads the team's age_class_game_rules (2×half + break).
+// For generisch events it reads the template's duration_minutes.
+func (h *Handler) effectiveEventDuration(ctx context.Context, eventType string, templateID, teamID int) (int, error) {
+	if eventType == "heim" || eventType == "auswärts" {
+		var ageClass sql.NullString
+		h.db.QueryRowContext(ctx, `SELECT age_class FROM teams WHERE id=?`, teamID).Scan(&ageClass)
+		if !ageClass.Valid || ageClass.String == "" {
+			return 0, fmt.Errorf("Team hat keine Altersklasse — Slot-Zeitberechnung nicht möglich")
+		}
+		// Normalize "B-Jugend" → "B" to match age_class_game_rules primary keys.
+		ageClassKey := ageClass.String
+		if len(ageClassKey) > 1 && ageClassKey[1] == '-' {
+			ageClassKey = ageClassKey[:1]
+		}
+		var half, brk int
+		err := h.db.QueryRowContext(ctx,
+			`SELECT half_duration_minutes, break_minutes FROM age_class_game_rules WHERE age_class=?`,
+			ageClassKey).Scan(&half, &brk)
+		if err == sql.ErrNoRows {
+			return 0, fmt.Errorf("keine Altersklassen-Regel für Klasse %s gefunden", ageClassKey)
+		}
+		if err != nil {
+			return 0, err
+		}
+		return 2*half + brk, nil
+	}
+	var dur int
+	err := h.db.QueryRowContext(ctx,
+		`SELECT duration_minutes FROM game_templates WHERE id=?`, templateID).Scan(&dur)
+	if err != nil {
+		return 0, fmt.Errorf("Vorlage nicht gefunden")
+	}
+	if dur <= 0 {
+		return 0, fmt.Errorf("Vorlage hat keine Spieldauer konfiguriert")
+	}
+	return dur, nil
+}
+
 // findTemplateForGame returns the best-matching template for a game.
 // For home games: tries 'heim', falls back to 'generisch'.
 // For away games: tries 'auswärts', falls back to 'generisch'.
@@ -91,11 +130,11 @@ func (h *Handler) findTemplateForGame(ctx context.Context, isHome bool) (id, dur
 		targetType = "heim"
 	}
 	err = h.db.QueryRowContext(ctx,
-		`SELECT id, game_duration_minutes FROM game_templates WHERE template_type=? ORDER BY id LIMIT 1`, targetType).
+		`SELECT id, duration_minutes FROM game_templates WHERE template_type=? ORDER BY id LIMIT 1`, targetType).
 		Scan(&id, &durationMins)
 	if err == sql.ErrNoRows {
 		err = h.db.QueryRowContext(ctx,
-			`SELECT id, game_duration_minutes FROM game_templates WHERE template_type='generisch' ORDER BY id LIMIT 1`).
+			`SELECT id, duration_minutes FROM game_templates WHERE template_type='generisch' ORDER BY id LIMIT 1`).
 			Scan(&id, &durationMins)
 	}
 	if err == sql.ErrNoRows {
@@ -705,7 +744,7 @@ func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templ
 // GET /api/admin/duty-templates
 func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT gt.id, gt.name, gt.template_type, gt.game_duration_minutes, COUNT(gti.id)
+		`SELECT gt.id, gt.name, gt.template_type, gt.duration_minutes, COUNT(gti.id)
 		 FROM game_templates gt
 		 LEFT JOIN game_template_items gti ON gti.template_id = gt.id
 		 GROUP BY gt.id ORDER BY gt.id`)
@@ -716,16 +755,16 @@ func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type listItem struct {
-		ID                  int    `json:"id"`
-		Name                string `json:"name"`
-		TemplateType        string `json:"template_type"`
-		GameDurationMinutes int    `json:"game_duration_minutes"`
-		ItemCount           int    `json:"item_count"`
+		ID              int    `json:"id"`
+		Name            string `json:"name"`
+		TemplateType    string `json:"template_type"`
+		DurationMinutes int    `json:"duration_minutes"`
+		ItemCount       int    `json:"item_count"`
 	}
 	result := []listItem{}
 	for rows.Next() {
 		var t listItem
-		rows.Scan(&t.ID, &t.Name, &t.TemplateType, &t.GameDurationMinutes, &t.ItemCount)
+		rows.Scan(&t.ID, &t.Name, &t.TemplateType, &t.DurationMinutes, &t.ItemCount)
 		result = append(result, t)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -736,14 +775,14 @@ func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetTemplateByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var t struct {
-		ID                  int    `json:"id"`
-		Name                string `json:"name"`
-		TemplateType        string `json:"template_type"`
-		GameDurationMinutes int    `json:"game_duration_minutes"`
+		ID              int    `json:"id"`
+		Name            string `json:"name"`
+		TemplateType    string `json:"template_type"`
+		DurationMinutes int    `json:"duration_minutes"`
 	}
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, name, template_type, game_duration_minutes FROM game_templates WHERE id=?`, id).
-		Scan(&t.ID, &t.Name, &t.TemplateType, &t.GameDurationMinutes)
+		`SELECT id, name, template_type, duration_minutes FROM game_templates WHERE id=?`, id).
+		Scan(&t.ID, &t.Name, &t.TemplateType, &t.DurationMinutes)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -756,16 +795,16 @@ func (h *Handler) GetTemplateByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"id": t.ID, "name": t.Name, "template_type": t.TemplateType,
-		"game_duration_minutes": t.GameDurationMinutes, "items": items,
+		"duration_minutes": t.DurationMinutes, "items": items,
 	})
 }
 
 // POST /api/admin/duty-templates
 func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name                string `json:"name"`
-		TemplateType        string `json:"template_type"`
-		GameDurationMinutes int    `json:"game_duration_minutes"`
+		Name            string `json:"name"`
+		TemplateType    string `json:"template_type"`
+		DurationMinutes int    `json:"duration_minutes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -775,12 +814,12 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid template_type", http.StatusBadRequest)
 		return
 	}
-	if req.GameDurationMinutes <= 0 {
-		req.GameDurationMinutes = 90
+	if req.DurationMinutes <= 0 {
+		req.DurationMinutes = 90
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO game_templates (name, template_type, game_duration_minutes) VALUES (?,?,?)`,
-		req.Name, req.TemplateType, req.GameDurationMinutes)
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?,?,?)`,
+		req.Name, req.TemplateType, req.DurationMinutes)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -790,7 +829,7 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
 		"id": newID, "name": req.Name, "template_type": req.TemplateType,
-		"game_duration_minutes": req.GameDurationMinutes, "items": []any{},
+		"duration_minutes": req.DurationMinutes, "items": []any{},
 	})
 }
 
@@ -803,10 +842,10 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name                string         `json:"name"`
-		TemplateType        string         `json:"template_type"`
-		GameDurationMinutes int            `json:"game_duration_minutes"`
-		Items               []templateItem `json:"items"`
+		Name            string         `json:"name"`
+		TemplateType    string         `json:"template_type"`
+		DurationMinutes int            `json:"duration_minutes"`
+		Items           []templateItem `json:"items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -816,8 +855,8 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid template_type", http.StatusBadRequest)
 		return
 	}
-	if req.GameDurationMinutes <= 0 {
-		req.GameDurationMinutes = 90
+	if req.DurationMinutes <= 0 {
+		req.DurationMinutes = 90
 	}
 	for _, it := range req.Items {
 		var exists int
@@ -836,8 +875,8 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(r.Context(),
-		`UPDATE game_templates SET name=?, template_type=?, game_duration_minutes=? WHERE id=?`,
-		req.Name, req.TemplateType, req.GameDurationMinutes, id)
+		`UPDATE game_templates SET name=?, template_type=?, duration_minutes=? WHERE id=?`,
+		req.Name, req.TemplateType, req.DurationMinutes, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -901,7 +940,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 
 	var templateID, durationMins int
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, game_duration_minutes FROM game_templates WHERE id=?`, templateIDStr).
+		`SELECT id, duration_minutes FROM game_templates WHERE id=?`, templateIDStr).
 		Scan(&templateID, &durationMins)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -1091,26 +1130,6 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 	for _, g := range dayGames {
 		res := gameResult{GameID: g.ID}
 
-		var templateID, durationMins int
-		if g.TemplateID.Valid {
-			templateID = int(g.TemplateID.Int64)
-			h.db.QueryRowContext(r.Context(),
-				`SELECT game_duration_minutes FROM game_templates WHERE id=?`, templateID).Scan(&durationMins)
-		} else {
-			templateID, durationMins, err = h.findTemplateForGame(r.Context(), g.IsHome)
-			if err != nil {
-				res.Skipped = true
-				results = append(results, res)
-				continue
-			}
-		}
-
-		items, err := h.loadTemplateItems(r.Context(), templateID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-
 		teamRows, _ := h.db.QueryContext(r.Context(), `SELECT team_id FROM game_teams WHERE game_id=?`, g.ID)
 		var teamIDs []int
 		if teamRows != nil {
@@ -1120,6 +1139,37 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 				teamIDs = append(teamIDs, tid)
 			}
 			teamRows.Close()
+		}
+
+		var templateID int
+		if g.TemplateID.Valid {
+			templateID = int(g.TemplateID.Int64)
+		} else {
+			var ignoredDur int
+			templateID, ignoredDur, err = h.findTemplateForGame(r.Context(), g.IsHome)
+			_ = ignoredDur
+			if err != nil {
+				res.Skipped = true
+				results = append(results, res)
+				continue
+			}
+		}
+
+		firstTeamID := 0
+		if len(teamIDs) > 0 {
+			firstTeamID = teamIDs[0]
+		}
+		durationMins, durErr := h.effectiveEventDuration(r.Context(), g.EventType, templateID, firstTeamID)
+		if durErr != nil {
+			res.Skipped = true
+			results = append(results, res)
+			continue
+		}
+
+		items, err := h.loadTemplateItems(r.Context(), templateID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
 		}
 
 		tx.QueryRowContext(r.Context(),
@@ -1280,10 +1330,6 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var durationMins int
-	h.db.QueryRowContext(r.Context(),
-		`SELECT game_duration_minutes FROM game_templates WHERE id=?`, resolvedTemplateID).Scan(&durationMins)
-
 	teamRows, err := h.db.QueryContext(r.Context(),
 		`SELECT team_id FROM game_teams WHERE game_id=?`, gameID)
 	if err != nil {
@@ -1297,6 +1343,16 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		var tid int
 		teamRows.Scan(&tid)
 		teamIDs = append(teamIDs, tid)
+	}
+
+	firstTeamID := 0
+	if len(teamIDs) > 0 {
+		firstTeamID = teamIDs[0]
+	}
+	durationMins, err := h.effectiveEventDuration(r.Context(), game.EventType, resolvedTemplateID, firstTeamID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
 	}
 
 	allGameTimes, hasPrevDay, hasNextDay := h.loadSameDayContext(r.Context(), game.Date, game.SeasonID)
