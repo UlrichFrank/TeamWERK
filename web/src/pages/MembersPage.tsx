@@ -75,6 +75,31 @@ export default function MembersPage() {
     }
   }
 
+  const [showNew, setShowNew] = useState(false)
+  const [newFirstName, setNewFirstName] = useState('')
+  const [newLastName, setNewLastName] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newFirstName.trim() || !newLastName.trim()) return
+    setCreating(true)
+    try {
+      const res = await api.post<{ id: number }>('/members', { first_name: newFirstName.trim(), last_name: newLastName.trim() })
+      navigate(`/mitglieder/${res.data.id}`)
+    } catch {
+      alert('Anlegen fehlgeschlagen.')
+      setCreating(false)
+    }
+  }
+
+  const resetNew = () => {
+    setShowNew(false)
+    setNewFirstName('')
+    setNewLastName('')
+    setCreating(false)
+  }
+
   const [showImport, setShowImport] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<'append' | 'update'>('append')
@@ -118,7 +143,7 @@ export default function MembersPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  useEscapeKey(showImport ? resetImport : null)
+  useEscapeKey(showNew ? resetNew : showImport ? resetImport : null)
 
   return (
     <div>
@@ -134,12 +159,12 @@ export default function MembersPage() {
             />
             {isAdmin && (
               <>
-                <Link
-                  to="/mitglieder/neu"
-                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors text-center"
+                <button
+                  onClick={() => setShowNew(true)}
+                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
                 >
                   + Neu
-                </Link>
+                </button>
                 <button
                   onClick={() => setShowImport(true)}
                   className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
@@ -227,6 +252,55 @@ export default function MembersPage() {
       </div>
 
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} />
+
+      {/* Neu-Mitglied Modal */}
+      {showNew && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm">
+            <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
+              <h2 className="font-semibold text-base text-brand-text">Neues Mitglied anlegen</h2>
+              <button onClick={resetNew} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreate} className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={newFirstName}
+                  onChange={e => setNewFirstName(e.target.value)}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+                <input
+                  type="text"
+                  value={newLastName}
+                  onChange={e => setNewLastName(e.target.value)}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={resetNew} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                >
+                  {creating ? 'Anlegen…' : 'Anlegen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Import Modal */}
       {showImport && (
