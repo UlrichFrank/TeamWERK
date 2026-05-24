@@ -5,7 +5,6 @@ interface Member {
   id?: number
   first_name: string
   last_name: string
-  date_of_birth: string
   member_number: string
   pass_number: string
   jersey_number?: number
@@ -143,15 +142,6 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               </div>
             </div>
           )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
-            <input
-              type="date"
-              value={form.date_of_birth}
-              onChange={e => onFormChange({ date_of_birth: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            />
-          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mitgliedsnummer</label>
             <input

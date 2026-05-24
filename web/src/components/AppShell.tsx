@@ -44,6 +44,7 @@ const navModules: NavModule[] = [
     label: 'Administration',
     items: [
       { to: '/admin/nutzer', label: 'Nutzerverwaltung', roles: ['admin', 'vorstand'] },
+      { to: '/admin/tresor-verwaltung', label: 'Tresor', roles: ['vorstand'] },
     ],
   },
 ]

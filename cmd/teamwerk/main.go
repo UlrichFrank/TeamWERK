@@ -100,8 +100,10 @@ func serve() {
 		// Members
 		r.Get("/api/members", membH.List)
 		r.Post("/api/members", membH.Create)
-		r.Get("/api/members/export", membH.Export)
+		r.Get("/api/members/export-encrypted", membH.ExportEncrypted)
 		r.Get("/api/members/{id}", membH.Get)
+		r.Get("/api/members/{id}/sensitive", membH.GetSensitive)
+		r.Put("/api/members/{id}/sensitive", membH.PutSensitive)
 		r.Put("/api/members/{id}", membH.Update)
 		r.Put("/api/members/{id}/status", membH.UpdateStatus)
 		r.Get("/api/members/{id}/change-drafts", membH.GetChangeRequestsHandler)
@@ -168,6 +170,9 @@ func serve() {
 		// Admin + Vorstand
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole("admin", "vorstand"))
+			r.Get("/api/admin/encryption-config", membH.GetEncryptionConfig)
+			r.Put("/api/admin/encryption-config", membH.SetEncryptionConfig)
+			r.Put("/api/admin/rotate-encryption", membH.RotateEncryption)
 			r.Get("/api/admin/club", cfgH.GetClub)
 			r.Put("/api/admin/club", cfgH.UpdateClub)
 			r.Get("/api/admin/seasons", cfgH.ListSeasons)

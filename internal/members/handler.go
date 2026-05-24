@@ -22,7 +22,6 @@ type Member struct {
 	ID           int     `json:"id"`
 	FirstName    string  `json:"first_name"`
 	LastName     string  `json:"last_name"`
-	DateOfBirth  string  `json:"date_of_birth,omitempty"`
 	MemberNumber string  `json:"member_number,omitempty"`
 	PassNumber   string  `json:"pass_number,omitempty"`
 	JerseyNumber *int    `json:"jersey_number,omitempty"`
@@ -32,13 +31,8 @@ type Member struct {
 	UserID       *int    `json:"user_id,omitempty"`
 	ClubFunction *string `json:"club_function,omitempty"`
 
-	// Extended fields (populated by GetMember)
-	Street   *string `json:"street,omitempty"`
-	Zip      *string `json:"zip,omitempty"`
-	City     *string `json:"city,omitempty"`
+	// Extended fields (populated by Get handler)
 	JoinDate *string `json:"join_date,omitempty"`
-	IBAN          *string `json:"iban,omitempty"`
-	AccountHolder *string `json:"account_holder,omitempty"`
 	PhotoURL      *string `json:"photo_url,omitempty"`
 	PhotoVisible bool `json:"photo_visible,omitempty"`
 
@@ -50,10 +44,6 @@ type Member struct {
 	SepaMandatDate        *string `json:"sepa_mandat_date,omitempty"`
 	SepaMandatURL         *string `json:"sepa_mandat_url,omitempty"`
 
-	AddressSource       string         `json:"address_source,omitempty"`
-	AddressConflict     bool           `json:"address_conflict,omitempty"`
-	MemberAddressStored *AddressStored `json:"member_address_stored,omitempty"`
-
 	// Linked user contact data (shown when user visibility allows)
 	UserPhones   []UserPhone `json:"user_phones,omitempty"`
 	UserPhotoURL *string     `json:"user_photo_url,omitempty"`
@@ -61,17 +51,11 @@ type Member struct {
 	HasPendingDrafts bool `json:"has_pending_drafts,omitempty"`
 }
 
-type AddressStored struct {
-	Street string `json:"street"`
-	Zip    string `json:"zip"`
-	City   string `json:"city"`
-}
-
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	var m Member
 	var jerseyNum, userID sql.NullInt64
 	var clubFunc sql.NullString
-	err := row.Scan(&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth, &m.MemberNumber, &m.PassNumber,
+	err := row.Scan(&m.ID, &m.FirstName, &m.LastName, &m.MemberNumber, &m.PassNumber,
 		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunc)
 	if err != nil {
 		return m, err
@@ -136,13 +120,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	var rows *sql.Rows
 	if claims.Role == "admin" {
-		query := `SELECT id, first_name, last_name, COALESCE(date_of_birth,''), COALESCE(member_number,''), COALESCE(pass_number,''),
+		query := `SELECT id, first_name, last_name, COALESCE(member_number,''), COALESCE(pass_number,''),
 		        jersey_number, COALESCE(position,''), COALESCE(gender,'u'), status, user_id, club_function
 		 FROM members WHERE status != 'ausgetreten'` + whereExtra + ` ORDER BY last_name, first_name LIMIT ? OFFSET ?`
 		args := buildListArgs(nil, clubFuncFilter, search, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	} else {
-		query := `SELECT DISTINCT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		query := `SELECT DISTINCT m.id, m.first_name, m.last_name, COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function
 		 FROM members m
 		 JOIN team_memberships tm ON tm.member_id = m.id
@@ -258,39 +242,34 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	row := h.db.QueryRowContext(r.Context(), `
 		SELECT m.id, m.first_name, m.last_name,
-		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		       COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function,
-		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
+		       m.join_date,
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
-		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path,
-		       u.street, u.zip, u.city
+		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path
 		FROM members m
-		LEFT JOIN users u ON u.id = m.user_id
 		WHERE m.id=?`, id)
 
 	var base Member
 	var jerseyNum, userID sql.NullInt64
 	var clubFunc sql.NullString
-	var mStreet, mZip, mCity sql.NullString
-	var joinDate, iban, accountHolder sql.NullString
+	var joinDate sql.NullString
 	var photoPath sql.NullString
 	var photoVisible int64
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
 	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
-	var uStreet, uZip, uCity sql.NullString
 
 	err := row.Scan(
-		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
+		&base.ID, &base.FirstName, &base.LastName,
 		&base.MemberNumber, &base.PassNumber,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunc,
-		&mStreet, &mZip, &mCity, &joinDate, &iban, &accountHolder,
+		&joinDate,
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
 		&sepaMandat, &sepaMandatDate, &sepaMandatPath,
-		&uStreet, &uZip, &uCity,
 	)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -312,35 +291,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	isAdmin := claims.Role == "admin"
 	isPrivileged := claims.Role == "admin" || claims.Role == "vorstand" || claims.Role == "trainer"
 	isOwn := base.UserID != nil && *base.UserID == claims.UserID
-
-	// Address priority: user address wins when present
-	if uStreet.Valid && uStreet.String != "" {
-		base.AddressSource = "user"
-		s := uStreet.String
-		z := uZip.String
-		c := uCity.String
-		base.Street = &s
-		base.Zip = &z
-		base.City = &c
-		// Conflict: member also has an address that differs
-		if mStreet.Valid && mStreet.String != "" &&
-			(mStreet.String != uStreet.String || mZip.String != uZip.String || mCity.String != uCity.String) {
-			base.AddressConflict = true
-			base.MemberAddressStored = &AddressStored{
-				Street: mStreet.String,
-				Zip:    mZip.String,
-				City:   mCity.String,
-			}
-		}
-	} else if mStreet.Valid && mStreet.String != "" {
-		base.AddressSource = "member"
-		s := mStreet.String
-		z := mZip.String
-		c := mCity.String
-		base.Street = &s
-		base.Zip = &z
-		base.City = &c
-	}
 
 	// Photo: always for privileged roles; others only if photo_visible=1
 	base.PhotoVisible = photoVisible == 1
@@ -370,14 +320,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// IBAN, account holder + SEPA document URL: admin only
+	// SEPA document URL: admin only
 	if isAdmin {
-		if iban.Valid {
-			base.IBAN = &iban.String
-		}
-		if accountHolder.Valid {
-			base.AccountHolder = &accountHolder.String
-		}
 		if sepaMandatPath.Valid && sepaMandatPath.String != "" {
 			url := "/api/uploads/" + sepaMandatPath.String
 			base.SepaMandatURL = &url
@@ -423,12 +367,10 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/members/:id
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	claims := auth.ClaimsFromCtx(r.Context())
 	id := r.PathValue("id")
 	var req struct {
 		FirstName    string  `json:"first_name"`
 		LastName     string  `json:"last_name"`
-		DateOfBirth  string  `json:"date_of_birth"`
 		MemberNumber string  `json:"member_number"`
 		PassNumber   string  `json:"pass_number"`
 		JerseyNumber *int    `json:"jersey_number"`
@@ -436,12 +378,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Gender       string  `json:"gender"`
 		ClubFunction *string `json:"club_function"`
 
-		Street   string `json:"street"`
-		Zip      string `json:"zip"`
-		City     string `json:"city"`
-		JoinDate      string `json:"join_date"`
-		IBAN          string `json:"iban"`
-		AccountHolder string `json:"account_holder"`
+		JoinDate string `json:"join_date"`
 
 		PhotoVisible bool `json:"photo_visible"`
 
@@ -457,31 +394,20 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		req.Gender = "u"
 	}
 
-	ibanVal := interface{}(nil)
-	if claims.Role == "admin" && req.IBAN != "" {
-		ibanVal = req.IBAN
-	}
-
-	accountHolderVal := interface{}(nil)
-	if claims.Role == "admin" {
-		accountHolderVal = nullableString(req.AccountHolder)
-	}
-
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET
-			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
+			first_name=?, last_name=?, member_number=?, pass_number=?,
 			jersey_number=?, position=?, gender=?, club_function=?,
-			street=?, zip=?, city=?, join_date=?, iban=COALESCE(?, iban), account_holder=?,
+			join_date=?,
 			photo_visible=?,
 			dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
 			dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
 			sepa_mandat=?, sepa_mandat_date=?,
 			updated_at=?
 		WHERE id=?`,
-		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
+		req.FirstName, req.LastName, nullableString(req.MemberNumber),
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender, req.ClubFunction,
-		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
-		nullableString(req.JoinDate), ibanVal, accountHolderVal,
+		nullableString(req.JoinDate),
 		boolToInt(req.PhotoVisible),
 		boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 		boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
@@ -565,64 +491,6 @@ func (h *Handler) DeleteFamilyLink(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/members/export
-func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT m.member_number, m.first_name, m.last_name, COALESCE(m.date_of_birth,''),
-		        m.gender, COALESCE(m.pass_number,''), m.jersey_number,
-		        COALESCE(m.position,''), m.status,
-		        COALESCE(u.email,'') AS user_email,
-		        COALESCE(up1.email,'') AS parent1_email,
-		        COALESCE(up2.email,'') AS parent2_email
-		 FROM members m
-		 LEFT JOIN users u ON u.id = m.user_id
-		 LEFT JOIN (
-		   SELECT fl.member_id, MIN(fl.parent_user_id) AS uid
-		   FROM family_links fl GROUP BY fl.member_id
-		 ) fl1 ON fl1.member_id = m.id
-		 LEFT JOIN users up1 ON up1.id = fl1.uid
-		 LEFT JOIN (
-		   SELECT fl.member_id, MIN(fl.parent_user_id) AS uid
-		   FROM family_links fl
-		   WHERE fl.parent_user_id > (
-		     SELECT MIN(fl2.parent_user_id) FROM family_links fl2 WHERE fl2.member_id = fl.member_id
-		   )
-		   GROUP BY fl.member_id
-		 ) fl2 ON fl2.member_id = m.id
-		 LEFT JOIN users up2 ON up2.id = fl2.uid
-		 ORDER BY m.last_name, m.first_name`)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="mitglieder.csv"`)
-	cw := csv.NewWriter(w)
-	cw.Comma = ';'
-	cw.Write([]string{
-		"Mitgliedsnummer", "Vorname", "Nachname", "Geburtsdatum", "Geschlecht",
-		"Passnummer", "Trikotnummer", "Position", "Status",
-		"Benutzer_Email", "Erziehungsberechtigter1_Email", "Erziehungsberechtigter2_Email",
-	})
-	for rows.Next() {
-		var memberNum, position, userEmail, parent1, parent2 sql.NullString
-		var firstName, lastName, dob, passNum, gender, status string
-		var jerseyNum sql.NullInt64
-		rows.Scan(&memberNum, &firstName, &lastName, &dob, &gender, &passNum, &jerseyNum,
-			&position, &status, &userEmail, &parent1, &parent2)
-		jerseyStr := ""
-		if jerseyNum.Valid {
-			jerseyStr = fmt.Sprintf("%d", jerseyNum.Int64)
-		}
-		cw.Write([]string{
-			memberNum.String, firstName, lastName, dob, gender,
-			passNum, jerseyStr, position.String, status,
-			userEmail.String, parent1.String, parent2.String,
-		})
-	}
-	cw.Flush()
-}
 
 type ProfileParent struct {
 	ID    int    `json:"id"`
@@ -673,7 +541,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	// Children (elternteil)
 	if claims.Role == "elternteil" {
 		rows, err := h.db.QueryContext(r.Context(),
-			`SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+			`SELECT m.id, m.first_name, m.last_name, COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 			        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function
 			 FROM members m
 			 JOIN family_links fl ON fl.member_id = m.id

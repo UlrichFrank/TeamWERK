@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useVault } from '../contexts/VaultContext'
 import { usePagination } from '../lib/usePagination'
 import MobileCard from '../components/MobileCard'
 import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { decrypt, unwrapKey } from '../lib/crypto'
 
 interface Member {
   id: number; first_name: string; last_name: string
@@ -57,8 +59,10 @@ const rowStatusColor = (s: ImportRow['status']) => {
 export default function MembersPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { vaultKwKey } = useVault()
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members')
   const isAdmin = user?.role === 'admin'
+  const isVorstandOrAdmin = user?.role === 'admin' || user?.role === 'vorstand'
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
 
@@ -82,15 +86,54 @@ export default function MembersPage() {
   const [importResult, setImportResult] = useState<ImportReport | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleExport = () => {
-    api.get('/members/export', { responseType: 'blob' }).then(r => {
-      const url = URL.createObjectURL(r.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'mitglieder.csv'
-      a.click()
-      URL.revokeObjectURL(url)
-    })
+  const handleExport = async () => {
+    if (!vaultKwKey) return
+    const { data } = await api.get<Array<{
+      id: number
+      first_name: string
+      last_name: string
+      member_number: string
+      pass_number: string
+      gender: string
+      status: string
+      position: string
+      ciphertext: string
+      dek_enc_vorstand: string
+    }>>('/members/export-encrypted')
+
+    const rows: string[][] = [
+      ['Mitgliedsnummer', 'Vorname', 'Nachname', 'Geschlecht', 'Status', 'Position',
+       'Geburtsdatum', 'Straße', 'PLZ', 'Ort', 'IBAN', 'Kontoinhaber'],
+    ]
+
+    for (const m of data) {
+      let dob = '', street = '', zip = '', city = '', iban = '', holder = ''
+      if (m.ciphertext && m.dek_enc_vorstand) {
+        try {
+          const dek = await unwrapKey(m.dek_enc_vorstand, vaultKwKey)
+          const payload = await decrypt(m.ciphertext, dek) as Record<string, string>
+          dob = payload.date_of_birth ?? ''
+          street = payload.street ?? ''
+          zip = payload.zip ?? ''
+          city = payload.city ?? ''
+          iban = payload.iban ?? ''
+          holder = payload.account_holder ?? ''
+        } catch {
+          // skip decryption failure
+        }
+      }
+      rows.push([m.member_number, m.first_name, m.last_name, m.gender, m.status, m.position,
+        dob, street, zip, city, iban, holder])
+    }
+
+    const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(';')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'mitglieder.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleImport = async () => {
@@ -146,12 +189,16 @@ export default function MembersPage() {
                 >
                   Import CSV
                 </button>
-                <button
-                  onClick={handleExport}
-                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
-                >
-                  Export CSV
-                </button>
+                {isVorstandOrAdmin && (
+                  <button
+                    onClick={handleExport}
+                    disabled={!vaultKwKey}
+                    title={!vaultKwKey ? 'Tresor entsperren um zu exportieren' : ''}
+                    className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Export CSV
+                  </button>
+                )}
               </>
             )}
           </div>

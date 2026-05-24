@@ -654,6 +654,8 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
+		DekEncMember    string `json:"dek_enc_member"`
+		MemberSalt      string `json:"member_salt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CurrentPassword == "" || req.NewPassword == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -675,8 +677,29 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.db.ExecContext(r.Context(), `UPDATE users SET password=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, string(newHash), claims.UserID)
-	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE user_id=?`, claims.UserID)
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	tx.ExecContext(r.Context(), `UPDATE users SET password=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, string(newHash), claims.UserID)
+	tx.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE user_id=?`, claims.UserID)
+
+	if req.DekEncMember != "" {
+		// Re-wrap DEK for the member linked to this user
+		tx.ExecContext(r.Context(),
+			`UPDATE member_sensitive SET dek_enc_member=?, member_salt=?
+			 WHERE member_id=(SELECT id FROM members WHERE user_id=? LIMIT 1)`,
+			req.DekEncMember, req.MemberSalt, claims.UserID)
+	}
+
+	if err = tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

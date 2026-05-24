@@ -49,24 +49,22 @@ func (h *Handler) GetChangeDrafts(memberID int) ([]ChangeDraft, error) {
 func (h *Handler) getMember(memberID int) (*Member, error) {
 	row := h.db.QueryRow(`
 		SELECT m.id, m.first_name, m.last_name,
-		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		       COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function,
-		       m.street, m.zip, m.city, m.join_date, m.iban,
-		       m.photo_visible
+		       m.join_date, m.photo_visible
 		FROM members m
 		WHERE m.id=?`, memberID)
 
 	var m Member
 	var jerseyNum, userID sql.NullInt64
-	var clubFunc, street, zip, city, joinDate, iban sql.NullString
+	var clubFunc, joinDate sql.NullString
 	var photoVisible int64
 
 	err := row.Scan(
-		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
+		&m.ID, &m.FirstName, &m.LastName,
 		&m.MemberNumber, &m.PassNumber,
 		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunc,
-		&street, &zip, &city, &joinDate, &iban,
-		&photoVisible,
+		&joinDate, &photoVisible,
 	)
 	if err != nil {
 		return nil, err
@@ -83,20 +81,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	if clubFunc.Valid {
 		m.ClubFunction = &clubFunc.String
 	}
-	if street.Valid {
-		m.Street = &street.String
-	}
-	if zip.Valid {
-		m.Zip = &zip.String
-	}
-	if city.Valid {
-		m.City = &city.String
-	}
 	if joinDate.Valid {
 		m.JoinDate = &joinDate.String
-	}
-	if iban.Valid {
-		m.IBAN = &iban.String
 	}
 	m.PhotoVisible = photoVisible != 0
 
@@ -199,21 +185,11 @@ func (h *Handler) extractFieldValue(m *Member, fieldName string) (json.RawMessag
 			"last_name":  m.LastName,
 		})
 	case "address":
-		addr := map[string]interface{}{}
-		if m.Street != nil {
-			addr["street"] = *m.Street
-		}
-		if m.Zip != nil {
-			addr["zip"] = *m.Zip
-		}
-		if m.City != nil {
-			addr["city"] = *m.City
-		}
-		return json.Marshal(addr)
+		return json.Marshal(map[string]interface{}{})
 	case "photo_url":
 		return json.Marshal(m.PhotoURL)
 	case "iban":
-		return json.Marshal(m.IBAN)
+		return json.Marshal(nil)
 	case "dsgvo":
 		return json.Marshal(map[string]bool{
 			"verarbeitung": m.DsgvoVerarbeitung,

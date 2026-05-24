@@ -7,16 +7,12 @@ import MemberKontaktTab from '../components/admin/MemberKontaktTab'
 import MemberDatenschutzTab from '../components/admin/MemberDatenschutzTab'
 import MemberFamilieTab from '../components/admin/MemberFamilieTab'
 import MemberAdminTab from '../components/admin/MemberAdminTab'
-
-interface AddressStored {
-  street: string; zip: string; city: string
-}
+import MemberSensitivTab from '../components/admin/MemberSensitivTab'
 
 interface Member {
   id: number
   first_name: string
   last_name: string
-  date_of_birth: string
   member_number: string
   pass_number: string
   jersey_number?: number
@@ -25,12 +21,7 @@ interface Member {
   status: string
   user_id?: number
   club_function?: string
-  street?: string
-  zip?: string
-  city?: string
   join_date?: string
-  iban?: string
-  account_holder?: string
   photo_url?: string
   photo_visible?: boolean
   dsgvo_verarbeitung?: boolean
@@ -40,14 +31,11 @@ interface Member {
   sepa_mandat?: boolean
   sepa_mandat_date?: string
   sepa_mandat_url?: string
-  address_source?: string
-  address_conflict?: boolean
-  member_address_stored?: AddressStored
 }
 
 interface User { id: number; name: string; email: string; role: string }
 
-type TabName = 'stammdaten' | 'kontakt' | 'datenschutz' | 'familie' | 'admin'
+type TabName = 'stammdaten' | 'kontakt' | 'sensitiv' | 'datenschutz' | 'familie' | 'admin'
 
 export default function MemberDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -65,10 +53,13 @@ export default function MemberDetailPage() {
     localStorage.setItem('memberDetailTab', activeTab)
   }, [activeTab])
 
+  const isVorstand = user?.role === 'vorstand' || user?.role === 'admin'
+  const [currentUserID, setCurrentUserID] = useState<number | null>(null)
+
   const [form, setForm] = useState<Omit<Member, 'id'>>({
-    first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
+    first_name: '', last_name: '', member_number: '', pass_number: '',
     jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_function: '',
-    street: '', zip: '', city: '', join_date: '', iban: '', account_holder: '',
+    join_date: '',
     photo_url: '', photo_visible: false,
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
@@ -76,7 +67,6 @@ export default function MemberDetailPage() {
   })
   const [users, setUsers] = useState<User[]>([])
   const [linkedParents, setLinkedParents] = useState<User[]>([])
-  const [currentUserID, setCurrentUserID] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -105,9 +95,6 @@ export default function MemberDetailPage() {
         setForm(f => ({
           ...f,
           first_name: m.first_name, last_name: m.last_name,
-          street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
-          iban: m.iban ?? '',
-          account_holder: m.account_holder ?? '',
           dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
           dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,
           sepa_mandat: m.sepa_mandat ?? false,
@@ -139,16 +126,12 @@ export default function MemberDetailPage() {
         const m: Member = r.data
         setForm({
           first_name: m.first_name, last_name: m.last_name,
-          date_of_birth: m.date_of_birth?.slice(0, 10) ?? '',
           member_number: m.member_number ?? '',
           pass_number: m.pass_number ?? '',
           jersey_number: m.jersey_number, position: m.position ?? '',
           gender: m.gender ?? 'u', status: m.status,
           club_function: m.club_function ?? '',
-          street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
           join_date: m.join_date?.slice(0, 10) ?? '',
-          iban: m.iban ?? '',
-          account_holder: m.account_holder ?? '',
           photo_url: m.photo_url ?? '',
           photo_visible: m.photo_visible ?? false,
           dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
@@ -220,6 +203,7 @@ export default function MemberDetailPage() {
   const tabButtons: { name: TabName; label: string; show: boolean }[] = [
     { name: 'stammdaten', label: 'Stammdaten', show: true },
     { name: 'kontakt', label: 'Kontakt', show: !isNew },
+    { name: 'sensitiv', label: 'Sensible Daten', show: !isNew && isVorstand },
     { name: 'datenschutz', label: 'Datenschutz', show: !isNew && isAdmin },
     { name: 'familie', label: 'Familie', show: !isNew && isAdmin },
     { name: 'admin', label: 'Admin', show: !isNew && isAdmin },
@@ -269,18 +253,11 @@ export default function MemberDetailPage() {
       )}
 
       {activeTab === 'kontakt' && (
-        <MemberKontaktTab
-          form={form}
-          isNew={isNew}
-          drafts={drafts}
-          onFormChange={updates => setForm(f => ({ ...f, ...updates }))}
-          onDraftAccept={handleDraftAccept}
-          onDraftReject={handleDraftReject}
-          onSave={handleSave}
-          saving={saving}
-          saved={saved}
-          error={error}
-        />
+        <MemberKontaktTab isNew={isNew} />
+      )}
+
+      {activeTab === 'sensitiv' && !isNew && id && (
+        <MemberSensitivTab memberId={Number(id)} memberUserId={currentUserID ?? undefined} />
       )}
 
       {activeTab === 'datenschutz' && (

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { VaultProvider } from './contexts/VaultContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import RequestMembershipPage from './pages/RequestMembershipPage'
@@ -20,6 +21,8 @@ import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminSeasonsPage from './pages/AdminSeasonsPage'
 import AdminKaderPage from './pages/AdminKaderPage'
+import AdminTresorEinrichtenPage from './pages/AdminTresorEinrichtenPage'
+import AdminTresorVerwaltungPage from './pages/AdminTresorVerwaltungPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -31,6 +34,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <AuthProvider>
+      <VaultProvider>
       <BrowserRouter>
         <Routes>
           {/* Public */}
@@ -57,11 +61,14 @@ export default function App() {
             <Route path="admin/dienstplan-vorlagen" element={<AdminDutyTemplatesPage />} />
             <Route path="admin/dienstplan-vorlagen/:id" element={<AdminDutyTemplateDetailPage />} />
             <Route path="admin/saisons" element={<AdminSeasonsPage />} />
+            <Route path="admin/tresor-einrichten" element={<AdminTresorEinrichtenPage />} />
+            <Route path="admin/tresor-verwaltung" element={<AdminTresorVerwaltungPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </VaultProvider>
     </AuthProvider>
   )
 }
