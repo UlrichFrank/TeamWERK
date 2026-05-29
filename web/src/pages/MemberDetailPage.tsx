@@ -89,25 +89,39 @@ export default function MemberDetailPage() {
     }
   }
 
+  const applyMemberToForm = (m: Member) => {
+    setForm({
+      first_name: m.first_name, last_name: m.last_name,
+      date_of_birth: m.date_of_birth?.slice(0, 10) ?? '',
+      member_number: m.member_number ?? '',
+      pass_number: m.pass_number ?? '',
+      jersey_number: m.jersey_number, position: m.position ?? '',
+      gender: m.gender ?? 'u', status: m.status,
+      club_function: m.club_function ?? '',
+      street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
+      join_date: m.join_date?.slice(0, 10) ?? '',
+      iban: m.iban ?? '',
+      account_holder: m.account_holder ?? '',
+      photo_url: m.photo_url ?? '',
+      photo_visible: m.photo_visible ?? false,
+      dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
+      dsgvo_verarbeitung_date: m.dsgvo_verarbeitung_date?.slice(0, 10) ?? '',
+      dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,
+      dsgvo_weitergabe_date: m.dsgvo_weitergabe_date?.slice(0, 10) ?? '',
+      sepa_mandat: m.sepa_mandat ?? false,
+      sepa_mandat_date: m.sepa_mandat_date?.slice(0, 10) ?? '',
+      sepa_mandat_url: m.sepa_mandat_url ?? '',
+    })
+    setCurrentUserID(m.user_id ?? null)
+    setWelcomeEmailSentAt(m.welcome_email_sent_at ?? null)
+  }
+
   const handleDraftAccept = async (draftId: number) => {
     if (!id) return
     try {
       await api.post(`/members/${id}/change-drafts/${draftId}/accept`)
       loadDrafts()
-      // Reload member data to reflect accepted changes
-      api.get(`/members/${id}`).then(r => {
-        const m: Member = r.data
-        setForm(f => ({
-          ...f,
-          first_name: m.first_name, last_name: m.last_name,
-          street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
-          iban: m.iban ?? '',
-          account_holder: m.account_holder ?? '',
-          dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
-          dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,
-          sepa_mandat: m.sepa_mandat ?? false,
-        }))
-      })
+      api.get(`/members/${id}`).then(r => applyMemberToForm(r.data))
     } catch {
       setError('Fehler beim Annehmen der Änderung.')
     }
@@ -131,31 +145,7 @@ export default function MemberDetailPage() {
       loadDrafts()
       api.get(`/members/${id}`).then(r => {
         if (cancelled) return
-        const m: Member = r.data
-        setForm({
-          first_name: m.first_name, last_name: m.last_name,
-          date_of_birth: m.date_of_birth?.slice(0, 10) ?? '',
-          member_number: m.member_number ?? '',
-          pass_number: m.pass_number ?? '',
-          jersey_number: m.jersey_number, position: m.position ?? '',
-          gender: m.gender ?? 'u', status: m.status,
-          club_function: m.club_function ?? '',
-          street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
-          join_date: m.join_date?.slice(0, 10) ?? '',
-          iban: m.iban ?? '',
-          account_holder: m.account_holder ?? '',
-          photo_url: m.photo_url ?? '',
-          photo_visible: m.photo_visible ?? false,
-          dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
-          dsgvo_verarbeitung_date: m.dsgvo_verarbeitung_date?.slice(0, 10) ?? '',
-          dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,
-          dsgvo_weitergabe_date: m.dsgvo_weitergabe_date?.slice(0, 10) ?? '',
-          sepa_mandat: m.sepa_mandat ?? false,
-          sepa_mandat_date: m.sepa_mandat_date?.slice(0, 10) ?? '',
-          sepa_mandat_url: m.sepa_mandat_url ?? '',
-        })
-        setCurrentUserID(m.user_id ?? null)
-        setWelcomeEmailSentAt(m.welcome_email_sent_at ?? null)
+        applyMemberToForm(r.data)
       })
       loadLinkedParents()
     }
