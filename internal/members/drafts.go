@@ -51,21 +51,21 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		SELECT m.id, m.first_name, m.last_name,
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function,
-		       m.street, m.zip, m.city, m.join_date, m.iban,
+		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
 		       m.photo_visible
 		FROM members m
 		WHERE m.id=?`, memberID)
 
 	var m Member
 	var jerseyNum, userID sql.NullInt64
-	var clubFunc, street, zip, city, joinDate, iban sql.NullString
+	var clubFunc, street, zip, city, joinDate, iban, accountHolder sql.NullString
 	var photoVisible int64
 
 	err := row.Scan(
 		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
 		&m.MemberNumber, &m.PassNumber,
 		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunc,
-		&street, &zip, &city, &joinDate, &iban,
+		&street, &zip, &city, &joinDate, &iban, &accountHolder,
 		&photoVisible,
 	)
 	if err != nil {
@@ -97,6 +97,9 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	}
 	if iban.Valid {
 		m.IBAN = &iban.String
+	}
+	if accountHolder.Valid {
+		m.AccountHolder = &accountHolder.String
 	}
 	m.PhotoVisible = photoVisible != 0
 

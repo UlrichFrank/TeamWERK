@@ -73,6 +73,22 @@ export default function ProfileBankTab({ ownMember }: Props) {
 
   return (
     <div className="space-y-6">
+      {ownMember.account_holder && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+          <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
+            <input
+              type="text"
+              value={ownMember.account_holder}
+              readOnly
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text bg-brand-surface-card cursor-not-allowed"
+            />
+            <p className="text-xs text-brand-text-subtle mt-1">Wird vom Verein verwaltet.</p>
+          </div>
+        </div>
+      )}
+
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text-muted mb-1">IBAN</h2>
         <p className="text-xs text-brand-text-subtle mb-4">IBAN-Änderungen müssen vom Verein übernommen werden.</p>
