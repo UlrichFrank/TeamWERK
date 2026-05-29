@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
@@ -54,10 +54,22 @@ const rowStatusColor = (s: ImportRow['status']) => {
   return 'text-brand-danger'
 }
 
+const CLUB_FUNCTION_LABELS: Record<string, string> = {
+  spieler: 'Spieler',
+  trainer: 'Trainer',
+  vorstand: 'Vorstand',
+  vorstand_beisitzer: 'Vorstands-Beisitzer',
+}
+
 export default function MembersPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members')
+  const [clubFunctionFilter, setClubFunctionFilter] = useState('')
+  const extraParams = useMemo<Record<string, string>>(
+    () => clubFunctionFilter ? { club_function: clubFunctionFilter } : ({} as Record<string, string>),
+    [clubFunctionFilter]
+  )
+  const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   const isAdmin = user?.role === 'admin'
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
@@ -157,6 +169,16 @@ export default function MembersPage() {
               onChange={e => setSearch(e.target.value)}
               className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
             />
+            <select
+              value={clubFunctionFilter}
+              onChange={e => setClubFunctionFilter(e.target.value)}
+              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+            >
+              <option value="">Alle Funktionen</option>
+              {Object.entries(CLUB_FUNCTION_LABELS).map(([val, label]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
             {isAdmin && (
               <>
                 <button
@@ -190,7 +212,7 @@ export default function MembersPage() {
             <MobileCard
               key={m.id}
               title={`${m.last_name}, ${m.first_name}${m.has_pending_drafts ? ' ⏳' : ''}`}
-              subtitle={m.position || '–'}
+              subtitle={[m.club_function ? CLUB_FUNCTION_LABELS[m.club_function] : null, m.position].filter(Boolean).join(' · ') || '–'}
               badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
               onClick={() => navigate(`/mitglieder/${m.id}`)}
               actions={[{ label: deletingIds.has(m.id) ? '…' : 'Löschen', onClick: () => handleDelete(m), variant: 'danger' }]}
@@ -199,7 +221,7 @@ export default function MembersPage() {
             <Link key={m.id} to={`/mitglieder/${m.id}`} className="block">
               <MobileCard
                 title={`${m.last_name}, ${m.first_name}`}
-                subtitle={m.position || '–'}
+                subtitle={[m.club_function ? CLUB_FUNCTION_LABELS[m.club_function] : null, m.position].filter(Boolean).join(' · ') || '–'}
                 badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
               />
             </Link>

@@ -50,10 +50,6 @@ type Member struct {
 	SepaMandatDate        *string `json:"sepa_mandat_date,omitempty"`
 	SepaMandatURL         *string `json:"sepa_mandat_url,omitempty"`
 
-	AddressSource       string         `json:"address_source,omitempty"`
-	AddressConflict     bool           `json:"address_conflict,omitempty"`
-	MemberAddressStored *AddressStored `json:"member_address_stored,omitempty"`
-
 	// Linked user contact data (shown when user visibility allows)
 	UserPhones   []UserPhone `json:"user_phones,omitempty"`
 	UserPhotoURL *string     `json:"user_photo_url,omitempty"`
@@ -61,12 +57,6 @@ type Member struct {
 	WelcomeEmailSentAt *string `json:"welcome_email_sent_at,omitempty"`
 
 	HasPendingDrafts bool `json:"has_pending_drafts,omitempty"`
-}
-
-type AddressStored struct {
-	Street string `json:"street"`
-	Zip    string `json:"zip"`
-	City   string `json:"city"`
 }
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
@@ -267,7 +257,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
 		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path,
-		       u.street, u.zip, u.city,
 		       m.welcome_email_sent_at
 		FROM members m
 		LEFT JOIN users u ON u.id = m.user_id
@@ -282,7 +271,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var photoVisible int64
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
 	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
-	var uStreet, uZip, uCity sql.NullString
 	var welcomeEmailSentAt sql.NullString
 
 	err := row.Scan(
@@ -294,7 +282,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
 		&sepaMandat, &sepaMandatDate, &sepaMandatPath,
-		&uStreet, &uZip, &uCity,
 		&welcomeEmailSentAt,
 	)
 	if err != nil {
@@ -318,27 +305,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	isPrivileged := claims.Role == "admin" || claims.Role == "vorstand" || claims.Role == "trainer"
 	isOwn := base.UserID != nil && *base.UserID == claims.UserID
 
-	// Address priority: user address wins when present
-	if uStreet.Valid && uStreet.String != "" {
-		base.AddressSource = "user"
-		s := uStreet.String
-		z := uZip.String
-		c := uCity.String
-		base.Street = &s
-		base.Zip = &z
-		base.City = &c
-		// Conflict: member also has an address that differs
-		if mStreet.Valid && mStreet.String != "" &&
-			(mStreet.String != uStreet.String || mZip.String != uZip.String || mCity.String != uCity.String) {
-			base.AddressConflict = true
-			base.MemberAddressStored = &AddressStored{
-				Street: mStreet.String,
-				Zip:    mZip.String,
-				City:   mCity.String,
-			}
-		}
-	} else if mStreet.Valid && mStreet.String != "" {
-		base.AddressSource = "member"
+	if mStreet.Valid && mStreet.String != "" {
 		s := mStreet.String
 		z := mZip.String
 		c := mCity.String
@@ -444,6 +411,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		JerseyNumber *int    `json:"jersey_number"`
 		Position     string  `json:"position"`
 		Gender       string  `json:"gender"`
+		Status       string  `json:"status"`
 		ClubFunction *string `json:"club_function"`
 
 		Street   string `json:"street"`
@@ -466,41 +434,49 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Gender == "" {
 		req.Gender = "u"
 	}
-
-	ibanVal := interface{}(nil)
-	if claims.Role == "admin" && req.IBAN != "" {
-		ibanVal = req.IBAN
-	}
-
-	accountHolderVal := interface{}(nil)
-	if claims.Role == "admin" {
-		accountHolderVal = nullableString(req.AccountHolder)
+	if req.Status == "" {
+		req.Status = "aktiv"
 	}
 
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET
 			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
 			jersey_number=?, position=?, gender=?, club_function=?,
-			street=?, zip=?, city=?, join_date=?, iban=COALESCE(?, iban), account_holder=?,
+			street=?, zip=?, city=?,
+			status=?,
 			photo_visible=?,
-			dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
-			dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
-			sepa_mandat=?, sepa_mandat_date=?,
 			updated_at=?
 		WHERE id=?`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender, req.ClubFunction,
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
-		nullableString(req.JoinDate), ibanVal, accountHolderVal,
+		req.Status,
 		boolToInt(req.PhotoVisible),
-		boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
-		boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
-		boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
 		time.Now(), id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
+	if claims.Role == "admin" {
+		ibanVal := interface{}(nil)
+		if req.IBAN != "" {
+			ibanVal = req.IBAN
+		}
+		h.db.ExecContext(r.Context(),
+			`UPDATE members SET
+				join_date=?, iban=COALESCE(?, iban), account_holder=?,
+				dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
+				dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
+				sepa_mandat=?, sepa_mandat_date=?
+			WHERE id=?`,
+			nullableString(req.JoinDate), ibanVal, nullableString(req.AccountHolder),
+			boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
+			boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
+			boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
+			id)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

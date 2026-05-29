@@ -8,10 +8,6 @@ import MemberDatenschutzTab from '../components/admin/MemberDatenschutzTab'
 import MemberFamilieTab from '../components/admin/MemberFamilieTab'
 import MemberAdminTab from '../components/admin/MemberAdminTab'
 
-interface AddressStored {
-  street: string; zip: string; city: string
-}
-
 interface Member {
   id: number
   first_name: string
@@ -40,9 +36,6 @@ interface Member {
   sepa_mandat?: boolean
   sepa_mandat_date?: string
   sepa_mandat_url?: string
-  address_source?: string
-  address_conflict?: boolean
-  member_address_stored?: AddressStored
   welcome_email_sent_at?: string
 }
 

@@ -7,7 +7,7 @@ interface PaginatedResponse<T> {
   total: number
 }
 
-export function usePagination<T>(endpoint: string, limit = 20) {
+export function usePagination<T>(endpoint: string, limit = 20, extraParams: Record<string, string> = {}) {
   const [searchParams, setSearchParams] = useSearchParams()
   const currentPage = Math.max(1, Number(searchParams.get('page') || '1'))
   const currentSearch = searchParams.get('search') || ''
@@ -18,6 +18,8 @@ export function usePagination<T>(endpoint: string, limit = 20) {
   const [error, setError] = useState<string | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+
+  const extraParamsKey = Object.entries(extraParams).map(([k, v]) => `${k}=${v}`).sort().join('&')
 
   const totalPages = total > 0 ? Math.ceil(total / limit) : 1
 
@@ -32,6 +34,9 @@ export function usePagination<T>(endpoint: string, limit = 20) {
         if (currentSearch) params.append('search', currentSearch)
         params.append('limit', String(limit))
         params.append('offset', String((currentPage - 1) * limit))
+        for (const [k, v] of Object.entries(extraParams)) {
+          if (v) params.append(k, v)
+        }
 
         const res = await api.get<PaginatedResponse<T>>(`${endpoint}?${params}`)
         if (cancelled) return
@@ -53,7 +58,7 @@ export function usePagination<T>(endpoint: string, limit = 20) {
 
     fetchData()
     return () => { cancelled = true }
-  }, [currentPage, currentSearch, refreshTick])
+  }, [currentPage, currentSearch, refreshTick, extraParamsKey])
 
   function setSearch(val: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current)
