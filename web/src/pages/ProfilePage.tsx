@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ProfileAccountTab from '../components/profile/ProfileAccountTab'
 import ProfileProfilTab from '../components/profile/ProfileProfilTab'
 import ProfileMemberTab from '../components/profile/ProfileMemberTab'
@@ -54,13 +55,17 @@ export default function ProfilePage() {
     localStorage.setItem('profileTab', activeTab)
   }, [activeTab])
 
-  useEffect(() => {
+  const loadProfile = () => {
     api.get('/profile/me').then(r => {
       setOwnMember(r.data?.own_member ?? null)
       setChildren(r.data?.children ?? [])
       setParents(r.data?.parents ?? [])
     })
-  }, [])
+  }
+
+  useEffect(() => { loadProfile() }, [])
+
+  useLiveUpdates((event) => { if (event === 'members') loadProfile() })
 
   const showMemberTabs = ownMember !== null
 
