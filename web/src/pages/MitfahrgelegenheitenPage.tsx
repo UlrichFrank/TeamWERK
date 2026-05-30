@@ -477,8 +477,8 @@ export default function MitfahrgelegenheitenPage() {
 
   void user // used to re-render when auth changes
 
-  const load = () => {
-    setLoading(true)
+  const load = (silent = false) => {
+    if (!silent) setLoading(true)
     api.get('/mitfahrgelegenheiten')
       .then(res => {
         setResponse({ games: res.data?.games ?? [], vehicleSeats: res.data?.vehicleSeats })
@@ -487,7 +487,13 @@ export default function MitfahrgelegenheitenPage() {
       .catch(() => { setError('Fehler beim Laden.'); setLoading(false) })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    const interval = setInterval(() => { if (!document.hidden) load(true) }, 15000)
+    const onVisible = () => { if (!document.hidden) load(true) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible) }
+  }, [])
 
   const handleDelete = async (id: number) => {
     try {
