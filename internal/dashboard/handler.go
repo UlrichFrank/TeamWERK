@@ -70,12 +70,31 @@ type VehicleInfo struct {
 	UpToDate bool   `json:"upToDate"`
 }
 
+type CarpoolingMyEntry struct {
+	ID  int    `json:"id"`
+	Typ string `json:"typ"`
+}
+
+type CarpoolingPaarung struct {
+	PaarungID   int    `json:"paarungId"`
+	PartnerName string `json:"partnerName"`
+}
+
+type CarpoolingEvent struct {
+	Type      string `json:"type"`
+	ActorName string `json:"actorName"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type CarpoolingHint struct {
-	GameID    int    `json:"gameId"`
-	Date      string `json:"date"`
-	Opponent  string `json:"opponent"`
-	BieteCount int   `json:"bieteCount"`
-	SucheCount int   `json:"sucheCount"`
+	GameID       int                 `json:"gameId"`
+	Date         string              `json:"date"`
+	Opponent     string              `json:"opponent"`
+	BieteCount   int                 `json:"bieteCount"`
+	SucheCount   int                 `json:"sucheCount"`
+	MyEntry      *CarpoolingMyEntry  `json:"myEntry"`
+	Paarungen    []CarpoolingPaarung `json:"paarungen"`
+	RecentEvents []CarpoolingEvent   `json:"recentEvents"`
 }
 
 type Response struct {
@@ -522,6 +541,58 @@ func (h *Handler) queryCarpoolingHint(r *http.Request, userID int, role string, 
 		`SELECT COUNT(CASE WHEN typ='biete' THEN 1 END), COUNT(CASE WHEN typ='suche' THEN 1 END)
 		 FROM mitfahrgelegenheiten WHERE game_id = ?`, hint.GameID,
 	).Scan(&hint.BieteCount, &hint.SucheCount)
+
+	// MyEntry
+	var myEntry CarpoolingMyEntry
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT id, typ FROM mitfahrgelegenheiten WHERE game_id = ? AND user_id = ? LIMIT 1`,
+		hint.GameID, userID).Scan(&myEntry.ID, &myEntry.Typ); err == nil {
+		hint.MyEntry = &myEntry
+	}
+
+	// Confirmed paarungen involving this user
+	hint.Paarungen = make([]CarpoolingPaarung, 0)
+	pRows, err := h.db.QueryContext(r.Context(), `
+		SELECT p.id,
+		       CASE WHEN mb.user_id = ? THEN us.first_name || ' ' || us.last_name
+		                                ELSE ub.first_name || ' ' || ub.last_name END
+		FROM mitfahrt_paarungen p
+		JOIN mitfahrgelegenheiten mb ON mb.id = p.biete_id
+		JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
+		JOIN users ub ON ub.id = mb.user_id
+		JOIN users us ON us.id = ms.user_id
+		WHERE p.status = 'confirmed'
+		  AND (mb.user_id = ? OR ms.user_id = ?)
+		  AND mb.game_id = ?
+		ORDER BY p.updated_at DESC`,
+		userID, userID, userID, hint.GameID)
+	if err == nil {
+		defer pRows.Close()
+		for pRows.Next() {
+			var p CarpoolingPaarung
+			pRows.Scan(&p.PaarungID, &p.PartnerName)
+			hint.Paarungen = append(hint.Paarungen, p)
+		}
+	}
+
+	// Recent events (last 48 h)
+	hint.RecentEvents = make([]CarpoolingEvent, 0)
+	eRows, err := h.db.QueryContext(r.Context(), `
+		SELECT type, actor_name, created_at
+		FROM carpooling_events
+		WHERE user_id = ?
+		  AND game_id = ?
+		  AND created_at >= datetime('now', '-48 hours')
+		ORDER BY created_at DESC`,
+		userID, hint.GameID)
+	if err == nil {
+		defer eRows.Close()
+		for eRows.Next() {
+			var e CarpoolingEvent
+			eRows.Scan(&e.Type, &e.ActorName, &e.CreatedAt)
+			hint.RecentEvents = append(hint.RecentEvents, e)
+		}
+	}
 
 	return &hint
 }

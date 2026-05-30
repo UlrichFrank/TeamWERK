@@ -121,17 +121,19 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorName := h.userName(userID)
+	h.writeEvent(bieteGameID, oppositeUserID, "pairing_requested", actorName)
+
 	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	go func() {
-		name := h.userName(userID)
 		opponent, date := h.gameInfo(bieteGameID)
 		var msg string
 		if initiertVon == "suche" {
-			msg = fmt.Sprintf("%s möchte mitfahren — %s, %s", name, opponent, date)
+			msg = fmt.Sprintf("%s möchte mitfahren — %s, %s", actorName, opponent, date)
 		} else {
-			msg = fmt.Sprintf("%s bietet dir einen Platz an — %s, %s", name, opponent, date)
+			msg = fmt.Sprintf("%s bietet dir einen Platz an — %s, %s", actorName, opponent, date)
 		}
 		notifications.SendToUsers(h.db, h.cfg, []int{oppositeUserID}, "Mitfahranfrage", msg, "/mitfahrgelegenheiten")
 	}()
@@ -216,15 +218,17 @@ func (h *Handler) ConfirmPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var gameID int
+	h.db.QueryRowContext(r.Context(), `SELECT game_id FROM mitfahrgelegenheiten WHERE id = ?`, bieteID).Scan(&gameID)
+	actorName := h.userName(userID)
+	h.writeEvent(gameID, initiatorUserID, "pairing_confirmed", actorName)
+
 	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	go func() {
-		name := h.userName(userID)
-		var gameID int
-		h.db.QueryRow(`SELECT game_id FROM mitfahrgelegenheiten WHERE id = ?`, bieteID).Scan(&gameID)
 		opponent, date := h.gameInfo(gameID)
-		msg := fmt.Sprintf("%s hat die Mitfahrt bestätigt — %s, %s", name, opponent, date)
+		msg := fmt.Sprintf("%s hat die Mitfahrt bestätigt — %s, %s", actorName, opponent, date)
 		notifications.SendToUsers(h.db, h.cfg, []int{initiatorUserID}, "Mitfahrt bestätigt", msg, "/mitfahrgelegenheiten")
 	}()
 }
@@ -283,21 +287,27 @@ func (h *Handler) RejectPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var gameID int
+	h.db.QueryRowContext(r.Context(), `SELECT game_id FROM mitfahrgelegenheiten WHERE id = ?`, bieteID).Scan(&gameID)
+	actorName := h.userName(userID)
+	eventType := "pairing_rejected"
+	if status == "confirmed" {
+		eventType = "pairing_cancelled"
+	}
+	h.writeEvent(gameID, oppositeUserID, eventType, actorName)
+
 	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	go func() {
-		name := h.userName(userID)
-		var gameID int
-		h.db.QueryRow(`SELECT game_id FROM mitfahrgelegenheiten WHERE id = ?`, bieteID).Scan(&gameID)
 		opponent, date := h.gameInfo(gameID)
 		var title, msg string
 		if status == "confirmed" {
 			title = "Mitfahrt storniert"
-			msg = fmt.Sprintf("%s hat die bestätigte Mitfahrt storniert — %s, %s", name, opponent, date)
+			msg = fmt.Sprintf("%s hat die bestätigte Mitfahrt storniert — %s, %s", actorName, opponent, date)
 		} else {
 			title = "Mitfahranfrage abgelehnt"
-			msg = fmt.Sprintf("%s hat die Mitfahranfrage abgelehnt — %s, %s", name, opponent, date)
+			msg = fmt.Sprintf("%s hat die Mitfahranfrage abgelehnt — %s, %s", actorName, opponent, date)
 		}
 		notifications.SendToUsers(h.db, h.cfg, []int{oppositeUserID}, title, msg, "/mitfahrgelegenheiten")
 	}()

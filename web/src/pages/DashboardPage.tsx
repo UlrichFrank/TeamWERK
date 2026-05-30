@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Zap, Calendar, BarChart2, Users, Car,
   CircleDot, ArrowRight, Download, ChevronDown, ChevronRight,
-  Home, MapPin, MapPinned
+  Home, MapPin, MapPinned, Check, X, AlertTriangle
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import Accordion from '../components/Accordion'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 interface Season { id: number; name: string; isActive: boolean }
 interface Action { id: string; type: string; text: string; link: string; dueDate?: string; eventTime?: string; dutyTypeName?: string; actionNeeded?: boolean }
@@ -17,7 +18,15 @@ interface TeamStats { team: string; activeMembers: number; totalMembers: number;
 interface RecentAssignment { date: string; dutyType: string; status: string }
 interface DutyAccount { season: string; ist: number; soll: number | null; children: number; recentAssignments: RecentAssignment[] }
 interface VehicleInfo { seats: number; notes: string; upToDate: boolean }
-interface CarpoolingHint { gameId: number; date: string; opponent: string; bieteCount: number; sucheCount: number }
+interface CarpoolingMyEntry { id: number; typ: string }
+interface CarpoolingPaarung { paarungId: number; partnerName: string }
+interface CarpoolingEvent { type: string; actorName: string; createdAt: string }
+interface CarpoolingHint {
+  gameId: number; date: string; opponent: string; bieteCount: number; sucheCount: number
+  myEntry: CarpoolingMyEntry | null
+  paarungen: CarpoolingPaarung[]
+  recentEvents: CarpoolingEvent[]
+}
 interface DashboardData {
   currentSeason: Season | null
   nextGameDate: string | null
@@ -35,6 +44,35 @@ function formatDate(iso: string) {
     return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })
   }
   return iso
+}
+
+function relativeTime(iso: string): string {
+  const d = new Date(iso.replace(' ', 'T') + 'Z')
+  const diffHours = (Date.now() - d.getTime()) / 3600000
+  if (diffHours < 24) return 'heute'
+  if (diffHours < 48) return 'gestern'
+  return d.toLocaleDateString('de-DE', { weekday: 'short' })
+}
+
+const EVENT_TEXT: Record<string, (name: string) => string> = {
+  biete_created:     n => `${n} bietet Mitfahrt an`,
+  suche_created:     n => `${n} sucht Mitfahrt`,
+  pairing_requested: n => `${n} möchte mitfahren`,
+  pairing_confirmed: n => `${n} hat Mitfahrt bestätigt`,
+  pairing_rejected:  n => `${n} hat Anfrage abgelehnt`,
+  pairing_cancelled: n => `${n} hat Mitfahrt storniert`,
+  biete_deleted:     n => `${n} hat Angebot zurückgezogen`,
+  suche_deleted:     n => `${n} hat Gesuch zurückgezogen`,
+}
+
+function EventIcon({ type }: { type: string }) {
+  if (type === 'pairing_confirmed')
+    return <Check size={14} className="text-brand-success flex-shrink-0 mt-0.5" />
+  if (type === 'pairing_rejected' || type === 'pairing_cancelled')
+    return <X size={14} className="text-brand-danger flex-shrink-0 mt-0.5" />
+  if (type.endsWith('_deleted'))
+    return <AlertTriangle size={14} className="text-brand-danger flex-shrink-0 mt-0.5" />
+  return <CircleDot size={14} className="text-brand-text-muted flex-shrink-0 mt-0.5" />
 }
 
 function statusLabel(status: string) {
@@ -254,8 +292,11 @@ function CarpoolingHintCard({ hint }: { hint: CarpoolingHint | null | undefined 
       </div>
     )
   }
+
+  const hasActivity = hint.paarungen.length > 0 || hint.recentEvents.length > 0
+
   return (
-    <div>
+    <div className="space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-xs text-brand-text-muted">{formatDate(hint.date)}</p>
@@ -268,10 +309,52 @@ function CarpoolingHintCard({ hint }: { hint: CarpoolingHint | null | undefined 
           Alle <ArrowRight size={12} />
         </Link>
       </div>
-      <div className="flex gap-4 mt-2 text-xs text-brand-text-muted">
-        <span><span className="font-medium text-brand-text">{hint.bieteCount}</span> Angebot{hint.bieteCount !== 1 ? 'e' : ''}</span>
-        <span><span className="font-medium text-brand-text">{hint.sucheCount}</span> Gesuch{hint.sucheCount !== 1 ? 'e' : ''}</span>
-      </div>
+
+      {hint.myEntry && (
+        <p className="text-xs text-brand-text-muted">
+          Mein Eintrag: <span className="font-medium text-brand-text">
+            {hint.myEntry.typ === 'biete' ? 'Angebot' : 'Gesuch'}
+          </span>
+        </p>
+      )}
+
+      {hint.paarungen.length > 0 && (
+        <div className="space-y-1">
+          {hint.paarungen.map(p => (
+            <div key={p.paarungId} className="flex items-center gap-1.5 text-xs">
+              <Check size={14} className="text-brand-success flex-shrink-0" />
+              <span className="text-brand-text">{p.partnerName}</span>
+              <span className="text-brand-text-subtle">— Mitfahrt bestätigt</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {hint.recentEvents.length > 0 && (
+        <div className="space-y-1 pt-1 border-t border-brand-border-subtle">
+          {hint.recentEvents.map((e, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs">
+              <EventIcon type={e.type} />
+              <span className="flex-1 text-brand-text">{(EVENT_TEXT[e.type] ?? (n => n))(e.actorName)}</span>
+              <span className="text-brand-text-subtle flex-shrink-0">{relativeTime(e.createdAt)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!hasActivity && (
+        <div className="flex gap-4 text-xs text-brand-text-muted">
+          <span><span className="font-medium text-brand-text">{hint.bieteCount}</span> Angebot{hint.bieteCount !== 1 ? 'e' : ''}</span>
+          <span><span className="font-medium text-brand-text">{hint.sucheCount}</span> Gesuch{hint.sucheCount !== 1 ? 'e' : ''}</span>
+        </div>
+      )}
+
+      {hasActivity && (
+        <div className="flex gap-4 text-xs text-brand-text-subtle">
+          <span>{hint.bieteCount} Angebot{hint.bieteCount !== 1 ? 'e' : ''}</span>
+          <span>{hint.sucheCount} Gesuch{hint.sucheCount !== 1 ? 'e' : ''}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -300,7 +383,8 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => {
+  const load = useCallback((silent = false) => {
+    if (!silent) setState('loading')
     api.get('/dashboard')
       .then(res => {
         setData(res.data)
@@ -311,6 +395,12 @@ export default function DashboardPage() {
         setState('error')
       })
   }, [])
+
+  useEffect(() => { load() }, [load])
+
+  useLiveUpdates(event => {
+    if (event === 'mitfahrgelegenheiten') load(true)
+  })
 
   if (state === 'loading') {
     return (

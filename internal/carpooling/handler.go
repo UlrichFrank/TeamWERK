@@ -217,6 +217,7 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var err error
+	isNewEntry := false
 	if body.Typ == "biete" {
 		var plaetze interface{} = nil
 		if body.Plaetze != nil && *body.Plaetze > 0 {
@@ -230,6 +231,7 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 			_, err = h.db.ExecContext(r.Context(),
 				`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'biete', ?, ?, ?)`,
 				body.GameID, userID, plaetze, body.Treffpunkt, body.Notiz)
+			isNewEntry = true
 		} else if scanErr == nil {
 			_, err = h.db.ExecContext(r.Context(),
 				`UPDATE mitfahrgelegenheiten SET plaetze = ?, treffpunkt = ?, notiz = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -242,10 +244,20 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 		_, err = h.db.ExecContext(r.Context(),
 			`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'suche', ?, ?, ?)`,
 			body.GameID, userID, *body.Plaetze, body.Treffpunkt, body.Notiz)
+		isNewEntry = true
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	actorName := h.userName(userID)
+	if isNewEntry {
+		if body.Typ == "biete" {
+			h.writeEvents(body.GameID, h.usersWithTyp(body.GameID, "suche", userID), "biete_created", actorName)
+		} else {
+			h.writeEvents(body.GameID, h.usersWithTyp(body.GameID, "biete", userID), "suche_created", actorName)
+		}
 	}
 
 	h.hub.Broadcast("mitfahrgelegenheiten")
@@ -258,8 +270,7 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	senderTyp := body.Typ
 	gameID := body.GameID
 	go func() {
-		name := h.userName(userID)
-		h.notifyOpposite(gameID, userID, name, senderTyp, oppositeTyp)
+		h.notifyOpposite(gameID, userID, actorName, senderTyp, oppositeTyp)
 	}()
 }
 
@@ -274,21 +285,46 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
 	var typ string
 	var gameID int
-	h.db.QueryRowContext(r.Context(),
+	if err := tx.QueryRowContext(r.Context(),
 		`SELECT typ, game_id FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID).
-		Scan(&typ, &gameID)
-
-	// Collect users to notify before CASCADE deletes paarungen
-	var notifyUserIDs []int
-	if typ == "biete" {
-		notifyUserIDs = h.sucherWithActivePaarung(id)
-	} else if typ == "suche" {
-		notifyUserIDs = h.bieterWithConfirmedPaarung(id)
+		Scan(&typ, &gameID); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 
-	res, err := h.db.ExecContext(r.Context(),
+	actorName := h.userName(userID)
+
+	// Event-Log: nur Paarungspartner (die direkt betroffen sind)
+	// Push: alle Suche-User des Spiels (bei biete_deleted), Paarungspartner (bei suche_deleted)
+	var eventUserIDs, pushUserIDs []int
+	if typ == "biete" {
+		eventUserIDs = h.sucherWithActivePaarung(id)
+		pushUserIDs = h.usersWithTyp(gameID, "suche", userID)
+		for _, uid := range eventUserIDs {
+			tx.ExecContext(r.Context(),
+				`INSERT INTO carpooling_events (user_id, game_id, type, actor_name) VALUES (?, ?, 'biete_deleted', ?)`,
+				uid, gameID, actorName)
+		}
+	} else if typ == "suche" {
+		eventUserIDs = h.bieterWithActivePaarung(id)
+		pushUserIDs = eventUserIDs
+		for _, uid := range eventUserIDs {
+			tx.ExecContext(r.Context(),
+				`INSERT INTO carpooling_events (user_id, game_id, type, actor_name) VALUES (?, ?, 'suche_deleted', ?)`,
+				uid, gameID, actorName)
+		}
+	}
+
+	res, err := tx.ExecContext(r.Context(),
 		`DELETE FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -300,21 +336,38 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
-	if len(notifyUserIDs) > 0 {
+	if len(pushUserIDs) > 0 {
 		go func() {
-			name := h.userName(userID)
 			opponent, date := h.gameInfo(gameID)
 			var body string
 			if typ == "biete" {
-				body = fmt.Sprintf("%s hat sein Fahrangebot zurückgezogen — %s, %s", name, opponent, date)
+				body = fmt.Sprintf("%s hat sein Fahrangebot zurückgezogen — %s, %s", actorName, opponent, date)
 			} else {
-				body = fmt.Sprintf("%s hat seine Mitfahrzusage zurückgezogen — %s, %s", name, opponent, date)
+				body = fmt.Sprintf("%s hat seine Mitfahrzusage zurückgezogen — %s, %s", actorName, opponent, date)
 			}
-			notifications.SendToUsers(h.db, h.cfg, notifyUserIDs, "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
+			notifications.SendToUsers(h.db, h.cfg, pushUserIDs, "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
 		}()
+	}
+}
+
+func (h *Handler) writeEvent(gameID, userID int, eventType, actorName string) {
+	h.db.Exec(
+		`INSERT INTO carpooling_events (user_id, game_id, type, actor_name) VALUES (?, ?, ?, ?)`,
+		userID, gameID, eventType, actorName,
+	)
+}
+
+func (h *Handler) writeEvents(gameID int, userIDs []int, eventType, actorName string) {
+	for _, uid := range userIDs {
+		h.writeEvent(gameID, uid, eventType, actorName)
 	}
 }
 
@@ -337,12 +390,12 @@ func (h *Handler) sucherWithActivePaarung(bieteID int) []int {
 	return ids
 }
 
-func (h *Handler) bieterWithConfirmedPaarung(sucheID int) []int {
+func (h *Handler) bieterWithActivePaarung(sucheID int) []int {
 	rows, err := h.db.Query(`
 		SELECT mb.user_id
 		FROM mitfahrt_paarungen p
 		JOIN mitfahrgelegenheiten mb ON mb.id = p.biete_id
-		WHERE p.suche_id = ? AND p.status = 'confirmed'`, sucheID)
+		WHERE p.suche_id = ? AND p.status IN ('pending','confirmed')`, sucheID)
 	if err != nil {
 		return nil
 	}
