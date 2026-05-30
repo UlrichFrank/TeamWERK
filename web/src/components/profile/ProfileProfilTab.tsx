@@ -43,6 +43,7 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
     if (ownMember) {
       setFirstName(ownMember.first_name)
       setLastName(ownMember.last_name)
+      setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
     } else {
       api.get('/profile/account').then(r => {
         setFirstName(r.data.first_name ?? '')
@@ -62,16 +63,19 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
         setFirstName(nv.first_name ?? ownMember.first_name)
         setLastName(nv.last_name ?? ownMember.last_name)
         setAddress({ street: nv.street ?? '', zip: nv.zip ?? '', city: nv.city ?? '' })
+      } else {
+        setFirstName(ownMember.first_name)
+        setLastName(ownMember.last_name)
+        setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
+        setChanged(false)
       }
     }).catch(() => {})
   }, [ownMember?.id, draftRefreshKey])
 
-  const readonly = !!profilDraft
   const handleChange = () => setChanged(true)
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault()
-    if (readonly) return
     setSaving(true)
     setError('')
     try {
@@ -136,14 +140,13 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
   }
 
   const inputCls = `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
-  const inputReadonlyCls = `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text-muted bg-gray-50 cursor-not-allowed`
 
   return (
     <div className="space-y-6">
       {/* Pending draft banner */}
       {profilDraft && (
         <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
-          Eine Änderungsanfrage ist ausstehend — das Formular ist gesperrt. Du kannst die Anfrage im Tab „Mitgliedsdaten" zurückziehen.
+          Änderungsanfrage ausstehend — wird beim Speichern aktualisiert. Zum Zurückziehen den Tab „Mitgliedsdaten" öffnen.
         </div>
       )}
 
@@ -180,9 +183,8 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
               <input
                 type="text"
                 value={firstName}
-                readOnly={readonly}
                 onChange={e => { setFirstName(e.target.value); handleChange() }}
-                className={readonly ? inputReadonlyCls : inputCls}
+                className={inputCls}
               />
             </div>
             <div>
@@ -190,9 +192,8 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
               <input
                 type="text"
                 value={lastName}
-                readOnly={readonly}
                 onChange={e => { setLastName(e.target.value); handleChange() }}
-                className={readonly ? inputReadonlyCls : inputCls}
+                className={inputCls}
               />
             </div>
           </div>
@@ -201,9 +202,8 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
             <input
               type="text"
               value={address.street}
-              readOnly={readonly}
               onChange={e => { setAddress({ ...address, street: e.target.value }); handleChange() }}
-              className={readonly ? inputReadonlyCls : inputCls}
+              className={inputCls}
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -212,9 +212,8 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
               <input
                 type="text"
                 value={address.zip}
-                readOnly={readonly}
                 onChange={e => { setAddress({ ...address, zip: e.target.value }); handleChange() }}
-                className={readonly ? inputReadonlyCls : inputCls}
+                className={inputCls}
               />
             </div>
             <div className="col-span-2">
@@ -222,9 +221,8 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
               <input
                 type="text"
                 value={address.city}
-                readOnly={readonly}
                 onChange={e => { setAddress({ ...address, city: e.target.value }); handleChange() }}
-                className={readonly ? inputReadonlyCls : inputCls}
+                className={inputCls}
               />
             </div>
           </div>
@@ -350,19 +348,17 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
       )}
 
       {/* Save / Request button */}
-      {!readonly && (
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={!changed || saving}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {saving ? 'Speichern…' : ownMember ? 'Änderung anfordern' : 'Speichern'}
-          </button>
-          {saved && <span className="text-sm text-green-600">{ownMember ? 'Anfrage gesendet' : 'Gespeichert'}</span>}
-          {error && <span className="text-sm text-brand-danger">{error}</span>}
-        </div>
-      )}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleSave}
+          disabled={!changed || saving}
+          className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Speichern…' : ownMember ? 'Änderung anfordern' : 'Speichern'}
+        </button>
+        {saved && <span className="text-sm text-green-600">{ownMember ? 'Anfrage gesendet' : 'Gespeichert'}</span>}
+        {error && <span className="text-sm text-brand-danger">{error}</span>}
+      </div>
     </div>
   )
 }

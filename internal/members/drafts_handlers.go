@@ -55,7 +55,7 @@ func (h *Handler) CreateChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 	// Validation: allowed field names
 	allowedFields := map[string]bool{
 		"name": true, "address": true, "phones": true, "email": true,
-		"photo_url": true, "iban": true, "account_holder": true, "sepa_mandat": true, "dsgvo": true,
+		"photo_url": true, "bankdaten": true, "sepa_mandat": true, "dsgvo": true,
 		"profil": true,
 	}
 	if !allowedFields[req.FieldName] {

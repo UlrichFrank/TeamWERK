@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { X, User, CreditCard } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
@@ -11,7 +11,8 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 interface Member {
   id: number; first_name: string; last_name: string
   status: string; pass_number?: string; position?: string; gender?: string; club_function?: string
-  has_pending_drafts?: boolean
+  has_pending_profil_draft?: boolean
+  has_pending_bank_draft?: boolean
 }
 
 interface ImportRow {
@@ -211,7 +212,7 @@ export default function MembersPage() {
           isAdmin ? (
             <MobileCard
               key={m.id}
-              title={`${m.last_name}, ${m.first_name}${m.has_pending_drafts ? ' ⏳' : ''}`}
+              title={`${m.last_name}, ${m.first_name}`}
               subtitle={[m.club_function ? CLUB_FUNCTION_LABELS[m.club_function] : null, m.position].filter(Boolean).join(' · ') || '–'}
               badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
               onClick={() => navigate(`/mitglieder/${m.id}`)}
@@ -246,7 +247,12 @@ export default function MembersPage() {
             {items.map(m => (
               <tr key={m.id} className="hover:bg-brand-table-select transition-colors cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
                 <td className="px-4 py-3 font-medium text-brand-text">
-                  {m.last_name}, {m.first_name}{isAdmin && m.has_pending_drafts && <span className="ml-2">⏳</span>}
+                  {m.last_name}, {m.first_name}{isAdmin && (
+                    <>
+                      {m.has_pending_profil_draft && <User size={14} className="inline ml-2 text-brand-text-muted" aria-label="Persönliche Daten ausstehend" />}
+                      {m.has_pending_bank_draft && <CreditCard size={14} className="inline ml-1 text-brand-text-muted" aria-label="Bankdaten ausstehend" />}
+                    </>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-brand-text-muted">{m.pass_number || '–'}</td>
                 <td className="px-4 py-3 text-brand-text-muted">{m.club_function === 'spieler' ? genderLabel(m.gender) : '–'}</td>

@@ -56,7 +56,8 @@ type Member struct {
 
 	WelcomeEmailSentAt *string `json:"welcome_email_sent_at,omitempty"`
 
-	HasPendingDrafts bool `json:"has_pending_drafts,omitempty"`
+	HasPendingProfilDraft bool `json:"has_pending_profil_draft,omitempty"`
+	HasPendingBankDraft   bool `json:"has_pending_bank_draft,omitempty"`
 }
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
@@ -157,7 +158,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		result = append(result, m)
 	}
 
-	// For admin: mark members with pending drafts
+	// For admin: mark members with pending draft types
 	if claims.Role == "admin" && len(result) > 0 {
 		ids := make([]interface{}, len(result))
 		idxMap := make(map[int]int, len(result))
@@ -172,15 +173,28 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			}
 			placeholders += "?"
 		}
-		draftRows, err := h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT member_id FROM member_change_drafts WHERE member_id IN (`+placeholders+`)`, ids...)
+		profilRows, err := h.db.QueryContext(r.Context(),
+			`SELECT DISTINCT member_id FROM member_change_drafts WHERE field_name='profil' AND member_id IN (`+placeholders+`)`, ids...)
 		if err == nil {
-			defer draftRows.Close()
-			for draftRows.Next() {
+			defer profilRows.Close()
+			for profilRows.Next() {
 				var mid int
-				if draftRows.Scan(&mid) == nil {
+				if profilRows.Scan(&mid) == nil {
 					if idx, ok := idxMap[mid]; ok {
-						result[idx].HasPendingDrafts = true
+						result[idx].HasPendingProfilDraft = true
+					}
+				}
+			}
+		}
+		bankRows, err := h.db.QueryContext(r.Context(),
+			`SELECT DISTINCT member_id FROM member_change_drafts WHERE field_name='bankdaten' AND member_id IN (`+placeholders+`)`, ids...)
+		if err == nil {
+			defer bankRows.Close()
+			for bankRows.Next() {
+				var mid int
+				if bankRows.Scan(&mid) == nil {
+					if idx, ok := idxMap[mid]; ok {
+						result[idx].HasPendingBankDraft = true
 					}
 				}
 			}

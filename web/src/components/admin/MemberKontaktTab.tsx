@@ -41,8 +41,7 @@ interface Props {
 }
 
 export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
-  const ibanDraft = drafts.find(d => d.field_name === 'iban')
-  const accountHolderDraft = drafts.find(d => d.field_name === 'account_holder')
+  const bankdatenDraft = drafts.find(d => d.field_name === 'bankdaten') ?? null
 
   const [ibanDisplay, setIbanDisplay] = useState(formatIBAN(form.iban || ''))
   const [ibanError, setIbanError] = useState('')
@@ -70,6 +69,43 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
       {/* Bankdaten */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
+
+        {bankdatenDraft && (
+          <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div className="space-y-1">
+                <p className="font-medium mb-1">Angeforderte Bankdaten:</p>
+                {bankdatenDraft.new_value?.account_holder && (
+                  <p className="text-xs">
+                    <span className="text-brand-text-muted">Kontoinhaber:</span>{' '}
+                    {bankdatenDraft.new_value.account_holder}
+                  </p>
+                )}
+                {bankdatenDraft.new_value?.iban && (
+                  <p className="text-xs font-mono">
+                    <span className="text-brand-text-muted not-italic">IBAN:</span>{' '}
+                    {formatIBAN(bankdatenDraft.new_value.iban)}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => onDraftAccept(bankdatenDraft.id)}
+                  className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-xs font-medium"
+                >
+                  Annehmen
+                </button>
+                <button
+                  onClick={() => onDraftReject(bankdatenDraft.id)}
+                  className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 text-xs font-medium"
+                >
+                  Ablehnen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
@@ -79,30 +115,6 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
               onChange={e => onFormChange({ account_holder: e.target.value })}
               className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
-            {accountHolderDraft && (
-              <div className="mt-2 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span>
-                    <span className="font-medium">Angefordert:</span>{' '}
-                    <span>{accountHolderDraft.new_value ?? ''}</span>
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onDraftAccept(accountHolderDraft.id)}
-                      className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
-                    >
-                      Annehmen
-                    </button>
-                    <button
-                      onClick={() => onDraftReject(accountHolderDraft.id)}
-                      className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 font-medium"
-                    >
-                      Ablehnen
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
@@ -119,31 +131,6 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
             />
             {ibanError && <p className="text-xs text-brand-danger mt-1">{ibanError}</p>}
           </div>
-
-          {ibanDraft && (
-            <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span>
-                  <span className="font-medium">Angeforderte IBAN:</span>{' '}
-                  <span className="font-mono">{formatIBAN(ibanDraft.new_value ?? '')}</span>
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onDraftAccept(ibanDraft.id)}
-                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
-                  >
-                    ✓ Annehmen
-                  </button>
-                  <button
-                    onClick={() => onDraftReject(ibanDraft.id)}
-                    className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 font-medium"
-                  >
-                    ✗ Ablehnen
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

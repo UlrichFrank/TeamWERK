@@ -241,6 +241,15 @@ func (h *Handler) extractFieldValue(m *Member, fieldName string) (json.RawMessag
 			p["city"] = *m.City
 		}
 		return json.Marshal(p)
+	case "bankdaten":
+		b := map[string]interface{}{}
+		if m.IBAN != nil {
+			b["iban"] = *m.IBAN
+		}
+		if m.AccountHolder != nil {
+			b["account_holder"] = *m.AccountHolder
+		}
+		return json.Marshal(b)
 	default:
 		return json.Marshal(nil)
 	}
@@ -333,6 +342,19 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 		_, err := h.db.Exec(
 			`UPDATE members SET first_name=?, last_name=?, street=?, zip=?, city=? WHERE id=?`,
 			data.FirstName, data.LastName, data.Street, data.Zip, data.City, memberID)
+		return err
+
+	case "bankdaten":
+		var data struct {
+			IBAN          string `json:"iban"`
+			AccountHolder string `json:"account_holder"`
+		}
+		if err := json.Unmarshal(newValue, &data); err != nil {
+			return err
+		}
+		_, err := h.db.Exec(
+			`UPDATE members SET iban=?, account_holder=? WHERE id=?`,
+			nullableString(data.IBAN), nullableString(data.AccountHolder), memberID)
 		return err
 
 	default:
