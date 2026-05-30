@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react'
-import { Minus, Plus } from 'lucide-react'
 import { api } from '../../lib/api'
+import NumberSpinner from '../NumberSpinner'
 
 interface Vehicle {
   seats: number | null
@@ -54,27 +54,12 @@ export default function ProfileMiscTab() {
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Sitzplätze</label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => { setVehicle(v => ({ ...v, seats: Math.max(0, (v.seats ?? 0) - 1) })); handleChange() }}
-                className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
-                aria-label="Weniger"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-              <span className="w-10 text-center text-sm font-medium text-brand-text border border-brand-border rounded-md py-2">
-                {vehicle.seats ?? 0}
-              </span>
-              <button
-                type="button"
-                onClick={() => { setVehicle(v => ({ ...v, seats: Math.min(10, (v.seats ?? 0) + 1) })); handleChange() }}
-                className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
-                aria-label="Mehr"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
+            <NumberSpinner
+              value={vehicle.seats ?? 0}
+              min={0}
+              max={10}
+              onChange={v => { setVehicle(prev => ({ ...prev, seats: v })); handleChange() }}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Anmerkungen</label>

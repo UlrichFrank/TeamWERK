@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Trash2, Car, Users, X, Check, UserPlus } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
+import NumberSpinner from '../components/NumberSpinner'
 
 interface CarpoolEntry {
   id: number
@@ -273,14 +274,11 @@ function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormM
               {typ === 'biete' ? 'Freie Plätze' : 'Anzahl Personen'}
               {typ === 'suche' && <span className="text-brand-danger ml-1">*</span>}
             </label>
-            <input
-              type="number"
-              min="1"
-              value={plaetze}
-              onChange={e => setPlaetze(e.target.value)}
-              placeholder={typ === 'biete' ? 'z. B. 3' : 'z. B. 2'}
-              required={typ === 'suche'}
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            <NumberSpinner
+              value={parseInt(plaetze) || 1}
+              min={1}
+              max={8}
+              onChange={v => setPlaetze(String(v))}
             />
             {typ === 'biete' && vehicleSeats && !plaetze && (
               <p className="text-xs text-brand-text-muted mt-1">Laut Profil: {vehicleSeats} Plätze</p>

@@ -419,18 +419,18 @@ export default function AdminKaderPage() {
                       </select>
                     )}
                     {ageClassOptions.length > 0 && (
-                      <>
-                        <span className="text-xs text-brand-text-muted font-medium ml-2">Altersklasse:</span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <span className="text-xs text-brand-text-muted font-medium">Altersklasse:</span>
                         <select
                           value={k.age_class}
                           onChange={e => handleSetAgeClass(k, e.target.value)}
-                          className="border border-brand-border-subtle rounded px-2 py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                          className="border border-brand-border-subtle rounded px-2 py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow w-28"
                         >
                           {ageClassOptions.map(ac => (
                             <option key={ac} value={ac}>{ac}</option>
                           ))}
                         </select>
-                      </>
+                      </div>
                     )}
                   </div>
 

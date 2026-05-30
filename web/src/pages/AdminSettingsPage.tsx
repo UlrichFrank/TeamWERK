@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import EditModal from '../components/EditModal'
 import MobileCard from '../components/MobileCard'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import NumberSpinner from '../components/NumberSpinner'
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
@@ -411,8 +412,6 @@ function AltersklassenTab() {
     }
   }
 
-  const INPUT_NUM = 'w-20 border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-
   return (
     <div>
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
@@ -440,10 +439,10 @@ function AltersklassenTab() {
                   <tr key={rule.age_class} className="border-t border-brand-border-subtle">
                     <td className="px-4 py-3 text-sm font-semibold text-brand-text">{rule.age_class}</td>
                     <td className="px-4 py-3">
-                      <input type="number" min={1} value={s.half} onChange={e => updateRow(rule.age_class, 'half', e.target.value)} className={INPUT_NUM} />
+                      <NumberSpinner value={parseInt(s.half) || 1} min={1} step={5} onChange={v => updateRow(rule.age_class, 'half', String(v))} />
                     </td>
                     <td className="px-4 py-3">
-                      <input type="number" min={1} value={s.brk} onChange={e => updateRow(rule.age_class, 'brk', e.target.value)} className={INPUT_NUM} />
+                      <NumberSpinner value={parseInt(s.brk) || 1} min={1} step={5} onChange={v => updateRow(rule.age_class, 'brk', String(v))} />
                     </td>
                     <td className="px-4 py-3 text-sm text-brand-text-muted">
                       {total !== '—' ? `${total} min` : '—'}
