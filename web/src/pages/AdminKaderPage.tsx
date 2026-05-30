@@ -29,6 +29,7 @@ interface Kader {
   team_number: number
   team_id: number
   dedicated_birth_year: number | null
+  games_per_season: number
   birth_years: number[]
   bracket_years: number[]
   members: Member[]
@@ -60,6 +61,7 @@ export default function AdminKaderPage() {
   const [ageClassOptions, setAgeClassOptions] = useState<string[]>([])
 
   const [pendingDedicated, setPendingDedicated] = useState<Set<number>>(new Set())
+  const [gpsValues, setGpsValues] = useState<Record<number, number>>({})
 
   const [createModal, setCreateModal] = useState<{
     ageClass: string
@@ -95,6 +97,9 @@ export default function AdminKaderPage() {
     const list: Kader[] = Array.isArray(kaderRes.data) ? kaderRes.data : []
     setKaderList(list)
     setPendingDedicated(new Set())
+    const initialGps: Record<number, number> = {}
+    for (const k of list) initialGps[k.id] = k.games_per_season
+    setGpsValues(initialGps)
     const options: string[] = (ageClassRes.data ?? []).map((r: { age_class: string }) => r.age_class)
     setAgeClassOptions(options)
     setActiveAgeClass(prev => {
@@ -209,6 +214,14 @@ export default function AdminKaderPage() {
       await loadAll()
     } catch {
       showToast('Fehler beim Speichern der Altersklasse')
+    }
+  }
+
+  const handlePatchGamesPerSeason = async (kaderId: number, value: number) => {
+    try {
+      await api.patch(`/admin/kader/${kaderId}/games-per-season`, { games_per_season: value })
+    } catch {
+      showToast('Fehler beim Speichern der Spielanzahl')
     }
   }
 
@@ -419,7 +432,7 @@ export default function AdminKaderPage() {
                       </select>
                     )}
                     {ageClassOptions.length > 0 && (
-                      <div className="ml-auto flex items-center gap-2">
+                      <div className="ml-auto flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-brand-text-muted font-medium">Altersklasse:</span>
                         <select
                           value={k.age_class}
@@ -430,6 +443,17 @@ export default function AdminKaderPage() {
                             <option key={ac} value={ac}>{ac}</option>
                           ))}
                         </select>
+                        <span className="text-xs text-brand-text-muted font-medium">Spiele:</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={gpsValues[k.id] ?? k.games_per_season}
+                          onChange={e => setGpsValues(prev => ({ ...prev, [k.id]: Math.max(0, parseInt(e.target.value) || 0) }))}
+                          onBlur={e => handlePatchGamesPerSeason(k.id, Math.max(0, parseInt(e.target.value) || 0))}
+                          className="border border-brand-border-subtle rounded px-2 py-2.5 sm:py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow w-16 min-h-[44px] sm:min-h-0"
+                          aria-label="Spiele pro Saison"
+                        />
                       </div>
                     )}
                   </div>

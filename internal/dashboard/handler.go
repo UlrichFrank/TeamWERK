@@ -1,9 +1,11 @@
 package dashboard
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -458,7 +460,8 @@ func (h *Handler) queryDutyAccount(r *http.Request, userID int, role string, sea
 			`SELECT COUNT(*) FROM family_links WHERE parent_user_id = ?`, userID,
 		).Scan(&childCount)
 		acc.Children = childCount
-		soll := 5 * childCount
+		avgPerGame, _ := computeAvgSlotsPerGame(r.Context(), h.db)
+		soll, _ := computeSollForElternteil(r.Context(), h.db, userID, seasonID, avgPerGame)
 		acc.Soll = &soll
 	case "spieler":
 		soll := 5
@@ -595,6 +598,76 @@ func (h *Handler) queryCarpoolingHint(r *http.Request, userID int, role string, 
 	}
 
 	return &hint
+}
+
+func computeAvgSlotsPerGame(ctx context.Context, db *sql.DB) (float64, error) {
+	var heimSlots, auswärtsSlots int
+	db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(gti.slots_count), 0)
+		FROM game_template_items gti
+		JOIN game_templates gt ON gt.id = gti.template_id
+		WHERE gt.template_type = 'heim' AND gt.is_active = 1`,
+	).Scan(&heimSlots)
+	db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(gti.slots_count), 0)
+		FROM game_template_items gti
+		JOIN game_templates gt ON gt.id = gti.template_id
+		WHERE gt.template_type = 'auswärts' AND gt.is_active = 1`,
+	).Scan(&auswärtsSlots)
+	return float64(heimSlots+auswärtsSlots) / 2.0, nil
+}
+
+func computeSollForElternteil(ctx context.Context, db *sql.DB, userID int, seasonID int, avgPerGame float64) (int, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT member_id FROM family_links WHERE parent_user_id = ?`, userID)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var total float64
+	for rows.Next() {
+		var memberID int
+		rows.Scan(&memberID)
+
+		var kaderID, gamesPerSeason int
+		err := db.QueryRowContext(ctx, `
+			SELECT k.id, k.games_per_season
+			FROM kader_members km
+			JOIN kader k ON k.id = km.kader_id
+			WHERE km.member_id = ? AND k.season_id = ?
+			LIMIT 1`, memberID, seasonID,
+		).Scan(&kaderID, &gamesPerSeason)
+		if err == sql.ErrNoRows {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		if gamesPerSeason == 0 {
+			continue
+		}
+
+		var playerCount int
+		db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM kader_members WHERE kader_id = ?`, kaderID,
+		).Scan(&playerCount)
+		if playerCount == 0 {
+			continue
+		}
+
+		var parentCount int
+		db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM family_links WHERE member_id = ?`, memberID,
+		).Scan(&parentCount)
+		if parentCount == 0 {
+			parentCount = 1
+		}
+
+		childSoll := float64(gamesPerSeason) * avgPerGame / float64(playerCount) / float64(parentCount)
+		total += childSoll
+	}
+	return int(math.Round(total)), nil
 }
 
 func formatDate(date string) string {

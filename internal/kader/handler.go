@@ -56,6 +56,7 @@ type kaderRow struct {
 	TeamNumber         int    `json:"team_number"`
 	TeamID             int64  `json:"team_id"`
 	DedicatedBirthYear *int   `json:"dedicated_birth_year"`
+	GamesPerSeason     int    `json:"games_per_season"`
 }
 
 type memberRow struct {
@@ -99,7 +100,7 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 	var k kaderRow
 	var seasonStartYear int
 	var dedicatedBirthYear sql.NullInt64
-	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &seasonStartYear)
+	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &k.GamesPerSeason, &seasonStartYear)
 	if err != nil {
 		return k, 0, err
 	}
@@ -111,7 +112,7 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 }
 
 const kaderSelectSQL = `
-	SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year,
+	SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year, k.games_per_season,
 	       CAST(strftime('%Y', s.start_date) AS INTEGER)
 	FROM kader k JOIN seasons s ON s.id = k.season_id`
 
@@ -500,6 +501,30 @@ func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+// PATCH /api/admin/kader/{id}/games-per-season
+func (h *Handler) PatchGamesPerSeason(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		GamesPerSeason int `json:"games_per_season"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.GamesPerSeason < 0 {
+		http.Error(w, "games_per_season must be >= 0", http.StatusBadRequest)
+		return
+	}
+	_, err := h.db.ExecContext(r.Context(),
+		`UPDATE kader SET games_per_season=?, updated_at=? WHERE id=?`,
+		req.GamesPerSeason, time.Now(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) loadTrainers(ctx context.Context, kaderID int) ([]trainerRow, error) {

@@ -1,0 +1,1 @@
+ALTER TABLE kader ADD COLUMN games_per_season INTEGER NOT NULL DEFAULT 0;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Home, MapPin, Calendar, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -53,9 +53,19 @@ const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-s
 export default function KalenderPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth())
+  const initDate = () => {
+    const param = searchParams.get('date')
+    if (param) {
+      const d = new Date(param + 'T12:00:00')
+      if (!isNaN(d.getTime())) return d
+    }
+    return now
+  }
+  const startDate = initDate()
+  const [year, setYear] = useState(startDate.getFullYear())
+  const [month, setMonth] = useState(startDate.getMonth())
   const [games, setGames] = useState<Game[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)

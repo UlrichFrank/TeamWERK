@@ -165,7 +165,7 @@ function NextGamesList({ games }: { games: Game[] }) {
     <ul className="space-y-2">
       {games.map(g => (
         <li key={g.id}>
-          <Link to={g.link} className="block hover:bg-brand-border-subtle rounded px-2 py-2 -mx-2 transition-colors">
+          <Link to={`/kalender?date=${g.date.slice(0, 10)}`} className="block hover:bg-brand-border-subtle rounded px-2 py-2 -mx-2 transition-colors">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <span className="text-xs text-brand-text-muted mr-2">{formatDate(g.date)}</span>
@@ -195,6 +195,7 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
   const isAdmin = user?.role === 'admin' || user?.role === 'vorstand'
 
   const pct = account.soll ? Math.min(100, Math.round((account.ist / account.soll) * 100)) : null
+  const showProgress = account.soll != null && account.soll > 0
 
   return (
     <div>
@@ -204,9 +205,9 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
       >
         <div>
           <span className="text-sm font-medium text-brand-text">
-            Dienstleistungen: {account.ist}{account.soll != null ? `/${account.soll}` : ''}
+            Dienstleistungen: {account.ist}{showProgress ? `/${account.soll}` : ''}
           </span>
-          {account.soll != null && (
+          {showProgress && (
             <div className="mt-1 h-2 w-32 bg-brand-border-subtle rounded-full overflow-hidden">
               <div
                 className="h-full bg-brand-blue rounded-full transition-all"
@@ -218,9 +219,9 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
       </button>
 
-      {role === 'elternteil' && account.children > 0 && (
+      {role === 'elternteil' && account.soll != null && (
         <p className="text-xs text-brand-text-muted mt-1">
-          Ziel: 5 Dienste × {account.children} Kinder = {account.soll}
+          Ziel: {account.soll} Dienste (Saison {account.season})
         </p>
       )}
 
@@ -451,7 +452,7 @@ export default function DashboardPage() {
           <ActionsList actions={data.actions} />
         </Accordion>
 
-        <Accordion id="games" title="Nächste Spiele" icon={Calendar} isOpen={isOpen('games')} onToggle={() => toggle('games')}>
+        <Accordion id="games" title="Nächste Events" icon={Calendar} isOpen={isOpen('games')} onToggle={() => toggle('games')}>
           <NextGamesList games={data.nextGames} />
         </Accordion>
 

@@ -249,6 +249,7 @@ func serve() {
 			r.Put("/api/admin/kader/{id}", kaderH.UpdateKader)
 			r.Delete("/api/admin/kader/{id}", kaderH.DeleteKader)
 			r.Get("/api/admin/kader/{id}/member-suggestions", kaderH.MemberSuggestions)
+			r.Patch("/api/admin/kader/{id}/games-per-season", kaderH.PatchGamesPerSeason)
 			r.Post("/api/admin/kader/copy-from-season", kaderH.CopyFromSeason)
 			r.Post("/api/admin/kader/auto-assign", kaderH.AutoAssign)
 		})
