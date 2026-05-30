@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react'
+import { Minus, Plus } from 'lucide-react'
 import { api } from '../../lib/api'
 
 interface Vehicle {
@@ -48,27 +49,40 @@ export default function ProfileMiscTab() {
   return (
     <div className="space-y-6">
       {/* Fahrzeug */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Fahrzeug</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Fahrzeug</h2>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sitzplätze</label>
-            <input
-              type="number"
-              min="0"
-              max="10"
-              value={vehicle.seats ?? ''}
-              onChange={(e) => { setVehicle({...vehicle, seats: e.target.value ? parseInt(e.target.value) : null}); handleChange() }}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-            />
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Sitzplätze</label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { setVehicle(v => ({ ...v, seats: Math.max(0, (v.seats ?? 0) - 1) })); handleChange() }}
+                className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                aria-label="Weniger"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <span className="w-10 text-center text-sm font-medium text-brand-text border border-brand-border rounded-md py-2">
+                {vehicle.seats ?? 0}
+              </span>
+              <button
+                type="button"
+                onClick={() => { setVehicle(v => ({ ...v, seats: Math.min(10, (v.seats ?? 0) + 1) })); handleChange() }}
+                className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                aria-label="Mehr"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Anmerkungen</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Anmerkungen</label>
             <textarea
               value={vehicle.notes}
               onChange={(e) => { setVehicle({...vehicle, notes: e.target.value}); handleChange() }}
               placeholder="z.B. Hänger vorhanden, Fahrradträger, etc."
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
               rows={3}
             />
           </div>
@@ -84,8 +98,8 @@ export default function ProfileMiscTab() {
         >
           {saving ? 'Speichern…' : 'Speichern'}
         </button>
-        {saved && <span className="text-sm text-green-600">Gespeichert</span>}
-        {error && <span className="text-sm text-red-600">{error}</span>}
+        {saved && <span className="text-sm text-brand-text-muted">Gespeichert</span>}
+        {error && <span className="text-sm text-brand-danger">{error}</span>}
       </div>
     </div>
   )

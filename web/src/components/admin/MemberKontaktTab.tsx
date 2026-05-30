@@ -42,6 +42,7 @@ interface Props {
 
 export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const ibanDraft = drafts.find(d => d.field_name === 'iban')
+  const accountHolderDraft = drafts.find(d => d.field_name === 'account_holder')
 
   const [ibanDisplay, setIbanDisplay] = useState(formatIBAN(form.iban || ''))
   const [ibanError, setIbanError] = useState('')
@@ -78,6 +79,30 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
               onChange={e => onFormChange({ account_holder: e.target.value })}
               className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
+            {accountHolderDraft && (
+              <div className="mt-2 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span>
+                    <span className="font-medium">Angefordert:</span>{' '}
+                    <span>{accountHolderDraft.new_value ?? ''}</span>
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onDraftAccept(accountHolderDraft.id)}
+                      className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium"
+                    >
+                      Annehmen
+                    </button>
+                    <button
+                      onClick={() => onDraftReject(accountHolderDraft.id)}
+                      className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 font-medium"
+                    >
+                      Ablehnen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
