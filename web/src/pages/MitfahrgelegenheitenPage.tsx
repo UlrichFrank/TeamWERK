@@ -552,7 +552,7 @@ export default function MitfahrgelegenheitenPage() {
             onClick={() => setViewMine(false)}
             className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
           >
-            Alle
+            Team
           </button>
           <button
             onClick={() => setViewMine(true)}
@@ -598,9 +598,9 @@ export default function MitfahrgelegenheitenPage() {
             <p className="text-sm text-brand-text-muted">
               {viewMine
                 ? 'Du bist bei keinem Spiel eingetragen.'
-                : activeTab === 'auswärts' ? 'Keine Auswärtsspiele geplant.'
-                : activeTab === 'heim' ? 'Keine Heimspiele geplant.'
-                : 'Keine Events geplant.'}
+                : activeTab === 'auswärts' ? 'Keine Auswärtsspiele deines Teams geplant.'
+                : activeTab === 'heim' ? 'Keine Heimspiele deines Teams geplant.'
+                : 'Keine Events deines Teams geplant.'}
             </p>
           ) : (
             <div className="space-y-4">
