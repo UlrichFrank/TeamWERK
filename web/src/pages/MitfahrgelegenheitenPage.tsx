@@ -210,7 +210,7 @@ interface FormModalProps {
 function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormModalProps) {
   const [typ, setTyp] = useState<'biete' | 'suche'>(initialTyp ?? 'biete')
   const [plaetze, setPlaetze] = useState(() =>
-    initialTyp === 'biete' && vehicleSeats ? String(vehicleSeats) : '1'
+    initialTyp === 'biete' ? String(vehicleSeats ?? 1) : '1'
   )
   const [treffpunkt, setTreffpunkt] = useState('')
   const [notiz, setNotiz] = useState('')
@@ -255,7 +255,7 @@ function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormM
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => { setTyp('biete'); if (!plaetze && vehicleSeats) setPlaetze(String(vehicleSeats)) }}
+              onClick={() => { setTyp('biete'); if (vehicleSeats) setPlaetze(String(vehicleSeats)) }}
               className={`flex-1 py-2.5 sm:py-2 text-sm font-medium rounded-md border transition-colors ${typ === 'biete' ? 'bg-brand-yellow text-brand-black border-brand-yellow' : 'border-brand-border text-brand-text-muted hover:border-brand-text'}`}
             >
               Ich biete Mitfahrt
