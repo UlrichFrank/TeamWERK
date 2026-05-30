@@ -10,15 +10,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 )
 
 type Handler struct {
 	db  *sql.DB
 	cfg *appconfig.Config
+	hub *hub.EventHub
 }
 
-func NewHandler(db *sql.DB, cfg *appconfig.Config) *Handler { return &Handler{db: db, cfg: cfg} }
+func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
+	return &Handler{db: db, cfg: cfg, hub: h}
+}
 
 type GameEntry struct {
 	ID        int    `json:"id"`
@@ -244,6 +248,7 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	oppositeTyp := "suche"
@@ -295,6 +300,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	if len(notifyUserIDs) > 0 {

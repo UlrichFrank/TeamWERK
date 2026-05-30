@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
 type AgeClassRule struct {
@@ -52,9 +54,12 @@ func UpdateAgeClassRule(db *sql.DB, ageClass string, half, brk int) error {
 	return nil
 }
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db  *sql.DB
+	hub *hub.EventHub
+}
 
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 // GET /api/admin/club
 func (h *Handler) GetClub(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +85,7 @@ func (h *Handler) UpdateClub(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE clubs SET name=?, logo_url=?, address=?, updated_at=? WHERE id=(SELECT id FROM clubs LIMIT 1)`,
 		req.Name, req.Name, req.Address, time.Now())
+	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -258,6 +264,7 @@ func (h *Handler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(), `UPDATE teams SET name=?, age_class=?, gender=?, is_active=? WHERE id=?`,
 		req.Name, ageClassVal, req.Gender, active, id)
+	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -287,6 +294,7 @@ func (h *Handler) UpdateAgeClassRuleHandler(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
+	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
 }
 

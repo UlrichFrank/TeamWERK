@@ -9,11 +9,15 @@ import (
 	"os"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db  *sql.DB
+	hub *hub.EventHub
+}
 
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 // GET /api/admin/duty-types
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
@@ -201,6 +205,7 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
 		 VALUES (?,?,?,?,?,?,?,?,?)`,
 		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID)
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -222,6 +227,7 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=? WHERE id=?`,
 		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, id)
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -238,6 +244,7 @@ func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -472,6 +479,7 @@ func (h *Handler) Fulfill(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_assignments SET status='fulfilled', fulfilled_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -485,6 +493,7 @@ func (h *Handler) CashSubstitute(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_assignments SET status='cash_substitute', cash_amount=?, fulfilled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		req.Amount, id)
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
 

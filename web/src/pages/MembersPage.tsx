@@ -4,6 +4,7 @@ import { X, User, CreditCard } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import MobileCard from '../components/MobileCard'
 import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -71,6 +72,7 @@ export default function MembersPage() {
     [clubFunctionFilter]
   )
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
+  useLiveUpdates((event) => { if (event === 'members') refresh() })
   const isAdmin = user?.role === 'admin'
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())

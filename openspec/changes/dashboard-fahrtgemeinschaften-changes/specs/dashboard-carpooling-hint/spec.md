@@ -6,28 +6,28 @@ Das System SHALL in der Dashboard-Antwort (`GET /api/dashboard`) unter `carpooli
 
 - Nächstes Auswärtsspiel (Spielgegner, Datum, game_id) — wie bisher
 - `bieteCount` / `sucheCount` — aggregierte Zähler — wie bisher
-- `myEntry`: ob und mit welchem `typ` der User selbst eingetragen ist (inkl. `id` des Eintrags)
-- `paarungen`: Liste der Paarungen, an denen der User beteiligt ist, mit `status`, `updated_at`, Name der Gegenseite
-- `recentEvents`: Events aus `carpooling_events` für dieses Spiel, die den User betreffen, aus den letzten 48 h
+- `myEntry`: ob und mit welchem `typ` der User selbst eingetragen ist (inkl. `id` des Eintrags), oder `null`
+- `paarungen`: Liste der aktuell `confirmed` Paarungen des Users (unabhängig vom Alter), mit Name der Gegenseite
+- `recentEvents`: Ereignisse aus `carpooling_events` für dieses Spiel und diesen User aus den letzten 48 h, absteigend nach `created_at`
 
-#### Scenario: User mit Suche-Eintrag und bestätigter Paarung
+#### Scenario: User mit bestätigter Paarung
 
-- **WHEN** ein User eine aktive `suche` eingetragen hat und eine Paarung mit `status='confirmed'` existiert
-- **THEN** enthält `carpoolingHint.myEntry` den suche-Eintrag und `paarungen` die bestätigte Paarung mit Name des Bieters
+- **WHEN** der User eine Paarung mit `status='confirmed'` für das nächste Spiel hat
+- **THEN** enthält `paarungen` diese Paarung mit Name der Gegenseite, unabhängig davon wann sie bestätigt wurde
 
-#### Scenario: User mit Suche-Eintrag und abgelehnter Paarung innerhalb 48 h
+#### Scenario: User mit abgelehnter Paarung
 
-- **WHEN** eine Paarung des Users auf `status='rejected'` gesetzt wurde und `updated_at >= now - 48h`
-- **THEN** ist diese Paarung in `paarungen` enthalten
+- **WHEN** eine Paarung des Users `status='rejected'` hat
+- **THEN** erscheint sie NICHT in `paarungen`; stattdessen ist ein `pairing_rejected`- oder `pairing_cancelled`-Event in `recentEvents` (sofern innerhalb 48 h)
 
-#### Scenario: User mit Suche-Eintrag und abgelehnter Paarung älter als 48 h
+#### Scenario: Gelöschter Biete-Eintrag im Event-Feed
 
-- **WHEN** eine Paarung des Users `status='rejected'` hat und `updated_at < now - 48h`
-- **THEN** ist diese Paarung NICHT in `paarungen` enthalten
+- **WHEN** ein `carpooling_events`-Eintrag `type='biete_deleted'` für den User und das Spiel existiert und `created_at >= now - 48h`
+- **THEN** erscheint dieser Event in `recentEvents`
 
-#### Scenario: Gelöschter Biete-Eintrag — Event im Dashboard
+#### Scenario: Neue Biete/Suche-Einträge anderer im Event-Feed
 
-- **WHEN** ein `carpooling_events`-Eintrag mit `type='biete_deleted'` für den User und das nächste Spiel existiert und `created_at >= now - 48h`
+- **WHEN** ein `carpooling_events`-Eintrag `type='biete_created'` oder `type='suche_created'` für den User existiert und `created_at >= now - 48h`
 - **THEN** erscheint dieser Event in `recentEvents`
 
 #### Scenario: Kein Auswärtsspiel
@@ -35,7 +35,7 @@ Das System SHALL in der Dashboard-Antwort (`GET /api/dashboard`) unter `carpooli
 - **WHEN** kein kommendes Auswärtsspiel für das Team des Users existiert
 - **THEN** ist `carpoolingHint` null (unverändert)
 
-#### Scenario: User nicht eingetragen
+#### Scenario: User nicht eingetragen, keine Events
 
-- **WHEN** der User weder biete noch suche für das nächste Spiel eingetragen hat
-- **THEN** ist `myEntry` null; `paarungen` ist ein leeres Array; `recentEvents` kann trotzdem Events enthalten (aus 48-h-Fenster)
+- **WHEN** der User weder biete noch suche für das nächste Spiel eingetragen hat und keine Events in den letzten 48 h existieren
+- **THEN** ist `myEntry` null, `paarungen` ist `[]`, `recentEvents` ist `[]`

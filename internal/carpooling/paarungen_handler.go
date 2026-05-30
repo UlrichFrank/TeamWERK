@@ -115,6 +115,7 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	go func() {
@@ -209,6 +210,7 @@ func (h *Handler) ConfirmPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	go func() {
@@ -275,6 +277,7 @@ func (h *Handler) RejectPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
 	go func() {

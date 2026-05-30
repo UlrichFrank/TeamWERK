@@ -10,11 +10,15 @@ import (
 	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db  *sql.DB
+	hub *hub.EventHub
+}
 
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 // addMinutes adds offset to a "HH:MM" string, wrapping around 24 hours.
 func addMinutes(t string, offset int) string {
@@ -544,6 +548,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("games")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"id": gameID})
@@ -605,6 +610,7 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("games")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -650,6 +656,7 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	h.hub.Broadcast("games")
 	w.WriteHeader(http.StatusNoContent)
 }
 

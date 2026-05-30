@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { Trash2, Car, Users, X, Check, UserPlus } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
@@ -487,13 +488,8 @@ export default function MitfahrgelegenheitenPage() {
       .catch(() => { setError('Fehler beim Laden.'); setLoading(false) })
   }
 
-  useEffect(() => {
-    load()
-    const interval = setInterval(() => { if (!document.hidden) load(true) }, 15000)
-    const onVisible = () => { if (!document.hidden) load(true) }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible) }
-  }, [])
+  useEffect(() => { load() }, [])
+  useLiveUpdates((event) => { if (event === 'mitfahrgelegenheiten') load(true) })
 
   const handleDelete = async (id: number) => {
     try {

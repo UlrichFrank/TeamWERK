@@ -23,6 +23,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/games"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
@@ -74,15 +75,17 @@ func serve() {
 	defer database.Close()
 
 	m := mailer.New(cfg.SMTP)
+	hubInstance := hub.NewHub()
+	hubH := hub.NewHandler(hubInstance)
 	authH := auth.NewHandler(database, cfg.JWTSecret, m, cfg.BaseURL)
-	cfgH := appconfig.NewHandler(database)
-	membH := members.NewHandler(database)
-	dutyH := duties.NewHandler(database)
+	cfgH := appconfig.NewHandler(database, hubInstance)
+	membH := members.NewHandler(database, hubInstance)
+	dutyH := duties.NewHandler(database, hubInstance)
 	dashH := dashboard.NewHandler(database)
-	gameH := games.NewHandler(database)
+	gameH := games.NewHandler(database, hubInstance)
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
-	carpoolH := carpooling.NewHandler(database, cfg)
+	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
 
@@ -106,6 +109,9 @@ func serve() {
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(cfg.JWTSecret))
+
+		// SSE live updates
+		r.Get("/api/events", hubH.Events)
 
 		// Members
 		r.Get("/api/members", membH.List)

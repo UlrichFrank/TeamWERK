@@ -4,6 +4,7 @@ import { Home, MapPin, Calendar, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 interface Game {
   id: number
@@ -111,6 +112,7 @@ export default function KalenderPage() {
     }
     loadInitialData()
   }, [])
+  useLiveUpdates((event) => { if (event === 'games') loadGames() })
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
   const nextMonth = () => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)

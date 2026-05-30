@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 interface BoardSlot {
   id: number
@@ -76,6 +77,7 @@ export default function DutyPage() {
   }
 
   useEffect(() => { load() }, [viewMine])
+  useLiveUpdates((event) => { if (event === 'duties') load() })
 
   const claim = async (id: number) => {
     try {

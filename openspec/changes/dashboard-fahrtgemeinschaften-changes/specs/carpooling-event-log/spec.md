@@ -1,36 +1,68 @@
 ## ADDED Requirements
 
-### Requirement: Lösch-Ereignisse persistieren
+### Requirement: Vollständige Ereignisse persistieren
 
-Das System SHALL Lösch-Ereignisse in `carpooling_events` speichern, bevor ein Mitfahrgelegenheiten-Eintrag gelöscht wird, wenn betroffene User mit einer aktiven Paarung existieren.
+Das System SHALL für alle relevanten Carpooling-Ereignisse einen Eintrag in `carpooling_events` schreiben. Jeder Eintrag gehört zu genau einem betroffenen User (`user_id`), einem Spiel (`game_id`), hat einen `type` und einen `actor_name` (Name des auslösenden Users).
 
-Betroffene User:
-- `biete_deleted`: alle User, deren `suche`-Eintrag eine `pending` oder `confirmed` Paarung gegen diesen `biete`-Eintrag hat
-- `suche_deleted`: der User des `biete`-Eintrags, falls eine `pending` oder `confirmed` Paarung existiert
+Erlaubte `type`-Werte: `biete_created`, `suche_created`, `pairing_requested`, `pairing_confirmed`, `pairing_rejected`, `pairing_cancelled`, `biete_deleted`, `suche_deleted`.
 
-#### Scenario: Biete-Eintrag mit aktiver Paarung gelöscht
+#### Scenario: Neuer Biete-Eintrag
 
-- **WHEN** ein User seinen `biete`-Eintrag löscht und mindestens eine `pending` oder `confirmed` Paarung dagegen existiert
-- **THEN** wird für jeden betroffenen `suche`-User ein `carpooling_events`-Eintrag mit `type='biete_deleted'` und `actor_name` des löschenden Users angelegt, bevor das DELETE ausgeführt wird
+- **WHEN** ein User einen `biete`-Eintrag für ein Spiel anlegt und andere User bereits `suche`-Einträge für dasselbe Spiel haben
+- **THEN** wird für jeden dieser User ein Event `type='biete_created'` mit `actor_name` des Bieters geschrieben
 
-#### Scenario: Biete-Eintrag ohne aktive Paarung gelöscht
+#### Scenario: Neuer Suche-Eintrag
 
-- **WHEN** ein User seinen `biete`-Eintrag löscht und keine `pending`/`confirmed` Paarung existiert
-- **THEN** wird kein Event angelegt; das DELETE wird normal ausgeführt
+- **WHEN** ein User einen `suche`-Eintrag für ein Spiel anlegt und andere User bereits `biete`-Einträge für dasselbe Spiel haben
+- **THEN** wird für jeden dieser User ein Event `type='suche_created'` geschrieben
 
-#### Scenario: Suche-Eintrag mit aktiver Paarung gelöscht
+#### Scenario: Paarungsanfrage gestellt
 
-- **WHEN** ein User seinen `suche`-Eintrag löscht und eine `pending` oder `confirmed` Paarung dagegen existiert
-- **THEN** wird für den Biete-User ein `carpooling_events`-Eintrag mit `type='suche_deleted'` angelegt
+- **WHEN** ein User eine Paarungsanfrage stellt (POST /api/mitfahrt-paarungen)
+- **THEN** wird für die Gegenseite ein Event `type='pairing_requested'` geschrieben
 
-#### Scenario: Atomarität sichergestellt
+#### Scenario: Paarung bestätigt
 
-- **WHEN** das Schreiben des Events oder das DELETE fehlschlägt
-- **THEN** werden beide Operationen zurückgerollt (Transaktion)
+- **WHEN** die Gegenseite eine Paarungsanfrage bestätigt (POST /api/mitfahrt-paarungen/{id}/confirm)
+- **THEN** wird für den Initiator der Anfrage ein Event `type='pairing_confirmed'` geschrieben
+
+#### Scenario: Paarungsanfrage abgelehnt
+
+- **WHEN** eine `pending`-Paarung abgelehnt wird (POST /api/mitfahrt-paarungen/{id}/reject)
+- **THEN** wird für den Initiator der Anfrage ein Event `type='pairing_rejected'` geschrieben
+
+#### Scenario: Bestätigte Paarung storniert
+
+- **WHEN** eine `confirmed`-Paarung abgelehnt/storniert wird
+- **THEN** wird für die Gegenseite ein Event `type='pairing_cancelled'` geschrieben
+
+#### Scenario: Biete-Eintrag gelöscht mit aktiver Paarung
+
+- **WHEN** ein `biete`-Eintrag gelöscht wird und `pending` oder `confirmed` Paarungen dagegen existieren
+- **THEN** wird für jeden betroffenen Suche-User ein Event `type='biete_deleted'` geschrieben, *bevor* das DELETE ausgeführt wird (Transaktion)
+
+#### Scenario: Suche-Eintrag gelöscht mit aktiver Paarung
+
+- **WHEN** ein `suche`-Eintrag gelöscht wird und eine `pending` oder `confirmed` Paarung dagegen existiert
+- **THEN** wird für den Biete-User ein Event `type='suche_deleted'` geschrieben
+
+#### Scenario: Eintrag gelöscht ohne aktive Paarung
+
+- **WHEN** ein Eintrag gelöscht wird und keine `pending`/`confirmed` Paarung existiert
+- **THEN** wird kein Event angelegt
+
+### Requirement: Atomarität bei Löschungen
+
+Das System SHALL Lösch-Events und das zugehörige DELETE in einer einzigen Transaktion ausführen.
+
+#### Scenario: Fehler beim Event-Write
+
+- **WHEN** das Schreiben eines Lösch-Events fehlschlägt
+- **THEN** wird das DELETE nicht ausgeführt und die Transaktion zurückgerollt
 
 ### Requirement: Events nur für zukünftige Spiele anzeigen
 
-Das System SHALL beim Laden des Dashboards nur Events zurückgeben, deren verknüpftes Spiel (`game_id`) ein Datum >= heute hat.
+Das System SHALL beim Laden des Dashboards nur Events zurückgeben, deren verknüpftes Spiel ein Datum >= heute hat.
 
 #### Scenario: Event zu vergangenem Spiel
 

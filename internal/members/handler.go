@@ -12,11 +12,15 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db  *sql.DB
+	hub *hub.EventHub
+}
 
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 type Member struct {
 	ID           int     `json:"id"`
@@ -252,6 +256,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	h.hub.Broadcast("members")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
@@ -491,6 +496,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			id)
 	}
 
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -502,6 +508,7 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	h.db.ExecContext(r.Context(), `UPDATE members SET status=?, updated_at=? WHERE id=?`, req.Status, time.Now(), id)
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
