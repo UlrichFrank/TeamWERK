@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
-import { Member, ChangeDraft } from '../../pages/ProfilePage'
+import { Member, Parent, ChangeDraft } from '../../pages/ProfilePage'
 
 interface Props {
   ownMember: Member | null
+  children?: Member[]
+  parents?: Parent[]
   onDraftWithdrawn?: () => void
 }
 
@@ -16,7 +18,7 @@ const FIELD_LABELS: Record<string, string> = {
   iban: 'IBAN',
 }
 
-export default function ProfileMemberTab({ ownMember, onDraftWithdrawn }: Props) {
+export default function ProfileMemberTab({ ownMember, children = [], parents = [], onDraftWithdrawn }: Props) {
   const [drafts, setDrafts] = useState<ChangeDraft[]>([])
   const [cancelError, setCancelError] = useState('')
 
@@ -73,6 +75,35 @@ export default function ProfileMemberTab({ ownMember, onDraftWithdrawn }: Props)
           )}
         </div>
       </div>
+
+      {/* Familie */}
+      {(children.length > 0 || parents.length > 0) && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+          <h2 className="font-semibold text-brand-text-muted mb-4">Familie</h2>
+          <div className="space-y-3 text-sm">
+            {parents.length > 0 && (
+              <div>
+                <p className="text-brand-text-muted text-xs font-medium mb-1">Erziehungsberechtigte</p>
+                <div className="space-y-1">
+                  {parents.map(p => (
+                    <p key={p.id} className="text-brand-text">• {p.name} ({p.email})</p>
+                  ))}
+                </div>
+              </div>
+            )}
+            {children.length > 0 && (
+              <div>
+                <p className="text-brand-text-muted text-xs font-medium mb-1">Meine Kinder</p>
+                <div className="space-y-1">
+                  {children.map(c => (
+                    <p key={c.id} className="text-brand-text">• {c.first_name} {c.last_name}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Ausstehende Anfrage */}
       {profilDraft && (

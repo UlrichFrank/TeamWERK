@@ -115,7 +115,7 @@ export default function ProfilePage() {
         />
       )}
       {showMemberTabs && activeTab === 'member' && (
-        <ProfileMemberTab ownMember={ownMember} onDraftWithdrawn={handleDraftWithdrawn} />
+        <ProfileMemberTab ownMember={ownMember} children={children} parents={parents} onDraftWithdrawn={handleDraftWithdrawn} />
       )}
       {showMemberTabs && activeTab === 'banking' && (
         <ProfileBankTab ownMember={ownMember} />
