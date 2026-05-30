@@ -13,11 +13,11 @@ export default function NumberSpinner({ value, min, max, step = 1, onChange, cla
   const atMin = min !== undefined && value <= min
   const atMax = max !== undefined && value >= max
 
-  const btnBase = 'flex items-center justify-center w-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+  const btnBase = 'flex items-center justify-center w-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none'
   const btnColor = 'bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow'
 
   return (
-    <div className={`inline-flex border border-brand-border rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-brand-yellow focus-within:border-brand-yellow ${className}`}>
+    <div className={`relative inline-flex border border-brand-border rounded-md focus-within:ring-2 focus-within:ring-brand-yellow focus-within:border-brand-yellow ${className}`}>
       <input
         type="number"
         value={value}
@@ -25,26 +25,26 @@ export default function NumberSpinner({ value, min, max, step = 1, onChange, cla
         max={max}
         onChange={e => onChange(parseInt(e.target.value) || 0)}
         style={{ MozAppearance: 'textfield', WebkitAppearance: 'none' } as React.CSSProperties}
-        className="w-20 pl-3 py-2 text-sm text-brand-text focus:outline-none [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
+        className="w-20 border-0 pl-3 pr-9 py-2 text-sm text-brand-text bg-transparent focus:outline-none [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
       />
-      <div className="flex flex-col w-6">
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col w-6 rounded overflow-hidden">
         <button
           type="button"
           disabled={atMax}
           onClick={() => onChange(Math.min(max ?? Infinity, value + step))}
-          className={`${btnBase} ${btnColor} flex-1`}
+          className={`${btnBase} ${btnColor} h-3.5`}
           aria-label="Erhöhen"
         >
-          <ChevronUp className="w-3 h-3" />
+          <ChevronUp className="w-2.5 h-2.5" />
         </button>
         <button
           type="button"
           disabled={atMin}
           onClick={() => onChange(Math.max(min ?? 0, value - step))}
-          className={`${btnBase} ${btnColor} flex-1`}
+          className={`${btnBase} ${btnColor} h-3.5`}
           aria-label="Verringern"
         >
-          <ChevronDown className="w-3 h-3" />
+          <ChevronDown className="w-2.5 h-2.5" />
         </button>
       </div>
     </div>

@@ -210,7 +210,7 @@ interface FormModalProps {
 function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormModalProps) {
   const [typ, setTyp] = useState<'biete' | 'suche'>(initialTyp ?? 'biete')
   const [plaetze, setPlaetze] = useState(() =>
-    initialTyp === 'biete' && vehicleSeats ? String(vehicleSeats) : ''
+    initialTyp === 'biete' && vehicleSeats ? String(vehicleSeats) : '1'
   )
   const [treffpunkt, setTreffpunkt] = useState('')
   const [notiz, setNotiz] = useState('')
@@ -229,7 +229,7 @@ function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormM
       await api.post('/mitfahrgelegenheiten', {
         gameId,
         typ,
-        plaetze: plaetze ? parseInt(plaetze) : null,
+        plaetze: typ === 'suche' ? (parseInt(plaetze) || 1) : (plaetze ? parseInt(plaetze) : null),
         treffpunkt,
         notiz,
       })

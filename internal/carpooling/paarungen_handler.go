@@ -88,21 +88,23 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Capacity check: biete.plaetze - sum(pending+confirmed suche.plaetze) >= suche.plaetze
-	if !bietePlaetze.Valid || !suchePlaetze.Valid {
-		http.Error(w, "plaetze missing", http.StatusBadRequest)
-		return
+	// NULL bietePlaetze = unlimited; NULL suchePlaetze = 1 person
+	suchePlaetzeVal := int64(1)
+	if suchePlaetze.Valid && suchePlaetze.Int64 > 0 {
+		suchePlaetzeVal = suchePlaetze.Int64
 	}
-	var usedPlaetze int
-	h.db.QueryRowContext(r.Context(), `
-		SELECT COALESCE(SUM(ms.plaetze), 0)
-		FROM mitfahrt_paarungen p
-		JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
-		WHERE p.biete_id = ? AND p.status IN ('pending','confirmed')`,
-		body.BieteID).Scan(&usedPlaetze)
-
-	if int(bietePlaetze.Int64)-usedPlaetze < int(suchePlaetze.Int64) {
-		http.Error(w, "not enough seats available", http.StatusConflict)
-		return
+	if bietePlaetze.Valid {
+		var usedPlaetze int
+		h.db.QueryRowContext(r.Context(), `
+			SELECT COALESCE(SUM(ms.plaetze), 0)
+			FROM mitfahrt_paarungen p
+			JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
+			WHERE p.biete_id = ? AND p.status IN ('pending','confirmed')`,
+			body.BieteID).Scan(&usedPlaetze)
+		if int(bietePlaetze.Int64)-usedPlaetze < int(suchePlaetzeVal) {
+			http.Error(w, "not enough seats available", http.StatusConflict)
+			return
+		}
 	}
 
 	_, err = h.db.ExecContext(r.Context(),

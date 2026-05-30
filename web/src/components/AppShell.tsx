@@ -83,7 +83,7 @@ export default function AppShell() {
   const closeSidebar = () => setSidebarOpen(false)
 
   const Sidebar = () => (
-    <aside className="w-56 bg-brand-gray text-brand-black flex flex-col">
+    <aside className="w-56 bg-brand-gray text-brand-black flex flex-col overflow-y-auto">
       <div className="px-4 py-5 border-b border-brand-black/10 flex items-center justify-between">
         <NavLink to="/" onClick={closeSidebar} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <img src="/logo.svg" alt="Team Stuttgart" className="h-8 w-8" />
@@ -140,7 +140,7 @@ export default function AppShell() {
   )
 
   return (
-    <div className="min-h-screen flex bg-brand-gray">
+    <div className="h-screen overflow-hidden flex bg-brand-gray">
       {/* Desktop sidebar */}
       <div className="hidden sm:flex">
         <Sidebar />
@@ -159,7 +159,7 @@ export default function AppShell() {
         </>
       )}
 
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Mobile header */}
         <header className="sm:hidden bg-brand-white border-b border-brand-black/10 px-4 py-4 flex items-center gap-3">
           <button
