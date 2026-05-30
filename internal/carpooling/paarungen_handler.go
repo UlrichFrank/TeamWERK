@@ -107,8 +107,14 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, err = h.db.ExecContext(r.Context(),
-		`INSERT INTO mitfahrt_paarungen (biete_id, suche_id, initiiert_von) VALUES (?, ?, ?)`,
+	_, err = h.db.ExecContext(r.Context(), `
+		INSERT INTO mitfahrt_paarungen (biete_id, suche_id, initiiert_von)
+		VALUES (?, ?, ?)
+		ON CONFLICT(biete_id, suche_id) DO UPDATE SET
+			status = 'pending',
+			initiiert_von = excluded.initiiert_von,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE mitfahrt_paarungen.status = 'rejected'`,
 		body.BieteID, body.SucheID, initiertVon)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
