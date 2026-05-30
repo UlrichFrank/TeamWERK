@@ -677,8 +677,8 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Children (elternteil)
-	if claims.Role == "elternteil" {
+	// Children — alle verknüpften Mitglieder, bei denen dieser User Erziehungsberechtigter ist
+	{
 		rows, err := h.db.QueryContext(r.Context(),
 			`SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 			        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function
@@ -695,8 +695,8 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parents (spieler)
-	if claims.Role == "spieler" {
+	// Parents — Erziehungsberechtigte des eigenen verknüpften Mitglieds
+	{
 		rows, err := h.db.QueryContext(r.Context(),
 			`SELECT u.id, u.first_name || ' ' || u.last_name, u.email
 			 FROM users u
