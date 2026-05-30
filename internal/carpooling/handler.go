@@ -37,10 +37,24 @@ type CarpoolEntry struct {
 	IsOwn      bool   `json:"isOwn"`
 }
 
+type PaarungEntry struct {
+	ID          int    `json:"id"`
+	BieteID     int    `json:"bieteId"`
+	SucheID     int    `json:"sucheId"`
+	BieteName   string `json:"bieteName"`
+	SucheName   string `json:"sucheName"`
+	Anzahl      int    `json:"anzahl"`
+	Status      string `json:"status"`
+	InitiertVon string `json:"initiertVon"`
+	BieteIsOwn  bool   `json:"bieteIsOwn"`
+	SucheIsOwn  bool   `json:"sucheIsOwn"`
+}
+
 type CarpoolResponse struct {
-	Game  GameEntry      `json:"game"`
-	Biete []CarpoolEntry `json:"biete"`
-	Suche []CarpoolEntry `json:"suche"`
+	Game      GameEntry      `json:"game"`
+	Biete     []CarpoolEntry `json:"biete"`
+	Suche     []CarpoolEntry `json:"suche"`
+	Paarungen []PaarungEntry `json:"paarungen"`
 }
 
 type ListResponse struct {
@@ -76,10 +90,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	gamesList := make([]CarpoolResponse, 0, len(games))
 	for _, g := range games {
 		biete, suche := h.queryEntries(r, g.ID, userID)
+		paarungen := h.queryPaarungen(r, g.ID, userID)
 		gamesList = append(gamesList, CarpoolResponse{
-			Game:  g,
-			Biete: biete,
-			Suche: suche,
+			Game:      g,
+			Biete:     biete,
+			Suche:     suche,
+			Paarungen: paarungen,
 		})
 	}
 
@@ -129,6 +145,44 @@ func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]Ca
 	return biete, suche
 }
 
+func (h *Handler) queryPaarungen(r *http.Request, gameID, currentUserID int) []PaarungEntry {
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT p.id, p.biete_id, p.suche_id,
+		       ub.first_name || ' ' || ub.last_name,
+		       us.first_name || ' ' || us.last_name,
+		       COALESCE(ms.plaetze, 0),
+		       p.status, p.initiiert_von,
+		       mb.user_id, ms.user_id
+		FROM mitfahrt_paarungen p
+		JOIN mitfahrgelegenheiten mb ON mb.id = p.biete_id
+		JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
+		JOIN users ub ON ub.id = mb.user_id
+		JOIN users us ON us.id = ms.user_id
+		WHERE mb.game_id = ? AND p.status != 'rejected'
+		ORDER BY p.created_at ASC`, gameID)
+	if err != nil {
+		return []PaarungEntry{}
+	}
+	defer rows.Close()
+
+	var result []PaarungEntry
+	for rows.Next() {
+		var p PaarungEntry
+		var bieteUserID, sucheUserID int
+		rows.Scan(&p.ID, &p.BieteID, &p.SucheID,
+			&p.BieteName, &p.SucheName,
+			&p.Anzahl, &p.Status, &p.InitiertVon,
+			&bieteUserID, &sucheUserID)
+		p.BieteIsOwn = bieteUserID == currentUserID
+		p.SucheIsOwn = sucheUserID == currentUserID
+		result = append(result, p)
+	}
+	if result == nil {
+		result = []PaarungEntry{}
+	}
+	return result
+}
+
 // POST /api/mitfahrgelegenheiten
 func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -153,22 +207,38 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "gameId required", http.StatusBadRequest)
 		return
 	}
-
-	var plaetze interface{} = nil
-	if body.Typ == "biete" && body.Plaetze != nil && *body.Plaetze > 0 {
-		plaetze = *body.Plaetze
+	if body.Typ == "suche" && (body.Plaetze == nil || *body.Plaetze < 1) {
+		http.Error(w, "plaetze >= 1 required for suche", http.StatusBadRequest)
+		return
 	}
 
-	_, err := h.db.ExecContext(r.Context(), `
-		INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT(game_id, user_id) DO UPDATE SET
-		  typ = excluded.typ,
-		  plaetze = excluded.plaetze,
-		  treffpunkt = excluded.treffpunkt,
-		  notiz = excluded.notiz,
-		  updated_at = CURRENT_TIMESTAMP`,
-		body.GameID, userID, body.Typ, plaetze, body.Treffpunkt, body.Notiz)
+	var err error
+	if body.Typ == "biete" {
+		var plaetze interface{} = nil
+		if body.Plaetze != nil && *body.Plaetze > 0 {
+			plaetze = *body.Plaetze
+		}
+		var existingID int
+		scanErr := h.db.QueryRowContext(r.Context(),
+			`SELECT id FROM mitfahrgelegenheiten WHERE game_id = ? AND user_id = ? AND typ = 'biete'`,
+			body.GameID, userID).Scan(&existingID)
+		if scanErr == sql.ErrNoRows {
+			_, err = h.db.ExecContext(r.Context(),
+				`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'biete', ?, ?, ?)`,
+				body.GameID, userID, plaetze, body.Treffpunkt, body.Notiz)
+		} else if scanErr == nil {
+			_, err = h.db.ExecContext(r.Context(),
+				`UPDATE mitfahrgelegenheiten SET plaetze = ?, treffpunkt = ?, notiz = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+				plaetze, body.Treffpunkt, body.Notiz, existingID)
+		} else {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		_, err = h.db.ExecContext(r.Context(),
+			`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'suche', ?, ?, ?)`,
+			body.GameID, userID, *body.Plaetze, body.Treffpunkt, body.Notiz)
+	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -176,7 +246,6 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 
-	// notify users with the opposite typ
 	oppositeTyp := "suche"
 	if body.Typ == "suche" {
 		oppositeTyp = "biete"
@@ -200,12 +269,19 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// fetch typ and game_id before deleting (needed for notification)
 	var typ string
 	var gameID int
 	h.db.QueryRowContext(r.Context(),
 		`SELECT typ, game_id FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID).
 		Scan(&typ, &gameID)
+
+	// Collect users to notify before CASCADE deletes paarungen
+	var notifyUserIDs []int
+	if typ == "biete" {
+		notifyUserIDs = h.sucherWithActivePaarung(id)
+	} else if typ == "suche" {
+		notifyUserIDs = h.bieterWithConfirmedPaarung(id)
+	}
 
 	res, err := h.db.ExecContext(r.Context(),
 		`DELETE FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID)
@@ -221,13 +297,57 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 
-	// only notify when a "biete" offer is withdrawn
-	if typ == "biete" && gameID != 0 {
+	if len(notifyUserIDs) > 0 {
 		go func() {
 			name := h.userName(userID)
-			h.notifyWithdrawn(gameID, userID, name)
+			opponent, date := h.gameInfo(gameID)
+			var body string
+			if typ == "biete" {
+				body = fmt.Sprintf("%s hat sein Fahrangebot zurückgezogen — %s, %s", name, opponent, date)
+			} else {
+				body = fmt.Sprintf("%s hat seine Mitfahrzusage zurückgezogen — %s, %s", name, opponent, date)
+			}
+			notifications.SendToUsers(h.db, h.cfg, notifyUserIDs, "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
 		}()
 	}
+}
+
+func (h *Handler) sucherWithActivePaarung(bieteID int) []int {
+	rows, err := h.db.Query(`
+		SELECT ms.user_id
+		FROM mitfahrt_paarungen p
+		JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
+		WHERE p.biete_id = ? AND p.status IN ('pending','confirmed')`, bieteID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func (h *Handler) bieterWithConfirmedPaarung(sucheID int) []int {
+	rows, err := h.db.Query(`
+		SELECT mb.user_id
+		FROM mitfahrt_paarungen p
+		JOIN mitfahrgelegenheiten mb ON mb.id = p.biete_id
+		WHERE p.suche_id = ? AND p.status = 'confirmed'`, sucheID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // notifyOpposite sends a push to all users with oppositeTyp for the same game (excluding self).
@@ -248,18 +368,6 @@ func (h *Handler) notifyOpposite(gameID, senderID int, senderName, senderTyp, ta
 	notifications.SendToUsers(h.db, h.cfg, userIDs, title, body, "/mitfahrgelegenheiten")
 }
 
-// notifyWithdrawn sends a push to all "suche" users when a "biete" entry is deleted.
-func (h *Handler) notifyWithdrawn(gameID, senderID int, senderName string) {
-	userIDs := h.usersWithTyp(gameID, "suche", senderID)
-	if len(userIDs) == 0 {
-		return
-	}
-	opponent, date := h.gameInfo(gameID)
-	body := fmt.Sprintf("%s hat sein Angebot zurückgezogen — %s, %s", senderName, opponent, date)
-	notifications.SendToUsers(h.db, h.cfg, userIDs, "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
-}
-
-// usersWithTyp returns user IDs with the given typ for a game, excluding excludeID.
 func (h *Handler) usersWithTyp(gameID int, typ string, excludeID int) []int {
 	rows, err := h.db.Query(
 		`SELECT user_id FROM mitfahrgelegenheiten WHERE game_id = ? AND typ = ? AND user_id != ?`,
@@ -277,7 +385,6 @@ func (h *Handler) usersWithTyp(gameID int, typ string, excludeID int) []int {
 	return ids
 }
 
-// gameInfo returns opponent and formatted date for a game.
 func (h *Handler) gameInfo(gameID int) (opponent, date string) {
 	h.db.QueryRow(
 		`SELECT opponent, date FROM games WHERE id = ?`, gameID).
@@ -288,7 +395,6 @@ func (h *Handler) gameInfo(gameID int) (opponent, date string) {
 	return opponent, date
 }
 
-// userName returns the display name for a user.
 func (h *Handler) userName(userID int) string {
 	var firstName, lastName string
 	h.db.QueryRow(`SELECT first_name, last_name FROM users WHERE id = ?`, userID).

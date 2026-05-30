@@ -141,6 +141,9 @@ func serve() {
 		r.Get("/api/mitfahrgelegenheiten", carpoolH.List)
 		r.Post("/api/mitfahrgelegenheiten", carpoolH.Upsert)
 		r.Delete("/api/mitfahrgelegenheiten/{id}", carpoolH.Delete)
+		r.Post("/api/mitfahrt-paarungen", carpoolH.RequestPairing)
+		r.Post("/api/mitfahrt-paarungen/{id}/confirm", carpoolH.ConfirmPairing)
+		r.Post("/api/mitfahrt-paarungen/{id}/reject", carpoolH.RejectPairing)
 
 		// Push Notifications
 		r.Get("/api/push/vapid-public-key", notifH.GetVAPIDPublicKey)
