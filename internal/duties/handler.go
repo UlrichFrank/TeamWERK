@@ -293,6 +293,11 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		args = append(args, userID)
 	}
 
+	if gameIDStr := r.URL.Query().Get("game_id"); gameIDStr != "" {
+		whereParts += ` AND ds.game_id = ?`
+		args = append(args, gameIDStr)
+	}
+
 	rows, err := h.db.QueryContext(r.Context(), `SELECT
 		    ds.id,
 		    COALESCE(ds.event_date, '') AS event_date,

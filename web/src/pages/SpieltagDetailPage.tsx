@@ -4,6 +4,8 @@ import { Trash2, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 
 interface GameDetail {
   id: number
@@ -51,19 +53,6 @@ interface Template {
 const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 
-function ProgressBar({ filled, total }: { filled: number; total: number }) {
-  const pct = total > 0 ? Math.round((filled / total) * 100) : 0
-  const color = pct === 100 ? 'bg-brand-success' : pct > 0 ? 'bg-brand-warning' : 'bg-brand-danger'
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-brand-border-subtle rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs text-brand-text-muted w-10 text-right">{filled}/{total}</span>
-    </div>
-  )
-}
-
 export default function SpieltagDetailPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const { user } = useAuth()
@@ -72,6 +61,7 @@ export default function SpieltagDetailPage() {
 
   const [game, setGame] = useState<GameDetail | null>(null)
   const [slots, setSlots] = useState<SlotDetail[]>([])
+  const [boardSlots, setBoardSlots] = useState<BoardSlot[]>([])
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -103,6 +93,7 @@ export default function SpieltagDetailPage() {
   const [regenPreviewLoading, setRegenPreviewLoading] = useState(false)
   const [regenSaving, setRegenSaving] = useState(false)
   const [regenError, setRegenError] = useState<string | null>(null)
+  const [regenKeptSlots, setRegenKeptSlots] = useState<number | null>(null)
 
   useEscapeKey(
     showDeleteGame ? () => setShowDeleteGame(false) :
@@ -112,7 +103,6 @@ export default function SpieltagDetailPage() {
     showAddSlot ? () => setShowAddSlot(false) :
     null
   )
-  const [regenKeptSlots, setRegenKeptSlots] = useState<number | null>(null)
 
   const loadGame = async () => {
     try {
@@ -124,12 +114,25 @@ export default function SpieltagDetailPage() {
     }
   }
 
+  const loadBoard = async () => {
+    try {
+      const r = await api.get(`/duty-board?game_id=${gameId}`)
+      const groups: any[] = r.data ?? []
+      setBoardSlots(groups.length > 0 ? groups[0].slots ?? [] : [])
+    } catch {
+      setBoardSlots([])
+    }
+  }
+
   useEffect(() => {
     Promise.all([
       loadGame(),
+      loadBoard(),
       canEdit ? api.get('/admin/duty-types').then(r => setDutyTypes(r.data ?? [])) : Promise.resolve(),
     ]).finally(() => setLoading(false))
   }, [gameId])
+
+  useLiveUpdates((event) => { if (event === 'duties') loadBoard() })
 
   const handleAddSlot = async () => {
     if (!addDutyTypeId || !game) return
@@ -148,7 +151,7 @@ export default function SpieltagDetailPage() {
         season_id: game.season_id,
         game_id: game.id,
       })
-      await loadGame()
+      await Promise.all([loadGame(), loadBoard()])
       setShowAddSlot(false)
       setAddDutyTypeId('')
       setAddEventTime('')
@@ -179,7 +182,7 @@ export default function SpieltagDetailPage() {
         role_desc: editRoleDesc,
         slots_total: editSlotsTotal,
       })
-      await loadGame()
+      await Promise.all([loadGame(), loadBoard()])
       setEditSlot(null)
     } finally {
       setEditSaving(false)
@@ -191,7 +194,7 @@ export default function SpieltagDetailPage() {
     setDeleteSaving(true)
     try {
       await api.delete(`/duty-slots/${deleteSlotId}`)
-      await loadGame()
+      await Promise.all([loadGame(), loadBoard()])
       setDeleteSlotId(null)
     } finally {
       setDeleteSaving(false)
@@ -263,7 +266,7 @@ export default function SpieltagDetailPage() {
     setRegenError(null)
     try {
       const r = await api.post(`/admin/kalender/${gameId}/regenerate`, { template_id: regenTemplateID })
-      await loadGame()
+      await Promise.all([loadGame(), loadBoard()])
       setRegenKeptSlots(r.data.kept_slots)
       setShowRegen(false)
     } catch (e: any) {
@@ -286,6 +289,7 @@ export default function SpieltagDetailPage() {
   const dateFormatted = new Date(game.date.slice(0, 10) + 'T12:00:00').toLocaleDateString('de-DE', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
+  const isPast = new Date(game.date.slice(0, 10) + 'T23:59:59') < new Date()
 
   return (
     <div className="max-w-2xl">
@@ -345,39 +349,16 @@ export default function SpieltagDetailPage() {
           )}
         </div>
 
-        {slots.length === 0 ? (
+        {boardSlots.length === 0 ? (
           <p className="text-sm text-brand-text-subtle text-center py-8 italic">Keine Dienste für dieses Spiel angelegt</p>
         ) : (
-          <div className="divide-y divide-brand-border-subtle">
-            {slots.map(s => (
-              <div key={s.id} className="px-4 py-3 flex items-start gap-4">
-                <div className="font-mono text-sm font-semibold w-12 flex-shrink-0 pt-0.5 text-brand-text">
-                  {s.event_time || '–'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm text-brand-text">{s.duty_type_name}</div>
-                  {s.role_description && (
-                    <div className="text-xs text-brand-text-subtle mt-0.5">{s.role_description}</div>
-                  )}
-                  <div className="mt-1.5">
-                    <ProgressBar filled={s.slots_filled} total={s.slots_total} />
-                  </div>
-                </div>
-                {canEdit && (
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => openEditSlot(s)}
-                      className="text-xs text-brand-text-muted hover:text-brand-text px-2 py-1 rounded hover:bg-brand-border-subtle transition-colors"
-                    >Bearbeiten</button>
-                    <button
-                      onClick={() => setDeleteSlotId(s.id)}
-                      className="text-xs text-brand-text-muted hover:text-brand-danger px-2 py-1 rounded hover:bg-brand-danger-light transition-colors"
-                    >Löschen</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <DutySlotList
+            slots={boardSlots}
+            isPast={isPast}
+            canEdit={canEdit}
+            onReload={() => Promise.all([loadGame(), loadBoard()])}
+            onEdit={canEdit ? (id) => { const s = slots.find(x => x.id === id); if (s) openEditSlot(s) } : undefined}
+          />
         )}
       </div>
 
