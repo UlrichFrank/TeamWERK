@@ -668,15 +668,16 @@ type UserVisibility struct {
 }
 
 type ProfileResponse struct {
-	OwnMember  *Member        `json:"own_member,omitempty"`
-	Children   []Member       `json:"children"`
-	Parents    []ProfileParent `json:"parents"`
-	Street     string          `json:"street,omitempty"`
-	Zip        string          `json:"zip,omitempty"`
-	City       string          `json:"city,omitempty"`
-	PhotoURL   string          `json:"photo_url,omitempty"`
-	Phones     []UserPhone     `json:"phones"`
-	Visibility UserVisibility  `json:"visibility"`
+	OwnMember        *Member         `json:"own_member,omitempty"`
+	Children         []Member        `json:"children"`
+	Parents          []ProfileParent `json:"parents"`
+	Street           string          `json:"street,omitempty"`
+	Zip              string          `json:"zip,omitempty"`
+	City             string          `json:"city,omitempty"`
+	PhotoURL         string          `json:"photo_url,omitempty"`
+	Phones           []UserPhone     `json:"phones"`
+	Visibility       UserVisibility  `json:"visibility"`
+	DutyReminderDays *int            `json:"duty_reminder_days"`
 }
 
 // GET /api/profile/me — returns the logged-in user's linked member profile(s) + contact data
@@ -731,16 +732,21 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Contact data: address, photo_url, phones, visibility
+	// Contact data: address, photo_url, phones, visibility, reminder preference
 	var street, zip, city, photoPath sql.NullString
+	var reminderDays sql.NullInt64
 	h.db.QueryRowContext(r.Context(),
-		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,'') FROM users WHERE id=?`,
-		claims.UserID).Scan(&street, &zip, &city, &photoPath)
+		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,''), duty_reminder_days FROM users WHERE id=?`,
+		claims.UserID).Scan(&street, &zip, &city, &photoPath, &reminderDays)
 	resp.Street = street.String
 	resp.Zip = zip.String
 	resp.City = city.String
 	if photoPath.String != "" {
 		resp.PhotoURL = "/api/uploads/" + photoPath.String
+	}
+	if reminderDays.Valid {
+		v := int(reminderDays.Int64)
+		resp.DutyReminderDays = &v
 	}
 
 	phoneRows, err := h.db.QueryContext(r.Context(),
@@ -784,6 +790,26 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, updated_at=? WHERE id=?`,
 		nullableString(req.FirstName), nullableString(req.LastName),
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), time.Now(), claims.UserID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/profile/reminder-preference
+func (h *Handler) UpdateReminderPreference(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	var req struct {
+		DutyReminderDays *int `json:"duty_reminder_days"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.DutyReminderDays != nil && *req.DutyReminderDays != 2 {
+		http.Error(w, "duty_reminder_days must be 2 or null", http.StatusBadRequest)
+		return
+	}
+	h.db.ExecContext(r.Context(),
+		`UPDATE users SET duty_reminder_days=? WHERE id=?`,
+		req.DutyReminderDays, claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

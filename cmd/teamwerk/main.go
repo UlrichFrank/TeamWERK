@@ -130,6 +130,7 @@ func serve() {
 		r.Put("/api/profile/phones/{id}", membH.UpdatePhone)
 		r.Delete("/api/profile/phones/{id}", membH.DeletePhone)
 		r.Put("/api/profile/visibility", membH.UpdateVisibility)
+		r.Put("/api/profile/reminder-preference", membH.UpdateReminderPreference)
 		r.Post("/api/upload/user-photo", uploadH.UploadUserPhoto)
 
 		// Dashboard
@@ -311,12 +312,16 @@ func runCreateAdmin() {
 
 func runScheduler() {
 	_ = godotenv.Load()
-	database, err := db.Open(getEnvOrDefault("DB_PATH", "./teamwerk.db"))
+	cfg, err := appconfig.Load()
+	if err != nil {
+		log.Fatalf("scheduler: load config: %v", err)
+	}
+	database, err := db.Open(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("scheduler: open db: %v", err)
 	}
 	defer database.Close()
-	scheduler.New(database).Run()
+	scheduler.New(database, mailer.New(cfg.SMTP)).Run()
 }
 
 func runMigrateForce() {

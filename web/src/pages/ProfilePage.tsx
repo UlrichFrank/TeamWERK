@@ -51,6 +51,7 @@ export default function ProfilePage() {
   const [children, setChildren] = useState<Member[]>([])
   const [parents, setParents] = useState<Parent[]>([])
   const [draftRefreshKey, setDraftRefreshKey] = useState(0)
+  const [dutyReminderDays, setDutyReminderDays] = useState<number | null>(null)
 
   useEffect(() => {
     localStorage.setItem('profileTab', activeTab)
@@ -61,6 +62,7 @@ export default function ProfilePage() {
       setOwnMember(r.data?.own_member ?? null)
       setChildren(r.data?.children ?? [])
       setParents(r.data?.parents ?? [])
+      setDutyReminderDays(r.data?.duty_reminder_days ?? null)
     })
   }
 
@@ -126,7 +128,7 @@ export default function ProfilePage() {
       {showMemberTabs && activeTab === 'banking' && (
         <ProfileBankTab ownMember={ownMember} />
       )}
-      {activeTab === 'misc' && <ProfileMiscTab />}
+      {activeTab === 'misc' && <ProfileMiscTab dutyReminderDays={dutyReminderDays} />}
     </div>
   )
 }
