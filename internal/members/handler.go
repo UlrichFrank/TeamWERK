@@ -123,7 +123,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	const clubFuncSubquery = `COALESCE((SELECT GROUP_CONCAT(mcf.function, ',') FROM member_club_functions mcf WHERE mcf.member_id = m.id), '')`
 
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+	// Trainers searching specifically for trainers see all trainers club-wide
+	// (not restricted to their team) — needed for kader trainer assignment.
+	wideSearch := claims.Role == "admin" || claims.HasFunction("vorstand") ||
+		(claims.HasFunction("trainer") && clubFuncFilter == "trainer")
+
+	if wideSearch {
 		countQuery := `SELECT COUNT(*) FROM members m WHERE status != 'ausgetreten'` + whereExtra
 		args := buildListArgs(nil, clubFuncFilter, search, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
@@ -141,7 +146,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var rows *sql.Rows
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+	if wideSearch {
 		query := `SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
 		 FROM members m WHERE m.status != 'ausgetreten'` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`

@@ -315,7 +315,7 @@ Alle Pfade relativ zu `/api/` (der Prefix wird in api.ts gesetzt: `baseURL: '/ap
 ### Styling
 
 Tailwind v3. Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`-Direktiven).  
-Marken-Primärfarben: Schwarz `#000000`, Gelb `#FAE806`, Weiß `#FFFFFF`. Sekundär: Blau `#3E4A98`, Grün `#6EB42E`.  
+Marken-Primärfarben: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`. Sekundär: Blau `#3E4A98`, Grün `#6EB42E`.  
 Schrift: Hanken Grotesk (Google Fonts). Logo: `../team-stuttgart-org/team-stuttgart-site/Resources/Public/Images/logo.svg`
 
 **Keine raw Tailwind-Farben** (`bg-gray-50`, `text-gray-700`, `text-red-600` etc.) — immer `brand-*`-Tokens verwenden.
