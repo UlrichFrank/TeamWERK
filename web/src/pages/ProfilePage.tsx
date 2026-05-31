@@ -15,6 +15,7 @@ export interface Member {
   street?: string; zip?: string; city?: string
   iban?: string
   account_holder?: string
+  club_functions?: string[]
 }
 
 export interface Parent {

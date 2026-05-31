@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Home, MapPin, Calendar, Plus } from 'lucide-react'
 import { api } from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
@@ -319,7 +319,7 @@ export default function KalenderPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Kalender</h1>
-        {user && ['admin', 'vorstand', 'trainer'].includes(user.role) && (
+        {user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer')) && (
           <button
             onClick={() => setShowCreate(true)}
             className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
@@ -361,7 +361,7 @@ export default function KalenderPage() {
             const dateStr = padDate(year, month, day)
             const dayGames = gamesByDate[dateStr] ?? []
             const isToday = dateStr === todayStr
-            const canEdit = user && ['admin', 'vorstand', 'trainer'].includes(user.role)
+            const canEdit = user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer'))
             const canRegen = canEdit && dayGames.length > 0
             return (
               <div key={day} className={`group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle ${isToday ? 'bg-brand-yellow/20' : ''}`}>

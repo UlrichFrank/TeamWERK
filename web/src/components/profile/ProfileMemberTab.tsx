@@ -9,6 +9,10 @@ interface Props {
   onDraftWithdrawn?: () => void
 }
 
+const CLUB_FUNCTION_LABELS: Record<string, string> = {
+  spieler: 'Spieler', trainer: 'Trainer', vorstand: 'Vorstand', vorstand_beisitzer: 'Vorstands-Beisitzer',
+}
+
 const FIELD_LABELS: Record<string, string> = {
   first_name: 'Vorname',
   last_name: 'Nachname',
@@ -70,6 +74,9 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
           <Row label="Rückennummer" value={ownMember.jersey_number?.toString() ?? '–'} />
           <Row label="Position" value={ownMember.position || '–'} />
           <Row label="Status" value={ownMember.status || '–'} />
+          {(ownMember.club_functions ?? []).length > 0 && (
+            <Row label="Vereinsfunktion" value={(ownMember.club_functions ?? []).map(f => CLUB_FUNCTION_LABELS[f] ?? f).join(', ')} />
+          )}
           {(ownMember.street || ownMember.zip || ownMember.city) && (
             <Row label="Adresse" value={[ownMember.street, [ownMember.zip, ownMember.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')} />
           )}
