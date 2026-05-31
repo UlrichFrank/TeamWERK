@@ -328,7 +328,7 @@ export default function AdminUsersPage() {
                         <button
                           onClick={() => handleCreateMember(u)}
                           disabled={createMemberLoading.has(u.id)}
-                          className="text-xs border border-brand-blue text-brand-blue px-3 py-1 rounded font-medium hover:bg-brand-blue hover:text-white transition-colors disabled:opacity-50"
+                          className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {createMemberLoading.has(u.id) ? '…' : 'Mitglied anlegen'}
                         </button>
