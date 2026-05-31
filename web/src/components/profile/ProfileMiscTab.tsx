@@ -20,6 +20,10 @@ export default function ProfileMiscTab({ dutyReminderDays: initialReminder }: Pr
   const [error, setError] = useState('')
 
   useEffect(() => {
+    setReminderEnabled(initialReminder !== null)
+  }, [initialReminder])
+
+  useEffect(() => {
     api.get('/profile/vehicle').then(r => {
       if (r.data) {
         setVehicle({ seats: r.data.seats ?? null, notes: r.data.notes ?? '' })
