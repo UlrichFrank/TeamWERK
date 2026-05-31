@@ -6,7 +6,7 @@ import {
   Home, MapPin, MapPinned, Check, X, AlertTriangle
 } from 'lucide-react'
 import { api } from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import Accordion from '../components/Accordion'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -189,10 +189,10 @@ function NextGamesList({ games }: { games: Game[] }) {
   )
 }
 
-function DutyAccountTile({ account, role }: { account: DutyAccount; role: string }) {
+function DutyAccountTile({ account }: { account: DutyAccount }) {
   const [open, setOpen] = useState(false)
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin' || user?.role === 'vorstand'
+  const isAdmin = user?.role === 'admin' || hasFunction(user, 'vorstand')
 
   const pct = account.soll ? Math.min(100, Math.round((account.ist / account.soll) * 100)) : null
   const showProgress = account.soll != null && account.soll > 0
@@ -219,7 +219,7 @@ function DutyAccountTile({ account, role }: { account: DutyAccount; role: string
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
       </button>
 
-      {role === 'elternteil' && account.soll != null && (
+      {user?.isParent && account.soll != null && (
         <p className="text-xs text-brand-text-muted mt-1">
           Ziel: {account.soll} Dienste (Saison {account.season})
         </p>
@@ -428,10 +428,9 @@ export default function DashboardPage() {
     )
   }
 
-  const role = user?.role ?? ''
   const hasKontoSection = !!data.dutyAccount
-  const hasTeamSection = role === 'trainer' || role === 'elternteil' || role === 'spieler'
-  const hasFahrtSection = !!data.vehicleInfo || role === 'elternteil' || role === 'spieler' || role === 'trainer'
+  const hasTeamSection = hasFunction(user, 'trainer') || user?.isParent || hasFunction(user, 'spieler')
+  const hasFahrtSection = !!data.vehicleInfo || !!data.carpoolingHint || user?.isParent || hasFunction(user, 'spieler') || hasFunction(user, 'trainer')
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -458,14 +457,14 @@ export default function DashboardPage() {
 
         {hasKontoSection && (
           <Accordion id="konto" title="Dienstkonto" icon={BarChart2} isOpen={isOpen('konto')} onToggle={() => toggle('konto')}>
-            {data.dutyAccount && <DutyAccountTile account={data.dutyAccount} role={role} />}
+            {data.dutyAccount && <DutyAccountTile account={data.dutyAccount} />}
             {data.teamStats && <TeamStatsCard stats={data.teamStats} />}
           </Accordion>
         )}
 
         {hasTeamSection && (
           <Accordion id="team" title="Dein Team" icon={Users} isOpen={isOpen('team')} onToggle={() => toggle('team')}>
-            {user?.role === 'trainer' || user?.role === 'vorstand' || user?.role === 'admin' ? (
+            {hasFunction(user, 'trainer') || hasFunction(user, 'vorstand') || user?.role === 'admin' ? (
               <Link to="/mitglieder" className="inline-flex items-center gap-1 text-sm text-brand-text hover:underline py-1">
                 Zur Mitgliederliste <ArrowRight size={14} />
               </Link>

@@ -50,7 +50,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	row := h.db.QueryRow(`
 		SELECT m.id, m.first_name, m.last_name,
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
-		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function,
+		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
+		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
 		       m.photo_visible
 		FROM members m
@@ -58,13 +59,14 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 
 	var m Member
 	var jerseyNum, userID sql.NullInt64
-	var clubFunc, street, zip, city, joinDate, iban, accountHolder sql.NullString
+	var clubFunctionsStr string
+	var street, zip, city, joinDate, iban, accountHolder sql.NullString
 	var photoVisible int64
 
 	err := row.Scan(
 		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
 		&m.MemberNumber, &m.PassNumber,
-		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunc,
+		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunctionsStr,
 		&street, &zip, &city, &joinDate, &iban, &accountHolder,
 		&photoVisible,
 	)
@@ -80,9 +82,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		uid := int(userID.Int64)
 		m.UserID = &uid
 	}
-	if clubFunc.Valid {
-		m.ClubFunction = &clubFunc.String
-	}
+	m.ClubFunctions = parseFunctions(clubFunctionsStr)
 	if street.Valid {
 		m.Street = &street.String
 	}

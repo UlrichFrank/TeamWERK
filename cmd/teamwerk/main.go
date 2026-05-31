@@ -165,7 +165,7 @@ func serve() {
 
 		// Admin + Trainer
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireRole("admin", "trainer"))
+			r.Use(auth.RequireClubFunction("trainer"))
 			r.Post("/api/duty-slots", dutyH.CreateSlot)
 			r.Put("/api/duty-slots/{id}", dutyH.UpdateSlot)
 			r.Delete("/api/duty-slots/{id}", dutyH.DeleteSlot)
@@ -180,7 +180,7 @@ func serve() {
 
 		// Admin + Vorstand + Trainer
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireRole("admin", "vorstand", "trainer"))
+			r.Use(auth.RequireClubFunction("vorstand", "trainer"))
 			r.Post("/api/admin/kalender", gameH.CreateGame)
 			r.Put("/api/admin/kalender/{id}", gameH.UpdateGame)
 			r.Delete("/api/admin/kalender/{id}", gameH.DeleteGame)
@@ -193,7 +193,7 @@ func serve() {
 
 		// Admin + Vorstand
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireRole("admin", "vorstand"))
+			r.Use(auth.RequireClubFunction("vorstand"))
 			r.Post("/api/members", membH.Create)
 			r.Get("/api/members/export", membH.Export)
 			r.Put("/api/members/{id}", membH.Update)
@@ -240,7 +240,7 @@ func serve() {
 
 		// Admin + Vorstand + Trainer
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireRole("admin", "vorstand", "trainer"))
+			r.Use(auth.RequireClubFunction("vorstand", "trainer"))
 			r.Get("/api/admin/seasons", cfgH.ListSeasons)
 			// Kader (season-based teams)
 			r.Get("/api/admin/kader", kaderH.ListKader)

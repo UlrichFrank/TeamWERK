@@ -12,12 +12,9 @@ interface Invitation { id: number; email: string; role: string; comment: string;
 interface MembershipRequest { id: number; name: string; email: string; comment: string; status: string; created_at: string }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin', vorstand: 'Vorstand', trainer: 'Trainer', elternteil: 'Elternteil', spieler: 'Spieler',
+  admin: 'Admin', standard: 'Standard',
 }
-const ROLE_RANK: Record<string, number> = {
-  admin: 5, vorstand: 4, trainer: 3, elternteil: 2, spieler: 1,
-}
-const ALL_ROLES = ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler'] as const
+const ALL_ROLES = ['admin', 'standard'] as const
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
@@ -33,7 +30,7 @@ export default function AdminUsersPage() {
 
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('elternteil')
+  const [inviteRole, setInviteRole] = useState('standard')
   const [inviteComment, setInviteComment] = useState('')
   const [sent, setSent] = useState(false)
   const [inviteError, setInviteError] = useState('')
@@ -67,7 +64,7 @@ export default function AdminUsersPage() {
   const closeModal = () => {
     setShowInviteModal(false)
     setInviteEmail('')
-    setInviteRole('elternteil')
+    setInviteRole('standard')
     setInviteComment('')
     setSent(false)
     setInviteError('')
@@ -120,7 +117,7 @@ export default function AdminUsersPage() {
   }
 
   const allowedRoles = (callerRole: string) =>
-    ALL_ROLES.filter(r => ROLE_RANK[r] <= (ROLE_RANK[callerRole] ?? 0))
+    callerRole === 'admin' ? ALL_ROLES : ALL_ROLES.filter(r => r !== 'admin')
 
   return (
     <div>
@@ -185,10 +182,7 @@ export default function AdminUsersPage() {
                     onChange={e => setInviteRole(e.target.value)}
                     className={INPUT}
                   >
-                    <option value="elternteil">Elternteil</option>
-                    <option value="spieler">Spieler</option>
-                    <option value="trainer">Trainer</option>
-                    <option value="vorstand">Vorstand</option>
+                    <option value="standard">Standard</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
@@ -308,8 +302,7 @@ export default function AdminUsersPage() {
         <table className="w-full text-sm">
           <tbody className="divide-y divide-brand-border-subtle">
             {users.map(u => {
-              const callerRank = ROLE_RANK[self?.role ?? ''] ?? 0
-              const canEdit = self?.id !== u.id && (ROLE_RANK[u.role] ?? 0) <= callerRank
+              const canEdit = self?.id !== u.id && self?.role === 'admin'
               return (
                 <tr key={`user-${u.id}`} className="hover:bg-brand-table-select transition-colors">
                   <td className="px-6 py-3 font-medium text-brand-text">{u.first_name} {u.last_name}</td>
@@ -367,8 +360,7 @@ export default function AdminUsersPage() {
       {/* Mobile cards */}
       <div className="sm:hidden space-y-0 mt-4">
         {users.map(u => {
-          const callerRank = ROLE_RANK[self?.role ?? ''] ?? 0
-          const canEdit = self?.id !== u.id && (ROLE_RANK[u.role] ?? 0) <= callerRank
+          const canEdit = self?.id !== u.id && self?.role === 'admin'
           return (
             <MobileCard
               key={`user-${u.id}`}
@@ -384,7 +376,7 @@ export default function AdminUsersPage() {
                   label: 'Rolle ändern',
                   onClick: () => {
                     const newRole = prompt(`Neue Rolle für ${u.first_name} ${u.last_name}:`, u.role)
-                    if (newRole && allowedRoles(self?.role ?? '').includes(newRole as typeof ALL_ROLES[number])) {
+                    if (newRole && (allowedRoles(self?.role ?? '') as string[]).includes(newRole)) {
                       handleRoleChange(u, newRole)
                     }
                   },

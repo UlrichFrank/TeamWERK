@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,17 +16,28 @@ const (
 )
 
 type Claims struct {
-	UserID int    `json:"uid"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
+	UserID       int      `json:"uid"`
+	Email        string   `json:"email"`
+	Role         string   `json:"role"`
+	ClubFunctions []string `json:"club_functions"`
+	IsParent     bool     `json:"is_parent"`
 	jwt.RegisteredClaims
 }
 
-func IssueAccessToken(secret string, userID int, email, role string) (string, error) {
+func (c *Claims) HasFunction(f string) bool {
+	return slices.Contains(c.ClubFunctions, f)
+}
+
+func IssueAccessToken(secret string, userID int, email, role string, clubFunctions []string, isParent bool) (string, error) {
+	if clubFunctions == nil {
+		clubFunctions = []string{}
+	}
 	claims := Claims{
-		UserID: userID,
-		Email:  email,
-		Role:   role,
+		UserID:        userID,
+		Email:         email,
+		Role:          role,
+		ClubFunctions: clubFunctions,
+		IsParent:      isParent,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

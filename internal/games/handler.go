@@ -454,7 +454,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFromCtx(r.Context())
-	if claims != nil && claims.Role == "trainer" {
+	if claims != nil && claims.HasFunction("trainer") {
 		placeholders := strings.Repeat("?,", len(req.TeamIDs))
 		placeholders = placeholders[:len(placeholders)-1]
 		args := append([]any{claims.UserID}, toAny(req.TeamIDs)...)
@@ -680,7 +680,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 
 	var rows *sql.Rows
 	var err error
-	if claims.Role == "trainer" {
+	if claims.HasFunction("trainer") {
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
 			 FROM teams t

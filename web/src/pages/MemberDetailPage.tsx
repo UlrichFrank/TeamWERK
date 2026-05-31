@@ -20,7 +20,7 @@ interface Member {
   gender: string
   status: string
   user_id?: number
-  club_function?: string
+  club_functions?: string[]
   street?: string
   zip?: string
   city?: string
@@ -61,7 +61,7 @@ export default function MemberDetailPage() {
 
   const [form, setForm] = useState<Omit<Member, 'id'>>({
     first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
-    jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_function: '',
+    jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_functions: [],
     street: '', zip: '', city: '', join_date: '', iban: '', account_holder: '',
     photo_url: '', photo_visible: false,
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
@@ -97,7 +97,7 @@ export default function MemberDetailPage() {
       pass_number: m.pass_number ?? '',
       jersey_number: m.jersey_number, position: m.position ?? '',
       gender: m.gender ?? 'u', status: m.status,
-      club_function: m.club_function ?? '',
+      club_functions: m.club_functions ?? [],
       street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
       join_date: m.join_date?.slice(0, 10) ?? '',
       iban: m.iban ?? '',
@@ -158,7 +158,7 @@ export default function MemberDetailPage() {
       const body = {
         ...form,
         jersey_number: form.jersey_number ? Number(form.jersey_number) : null,
-        club_function: form.club_function || null,
+        club_functions: form.club_functions ?? [],
       }
       if (isNew) {
         const r = await api.post('/members', body)

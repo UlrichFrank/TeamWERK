@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
@@ -42,7 +44,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
-	accessToken, err := IssueAccessToken(h.jwtSecret, id, req.Email, role)
+	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
+	accessToken, err := IssueAccessToken(h.jwtSecret, id, req.Email, role, clubFunctions, isParent)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -94,7 +97,8 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE token_hash = ?`, tokenHash)
 
-	accessToken, _ := IssueAccessToken(h.jwtSecret, id, email, role)
+	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
+	accessToken, _ := IssueAccessToken(h.jwtSecret, id, email, role, clubFunctions, isParent)
 	plain, newHash, _ := GenerateOpaqueToken()
 	newExpiry := RefreshTokenExpiry()
 	h.db.ExecContext(r.Context(),
@@ -197,7 +201,7 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 	expiry := InvitationExpiry()
 	if _, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at) VALUES (?,?,?,?,?)`,
-		email, nil, "elternteil", tokenHash, expiry,
+		email, nil, "standard", tokenHash, expiry,
 	); err != nil {
 		log.Printf("DB ERROR (ApproveMembership token for %s): %v", email, err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -248,7 +252,16 @@ func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Role == "" {
-		req.Role = "elternteil"
+		req.Role = "standard"
+	}
+	if req.Role != "admin" && req.Role != "standard" {
+		http.Error(w, "invalid role", http.StatusBadRequest)
+		return
+	}
+	caller := ClaimsFromCtx(r.Context())
+	if req.Role == "admin" && (caller == nil || caller.Role != "admin") {
+		http.Error(w, "only admins can invite admins", http.StatusForbidden)
+		return
 	}
 	var commentVal interface{}
 	if req.Comment != "" {
@@ -464,28 +477,17 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	roleRank := map[string]int{"admin": 5, "vorstand": 4, "trainer": 3, "elternteil": 2, "spieler": 1}
-	callerRank, ok := roleRank[caller.Role]
-	if !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	targetRank, ok := roleRank[req.Role]
-	if !ok {
+	if req.Role != "admin" && req.Role != "standard" {
 		http.Error(w, "invalid role", http.StatusBadRequest)
 		return
 	}
-	if targetRank > callerRank {
-		http.Error(w, "cannot assign role higher than own", http.StatusForbidden)
+	if req.Role == "admin" && caller.Role != "admin" {
+		http.Error(w, "only admins can assign admin role", http.StatusForbidden)
 		return
 	}
-	var currentRole string
-	if err := h.db.QueryRowContext(r.Context(), `SELECT role FROM users WHERE id = ?`, targetID).Scan(&currentRole); err != nil {
+	var exists bool
+	if err := h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) > 0 FROM users WHERE id = ?`, targetID).Scan(&exists); err != nil || !exists {
 		http.Error(w, "user not found", http.StatusNotFound)
-		return
-	}
-	if roleRank[currentRole] > callerRank {
-		http.Error(w, "cannot modify user with higher role", http.StatusForbidden)
 		return
 	}
 	if _, err := h.db.ExecContext(r.Context(), `UPDATE users SET role = ? WHERE id = ?`, req.Role, targetID); err != nil {
@@ -762,7 +764,13 @@ func (h *Handler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) notifyTrainersOfRequest(r *http.Request, teamID int, name, email string) {
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT u.email FROM users u JOIN team_trainers tt ON tt.user_id = u.id WHERE tt.team_id = ? AND u.role IN ('trainer','admin')`,
+		`SELECT u.email FROM users u
+		 JOIN team_trainers tt ON tt.user_id = u.id
+		 JOIN members m ON m.user_id = u.id
+		 JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'trainer'
+		 WHERE tt.team_id = ?
+		 UNION
+		 SELECT u2.email FROM users u2 WHERE u2.role = 'admin'`,
 		teamID,
 	)
 	if err != nil {
@@ -775,4 +783,29 @@ func (h *Handler) notifyTrainersOfRequest(r *http.Request, teamID int, name, ema
 		h.mailer.Send(trainerEmail, "Neuer Beitrittsantrag – TeamWERK",
 			fmt.Sprintf("Neuer Antrag von %s (%s).\nBitte in TeamWERK prüfen: %s/admin/membership-requests", name, email, h.baseURL))
 	}
+}
+
+// loadJWTExtras queries club_functions and is_parent for inclusion in the JWT.
+func (h *Handler) loadJWTExtras(ctx context.Context, userID int) ([]string, bool) {
+	var functionsStr string
+	h.db.QueryRowContext(ctx,
+		`SELECT COALESCE(GROUP_CONCAT(mcf.function, ','), '')
+		 FROM member_club_functions mcf
+		 JOIN members m ON m.id = mcf.member_id
+		 WHERE m.user_id = ?`, userID,
+	).Scan(&functionsStr)
+
+	var clubFunctions []string
+	if functionsStr != "" {
+		clubFunctions = strings.Split(functionsStr, ",")
+	} else {
+		clubFunctions = []string{}
+	}
+
+	var isParent bool
+	h.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) > 0 FROM family_links WHERE parent_user_id = ?`, userID,
+	).Scan(&isParent)
+
+	return clubFunctions, isParent
 }

@@ -11,7 +11,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Member {
   id: number; first_name: string; last_name: string
-  status: string; pass_number?: string; position?: string; gender?: string; club_function?: string
+  status: string; pass_number?: string; position?: string; gender?: string; club_functions?: string[]
   has_pending_profil_draft?: boolean
   has_pending_bank_draft?: boolean
 }
@@ -68,7 +68,7 @@ export default function MembersPage() {
   const { user } = useAuth()
   const [clubFunctionFilter, setClubFunctionFilter] = useState('')
   const extraParams = useMemo<Record<string, string>>(
-    () => clubFunctionFilter ? { club_function: clubFunctionFilter } : ({} as Record<string, string>),
+    () => clubFunctionFilter ? { club_function: clubFunctionFilter } : ({} as Record<string, string>), // backend param name unchanged
     [clubFunctionFilter]
   )
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
@@ -215,7 +215,7 @@ export default function MembersPage() {
             <MobileCard
               key={m.id}
               title={`${m.last_name}, ${m.first_name}`}
-              subtitle={[m.club_function ? CLUB_FUNCTION_LABELS[m.club_function] : null, m.position].filter(Boolean).join(' · ') || '–'}
+              subtitle={[(m.club_functions ?? []).map(f => CLUB_FUNCTION_LABELS[f]).filter(Boolean).join(', ') || null, m.position].filter(Boolean).join(' · ') || '–'}
               badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
               onClick={() => navigate(`/mitglieder/${m.id}`)}
               actions={[{ label: deletingIds.has(m.id) ? '…' : 'Löschen', onClick: () => handleDelete(m), variant: 'danger' }]}
@@ -224,7 +224,7 @@ export default function MembersPage() {
             <Link key={m.id} to={`/mitglieder/${m.id}`} className="block">
               <MobileCard
                 title={`${m.last_name}, ${m.first_name}`}
-                subtitle={[m.club_function ? CLUB_FUNCTION_LABELS[m.club_function] : null, m.position].filter(Boolean).join(' · ') || '–'}
+                subtitle={[(m.club_functions ?? []).map(f => CLUB_FUNCTION_LABELS[f]).filter(Boolean).join(', ') || null, m.position].filter(Boolean).join(' · ') || '–'}
                 badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
               />
             </Link>
@@ -257,7 +257,7 @@ export default function MembersPage() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-brand-text-muted">{m.pass_number || '–'}</td>
-                <td className="px-4 py-3 text-brand-text-muted">{m.club_function === 'spieler' ? genderLabel(m.gender) : '–'}</td>
+                <td className="px-4 py-3 text-brand-text-muted">{m.club_functions?.includes('spieler') ? genderLabel(m.gender) : '–'}</td>
                 <td className="px-4 py-3 text-brand-text-muted">{m.position || '–'}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeStyles(m.status)}`}>

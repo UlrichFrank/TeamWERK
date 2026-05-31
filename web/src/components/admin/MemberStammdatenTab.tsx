@@ -12,7 +12,7 @@ interface Member {
   position: string
   gender: string
   status: string
-  club_function?: string
+  club_functions?: string[]
   street?: string
   zip?: string
   city?: string
@@ -48,7 +48,6 @@ const GENDER_OPTIONS = [
 ]
 
 const CLUB_FUNCTION_OPTIONS = [
-  { value: '', label: '– keine –' },
   { value: 'spieler', label: 'Spieler' },
   { value: 'trainer', label: 'Trainer' },
   { value: 'vorstand', label: 'Vorstand' },
@@ -76,7 +75,15 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   }
 
   const selectedPositions = form.position ? form.position.split(',').filter(Boolean) : []
-  const isSpieler = form.club_function === 'spieler'
+  const clubFunctions = form.club_functions ?? []
+  const hasSpieler = clubFunctions.includes('spieler')
+
+  const toggleClubFunction = (fn: string) => {
+    const next = clubFunctions.includes(fn)
+      ? clubFunctions.filter(f => f !== fn)
+      : [...clubFunctions, fn]
+    onFormChange({ club_functions: next })
+  }
 
   const nameDraft = drafts.find(d => d.field_name === 'name')
   const profilDraft = drafts.find(d => d.field_name === 'profil')
@@ -208,7 +215,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
-          {isSpieler && (
+          {hasSpieler && (
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Passnummer</label>
@@ -233,7 +240,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         </div>
 
         {/* Positionen — nur für Spieler */}
-        {isSpieler && (
+        {hasSpieler && (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Positionen</label>
             <div className="flex flex-wrap gap-2">
@@ -256,7 +263,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         )}
 
         {/* Geschlecht — nur für Spieler */}
-        {isSpieler && (
+        {hasSpieler && (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Geschlecht</label>
             <div className="flex gap-2">
@@ -301,16 +308,20 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
 
         {/* Vereinsfunktion */}
         <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Vereinsfunktion</label>
-          <select
-            value={form.club_function || ''}
-            onChange={e => onFormChange({ club_function: e.target.value })}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-          >
+          <label className="block text-sm font-medium text-gray-700 mb-2">Vereinsfunktion</label>
+          <div className="flex flex-wrap gap-2">
             {CLUB_FUNCTION_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <label key={opt.value} className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={clubFunctions.includes(opt.value)}
+                  onChange={() => toggleClubFunction(opt.value)}
+                  className="w-4 h-4 accent-brand-yellow"
+                />
+                <span className="text-sm text-brand-text">{opt.label}</span>
+              </label>
             ))}
-          </select>
+          </div>
         </div>
       </div>
 

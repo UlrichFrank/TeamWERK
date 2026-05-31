@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"slices"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 )
@@ -115,7 +116,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := auth.ClaimsFromCtx(ctx)
 	userID := claims.UserID
-	role := claims.Role
+	role := effectivePersona(claims.ClubFunctions, claims.IsParent)
 
 	resp := Response{
 		Actions:   []Action{},
@@ -151,7 +152,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	resp.Actions = actions
 
 	// T5: Next games
-	resp.NextGames = h.queryNextGames(r, userID, role, seasonID)
+	resp.NextGames = h.queryNextGames(r, userID, seasonID)
 	if len(resp.NextGames) > 0 {
 		d := resp.NextGames[0].Date
 		resp.NextGameDate = &d
@@ -169,7 +170,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	resp.VehicleInfo = h.queryVehicleInfo(r, userID)
 
 	// CarpoolingHint
-	resp.CarpoolingHint = h.queryCarpoolingHint(r, userID, role, seasonID)
+	resp.CarpoolingHint = h.queryCarpoolingHint(r, userID, seasonID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -188,7 +189,7 @@ func (h *Handler) buildActions(r *http.Request, userID int, role string, seasonI
 	}
 
 	// Vehicle action for everyone with team connections
-	if va := h.vehicleAction(r, userID, role, seasonID); va != nil {
+	if va := h.vehicleAction(r, userID, seasonID); va != nil {
 		actions = append(actions, *va)
 	}
 
@@ -252,10 +253,7 @@ func (h *Handler) vorstandDutyActions(r *http.Request, seasonID int) []Action {
 
 // T3: Elternteil/Spieler — find applicable open duty slots this week for their teams
 func (h *Handler) memberDutyActions(r *http.Request, userID int, role string, seasonID int) []Action {
-	teamSubquery := h.teamQueryForUser(role)
-	if teamSubquery == "" {
-		return nil
-	}
+	teamSubquery := h.teamQueryForUser()
 	rows, err := h.db.QueryContext(r.Context(), fmt.Sprintf(`
 		SELECT ds.id, dt.name, ds.event_date, COALESCE(ds.event_time, '')
 		FROM duty_slots ds
@@ -295,11 +293,8 @@ func (h *Handler) memberDutyActions(r *http.Request, userID int, role string, se
 }
 
 // T4: Vehicle action — check for upcoming away games and vehicle_info status
-func (h *Handler) vehicleAction(r *http.Request, userID int, role string, seasonID int) *Action {
-	teamQuery := h.teamQueryForUser(role)
-	if teamQuery == "" {
-		return nil
-	}
+func (h *Handler) vehicleAction(r *http.Request, userID int, seasonID int) *Action {
+	teamQuery := h.teamQueryForUser()
 
 	var gameID int
 	var gameDate, gameTime, opponent string
@@ -346,36 +341,16 @@ func (h *Handler) vehicleAction(r *http.Request, userID int, role string, season
 	}
 }
 
-// teamQueryForUser returns a subquery returning team_ids for the user, or "" if not applicable.
+// teamQueryForUser returns a subquery returning team_ids for the user based on actual
+// team relationships (kader member, kader trainer, or parent via family_links).
 // The subquery uses two positional parameters: userID and seasonID.
-func (h *Handler) teamQueryForUser(role string) string {
-	switch role {
-	case "trainer":
-		return `SELECT k.team_id
-			FROM kader_trainers kt
-			JOIN kader k ON k.id = kt.kader_id
-			JOIN members m ON m.id = kt.member_id
-			WHERE m.user_id = ? AND k.season_id = ? AND k.team_id IS NOT NULL`
-	case "elternteil":
-		return `SELECT tm.team_id
-			FROM team_memberships tm
-			JOIN family_links fl ON fl.member_id = tm.member_id
-			WHERE fl.parent_user_id = ? AND tm.season_id = ?`
-	case "spieler":
-		return `SELECT tm.team_id
-			FROM team_memberships tm
-			JOIN members m ON m.id = tm.member_id
-			WHERE m.user_id = ? AND tm.season_id = ?`
-	}
-	return ""
+func (h *Handler) teamQueryForUser() string {
+	return `SELECT uat.team_id FROM user_accessible_teams uat WHERE uat.user_id = ? AND uat.season_id = ?`
 }
 
 // T5: Next games for user's teams
-func (h *Handler) queryNextGames(r *http.Request, userID int, role string, seasonID int) []Game {
-	teamQuery := h.teamQueryForUser(role)
-	if teamQuery == "" {
-		return []Game{}
-	}
+func (h *Handler) queryNextGames(r *http.Request, userID int, seasonID int) []Game {
+	teamQuery := h.teamQueryForUser()
 
 	rows, err := h.db.QueryContext(r.Context(), fmt.Sprintf(`
 		SELECT g.id, g.date, g.time, g.opponent, g.is_home, g.event_type, t.name,
@@ -517,13 +492,9 @@ func (h *Handler) queryVehicleInfo(r *http.Request, userID int) *VehicleInfo {
 	return &vi
 }
 
-func (h *Handler) queryCarpoolingHint(r *http.Request, userID int, role string, seasonID int) *CarpoolingHint {
-	teamQuery := h.teamQueryForUser(role)
-	if teamQuery == "" {
-		return nil
-	}
-
+func (h *Handler) queryCarpoolingHint(r *http.Request, userID int, seasonID int) *CarpoolingHint {
 	var hint CarpoolingHint
+	teamQuery := h.teamQueryForUser()
 	err := h.db.QueryRowContext(r.Context(), fmt.Sprintf(`
 		SELECT g.id, g.date, g.opponent
 		FROM games g
@@ -676,4 +647,18 @@ func formatDate(date string) string {
 		return date[8:10] + "." + date[5:7] + "." + date[0:4]
 	}
 	return date
+}
+
+// effectivePersona returns the single duty/dashboard persona for a user based on
+// their club functions and parent status. Priority: trainer > vorstand > spieler > elternteil.
+func effectivePersona(clubFunctions []string, isParent bool) string {
+	for _, p := range []string{"trainer", "vorstand", "vorstand_beisitzer", "spieler"} {
+		if slices.Contains(clubFunctions, p) {
+			return p
+		}
+	}
+	if isParent {
+		return "elternteil"
+	}
+	return ""
 }

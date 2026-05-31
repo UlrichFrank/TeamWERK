@@ -34,6 +34,7 @@ func Middleware(secret string) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireRole gates access by system role (admin|standard). Use for admin-only endpoints.
 func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(roles))
 	for _, r := range roles {
@@ -47,6 +48,30 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 				return
 			}
 			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireClubFunction gates access by Vereinsfunktion. Admins always pass through.
+func RequireClubFunction(functions ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := ClaimsFromCtx(r.Context())
+			if claims == nil {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			if claims.Role == "admin" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			for _, f := range functions {
+				if claims.HasFunction(f) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			http.Error(w, "forbidden", http.StatusForbidden)
 		})
 	}
 }

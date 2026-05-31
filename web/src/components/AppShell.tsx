@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X, ChevronRight, ChevronDown } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 
@@ -97,7 +97,11 @@ export default function AppShell() {
       </div>
       <nav className="flex-1 py-4">
         {navModules.map(mod => {
-          const visibleItems = mod.items.filter(item => user && (item.roles.length === 0 || item.roles.includes(user.role)) && !item.excludeRoles?.includes(user.role))
+          const visibleItems = mod.items.filter(item => {
+            if (!user) return false
+            if (item.excludeRoles?.some(r => r === 'admin' ? user.role === 'admin' : hasFunction(user, r))) return false
+            return item.roles.length === 0 || item.roles.some(r => r === 'admin' ? user.role === 'admin' : hasFunction(user, r))
+          })
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))
           const isOpen = openModules[mod.label]

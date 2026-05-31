@@ -2,12 +2,14 @@ package members
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +36,7 @@ type Member struct {
 	Gender       string  `json:"gender"`
 	Status       string  `json:"status"`
 	UserID       *int    `json:"user_id,omitempty"`
-	ClubFunction *string `json:"club_function,omitempty"`
+	ClubFunctions []string `json:"club_functions"`
 
 	// Extended fields (populated by GetMember)
 	Street   *string `json:"street,omitempty"`
@@ -67,9 +69,9 @@ type Member struct {
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	var m Member
 	var jerseyNum, userID sql.NullInt64
-	var clubFunc sql.NullString
+	var clubFunctionsStr string
 	err := row.Scan(&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth, &m.MemberNumber, &m.PassNumber,
-		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunc)
+		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunctionsStr)
 	if err != nil {
 		return m, err
 	}
@@ -81,10 +83,15 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 		n := int(userID.Int64)
 		m.UserID = &n
 	}
-	if clubFunc.Valid {
-		m.ClubFunction = &clubFunc.String
-	}
+	m.ClubFunctions = parseFunctions(clubFunctionsStr)
 	return m, nil
+}
+
+func parseFunctions(s string) []string {
+	if s == "" {
+		return []string{}
+	}
+	return strings.Split(s, ",")
 }
 
 // GET /api/members
@@ -105,7 +112,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	// Build WHERE additions
 	whereExtra := ""
 	if clubFuncFilter != "" {
-		whereExtra += ` AND club_function = ?`
+		whereExtra += ` AND EXISTS(SELECT 1 FROM member_club_functions WHERE member_id=m.id AND function=?)`
 	}
 	if search != "" {
 		whereExtra += ` AND (first_name LIKE ? OR last_name LIKE ? OR position LIKE ?)`
@@ -114,8 +121,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var total int
 
-	if claims.Role == "admin" {
-		countQuery := `SELECT COUNT(*) FROM members WHERE status != 'ausgetreten'` + whereExtra
+	const clubFuncSubquery = `COALESCE((SELECT GROUP_CONCAT(mcf.function, ',') FROM member_club_functions mcf WHERE mcf.member_id = m.id), '')`
+
+	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+		countQuery := `SELECT COUNT(*) FROM members m WHERE status != 'ausgetreten'` + whereExtra
 		args := buildListArgs(nil, clubFuncFilter, search, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	} else {
@@ -132,15 +141,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var rows *sql.Rows
-	if claims.Role == "admin" {
-		query := `SELECT id, first_name, last_name, COALESCE(date_of_birth,''), COALESCE(member_number,''), COALESCE(pass_number,''),
-		        jersey_number, COALESCE(position,''), COALESCE(gender,'u'), status, user_id, club_function
-		 FROM members WHERE status != 'ausgetreten'` + whereExtra + ` ORDER BY last_name, first_name LIMIT ? OFFSET ?`
+	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+		query := `SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
+		 FROM members m WHERE m.status != 'ausgetreten'` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
 		args := buildListArgs(nil, clubFuncFilter, search, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	} else {
 		query := `SELECT DISTINCT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
-		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function
+		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
 		 FROM members m
 		 JOIN team_memberships tm ON tm.member_id = m.id
 		 JOIN team_trainers tt ON tt.team_id = tm.team_id
@@ -231,14 +240,14 @@ func buildListArgs(prefix []any, clubFunc, search string, limit, offset *int) []
 // POST /api/members
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		FirstName    string  `json:"first_name"`
-		LastName     string  `json:"last_name"`
-		DateOfBirth  string  `json:"date_of_birth"`
-		MemberNumber string  `json:"member_number"`
-		PassNumber   string  `json:"pass_number"`
-		Position     string  `json:"position"`
-		Gender       string  `json:"gender"`
-		ClubFunction *string `json:"club_function"`
+		FirstName     string   `json:"first_name"`
+		LastName      string   `json:"last_name"`
+		DateOfBirth   string   `json:"date_of_birth"`
+		MemberNumber  string   `json:"member_number"`
+		PassNumber    string   `json:"pass_number"`
+		Position      string   `json:"position"`
+		Gender        string   `json:"gender"`
+		ClubFunctions []string `json:"club_functions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FirstName == "" || req.LastName == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -248,14 +257,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Gender = "u"
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender, club_function) VALUES (?,?,?,?,?,?,?,?)`,
+		`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender) VALUES (?,?,?,?,?,?,?)`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
-		nullableString(req.PassNumber), nullableString(req.Position), req.Gender, req.ClubFunction)
+		nullableString(req.PassNumber), nullableString(req.Position), req.Gender)
 	if err != nil {
 		http.Error(w, "duplicate pass number or internal error", http.StatusConflict)
 		return
 	}
 	id, _ := res.LastInsertId()
+	h.writeClubFunctions(r.Context(), int(id), req.ClubFunctions)
 	h.hub.Broadcast("members")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -270,7 +280,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	row := h.db.QueryRowContext(r.Context(), `
 		SELECT m.id, m.first_name, m.last_name,
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
-		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function,
+		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
+		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
@@ -283,7 +294,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var base Member
 	var jerseyNum, userID sql.NullInt64
-	var clubFunc sql.NullString
+	var clubFunctionsStr string
 	var mStreet, mZip, mCity sql.NullString
 	var joinDate, iban, accountHolder sql.NullString
 	var photoPath sql.NullString
@@ -295,7 +306,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	err := row.Scan(
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
 		&base.MemberNumber, &base.PassNumber,
-		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunc,
+		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunctionsStr,
 		&mStreet, &mZip, &mCity, &joinDate, &iban, &accountHolder,
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
@@ -316,12 +327,10 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		n := int(userID.Int64)
 		base.UserID = &n
 	}
-	if clubFunc.Valid {
-		base.ClubFunction = &clubFunc.String
-	}
+	base.ClubFunctions = parseFunctions(clubFunctionsStr)
 
 	isAdmin := claims.Role == "admin"
-	isPrivileged := claims.Role == "admin" || claims.Role == "vorstand" || claims.Role == "trainer"
+	isPrivileged := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("trainer")
 	isOwn := base.UserID != nil && *base.UserID == claims.UserID
 
 	if mStreet.Valid && mStreet.String != "" {
@@ -422,16 +431,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	id := r.PathValue("id")
 	var req struct {
-		FirstName    string  `json:"first_name"`
-		LastName     string  `json:"last_name"`
-		DateOfBirth  string  `json:"date_of_birth"`
-		MemberNumber string  `json:"member_number"`
-		PassNumber   string  `json:"pass_number"`
-		JerseyNumber *int    `json:"jersey_number"`
-		Position     string  `json:"position"`
-		Gender       string  `json:"gender"`
-		Status       string  `json:"status"`
-		ClubFunction *string `json:"club_function"`
+		FirstName     string   `json:"first_name"`
+		LastName      string   `json:"last_name"`
+		DateOfBirth   string   `json:"date_of_birth"`
+		MemberNumber  string   `json:"member_number"`
+		PassNumber    string   `json:"pass_number"`
+		JerseyNumber  *int     `json:"jersey_number"`
+		Position      string   `json:"position"`
+		Gender        string   `json:"gender"`
+		Status        string   `json:"status"`
+		ClubFunctions []string `json:"club_functions"`
 
 		Street   string `json:"street"`
 		Zip      string `json:"zip"`
@@ -460,14 +469,14 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET
 			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
-			jersey_number=?, position=?, gender=?, club_function=?,
+			jersey_number=?, position=?, gender=?,
 			street=?, zip=?, city=?,
 			status=?,
 			photo_visible=?,
 			updated_at=?
 		WHERE id=?`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
-		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender, req.ClubFunction,
+		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender,
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
 		req.Status,
 		boolToInt(req.PhotoVisible),
@@ -496,6 +505,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			id)
 	}
 
+	if idInt, err2 := strconv.Atoi(id); err2 == nil {
+		h.writeClubFunctions(r.Context(), idInt, req.ClubFunctions)
+	}
 	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -681,7 +693,8 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	{
 		rows, err := h.db.QueryContext(r.Context(),
 			`SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
-			        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, m.club_function
+			        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
+			        COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),'')
 			 FROM members m
 			 JOIN family_links fl ON fl.member_id = m.id
 			 WHERE fl.parent_user_id=?`, claims.UserID)
@@ -868,7 +881,7 @@ func (h *Handler) GetMemberParents(w http.ResponseWriter, r *http.Request) {
 		 JOIN family_links fl ON fl.parent_user_id = u.id
 		 WHERE fl.member_id=?`
 	args := []any{id}
-	if claims.Role == "elternteil" {
+	if claims.IsParent {
 		query += ` AND fl.parent_user_id=?`
 		args = append(args, claims.UserID)
 	}
@@ -1321,6 +1334,13 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) writeClubFunctions(ctx context.Context, memberID int, functions []string) {
+	h.db.ExecContext(ctx, `DELETE FROM member_club_functions WHERE member_id = ?`, memberID)
+	for _, f := range functions {
+		h.db.ExecContext(ctx, `INSERT OR IGNORE INTO member_club_functions (member_id, function) VALUES (?,?)`, memberID, f)
+	}
 }
 
 func parseOptionalInt(s string) (interface{}, bool) {

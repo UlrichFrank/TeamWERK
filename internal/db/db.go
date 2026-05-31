@@ -23,6 +23,15 @@ func Open(path string) (*sql.DB, error) {
 }
 
 func MigrateForce(sqlDB *sql.DB, migrationsFS fs.FS, version int) error {
+	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("pragma off: %w", err)
+	}
+	defer func() {
+		sqlDB.Exec(`PRAGMA foreign_keys = ON`)
+		sqlDB.SetMaxOpenConns(0)
+	}()
+
 	src, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("migration source: %w", err)
@@ -39,6 +48,18 @@ func MigrateForce(sqlDB *sql.DB, migrationsFS fs.FS, version int) error {
 }
 
 func Migrate(sqlDB *sql.DB, migrationsFS fs.FS) error {
+	// PRAGMA foreign_keys is a no-op inside a transaction (SQLite limitation).
+	// golang-migrate wraps migrations in transactions, so we disable FK enforcement
+	// at the connection level here and restore it after migrations complete.
+	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("pragma off: %w", err)
+	}
+	defer func() {
+		sqlDB.Exec(`PRAGMA foreign_keys = ON`)
+		sqlDB.SetMaxOpenConns(0)
+	}()
+
 	src, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("migration source: %w", err)

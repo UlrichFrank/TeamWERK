@@ -2,12 +2,16 @@ import { createContext, useContext, useState, useEffect, useRef, ReactNode } fro
 import axios from 'axios'
 import { setAccessToken } from '../lib/api'
 
-interface User { id: number; email: string; role: string }
+interface User { id: number; email: string; role: string; clubFunctions: string[]; isParent: boolean }
 interface AuthCtx {
   user: User | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+}
+
+export function hasFunction(user: User | null, f: string): boolean {
+  return user?.clubFunctions?.includes(f) ?? false
 }
 
 const WARN_MS = 25 * 60 * 1000
@@ -69,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const token: string = res.data.access_token
         setAccessToken(token)
         const payload = JSON.parse(atob(token.split('.')[1]))
-        setUser({ id: payload.uid, email: payload.email, role: payload.role })
+        setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
       })
       .catch(() => setUser(null))
       .finally(() => setLoading(false))
@@ -97,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token: string = res.data.access_token
     setAccessToken(token)
     const payload = JSON.parse(atob(token.split('.')[1]))
-    setUser({ id: payload.uid, email: payload.email, role: payload.role })
+    setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
   }
 
   return (
