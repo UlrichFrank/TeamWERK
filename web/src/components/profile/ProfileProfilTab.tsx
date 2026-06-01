@@ -40,35 +40,17 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
   }, [])
 
   useEffect(() => {
-    if (ownMember) {
-      setFirstName(ownMember.first_name)
-      setLastName(ownMember.last_name)
-      setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
-    } else {
-      api.get('/profile/account').then(r => {
-        setFirstName(r.data.first_name ?? '')
-        setLastName(r.data.last_name ?? '')
-      })
-    }
-  }, [ownMember?.id])
+    api.get('/profile/account').then(r => {
+      setFirstName(r.data.first_name ?? '')
+      setLastName(r.data.last_name ?? '')
+    })
+  }, [])
 
   useEffect(() => {
     if (!ownMember) return
     api.get(`/members/${ownMember.id}/change-drafts`).then(r => {
       const drafts: any[] = r.data?.drafts ?? []
-      const draft = drafts.find(d => d.field_name === 'profil') ?? null
-      setProfilDraft(draft)
-      if (draft) {
-        const nv = draft.new_value ?? {}
-        setFirstName(nv.first_name ?? ownMember.first_name)
-        setLastName(nv.last_name ?? ownMember.last_name)
-        setAddress({ street: nv.street ?? '', zip: nv.zip ?? '', city: nv.city ?? '' })
-      } else {
-        setFirstName(ownMember.first_name)
-        setLastName(ownMember.last_name)
-        setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
-        setChanged(false)
-      }
+      setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
     }).catch(() => {})
   }, [ownMember?.id, draftRefreshKey])
 
@@ -79,6 +61,7 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
     setSaving(true)
     setError('')
     try {
+      await api.put('/profile/me', { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city })
       if (ownMember) {
         await api.post(`/members/${ownMember.id}/change-request`, {
           field_name: 'profil',
@@ -87,8 +70,6 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
         const r = await api.get(`/members/${ownMember.id}/change-drafts`)
         const drafts: any[] = r.data?.drafts ?? []
         setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
-      } else {
-        await api.put('/profile/me', { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city })
       }
       await api.put('/profile/visibility', visibility)
       setSaved(true)
@@ -354,9 +335,9 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
           disabled={!changed || saving}
           className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {saving ? 'Speichern…' : ownMember ? 'Änderung anfordern' : 'Speichern'}
+          {saving ? 'Speichern…' : 'Speichern'}
         </button>
-        {saved && <span className="text-sm text-green-600">{ownMember ? 'Anfrage gesendet' : 'Gespeichert'}</span>}
+        {saved && <span className="text-sm text-green-600">Gespeichert</span>}
         {error && <span className="text-sm text-brand-danger">{error}</span>}
       </div>
     </div>

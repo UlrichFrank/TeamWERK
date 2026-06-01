@@ -786,10 +786,14 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		City      string `json:"city"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	h.db.ExecContext(r.Context(),
+	if _, err := h.db.ExecContext(r.Context(),
 		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, updated_at=? WHERE id=?`,
-		nullableString(req.FirstName), nullableString(req.LastName),
-		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), time.Now(), claims.UserID)
+		req.FirstName, req.LastName,
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), time.Now(), claims.UserID,
+	); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
