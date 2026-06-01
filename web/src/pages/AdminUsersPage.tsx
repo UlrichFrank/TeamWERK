@@ -323,14 +323,14 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                   <td className="px-6 py-3 text-right">
-                    <div className="flex gap-1 justify-end items-center">
+                    <div className="flex flex-nowrap gap-1 justify-end items-center">
                       {!u.member_id && !createdMemberUserIds.has(u.id) && (
                         <button
                           onClick={() => handleCreateMember(u)}
                           disabled={createMemberLoading.has(u.id)}
-                          className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="whitespace-nowrap bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          {createMemberLoading.has(u.id) ? '…' : 'Mitglied anlegen'}
+                          {createMemberLoading.has(u.id) ? '…' : 'Mitglied +'}
                         </button>
                       )}
                       {createMemberErrors.get(u.id) && (
@@ -339,7 +339,7 @@ export default function AdminUsersPage() {
                       {self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' && (
                         <button
                           onClick={() => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim())}
-                          className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                          className="whitespace-nowrap text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
                         >
                           Testen als
                         </button>
@@ -347,7 +347,7 @@ export default function AdminUsersPage() {
                       <button
                         onClick={() => handleDeleteUser(u)}
                         disabled={self?.id === u.id}
-                        className="text-xs bg-brand-danger text-white px-3 py-1 rounded font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="whitespace-nowrap text-xs bg-brand-danger text-white px-3 py-1 rounded font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         Löschen
                       </button>
