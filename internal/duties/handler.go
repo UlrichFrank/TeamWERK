@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
@@ -327,14 +328,25 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	type phoneEntry struct {
+		Label  string `json:"label"`
+		Number string `json:"number"`
+	}
+	type publicAssignee struct {
+		Name     string       `json:"name"`
+		PhotoURL *string      `json:"photo_url,omitempty"`
+		Phones   []phoneEntry `json:"phones"`
+		Address  *string      `json:"address,omitempty"`
+	}
 	type boardSlot struct {
-		ID          int    `json:"id"`
-		DutyType    string `json:"duty_type"`
-		EventTime   string `json:"event_time,omitempty"`
-		SlotsTotal  int    `json:"slots_total"`
-		Vacancies   int    `json:"vacancies"`
-		ClaimedByMe bool   `json:"claimed_by_me"`
-		RoleDesc    string `json:"role_desc,omitempty"`
+		ID          int              `json:"id"`
+		DutyType    string           `json:"duty_type"`
+		EventTime   string           `json:"event_time,omitempty"`
+		SlotsTotal  int              `json:"slots_total"`
+		Vacancies   int              `json:"vacancies"`
+		ClaimedByMe bool             `json:"claimed_by_me"`
+		RoleDesc    string           `json:"role_desc,omitempty"`
+		Assignees   []publicAssignee `json:"assignees"`
 	}
 	type boardGroup struct {
 		GameID    *int        `json:"game_id"`
@@ -393,7 +405,68 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			Vacancies:   slotsTotal - slotsFilled,
 			ClaimedByMe: claimedInt == 1,
 			RoleDesc:    roleDesc,
+			Assignees:   []publicAssignee{},
 		})
+	}
+
+	// Fetch assignees for all slots with privacy filtering
+	var slotIDs []int
+	for _, grp := range groupMap {
+		for _, s := range grp.Slots {
+			slotIDs = append(slotIDs, s.ID)
+		}
+	}
+	if len(slotIDs) > 0 {
+		ph := make([]string, len(slotIDs))
+		aArgs := make([]any, len(slotIDs))
+		for i, id := range slotIDs {
+			ph[i] = "?"
+			aArgs[i] = id
+		}
+		aRows, aErr := h.db.QueryContext(r.Context(), `
+			SELECT da.duty_slot_id,
+			       u.first_name || ' ' || u.last_name,
+			       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != '' THEN '/api/uploads/' || u.photo_path END,
+			       CASE WHEN COALESCE(uv.phones_visible,0)=1 THEN
+			           (SELECT json_group_array(json_object('label', p.label, 'number', p.number))
+			            FROM user_phones p WHERE p.user_id=u.id)
+			       END,
+			       CASE WHEN COALESCE(uv.address_visible,0)=1 AND COALESCE(u.street,'') != '' THEN
+			           u.street || COALESCE(', ' || NULLIF(TRIM(COALESCE(u.zip,'') || ' ' || COALESCE(u.city,'')), ''), '')
+			       END
+			FROM duty_assignments da
+			JOIN users u ON u.id = da.user_id
+			LEFT JOIN user_visibility uv ON uv.user_id = u.id
+			WHERE da.duty_slot_id IN (`+strings.Join(ph, ",")+`)
+			ORDER BY da.created_at`, aArgs...)
+		if aErr == nil {
+			defer aRows.Close()
+			assigneeMap := map[int][]publicAssignee{}
+			for aRows.Next() {
+				var slotID int
+				var name string
+				var photoURL, phonesJSON, address sql.NullString
+				aRows.Scan(&slotID, &name, &photoURL, &phonesJSON, &address)
+				a := publicAssignee{Name: name, Phones: []phoneEntry{}}
+				if photoURL.Valid && photoURL.String != "" {
+					a.PhotoURL = &photoURL.String
+				}
+				if phonesJSON.Valid && phonesJSON.String != "" && phonesJSON.String != "[]" {
+					json.Unmarshal([]byte(phonesJSON.String), &a.Phones)
+				}
+				if address.Valid && address.String != "" {
+					a.Address = &address.String
+				}
+				assigneeMap[slotID] = append(assigneeMap[slotID], a)
+			}
+			for _, grp := range groupMap {
+				for i := range grp.Slots {
+					if assignees, ok := assigneeMap[grp.Slots[i].ID]; ok {
+						grp.Slots[i].Assignees = assignees
+					}
+				}
+			}
+		}
 	}
 
 	result := make([]*boardGroup, 0, len(groupOrder))
