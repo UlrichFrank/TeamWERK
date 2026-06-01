@@ -219,13 +219,22 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
                   {s.role_desc ? <span className="text-brand-text-subtle font-normal"> · {s.role_desc}</span> : null}
                 </td>
                 <td className="px-4 py-2.5 text-brand-text-muted w-20">{s.event_time || '—'}</td>
-                <td className="px-4 py-2.5 text-brand-text-muted w-24 text-right">
-                  {s.claimed_by_me
-                    ? <span className="text-brand-blue text-xs font-medium">Eingetragen</span>
-                    : s.vacancies > 0
-                      ? <span className="text-xs">{s.vacancies} frei</span>
-                      : <span className="text-xs text-brand-text-subtle">Besetzt</span>
-                  }
+                <td className="px-4 py-2.5 text-brand-text-muted text-right">
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div>
+                      {s.claimed_by_me
+                        ? <span className="text-brand-blue text-xs font-medium">Eingetragen</span>
+                        : s.vacancies > 0
+                          ? <span className="text-xs">{s.vacancies} frei</span>
+                          : <span className="text-xs text-brand-text-subtle">Besetzt</span>
+                      }
+                    </div>
+                    {s.assignees && s.assignees.length > 0 && (
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {s.assignees.map((a, i) => <AssigneeChip key={i} assignee={a} />)}
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-2">
@@ -274,18 +283,6 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
                   </div>
                 </td>
               </tr>
-
-              {s.assignees && s.assignees.length > 0 && (
-                <tr key={`${s.id}-assignees`}>
-                  <td colSpan={4} className="px-4 pb-2.5 pt-0">
-                    <div className="flex flex-wrap gap-1.5">
-                      {s.assignees.map((a, i) => (
-                        <AssigneeChip key={i} assignee={a} />
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              )}
 
               {expanded === s.id && (
                 <tr key={`${s.id}-assignments`}>
