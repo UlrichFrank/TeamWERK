@@ -4,9 +4,11 @@ import { Trash2, Car, Users, X, Check, UserPlus } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
 import NumberSpinner from '../components/NumberSpinner'
+import PersonChip from '../components/PersonChip'
 
 interface CarpoolEntry {
   id: number
+  userId: number
   userName: string
   plaetze?: number
   treffpunkt?: string
@@ -20,6 +22,8 @@ interface PaarungEntry {
   sucheId: number
   bieteName: string
   sucheName: string
+  bieteUserId: number
+  sucheUserId: number
   anzahl: number
   status: 'pending' | 'confirmed'
   initiertVon: 'biete' | 'suche'
@@ -100,7 +104,7 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-brand-text">{entry.userName}</span>
+            <PersonChip userId={entry.userId} name={entry.userName} />
             {entry.plaetze != null && (
               <span className="text-xs text-brand-text-muted">
                 {typ === 'biete'
@@ -438,10 +442,10 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
             {confirmedPaarungen.map(p => (
               <div key={p.id} className="flex items-center gap-2 text-xs text-brand-text">
                 <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
-                <span>
-                  <span className="font-medium">{p.sucheName}</span>
+                <span className="flex items-center gap-1 flex-wrap">
+                  <PersonChip userId={p.sucheUserId} name={p.sucheName} />
                   {p.anzahl > 1 && ` (${p.anzahl} Personen)`}
-                  {' '}fährt mit <span className="font-medium">{p.bieteName}</span>
+                  {' '}fährt mit <PersonChip userId={p.bieteUserId} name={p.bieteName} />
                 </span>
                 {(p.bieteIsOwn || p.sucheIsOwn) && (
                   <button

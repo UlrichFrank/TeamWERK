@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { usePersonContact } from '../contexts/PersonContactContext'
 
 interface PersonChipProps {
@@ -7,15 +8,27 @@ interface PersonChipProps {
   photoUrl?: string
 }
 
+function toWhatsAppNumber(raw: string): string {
+  let digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('00')) digits = digits.slice(2)
+  else if (digits.startsWith('0')) digits = '49' + digits.slice(1)
+  return digits
+}
+
 export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
   const { get, fetchContact } = usePersonContact()
 
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (
+        btnRef.current && !btnRef.current.contains(e.target as Node) &&
+        tooltipRef.current && !tooltipRef.current.contains(e.target as Node)
+      ) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -28,13 +41,19 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
   const state = get(userId)
 
   function handleOpen() {
+    if (!btnRef.current) return
+    const r = btnRef.current.getBoundingClientRect()
+    setPos({ top: r.top + window.scrollY, left: r.left + window.scrollX })
     fetchContact(userId!)
     setOpen(true)
   }
 
+  const linkClass = 'underline hover:text-brand-text transition-colors'
+
   return (
-    <div ref={ref} className="relative inline-block">
+    <>
       <button
+        ref={btnRef}
         type="button"
         className="flex items-center gap-1.5 rounded-full bg-brand-border-subtle px-2 py-0.5 text-xs text-brand-text hover:bg-brand-border transition-colors"
         onMouseEnter={handleOpen}
@@ -48,9 +67,11 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
         {name}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
-          className="absolute bottom-full left-0 mb-1.5 z-50 w-52 bg-white rounded-lg shadow-lg border border-brand-border-subtle p-3 text-xs"
+          ref={tooltipRef}
+          style={{ top: pos.top - 8, left: pos.left, transform: 'translateY(-100%)' }}
+          className="fixed z-[9999] w-52 bg-white rounded-lg shadow-lg border border-brand-border-subtle p-3 text-xs"
           onMouseEnter={() => setOpen(true)}
           onMouseLeave={() => setOpen(false)}
         >
@@ -74,19 +95,34 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
                 />
               )}
               <p className="font-semibold text-brand-text mb-1.5">{state.name}</p>
-              {(state.phones && state.phones.length > 0) || state.address ? (
+              {(state.phones && state.phones.length > 0) || state.address || state.email ? (
                 <>
                   {state.phones && state.phones.length > 0 && (
                     <div className="space-y-0.5 mb-1.5">
                       {state.phones.map((p, i) => (
                         <p key={i} className="text-brand-text-muted">
-                          <span className="text-brand-text-subtle">{p.label}:</span> {p.number}
+                          <span className="text-brand-text-subtle">{p.label}:</span>{' '}
+                          <a href={`tel:${p.number}`} className={linkClass}>{p.number}</a>
+                          {' · '}
+                          <a
+                            href={`https://wa.me/${toWhatsAppNumber(p.number)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={linkClass}
+                          >
+                            WhatsApp
+                          </a>
                         </p>
                       ))}
                     </div>
                   )}
                   {state.address && (
-                    <p className="text-brand-text-muted whitespace-pre-line">{state.address}</p>
+                    <p className="text-brand-text-muted whitespace-pre-line mb-1">{state.address}</p>
+                  )}
+                  {state.email && (
+                    <p className="text-brand-text-muted">
+                      <a href={`mailto:${state.email}`} className={linkClass}>{state.email}</a>
+                    </p>
                   )}
                 </>
               ) : (
@@ -94,8 +130,9 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   )
 }

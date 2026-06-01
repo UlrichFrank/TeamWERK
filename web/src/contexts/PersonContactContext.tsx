@@ -12,6 +12,7 @@ export interface PersonContact {
   photo_url?: string
   phones?: PhoneEntry[]
   address?: string
+  email?: string
 }
 
 type ContactState = PersonContact | 'loading' | 'error'

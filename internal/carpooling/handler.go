@@ -34,6 +34,7 @@ type GameEntry struct {
 
 type CarpoolEntry struct {
 	ID         int    `json:"id"`
+	UserID     int    `json:"userId"`
 	UserName   string `json:"userName"`
 	Plaetze    *int   `json:"plaetze,omitempty"`
 	Treffpunkt string `json:"treffpunkt,omitempty"`
@@ -42,16 +43,18 @@ type CarpoolEntry struct {
 }
 
 type PaarungEntry struct {
-	ID          int    `json:"id"`
-	BieteID     int    `json:"bieteId"`
-	SucheID     int    `json:"sucheId"`
-	BieteName   string `json:"bieteName"`
-	SucheName   string `json:"sucheName"`
-	Anzahl      int    `json:"anzahl"`
-	Status      string `json:"status"`
-	InitiertVon string `json:"initiertVon"`
-	BieteIsOwn  bool   `json:"bieteIsOwn"`
-	SucheIsOwn  bool   `json:"sucheIsOwn"`
+	ID           int    `json:"id"`
+	BieteID      int    `json:"bieteId"`
+	SucheID      int    `json:"sucheId"`
+	BieteName    string `json:"bieteName"`
+	SucheName    string `json:"sucheName"`
+	BieteUserID  int    `json:"bieteUserId"`
+	SucheUserID  int    `json:"sucheUserId"`
+	Anzahl       int    `json:"anzahl"`
+	Status       string `json:"status"`
+	InitiertVon  string `json:"initiertVon"`
+	BieteIsOwn   bool   `json:"bieteIsOwn"`
+	SucheIsOwn   bool   `json:"sucheIsOwn"`
 }
 
 type CarpoolResponse struct {
@@ -204,6 +207,7 @@ func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]Ca
 			n := int(plaetze.Int64)
 			e.Plaetze = &n
 		}
+		e.UserID = ownerID
 		e.IsOwn = ownerID == currentUserID
 		if typ == "biete" {
 			biete = append(biete, e)
@@ -248,6 +252,8 @@ func (h *Handler) queryPaarungen(r *http.Request, gameID, currentUserID int) []P
 			&p.BieteName, &p.SucheName,
 			&p.Anzahl, &p.Status, &p.InitiertVon,
 			&bieteUserID, &sucheUserID)
+		p.BieteUserID = bieteUserID
+		p.SucheUserID = sucheUserID
 		p.BieteIsOwn = bieteUserID == currentUserID
 		p.SucheIsOwn = sucheUserID == currentUserID
 		result = append(result, p)

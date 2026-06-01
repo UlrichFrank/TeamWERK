@@ -665,6 +665,7 @@ type UserVisibility struct {
 	PhonesVisible  bool `json:"phones_visible"`
 	AddressVisible bool `json:"address_visible"`
 	PhotoVisible   bool `json:"photo_visible"`
+	EmailVisible   bool `json:"email_visible"`
 }
 
 type ProfileResponse struct {
@@ -762,13 +763,14 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var vis UserVisibility
-	var pv, av, phv int
+	var pv, av, phv, ev int
 	h.db.QueryRowContext(r.Context(),
-		`SELECT phones_visible, address_visible, photo_visible FROM user_visibility WHERE user_id=?`,
-		claims.UserID).Scan(&pv, &av, &phv)
+		`SELECT phones_visible, address_visible, photo_visible, COALESCE(email_visible,0) FROM user_visibility WHERE user_id=?`,
+		claims.UserID).Scan(&pv, &av, &phv, &ev)
 	vis.PhonesVisible = pv == 1
 	vis.AddressVisible = av == 1
 	vis.PhotoVisible = phv == 1
+	vis.EmailVisible = ev == 1
 	resp.Visibility = vis
 
 	w.Header().Set("Content-Type", "application/json")
@@ -896,13 +898,14 @@ func (h *Handler) UpdateVisibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible)
-		 VALUES (?,?,?,?)
+		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible, email_visible)
+		 VALUES (?,?,?,?,?)
 		 ON CONFLICT(user_id) DO UPDATE SET
 		   phones_visible=excluded.phones_visible,
 		   address_visible=excluded.address_visible,
-		   photo_visible=excluded.photo_visible`,
-		claims.UserID, boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible))
+		   photo_visible=excluded.photo_visible,
+		   email_visible=excluded.email_visible`,
+		claims.UserID, boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1401,10 +1404,11 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 		PhotoURL *string      `json:"photo_url,omitempty"`
 		Phones   []phoneEntry `json:"phones,omitempty"`
 		Address  *string      `json:"address,omitempty"`
+		Email    *string      `json:"email,omitempty"`
 	}
 
 	var resp contactResponse
-	var photoURL, phonesJSON, address sql.NullString
+	var photoURL, phonesJSON, address, email sql.NullString
 	err := h.db.QueryRowContext(r.Context(), `
 		SELECT u.first_name || ' ' || u.last_name,
 		       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != ''
@@ -1415,10 +1419,11 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 		       END,
 		       CASE WHEN COALESCE(uv.address_visible,0)=1 AND COALESCE(u.street,'') != '' THEN
 		           u.street || COALESCE(', ' || NULLIF(TRIM(COALESCE(u.zip,'') || ' ' || COALESCE(u.city,'')), ''), '')
-		       END
+		       END,
+		       CASE WHEN COALESCE(uv.email_visible,0)=1 THEN u.email END
 		FROM users u
 		LEFT JOIN user_visibility uv ON uv.user_id = u.id
-		WHERE u.id = ?`, id).Scan(&resp.Name, &photoURL, &phonesJSON, &address)
+		WHERE u.id = ?`, id).Scan(&resp.Name, &photoURL, &phonesJSON, &address, &email)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1435,6 +1440,9 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 	}
 	if address.Valid && address.String != "" {
 		resp.Address = &address.String
+	}
+	if email.Valid && email.String != "" {
+		resp.Email = &email.String
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

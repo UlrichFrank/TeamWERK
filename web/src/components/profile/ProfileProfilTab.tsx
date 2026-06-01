@@ -14,7 +14,7 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
   const [lastName, setLastName] = useState('')
   const [address, setAddress] = useState({ street: '', zip: '', city: '' })
   const [phones, setPhones] = useState<Phone[]>([])
-  const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false })
+  const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false, email_visible: false })
   const [photoURL, setPhotoURL] = useState('')
   const [profilDraft, setProfilDraft] = useState<any>(null)
 
@@ -34,7 +34,7 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
     api.get('/profile/me').then(r => {
       setAddress({ street: r.data?.street ?? '', zip: r.data?.zip ?? '', city: r.data?.city ?? '' })
       setPhones(r.data?.phones ?? [])
-      setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false })
+      setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false, email_visible: false })
       if (r.data?.photo_url) setPhotoURL(r.data.photo_url)
     })
   }, [])
@@ -287,6 +287,7 @@ export default function ProfileProfilTab({ children, parents, ownMember, draftRe
             { key: 'phones_visible' as const, label: 'Telefonnummern sichtbar' },
             { key: 'address_visible' as const, label: 'Adresse sichtbar' },
             { key: 'photo_visible' as const, label: 'Profilbild sichtbar' },
+            { key: 'email_visible' as const, label: 'E-Mail-Adresse sichtbar' },
           ].map(({ key, label }) => (
             <label key={key} className="flex items-center gap-2 cursor-pointer">
               <input

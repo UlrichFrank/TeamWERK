@@ -27,7 +27,7 @@ export interface Phone {
 }
 
 export interface Visibility {
-  phones_visible: boolean; address_visible: boolean; photo_visible: boolean
+  phones_visible: boolean; address_visible: boolean; photo_visible: boolean; email_visible: boolean
 }
 
 export interface ChangeDraft {
