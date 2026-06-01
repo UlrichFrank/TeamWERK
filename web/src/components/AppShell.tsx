@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Menu, X, ChevronRight, ChevronDown } from 'lucide-react'
+import { Menu, X, ChevronRight, ChevronDown, Eye } from 'lucide-react'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
@@ -59,7 +59,7 @@ function initOpenModules(): Record<string, boolean> {
 }
 
 export default function AppShell() {
-  const { user, logout } = useAuth()
+  const { user, logout, impersonating, stopImpersonation } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
@@ -175,6 +175,21 @@ export default function AppShell() {
           </button>
           <span className="font-bold text-lg">TeamWERK</span>
         </header>
+
+        {/* Impersonation banner */}
+        {impersonating && (
+          <div className="bg-brand-yellow px-4 py-2 flex items-center gap-2 text-brand-black text-sm font-medium shrink-0">
+            <Eye className="w-4 h-4 shrink-0" />
+            <span className="flex-1">Admin-Vorschau: <strong>{impersonating.name}</strong></span>
+            <button
+              onClick={stopImpersonation}
+              className="flex items-center gap-1 bg-brand-black text-brand-yellow rounded px-2 py-0.5 text-xs font-semibold hover:bg-brand-black/80 transition-colors"
+            >
+              <X className="w-3 h-3" />
+              Beenden
+            </button>
+          </div>
+        )}
 
         {/* Main content */}
         <main className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow">

@@ -192,6 +192,12 @@ func serve() {
 			r.Get("/api/admin/age-class-rules", cfgH.GetAgeClassRulesHandler)
 		})
 
+		// Admin only
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireRole("admin"))
+			r.Post("/api/admin/impersonate/{id}", authH.Impersonate)
+		})
+
 		// Admin + Vorstand
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))

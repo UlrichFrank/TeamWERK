@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import axios from 'axios'
 
 const Sidebar = () => (
-  <div className="hidden sm:flex flex-col justify-center items-center w-full sm:max-w-xs px-8 py-12 text-brand-black">
+  <div className="hidden sm:flex flex-col justify-center items-center sm:w-56 shrink-0 px-8 py-12 text-brand-black">
     <img src="/logo.svg" alt="Team Stuttgart" className="h-20 w-20 mb-6" />
     <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
     <p className="text-brand-black/50 text-sm">Team Stuttgart</p>

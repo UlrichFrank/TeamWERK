@@ -19,7 +19,7 @@ const ALL_ROLES = ['admin', 'standard'] as const
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function AdminUsersPage() {
-  const { user: self } = useAuth()
+  const { user: self, startImpersonation } = useAuth()
   const { items: users, setSearch, total, currentPage, totalPages, goToPage } = usePagination<User>('/admin/users')
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [requests, setRequests] = useState<MembershipRequest[]>([])
@@ -336,6 +336,14 @@ export default function AdminUsersPage() {
                       {createMemberErrors.get(u.id) && (
                         <span className="text-xs text-brand-danger">{createMemberErrors.get(u.id)}</span>
                       )}
+                      {self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' && (
+                        <button
+                          onClick={() => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim())}
+                          className="text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                        >
+                          Testen als
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeleteUser(u)}
                         disabled={self?.id === u.id}
@@ -380,6 +388,10 @@ export default function AdminUsersPage() {
                       handleRoleChange(u, newRole)
                     }
                   },
+                }] : []),
+                ...(self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' ? [{
+                  label: 'Testen als',
+                  onClick: () => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim()),
                 }] : []),
                 { label: 'Löschen', onClick: () => handleDeleteUser(u), variant: 'danger' },
               ]}

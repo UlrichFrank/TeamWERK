@@ -462,6 +462,47 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"items": result, "total": total})
 }
 
+// POST /api/admin/impersonate/{userId}
+func (h *Handler) Impersonate(w http.ResponseWriter, r *http.Request) {
+	caller := ClaimsFromCtx(r.Context())
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if caller.UserID == targetID {
+		http.Error(w, "cannot impersonate yourself", http.StatusBadRequest)
+		return
+	}
+	var email, role, firstName, lastName string
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT email, role, first_name, last_name FROM users WHERE id = ?`, targetID,
+	).Scan(&email, &role, &firstName, &lastName)
+	if err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if role == "admin" {
+		http.Error(w, "cannot impersonate admin", http.StatusBadRequest)
+		return
+	}
+	clubFunctions, isParent := h.loadJWTExtras(r.Context(), targetID)
+	accessToken, err := IssueAccessToken(h.jwtSecret, targetID, email, role, clubFunctions, isParent)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	name := firstName
+	if lastName != "" {
+		name += " " + lastName
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"access_token": accessToken,
+		"user":         map[string]any{"id": targetID, "name": name},
+	})
+}
+
 // PUT /api/admin/users/{id}/role
 func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	caller := ClaimsFromCtx(r.Context())

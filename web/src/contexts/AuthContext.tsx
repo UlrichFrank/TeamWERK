@@ -1,13 +1,17 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import axios from 'axios'
-import { setAccessToken } from '../lib/api'
+import { api, setAccessToken } from '../lib/api'
 
 interface User { id: number; email: string; role: string; clubFunctions: string[]; isParent: boolean }
+interface Impersonating { userId: number; name: string }
 interface AuthCtx {
   user: User | null
   loading: boolean
+  impersonating: Impersonating | null
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  startImpersonation: (userId: number, name: string) => Promise<void>
+  stopImpersonation: () => Promise<void>
 }
 
 export function hasFunction(user: User | null, f: string): boolean {
@@ -30,6 +34,7 @@ function fmtCountdown(s: number): string {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [impersonating, setImpersonating] = useState<Impersonating | null>(null)
   const [showWarning, setShowWarning] = useState(false)
   const [countdown, setCountdown] = useState(COUNTDOWN_SECS)
 
@@ -104,8 +109,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
   }
 
+  async function startImpersonation(userId: number, name: string) {
+    const res = await api.post(`/admin/impersonate/${userId}`)
+    const token: string = res.data.access_token
+    setAccessToken(token)
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
+    setImpersonating({ userId, name })
+  }
+
+  async function stopImpersonation() {
+    const res = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
+    const token: string = res.data.access_token
+    setAccessToken(token)
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
+    setImpersonating(null)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, impersonating, login, logout, startImpersonation, stopImpersonation }}>
       {children}
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
