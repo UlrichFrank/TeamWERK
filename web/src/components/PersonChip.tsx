@@ -1,0 +1,101 @@
+import { useEffect, useRef, useState } from 'react'
+import { usePersonContact } from '../contexts/PersonContactContext'
+
+interface PersonChipProps {
+  userId?: number
+  name: string
+  photoUrl?: string
+}
+
+export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const { get, fetchContact } = usePersonContact()
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  if (!userId) {
+    return <span className="text-xs text-brand-text">{name}</span>
+  }
+
+  const state = get(userId)
+
+  function handleOpen() {
+    fetchContact(userId!)
+    setOpen(true)
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        className="flex items-center gap-1.5 rounded-full bg-brand-border-subtle px-2 py-0.5 text-xs text-brand-text hover:bg-brand-border transition-colors"
+        onMouseEnter={handleOpen}
+        onMouseLeave={() => setOpen(false)}
+        onClick={(e) => { e.stopPropagation(); if (!open) { handleOpen() } else { setOpen(false) } }}
+        aria-label={`Details zu ${name}`}
+      >
+        {photoUrl && (
+          <img src={photoUrl} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+        )}
+        {name}
+      </button>
+
+      {open && (
+        <div
+          className="absolute bottom-full left-0 mb-1.5 z-50 w-52 bg-white rounded-lg shadow-lg border border-brand-border-subtle p-3 text-xs"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+        >
+          {state === 'loading' || state === undefined ? (
+            <div className="flex items-center gap-2 text-brand-text-muted">
+              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Lädt…
+            </div>
+          ) : state === 'error' ? (
+            <p className="text-brand-danger italic">Fehler beim Laden</p>
+          ) : (
+            <>
+              {state.photo_url && (
+                <img
+                  src={state.photo_url}
+                  alt={state.name}
+                  className="w-10 h-10 rounded-full object-cover mb-2"
+                />
+              )}
+              <p className="font-semibold text-brand-text mb-1.5">{state.name}</p>
+              {(state.phones && state.phones.length > 0) || state.address ? (
+                <>
+                  {state.phones && state.phones.length > 0 && (
+                    <div className="space-y-0.5 mb-1.5">
+                      {state.phones.map((p, i) => (
+                        <p key={i} className="text-brand-text-muted">
+                          <span className="text-brand-text-subtle">{p.label}:</span> {p.number}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {state.address && (
+                    <p className="text-brand-text-muted whitespace-pre-line">{state.address}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-brand-text-subtle italic">Keine weiteren Infos freigegeben</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import BrandCheckbox from './BrandCheckbox'
+import PersonChip from './PersonChip'
 
 interface Suggestion {
   id: number
@@ -11,6 +12,7 @@ interface Suggestion {
 interface Trainer {
   id: number
   name: string
+  user_id?: number
 }
 
 interface Props {
@@ -125,7 +127,7 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
         <ul className="divide-y divide-brand-border-subtle mt-1">
           {assignedTrainers.map(t => (
             <li key={t.id} className="flex items-center justify-between py-2 gap-2">
-              <span className="text-sm font-medium text-brand-blue">{t.name}</span>
+              <PersonChip userId={t.user_id} name={t.name} />
               <button
                 onClick={() => handleRemove(t.id)}
                 disabled={busy[t.id]}

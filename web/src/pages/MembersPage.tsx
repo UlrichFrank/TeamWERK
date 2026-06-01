@@ -8,12 +8,15 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import MobileCard from '../components/MobileCard'
 import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import PersonChip from '../components/PersonChip'
 
 interface Member {
   id: number; first_name: string; last_name: string
   status: string; pass_number?: string; position?: string; gender?: string; club_functions?: string[]
   has_pending_profil_draft?: boolean
   has_pending_bank_draft?: boolean
+  user_id?: number
+  user_photo_url?: string
 }
 
 interface ImportRow {
@@ -249,7 +252,8 @@ export default function MembersPage() {
             {items.map(m => (
               <tr key={m.id} className="hover:bg-brand-table-select transition-colors cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
                 <td className="px-4 py-3 font-medium text-brand-text">
-                  {m.last_name}, {m.first_name}{isAdmin && (
+                  <PersonChip userId={m.user_id} name={`${m.last_name}, ${m.first_name}`} photoUrl={m.user_photo_url} />
+                  {isAdmin && (
                     <>
                       {m.has_pending_profil_draft && <User size={14} className="inline ml-2 text-brand-text-muted" aria-label="Persönliche Daten ausstehend" />}
                       {m.has_pending_bank_draft && <CreditCard size={14} className="inline ml-1 text-brand-text-muted" aria-label="Bankdaten ausstehend" />}

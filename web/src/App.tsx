@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth, hasFunction } from './contexts/AuthContext'
+import { PersonContactProvider } from './contexts/PersonContactContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import RequestMembershipPage from './pages/RequestMembershipPage'
@@ -39,6 +40,7 @@ function RoleRoute({ roles, children }: { roles: string[]; children: React.React
 export default function App() {
   return (
     <AuthProvider>
+      <PersonContactProvider>
       <BrowserRouter>
         <Routes>
           {/* Public */}
@@ -73,6 +75,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </PersonContactProvider>
     </AuthProvider>
   )
 }

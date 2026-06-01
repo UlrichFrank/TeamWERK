@@ -328,15 +328,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	type phoneEntry struct {
-		Label  string `json:"label"`
-		Number string `json:"number"`
-	}
 	type publicAssignee struct {
-		Name     string       `json:"name"`
-		PhotoURL *string      `json:"photo_url,omitempty"`
-		Phones   []phoneEntry `json:"phones"`
-		Address  *string      `json:"address,omitempty"`
+		UserID   int     `json:"user_id"`
+		Name     string  `json:"name"`
+		PhotoURL *string `json:"photo_url,omitempty"`
 	}
 	type boardSlot struct {
 		ID          int              `json:"id"`
@@ -425,15 +420,9 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		}
 		aRows, aErr := h.db.QueryContext(r.Context(), `
 			SELECT da.duty_slot_id,
+			       u.id,
 			       u.first_name || ' ' || u.last_name,
-			       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != '' THEN '/api/uploads/' || u.photo_path END,
-			       CASE WHEN COALESCE(uv.phones_visible,0)=1 THEN
-			           (SELECT json_group_array(json_object('label', p.label, 'number', p.number))
-			            FROM user_phones p WHERE p.user_id=u.id)
-			       END,
-			       CASE WHEN COALESCE(uv.address_visible,0)=1 AND COALESCE(u.street,'') != '' THEN
-			           u.street || COALESCE(', ' || NULLIF(TRIM(COALESCE(u.zip,'') || ' ' || COALESCE(u.city,'')), ''), '')
-			       END
+			       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != '' THEN '/api/uploads/' || u.photo_path END
 			FROM duty_assignments da
 			JOIN users u ON u.id = da.user_id
 			LEFT JOIN user_visibility uv ON uv.user_id = u.id
@@ -443,19 +432,13 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			defer aRows.Close()
 			assigneeMap := map[int][]publicAssignee{}
 			for aRows.Next() {
-				var slotID int
+				var slotID, userID int
 				var name string
-				var photoURL, phonesJSON, address sql.NullString
-				aRows.Scan(&slotID, &name, &photoURL, &phonesJSON, &address)
-				a := publicAssignee{Name: name, Phones: []phoneEntry{}}
+				var photoURL sql.NullString
+				aRows.Scan(&slotID, &userID, &name, &photoURL)
+				a := publicAssignee{UserID: userID, Name: name}
 				if photoURL.Valid && photoURL.String != "" {
 					a.PhotoURL = &photoURL.String
-				}
-				if phonesJSON.Valid && phonesJSON.String != "" && phonesJSON.String != "[]" {
-					json.Unmarshal([]byte(phonesJSON.String), &a.Phones)
-				}
-				if address.Valid && address.String != "" {
-					a.Address = &address.String
 				}
 				assigneeMap[slotID] = append(assigneeMap[slotID], a)
 			}

@@ -1,18 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
-
-interface PhoneEntry {
-  label: string
-  number: string
-}
+import PersonChip from './PersonChip'
 
 export interface PublicAssignee {
+  user_id: number
   name: string
   photo_url?: string
-  phones?: PhoneEntry[]
-  address?: string
 }
 
 export interface BoardSlot {
@@ -49,78 +44,6 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function AssigneeChip({ assignee }: { assignee: PublicAssignee }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  const hasDetails = (assignee.phones && assignee.phones.length > 0) || assignee.address
-
-  return (
-    <div ref={ref} className="relative inline-block">
-      <button
-        type="button"
-        className="flex items-center gap-1.5 rounded-full bg-brand-border-subtle px-2 py-0.5 text-xs text-brand-text hover:bg-brand-border transition-colors"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        onClick={() => setOpen(v => !v)}
-        aria-label={`Details zu ${assignee.name}`}
-      >
-        {assignee.photo_url && (
-          <img
-            src={assignee.photo_url}
-            alt=""
-            className="w-4 h-4 rounded-full object-cover flex-shrink-0"
-          />
-        )}
-        {assignee.name}
-      </button>
-
-      {open && (
-        <div
-          className="absolute bottom-full left-0 mb-1.5 z-50 w-52 bg-white rounded-lg shadow-lg border border-brand-border-subtle p-3 text-xs"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
-        >
-          {assignee.photo_url && (
-            <img
-              src={assignee.photo_url}
-              alt={assignee.name}
-              className="w-10 h-10 rounded-full object-cover mb-2"
-            />
-          )}
-          <p className="font-semibold text-brand-text mb-1.5">{assignee.name}</p>
-          {hasDetails ? (
-            <>
-              {assignee.phones && assignee.phones.length > 0 && (
-                <div className="space-y-0.5 mb-1.5">
-                  {assignee.phones.map((p, i) => (
-                    <p key={i} className="text-brand-text-muted">
-                      <span className="text-brand-text-subtle">{p.label}:</span> {p.number}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {assignee.address && (
-                <p className="text-brand-text-muted whitespace-pre-line">{assignee.address}</p>
-              )}
-            </>
-          ) : (
-            <p className="text-brand-text-subtle italic">Keine weiteren Infos freigegeben</p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 interface DutySlotListProps {
   slots: BoardSlot[]
@@ -231,7 +154,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
                     </div>
                     {s.assignees && s.assignees.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1">
-                        {s.assignees.map((a, i) => <AssigneeChip key={i} assignee={a} />)}
+                        {s.assignees.map((a, i) => <PersonChip key={i} userId={a.user_id} name={a.name} photoUrl={a.photo_url} />)}
                       </div>
                     )}
                   </div>

@@ -1388,3 +1388,54 @@ func parseOptionalInt(s string) (interface{}, bool) {
 	}
 	return n, true
 }
+
+// GET /api/users/:id/contact
+func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	type phoneEntry struct {
+		Label  string `json:"label"`
+		Number string `json:"number"`
+	}
+	type contactResponse struct {
+		Name     string       `json:"name"`
+		PhotoURL *string      `json:"photo_url,omitempty"`
+		Phones   []phoneEntry `json:"phones,omitempty"`
+		Address  *string      `json:"address,omitempty"`
+	}
+
+	var resp contactResponse
+	var photoURL, phonesJSON, address sql.NullString
+	err := h.db.QueryRowContext(r.Context(), `
+		SELECT u.first_name || ' ' || u.last_name,
+		       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != ''
+		            THEN '/api/uploads/' || u.photo_path END,
+		       CASE WHEN COALESCE(uv.phones_visible,0)=1 THEN
+		           (SELECT json_group_array(json_object('label', p.label, 'number', p.number))
+		            FROM user_phones p WHERE p.user_id=u.id)
+		       END,
+		       CASE WHEN COALESCE(uv.address_visible,0)=1 AND COALESCE(u.street,'') != '' THEN
+		           u.street || COALESCE(', ' || NULLIF(TRIM(COALESCE(u.zip,'') || ' ' || COALESCE(u.city,'')), ''), '')
+		       END
+		FROM users u
+		LEFT JOIN user_visibility uv ON uv.user_id = u.id
+		WHERE u.id = ?`, id).Scan(&resp.Name, &photoURL, &phonesJSON, &address)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if photoURL.Valid && photoURL.String != "" {
+		resp.PhotoURL = &photoURL.String
+	}
+	if phonesJSON.Valid && phonesJSON.String != "" && phonesJSON.String != "[]" {
+		json.Unmarshal([]byte(phonesJSON.String), &resp.Phones)
+	}
+	if address.Valid && address.String != "" {
+		resp.Address = &address.String
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}

@@ -116,6 +116,7 @@ func serve() {
 		// Members
 		r.Get("/api/members", membH.List)
 		r.Get("/api/members/{id}", membH.Get)
+		r.Get("/api/users/{id}/contact", membH.GetContact)
 		r.Get("/api/members/{id}/change-drafts", membH.GetChangeRequestsHandler)
 		r.Post("/api/members/{id}/change-request", membH.CreateChangeRequestHandler)
 		r.Get("/api/profile/me", membH.GetProfile)
