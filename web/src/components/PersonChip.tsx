@@ -20,7 +20,19 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { get, fetchContact } = usePersonContact()
+
+  function scheduleClose() {
+    closeTimer.current = setTimeout(() => setOpen(false), 150)
+  }
+
+  function cancelClose() {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -56,8 +68,8 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
         ref={btnRef}
         type="button"
         className="flex items-center gap-1.5 rounded-full bg-brand-border-subtle px-2 py-0.5 text-xs text-brand-text hover:bg-brand-border transition-colors"
-        onMouseEnter={handleOpen}
-        onMouseLeave={() => setOpen(false)}
+        onMouseEnter={() => { cancelClose(); handleOpen() }}
+        onMouseLeave={scheduleClose}
         onClick={(e) => { e.stopPropagation(); if (!open) { handleOpen() } else { setOpen(false) } }}
         aria-label={`Details zu ${name}`}
       >
@@ -72,8 +84,8 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
           ref={tooltipRef}
           style={{ top: pos.top - 8, left: pos.left, transform: 'translateY(-100%)' }}
           className="fixed z-[9999] w-52 bg-white rounded-lg shadow-lg border border-brand-border-subtle p-3 text-xs"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
         >
           {state === 'loading' || state === undefined ? (
             <div className="flex items-center gap-2 text-brand-text-muted">

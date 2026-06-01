@@ -324,26 +324,22 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-6 py-3 text-right">
                     <div className="flex flex-nowrap gap-1 justify-end items-center">
-                      {!u.member_id && !createdMemberUserIds.has(u.id) && (
-                        <button
-                          onClick={() => handleCreateMember(u)}
-                          disabled={createMemberLoading.has(u.id)}
-                          className="whitespace-nowrap bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {createMemberLoading.has(u.id) ? '…' : 'Mitglied +'}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleCreateMember(u)}
+                        disabled={createMemberLoading.has(u.id)}
+                        className={`whitespace-nowrap bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${u.member_id || createdMemberUserIds.has(u.id) ? 'invisible' : ''}`}
+                      >
+                        {createMemberLoading.has(u.id) ? '…' : 'Mitglied +'}
+                      </button>
                       {createMemberErrors.get(u.id) && (
                         <span className="text-xs text-brand-danger">{createMemberErrors.get(u.id)}</span>
                       )}
-                      {self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' && (
-                        <button
-                          onClick={() => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim())}
-                          className="whitespace-nowrap text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
-                        >
-                          Testen als
-                        </button>
-                      )}
+                      <button
+                        onClick={() => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim())}
+                        className={`whitespace-nowrap text-xs bg-brand-yellow text-brand-black px-3 py-1 rounded font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors ${!(self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin') ? 'invisible' : ''}`}
+                      >
+                        Testen als
+                      </button>
                       <button
                         onClick={() => handleDeleteUser(u)}
                         disabled={self?.id === u.id}
