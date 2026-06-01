@@ -33,28 +33,31 @@ type GameEntry struct {
 }
 
 type CarpoolEntry struct {
-	ID         int    `json:"id"`
-	UserID     int    `json:"userId"`
-	UserName   string `json:"userName"`
-	Plaetze    *int   `json:"plaetze,omitempty"`
-	Treffpunkt string `json:"treffpunkt,omitempty"`
-	Notiz      string `json:"notiz,omitempty"`
-	IsOwn      bool   `json:"isOwn"`
+	ID         int     `json:"id"`
+	UserID     int     `json:"userId"`
+	UserName   string  `json:"userName"`
+	PhotoURL   *string `json:"photoUrl,omitempty"`
+	Plaetze    *int    `json:"plaetze,omitempty"`
+	Treffpunkt string  `json:"treffpunkt,omitempty"`
+	Notiz      string  `json:"notiz,omitempty"`
+	IsOwn      bool    `json:"isOwn"`
 }
 
 type PaarungEntry struct {
-	ID           int    `json:"id"`
-	BieteID      int    `json:"bieteId"`
-	SucheID      int    `json:"sucheId"`
-	BieteName    string `json:"bieteName"`
-	SucheName    string `json:"sucheName"`
-	BieteUserID  int    `json:"bieteUserId"`
-	SucheUserID  int    `json:"sucheUserId"`
-	Anzahl       int    `json:"anzahl"`
-	Status       string `json:"status"`
-	InitiertVon  string `json:"initiertVon"`
-	BieteIsOwn   bool   `json:"bieteIsOwn"`
-	SucheIsOwn   bool   `json:"sucheIsOwn"`
+	ID            int     `json:"id"`
+	BieteID       int     `json:"bieteId"`
+	SucheID       int     `json:"sucheId"`
+	BieteName     string  `json:"bieteName"`
+	SucheName     string  `json:"sucheName"`
+	BietePhotoURL *string `json:"bietePhotoUrl,omitempty"`
+	SuchePhotoURL *string `json:"suchePhotoUrl,omitempty"`
+	BieteUserID   int     `json:"bieteUserId"`
+	SucheUserID   int     `json:"sucheUserId"`
+	Anzahl        int     `json:"anzahl"`
+	Status        string  `json:"status"`
+	InitiertVon   string  `json:"initiertVon"`
+	BieteIsOwn    bool    `json:"bieteIsOwn"`
+	SucheIsOwn    bool    `json:"sucheIsOwn"`
 }
 
 type CarpoolResponse struct {
@@ -186,9 +189,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]CarpoolEntry, []CarpoolEntry) {
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, u.first_name || ' ' || u.last_name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id
+		SELECT m.id, u.first_name || ' ' || u.last_name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id,
+		       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != '' THEN '/api/uploads/' || u.photo_path END
 		FROM mitfahrgelegenheiten m
 		JOIN users u ON u.id = m.user_id
+		LEFT JOIN user_visibility uv ON uv.user_id = m.user_id
 		WHERE m.game_id = ?
 		ORDER BY m.created_at ASC`, gameID)
 	if err != nil {
@@ -202,10 +207,14 @@ func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]Ca
 		var typ string
 		var plaetze sql.NullInt64
 		var ownerID int
-		rows.Scan(&e.ID, &e.UserName, &typ, &plaetze, &e.Treffpunkt, &e.Notiz, &ownerID)
+		var photoURL sql.NullString
+		rows.Scan(&e.ID, &e.UserName, &typ, &plaetze, &e.Treffpunkt, &e.Notiz, &ownerID, &photoURL)
 		if plaetze.Valid {
 			n := int(plaetze.Int64)
 			e.Plaetze = &n
+		}
+		if photoURL.Valid && photoURL.String != "" {
+			e.PhotoURL = &photoURL.String
 		}
 		e.UserID = ownerID
 		e.IsOwn = ownerID == currentUserID
@@ -231,12 +240,16 @@ func (h *Handler) queryPaarungen(r *http.Request, gameID, currentUserID int) []P
 		       us.first_name || ' ' || us.last_name,
 		       COALESCE(ms.plaetze, 0),
 		       p.status, p.initiiert_von,
-		       mb.user_id, ms.user_id
+		       mb.user_id, ms.user_id,
+		       CASE WHEN COALESCE(uvb.photo_visible,0)=1 AND COALESCE(ub.photo_path,'') != '' THEN '/api/uploads/' || ub.photo_path END,
+		       CASE WHEN COALESCE(uvs.photo_visible,0)=1 AND COALESCE(us.photo_path,'') != '' THEN '/api/uploads/' || us.photo_path END
 		FROM mitfahrt_paarungen p
 		JOIN mitfahrgelegenheiten mb ON mb.id = p.biete_id
 		JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
 		JOIN users ub ON ub.id = mb.user_id
 		JOIN users us ON us.id = ms.user_id
+		LEFT JOIN user_visibility uvb ON uvb.user_id = mb.user_id
+		LEFT JOIN user_visibility uvs ON uvs.user_id = ms.user_id
 		WHERE mb.game_id = ? AND p.status != 'rejected'
 		ORDER BY p.created_at ASC`, gameID)
 	if err != nil {
@@ -248,14 +261,22 @@ func (h *Handler) queryPaarungen(r *http.Request, gameID, currentUserID int) []P
 	for rows.Next() {
 		var p PaarungEntry
 		var bieteUserID, sucheUserID int
+		var bietePhotoURL, suchePhotoURL sql.NullString
 		rows.Scan(&p.ID, &p.BieteID, &p.SucheID,
 			&p.BieteName, &p.SucheName,
 			&p.Anzahl, &p.Status, &p.InitiertVon,
-			&bieteUserID, &sucheUserID)
+			&bieteUserID, &sucheUserID,
+			&bietePhotoURL, &suchePhotoURL)
 		p.BieteUserID = bieteUserID
 		p.SucheUserID = sucheUserID
 		p.BieteIsOwn = bieteUserID == currentUserID
 		p.SucheIsOwn = sucheUserID == currentUserID
+		if bietePhotoURL.Valid && bietePhotoURL.String != "" {
+			p.BietePhotoURL = &bietePhotoURL.String
+		}
+		if suchePhotoURL.Valid && suchePhotoURL.String != "" {
+			p.SuchePhotoURL = &suchePhotoURL.String
+		}
 		result = append(result, p)
 	}
 	if result == nil {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Zap, Calendar, BarChart2, Users, Car,
+  Zap, Calendar, BarChart2, Users, Car, UserPlus,
   CircleDot, ArrowRight, Download, ChevronDown, ChevronRight,
-  Home, MapPin, MapPinned, Check, X, AlertTriangle
+  Home, MapPin, MapPinned, Check
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -20,12 +20,12 @@ interface DutyAccount { season: string; ist: number; soll: number | null; childr
 interface VehicleInfo { seats: number; notes: string; upToDate: boolean }
 interface CarpoolingMyEntry { id: number; typ: string }
 interface CarpoolingPaarung { paarungId: number; partnerName: string }
-interface CarpoolingEvent { type: string; actorName: string; createdAt: string }
+interface CarpoolingOpenEntry { typ: string; name: string }
 interface CarpoolingHint {
   gameId: number; date: string; opponent: string; bieteCount: number; sucheCount: number
   myEntry: CarpoolingMyEntry | null
   paarungen: CarpoolingPaarung[]
-  recentEvents: CarpoolingEvent[]
+  openEntries: CarpoolingOpenEntry[]
 }
 interface DashboardData {
   currentSeason: Season | null
@@ -46,34 +46,6 @@ function formatDate(iso: string) {
   return iso
 }
 
-function relativeTime(iso: string): string {
-  const d = new Date(iso.replace(' ', 'T') + 'Z')
-  const diffHours = (Date.now() - d.getTime()) / 3600000
-  if (diffHours < 24) return 'heute'
-  if (diffHours < 48) return 'gestern'
-  return d.toLocaleDateString('de-DE', { weekday: 'short' })
-}
-
-const EVENT_TEXT: Record<string, (name: string) => string> = {
-  biete_created:     n => `${n} bietet Mitfahrt an`,
-  suche_created:     n => `${n} sucht Mitfahrt`,
-  pairing_requested: n => `${n} möchte mitfahren`,
-  pairing_confirmed: n => `${n} hat Mitfahrt bestätigt`,
-  pairing_rejected:  n => `${n} hat Anfrage abgelehnt`,
-  pairing_cancelled: n => `${n} hat Mitfahrt storniert`,
-  biete_deleted:     n => `${n} hat Angebot zurückgezogen`,
-  suche_deleted:     n => `${n} hat Gesuch zurückgezogen`,
-}
-
-function EventIcon({ type }: { type: string }) {
-  if (type === 'pairing_confirmed')
-    return <Check size={14} className="text-brand-success flex-shrink-0 mt-0.5" />
-  if (type === 'pairing_rejected' || type === 'pairing_cancelled')
-    return <X size={14} className="text-brand-danger flex-shrink-0 mt-0.5" />
-  if (type.endsWith('_deleted'))
-    return <AlertTriangle size={14} className="text-brand-danger flex-shrink-0 mt-0.5" />
-  return <CircleDot size={14} className="text-brand-text-muted flex-shrink-0 mt-0.5" />
-}
 
 function statusLabel(status: string) {
   if (status === 'fulfilled') return { label: 'Erfüllt', cls: 'bg-brand-success-light text-brand-success' }
@@ -294,15 +266,18 @@ function CarpoolingHintCard({ hint }: { hint: CarpoolingHint | null | undefined 
     )
   }
 
-  const hasActivity = hint.paarungen.length > 0 || hint.recentEvents.length > 0
+  const shownCount = hint.openEntries.length + hint.paarungen.length + (hint.myEntry ? 1 : 0)
+  const totalCount = hint.bieteCount + hint.sucheCount
+  const weitereCount = totalCount - shownCount
+  const hasContent = hint.paarungen.length > 0 || hint.openEntries.length > 0
 
   return (
     <div className="space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs text-brand-text-muted">{formatDate(hint.date)}</p>
-          <p className="text-sm font-medium text-brand-text">vs. {hint.opponent}</p>
-        </div>
+      {/* Spielzeile */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-brand-text">
+          {formatDate(hint.date)} · vs. {hint.opponent}
+        </p>
         <Link
           to="/mitfahrgelegenheiten"
           className="flex-shrink-0 text-xs text-brand-text-muted hover:text-brand-text transition-colors flex items-center gap-1"
@@ -311,49 +286,52 @@ function CarpoolingHintCard({ hint }: { hint: CarpoolingHint | null | undefined 
         </Link>
       </div>
 
+      {/* Mein Eintrag */}
       {hint.myEntry && (
-        <p className="text-xs text-brand-text-muted">
-          Mein Eintrag: <span className="font-medium text-brand-text">
-            {hint.myEntry.typ === 'biete' ? 'Angebot' : 'Gesuch'}
-          </span>
-        </p>
+        <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-brand-yellow/20 text-brand-text">
+          {hint.myEntry.typ === 'biete' ? 'Mein Angebot' : 'Mein Gesuch'}
+        </span>
       )}
 
+      {/* Bestätigte Paarungen */}
       {hint.paarungen.length > 0 && (
         <div className="space-y-1">
           {hint.paarungen.map(p => (
             <div key={p.paarungId} className="flex items-center gap-1.5 text-xs">
               <Check size={14} className="text-brand-success flex-shrink-0" />
-              <span className="text-brand-text">{p.partnerName}</span>
+              <span className="font-medium text-brand-text">{p.partnerName}</span>
               <span className="text-brand-text-subtle">— Mitfahrt bestätigt</span>
             </div>
           ))}
         </div>
       )}
 
-      {hint.recentEvents.length > 0 && (
+      {/* Offene Einträge anderer */}
+      {hint.openEntries.length > 0 && (
         <div className="space-y-1 pt-1 border-t border-brand-border-subtle">
-          {hint.recentEvents.map((e, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-xs">
-              <EventIcon type={e.type} />
-              <span className="flex-1 text-brand-text">{(EVENT_TEXT[e.type] ?? (n => n))(e.actorName)}</span>
-              <span className="text-brand-text-subtle flex-shrink-0">{relativeTime(e.createdAt)}</span>
+          {hint.openEntries.map((e, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-xs text-brand-text">
+              {e.typ === 'biete'
+                ? <Car size={13} className="text-brand-text-muted flex-shrink-0" />
+                : <UserPlus size={13} className="text-brand-text-muted flex-shrink-0" />
+              }
+              <span>{e.name}</span>
+              <span className="text-brand-text-subtle">· {e.typ === 'biete' ? 'Angebot' : 'Gesuch'}</span>
             </div>
           ))}
+          {weitereCount > 0 && (
+            <p className="text-xs text-brand-text-subtle">+ {weitereCount} weitere</p>
+          )}
         </div>
       )}
 
-      {!hasActivity && (
-        <div className="flex gap-4 text-xs text-brand-text-muted">
-          <span><span className="font-medium text-brand-text">{hint.bieteCount}</span> Angebot{hint.bieteCount !== 1 ? 'e' : ''}</span>
-          <span><span className="font-medium text-brand-text">{hint.sucheCount}</span> Gesuch{hint.sucheCount !== 1 ? 'e' : ''}</span>
-        </div>
-      )}
-
-      {hasActivity && (
-        <div className="flex gap-4 text-xs text-brand-text-subtle">
-          <span>{hint.bieteCount} Angebot{hint.bieteCount !== 1 ? 'e' : ''}</span>
-          <span>{hint.sucheCount} Gesuch{hint.sucheCount !== 1 ? 'e' : ''}</span>
+      {/* Fallback wenn gar nichts */}
+      {!hasContent && (
+        <div className="pt-1">
+          <p className="text-xs text-brand-text-muted">Noch keine Einträge.</p>
+          <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text transition-colors flex items-center gap-1 mt-1">
+            Als Erstes eintragen <ArrowRight size={12} />
+          </Link>
         </div>
       )}
     </div>

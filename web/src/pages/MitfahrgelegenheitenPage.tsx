@@ -10,6 +10,7 @@ interface CarpoolEntry {
   id: number
   userId: number
   userName: string
+  photoUrl?: string
   plaetze?: number
   treffpunkt?: string
   notiz?: string
@@ -22,6 +23,8 @@ interface PaarungEntry {
   sucheId: number
   bieteName: string
   sucheName: string
+  bietePhotoUrl?: string
+  suchePhotoUrl?: string
   bieteUserId: number
   sucheUserId: number
   anzahl: number
@@ -104,7 +107,7 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <PersonChip userId={entry.userId} name={entry.userName} />
+            <PersonChip userId={entry.userId} name={entry.userName} photoUrl={entry.photoUrl} />
             {entry.plaetze != null && (
               <span className="text-xs text-brand-text-muted">
                 {typ === 'biete'
@@ -443,9 +446,9 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
               <div key={p.id} className="flex items-center gap-2 text-xs text-brand-text">
                 <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
                 <span className="flex items-center gap-1 flex-wrap">
-                  <PersonChip userId={p.sucheUserId} name={p.sucheName} />
+                  <PersonChip userId={p.sucheUserId} name={p.sucheName} photoUrl={p.suchePhotoUrl} />
                   {p.anzahl > 1 && ` (${p.anzahl} Personen)`}
-                  {' '}fährt mit <PersonChip userId={p.bieteUserId} name={p.bieteName} />
+                  {' '}fährt mit <PersonChip userId={p.bieteUserId} name={p.bieteName} photoUrl={p.bietePhotoUrl} />
                 </span>
                 {(p.bieteIsOwn || p.sucheIsOwn) && (
                   <button

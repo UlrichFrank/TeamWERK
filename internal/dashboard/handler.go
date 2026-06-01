@@ -83,21 +83,20 @@ type CarpoolingPaarung struct {
 	PartnerName string `json:"partnerName"`
 }
 
-type CarpoolingEvent struct {
-	Type      string `json:"type"`
-	ActorName string `json:"actorName"`
-	CreatedAt string `json:"createdAt"`
+type CarpoolingOpenEntry struct {
+	Typ  string `json:"typ"`
+	Name string `json:"name"`
 }
 
 type CarpoolingHint struct {
-	GameID       int                 `json:"gameId"`
-	Date         string              `json:"date"`
-	Opponent     string              `json:"opponent"`
-	BieteCount   int                 `json:"bieteCount"`
-	SucheCount   int                 `json:"sucheCount"`
-	MyEntry      *CarpoolingMyEntry  `json:"myEntry"`
-	Paarungen    []CarpoolingPaarung `json:"paarungen"`
-	RecentEvents []CarpoolingEvent   `json:"recentEvents"`
+	GameID      int                   `json:"gameId"`
+	Date        string                `json:"date"`
+	Opponent    string                `json:"opponent"`
+	BieteCount  int                   `json:"bieteCount"`
+	SucheCount  int                   `json:"sucheCount"`
+	MyEntry     *CarpoolingMyEntry    `json:"myEntry"`
+	Paarungen   []CarpoolingPaarung   `json:"paarungen"`
+	OpenEntries []CarpoolingOpenEntry `json:"openEntries"`
 }
 
 type Response struct {
@@ -549,22 +548,28 @@ func (h *Handler) queryCarpoolingHint(r *http.Request, userID int, seasonID int)
 		}
 	}
 
-	// Recent events (last 48 h)
-	hint.RecentEvents = make([]CarpoolingEvent, 0)
-	eRows, err := h.db.QueryContext(r.Context(), `
-		SELECT type, actor_name, created_at
-		FROM carpooling_events
-		WHERE user_id = ?
-		  AND game_id = ?
-		  AND created_at >= datetime('now', '-48 hours')
-		ORDER BY created_at DESC`,
-		userID, hint.GameID)
+	// Open entries from other users (no confirmed pairing)
+	hint.OpenEntries = make([]CarpoolingOpenEntry, 0)
+	oRows, err := h.db.QueryContext(r.Context(), `
+		SELECT m.typ, u.first_name || ' ' || u.last_name
+		FROM mitfahrgelegenheiten m
+		JOIN users u ON u.id = m.user_id
+		WHERE m.game_id = ?
+		  AND m.user_id != ?
+		  AND NOT EXISTS (
+		      SELECT 1 FROM mitfahrt_paarungen p
+		      WHERE p.status = 'confirmed'
+		        AND (p.biete_id = m.id OR p.suche_id = m.id)
+		  )
+		ORDER BY m.typ, u.first_name
+		LIMIT 5`,
+		hint.GameID, userID)
 	if err == nil {
-		defer eRows.Close()
-		for eRows.Next() {
-			var e CarpoolingEvent
-			eRows.Scan(&e.Type, &e.ActorName, &e.CreatedAt)
-			hint.RecentEvents = append(hint.RecentEvents, e)
+		defer oRows.Close()
+		for oRows.Next() {
+			var e CarpoolingOpenEntry
+			oRows.Scan(&e.Typ, &e.Name)
+			hint.OpenEntries = append(hint.OpenEntries, e)
 		}
 	}
 
