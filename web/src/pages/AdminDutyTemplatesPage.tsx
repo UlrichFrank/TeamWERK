@@ -6,12 +6,14 @@ import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
+import { AUDIENCE_OPTIONS } from '../lib/constants'
 
 interface DutyType {
   id: number
   name: string
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
+  audiences?: string[] | null
 }
 
 interface TemplateItem {
@@ -19,7 +21,7 @@ interface TemplateItem {
   anchor: 'start' | 'end'
   offset_minutes: number
   slots_count: number
-  role_desc: string
+  audiences: string[]
 }
 
 interface DutyTemplate {
@@ -61,16 +63,8 @@ function newTemplate(): TemplateFormState {
   }
 }
 
-const ROLE_OPTIONS = [
-  { value: 'elternteil', label: 'Elternteil' },
-  { value: 'spieler', label: 'Spieler' },
-  { value: 'trainer', label: 'Trainer' },
-  { value: 'vorstand', label: 'Vorstand' },
-  { value: 'admin', label: 'Admin' },
-]
-
 function newItem(): TemplateItem {
-  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, role_desc: 'spieler' }
+  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [] }
 }
 
 function TemplateForm({ template, onChange, dutyTypes }: {
@@ -168,6 +162,7 @@ function TemplateForm({ template, onChange, dutyTypes }: {
                             duty_type_id: dutyTypeId,
                             anchor: dutyType?.default_anchor ?? item.anchor,
                             offset_minutes: dutyType?.default_offset_minutes ?? item.offset_minutes,
+                            audiences: dutyType?.audiences ?? [],
                           })
                         }}
                         className={INPUT_SM}
@@ -176,21 +171,6 @@ function TemplateForm({ template, onChange, dutyTypes }: {
                         {dutyTypes.map(dt => (
                           <option key={dt.id} value={dt.id}>{dt.name}</option>
                         ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">Rolle</label>
-                      <select
-                        value={item.role_desc}
-                        onChange={e => updateItem(index, { role_desc: e.target.value })}
-                        className={INPUT_SM}
-                      >
-                        {ROLE_OPTIONS.map(role => (
-                          <option key={role.value} value={role.value}>{role.label}</option>
-                        ))}
-                        {item.role_desc && !ROLE_OPTIONS.some(role => role.value === item.role_desc) && (
-                          <option value={item.role_desc}>{item.role_desc}</option>
-                        )}
                       </select>
                     </div>
                     <div>
@@ -205,6 +185,26 @@ function TemplateForm({ template, onChange, dutyTypes }: {
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-xs text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle font-normal">(leer = keine Einschränkung)</span></label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mt-1">
+                      {AUDIENCE_OPTIONS.map(o => (
+                        <label key={o.value} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={item.audiences.includes(o.value)}
+                            onChange={e => updateItem(index, {
+                              audiences: e.target.checked
+                                ? [...item.audiences, o.value]
+                                : item.audiences.filter(a => a !== o.value),
+                            })}
+                            className="accent-brand-yellow"
+                          />
+                          {o.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-brand-text-muted mb-1">Anker</label>
@@ -283,7 +283,7 @@ export default function AdminDutyTemplatesPage() {
         name: r.data.name,
         template_type: r.data.template_type,
         duration_minutes: r.data.duration_minutes,
-        items: r.data.items,
+        items: (r.data.items ?? []).map((it: any) => ({ ...it, audiences: it.audiences ?? [] })),
       })
     } catch {
       setModalError('Vorlage konnte nicht geladen werden.')
