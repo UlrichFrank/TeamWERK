@@ -18,6 +18,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
+	"github.com/teamstuttgart/teamwerk/internal/files"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
@@ -85,6 +86,7 @@ func serve() {
 	gameH := games.NewHandler(database, hubInstance)
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
+	filesH := files.NewHandler(database, cfg.FilesDir)
 	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
@@ -157,6 +159,18 @@ func serve() {
 		r.Get("/api/push/vapid-public-key", notifH.GetVAPIDPublicKey)
 		r.Post("/api/push/subscribe", notifH.Subscribe)
 		r.Delete("/api/push/subscribe", notifH.Unsubscribe)
+
+		// Dokumente
+		r.Get("/api/folders", filesH.ListRootFolders)
+		r.Post("/api/folders", filesH.CreateFolder)
+		r.Get("/api/folders/{id}/contents", filesH.FolderContents)
+		r.Delete("/api/folders/{id}", filesH.DeleteFolder)
+		r.Get("/api/folders/{id}/permissions", filesH.ListPermissions)
+		r.Post("/api/folders/{id}/permissions", filesH.AddPermission)
+		r.Delete("/api/folders/{id}/permissions/{permId}", filesH.DeletePermission)
+		r.Post("/api/folders/{folderId}/files", filesH.UploadFile)
+		r.Get("/api/files/{id}/download", filesH.DownloadFile)
+		r.Delete("/api/files/{id}", filesH.DeleteFile)
 
 		// Kalender
 		r.Get("/api/kalender", gameH.ListGames)

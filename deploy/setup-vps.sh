@@ -15,6 +15,10 @@ chown www-data:www-data /var/lib/teamwerk
 mkdir -p /var/lib/teamwerk/uploads
 chown -R www-data:www-data /var/lib/teamwerk/uploads
 
+# Create files directory for document storage
+mkdir -p /var/lib/teamwerk/files
+chown -R www-data:www-data /var/lib/teamwerk/files
+
 # Create env file (skip if already configured)
 if [ ! -f /etc/teamwerk/env ]; then
     mkdir -p /etc/teamwerk
@@ -23,6 +27,7 @@ PORT=8080
 DB_PATH=/var/lib/teamwerk/teamwerk.db
 JWT_SECRET=REPLACE_WITH_RANDOM_SECRET
 UPLOAD_DIR=/var/lib/teamwerk/uploads
+FILES_DIR=/var/lib/teamwerk/files
 SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587
 SMTP_USER=p459264p5

@@ -21,6 +21,7 @@ import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminKaderPage from './pages/AdminKaderPage'
 import MitfahrgelegenheitenPage from './pages/MitfahrgelegenheitenPage'
+import DocumentsPage from './pages/DocumentsPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -56,6 +57,8 @@ export default function App() {
             <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand','trainer']}><MembersPage /></RoleRoute>} />
             <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand','trainer']}><MemberDetailPage /></RoleRoute>} />
             <Route path="profil" element={<ProfilePage />} />
+            <Route path="dokumente" element={<DocumentsPage />} />
+            <Route path="dokumente/:folderId" element={<DocumentsPage />} />
             <Route path="dienste" element={<DutyPage />} />
             <Route path="mitfahrgelegenheiten" element={<MitfahrgelegenheitenPage />} />
             <Route path="anfragen" element={<Navigate to="/admin/nutzer" replace />} />

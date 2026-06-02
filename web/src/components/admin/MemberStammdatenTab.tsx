@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
+import { CLUB_FUNCTION_OPTIONS } from '../../lib/constants'
 
 interface Member {
   id?: number
@@ -47,12 +48,6 @@ const GENDER_OPTIONS = [
   { value: 'u', label: 'divers' },
 ]
 
-const CLUB_FUNCTION_OPTIONS = [
-  { value: 'spieler', label: 'Spieler' },
-  { value: 'trainer', label: 'Trainer' },
-  { value: 'vorstand', label: 'Vorstand' },
-  { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
-]
 
 const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'ausgetreten']
 const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']

@@ -17,6 +17,7 @@ const navModules: NavModule[] = [
       { to: '/', label: 'Dashboard', roles: [], end: true },
       { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand'] },
       { to: '/profil', label: 'Mein Profil', roles: [], excludeRoles: ['admin'] },
+      { to: '/dokumente', label: 'Dokumente', roles: [] },
     ],
   },
   {

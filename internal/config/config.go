@@ -12,6 +12,7 @@ type Config struct {
 	JWTSecret      string
 	BaseURL        string
 	UploadDir      string
+	FilesDir       string
 	SMTP           SMTPConfig
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
@@ -34,6 +35,7 @@ func Load() (*Config, error) {
 		JWTSecret: os.Getenv("JWT_SECRET"),
 		BaseURL:   getEnv("BASE_URL", "https://internal.team-stuttgart.org"),
 		UploadDir: getEnv("UPLOAD_DIR", "./storage/uploads"),
+		FilesDir:  getEnv("FILES_DIR", "./storage/files"),
 		SMTP: SMTPConfig{
 			Host:     getEnv("SMTP_HOST", "mail.agenturserver.de"),
 			Port:     smtpPort,
