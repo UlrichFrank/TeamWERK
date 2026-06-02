@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  Folder, FileText, Upload, FolderPlus, Download, Trash2,
+  Folder, FileText, Upload, FolderPlus, Download, Trash2, Pencil,
   MoreVertical, ChevronRight, Lock, X, Check, AlertTriangle,
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import { CLUB_FUNCTION_OPTIONS } from '../lib/constants'
+import { ROLE_OPTIONS, CLUB_FUNCTION_OPTIONS } from '../lib/constants'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -214,8 +214,6 @@ const PRINCIPAL_TYPE_LABELS: Record<string, string> = {
   user: 'Person (User-ID)',
 }
 
-const ROLE_OPTIONS = ['admin', 'vorstand', 'trainer', 'elternteil', 'spieler']
-
 function PermissionsModal({ folderId, canWrite, onClose }: {
   folderId: number
   canWrite: boolean
@@ -329,7 +327,7 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
                 className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
               >
                 <option value="">Rolle wählen…</option>
-                {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             )}
             {newType === 'club_function' && (
@@ -434,6 +432,63 @@ function ActionMenu({ items }: { items: { label: string; icon: React.ReactNode; 
   )
 }
 
+function RenameModal({ type, id, currentName, onRenamed, onClose }: {
+  type: 'folder' | 'file'
+  id: number
+  currentName: string
+  onRenamed: () => void
+  onClose: () => void
+}) {
+  const [name, setName] = useState(currentName)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim() || name.trim() === currentName) { onClose(); return }
+    setSaving(true)
+    try {
+      const url = type === 'folder' ? `/folders/${id}` : `/files/${id}`
+      await api.put(url, { name: name.trim() })
+      onRenamed()
+    } catch {
+      setError('Umbenennen fehlgeschlagen.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="font-semibold text-brand-text">Umbenennen</h2>
+          <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
+        </div>
+        <form onSubmit={submit} className="space-y-4">
+          <input
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+          />
+          {error && <p className="text-sm text-brand-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim()}
+              className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Speichern
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function DocumentsPage() {
@@ -453,6 +508,7 @@ export default function DocumentsPage() {
   const [showUpload, setShowUpload] = useState(false)
   const [showPermissions, setShowPermissions] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'folder' | 'file'; id: number; name: string } | null>(null)
+  const [renaming, setRenaming] = useState<{ type: 'folder' | 'file'; id: number; name: string } | null>(null)
 
   const loadRoot = useCallback(async () => {
     try {
@@ -632,6 +688,7 @@ export default function DocumentsPage() {
                     <span onClick={e => e.stopPropagation()}>
                       <ActionMenu items={[
                         { label: 'Herunterladen', icon: <Download className="w-4 h-4" />, onClick: () => openFile(file) },
+                        ...(canWrite ? [{ label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'file', id: file.id, name: file.name }) }] : []),
                         ...(canWrite ? [{ label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'file', id: file.id, name: file.name }) }] : []),
                       ]} />
                     </span>
@@ -671,6 +728,7 @@ export default function DocumentsPage() {
                           <td className="px-4 py-3 text-right">
                             {folder.can_write && (
                               <ActionMenu items={[
+                                { label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'folder', id: folder.id, name: folder.name }) },
                                 { label: 'Berechtigungen', icon: <Lock className="w-4 h-4" />, onClick: () => setShowPermissions(folder.id) },
                                 { label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'folder', id: folder.id, name: folder.name }) },
                               ]} />
@@ -691,6 +749,7 @@ export default function DocumentsPage() {
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                             <ActionMenu items={[
                               { label: 'Herunterladen', icon: <Download className="w-4 h-4" />, onClick: () => openFile(file) },
+                              ...(canWrite ? [{ label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'file', id: file.id, name: file.name }) }] : []),
                               ...(canWrite ? [{ label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'file', id: file.id, name: file.name }) }] : []),
                             ]} />
                           </td>
@@ -724,6 +783,20 @@ export default function DocumentsPage() {
           folderId={showPermissions}
           canWrite={canWrite}
           onClose={() => setShowPermissions(null)}
+        />
+      )}
+
+      {renaming && (
+        <RenameModal
+          type={renaming.type}
+          id={renaming.id}
+          currentName={renaming.name}
+          onRenamed={() => {
+            setRenaming(null)
+            if (renaming.type === 'folder') loadRoot()
+            if (currentFolderId) loadContents(currentFolderId)
+          }}
+          onClose={() => setRenaming(null)}
         />
       )}
 

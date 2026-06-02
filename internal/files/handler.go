@@ -300,6 +300,38 @@ func (h *Handler) FolderContents(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PUT /api/folders/{id}
+func (h *Handler) RenameFolder(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	_, cw, err := resolveAccess(h.db, claims, id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !cw {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE file_folders SET name = ? WHERE id = ?`, strings.TrimSpace(req.Name), id); err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // DELETE /api/folders/{id}
 func (h *Handler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -626,6 +658,44 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+sanitizeFilename(originalName)+`"`)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, originalName, time.Time{}, f)
+}
+
+// PUT /api/files/{id}
+func (h *Handler) RenameFile(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	var folderID int
+	err = h.db.QueryRowContext(r.Context(), `SELECT folder_id FROM files WHERE id = ?`, id).Scan(&folderID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	_, cw, err := resolveAccess(h.db, claims, folderID)
+	if err != nil || !cw {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE files SET original_name = ? WHERE id = ?`, strings.TrimSpace(req.Name), id); err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DELETE /api/files/{id}

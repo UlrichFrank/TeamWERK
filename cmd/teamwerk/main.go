@@ -164,12 +164,14 @@ func serve() {
 		r.Get("/api/folders", filesH.ListRootFolders)
 		r.Post("/api/folders", filesH.CreateFolder)
 		r.Get("/api/folders/{id}/contents", filesH.FolderContents)
+		r.Put("/api/folders/{id}", filesH.RenameFolder)
 		r.Delete("/api/folders/{id}", filesH.DeleteFolder)
 		r.Get("/api/folders/{id}/permissions", filesH.ListPermissions)
 		r.Post("/api/folders/{id}/permissions", filesH.AddPermission)
 		r.Delete("/api/folders/{id}/permissions/{permId}", filesH.DeletePermission)
 		r.Post("/api/folders/{folderId}/files", filesH.UploadFile)
 		r.Get("/api/files/{id}/download", filesH.DownloadFile)
+		r.Put("/api/files/{id}", filesH.RenameFile)
 		r.Delete("/api/files/{id}", filesH.DeleteFile)
 
 		// Kalender
