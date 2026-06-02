@@ -5,12 +5,14 @@ import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
 import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
+import { AUDIENCE_OPTIONS } from '../lib/constants'
 
 interface DutyType {
   id: number
   name: string
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
+  audiences?: string[] | null
 }
 
 interface TemplateItem {
@@ -18,7 +20,7 @@ interface TemplateItem {
   anchor: 'start' | 'end'
   offset_minutes: number
   slots_count: number
-  role_desc: string
+  audiences?: string[] | null
 }
 
 interface Template {
@@ -30,7 +32,7 @@ interface Template {
 }
 
 function newItem(): TemplateItem {
-  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, role_desc: '' }
+  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [] }
 }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -176,7 +178,7 @@ export default function AdminDutyTemplateDetailPage() {
                           onChange={e => {
                             const dtId = Number(e.target.value)
                             const dt = dutyTypes.find(d => d.id === dtId)
-                            updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}) })
+                            updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes, audiences: dt.audiences ?? [] } : {}) })
                           }}
                           className={INPUT_SM}
                         >
@@ -205,26 +207,34 @@ export default function AdminDutyTemplateDetailPage() {
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs text-brand-text-muted mb-1">Personen</label>
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.slots_count}
-                            onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                            className={INPUT_SM}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-brand-text-muted mb-1">Rollenbezeichnung</label>
-                          <input
-                            type="text"
-                            value={item.role_desc}
-                            onChange={e => updateItem(i, { role_desc: e.target.value })}
-                            placeholder="Optional"
-                            className={INPUT_SM}
-                          />
+                      <div>
+                        <label className="block text-xs text-brand-text-muted mb-1">Personen</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.slots_count}
+                          onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
+                          className={INPUT_SM}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle">(leer = keine)</span></label>
+                        <div className="grid grid-cols-2 gap-1">
+                          {AUDIENCE_OPTIONS.map(o => (
+                            <label key={o.value} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={(item.audiences ?? []).includes(o.value)}
+                                onChange={e => updateItem(i, {
+                                  audiences: e.target.checked
+                                    ? [...(item.audiences ?? []), o.value]
+                                    : (item.audiences ?? []).filter(a => a !== o.value),
+                                })}
+                                className="accent-brand-yellow"
+                              />
+                              {o.label}
+                            </label>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -244,7 +254,7 @@ export default function AdminDutyTemplateDetailPage() {
                       onChange={e => {
                         const dtId = Number(e.target.value)
                         const dt = dutyTypes.find(d => d.id === dtId)
-                        updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes } : {}) })
+                        updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes, audiences: dt.audiences ?? [] } : {}) })
                       }}
                       className="w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     >
@@ -282,14 +292,24 @@ export default function AdminDutyTemplateDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-brand-text-muted mb-1">Rollenbezeichnung</label>
-                    <input
-                      type="text"
-                      value={item.role_desc}
-                      onChange={e => updateItem(i, { role_desc: e.target.value })}
-                      placeholder="Optional"
-                      className="w-36 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
-                    />
+                    <label className="block text-xs text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle text-xs">(leer = keine)</span></label>
+                    <div className="space-y-1">
+                      {AUDIENCE_OPTIONS.map(o => (
+                        <label key={o.value} className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={(item.audiences ?? []).includes(o.value)}
+                            onChange={e => updateItem(i, {
+                              audiences: e.target.checked
+                                ? [...(item.audiences ?? []), o.value]
+                                : (item.audiences ?? []).filter(a => a !== o.value),
+                            })}
+                            className="accent-brand-yellow"
+                          />
+                          {o.label}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                   <button
                     onClick={() => removeItem(i)}

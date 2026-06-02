@@ -5,6 +5,7 @@ import { formatOffset, parseOffset } from '../lib/time'
 import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { AUDIENCE_OPTIONS } from '../lib/constants'
 
 interface DutyType {
   id: number
@@ -16,6 +17,7 @@ interface DutyType {
   same_day_variant_id?: number | null
   adjacent_day_behavior?: string
   adjacent_day_variant_id?: number | null
+  audiences?: string[] | null
 }
 
 interface EditState {
@@ -27,6 +29,7 @@ interface EditState {
   same_day_variant_id: string
   adjacent_day_behavior: string
   adjacent_day_variant_id: string
+  audiences: string[]
 }
 
 function hoursToDisplay(h: number): string {
@@ -55,6 +58,7 @@ function toEditState(t: DutyType): EditState {
     same_day_variant_id: t.same_day_variant_id ? t.same_day_variant_id.toString() : '',
     adjacent_day_behavior: t.adjacent_day_behavior || 'normal',
     adjacent_day_variant_id: t.adjacent_day_variant_id ? t.adjacent_day_variant_id.toString() : '',
+    audiences: t.audiences ?? [],
   }
 }
 
@@ -62,6 +66,7 @@ const emptyCreate = (): EditState => ({
   name: '', hours: '1h', anchor: 'start', offset: '0',
   same_day_behavior: 'normal', same_day_variant_id: '',
   adjacent_day_behavior: 'normal', adjacent_day_variant_id: '',
+  audiences: [],
 })
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -111,6 +116,29 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
           placeholder="z.B. -1h 30min" className={INPUT} />
       </div>
       <p className="text-xs text-brand-text-subtle">Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
+
+      <div>
+        <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe</label>
+        <p className="text-xs text-brand-text-subtle mb-2">Leer = keine Einschränkung</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {AUDIENCE_OPTIONS.map(o => (
+            <label key={o.value} className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={state.audiences.includes(o.value)}
+                onChange={e => onChange({
+                  ...state,
+                  audiences: e.target.checked
+                    ? [...state.audiences, o.value]
+                    : state.audiences.filter(a => a !== o.value),
+                })}
+                className="accent-brand-yellow"
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      </div>
 
       <div className="border-t border-brand-border-subtle pt-3 mt-1">
         <p className="text-xs font-semibold text-brand-text-muted mb-2">Spieltag-Verhalten</p>
@@ -176,6 +204,7 @@ export default function AdminDutyTypesPage() {
       same_day_variant_id: create.same_day_variant_id ? parseInt(create.same_day_variant_id) : null,
       adjacent_day_behavior: create.adjacent_day_behavior,
       adjacent_day_variant_id: create.adjacent_day_variant_id ? parseInt(create.adjacent_day_variant_id) : null,
+      audiences: create.audiences.length > 0 ? create.audiences : null,
     })
     setCreate(emptyCreate())
     setShowCreateModal(false)
@@ -198,6 +227,7 @@ export default function AdminDutyTypesPage() {
       same_day_variant_id: edit.same_day_variant_id ? parseInt(edit.same_day_variant_id) : null,
       adjacent_day_behavior: edit.adjacent_day_behavior,
       adjacent_day_variant_id: edit.adjacent_day_variant_id ? parseInt(edit.adjacent_day_variant_id) : null,
+      audiences: edit.audiences.length > 0 ? edit.audiences : null,
     })
     setEdit(null); setModalId(null)
     load()

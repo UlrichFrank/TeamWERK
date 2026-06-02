@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import PersonChip from './PersonChip'
 import ActionMenu from './ActionMenu'
+import { AUDIENCE_LABELS } from '../lib/constants'
 
 export interface PublicAssignee {
   user_id: number
@@ -19,6 +20,7 @@ export interface BoardSlot {
   vacancies: number
   claimed_by_me: boolean
   role_desc?: string
+  audiences?: string[] | null
   assignees?: PublicAssignee[]
 }
 
@@ -90,6 +92,15 @@ onSlotDeleted?.(slotId)
                 <td className="px-4 py-2.5 text-brand-text-muted text-right">
                   <div className="flex flex-col items-end gap-1.5">
                     {s.vacancies > 0 && <div><span className="text-xs">{s.vacancies} frei</span></div>}
+                    {s.audiences && s.audiences.length > 0 && (
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {s.audiences.map(a => (
+                          <span key={a} className="text-xs bg-brand-info/10 text-brand-text px-1.5 py-0.5 rounded">
+                            {AUDIENCE_LABELS[a] ?? a}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {s.assignees && s.assignees.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1">
                         {s.assignees.map((a, i) => <PersonChip key={i} userId={a.user_id} name={a.name} photoUrl={a.photo_url} />)}

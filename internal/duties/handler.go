@@ -24,7 +24,7 @@ func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, 
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
-		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id
+		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences
 		 FROM duty_types ORDER BY name`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ListTypes query error: %v\n", err)
@@ -43,6 +43,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		SameDayVariantID      *int     `json:"same_day_variant_id,omitempty"`
 		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
 		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id,omitempty"`
+		Audiences             []string `json:"audiences,omitempty"`
 	}
 	result := []dt{}
 	for rows.Next() {
@@ -50,8 +51,9 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		var cs sql.NullFloat64
 		var sdvi sql.NullInt64
 		var advi sql.NullInt64
+		var audiences sql.NullString
 		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes,
-			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi)
+			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi, &audiences)
 		if cs.Valid {
 			d.CashSubstitute = &cs.Float64
 		}
@@ -63,6 +65,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 			id := int(advi.Int64)
 			d.AdjacentDayVariantID = &id
 		}
+		d.Audiences = audiencesFromDB(audiences)
 		result = append(result, d)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -81,6 +84,7 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 		SameDayVariantID      *int     `json:"same_day_variant_id"`
 		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
 		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id"`
+		Audiences             []string `json:"audiences"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
@@ -102,10 +106,10 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
-		                          same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id)
-		 VALUES (?,?,?,?,?,?,?,?,?)`,
+		                          same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences)
+		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
-		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID)
+		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, audiencesToDB(req.Audiences))
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -122,6 +126,7 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 		SameDayVariantID      *int     `json:"same_day_variant_id"`
 		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
 		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id"`
+		Audiences             []string `json:"audiences"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
@@ -143,10 +148,12 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=?,
-		                       same_day_behavior=?, same_day_variant_id=?, adjacent_day_behavior=?, adjacent_day_variant_id=?
+		                       same_day_behavior=?, same_day_variant_id=?, adjacent_day_behavior=?, adjacent_day_variant_id=?,
+		                       audiences=?
 		 WHERE id=?`,
 		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
-		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, id)
+		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID,
+		audiencesToDB(req.Audiences), id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -187,15 +194,16 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 // POST /api/duty-slots
 func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		EventName  string `json:"event_name"`
-		EventDate  string `json:"event_date"`
-		EventTime  string `json:"event_time"`
-		DutyTypeID int    `json:"duty_type_id"`
-		RoleDesc   string `json:"role_desc"`
-		SlotsTotal int    `json:"slots_total"`
-		TeamID     *int   `json:"team_id"`
-		SeasonID   int    `json:"season_id"`
-		GameID     *int   `json:"game_id"`
+		EventName  string   `json:"event_name"`
+		EventDate  string   `json:"event_date"`
+		EventTime  string   `json:"event_time"`
+		DutyTypeID int      `json:"duty_type_id"`
+		RoleDesc   string   `json:"role_desc"`
+		SlotsTotal int      `json:"slots_total"`
+		TeamID     *int     `json:"team_id"`
+		SeasonID   int      `json:"season_id"`
+		GameID     *int     `json:"game_id"`
+		Audiences  []string `json:"audiences"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	var eventTime any = nil
@@ -203,9 +211,9 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		eventTime = req.EventTime
 	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-		 VALUES (?,?,?,?,?,?,?,?,?)`,
-		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID)
+		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences)
+		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences))
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusCreated)
 }
@@ -214,11 +222,12 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		EventName  string `json:"event_name"`
-		EventDate  string `json:"event_date"`
-		EventTime  string `json:"event_time"`
-		RoleDesc   string `json:"role_desc"`
-		SlotsTotal int    `json:"slots_total"`
+		EventName  string   `json:"event_name"`
+		EventDate  string   `json:"event_date"`
+		EventTime  string   `json:"event_time"`
+		RoleDesc   string   `json:"role_desc"`
+		SlotsTotal int      `json:"slots_total"`
+		Audiences  []string `json:"audiences"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	var eventTime any = nil
@@ -226,8 +235,8 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 		eventTime = req.EventTime
 	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=? WHERE id=?`,
-		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, id)
+		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=?, audiences=? WHERE id=?`,
+		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, audiencesToDB(req.Audiences), id)
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -253,6 +262,17 @@ func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	userID := claims.UserID
+
+	// Determine if user bypasses audience filter (admin, or has privileged Vereinsfunktion)
+	audienceBypass := claims.Role == "admin"
+	if !audienceBypass {
+		var cnt int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM member_club_functions mcf
+			 JOIN members m ON m.id = mcf.member_id
+			 WHERE m.user_id = ? AND mcf.function IN ('vorstand','vorstand_beisitzer','trainer')`, userID).Scan(&cnt)
+		audienceBypass = cnt > 0
+	}
 
 	args := []any{userID} // first ? is for the da LEFT JOIN
 	var whereParts string
@@ -289,6 +309,27 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		args = append(args, userID, userID, userID, userID)
 	}
 
+	if !audienceBypass {
+		whereParts += ` AND (
+		     COALESCE(ds.audiences, dt.audiences) IS NULL
+		     OR (
+		         json_valid(COALESCE(ds.audiences, dt.audiences)) AND (
+		             (EXISTS (
+		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
+		                 WHERE je.value = 'eltern'
+		             ) AND EXISTS (SELECT 1 FROM family_links fl_a WHERE fl_a.parent_user_id = ?))
+		             OR EXISTS (
+		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
+		                 JOIN member_club_functions mcf_a ON mcf_a.function = je.value
+		                 JOIN members m_a ON m_a.id = mcf_a.member_id
+		                 WHERE m_a.user_id = ?
+		             )
+		         )
+		     )
+		 )`
+		args = append(args, userID, userID)
+	}
+
 	if r.URL.Query().Get("view") == "mine" {
 		whereParts += ` AND EXISTS (SELECT 1 FROM duty_assignments da2 WHERE da2.duty_slot_id = ds.id AND da2.user_id = ?)`
 		args = append(args, userID)
@@ -314,7 +355,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(g.time, ''),
 		    COALESCE(ds.team_id, 0),
 		    COALESCE(t.name, ''),
-		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END
+		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END,
+		    COALESCE(ds.audiences, dt.audiences)
 		 FROM duty_slots ds
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
@@ -341,6 +383,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		Vacancies   int              `json:"vacancies"`
 		ClaimedByMe bool             `json:"claimed_by_me"`
 		RoleDesc    string           `json:"role_desc,omitempty"`
+		Audiences   []string         `json:"audiences,omitempty"`
 		Assignees   []publicAssignee `json:"assignees"`
 	}
 	type boardGroup struct {
@@ -362,9 +405,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt int
 		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, teamName string
 		var gameID sql.NullInt64
+		var audiences sql.NullString
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
 			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime,
-			&teamID, &teamName, &isPastInt)
+			&teamID, &teamName, &isPastInt, &audiences)
 
 		var key string
 		if gameID.Valid {
@@ -400,6 +444,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			Vacancies:   slotsTotal - slotsFilled,
 			ClaimedByMe: claimedInt == 1,
 			RoleDesc:    roleDesc,
+			Audiences:   audiencesFromDB(audiences),
 			Assignees:   []publicAssignee{},
 		})
 	}
@@ -616,6 +661,27 @@ func (h *Handler) ExportAccounts(w http.ResponseWriter, r *http.Request) {
 			fmtFloat(soll), fmtFloat(ist), fmtFloat(balance), fmtFloat(cash)})
 	}
 	cw.Flush()
+}
+
+func audiencesFromDB(ns sql.NullString) []string {
+	if !ns.Valid || ns.String == "" {
+		return nil
+	}
+	var result []string
+	json.Unmarshal([]byte(ns.String), &result)
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func audiencesToDB(audiences []string) *string {
+	if len(audiences) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(audiences)
+	s := string(b)
+	return &s
 }
 
 // PUT /api/admin/seasons/:id/duty-targets

@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
+import { AUDIENCE_OPTIONS } from '../lib/constants'
 
 interface GameDetail {
   id: number
@@ -27,11 +28,13 @@ interface SlotDetail {
   role_description: string
   slots_total: number
   slots_filled: number
+  audiences?: string[] | null
 }
 
 interface DutyType {
   id: number
   name: string
+  audiences?: string[] | null
 }
 
 interface SlotPreview {
@@ -70,13 +73,13 @@ export default function SpieltagDetailPage() {
   const [addDutyTypeId, setAddDutyTypeId] = useState<number | ''>('')
   const [addEventTime, setAddEventTime] = useState('')
   const [addSlotsTotal, setAddSlotsTotal] = useState(1)
-  const [addRoleDesc, setAddRoleDesc] = useState('')
+  const [addAudiences, setAddAudiences] = useState<string[]>([])
   const [addSaving, setAddSaving] = useState(false)
 
   const [editSlot, setEditSlot] = useState<SlotDetail | null>(null)
   const [editEventTime, setEditEventTime] = useState('')
   const [editSlotsTotal, setEditSlotsTotal] = useState(1)
-  const [editRoleDesc, setEditRoleDesc] = useState('')
+  const [editAudiences, setEditAudiences] = useState<string[]>([])
   const [editSaving, setEditSaving] = useState(false)
 
   const [deleteSlotId, setDeleteSlotId] = useState<number | null>(null)
@@ -145,18 +148,18 @@ export default function SpieltagDetailPage() {
         event_date: game.date.slice(0, 10),
         event_time: addEventTime || null,
         duty_type_id: addDutyTypeId,
-        role_desc: addRoleDesc,
         slots_total: addSlotsTotal,
         team_id: game.team_id,
         season_id: game.season_id,
         game_id: game.id,
+        audiences: addAudiences.length > 0 ? addAudiences : null,
       })
       await Promise.all([loadGame(), loadBoard()])
       setShowAddSlot(false)
       setAddDutyTypeId('')
       setAddEventTime('')
       setAddSlotsTotal(1)
-      setAddRoleDesc('')
+      setAddAudiences([])
     } finally {
       setAddSaving(false)
     }
@@ -166,7 +169,7 @@ export default function SpieltagDetailPage() {
     setEditSlot(s)
     setEditEventTime(s.event_time)
     setEditSlotsTotal(s.slots_total)
-    setEditRoleDesc(s.role_description)
+    setEditAudiences(s.audiences ?? [])
   }
 
   const handleEditSlot = async () => {
@@ -179,8 +182,8 @@ export default function SpieltagDetailPage() {
           : `${game?.event_type === 'heim' ? 'Heimspiel' : 'Auswärtsspiel'} Team vs ${game?.opponent || ''}`.trim(),
         event_date: game?.date.slice(0, 10),
         event_time: editEventTime || null,
-        role_desc: editRoleDesc,
         slots_total: editSlotsTotal,
+        audiences: editAudiences.length > 0 ? editAudiences : null,
       })
       await Promise.all([loadGame(), loadBoard()])
       setEditSlot(null)
@@ -370,7 +373,12 @@ export default function SpieltagDetailPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-brand-text-muted mb-1">Diensttyp *</label>
-                <select value={addDutyTypeId} onChange={e => setAddDutyTypeId(Number(e.target.value))} className={INPUT_WIZ}>
+                <select value={addDutyTypeId} onChange={e => {
+                  const dtId = Number(e.target.value)
+                  setAddDutyTypeId(dtId)
+                  const dt = dutyTypes.find(d => d.id === dtId)
+                  setAddAudiences(dt?.audiences ?? [])
+                }} className={INPUT_WIZ}>
                   <option value="">Auswählen…</option>
                   {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
                 </select>
@@ -384,9 +392,22 @@ export default function SpieltagDetailPage() {
                 <input type="number" min={1} value={addSlotsTotal} onChange={e => setAddSlotsTotal(Number(e.target.value))} className={INPUT_WIZ} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Rollenbezeichnung</label>
-                <input type="text" value={addRoleDesc} onChange={e => setAddRoleDesc(e.target.value)}
-                  placeholder="z.B. Aufbau, Bewirtung…" className={INPUT_WIZ} />
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle text-xs font-normal">(leer = keine Einschränkung)</span></label>
+                <div className="grid grid-cols-2 gap-1.5 mt-1">
+                  {AUDIENCE_OPTIONS.map(o => (
+                    <label key={o.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={addAudiences.includes(o.value)}
+                        onChange={e => setAddAudiences(prev =>
+                          e.target.checked ? [...prev, o.value] : prev.filter(a => a !== o.value)
+                        )}
+                        className="accent-brand-yellow"
+                      />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setShowAddSlot(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
@@ -416,8 +437,22 @@ export default function SpieltagDetailPage() {
                 <input type="number" min={1} value={editSlotsTotal} onChange={e => setEditSlotsTotal(Number(e.target.value))} className={INPUT_WIZ} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Rollenbezeichnung</label>
-                <input type="text" value={editRoleDesc} onChange={e => setEditRoleDesc(e.target.value)} className={INPUT_WIZ} />
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle text-xs font-normal">(leer = keine Einschränkung)</span></label>
+                <div className="grid grid-cols-2 gap-1.5 mt-1">
+                  {AUDIENCE_OPTIONS.map(o => (
+                    <label key={o.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editAudiences.includes(o.value)}
+                        onChange={e => setEditAudiences(prev =>
+                          e.target.checked ? [...prev, o.value] : prev.filter(a => a !== o.value)
+                        )}
+                        className="accent-brand-yellow"
+                      />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditSlot(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
