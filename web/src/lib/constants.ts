@@ -1,8 +1,3 @@
-export const ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'standard', label: 'Standard' },
-] as const
-
 export const CLUB_FUNCTION_OPTIONS = [
   { value: 'spieler', label: 'Spieler' },
   { value: 'trainer', label: 'Trainer' },

@@ -12,7 +12,7 @@ interface NavModule {
 
 const navModules: NavModule[] = [
   {
-    label: 'Mitglieder',
+    label: 'Nutzer',
     items: [
       { to: '/', label: 'Dashboard', roles: [], end: true },
       { to: '/profil', label: 'Mein Profil', roles: [], excludeRoles: ['admin'] },

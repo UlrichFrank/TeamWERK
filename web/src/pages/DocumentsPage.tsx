@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import { ROLE_OPTIONS, CLUB_FUNCTION_OPTIONS } from '../lib/constants'
+import { CLUB_FUNCTION_OPTIONS } from '../lib/constants'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -207,8 +207,10 @@ function UploadModal({ folderId, onUploaded, onClose }: {
   )
 }
 
+const ROLE_OPTIONS = ['admin', 'standard']
+
 const PRINCIPAL_TYPE_LABELS: Record<string, string> = {
-  everyone: 'Alle Mitglieder',
+  everyone: 'Alle Nutzer',
   role: 'Rolle',
   club_function: 'Vereinsfunktion',
   user: 'Person (User-ID)',
@@ -270,7 +272,7 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
   }
 
   function permLabel(p: Permission): string {
-    if (p.principal_type === 'everyone') return 'Alle Mitglieder'
+    if (p.principal_type === 'everyone') return 'Alle Nutzer'
     return `${PRINCIPAL_TYPE_LABELS[p.principal_type] ?? p.principal_type}: ${p.principal_ref}`
   }
 
@@ -327,7 +329,7 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
                 className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
               >
                 <option value="">Rolle wählen…</option>
-                {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             )}
             {newType === 'club_function' && (
