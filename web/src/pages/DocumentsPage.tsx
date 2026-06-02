@@ -611,7 +611,7 @@ export default function DocumentsPage() {
     <div>
       {/* Header — same sticky pattern as MembersPage */}
       <div className="sticky top-0 z-10 bg-brand-white pb-4 mb-4 sm:bg-transparent sm:pb-6 sm:mb-0 sm:static sm:z-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-brand-text">Dokumente</h1>
             {/* Breadcrumb only when inside a subfolder */}
@@ -665,39 +665,48 @@ export default function DocumentsPage() {
             <p className="text-sm text-brand-text-muted">Laden…</p>
           ) : (
             <>
-              {/* Mobile: Folder cards */}
-              <div className="sm:hidden space-y-2">
-                {displayFolders.map(folder => (
-                  <button
-                    key={folder.id}
-                    onClick={() => navigateTo(folder)}
-                    className="w-full flex items-center gap-3 bg-brand-surface-card rounded-xl shadow px-4 py-3 text-left hover:bg-brand-table-select transition-colors"
-                  >
-                    <Folder className="w-5 h-5 text-brand-text-muted flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-brand-text truncate">{folder.name}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-brand-text-muted flex-shrink-0" />
-                  </button>
-                ))}
-                {displayFiles.map(file => (
-                  <div key={file.id} className="bg-brand-surface-card rounded-xl shadow px-4 py-3 flex items-start gap-3 cursor-pointer" onClick={() => openFile(file)}>
-                    <FileText className="w-5 h-5 text-brand-text-muted flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-brand-text truncate">{file.name}</p>
-                      <p className="text-xs text-brand-text-muted">{formatBytes(file.size)} · {formatDate(file.created_at)} · {file.uploaded_by_name}</p>
-                    </div>
-                    <span onClick={e => e.stopPropagation()}>
-                      <ActionMenu items={[
-                        { label: 'Herunterladen', icon: <Download className="w-4 h-4" />, onClick: () => openFile(file) },
-                        ...(canWrite ? [{ label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'file', id: file.id, name: file.name }) }] : []),
-                        ...(canWrite ? [{ label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'file', id: file.id, name: file.name }) }] : []),
-                      ]} />
-                    </span>
+              {/* Mobile: single card with list */}
+              <div className="sm:hidden bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+                {displayFolders.length === 0 && displayFiles.length === 0 ? (
+                  <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Dieser Ordner ist leer.</p>
+                ) : (
+                  <div className="divide-y divide-brand-border-subtle">
+                    {displayFolders.map(folder => (
+                      <div key={folder.id} className="flex items-center hover:bg-brand-table-select transition-colors">
+                        <button
+                          onClick={() => navigateTo(folder)}
+                          className="flex-1 flex items-center gap-3 px-4 py-3 text-left min-w-0"
+                        >
+                          <Folder className="w-5 h-5 text-brand-text-muted flex-shrink-0" />
+                          <p className="text-sm font-medium text-brand-text truncate">{folder.name}</p>
+                        </button>
+                        <div className="pr-2">
+                          <ActionMenu items={[
+                            { label: 'Öffnen', icon: <Folder className="w-4 h-4" />, onClick: () => navigateTo(folder) },
+                            ...(folder.can_write ? [{ label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'folder', id: folder.id, name: folder.name }) }] : []),
+                            ...(folder.can_write ? [{ label: 'Berechtigungen', icon: <Lock className="w-4 h-4" />, onClick: () => setShowPermissions(folder.id) }] : []),
+                            ...(folder.can_write ? [{ label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'folder', id: folder.id, name: folder.name }) }] : []),
+                          ]} />
+                        </div>
+                      </div>
+                    ))}
+                    {displayFiles.map(file => (
+                      <div key={file.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-brand-table-select transition-colors" onClick={() => openFile(file)}>
+                        <FileText className="w-5 h-5 text-brand-text-muted flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-brand-text truncate">{file.name}</p>
+                          <p className="text-xs text-brand-text-muted">{formatBytes(file.size)} · {formatDate(file.created_at)}</p>
+                        </div>
+                        <span onClick={e => e.stopPropagation()}>
+                          <ActionMenu items={[
+                            { label: 'Herunterladen', icon: <Download className="w-4 h-4" />, onClick: () => openFile(file) },
+                            ...(canWrite ? [{ label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'file', id: file.id, name: file.name }) }] : []),
+                            ...(canWrite ? [{ label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'file', id: file.id, name: file.name }) }] : []),
+                          ]} />
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {displayFolders.length === 0 && displayFiles.length === 0 && (
-                  <p className="text-sm text-brand-text-muted italic py-4 text-center">Dieser Ordner ist leer.</p>
                 )}
               </div>
 

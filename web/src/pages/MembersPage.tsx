@@ -1,11 +1,12 @@
 import { useRef, useState, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+
 import { X, User, CreditCard } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
-import MobileCard from '../components/MobileCard'
+import ActionMenu from '../components/ActionMenu'
 import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import PersonChip from '../components/PersonChip'
@@ -211,40 +212,16 @@ export default function MembersPage() {
         </div>
       </div>
 
-      {/* Mobile: Cards */}
-      <div className="sm:hidden space-y-0">
-        {items.map(m => (
-          isAdmin ? (
-            <MobileCard
-              key={m.id}
-              title={`${m.last_name}, ${m.first_name}`}
-              subtitle={[(m.club_functions ?? []).map(f => CLUB_FUNCTION_LABELS[f]).filter(Boolean).join(', ') || null, m.position].filter(Boolean).join(' · ') || '–'}
-              badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
-              onClick={() => navigate(`/mitglieder/${m.id}`)}
-              actions={[{ label: deletingIds.has(m.id) ? '…' : 'Löschen', onClick: () => handleDelete(m), variant: 'danger' }]}
-            />
-          ) : (
-            <Link key={m.id} to={`/mitglieder/${m.id}`} className="block">
-              <MobileCard
-                title={`${m.last_name}, ${m.first_name}`}
-                subtitle={[(m.club_functions ?? []).map(f => CLUB_FUNCTION_LABELS[f]).filter(Boolean).join(', ') || null, m.position].filter(Boolean).join(' · ') || '–'}
-                badge={{ label: m.status, variant: m.status === 'aktiv' ? 'blue' : m.status === 'verletzt' ? 'yellow' : 'red' }}
-              />
-            </Link>
-          )
-        ))}
-      </div>
-
-      {/* Desktop: Table */}
-      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      {/* Table — always visible, columns drop off as screen shrinks */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr>
               <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Name</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Passnummer</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Gesch.</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Position</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Status</th>
+              <th className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Status</th>
+              <th className="hidden md:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Position</th>
+              <th className="hidden lg:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Gesch.</th>
+              <th className="hidden xl:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Passnummer</th>
               {isAdmin && <th className="bg-brand-surface-card px-4 py-3" />}
             </tr>
           </thead>
@@ -259,24 +236,26 @@ export default function MembersPage() {
                       {m.has_pending_bank_draft && <CreditCard size={14} className="inline ml-1 text-brand-text-muted" aria-label="Bankdaten ausstehend" />}
                     </>
                   )}
+                  {/* Status badge inline on mobile */}
+                  <div className="sm:hidden mt-0.5">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeStyles(m.status)}`}>
+                      {m.status}
+                    </span>
+                  </div>
                 </td>
-                <td className="px-4 py-3 text-brand-text-muted">{m.pass_number || '–'}</td>
-                <td className="px-4 py-3 text-brand-text-muted">{m.club_functions?.includes('spieler') ? genderLabel(m.gender) : '–'}</td>
-                <td className="px-4 py-3 text-brand-text-muted">{m.position || '–'}</td>
-                <td className="px-4 py-3">
+                <td className="hidden sm:table-cell px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeStyles(m.status)}`}>
                     {m.status}
                   </span>
                 </td>
+                <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{m.position || '–'}</td>
+                <td className="hidden lg:table-cell px-4 py-3 text-brand-text-muted">{m.club_functions?.includes('spieler') ? genderLabel(m.gender) : '–'}</td>
+                <td className="hidden xl:table-cell px-4 py-3 text-brand-text-muted">{m.pass_number || '–'}</td>
                 {isAdmin && (
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={() => handleDelete(m)}
-                      disabled={deletingIds.has(m.id)}
-                      className="text-xs bg-brand-danger text-white px-3 py-1 rounded font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50"
-                    >
-                      Löschen
-                    </button>
+                    <ActionMenu actions={[
+                      { label: deletingIds.has(m.id) ? 'Löschen…' : 'Löschen', onClick: () => handleDelete(m), variant: 'danger' },
+                    ]} />
                   </td>
                 )}
               </tr>

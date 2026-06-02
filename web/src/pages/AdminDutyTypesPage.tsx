@@ -2,7 +2,7 @@ import { useEffect, useState, FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatOffset, parseOffset } from '../lib/time'
-import MobileCard from '../components/MobileCard'
+import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
 
@@ -262,84 +262,62 @@ export default function AdminDutyTypesPage() {
         </div>
       )}
 
-      {/* Mobile: Cards */}
-      <div className="sm:hidden space-y-0 mt-4">
-        {types.map(t => (
-          <MobileCard
-            key={t.id}
-            title={t.name}
-            subtitle={hoursToDisplay(t.hours_value)}
-            actions={[
-              { label: 'Bearbeiten', onClick: () => startEdit(t) },
-              { label: 'Löschen', onClick: () => handleDelete(t.id, t.name), variant: 'danger' },
-            ]}
-          >
-            <div className="text-xs text-brand-text-muted space-y-1">
-              <div>Anker: {t.default_anchor === 'start' ? 'Anpfiff/Beginn' : 'Abpfiff/Ende'}</div>
-              <div>Versatz: {formatOffset(t.default_offset_minutes)}</div>
-            </div>
-          </MobileCard>
-        ))}
-      </div>
-
-      {/* Desktop: Table */}
-      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-6">
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left">Name</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Dauer</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Anker</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Versatz</th>
-              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3">Spieltag</th>
-              <th className="bg-brand-surface-card px-3 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-brand-border-subtle">
-            {types.map(t => (
-              <tr key={t.id} className="hover:bg-brand-table-select transition-colors">
-                <td className="px-3 py-3 font-medium text-brand-text">{t.name}</td>
-                <td className="px-3 py-3 text-right text-brand-text">{hoursToDisplay(t.hours_value)}</td>
-                <td className="px-3 py-3 text-right text-brand-text-muted">
-                  {t.default_anchor === 'start' ? 'Anpfiff/Beginn' : 'Abpfiff/Ende'}
-                </td>
-                <td className="px-3 py-3 text-right font-mono text-brand-text-muted">
-                  {formatOffset(t.default_offset_minutes)}
-                </td>
-                <td className="px-3 py-3 text-sm space-x-1">
-                  {(!t.same_day_behavior || t.same_day_behavior === 'normal') && (!t.adjacent_day_behavior || t.adjacent_day_behavior === 'normal') ? (
-                    <span className="text-brand-text-subtle text-xs">Normal</span>
-                  ) : (
-                    <>
-                      {t.same_day_behavior && t.same_day_behavior !== 'normal' && (
-                        <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
-                          {t.same_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Tag)
-                        </span>
-                      )}
-                      {t.adjacent_day_behavior && t.adjacent_day_behavior !== 'normal' && (
-                        <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
-                          {t.adjacent_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Adj.)
-                        </span>
-                      )}
-                    </>
-                  )}
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex gap-1 justify-end">
-                    <button onClick={() => startEdit(t)}
-                      className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
-                      Bearbeiten
-                    </button>
-                    <button onClick={() => handleDelete(t.id, t.name)}
-                      className="bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors">
-                      Löschen
-                    </button>
-                  </div>
-                </td>
+      {/* Table — responsive column hiding */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-4">
+        {types.length === 0 ? (
+          <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Keine Diensttypen vorhanden.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left">Name</th>
+                <th className="hidden md:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Dauer</th>
+                <th className="hidden lg:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Anker</th>
+                <th className="hidden lg:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-right">Versatz</th>
+                <th className="hidden xl:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3">Spieltag</th>
+                <th className="bg-brand-surface-card px-3 py-3"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-brand-border-subtle">
+              {types.map(t => (
+                <tr key={t.id} className="hover:bg-brand-table-select transition-colors">
+                  <td className="px-3 py-3 font-medium text-brand-text">{t.name}</td>
+                  <td className="hidden md:table-cell px-3 py-3 text-right text-brand-text">{hoursToDisplay(t.hours_value)}</td>
+                  <td className="hidden lg:table-cell px-3 py-3 text-right text-brand-text-muted">
+                    {t.default_anchor === 'start' ? 'Anpfiff/Beginn' : 'Abpfiff/Ende'}
+                  </td>
+                  <td className="hidden lg:table-cell px-3 py-3 text-right font-mono text-brand-text-muted">
+                    {formatOffset(t.default_offset_minutes)}
+                  </td>
+                  <td className="hidden xl:table-cell px-3 py-3 text-sm space-x-1">
+                    {(!t.same_day_behavior || t.same_day_behavior === 'normal') && (!t.adjacent_day_behavior || t.adjacent_day_behavior === 'normal') ? (
+                      <span className="text-brand-text-subtle text-xs">Normal</span>
+                    ) : (
+                      <>
+                        {t.same_day_behavior && t.same_day_behavior !== 'normal' && (
+                          <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
+                            {t.same_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Tag)
+                          </span>
+                        )}
+                        {t.adjacent_day_behavior && t.adjacent_day_behavior !== 'normal' && (
+                          <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
+                            {t.adjacent_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Adj.)
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <ActionMenu actions={[
+                      { label: 'Bearbeiten', onClick: () => startEdit(t) },
+                      { label: 'Löschen', onClick: () => handleDelete(t.id, t.name), variant: 'danger' },
+                    ]} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {edit && (

@@ -25,7 +25,7 @@ export default function MobileCard({ title, subtitle, badge, actions, onClick, c
   }
 
   return (
-    <div className={`bg-white border border-brand-border-subtle rounded p-4 mb-3${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
+    <div className={`bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 mb-3${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="flex-1 min-w-0">
           <div className="font-medium text-brand-text">{title}</div>

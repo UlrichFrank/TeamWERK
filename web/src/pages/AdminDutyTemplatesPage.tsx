@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
-import MobileCard from '../components/MobileCard'
+import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
@@ -244,7 +244,6 @@ export default function AdminDutyTemplatesPage() {
   const [templates, setTemplates] = useState<DutyTemplate[]>([])
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
   const [loading, setLoading] = useState(true)
-  const [deleteId, setDeleteId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState('')
   const [modalTemplate, setModalTemplate] = useState<TemplateFormState | null>(null)
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null)
@@ -297,12 +296,12 @@ export default function AdminDutyTemplatesPage() {
     setModalError('')
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number, name: string) => {
+    if (!confirm(`Vorlage „${name}" wirklich löschen?`)) return
     setDeleteError('')
     try {
       await api.delete(`/admin/duty-templates/${id}`)
       setTemplates(prev => prev.filter(t => t.id !== id))
-      setDeleteId(null)
     } catch {
       setDeleteError('Löschen fehlgeschlagen.')
     }
@@ -385,13 +384,13 @@ export default function AdminDutyTemplatesPage() {
           </p>
         ) : (
           <>
-            <table className="hidden sm:table w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr>
                   <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Name</th>
                   <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Typ</th>
-                  <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Dauer</th>
-                  <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Einträge</th>
+                  <th className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Dauer</th>
+                  <th className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Einträge</th>
                   <th className="bg-brand-surface-card px-4 py-3"></th>
                 </tr>
               </thead>
@@ -414,67 +413,21 @@ export default function AdminDutyTemplatesPage() {
                         <AlertTriangle className="inline w-3.5 h-3.5 ml-1 text-brand-warning" aria-label="Doppelter Typ" />
                       )}
                     </td>
-                    <td className="px-4 py-3 text-brand-text-muted">
+                    <td className="hidden sm:table-cell px-4 py-3 text-brand-text-muted">
                       {t.template_type === 'generisch' ? `${t.duration_minutes} min` : '–'}
                     </td>
-                    <td className="px-4 py-3 text-brand-text-muted">{t.item_count}</td>
-                    <td className="px-4 py-3 text-right">
-                      {deleteId === t.id ? (
-                        <span className="flex items-center gap-2 justify-end">
-                          <span className="text-xs text-brand-text-muted">Wirklich löschen?</span>
-                          <button onClick={() => handleDelete(t.id)} className="text-xs text-brand-danger hover:text-brand-danger/80 font-medium">Ja</button>
-                          <button onClick={() => setDeleteId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
-                        </span>
-                      ) : (
-                        <div className="flex gap-1 justify-end">
-                          <button
-                            onClick={() => openEditModal(t.id)}
-                            className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
-                          >
-                            Bearbeiten
-                          </button>
-                          <button
-                            onClick={() => setDeleteId(t.id)}
-                            className="bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors"
-                          >
-                            Löschen
-                          </button>
-                        </div>
-                      )}
+                    <td className="hidden sm:table-cell px-4 py-3 text-brand-text-muted">{t.item_count}</td>
+                    <td className="px-3 py-3 text-right">
+                      <ActionMenu actions={[
+                        { label: 'Bearbeiten', onClick: () => openEditModal(t.id) },
+                        { label: 'Löschen', onClick: () => handleDelete(t.id, t.name), variant: 'danger' },
+                      ]} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <div className="sm:hidden divide-y divide-brand-border-subtle">
-              {templates.map(t => (
-                <MobileCard
-                  key={t.id}
-                  title={t.name}
-                  subtitle={`${typeLabel[t.template_type] ?? t.template_type} · ${t.item_count} Einträge${t.template_type === 'generisch' ? ` · ${t.duration_minutes} min` : ''}`}
-                  badge={{ label: typeLabel[t.template_type] ?? t.template_type, variant: t.template_type === 'heim' ? 'blue' : t.template_type === 'auswärts' ? 'yellow' : 'red' }}
-                  actions={[
-                    { label: 'Bearbeiten', onClick: () => openEditModal(t.id) },
-                    { label: 'Löschen', onClick: () => setDeleteId(t.id), variant: 'danger' },
-                  ]}
-                >
-                  {typeCounts[t.template_type] > 1 && (
-                    <div className="mt-2 text-xs text-brand-warning flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      Mehrere Vorlagen dieses Typs vorhanden
-                    </div>
-                  )}
-                </MobileCard>
-              ))}
-              {deleteId !== null && (
-                <div className="p-4 flex items-center gap-2 text-xs text-brand-text-muted">
-                  <span>Wirklich löschen?</span>
-                  <button onClick={() => handleDelete(deleteId)} className="text-brand-danger font-medium">Ja</button>
-                  <button onClick={() => setDeleteId(null)} className="text-brand-text-muted">Abbrechen</button>
-                </div>
-              )}
-            </div>
           </>
         )}
       </div>
