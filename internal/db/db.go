@@ -12,11 +12,14 @@ import (
 )
 
 func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	// _pragma=foreign_keys=on is applied to every new connection in the pool,
+	// not just the first one. Without this, ON DELETE CASCADE is silently skipped
+	// on connections that don't have the PRAGMA set.
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys=on")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`); err != nil {
+	if _, err := db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
 		return nil, fmt.Errorf("pragma: %w", err)
 	}
 	return db, nil

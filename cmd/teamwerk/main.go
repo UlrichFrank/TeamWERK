@@ -185,6 +185,11 @@ func serve() {
 		r.Get("/api/training-sessions/{id}", trainingH.GetSession)
 		r.Post("/api/training-sessions/{id}/respond", trainingH.Respond)
 
+		// Games RSVP (user-facing; /my must come before /{id})
+		r.Get("/api/games/my", gameH.ListMyGames)
+		r.Post("/api/games/{id}/respond", gameH.RespondToGame)
+		r.Get("/api/games/{id}/responses", gameH.ListGameResponses)
+
 		// Teams (filtered by user role)
 		r.Get("/api/teams", gameH.ListTeamsForUser)
 

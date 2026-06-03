@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -345,6 +346,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		EndTime    *string `json:"end_time,omitempty"`
 		Opponent   string  `json:"opponent"`
 		EventType  string  `json:"event_type"`
+		IsHome     bool    `json:"is_home"`
 		SeasonID   int     `json:"season_id"`
 		TemplateID *int    `json:"template_id"`
 		Teams      []struct {
@@ -355,9 +357,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	var templateIDNull sql.NullInt64
 	var endTimeNull sql.NullString
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT g.id, g.date, g.time, g.end_time, g.opponent, g.event_type, g.season_id, g.template_id
+		`SELECT g.id, g.date, g.time, g.end_time, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id
 		 FROM games g WHERE g.id=?`, id).
-		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &g.Opponent, &g.EventType, &g.SeasonID, &templateIDNull)
+		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull)
 	if templateIDNull.Valid {
 		v := int(templateIDNull.Int64)
 		g.TemplateID = &v
@@ -1441,6 +1443,291 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"kept_slots": keptSlots})
+}
+
+// ── Game RSVP ────────────────────────────────────────────────────────────────
+
+type gameListItem struct {
+	ID             int     `json:"id"`
+	Date           string  `json:"date"`
+	Time           string  `json:"time"`
+	Opponent       string  `json:"opponent"`
+	EventType      string  `json:"event_type"`
+	IsHome         bool    `json:"is_home"`
+	SeasonID       int     `json:"season_id"`
+	ConfirmedCount int     `json:"confirmed_count"`
+	DeclinedCount  int     `json:"declined_count"`
+	MaybeCount     int     `json:"maybe_count"`
+	MyRSVP         *string `json:"my_rsvp"`
+}
+
+// memberIDForUser returns the member_id for a user, or 0 if not found.
+func (h *Handler) memberIDForUser(ctx context.Context, userID int) (int, error) {
+	var memberID int
+	err := h.db.QueryRowContext(ctx,
+		`SELECT id FROM members WHERE user_id = ?`, userID).Scan(&memberID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return memberID, err
+}
+
+// parentHasChild returns true if parentUserID has a family_links entry for memberID.
+func (h *Handler) parentHasChild(ctx context.Context, parentUserID, memberID int) (bool, error) {
+	var count int
+	err := h.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM family_links WHERE parent_user_id = ? AND member_id = ?`,
+		parentUserID, memberID).Scan(&count)
+	return count > 0, err
+}
+
+// GET /api/games/my
+func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	q := r.URL.Query()
+	from := q.Get("from")
+	to := q.Get("to")
+	if from == "" {
+		from = strings.Repeat("0", 10) // no lower bound: "0000-00-00"
+	}
+	if to == "" {
+		to = "9999-12-31"
+	}
+
+	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build team filter based on role
+	var teamSQL string
+	var teamArgs []any
+	if claims.Role == "admin" {
+		teamSQL = "1=1"
+	} else {
+		var conds []string
+		if claims.HasFunction("trainer") {
+			conds = append(conds, `gt.team_id IN (
+				SELECT DISTINCT k.team_id FROM kader k
+				JOIN kader_trainers kt ON kt.kader_id = k.id
+				JOIN members m ON m.id = kt.member_id
+				WHERE m.user_id = ?)`)
+			teamArgs = append(teamArgs, claims.UserID)
+		}
+		if claims.IsParent {
+			conds = append(conds, `gt.team_id IN (
+				SELECT DISTINCT tm.team_id FROM team_memberships tm
+				JOIN members m ON m.id = tm.member_id
+				JOIN family_links fl ON fl.member_id = m.id
+				WHERE fl.parent_user_id = ?)`)
+			teamArgs = append(teamArgs, claims.UserID)
+		}
+		conds = append(conds, `gt.team_id IN (
+			SELECT DISTINCT tm.team_id FROM team_memberships tm
+			JOIN members m ON m.id = tm.member_id
+			WHERE m.user_id = ?)`)
+		teamArgs = append(teamArgs, claims.UserID)
+		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
+	}
+
+	// Args order: memberID (subquery), teamArgs, from, to
+	args := append([]any{memberID}, teamArgs...)
+	args = append(args, from, to)
+
+	query := fmt.Sprintf(`
+		SELECT DISTINCT g.id, g.date, g.time, g.opponent, g.event_type, g.is_home, g.season_id,
+		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
+		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?)
+		FROM games g
+		JOIN game_teams gt ON gt.game_id = g.id
+		WHERE %s AND g.date >= ? AND g.date <= ?
+		ORDER BY g.date, g.time`, teamSQL)
+
+	rows, err := h.db.QueryContext(r.Context(), query, args...)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ListMyGames: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	result := []gameListItem{}
+	for rows.Next() {
+		var g gameListItem
+		var isHome int
+		var myRSVP sql.NullString
+		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
+			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP); err != nil {
+			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		g.IsHome = isHome == 1
+		if myRSVP.Valid {
+			g.MyRSVP = &myRSVP.String
+		}
+		result = append(result, g)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// POST /api/games/{id}/respond
+func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		MemberID int    `json:"member_id"`
+		Status   string `json:"status"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.Status != "confirmed" && req.Status != "declined" && req.Status != "maybe" {
+		http.Error(w, "status must be confirmed, declined, or maybe", http.StatusBadRequest)
+		return
+	}
+
+	var memberID int
+	switch claims.Role {
+	case "spieler":
+		memberID, err = h.memberIDForUser(r.Context(), claims.UserID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if memberID == 0 {
+			http.Error(w, "your account is not linked to a member record", http.StatusUnprocessableEntity)
+			return
+		}
+	case "elternteil":
+		if req.MemberID == 0 {
+			http.Error(w, "member_id required for elternteil", http.StatusBadRequest)
+			return
+		}
+		ok, err := h.parentHasChild(r.Context(), claims.UserID, req.MemberID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		memberID = req.MemberID
+	default:
+		if req.MemberID == 0 {
+			memberID, err = h.memberIDForUser(r.Context(), claims.UserID)
+			if err != nil {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			if memberID == 0 {
+				http.Error(w, "member_id required", http.StatusBadRequest)
+				return
+			}
+		} else {
+			memberID = req.MemberID
+		}
+	}
+
+	_, err = h.db.ExecContext(r.Context(), `
+		INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at)
+		VALUES (?, ?, ?, ?, ?, datetime('now'))
+		ON CONFLICT(game_id, member_id) DO UPDATE SET
+		  responded_by = excluded.responded_by,
+		  status       = excluded.status,
+		  reason       = excluded.reason,
+		  responded_at = datetime('now')`,
+		gameID, memberID, claims.UserID, req.Status, req.Reason)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "RespondToGame upsert: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("games")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type gameResponse struct {
+	MemberID    int     `json:"member_id"`
+	MemberName  string  `json:"member_name"`
+	Status      string  `json:"status"`
+	Reason      *string `json:"reason"`
+	RespondedBy int     `json:"responded_by"`
+	RespondedAt string  `json:"responded_at"`
+}
+
+// GET /api/games/{id}/responses
+func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	isTrainerLike := claims.Role == "admin" || claims.HasFunction("trainer")
+
+	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	childMemberIDs := map[int]bool{}
+	if claims.IsParent {
+		childRows, err := h.db.QueryContext(r.Context(),
+			`SELECT member_id FROM family_links WHERE parent_user_id = ?`, claims.UserID)
+		if err == nil {
+			defer childRows.Close()
+			for childRows.Next() {
+				var cid int
+				childRows.Scan(&cid)
+				childMemberIDs[cid] = true
+			}
+		}
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT gr.member_id,
+		       m.first_name || ' ' || m.last_name,
+		       gr.status, gr.reason, gr.responded_by, gr.responded_at
+		FROM game_responses gr
+		JOIN members m ON m.id = gr.member_id
+		WHERE gr.game_id = ?
+		ORDER BY m.last_name, m.first_name`, gameID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	result := []gameResponse{}
+	for rows.Next() {
+		var resp gameResponse
+		var reason string
+		rows.Scan(&resp.MemberID, &resp.MemberName, &resp.Status, &reason, &resp.RespondedBy, &resp.RespondedAt)
+		canSeeReason := isTrainerLike ||
+			(memberID > 0 && resp.MemberID == memberID) ||
+			childMemberIDs[resp.MemberID]
+		if canSeeReason && reason != "" {
+			resp.Reason = &reason
+		}
+		result = append(result, resp)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func audiencesFromDB(ns sql.NullString) []string {
