@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, X, HelpCircle, Dumbbell, Home, MapPin } from 'lucide-react'
+import { Check, X, HelpCircle, Dumbbell, Home, MapPin, Calendar, Settings, History } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { useCompactHeader } from '../hooks/useCompactHeader'
 
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 
@@ -21,6 +22,8 @@ interface Session {
   note: string
   status: 'active' | 'cancelled'
   cancel_reason: string
+  team_id: number
+  team_name: string
   confirmed_count: number
   declined_count: number
   maybe_count: number
@@ -35,10 +38,18 @@ interface Game {
   event_type: string
   is_home: boolean
   season_id: number
+  team_names: string
+  team_ids: number[]
   confirmed_count: number
   declined_count: number
   maybe_count: number
   my_rsvp: string | null
+}
+
+interface Team {
+  id: number
+  name: string
+  is_active: boolean
 }
 
 type Termin =
@@ -80,10 +91,23 @@ export default function TerminePage() {
   const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer')
 
   const [termine, setTermine] = useState<Termin[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [showPast, setShowPast] = useState(false)
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
   const [reasons, setReasons] = useState<Record<string, string>>({})
+  const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
+  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
+
+  const { ref: filterRef, compact } = useCompactHeader(450)
+
+  const toggleType = (type: string) => {
+    setFilterTypes(prev => {
+      const next = new Set(prev)
+      next.has(type) ? next.delete(type) : next.add(type)
+      return next
+    })
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const from = showPast
@@ -106,8 +130,22 @@ export default function TerminePage() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { load() }, [showPast])
+  useEffect(() => {
+    load()
+    api.get('/teams').then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? []))).catch(() => {})
+  }, [showPast])
   useLiveUpdates((event) => { if (event === 'trainings' || event === 'games') load() })
+
+  const visibleTermine = termine.filter(t => {
+    if (t.kind === 'training') {
+      if (!filterTypes.has('training')) return false
+      if (filterTeamId !== null && t.data.team_id !== filterTeamId) return false
+    } else {
+      if (!filterTypes.has(t.data.event_type)) return false
+      if (filterTeamId !== null && !t.data.team_ids?.includes(filterTeamId)) return false
+    }
+    return true
+  })
 
   const respondTraining = async (sessionId: number, status: string, reason = '') => {
     const key = `t-${sessionId}`
@@ -141,24 +179,61 @@ export default function TerminePage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-        <h1 className="text-2xl font-bold text-brand-text">Termine</h1>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-brand-text-muted cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showPast}
-              onChange={e => setShowPast(e.target.checked)}
-              className="rounded border-brand-border"
-            />
-            Vergangene anzeigen
-          </label>
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <h1 className="text-2xl font-bold text-brand-text shrink-0">Termine</h1>
+        <div ref={filterRef} className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+          <select
+            value={filterTeamId ?? ''}
+            onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
+            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-0 shrink"
+          >
+            <option value="">Alle Teams</option>
+            {teams.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {([
+            ['heim',      'Heim',       <Home className="w-3.5 h-3.5" />],
+            ['auswärts',  'Auswärts',   <MapPin className="w-3.5 h-3.5" />],
+            ['generisch', 'Sonstiges',  <Calendar className="w-3.5 h-3.5" />],
+            ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
+          ] as [string, string, React.ReactNode][]).map(([type, label, icon]) => (
+            <button
+              key={type}
+              onClick={() => toggleType(type)}
+              aria-label={label}
+              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
+                filterTypes.has(type)
+                  ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+              }`}
+            >
+              {icon}
+              {!compact && <span>{label}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setShowPast(p => !p)}
+            aria-label="Vergangene anzeigen"
+            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
+              showPast
+                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            {!compact && <span>Vergangene</span>}
+          </button>
           {isTrainer && (
             <button
               onClick={() => navigate('/admin/trainings')}
-              className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+              aria-label="Verwalten"
+              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors ${compact ? 'px-2' : 'px-3'}`}
             >
-              Verwalten
+              <Settings className="w-3.5 h-3.5" />
+              {!compact && <span>Verwalten</span>}
             </button>
           )}
         </div>
@@ -166,14 +241,14 @@ export default function TerminePage() {
 
       {loading ? (
         <p className="text-brand-text-muted text-sm">Laden…</p>
-      ) : termine.length === 0 ? (
+      ) : visibleTermine.length === 0 ? (
         <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
           <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
           <p className="text-brand-text-muted">Keine Termine vorhanden.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {termine.map(t => {
+          {visibleTermine.map(t => {
             if (t.kind === 'training') {
               const s = t.data
               const key = `t-${s.id}`
@@ -194,6 +269,9 @@ export default function TerminePage() {
                             {fmtDate(s.date)}
                           </span>
                           <span className="text-brand-text-muted text-sm">{s.start_time} – {s.end_time}</span>
+                          {s.team_name && (
+                            <span className="text-brand-text-subtle text-xs">{s.team_name}</span>
+                          )}
                           {s.status === 'cancelled' && (
                             <span className="bg-brand-danger-light text-brand-danger text-xs font-medium px-2 py-0.5 rounded-full">
                               Abgesagt
@@ -285,6 +363,9 @@ export default function TerminePage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-brand-text">{fmtDate(g.date)}</span>
                         <span className="text-brand-text-muted text-sm">{g.time} Uhr</span>
+                        {g.team_names && (
+                          <span className="text-brand-text-subtle text-xs">{g.team_names}</span>
+                        )}
                       </div>
                       <p className="text-sm text-brand-text-muted mt-0.5">{label}</p>
                     </div>

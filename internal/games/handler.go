@@ -1455,6 +1455,8 @@ type gameListItem struct {
 	EventType      string  `json:"event_type"`
 	IsHome         bool    `json:"is_home"`
 	SeasonID       int     `json:"season_id"`
+	TeamNames      string  `json:"team_names"`
+	TeamIDs        []int   `json:"team_ids"`
 	ConfirmedCount int     `json:"confirmed_count"`
 	DeclinedCount  int     `json:"declined_count"`
 	MaybeCount     int     `json:"maybe_count"`
@@ -1537,6 +1539,8 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT g.id, g.date, g.time, g.opponent, g.event_type, g.is_home, g.season_id,
+		       (SELECT GROUP_CONCAT(t.name, ', ') FROM game_teams gt2 JOIN teams t ON t.id = gt2.team_id WHERE gt2.game_id = g.id),
+		       (SELECT GROUP_CONCAT(gt3.team_id) FROM game_teams gt3 WHERE gt3.game_id = g.id),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
@@ -1559,13 +1563,23 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var g gameListItem
 		var isHome int
 		var myRSVP sql.NullString
+		var teamNames, teamIDsCSV sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
-			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP); err != nil {
+			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		g.IsHome = isHome == 1
+		g.TeamNames = teamNames.String
+		g.TeamIDs = []int{}
+		if teamIDsCSV.Valid {
+			for _, s := range strings.Split(teamIDsCSV.String, ",") {
+				if id, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+					g.TeamIDs = append(g.TeamIDs, id)
+				}
+			}
+		}
 		if myRSVP.Valid {
 			g.MyRSVP = &myRSVP.String
 		}

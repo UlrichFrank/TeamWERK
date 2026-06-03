@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { useCompactHeader } from '../hooks/useCompactHeader'
 import TrainingEditModal from '../components/TrainingEditModal'
 
 interface Training {
@@ -90,6 +91,8 @@ export default function KalenderPage() {
   const [trainings, setTrainings] = useState<Training[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
+  const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
+  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
 
   // Day-regen dialog
   const [showDayRegen, setShowDayRegen] = useState(false)
@@ -237,11 +240,22 @@ export default function KalenderPage() {
     loadTemplates()
   }
 
+  const toggleType = (type: string) => {
+    setFilterTypes(prev => {
+      const next = new Set(prev)
+      next.has(type) ? next.delete(type) : next.add(type)
+      return next
+    })
+  }
+
   const safeGames = Array.isArray(games) ? games : []
   const monthGames = safeGames.filter(g => {
     const y = parseInt(g.date.slice(0, 4))
     const m = parseInt(g.date.slice(5, 7)) - 1
-    return y === year && m === month
+    if (y !== year || m !== month) return false
+    if (!filterTypes.has(g.event_type)) return false
+    if (filterTeamId !== null && !g.teams.some(t => t.id === filterTeamId)) return false
+    return true
   })
 
   const gamesByDate: Record<string, Game[]> = {}
@@ -251,8 +265,14 @@ export default function KalenderPage() {
     gamesByDate[key].push(g)
   }
 
+  const filteredTrainings = trainings.filter(t => {
+    if (!filterTypes.has('training')) return false
+    if (filterTeamId !== null && t.team_id !== filterTeamId) return false
+    return true
+  })
+
   const trainingsByDate: Record<string, Training[]> = {}
-  for (const t of trainings) {
+  for (const t of filteredTrainings) {
     const key = t.date.slice(0, 10)
     if (!trainingsByDate[key]) trainingsByDate[key] = []
     trainingsByDate[key].push(t)
@@ -433,6 +453,8 @@ export default function KalenderPage() {
     setSeriesValidUntil('')
   }
 
+  const { ref: filterRef, compact } = useCompactHeader(450)
+
   useEscapeKey(
     showDayRegen ? () => setShowDayRegen(false) :
     showCreate ? closeDialog :
@@ -442,14 +464,48 @@ export default function KalenderPage() {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-6">
-        <h1 className="text-2xl font-bold">Kalender</h1>
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
+        <div ref={filterRef} className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+          <select
+            value={filterTeamId ?? ''}
+            onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
+            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-0 shrink"
+          >
+            <option value="">Alle Teams</option>
+            {teams.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {([
+            ['heim',      'Heim',       <Home className="w-3.5 h-3.5" />],
+            ['auswärts',  'Auswärts',   <MapPin className="w-3.5 h-3.5" />],
+            ['generisch', 'Sonstiges',  <Calendar className="w-3.5 h-3.5" />],
+            ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
+          ] as [string, string, React.ReactNode][]).map(([type, label, icon]) => (
+            <button
+              key={type}
+              onClick={() => toggleType(type)}
+              aria-label={label}
+              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
+                filterTypes.has(type)
+                  ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+              }`}
+            >
+              {icon}
+              {!compact && <span>{label}</span>}
+            </button>
+          ))}
+        </div>
         {user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer')) && (
           <button
             onClick={() => setShowCreate(true)}
-            className="bg-brand-yellow text-brand-black px-4 py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            aria-label="Event anlegen"
+            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'}`}
           >
-            + Event anlegen
+            <Plus className="w-3.5 h-3.5" />
+            {!compact && <span>Event anlegen</span>}
           </button>
         )}
       </div>

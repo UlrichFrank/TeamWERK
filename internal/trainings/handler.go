@@ -525,6 +525,7 @@ type sessionListItem struct {
 	ID             int     `json:"id"`
 	SeriesID       *int    `json:"series_id,omitempty"`
 	TeamID         int     `json:"team_id"`
+	TeamName       string  `json:"team_name"`
 	SeasonID       int     `json:"season_id"`
 	Title          string  `json:"title"`
 	Date           string  `json:"date"`
@@ -594,13 +595,14 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := fmt.Sprintf(`
-		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
+		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.location, ts.note, ts.status, ts.cancel_reason,
 		       COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN tr.status='declined'  THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN tr.status='maybe'     THEN 1 ELSE 0 END), 0),
 		       (SELECT status FROM training_responses WHERE training_id = ts.id AND member_id = ?)
 		FROM training_sessions ts
+		LEFT JOIN teams t ON t.id = ts.team_id
 		LEFT JOIN training_responses tr ON tr.training_id = ts.id
 		WHERE %s AND ts.date >= ? AND ts.date <= ? %s
 		GROUP BY ts.id
@@ -620,7 +622,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		var seriesID sql.NullInt64
 		var myRSVP sql.NullString
 		err := rows.Scan(
-			&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
+			&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 			&s.Location, &s.Note, &s.Status, &s.CancelReason,
 			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP)
 		if err != nil {
