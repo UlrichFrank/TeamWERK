@@ -395,6 +395,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TeamID    int    `json:"team_id"`
 		SeasonID  int    `json:"season_id"`
+		Title     string `json:"title"`
 		Date      string `json:"date"`
 		StartTime string `json:"start_time"`
 		EndTime   string `json:"end_time"`
@@ -411,9 +412,9 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, location, note)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		req.TeamID, req.SeasonID, req.Date, req.StartTime, req.EndTime, req.Location, req.Note)
+		`INSERT INTO training_sessions (team_id, season_id, title, date, start_time, end_time, location, note)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		req.TeamID, req.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, req.Location, req.Note)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSession: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -452,6 +453,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
+		Title        string `json:"title"`
 		Date         string `json:"date"`
 		StartTime    string `json:"start_time"`
 		EndTime      string `json:"end_time"`
@@ -473,8 +475,8 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		status = "active"
 	}
 	_, err = h.db.ExecContext(r.Context(),
-		`UPDATE training_sessions SET date=?, start_time=?, end_time=?, location=?, note=?, status=?, cancel_reason=? WHERE id=?`,
-		req.Date, req.StartTime, req.EndTime, req.Location, req.Note, status, req.CancelReason, sessionID)
+		`UPDATE training_sessions SET title=?, date=?, start_time=?, end_time=?, location=?, note=?, status=?, cancel_reason=? WHERE id=?`,
+		req.Title, req.Date, req.StartTime, req.EndTime, req.Location, req.Note, status, req.CancelReason, sessionID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -488,6 +490,7 @@ type sessionListItem struct {
 	SeriesID       *int    `json:"series_id,omitempty"`
 	TeamID         int     `json:"team_id"`
 	SeasonID       int     `json:"season_id"`
+	Title          string  `json:"title"`
 	Date           string  `json:"date"`
 	StartTime      string  `json:"start_time"`
 	EndTime        string  `json:"end_time"`
@@ -555,7 +558,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := fmt.Sprintf(`
-		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.date, ts.start_time, ts.end_time,
+		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.location, ts.note, ts.status, ts.cancel_reason,
 		       COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN tr.status='declined'  THEN 1 ELSE 0 END), 0),
@@ -581,7 +584,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		var seriesID sql.NullInt64
 		var myRSVP sql.NullString
 		err := rows.Scan(
-			&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Date, &s.StartTime, &s.EndTime,
+			&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 			&s.Location, &s.Note, &s.Status, &s.CancelReason,
 			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP)
 		if err != nil {
@@ -635,14 +638,14 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	var seriesID sql.NullInt64
 	var myRSVP sql.NullString
 	err = h.db.QueryRowContext(r.Context(), `
-		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.date, ts.start_time, ts.end_time,
+		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.location, ts.note, ts.status, ts.cancel_reason,
 		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0),
 		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='maybe'),0),
 		       (SELECT status FROM training_responses WHERE training_id=ts.id AND member_id=?)
 		FROM training_sessions ts WHERE ts.id = ?`, memberID, sessionID).Scan(
-		&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Date, &s.StartTime, &s.EndTime,
+		&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 		&s.Location, &s.Note, &s.Status, &s.CancelReason,
 		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP)
 	if err == sql.ErrNoRows {

@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 
 interface Training {
   id: number
+  title: string
   date: string
   start_time: string
   end_time: string
@@ -35,11 +36,13 @@ const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm t
 
 interface Props {
   session: Training
+  teamName?: string
   onClose: () => void
   onSaved: () => void
 }
 
-export default function TrainingEditModal({ session, onClose, onSaved }: Props) {
+export default function TrainingEditModal({ session, teamName, onClose, onSaved }: Props) {
+  const [title, setTitle] = useState(session.title)
   const [date, setDate] = useState(session.date.slice(0, 10))
   const [startTime, setStartTime] = useState(session.start_time)
   const [endTime, setEndTime] = useState(session.end_time)
@@ -69,6 +72,7 @@ export default function TrainingEditModal({ session, onClose, onSaved }: Props) 
     try {
       if (scope === 'this_one') {
         await api.put(`/training-sessions/${session.id}`, {
+          title,
           date,
           start_time: startTime,
           end_time: endTime,
@@ -109,6 +113,10 @@ export default function TrainingEditModal({ session, onClose, onSaved }: Props) 
           </button>
         </div>
 
+        {teamName && (
+          <p className="text-sm text-brand-text-muted mb-4">Mannschaft: <span className="font-medium text-brand-text">{teamName}</span></p>
+        )}
+
         {session.series_id && (
           <div className="mb-4">
             <label className="block text-sm font-medium text-brand-text-muted mb-2">Bearbeitungsumfang</label>
@@ -136,10 +144,17 @@ export default function TrainingEditModal({ session, onClose, onSaved }: Props) 
 
         <div className="space-y-3">
           {scope === 'this_one' && (
-            <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
-            </div>
+            <>
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Titel</label>
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+                  placeholder="z. B. Konditionstraining" className={INPUT} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
+              </div>
+            </>
           )}
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Startzeit</label>

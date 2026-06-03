@@ -29,12 +29,6 @@ const navModules: NavModule[] = [
     ],
   },
   {
-    label: 'Trainingsplanung',
-    items: [
-      { to: '/admin/trainings', label: 'Trainings verwalten', roles: ['admin', 'trainer'] },
-    ],
-  },
-  {
     label: 'Dienstplanung',
     items: [
       { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },

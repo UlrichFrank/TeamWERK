@@ -9,6 +9,7 @@ import TrainingEditModal from '../components/TrainingEditModal'
 
 interface Training {
   id: number
+  title: string
   date: string
   start_time: string
   end_time: string
@@ -118,6 +119,7 @@ export default function KalenderPage() {
   const [createError, setCreateError] = useState<string | null>(null)
   // Training / Serie wizard states
   const [activeSeasonId, setActiveSeasonId] = useState(0)
+  const [trainingTitle, setTrainingTitle] = useState('')
   const [trainingStartTime, setTrainingStartTime] = useState('18:00')
   const [trainingEndTime, setTrainingEndTime] = useState('19:30')
   const [trainingLocation, setTrainingLocation] = useState('')
@@ -299,6 +301,7 @@ export default function KalenderPage() {
       await api.post('/training-sessions', {
         team_id: selectedTeamIds[0],
         season_id: activeSeasonId,
+        title: trainingTitle,
         date: selectedDate,
         start_time: trainingStartTime,
         end_time: trainingEndTime,
@@ -421,6 +424,7 @@ export default function KalenderPage() {
     setPreview([])
     setSelectedSlotIndices(new Set())
     setCreateError(null)
+    setTrainingTitle('')
     setTrainingStartTime('18:00')
     setTrainingEndTime('19:30')
     setTrainingLocation('')
@@ -536,7 +540,7 @@ export default function KalenderPage() {
                   >
                     <div className="flex items-center gap-1 mb-0.5">
                       <Dumbbell className="w-3 h-3 text-blue-500 shrink-0" />
-                      <span className="font-semibold truncate text-brand-text">Training</span>
+                      <span className="font-semibold truncate text-brand-text">{t.title || 'Training'}</span>
                     </div>
                     <div className="text-brand-text-subtle leading-tight">{t.start_time}</div>
                     <div className="text-brand-text-subtle leading-tight text-[10px]">
@@ -778,6 +782,11 @@ export default function KalenderPage() {
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Einzeltraining anlegen</h2>
                 <div className="space-y-3">
                   <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Titel</label>
+                    <input type="text" value={trainingTitle} onChange={e => setTrainingTitle(e.target.value)}
+                      placeholder="z. B. Konditionstraining" className={INPUT_WIZ} />
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
                     <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
                   </div>
@@ -971,6 +980,7 @@ export default function KalenderPage() {
       {editingTraining && (
         <TrainingEditModal
           session={editingTraining}
+          teamName={teams.find(t => t.id === editingTraining.team_id)?.name}
           onClose={() => setEditingTraining(null)}
           onSaved={() => { loadTrainings(); setEditingTraining(null) }}
         />

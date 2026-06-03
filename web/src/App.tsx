@@ -24,7 +24,6 @@ import MitfahrgelegenheitenPage from './pages/MitfahrgelegenheitenPage'
 import DocumentsPage from './pages/DocumentsPage'
 import TrainingsPage from './pages/TrainingsPage'
 import TrainingsDetailPage from './pages/TrainingsDetailPage'
-import AdminTrainingsPage from './pages/AdminTrainingsPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -76,8 +75,7 @@ export default function App() {
             <Route path="kalender/:gameId" element={<SpieltagDetailPage />} />
             <Route path="trainings" element={<TrainingsPage />} />
             <Route path="trainings/:id" element={<TrainingsDetailPage />} />
-            <Route path="admin/trainings" element={<RoleRoute roles={['admin','trainer']}><AdminTrainingsPage /></RoleRoute>} />
-            <Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
+<Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
             <Route path="admin/dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
           </Route>
 
