@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Home, MapPin, Calendar, Plus, Dumbbell } from 'lucide-react'
+import { Home, MapPin, Calendar, Plus, Dumbbell, RefreshCw } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import TrainingEditModal from '../components/TrainingEditModal'
 
 interface Training {
   id: number
@@ -17,6 +18,11 @@ interface Training {
   declined_count: number
   maybe_count: number
   my_rsvp: string | null
+  series_id?: number
+  team_id: number
+  season_id: number
+  note: string
+  cancel_reason?: string
 }
 
 interface Game {
@@ -97,7 +103,7 @@ export default function KalenderPage() {
   // Wizard dialog
   const [showCreate, setShowCreate] = useState(false)
   const [wizardStep, setWizardStep] = useState(1)
-  const [eventType, setEventType] = useState<'heim' | 'auswärts' | 'generisch' | ''>('')
+  const [eventType, setEventType] = useState<'heim' | 'auswärts' | 'generisch' | 'training' | 'serie' | ''>('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('15:00')
   const [selectedOpponent, setSelectedOpponent] = useState('')
@@ -110,6 +116,16 @@ export default function KalenderPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  // Training / Serie wizard states
+  const [activeSeasonId, setActiveSeasonId] = useState(0)
+  const [trainingStartTime, setTrainingStartTime] = useState('18:00')
+  const [trainingEndTime, setTrainingEndTime] = useState('19:30')
+  const [trainingLocation, setTrainingLocation] = useState('')
+  const [seriesWeekday, setSeriesWeekday] = useState(1)
+  const [seriesValidFrom, setSeriesValidFrom] = useState('')
+  const [seriesValidUntil, setSeriesValidUntil] = useState('')
+  // Inline edit modal
+  const [editingTraining, setEditingTraining] = useState<Training | null>(null)
 
   const loadGames = async () => {
     try {
@@ -144,6 +160,13 @@ export default function KalenderPage() {
         api.get('/teams')
           .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
           .catch(() => setTeams([])),
+        api.get('/admin/seasons')
+          .then(r => {
+            const seasons = Array.isArray(r.data) ? r.data : []
+            const active = seasons.find((s: any) => s.is_active)
+            if (active) setActiveSeasonId(active.id)
+          })
+          .catch(() => {}),
       ])
       setLoading(false)
     }
@@ -265,6 +288,60 @@ export default function KalenderPage() {
     }
   }
 
+  const doCreateTraining = async () => {
+    if (!selectedDate || selectedTeamIds.length === 0 || !trainingStartTime || !trainingEndTime || !activeSeasonId) {
+      setCreateError('Bitte alle Pflichtfelder ausfüllen. Ist eine aktive Saison vorhanden?')
+      return
+    }
+    setCreating(true)
+    setCreateError(null)
+    try {
+      await api.post('/training-sessions', {
+        team_id: selectedTeamIds[0],
+        season_id: activeSeasonId,
+        date: selectedDate,
+        start_time: trainingStartTime,
+        end_time: trainingEndTime,
+        location: trainingLocation,
+      })
+      await loadTrainings()
+      closeDialog()
+    } catch {
+      setCreateError('Training konnte nicht angelegt werden.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const doCreateSerie = async () => {
+    if (selectedTeamIds.length === 0 || !seriesValidFrom || !seriesValidUntil || !trainingStartTime || !trainingEndTime || !activeSeasonId) {
+      setCreateError('Bitte alle Pflichtfelder ausfüllen. Ist eine aktive Saison vorhanden?')
+      return
+    }
+    const teamName = teams.find(t => t.id === selectedTeamIds[0])?.name ?? 'Training'
+    setCreating(true)
+    setCreateError(null)
+    try {
+      await api.post('/training-series', {
+        team_id: selectedTeamIds[0],
+        season_id: activeSeasonId,
+        name: `Training ${teamName}`,
+        location: trainingLocation,
+        day_of_week: seriesWeekday,
+        start_time: trainingStartTime,
+        end_time: trainingEndTime,
+        valid_from: seriesValidFrom,
+        valid_until: seriesValidUntil,
+      })
+      await loadTrainings()
+      closeDialog()
+    } catch {
+      setCreateError('Trainingsserie konnte nicht angelegt werden.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const loadTemplates = async () => {
     try {
       const r = await api.get('/admin/duty-templates')
@@ -344,11 +421,18 @@ export default function KalenderPage() {
     setPreview([])
     setSelectedSlotIndices(new Set())
     setCreateError(null)
+    setTrainingStartTime('18:00')
+    setTrainingEndTime('19:30')
+    setTrainingLocation('')
+    setSeriesWeekday(1)
+    setSeriesValidFrom('')
+    setSeriesValidUntil('')
   }
 
   useEscapeKey(
     showDayRegen ? () => setShowDayRegen(false) :
     showCreate ? closeDialog :
+    editingTraining ? () => setEditingTraining(null) :
     null
   )
 
@@ -437,7 +521,13 @@ export default function KalenderPage() {
                   <button
                     key={`t-${t.id}`}
                     onPointerDown={e => e.stopPropagation()}
-                    onClick={() => navigate(`/trainings/${t.id}`)}
+                    onClick={() => {
+                      if (user && (user.role === 'admin' || hasFunction(user, 'trainer'))) {
+                        setEditingTraining(t)
+                      } else {
+                        navigate(`/trainings/${t.id}`)
+                      }
+                    }}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
@@ -573,6 +663,28 @@ export default function KalenderPage() {
                       </div>
                     </button>
                   ))}
+                  {user && (user.role === 'admin' || hasFunction(user, 'trainer')) && (
+                    <>
+                      <button
+                        onClick={() => { setEventType('training'); setWizardStep(2) }}
+                        className="w-full p-4 border-2 border-brand-border rounded-lg text-left hover:bg-brand-border-subtle hover:border-brand-yellow transition-colors"
+                      >
+                        <div className="font-semibold flex items-center gap-2 text-brand-text">
+                          <Dumbbell className="w-4 h-4" /> Einzeltraining
+                        </div>
+                        <div className="text-xs text-brand-text-muted mt-1">Einmaliger Trainingstermin</div>
+                      </button>
+                      <button
+                        onClick={() => { setEventType('serie'); setWizardStep(2) }}
+                        className="w-full p-4 border-2 border-brand-border rounded-lg text-left hover:bg-brand-border-subtle hover:border-brand-yellow transition-colors"
+                      >
+                        <div className="font-semibold flex items-center gap-2 text-brand-text">
+                          <RefreshCw className="w-4 h-4" /> Trainingsserie
+                        </div>
+                        <div className="text-xs text-brand-text-muted mt-1">Wöchentlich wiederkehrender Termin</div>
+                      </button>
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2 pt-4">
                   <button onClick={closeDialog} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
@@ -580,7 +692,7 @@ export default function KalenderPage() {
               </div>
             )}
 
-            {wizardStep === 2 && (
+            {wizardStep === 2 && (eventType === 'heim' || eventType === 'auswärts' || eventType === 'generisch') && (
               <div>
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Event-Details</h2>
                 <div className="space-y-3">
@@ -657,6 +769,110 @@ export default function KalenderPage() {
                     disabled={!selectedDate || selectedTeamIds.length === 0}
                     className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >Weiter →</button>
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 2 && eventType === 'training' && (
+              <div>
+                <h2 className="text-lg font-bold mb-4 text-brand-text">Einzeltraining anlegen</h2>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
+                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Startzeit *</label>
+                    <input type="time" value={trainingStartTime} onChange={e => setTrainingStartTime(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Endzeit *</label>
+                    <input type="time" value={trainingEndTime} onChange={e => setTrainingEndTime(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+                    <input type="text" value={trainingLocation} onChange={e => setTrainingLocation(e.target.value)}
+                      placeholder="Sporthalle…" className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Mannschaft *</label>
+                    <select value={selectedTeamIds[0] ?? ''} onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
+                      className={INPUT_WIZ}>
+                      <option value="">Auswählen…</option>
+                      {teams.filter(t => t.is_active).map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {createError && <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>}
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <button onClick={() => setWizardStep(1)} className={BTN_SECONDARY}>← Zurück</button>
+                  <button
+                    onClick={doCreateTraining}
+                    disabled={creating || !selectedDate || selectedTeamIds.length === 0}
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                  >
+                    {creating ? 'Anlegen…' : 'Training anlegen'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 2 && eventType === 'serie' && (
+              <div>
+                <h2 className="text-lg font-bold mb-4 text-brand-text">Trainingsserie anlegen</h2>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Wochentag *</label>
+                    <select value={seriesWeekday} onChange={e => setSeriesWeekday(Number(e.target.value))} className={INPUT_WIZ}>
+                      {['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'].map((d, i) => (
+                        <option key={i} value={i}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Startzeit *</label>
+                    <input type="time" value={trainingStartTime} onChange={e => setTrainingStartTime(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Endzeit *</label>
+                    <input type="time" value={trainingEndTime} onChange={e => setTrainingEndTime(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+                    <input type="text" value={trainingLocation} onChange={e => setTrainingLocation(e.target.value)}
+                      placeholder="Sporthalle…" className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Mannschaft *</label>
+                    <select value={selectedTeamIds[0] ?? ''} onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
+                      className={INPUT_WIZ}>
+                      <option value="">Auswählen…</option>
+                      {teams.filter(t => t.is_active).map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig von *</label>
+                    <input type="date" value={seriesValidFrom} onChange={e => setSeriesValidFrom(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig bis *</label>
+                    <input type="date" value={seriesValidUntil} onChange={e => setSeriesValidUntil(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  {createError && <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>}
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <button onClick={() => setWizardStep(1)} className={BTN_SECONDARY}>← Zurück</button>
+                  <button
+                    onClick={doCreateSerie}
+                    disabled={creating || selectedTeamIds.length === 0 || !seriesValidFrom || !seriesValidUntil}
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                  >
+                    {creating ? 'Anlegen…' : 'Serie anlegen'}
+                  </button>
                 </div>
               </div>
             )}
@@ -751,6 +967,13 @@ export default function KalenderPage() {
             )}
           </div>
         </div>
+      )}
+      {editingTraining && (
+        <TrainingEditModal
+          session={editingTraining}
+          onClose={() => setEditingTraining(null)}
+          onSaved={() => { loadTrainings(); setEditingTraining(null) }}
+        />
       )}
     </div>
   )

@@ -22,5 +22,5 @@
 ## 4. Verifikation
 
 - [x] 4.1 Go-Build erfolgreich: `go build ./cmd/teamwerk`
-- [ ] 4.2 Manueller Test: RSVP als Spieler ändern → `TrainingsDetailPage` als Trainer aktualisiert sich sofort
+- [x] 4.2 Manueller Test: RSVP als Spieler ändern → `TrainingsDetailPage` als Trainer aktualisiert sich sofort
 - [ ] 4.3 Manueller Test: Session absagen als Trainer → `TrainingsPage` als Spieler zeigt Absage sofort
