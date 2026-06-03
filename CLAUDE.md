@@ -440,6 +440,16 @@ TeamWERK ist als PWA installierbar. Setup via `vite-plugin-pwa` (einzige neue Fr
 
 **`make deploy`** führt automatisch `migrate up` aus — der neue Binary hat die Migrations eingebettet.
 
+**SSE Live-Updates:** Jede Mutations-Route (`POST`/`PUT`/`DELETE`) muss `h.hub.Broadcast("domain-event")` aufrufen, damit alle verbundenen Clients sofort aktualisiert werden. Das Frontend abonniert mit `useLiveUpdates((event) => { if (event === 'domain-event') reload() })`. `Handler`-Structs, die Mutationen ausführen, müssen ein `hub *hub.EventHub`-Feld besitzen — das Hub wird in `main.go` via `NewHandler(db, hubInstance)` übergeben. Fehlt der `Broadcast`-Aufruf auf der Backend-Seite **oder** `useLiveUpdates` auf der Frontend-Seite, bleibt die Seite nach fremden Änderungen stumm.
+
+**Push Notifications:** Die vollständige Push-Infrastruktur ist in `internal/notifications/` implementiert. VAPID-Keys generieren mit `go run ./cmd/teamwerk gen-vapid` und in `.env` eintragen (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL`). Push an User senden:
+
+```go
+go notifications.SendToUsers(h.db, h.cfg, []int{userID1, userID2}, "Titel", "Text", "/ziel-url")
+```
+
+Immer als Goroutine aufrufen (`go ...`) — der Aufruf darf den HTTP-Response nicht blockieren. Der Frontend-Hook `usePushSubscription` (eingebunden in `AppShell.tsx`) registriert Subscriptions automatisch beim App-Start. Auf iOS nur aktiv wenn die PWA zum Homescreen hinzugefügt wurde (`display-mode: standalone`). Subscriptions werden in `push_subscriptions` gespeichert; ungültige Endpoints (HTTP 410) werden automatisch bereinigt. Für Scheduled Notifications (Reminder, Alerts) — neuer Job-Typ im `internal/scheduler/`-Package, idempotent via `notification_log`-Tabelle.
+
 ---
 
 ## VPS-Status

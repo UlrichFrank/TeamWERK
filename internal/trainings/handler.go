@@ -12,11 +12,15 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db  *sql.DB
+	hub *hub.EventHub
+}
 
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 // hasTeamAccess returns true if the user is admin or a kader trainer of teamID.
 func (h *Handler) hasTeamAccess(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
@@ -223,11 +227,12 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("trainings")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
-		"id":            seriesID,
+		"id":               seriesID,
 		"sessions_created": len(dates),
 	})
 }
@@ -333,6 +338,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("trainings")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"sessions_created": len(dates)})
 }
@@ -379,6 +385,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("trainings")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -413,6 +420,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	h.hub.Broadcast("trainings")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"id": id})
@@ -471,6 +479,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("trainings")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -789,6 +798,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("trainings")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -929,5 +939,6 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("trainings")
 	w.WriteHeader(http.StatusNoContent)
 }

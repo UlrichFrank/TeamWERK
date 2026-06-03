@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell, ChevronLeft, MapPin, Clock, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
@@ -86,6 +87,7 @@ export default function TrainingsDetailPage() {
     load()
     if (isTrainer) loadAttendances()
   }, [id])
+  useLiveUpdates((event) => { if (event === 'trainings') load() })
 
   const saveAttendances = async () => {
     setAttendanceSaving(true)

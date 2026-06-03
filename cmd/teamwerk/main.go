@@ -91,7 +91,7 @@ func serve() {
 	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
-	trainingH := trainings.NewHandler(database)
+	trainingH := trainings.NewHandler(database, hubInstance)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

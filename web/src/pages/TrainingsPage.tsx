@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 
@@ -54,6 +55,7 @@ export default function TrainingsPage() {
   }
 
   useEffect(() => { load() }, [showPast])
+  useLiveUpdates((event) => { if (event === 'trainings') load() })
 
   const respond = async (sessionId: number, status: string, reason = '') => {
     setRsvpLoading(sessionId)
