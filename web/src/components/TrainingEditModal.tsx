@@ -52,6 +52,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   const [scope, setScope] = useState<Scope>('this_one')
   const [series, setSeries] = useState<Series | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -103,6 +105,26 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
     }
   }
 
+  const handleDelete = async () => {
+    setDeleting(true)
+    setError(null)
+    try {
+      if (scope === 'this_one') {
+        await api.delete(`/training-sessions/${session.id}`)
+      } else if (series) {
+        const fromParam = scope === 'this_and_following'
+          ? `&from=${session.date.slice(0, 10)}`
+          : ''
+        await api.delete(`/training-series/${series.id}?scope=${scope}${fromParam}`)
+      }
+      onSaved()
+    } catch {
+      setError('Löschen fehlgeschlagen.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -132,7 +154,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
                     name="scope"
                     value={val}
                     checked={scope === val}
-                    onChange={() => setScope(val)}
+                    onChange={() => { setScope(val); setConfirmDelete(false) }}
                     className="accent-brand-yellow"
                   />
                   <span className="text-sm text-brand-text">{label}</span>
@@ -194,15 +216,45 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           )}
         </div>
 
+        {confirmDelete && (
+          <div className="mt-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+            {scope === 'this_one' && 'Diesen Termin wirklich löschen?'}
+            {scope === 'this_and_following' && 'Diesen und alle folgenden Termine der Serie löschen?'}
+            {scope === 'all' && 'Die gesamte Serie und alle Termine löschen?'}
+          </div>
+        )}
+
         <div className="flex gap-2 pt-4">
-          <button onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
           <button
-            onClick={handleSave}
-            disabled={saving || (scope !== 'this_one' && !series)}
-            className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+            onClick={() => {
+              if (!confirmDelete) {
+                setConfirmDelete(true)
+              } else {
+                handleDelete()
+              }
+            }}
+            disabled={deleting || saving || (scope !== 'this_one' && !series)}
+            className="bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {saving ? 'Speichern…' : 'Speichern'}
+            {deleting ? 'Löschen…' : confirmDelete ? 'Bestätigen' : 'Löschen'}
           </button>
+          {confirmDelete && (
+            <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>
+              Abbrechen
+            </button>
+          )}
+          {!confirmDelete && (
+            <>
+              <button onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
+              <button
+                onClick={handleSave}
+                disabled={saving || deleting || (scope !== 'this_one' && !series)}
+                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Speichern…' : 'Speichern'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

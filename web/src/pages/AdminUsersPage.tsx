@@ -123,9 +123,9 @@ export default function AdminUsersPage() {
     <div>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-brand-white pb-4 mb-4 sm:bg-transparent sm:pb-6 sm:mb-0 sm:static sm:z-auto">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
           <h1 className="text-2xl font-bold">Nutzerverwaltung</h1>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               type="search"
               placeholder="Suchen…"
@@ -198,7 +198,7 @@ export default function AdminUsersPage() {
       {/* Pending requests and invitations */}
       {(requests.length > 0 || invitations.length > 0) && (
         <div className="mb-8">
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-x-auto">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-brand-text">Ausstehende Anfragen & Einladungen ({requests.length + invitations.length})</h2>
             </div>
@@ -243,7 +243,7 @@ export default function AdminUsersPage() {
       )}
 
       {/* Registered users */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-x-auto mt-6">
         <div className="px-6 py-4 border-b border-brand-border-subtle">
           <h2 className="font-semibold text-brand-text">Registrierte Nutzer ({total})</h2>
         </div>

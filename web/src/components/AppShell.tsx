@@ -160,7 +160,7 @@ export default function AppShell() {
         </>
       )}
 
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Mobile header */}
         <header className="sm:hidden bg-brand-white border-b border-brand-black/10 px-4 py-4 flex items-center gap-3">
           <button

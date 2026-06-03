@@ -368,10 +368,14 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scope := r.URL.Query().Get("scope")
+	fromDate := r.URL.Query().Get("from")
 	var execErr error
 	if scope == "all" {
 		_, execErr = h.db.ExecContext(r.Context(),
 			`DELETE FROM training_sessions WHERE series_id = ?`, seriesID)
+	} else if scope == "this_and_following" && fromDate != "" {
+		_, execErr = h.db.ExecContext(r.Context(),
+			`DELETE FROM training_sessions WHERE series_id = ? AND date >= ?`, seriesID, fromDate)
 	} else {
 		today := time.Now().Format("2006-01-02")
 		_, execErr = h.db.ExecContext(r.Context(),
@@ -382,6 +386,38 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err = h.db.ExecContext(r.Context(), `DELETE FROM training_series WHERE id = ?`, seriesID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("trainings")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/training-sessions/{id}
+func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	sessionID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var teamID int
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	if err != nil || !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if _, err = h.db.ExecContext(r.Context(), `DELETE FROM training_sessions WHERE id = ?`, sessionID); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

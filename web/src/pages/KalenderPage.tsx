@@ -442,7 +442,7 @@ export default function KalenderPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-6">
         <h1 className="text-2xl font-bold">Kalender</h1>
         {user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer')) && (
           <button

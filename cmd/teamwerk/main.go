@@ -203,6 +203,7 @@ func serve() {
 			r.Delete("/api/training-series/{id}", trainingH.DeleteSeries)
 			r.Post("/api/training-sessions", trainingH.CreateSession)
 			r.Put("/api/training-sessions/{id}", trainingH.UpdateSession)
+			r.Delete("/api/training-sessions/{id}", trainingH.DeleteSession)
 			r.Get("/api/training-sessions/{id}/attendances", trainingH.GetAttendances)
 			r.Post("/api/training-sessions/{id}/attendances", trainingH.SaveAttendances)
 			r.Post("/api/duty-slots", dutyH.CreateSlot)

@@ -1,19 +1,26 @@
-## 1. AdminUsersPage Header-Fix
+## 1. AppShell Root-Fix
 
-- [ ] 1.1 Header-div von `flex items-center justify-between gap-3` auf `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0` ändern
-- [ ] 1.2 Controls-div (`flex gap-2` mit Suchfeld + Button) sicherstellen, dass er auf Mobile korrekt umbrochen wird — `flex-wrap` ergänzen falls nötig
+- [x] 1.1 In `AppShell.tsx`: `<div className="flex-1 flex flex-col min-h-0">` → `min-w-0` ergänzen
 
-## 2. AdminDutyTypesPage Header-Fix
+## 2. AdminUsersPage
 
-- [ ] 2.1 Header-div auf `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0` umstellen
-- [ ] 2.2 Prüfen ob der „+ Neu"-Button auf Mobile volle Breite oder Auto-Breite haben soll (analog MembersPage)
+- [x] 2.1 Header-div (Zeile mit `h1 + Suchfeld + Button`) auf `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0` umstellen
+- [x] 2.2 Controls-div `flex-wrap` ergänzen damit Suchfeld + Button auf Mobile umbrechen
+- [x] 2.3 Beiden Tabellen-Containern `overflow-x-auto` als Klasse hinzufügen
 
-## 3. AdminDutyTemplatesPage Header-Fix
+## 3. AdminDutyTypesPage
 
-- [ ] 3.1 Header-div auf `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0` umstellen
-- [ ] 3.2 Prüfen ob der „+ Neue Vorlage"-Button auf Mobile volle Breite oder Auto-Breite haben soll
+- [x] 3.1 Header-div auf `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0` umstellen
 
-## 4. Verifikation
+## 4. AdminDutyTemplatesPage
 
-- [ ] 4.1 Alle drei Seiten im Browser-DevTools bei 375px (iPhone SE) und 390px (iPhone 15 Pro) prüfen — kein horizontaler Overflow
-- [ ] 4.2 Desktop-Darstellung (> 640px) unverändert sicherstellen
+- [x] 4.1 Header-div auf `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0` umstellen
+
+## 5. KalenderPage
+
+- [x] 5.1 Header-div (Zeile mit `h1 Kalender` + „Event anlegen"-Button) auf `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0` umstellen
+
+## 6. Verifikation
+
+- [ ] 6.1 Alle betroffenen Seiten in DevTools bei 375px prüfen — kein horizontaler Overflow, korrekte Stapelung
+- [ ] 6.2 Desktop (> 640px) unverändert sicherstellen

@@ -243,7 +243,7 @@ export default function AdminDutyTypesPage() {
     <div>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-brand-white pb-4 mb-4 sm:bg-transparent sm:pb-6 sm:mb-0 sm:static sm:z-auto">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
           <h1 className="text-2xl font-bold">Diensttypen</h1>
           <button
             onClick={() => setShowCreateModal(true)}
