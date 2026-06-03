@@ -364,7 +364,9 @@ export default function TerminePage() {
                         <span className="font-semibold text-brand-text">{fmtDate(g.date)}</span>
                         <span className="text-brand-text-muted text-sm">{g.time} Uhr</span>
                         {g.team_names && (
-                          <span className="text-brand-text-subtle text-xs">{g.team_names}</span>
+                          <span className="text-brand-text-subtle text-xs">
+                            {g.team_ids && g.team_ids.length > 1 ? 'Mehrere Teams' : g.team_names}
+                          </span>
                         )}
                       </div>
                       <p className="text-sm text-brand-text-muted mt-0.5">{label}</p>
