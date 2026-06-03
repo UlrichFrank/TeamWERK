@@ -23,8 +23,15 @@ const navModules: NavModule[] = [
     label: 'Dienste',
     items: [
       { to: '/kalender', label: 'Kalender', roles: [] },
+      { to: '/trainings', label: 'Trainings', roles: [] },
       { to: '/dienste', label: 'Dienste', roles: [] },
       { to: '/mitfahrgelegenheiten', label: 'Mitfahrgelegenheiten', roles: [] },
+    ],
+  },
+  {
+    label: 'Trainingsplanung',
+    items: [
+      { to: '/admin/trainings', label: 'Trainings verwalten', roles: ['admin', 'trainer'] },
     ],
   },
   {

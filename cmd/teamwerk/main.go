@@ -30,6 +30,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
+	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 )
 
@@ -90,6 +91,7 @@ func serve() {
 	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
+	trainingH := trainings.NewHandler(database)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -178,12 +180,26 @@ func serve() {
 		r.Get("/api/kalender", gameH.ListGames)
 		r.Get("/api/kalender/{id}", gameH.GetGame)
 
+		// Trainings (read + RSVP for all authenticated users)
+		r.Get("/api/training-sessions", trainingH.ListSessions)
+		r.Get("/api/training-sessions/{id}", trainingH.GetSession)
+		r.Post("/api/training-sessions/{id}/respond", trainingH.Respond)
+
 		// Teams (filtered by user role)
 		r.Get("/api/teams", gameH.ListTeamsForUser)
 
 		// Admin + Trainer
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("trainer"))
+			// Trainings management
+			r.Get("/api/training-series", trainingH.ListSeries)
+			r.Post("/api/training-series", trainingH.CreateSeries)
+			r.Put("/api/training-series/{id}", trainingH.UpdateSeries)
+			r.Delete("/api/training-series/{id}", trainingH.DeleteSeries)
+			r.Post("/api/training-sessions", trainingH.CreateSession)
+			r.Put("/api/training-sessions/{id}", trainingH.UpdateSession)
+			r.Get("/api/training-sessions/{id}/attendances", trainingH.GetAttendances)
+			r.Post("/api/training-sessions/{id}/attendances", trainingH.SaveAttendances)
 			r.Post("/api/duty-slots", dutyH.CreateSlot)
 			r.Put("/api/duty-slots/{id}", dutyH.UpdateSlot)
 			r.Delete("/api/duty-slots/{id}", dutyH.DeleteSlot)

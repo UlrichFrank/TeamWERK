@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Home, MapPin, Calendar, Plus } from 'lucide-react'
+import { Home, MapPin, Calendar, Plus, Dumbbell } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+
+interface Training {
+  id: number
+  date: string
+  start_time: string
+  end_time: string
+  location: string
+  status: 'active' | 'cancelled'
+  confirmed_count: number
+  declined_count: number
+  maybe_count: number
+  my_rsvp: string | null
+}
 
 interface Game {
   id: number
@@ -67,6 +80,7 @@ export default function KalenderPage() {
   const [year, setYear] = useState(startDate.getFullYear())
   const [month, setMonth] = useState(startDate.getMonth())
   const [games, setGames] = useState<Game[]>([])
+  const [trainings, setTrainings] = useState<Training[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -110,10 +124,23 @@ export default function KalenderPage() {
     }
   }
 
+  const loadTrainings = async () => {
+    try {
+      const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
+      const lastDay = new Date(year, month + 1, 0).getDate()
+      const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      const r = await api.get(`/training-sessions?from=${from}&to=${to}`)
+      setTrainings(Array.isArray(r.data) ? r.data : [])
+    } catch {
+      setTrainings([])
+    }
+  }
+
   useEffect(() => {
     const loadInitialData = async () => {
       await Promise.all([
         loadGames(),
+        loadTrainings(),
         api.get('/teams')
           .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
           .catch(() => setTeams([])),
@@ -122,6 +149,9 @@ export default function KalenderPage() {
     }
     loadInitialData()
   }, [])
+
+  useEffect(() => { loadTrainings() }, [year, month])
+
   useLiveUpdates((event) => { if (event === 'games') loadGames() })
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
@@ -194,6 +224,13 @@ export default function KalenderPage() {
     const key = g.date.slice(0, 10)
     if (!gamesByDate[key]) gamesByDate[key] = []
     gamesByDate[key].push(g)
+  }
+
+  const trainingsByDate: Record<string, Training[]> = {}
+  for (const t of trainings) {
+    const key = t.date.slice(0, 10)
+    if (!trainingsByDate[key]) trainingsByDate[key] = []
+    trainingsByDate[key].push(t)
   }
 
   const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7
@@ -360,6 +397,7 @@ export default function KalenderPage() {
             const day = i + 1
             const dateStr = padDate(year, month, day)
             const dayGames = gamesByDate[dateStr] ?? []
+            const dayTrainings = trainingsByDate[dateStr] ?? []
             const isToday = dateStr === todayStr
             const canEdit = user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer'))
             const canRegen = canEdit && dayGames.length > 0
@@ -393,6 +431,27 @@ export default function KalenderPage() {
                       {g.event_type === 'generisch' ? (g.opponent || '–') : `Team vs ${g.opponent || '–'}`}
                     </div>
                     <div className="text-brand-text-subtle leading-tight">{g.time}</div>
+                  </button>
+                ))}
+                {dayTrainings.map(t => (
+                  <button
+                    key={`t-${t.id}`}
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={() => navigate(`/trainings/${t.id}`)}
+                    className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${
+                      t.status === 'cancelled'
+                        ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
+                        : 'bg-blue-50 hover:bg-blue-100 border-blue-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <Dumbbell className="w-3 h-3 text-blue-500 shrink-0" />
+                      <span className="font-semibold truncate text-brand-text">Training</span>
+                    </div>
+                    <div className="text-brand-text-subtle leading-tight">{t.start_time}</div>
+                    <div className="text-brand-text-subtle leading-tight text-[10px]">
+                      {t.confirmed_count}✓ {t.declined_count}✗
+                    </div>
                   </button>
                 ))}
                 {canRegen && (
