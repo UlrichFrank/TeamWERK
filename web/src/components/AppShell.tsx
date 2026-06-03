@@ -16,37 +16,32 @@ const navModules: NavModule[] = [
     items: [
       { to: '/', label: 'Dashboard', roles: [], end: true },
       { to: '/profil', label: 'Mein Profil', roles: [], excludeRoles: ['admin'] },
+    ],
+  },
+  {
+    label: 'Spielbetrieb',
+    items: [
+      { to: '/termine', label: 'Termine', roles: [] },
+      { to: '/kalender', label: 'Kalender', roles: [] },
+      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer'] },
+    ],
+  },
+  {
+    label: 'Verein',
+    items: [
+      { to: '/dienste', label: 'Dienste', roles: [] },
+      { to: '/mitfahrgelegenheiten', label: 'Mitfahrten', roles: [] },
       { to: '/dokumente', label: 'Dokumente', roles: [] },
     ],
   },
   {
-    label: 'Dienste',
+    label: 'Verwaltung',
     items: [
-      { to: '/kalender', label: 'Kalender', roles: [] },
-      { to: '/termine', label: 'Termine', roles: [] },
-      { to: '/dienste', label: 'Dienste', roles: [] },
-      { to: '/mitfahrgelegenheiten', label: 'Mitfahrgelegenheiten', roles: [] },
-    ],
-  },
-  {
-    label: 'Dienstplanung',
-    items: [
+      { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand', 'trainer'] },
+      { to: '/admin/nutzer', label: 'Nutzerverwaltung', roles: ['admin', 'vorstand'] },
       { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
       { to: '/admin/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
-    ],
-  },
-  {
-    label: 'Kaderplanung',
-    items: [
-      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer'] },
       { to: '/admin/einstellungen', label: 'Einstellungen', roles: ['admin', 'vorstand'] },
-    ],
-  },
-  {
-    label: 'Administration',
-    items: [
-      { to: '/admin/nutzer', label: 'Nutzerverwaltung', roles: ['admin', 'vorstand'] },
-      { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand'] },
     ],
   },
 ]
