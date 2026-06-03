@@ -53,14 +53,10 @@ export default function TrainingsDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer')
-  const canRsvp = !isTrainer
 
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [attendances, setAttendances] = useState<AttendanceItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [rsvpLoading, setRsvpLoading] = useState(false)
-  const [declineReason, setDeclineReason] = useState('')
-  const [showDeclineForm, setShowDeclineForm] = useState(false)
   const [attendanceSaving, setAttendanceSaving] = useState(false)
   const [attendanceMap, setAttendanceMap] = useState<Record<number, boolean>>({})
   const [attendanceLoaded, setAttendanceLoaded] = useState(false)
@@ -90,17 +86,6 @@ export default function TrainingsDetailPage() {
     load()
     if (isTrainer) loadAttendances()
   }, [id])
-
-  const respond = async (status: string, reason = '') => {
-    setRsvpLoading(true)
-    try {
-      await api.post(`/training-sessions/${id}/respond`, { status, reason })
-      setSession(prev => prev ? { ...prev, my_rsvp: status } : prev)
-      setShowDeclineForm(false)
-    } finally {
-      setRsvpLoading(false)
-    }
-  }
 
   const saveAttendances = async () => {
     setAttendanceSaving(true)
@@ -164,71 +149,6 @@ export default function TrainingsDetailPage() {
           </div>
         </div>
       </div>
-
-      {/* RSVP for spieler/elternteil */}
-      {canRsvp && session.status === 'active' && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
-          <h2 className="font-semibold text-brand-text mb-3">Meine Rückmeldung</h2>
-          {session.my_rsvp && (
-            <p className="text-sm text-brand-text-muted mb-3">
-              Aktuelle Antwort: <strong>{statusLabel[session.my_rsvp as keyof typeof statusLabel]}</strong>
-            </p>
-          )}
-          <div className="flex gap-2 flex-wrap">
-            <button
-              disabled={rsvpLoading}
-              onClick={() => respond('confirmed')}
-              className={`flex items-center gap-2 rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium transition-colors disabled:opacity-40 ${
-                session.my_rsvp === 'confirmed'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-brand-surface-card border border-brand-border text-brand-text hover:bg-green-50 hover:border-green-300'
-              }`}
-            >
-              <Check className="w-4 h-4" /> Zusagen
-            </button>
-            <button
-              disabled={rsvpLoading}
-              onClick={() => respond('maybe')}
-              className={`flex items-center gap-2 rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium transition-colors disabled:opacity-40 ${
-                session.my_rsvp === 'maybe'
-                  ? 'bg-brand-yellow text-brand-black'
-                  : 'bg-brand-surface-card border border-brand-border text-brand-text hover:bg-yellow-50'
-              }`}
-            >
-              <HelpCircle className="w-4 h-4" /> Vielleicht
-            </button>
-            <button
-              disabled={rsvpLoading}
-              onClick={() => setShowDeclineForm(!showDeclineForm)}
-              className={`flex items-center gap-2 rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium transition-colors disabled:opacity-40 ${
-                session.my_rsvp === 'declined'
-                  ? 'bg-brand-danger text-white'
-                  : 'bg-brand-surface-card border border-brand-border text-brand-text hover:bg-red-50 hover:border-brand-danger/30'
-              }`}
-            >
-              <X className="w-4 h-4" /> Absagen
-            </button>
-          </div>
-          {showDeclineForm && (
-            <div className="mt-3 space-y-2">
-              <input
-                type="text"
-                placeholder="Begründung (optional)"
-                value={declineReason}
-                onChange={e => setDeclineReason(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-              />
-              <button
-                onClick={() => respond('declined', declineReason)}
-                disabled={rsvpLoading}
-                className="bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40"
-              >
-                Absagen bestätigen
-              </button>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Responses list */}
       {session.status === 'active' && (

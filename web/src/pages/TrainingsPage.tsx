@@ -38,6 +38,7 @@ export default function TrainingsPage() {
   const [showPast, setShowPast] = useState(false)
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<number | null>(null)
+  const [reasons, setReasons] = useState<Record<number, string>>({})
 
   const today = new Date().toISOString().slice(0, 10)
   const from = showPast
@@ -54,11 +55,10 @@ export default function TrainingsPage() {
 
   useEffect(() => { load() }, [showPast])
 
-  const respond = async (sessionId: number, status: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const respond = async (sessionId: number, status: string, reason = '') => {
     setRsvpLoading(sessionId)
     try {
-      await api.post(`/training-sessions/${sessionId}/respond`, { status })
+      await api.post(`/training-sessions/${sessionId}/respond`, { status, reason })
       setSessions(prev => prev.map(s =>
         s.id === sessionId ? { ...s, my_rsvp: status } : s
       ))
@@ -104,10 +104,10 @@ export default function TrainingsPage() {
           {sessions.map(s => (
             <div
               key={s.id}
-              onClick={() => navigate(`/trainings/${s.id}`)}
-              className={`bg-brand-surface-card rounded-xl shadow border-t-4 p-4 cursor-pointer hover:shadow-md transition-shadow ${
+              onClick={isTrainer ? () => navigate(`/trainings/${s.id}`) : undefined}
+              className={`bg-brand-surface-card rounded-xl shadow border-t-4 p-4 transition-shadow ${
                 s.status === 'cancelled' ? 'border-brand-border opacity-60' : 'border-brand-yellow'
-              }`}
+              } ${isTrainer ? 'cursor-pointer hover:shadow-md' : ''}`}
             >
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-3 min-w-0">
@@ -149,30 +149,39 @@ export default function TrainingsPage() {
               </div>
 
               {s.status === 'active' && !isTrainer && (
-                <div className="mt-3 flex gap-2" onClick={e => e.stopPropagation()}>
-                  <RsvpButton
-                    label="Zusagen"
-                    icon={<Check className="w-4 h-4" />}
-                    active={s.my_rsvp === 'confirmed'}
-                    activeClass="bg-green-600 text-white border-green-600"
-                    disabled={rsvpLoading === s.id}
-                    onClick={e => respond(s.id, s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed', e)}
-                  />
-                  <RsvpButton
-                    label="Vielleicht"
-                    icon={<HelpCircle className="w-4 h-4" />}
-                    active={s.my_rsvp === 'maybe'}
-                    activeClass="bg-brand-yellow text-brand-black border-brand-yellow"
-                    disabled={rsvpLoading === s.id}
-                    onClick={e => respond(s.id, 'maybe', e)}
-                  />
-                  <RsvpButton
-                    label="Absagen"
-                    icon={<X className="w-4 h-4" />}
-                    active={s.my_rsvp === 'declined'}
-                    activeClass="bg-brand-danger text-white border-brand-danger"
-                    disabled={rsvpLoading === s.id}
-                    onClick={e => respond(s.id, 'declined', e)}
+                <div className="mt-3 space-y-2" onClick={e => e.stopPropagation()}>
+                  <div className="flex gap-2">
+                    <RsvpButton
+                      label="Zusagen"
+                      icon={<Check className="w-4 h-4" />}
+                      active={s.my_rsvp === 'confirmed'}
+                      activeClass="bg-green-600 text-white border-green-600"
+                      disabled={rsvpLoading === s.id}
+                      onClick={() => respond(s.id, s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed')}
+                    />
+                    <RsvpButton
+                      label="Vielleicht"
+                      icon={<HelpCircle className="w-4 h-4" />}
+                      active={s.my_rsvp === 'maybe'}
+                      activeClass="bg-brand-yellow text-brand-black border-brand-yellow"
+                      disabled={rsvpLoading === s.id}
+                      onClick={() => respond(s.id, 'maybe', reasons[s.id] ?? '')}
+                    />
+                    <RsvpButton
+                      label="Absagen"
+                      icon={<X className="w-4 h-4" />}
+                      active={s.my_rsvp === 'declined'}
+                      activeClass="bg-brand-danger text-white border-brand-danger"
+                      disabled={rsvpLoading === s.id}
+                      onClick={() => respond(s.id, 'declined', reasons[s.id] ?? '')}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Begründung für Absage / Vielleicht (optional)"
+                    value={reasons[s.id] ?? ''}
+                    onChange={e => setReasons(prev => ({ ...prev, [s.id]: e.target.value }))}
+                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                   />
                 </div>
               )}
@@ -190,7 +199,7 @@ function RsvpButton({ label, icon, active, activeClass, disabled, onClick }: {
   active: boolean
   activeClass: string
   disabled: boolean
-  onClick: (e: React.MouseEvent) => void
+  onClick: () => void
 }) {
   return (
     <button
