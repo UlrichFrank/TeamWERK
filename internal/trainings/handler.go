@@ -18,14 +18,17 @@ type Handler struct{ db *sql.DB }
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
-// hasTeamAccess returns true if the user is admin or a trainer of teamID.
+// hasTeamAccess returns true if the user is admin or a kader trainer of teamID.
 func (h *Handler) hasTeamAccess(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
 	if claims.Role == "admin" {
 		return true, nil
 	}
 	var count int
 	err := h.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM team_trainers WHERE user_id = ? AND team_id = ?`,
+		`SELECT COUNT(*) FROM kader_trainers kt
+		 JOIN kader k ON k.id = kt.kader_id
+		 JOIN members m ON m.id = kt.member_id
+		 WHERE m.user_id = ? AND k.team_id = ?`,
 		claims.UserID, teamID).Scan(&count)
 	return count > 0, err
 }
@@ -88,7 +91,11 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "admin" {
 		whereSQL = "1=1"
 	} else {
-		whereSQL = "s.team_id IN (SELECT team_id FROM team_trainers WHERE user_id = ?)"
+		whereSQL = `s.team_id IN (
+			SELECT DISTINCT k.team_id FROM kader k
+			JOIN kader_trainers kt ON kt.kader_id = k.id
+			JOIN members m ON m.id = kt.member_id
+			WHERE m.user_id = ?)`
 		args = append(args, claims.UserID)
 	}
 	if tid := r.URL.Query().Get("team_id"); tid != "" {
@@ -512,7 +519,11 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var conds []string
 		if claims.HasFunction("trainer") {
-			conds = append(conds, "ts.team_id IN (SELECT team_id FROM team_trainers WHERE user_id = ?)")
+			conds = append(conds, `ts.team_id IN (
+				SELECT DISTINCT k.team_id FROM kader k
+				JOIN kader_trainers kt ON kt.kader_id = k.id
+				JOIN members m ON m.id = kt.member_id
+				WHERE m.user_id = ?)`)
 			teamArgs = append(teamArgs, claims.UserID)
 		}
 		if claims.IsParent {

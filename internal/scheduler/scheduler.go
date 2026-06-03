@@ -191,9 +191,11 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
-				JOIN team_trainers tt ON tt.user_id = u.id
-				WHERE u.role = 'trainer'
-				  AND tt.team_id = ?
+				JOIN members m ON m.user_id = u.id
+				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'trainer'
+				JOIN kader_trainers kt ON kt.member_id = m.id
+				JOIN kader k ON k.id = kt.kader_id
+				WHERE k.team_id = ?
 				  AND u.duty_reminder_days IS NOT NULL
 				  AND ` + notAssigned
 			args = []any{sl.teamID.Int64, sl.id}
@@ -201,8 +203,9 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
-				WHERE u.role = 'trainer'
-				  AND u.duty_reminder_days IS NOT NULL
+				JOIN members m ON m.user_id = u.id
+				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'trainer'
+				WHERE u.duty_reminder_days IS NOT NULL
 				  AND ` + notAssigned
 			args = []any{sl.id}
 		}

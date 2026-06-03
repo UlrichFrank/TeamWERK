@@ -135,8 +135,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	} else {
 		countQuery := `SELECT COUNT(DISTINCT m.id) FROM members m
 		 JOIN team_memberships tm ON tm.member_id = m.id
-		 JOIN team_trainers tt ON tt.team_id = tm.team_id
-		 WHERE tt.user_id = ? AND m.status != 'ausgetreten'` + whereExtra
+		 WHERE tm.team_id IN (
+		   SELECT DISTINCT k.team_id FROM kader k
+		   JOIN kader_trainers kt ON kt.kader_id = k.id
+		   JOIN members tm2 ON tm2.id = kt.member_id
+		   WHERE tm2.user_id = ?
+		 ) AND m.status != 'ausgetreten'` + whereExtra
 		args := buildListArgs([]any{claims.UserID}, clubFuncFilter, search, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	}
@@ -157,8 +161,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
 		 FROM members m
 		 JOIN team_memberships tm ON tm.member_id = m.id
-		 JOIN team_trainers tt ON tt.team_id = tm.team_id
-		 WHERE tt.user_id = ? AND m.status != 'ausgetreten'` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
+		 WHERE tm.team_id IN (
+		   SELECT DISTINCT k.team_id FROM kader k
+		   JOIN kader_trainers kt ON kt.kader_id = k.id
+		   JOIN members tm2 ON tm2.id = kt.member_id
+		   WHERE tm2.user_id = ?
+		 ) AND m.status != 'ausgetreten'` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
 		args := buildListArgs([]any{claims.UserID}, clubFuncFilter, search, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	}

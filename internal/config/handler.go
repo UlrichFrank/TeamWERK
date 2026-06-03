@@ -298,14 +298,3 @@ func (h *Handler) UpdateAgeClassRuleHandler(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// POST /api/admin/teams/:id/assign-trainer
-func (h *Handler) AssignTrainer(w http.ResponseWriter, r *http.Request) {
-	teamID := r.PathValue("id")
-	var req struct {
-		UserID int `json:"user_id"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-	h.db.ExecContext(r.Context(),
-		`INSERT OR IGNORE INTO team_trainers (team_id, user_id) VALUES (?,?)`, teamID, req.UserID)
-	w.WriteHeader(http.StatusNoContent)
-}

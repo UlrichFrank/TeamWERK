@@ -41,7 +41,7 @@ export default function TrainingsPage() {
 
   const today = new Date().toISOString().slice(0, 10)
   const from = showPast
-    ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    ? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     : today
   const to = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 

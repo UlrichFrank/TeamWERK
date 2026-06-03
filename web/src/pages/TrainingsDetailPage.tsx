@@ -66,7 +66,7 @@ export default function TrainingsDetailPage() {
   const [attendanceLoaded, setAttendanceLoaded] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
-  const isPast = session ? session.date <= today : false
+  const isPast = session ? session.date.slice(0, 10) <= today : false
 
   const load = () => {
     api.get(`/training-sessions/${id}`)

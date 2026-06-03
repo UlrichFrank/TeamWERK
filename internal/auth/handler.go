@@ -806,10 +806,10 @@ func (h *Handler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) notifyTrainersOfRequest(r *http.Request, teamID int, name, email string) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT u.email FROM users u
-		 JOIN team_trainers tt ON tt.user_id = u.id
 		 JOIN members m ON m.user_id = u.id
-		 JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'trainer'
-		 WHERE tt.team_id = ?
+		 JOIN kader_trainers kt ON kt.member_id = m.id
+		 JOIN kader k ON k.id = kt.kader_id
+		 WHERE k.team_id = ?
 		 UNION
 		 SELECT u2.email FROM users u2 WHERE u2.role = 'admin'`,
 		teamID,

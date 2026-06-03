@@ -248,7 +248,6 @@ func serve() {
 			r.Get("/api/admin/teams", cfgH.ListTeams)
 			r.Post("/api/admin/teams", cfgH.CreateTeam)
 			r.Put("/api/admin/teams/{id}", cfgH.UpdateTeam)
-			r.Post("/api/admin/teams/{id}/assign-trainer", cfgH.AssignTrainer)
 			r.Get("/api/admin/users", authH.ListUsers)
 			r.Put("/api/admin/users/{id}/role", authH.UpdateUserRole)
 			r.Delete("/api/admin/users/{id}", authH.DeleteUser)
