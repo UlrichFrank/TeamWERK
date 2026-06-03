@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Check, X, HelpCircle, Dumbbell, ChevronLeft, MapPin, Clock, AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, Clock, Dumbbell, HelpCircle, MapPin, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -10,6 +10,13 @@ const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Fr
 function fmtDate(iso: string) {
   const d = new Date(iso.slice(0, 10) + 'T12:00:00')
   return `${WEEKDAYS[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+}
+
+function RsvpIcon({ status }: { status: string | null }) {
+  if (status === 'confirmed') return <Check className="w-4 h-4 text-green-600" />
+  if (status === 'declined') return <X className="w-4 h-4 text-brand-danger" />
+  if (status === 'maybe') return <HelpCircle className="w-4 h-4 text-brand-text-subtle" />
+  return <span className="text-brand-text-muted text-sm">–</span>
 }
 
 interface TrainingResponse {
@@ -46,8 +53,13 @@ interface AttendanceItem {
   present: boolean | null
 }
 
-const statusIcon = { confirmed: <Check className="w-4 h-4 text-green-600" />, declined: <X className="w-4 h-4 text-brand-danger" />, maybe: <HelpCircle className="w-4 h-4 text-brand-text-subtle" /> }
-const statusLabel = { confirmed: 'Zugesagt', declined: 'Abgesagt', maybe: 'Vielleicht' }
+interface TableRow {
+  member_id: number
+  member_name: string
+  rsvp_status: string | null
+  reason: string | null
+  present: boolean | null
+}
 
 export default function TrainingsDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -58,9 +70,9 @@ export default function TrainingsDetailPage() {
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [attendances, setAttendances] = useState<AttendanceItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [attendanceSaving, setAttendanceSaving] = useState(false)
   const [attendanceMap, setAttendanceMap] = useState<Record<number, boolean>>({})
-  const [attendanceLoaded, setAttendanceLoaded] = useState(false)
+  const [attendanceError, setAttendanceError] = useState<string | null>(null)
+  const [showReasonId, setShowReasonId] = useState<number | null>(null)
 
   const today = new Date().toISOString().slice(0, 10)
   const isPast = session ? session.date.slice(0, 10) <= today : false
@@ -73,13 +85,13 @@ export default function TrainingsDetailPage() {
 
   const loadAttendances = () => {
     api.get(`/training-sessions/${id}/attendances`).then(r => {
-      setAttendances(r.data ?? [])
+      const data: AttendanceItem[] = r.data ?? []
+      setAttendances(data)
       const map: Record<number, boolean> = {}
-      for (const a of r.data ?? []) {
+      for (const a of data) {
         if (a.present !== null) map[a.member_id] = a.present
       }
       setAttendanceMap(map)
-      setAttendanceLoaded(true)
     })
   }
 
@@ -89,26 +101,43 @@ export default function TrainingsDetailPage() {
   }, [id])
   useLiveUpdates((event) => { if (event === 'trainings') load() })
 
-  const saveAttendances = async () => {
-    setAttendanceSaving(true)
+  const toggleAttendance = async (memberId: number, newValue: boolean) => {
+    setAttendanceMap(prev => ({ ...prev, [memberId]: newValue }))
+    const entries = attendances.map(a => ({
+      member_id: a.member_id,
+      present: a.member_id === memberId ? newValue : (attendanceMap[a.member_id] ?? false),
+    }))
     try {
-      const entries = attendances.map(a => ({
-        member_id: a.member_id,
-        present: attendanceMap[a.member_id] ?? false,
-      }))
       await api.post(`/training-sessions/${id}/attendances`, entries)
-      loadAttendances()
-    } finally {
-      setAttendanceSaving(false)
+      setAttendanceError(null)
+    } catch {
+      setAttendanceMap(prev => ({ ...prev, [memberId]: !newValue }))
+      setAttendanceError('Fehler beim Speichern. Bitte nochmal versuchen.')
     }
   }
 
   if (loading) return <p className="text-brand-text-muted text-sm p-4">Laden…</p>
   if (!session) return <p className="text-brand-danger text-sm p-4">Termin nicht gefunden.</p>
 
-  const confirmed = session.responses.filter(r => r.status === 'confirmed')
-  const declined = session.responses.filter(r => r.status === 'declined')
-  const maybe = session.responses.filter(r => r.status === 'maybe')
+  const responseMap = Object.fromEntries(session.responses.map(r => [r.member_id, r]))
+  const noRsvpCount = attendances.length - session.confirmed_count - session.declined_count - session.maybe_count
+  const showAttendanceCol = isTrainer && isPast
+
+  const tableRows: TableRow[] = isTrainer
+    ? attendances.map(a => ({
+        member_id: a.member_id,
+        member_name: a.member_name,
+        rsvp_status: a.rsvp_status,
+        reason: responseMap[a.member_id]?.reason ?? null,
+        present: a.present,
+      }))
+    : session.responses.map(r => ({
+        member_id: r.member_id,
+        member_name: r.member_name,
+        rsvp_status: r.status,
+        reason: r.reason,
+        present: null,
+      }))
 
   return (
     <div className="max-w-2xl space-y-4">
@@ -148,86 +177,104 @@ export default function TrainingsDetailPage() {
             {session.note && (
               <p className="mt-3 text-sm text-brand-text bg-white border border-brand-border-subtle rounded-lg p-3">{session.note}</p>
             )}
+            {/* Stat badges */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <Check className="w-3 h-3" /> {session.confirmed_count}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-danger-light text-brand-danger">
+                <X className="w-3 h-3" /> {session.declined_count}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-border-subtle text-brand-text-muted">
+                <HelpCircle className="w-3 h-3" /> {session.maybe_count}
+              </span>
+              {isTrainer && attendances.length > 0 && noRsvpCount > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-border-subtle text-brand-text-muted">
+                  – {noRsvpCount}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Responses list */}
-      {session.status === 'active' && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
-          <div className="px-6 py-4 border-b border-brand-border-subtle">
-            <h2 className="font-semibold text-brand-text">
-              Rückmeldungen
-              <span className="ml-2 text-sm font-normal text-brand-text-muted">
-                {session.confirmed_count} ✓ · {session.declined_count} ✗ · {session.maybe_count} ?
-              </span>
-            </h2>
-          </div>
-          {[...confirmed, ...maybe, ...declined].length === 0 ? (
-            <p className="px-6 py-4 text-sm text-brand-text-muted">Noch keine Rückmeldungen.</p>
-          ) : (
-            <ul className="divide-y divide-brand-border-subtle">
-              {[...confirmed, ...maybe, ...declined].map(resp => (
-                <li key={resp.member_id} className="px-6 py-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-brand-text truncate">{resp.member_name}</p>
-                    {resp.reason && (
-                      <p className="text-xs text-brand-text-muted mt-0.5">{resp.reason}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {statusIcon[resp.status]}
-                    <span className="text-xs text-brand-text-muted hidden sm:inline">{statusLabel[resp.status]}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+      {/* Unified participation table */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <div className="px-6 py-4 border-b border-brand-border-subtle">
+          <h2 className="font-semibold text-brand-text">Teilnahme</h2>
         </div>
-      )}
-
-      {/* Attendance section (trainer only, past sessions) */}
-      {isTrainer && isPast && attendanceLoaded && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
-          <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-            <h2 className="font-semibold text-brand-text">Anwesenheit</h2>
-            <button
-              onClick={saveAttendances}
-              disabled={attendanceSaving}
-              className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40"
-            >
-              {attendanceSaving ? 'Speichern…' : 'Speichern'}
-            </button>
-          </div>
-          {attendances.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-brand-text-muted">Keine Mitglieder gefunden.</p>
-          ) : (
-            <ul className="divide-y divide-brand-border-subtle">
-              {attendances.map(a => (
-                <li key={a.member_id} className="px-6 py-3 flex items-center justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-brand-text">{a.member_name}</p>
-                    {a.rsvp_status && (
-                      <p className="text-xs text-brand-text-muted mt-0.5">
-                        RSVP: {statusLabel[a.rsvp_status as keyof typeof statusLabel] ?? a.rsvp_status}
-                      </p>
+        {tableRows.length === 0 ? (
+          <p className="px-6 py-4 text-sm text-brand-text-muted">
+            {isTrainer ? 'Keine Mitglieder gefunden.' : 'Noch keine Rückmeldungen.'}
+          </p>
+        ) : (
+          <>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-brand-border-subtle">
+                  <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Mitglied</th>
+                  <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Rückmeldung</th>
+                  {showAttendanceCol && (
+                    <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-center">Anwesend</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map(row => (
+                  <Fragment key={row.member_id}>
+                    <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
+                      <td className="px-4 py-3 text-sm text-brand-text font-medium">{row.member_name}</td>
+                      <td className="px-4 py-3">
+                        <div className="relative group flex items-center gap-1">
+                          <RsvpIcon status={row.rsvp_status} />
+                          {row.reason && (
+                            <>
+                              <button
+                                onClick={() => setShowReasonId(row.member_id === showReasonId ? null : row.member_id)}
+                                aria-label="Kommentar anzeigen"
+                              >
+                                <MessageCircle className="w-3 h-3 text-brand-text-muted" />
+                              </button>
+                              <div className="hidden group-hover:block absolute left-0 top-full z-10 mt-1 w-48 rounded-md bg-brand-text px-2 py-1 text-xs text-white shadow-lg pointer-events-none">
+                                {row.reason}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      {showAttendanceCol && (
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={attendanceMap[row.member_id] ?? false}
+                            onChange={e => toggleAttendance(row.member_id, e.target.checked)}
+                            className="w-4 h-4 rounded border-brand-border"
+                          />
+                        </td>
+                      )}
+                    </tr>
+                    {showReasonId === row.member_id && row.reason && (
+                      <tr className="bg-brand-surface-card">
+                        <td colSpan={showAttendanceCol ? 3 : 2} className="px-4 pb-2 text-xs text-brand-text-muted italic">
+                          {row.reason}
+                        </td>
+                      </tr>
                     )}
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <span className="text-xs text-brand-text-muted">Anwesend</span>
-                    <input
-                      type="checkbox"
-                      checked={attendanceMap[a.member_id] ?? false}
-                      onChange={e => setAttendanceMap(prev => ({ ...prev, [a.member_id]: e.target.checked }))}
-                      className="w-4 h-4 rounded border-brand-border"
-                    />
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+            {attendanceError && (
+              <div className="px-4 py-2 text-xs text-brand-danger bg-brand-danger-light border-t border-brand-danger/20 flex items-center justify-between">
+                {attendanceError}
+                <button onClick={() => setAttendanceError(null)} aria-label="Schließen">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
