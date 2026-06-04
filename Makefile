@@ -40,7 +40,7 @@ dev-remote: ## SSH-Tunnel zum VPS + Vite Dev-Server (kein lokales Backend)
 
 build: ## Frontend + Backend für Linux/amd64 bauen
 	cd web && pnpm build
-	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X 'main.buildHash=$(shell git rev-parse --short HEAD)'" -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
 
 setup-vps: ## VPS einmalig einrichten (Nginx, Certbot, systemd)
 	rsync -az deploy/ $(REMOTE):/tmp/teamwerk-deploy/

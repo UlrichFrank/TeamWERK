@@ -7,10 +7,11 @@ import (
 )
 
 type Handler struct {
-	hub *EventHub
+	hub       *EventHub
+	buildHash string
 }
 
-func NewHandler(h *EventHub) *Handler { return &Handler{hub: h} }
+func NewHandler(h *EventHub, buildHash string) *Handler { return &Handler{hub: h, buildHash: buildHash} }
 
 func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
@@ -26,6 +27,9 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 
 	ch := h.hub.Subscribe()
 	defer h.hub.Unsubscribe(ch)
+
+	fmt.Fprintf(w, "data: __version:%s\n\n", h.buildHash)
+	flusher.Flush()
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()

@@ -37,6 +37,8 @@ import (
 //go:embed all:web/dist
 var webFS embed.FS
 
+var buildHash = "dev"
+
 func main() {
 	_ = godotenv.Load()
 
@@ -78,7 +80,7 @@ func serve() {
 
 	m := mailer.New(cfg.SMTP)
 	hubInstance := hub.NewHub()
-	hubH := hub.NewHandler(hubInstance)
+	hubH := hub.NewHandler(hubInstance, buildHash)
 	authH := auth.NewHandler(database, cfg.JWTSecret, m, cfg.BaseURL)
 	cfgH := appconfig.NewHandler(database, hubInstance)
 	membH := members.NewHandler(database, hubInstance)

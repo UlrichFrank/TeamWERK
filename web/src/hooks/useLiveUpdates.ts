@@ -9,7 +9,7 @@ export function useLiveUpdates(onEvent: (eventType: string) => void) {
     const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`)
 
     es.onmessage = (e) => {
-      if (e.data) onEvent(e.data)
+      if (e.data && !e.data.startsWith('__version:')) onEvent(e.data)
     }
 
     es.onerror = () => {

@@ -52,6 +52,11 @@ self.addEventListener('push', (event) => {
   )
 })
 
+// Activate new SW on demand from the reload handler
+self.addEventListener('message', (event) => {
+  if ((event.data as { type: string })?.type === 'SKIP_WAITING') self.skipWaiting()
+})
+
 // Open the app at the correct URL when notification is clicked
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
