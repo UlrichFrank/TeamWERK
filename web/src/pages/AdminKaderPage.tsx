@@ -575,6 +575,27 @@ export default function AdminKaderPage() {
         )
       })}
 
+      {/* Missing gender combinations in active age class */}
+      {activeAgeClass && selectedSeason && (() => {
+        const presentGenders = new Set(kaderList.filter(k => k.age_class === activeAgeClass).map(k => k.gender))
+        const missing = (['m', 'f', 'mixed'] as const).filter(g => !presentGenders.has(g))
+        if (missing.length === 0) return null
+        return (
+          <div className="flex flex-col gap-1">
+            {missing.map(gender => (
+              <button
+                key={gender}
+                onClick={() => { setCreateModal({ ageClass: activeAgeClass, gender, nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
+                className="text-sm text-brand-blue hover:text-brand-black transition-colors flex items-center gap-1 px-1 py-1"
+              >
+                <span className="text-base leading-none">+</span>
+                Mannschaft anlegen ({activeAgeClass} {GENDER_LABEL[gender]})
+              </button>
+            ))}
+          </div>
+        )
+      })()}
+
       {/* Create team modal */}
       {createModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
