@@ -412,6 +412,130 @@ function SaisonsTab() {
           </table>
         )}
       </div>
+
+      {/* Qualifikationskader-Auswahl */}
+      {seasons.some(s => s.is_active) && kader.length > 0 && (
+        <KaderAuswahl
+          kader={kader}
+          onQualiAnlegen={openQualiModal}
+          onQualiBeenden={handleDeactivateQuali}
+        />
+      )}
+
+      {/* Quali-Kader anlegen Modal */}
+      {showQualiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-brand-border-subtle">
+              <h2 className="font-semibold text-lg text-brand-text">Qualifikationskader anlegen</h2>
+              <button onClick={() => setShowQualiModal(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateQuali} className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Altersklasse / Geschlecht</label>
+                <p className="text-sm text-brand-text">{qualiAgeClass} · {GENDER_LABEL[qualiGender]}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Name</label>
+                <input
+                  value={qualiName}
+                  onChange={e => setQualiName(e.target.value)}
+                  placeholder="z.B. B-Jugend Quali 2026"
+                  className={INPUT}
+                  required
+                  autoFocus
+                />
+              </div>
+              {qualiError && (
+                <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{qualiError}</p>
+              )}
+              <div className="flex gap-2 pt-2">
+                <button type="submit" disabled={qualiCreating} className={`flex-1 ${BTN_PRIMARY}`}>
+                  {qualiCreating ? 'Anlegen…' : 'Anlegen & aktivieren'}
+                </button>
+                <button type="button" onClick={() => setShowQualiModal(false)}
+                  className="px-4 py-2.5 sm:py-2 text-sm border border-brand-border rounded-md text-brand-text hover:bg-brand-surface-card transition-colors">
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface KaderAuswahlProps {
+  kader: KaderRow[]
+  onQualiAnlegen: (ageClass: string, gender: string) => void
+  onQualiBeenden: (id: number) => void
+}
+
+function KaderAuswahl({ kader, onQualiAnlegen, onQualiBeenden }: KaderAuswahlProps) {
+  const groups = Array.from(
+    kader.reduce((map, k) => {
+      const key = `${k.age_class}||${k.gender}`
+      if (!map.has(key)) map.set(key, { age_class: k.age_class, gender: k.gender, regular: null as KaderRow | null, quali: null as KaderRow | null })
+      const g = map.get(key)!
+      if (k.type === 'regular') g.regular = k
+      else g.quali = k
+      return map
+    }, new Map<string, { age_class: string; gender: string; regular: KaderRow | null; quali: KaderRow | null }>())
+  ).map(([, v]) => v).sort((a, b) => a.age_class.localeCompare(b.age_class) || a.gender.localeCompare(b.gender))
+
+  if (groups.length === 0) return null
+
+  return (
+    <div className="mt-6">
+      <h3 className="text-sm font-semibold text-brand-text-muted uppercase mb-3">Qualifikationskader</h3>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Altersklasse</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Regulärer Kader</th>
+              <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Qualifikationskader</th>
+              <th className="bg-brand-surface-card px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-brand-border-subtle">
+            {groups.map(g => (
+              <tr key={`${g.age_class}||${g.gender}`} className="hover:bg-brand-table-select transition-colors">
+                <td className="px-4 py-3 font-medium text-brand-text">
+                  {g.age_class} <span className="text-brand-text-muted font-normal">{GENDER_LABEL[g.gender]}</span>
+                </td>
+                <td className="px-4 py-3 text-brand-text">{g.regular ? `Kader #${g.regular.id}` : '–'}</td>
+                <td className="px-4 py-3">
+                  {g.quali ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="text-xs bg-brand-yellow/30 text-brand-black px-2 py-0.5 rounded-full font-medium">Quali aktiv</span>
+                      <span className="text-brand-text-muted text-xs">Kader #{g.quali.id}</span>
+                    </span>
+                  ) : (
+                    <span className="text-brand-text-subtle text-xs italic">kein Qualikader</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1 justify-end">
+                    {g.quali ? (
+                      <button onClick={() => onQualiBeenden(g.quali!.id)} className={BTN_DANGER_SM}>
+                        Quali beenden
+                      </button>
+                    ) : (
+                      <button onClick={() => onQualiAnlegen(g.age_class, g.gender)} className={BTN_SM}>
+                        + Qualikader
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
