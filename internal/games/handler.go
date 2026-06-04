@@ -1784,71 +1784,52 @@ func audiencesToDB(audiences []string) *string {
 }
 
 // attachChildrenRSVPToGames fills ChildrenRSVP on each item for parent users.
+// Only includes children who are kader members of one of the game's teams.
 func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID int, items []gameListItem) error {
-	childRows, err := h.db.QueryContext(ctx,
-		`SELECT m.id, m.first_name || ' ' || m.last_name
-		 FROM family_links fl JOIN members m ON m.id = fl.member_id
-		 WHERE fl.parent_user_id = ?
-		 ORDER BY m.last_name, m.first_name`, parentUserID)
-	if err != nil {
-		return err
-	}
-	defer childRows.Close()
-	var allChildren []childRSVP
-	for childRows.Next() {
-		var c childRSVP
-		childRows.Scan(&c.MemberID, &c.Name)
-		allChildren = append(allChildren, c)
-	}
-	if len(allChildren) == 0 {
-		return nil
-	}
-
+	placeholders := make([]string, len(items))
 	gameIDs := make([]any, len(items))
-	gamePlaceholders := make([]string, len(items))
 	for i, g := range items {
+		placeholders[i] = "?"
 		gameIDs[i] = g.ID
-		gamePlaceholders[i] = "?"
 	}
-	childMemberIDs := make([]any, len(allChildren))
-	childPlaceholders := make([]string, len(allChildren))
-	for i, c := range allChildren {
-		childMemberIDs[i] = c.MemberID
-		childPlaceholders[i] = "?"
-	}
-	respRows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT game_id, member_id, status
-		FROM game_responses
-		WHERE game_id IN (%s) AND member_id IN (%s)`,
-		strings.Join(gamePlaceholders, ","),
-		strings.Join(childPlaceholders, ",")),
-		append(gameIDs, childMemberIDs...)...)
+	// Single query: for each game, return only children who are in the kader of one of the game's teams
+	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status
+		FROM game_teams gt
+		JOIN kader k ON k.team_id = gt.team_id
+		  AND k.season_id = (SELECT season_id FROM games WHERE id = gt.game_id)
+		JOIN kader_members km ON km.kader_id = k.id
+		JOIN members m ON m.id = km.member_id
+		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
+		LEFT JOIN game_responses gr ON gr.game_id = gt.game_id AND gr.member_id = m.id
+		WHERE gt.game_id IN (%s)
+		ORDER BY m.last_name, m.first_name`,
+		strings.Join(placeholders, ",")),
+		append([]any{parentUserID}, gameIDs...)...)
 	if err != nil {
 		return err
 	}
-	defer respRows.Close()
+	defer rows.Close()
 
-	rsvpMap := map[int]map[int]string{}
-	for respRows.Next() {
-		var gid, mid int
-		var status string
-		respRows.Scan(&gid, &mid, &status)
-		if rsvpMap[gid] == nil {
-			rsvpMap[gid] = map[int]string{}
+	byGame := map[int][]childRSVP{}
+	for rows.Next() {
+		var gid int
+		var c childRSVP
+		var rsvp sql.NullString
+		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp)
+		if rsvp.Valid {
+			s := rsvp.String
+			c.RSVP = &s
 		}
-		rsvpMap[gid][mid] = status
+		byGame[gid] = append(byGame[gid], c)
 	}
 
 	for i := range items {
-		children := make([]childRSVP, len(allChildren))
-		copy(children, allChildren)
-		for j := range children {
-			if status, ok := rsvpMap[items[i].ID][children[j].MemberID]; ok {
-				s := status
-				children[j].RSVP = &s
-			}
+		if children, ok := byGame[items[i].ID]; ok {
+			items[i].ChildrenRSVP = children
+		} else {
+			items[i].ChildrenRSVP = []childRSVP{}
 		}
-		items[i].ChildrenRSVP = children
 	}
 	return nil
 }

@@ -1051,71 +1051,51 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 }
 
 // attachChildrenRSVPToSessions fills ChildrenRSVP on each item for parent users.
+// Only includes children who are kader members of the session's team.
 func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID int, items []sessionListItem) error {
-	childRows, err := h.db.QueryContext(ctx,
-		`SELECT m.id, m.first_name || ' ' || m.last_name
-		 FROM family_links fl JOIN members m ON m.id = fl.member_id
-		 WHERE fl.parent_user_id = ?
-		 ORDER BY m.last_name, m.first_name`, parentUserID)
-	if err != nil {
-		return err
-	}
-	defer childRows.Close()
-	var allChildren []childRSVP
-	for childRows.Next() {
-		var c childRSVP
-		childRows.Scan(&c.MemberID, &c.Name)
-		allChildren = append(allChildren, c)
-	}
-	if len(allChildren) == 0 {
-		return nil
-	}
-
+	placeholders := make([]string, len(items))
 	sessionIDs := make([]any, len(items))
-	sessionPlaceholders := make([]string, len(items))
 	for i, s := range items {
+		placeholders[i] = "?"
 		sessionIDs[i] = s.ID
-		sessionPlaceholders[i] = "?"
 	}
-	childMemberIDs := make([]any, len(allChildren))
-	childPlaceholders := make([]string, len(allChildren))
-	for i, c := range allChildren {
-		childMemberIDs[i] = c.MemberID
-		childPlaceholders[i] = "?"
-	}
-	respRows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT training_id, member_id, status
-		FROM training_responses
-		WHERE training_id IN (%s) AND member_id IN (%s)`,
-		strings.Join(sessionPlaceholders, ","),
-		strings.Join(childPlaceholders, ",")),
-		append(sessionIDs, childMemberIDs...)...)
+	// Single query: for each session, return only children who are in the kader of that session's team/season
+	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status
+		FROM training_sessions ts
+		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
+		JOIN kader_members km ON km.kader_id = k.id
+		JOIN members m ON m.id = km.member_id
+		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
+		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id
+		WHERE ts.id IN (%s)
+		ORDER BY m.last_name, m.first_name`,
+		strings.Join(placeholders, ",")),
+		append([]any{parentUserID}, sessionIDs...)...)
 	if err != nil {
 		return err
 	}
-	defer respRows.Close()
+	defer rows.Close()
 
-	rsvpMap := map[int]map[int]string{}
-	for respRows.Next() {
-		var sid, mid int
-		var status string
-		respRows.Scan(&sid, &mid, &status)
-		if rsvpMap[sid] == nil {
-			rsvpMap[sid] = map[int]string{}
+	bySession := map[int][]childRSVP{}
+	for rows.Next() {
+		var sid int
+		var c childRSVP
+		var rsvp sql.NullString
+		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp)
+		if rsvp.Valid {
+			s := rsvp.String
+			c.RSVP = &s
 		}
-		rsvpMap[sid][mid] = status
+		bySession[sid] = append(bySession[sid], c)
 	}
 
 	for i := range items {
-		children := make([]childRSVP, len(allChildren))
-		copy(children, allChildren)
-		for j := range children {
-			if status, ok := rsvpMap[items[i].ID][children[j].MemberID]; ok {
-				s := status
-				children[j].RSVP = &s
-			}
+		if children, ok := bySession[items[i].ID]; ok {
+			items[i].ChildrenRSVP = children
+		} else {
+			items[i].ChildrenRSVP = []childRSVP{}
 		}
-		items[i].ChildrenRSVP = children
 	}
 	return nil
 }
