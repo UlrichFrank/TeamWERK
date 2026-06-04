@@ -579,7 +579,7 @@ export default function KalenderPage() {
             const canEdit = user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer'))
             const canRegen = canEdit && dayGames.length > 0
             return (
-              <div key={day} className="group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
+              <div key={day} className="@container group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
                 <div className="flex items-center justify-between mb-1">
                   <span className={`text-xs leading-none flex items-center justify-center ${isToday ? 'font-bold w-5 h-5 rounded-full bg-brand-yellow text-brand-black' : 'text-brand-text-subtle'}`}>{day}</span>
                   {canEdit && (
@@ -598,6 +598,7 @@ export default function KalenderPage() {
                     key={g.id}
                     onPointerDown={e => e.stopPropagation()}
                     onClick={() => navigate(`/kalender/${g.id}`)}
+                    title={`${g.teams.length > 1 ? 'Mehrere Teams' : (shortNames.get(g.teams[0]?.id) ?? g.teams[0]?.name ?? '?')} · ${g.opponent || '–'} · ${g.time}`}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${getEventColors(g.event_type).pill}`}
                   >
                     <div className="flex items-center gap-1 mb-0.5">
@@ -606,17 +607,17 @@ export default function KalenderPage() {
                         : g.event_type === 'auswärts'
                         ? <MapPin className="w-3 h-3 text-brand-text-muted shrink-0" />
                         : <Calendar className="w-3 h-3 text-brand-text-muted shrink-0" />}
-                      <span className="font-semibold truncate text-brand-text">
+                      <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text">
                         {g.teams.length > 1 ? 'Mehrere' : (shortNames.get(g.teams[0]?.id) ?? '?')}
                       </span>
                     </div>
-                      <div className="truncate text-brand-text-muted leading-tight">
-                        {g.opponent || '–'}
-                      </div>
-                      <div className="flex items-center gap-1 text-brand-text-subtle leading-tight">
+                    <div className="hidden @tile-md:block truncate text-brand-text-muted leading-tight">
+                      {g.opponent || '–'}
+                    </div>
+                    <div className="flex items-center gap-1 text-brand-text-subtle leading-tight">
                       <span>{g.time}</span>
                       {g.slot_count > 0 && (
-                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
+                        <div className={`hidden @tile-sm:inline-flex w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
                       )}
                     </div>
                   </button>
@@ -625,6 +626,7 @@ export default function KalenderPage() {
                   <button
                     key={`t-${t.id}`}
                     onPointerDown={e => e.stopPropagation()}
+                    title={`${shortNames.get(t.team_id) ?? (t.title || 'Training')} · ${t.start_time}`}
                     onClick={() => {
                       if (user && (user.role === 'admin' || hasFunction(user, 'trainer'))) {
                         setEditingTraining(t)
@@ -640,17 +642,17 @@ export default function KalenderPage() {
                   >
                     <div className="flex items-center gap-1 mb-0.5">
                       <Dumbbell className={`w-3 h-3 shrink-0 ${getEventColors('training').pillIcon}`} />
-                      <span className="font-semibold truncate text-brand-text">
+                      <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text">
                         {shortNames.get(t.team_id) ?? (t.title || 'Training')}
                       </span>
                     </div>
-                    <div className="leading-tight">&nbsp;</div>
+                    <div className="hidden @tile-md:block leading-tight">&nbsp;</div>
                     <div className="flex items-center gap-1.5 text-brand-text-subtle leading-tight">
                       <span>{t.start_time}</span>
-                      <span className="flex items-center gap-0.5 text-green-600">
+                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-green-600">
                         <Check className="w-2.5 h-2.5" />{t.confirmed_count}
                       </span>
-                      <span className="flex items-center gap-0.5 text-brand-danger">
+                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
                         <X className="w-2.5 h-2.5" />{t.declined_count}
                       </span>
                     </div>

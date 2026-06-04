@@ -36,9 +36,14 @@ export default {
       fontFamily: {
         sans: ['"Hanken Grotesk"', 'sans-serif'],
       },
+      containers: {
+        'tile-sm': '80px',
+        'tile-md': '120px',
+      },
     },
   },
   plugins: [
     require('@tailwindcss/forms'),
+    require('@tailwindcss/container-queries'),
   ],
 }
