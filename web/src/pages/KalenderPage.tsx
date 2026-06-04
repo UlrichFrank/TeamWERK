@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Home, MapPin, Calendar, Plus, Dumbbell, RefreshCw, Check, X } from 'lucide-react'
+import { Home, Plane, Calendar, Plus, Dumbbell, RefreshCw, Check, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -512,7 +512,7 @@ export default function KalenderPage() {
           </select>
           {([
             ['heim',      'Heim',       <Home className="w-3.5 h-3.5" />],
-            ['auswärts',  'Auswärts',   <MapPin className="w-3.5 h-3.5" />],
+            ['auswärts',  'Auswärts',   <Plane className="w-3.5 h-3.5" />],
             ['generisch', 'Sonstiges',  <Calendar className="w-3.5 h-3.5" />],
             ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
           ] as [string, string, React.ReactNode][]).map(([type, label, icon]) => (
@@ -605,7 +605,7 @@ export default function KalenderPage() {
                       {g.event_type === 'heim'
                         ? <Home className="w-3 h-3 text-brand-text-muted shrink-0" />
                         : g.event_type === 'auswärts'
-                        ? <MapPin className="w-3 h-3 text-brand-text-muted shrink-0" />
+                        ? <Plane className="w-3 h-3 text-brand-text-muted shrink-0" />
                         : <Calendar className="w-3 h-3 text-brand-text-muted shrink-0" />}
                       <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text">
                         {g.teams.length > 1 ? 'Mehrere' : (shortNames.get(g.teams[0]?.id) ?? '?')}
@@ -767,7 +767,7 @@ export default function KalenderPage() {
                     >
                       <div className="font-semibold flex items-center gap-2 text-brand-text">
                         {type === 'heim' && <><Home className="w-4 h-4" /> Heimspiel</>}
-                        {type === 'auswärts' && <><MapPin className="w-4 h-4" /> Auswärtsspiel</>}
+                        {type === 'auswärts' && <><Plane className="w-4 h-4" /> Auswärtsspiel</>}
                         {type === 'generisch' && <><Calendar className="w-4 h-4" /> Sonstiges Event</>}
                       </div>
                       <div className="text-xs text-brand-text-muted mt-1">

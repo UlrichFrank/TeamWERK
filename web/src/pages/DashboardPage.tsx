@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   Zap, Calendar, BarChart2, Users, Car, UserPlus,
   CircleDot, ArrowRight, Download, ChevronDown, ChevronRight,
-  Home, MapPin, MapPinned, Check
+  Home, Plane, MapPinned, Check
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -144,7 +144,7 @@ function NextGamesList({ games }: { games: Game[] }) {
                 <span className="text-sm font-medium inline-flex items-center gap-1">
                   {g.isHome
                     ? <Home className="w-4 h-4 flex-shrink-0" />
-                    : <MapPin className="w-4 h-4 flex-shrink-0" />
+                    : <Plane className="w-4 h-4 flex-shrink-0" />
                   }
                   {g.eventType === 'generisch' ? g.opponent : `Team vs ${g.opponent}`}
                 </span>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, X, HelpCircle, Dumbbell, Home, MapPin, Calendar, Settings, History } from 'lucide-react'
+import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, Settings, History } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -216,7 +216,7 @@ export default function TerminePage() {
           </select>
           {([
             ['heim',      'Heim',       <Home className="w-3.5 h-3.5" />],
-            ['auswärts',  'Auswärts',   <MapPin className="w-3.5 h-3.5" />],
+            ['auswärts',  'Auswärts',   <Plane className="w-3.5 h-3.5" />],
             ['generisch', 'Sonstiges',  <Calendar className="w-3.5 h-3.5" />],
             ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
           ] as [string, string, React.ReactNode][]).map(([type, label, icon]) => (
@@ -366,7 +366,7 @@ export default function TerminePage() {
             // Game card
             const g = t.data
             const key = `g-${g.id}`
-            const Icon = g.event_type === 'generisch' ? Calendar : (g.is_home ? Home : MapPin)
+            const Icon = g.event_type === 'generisch' ? Calendar : (g.is_home ? Home : Plane)
             const label = g.event_type === 'generisch'
               ? g.opponent
               : (g.is_home ? `Heim: ${g.opponent}` : `Auswärts: ${g.opponent}`)

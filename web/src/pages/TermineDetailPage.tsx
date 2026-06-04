@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Check, ChevronLeft, Clock, Dumbbell, HelpCircle, Home, MapPin, MessageCircle, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, Clock, Dumbbell, HelpCircle, Home, MapPin, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -237,7 +237,7 @@ export default function TermineDetailPage() {
 
   // --- Game detail ---
   const g = game!
-  const Icon = g.is_home ? Home : MapPin
+  const Icon = g.is_home ? Home : Plane
   const gameLabel = g.event_type === 'generisch'
     ? g.opponent
     : (g.is_home ? `Heimspiel vs. ${g.opponent}` : `Auswärtsspiel vs. ${g.opponent}`)
