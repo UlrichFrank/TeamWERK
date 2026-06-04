@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Home, MapPin, Calendar, Plus, Dumbbell, RefreshCw } from 'lucide-react'
+import { Home, MapPin, Calendar, Plus, Dumbbell, RefreshCw, Check, X } from 'lucide-react'
 import { api } from '../lib/api'
+import { getEventColors } from '../lib/eventColors'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -50,6 +51,8 @@ interface SlotPreview {
 interface Team {
   id: number
   name: string
+  age_class: string
+  gender: string
   is_active: boolean
 }
 
@@ -57,11 +60,39 @@ const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 
-function trafficColor(filledCount: number, totalCount: number, slotCount: number): string {
-  if (slotCount === 0) return 'bg-brand-danger'
-  if (totalCount > 0 && filledCount >= totalCount) return 'bg-brand-success'
-  if (filledCount > 0) return 'bg-brand-warning'
+function dutyDotColor(filled: number, total: number): string {
+  if (total === 0) return 'bg-brand-danger'
+  const pct = filled / total
+  if (pct >= 0.9) return 'bg-brand-success'
+  if (pct >= 0.3) return 'bg-brand-warning'
   return 'bg-brand-danger'
+}
+
+function buildTeamShortNames(teams: Team[]): Map<number, string> {
+  const gLetter = (g: string) => g === 'f' ? 'w' : g === 'mixed' ? 'g' : 'm'
+  const aLetter = (a: string) => { const m = a.match(/^([A-F])/i); return m ? m[1].toUpperCase() : a.charAt(0) }
+
+  const groups = new Map<string, Team[]>()
+  for (const t of teams) {
+    const key = `${t.gender}|${t.age_class}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(t)
+  }
+
+  const result = new Map<number, string>()
+  for (const [, group] of groups) {
+    const multi = group.length > 1
+    for (const t of group) {
+      const base = `${gLetter(t.gender)}${aLetter(t.age_class)}`
+      if (multi) {
+        const numMatch = t.name.match(/\d+$/)
+        result.set(t.id, `${base}${numMatch ? numMatch[0] : ''}`)
+      } else {
+        result.set(t.id, base)
+      }
+    }
+  }
+  return result
 }
 
 function padDate(year: number, month: number, day: number): string {
@@ -247,6 +278,8 @@ export default function KalenderPage() {
       return next
     })
   }
+
+  const shortNames = useMemo(() => buildTeamShortNames(teams), [teams])
 
   const safeGames = Array.isArray(games) ? games : []
   const monthGames = safeGames.filter(g => {
@@ -489,7 +522,7 @@ export default function KalenderPage() {
               aria-label={label}
               className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
                 filterTypes.has(type)
-                  ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                  ? getEventColors(type).filter
                   : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
               }`}
             >
@@ -546,9 +579,9 @@ export default function KalenderPage() {
             const canEdit = user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer'))
             const canRegen = canEdit && dayGames.length > 0
             return (
-              <div key={day} className={`group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle ${isToday ? 'bg-brand-yellow/20' : ''}`}>
+              <div key={day} className="group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`text-xs ${isToday ? 'font-bold text-brand-text' : 'text-brand-text-subtle'}`}>{day}</span>
+                  <span className={`text-xs leading-none flex items-center justify-center ${isToday ? 'font-bold w-5 h-5 rounded-full bg-brand-yellow text-brand-black' : 'text-brand-text-subtle'}`}>{day}</span>
                   {canEdit && (
                     <button
                       onPointerDown={e => e.stopPropagation()}
@@ -565,16 +598,27 @@ export default function KalenderPage() {
                     key={g.id}
                     onPointerDown={e => e.stopPropagation()}
                     onClick={() => navigate(`/kalender/${g.id}`)}
-                    className="w-full text-left mb-1 p-1.5 rounded-md text-xs bg-brand-border-subtle hover:bg-brand-border transition-colors border border-brand-border-subtle"
+                    className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${getEventColors(g.event_type).pill}`}
                   >
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${trafficColor(g.filled_count, g.total_count, g.slot_count)}`} />
-                      <span className="font-semibold truncate text-brand-text">{g.teams.length > 1 ? 'Mehrere Teams' : g.teams[0]?.name}</span>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      {g.event_type === 'heim'
+                        ? <Home className="w-3 h-3 text-brand-text-muted shrink-0" />
+                        : g.event_type === 'auswärts'
+                        ? <MapPin className="w-3 h-3 text-brand-text-muted shrink-0" />
+                        : <Calendar className="w-3 h-3 text-brand-text-muted shrink-0" />}
+                      <span className="font-semibold truncate text-brand-text">
+                        {g.teams.length > 1 ? 'Mehrere' : (shortNames.get(g.teams[0]?.id) ?? '?')}
+                      </span>
                     </div>
-                    <div className="truncate text-brand-text-muted leading-tight">
-                      {g.event_type === 'generisch' ? (g.opponent || '–') : `Team vs ${g.opponent || '–'}`}
+                      <div className="truncate text-brand-text-muted leading-tight">
+                        {g.opponent || '–'}
+                      </div>
+                      <div className="flex items-center gap-1 text-brand-text-subtle leading-tight">
+                      <span>{g.time}</span>
+                      {g.slot_count > 0 && (
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
+                      )}
                     </div>
-                    <div className="text-brand-text-subtle leading-tight">{g.time}</div>
                   </button>
                 ))}
                 {dayTrainings.map(t => (
@@ -591,16 +635,24 @@ export default function KalenderPage() {
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
-                        : 'bg-blue-50 hover:bg-blue-100 border-blue-200'
+                        : getEventColors('training').pill
                     }`}
                   >
                     <div className="flex items-center gap-1 mb-0.5">
-                      <Dumbbell className="w-3 h-3 text-blue-500 shrink-0" />
-                      <span className="font-semibold truncate text-brand-text">{t.title || 'Training'}</span>
+                      <Dumbbell className={`w-3 h-3 shrink-0 ${getEventColors('training').pillIcon}`} />
+                      <span className="font-semibold truncate text-brand-text">
+                        {shortNames.get(t.team_id) ?? (t.title || 'Training')}
+                      </span>
                     </div>
-                    <div className="text-brand-text-subtle leading-tight">{t.start_time}</div>
-                    <div className="text-brand-text-subtle leading-tight text-[10px]">
-                      {t.confirmed_count}✓ {t.declined_count}✗
+                    <div className="leading-tight">&nbsp;</div>
+                    <div className="flex items-center gap-1.5 text-brand-text-subtle leading-tight">
+                      <span>{t.start_time}</span>
+                      <span className="flex items-center gap-0.5 text-green-600">
+                        <Check className="w-2.5 h-2.5" />{t.confirmed_count}
+                      </span>
+                      <span className="flex items-center gap-0.5 text-brand-danger">
+                        <X className="w-2.5 h-2.5" />{t.declined_count}
+                      </span>
                     </div>
                   </button>
                 ))}

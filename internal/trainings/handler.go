@@ -858,9 +858,9 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var teamID int
+	var teamID, seasonID int
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+		`SELECT team_id, season_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID, &seasonID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -875,16 +875,17 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get all team members with their RSVP and attendance
+	// Get all kader members for this team/season with RSVP and attendance
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT m.id, m.first_name || ' ' || m.last_name,
 		       tr.status, ta.present
 		FROM members m
-		JOIN team_memberships tm ON tm.member_id = m.id AND tm.team_id = ?
+		JOIN kader_members km ON km.member_id = m.id
+		JOIN kader k ON k.id = km.kader_id AND k.team_id = ? AND k.season_id = ?
 		LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 		LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
 		GROUP BY m.id
-		ORDER BY m.last_name, m.first_name`, teamID, sessionID, sessionID)
+		ORDER BY m.last_name, m.first_name`, teamID, seasonID, sessionID, sessionID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "GetAttendances: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

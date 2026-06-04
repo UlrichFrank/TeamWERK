@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell, Home, MapPin, Calendar, Settings, History } from 'lucide-react'
 import { api } from '../lib/api'
+import { getEventColors } from '../lib/eventColors'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -204,7 +205,7 @@ export default function TerminePage() {
               aria-label={label}
               className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
                 filterTypes.has(type)
-                  ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                  ? getEventColors(type).filter
                   : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
               }`}
             >
@@ -256,13 +257,15 @@ export default function TerminePage() {
                 <div
                   key={key}
                   onClick={isTrainer ? () => navigate(`/termine/training/${s.id}`) : undefined}
-                  className={`bg-brand-surface-card rounded-xl shadow border-t-4 p-4 transition-shadow ${
-                    s.status === 'cancelled' ? 'border-brand-border opacity-60' : 'border-brand-yellow'
+                  className={`rounded-xl shadow border-t-4 p-4 transition-shadow ${
+                    s.status === 'cancelled'
+                      ? 'bg-brand-surface-card border-brand-border opacity-60'
+                      : `${getEventColors('training').card.bg} ${getEventColors('training').card.border}`
                   } ${isTrainer ? 'cursor-pointer hover:shadow-md' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-3 min-w-0">
-                      <Dumbbell className="w-5 h-5 mt-0.5 text-brand-text-muted shrink-0" />
+                      <Dumbbell className={`w-5 h-5 mt-0.5 shrink-0 ${s.status === 'cancelled' ? 'text-brand-text-muted' : getEventColors('training').card.icon}`} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`font-semibold text-brand-text ${s.status === 'cancelled' ? 'line-through' : ''}`}>
@@ -346,7 +349,7 @@ export default function TerminePage() {
             // Game card
             const g = t.data
             const key = `g-${g.id}`
-            const Icon = g.is_home ? Home : MapPin
+            const Icon = g.event_type === 'generisch' ? Calendar : (g.is_home ? Home : MapPin)
             const label = g.event_type === 'generisch'
               ? g.opponent
               : (g.is_home ? `Heim: ${g.opponent}` : `Auswärts: ${g.opponent}`)
@@ -354,11 +357,11 @@ export default function TerminePage() {
               <div
                 key={key}
                 onClick={isTrainer ? () => navigate(`/termine/spiel/${g.id}`) : undefined}
-                className={`bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 transition-shadow ${isTrainer ? 'cursor-pointer hover:shadow-md' : ''}`}
+                className={`rounded-xl shadow border-t-4 p-4 transition-shadow ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border} ${isTrainer ? 'cursor-pointer hover:shadow-md' : ''}`}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-start gap-3 min-w-0">
-                    <Icon className="w-5 h-5 mt-0.5 text-brand-text-muted shrink-0" />
+                    <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${getEventColors(g.event_type).card.icon}`} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-brand-text">{fmtDate(g.date)}</span>
