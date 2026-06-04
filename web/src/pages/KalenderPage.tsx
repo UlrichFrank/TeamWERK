@@ -365,6 +365,8 @@ export default function KalenderPage() {
         start_time: trainingStartTime,
         end_time: trainingEndTime,
         location: trainingLocation,
+        rsvp_opt_out: gameRsvpOptOut,
+        rsvp_require_reason: gameRsvpRequireReason,
       })
       await loadTrainings()
       closeDialog()
@@ -394,6 +396,8 @@ export default function KalenderPage() {
         end_time: trainingEndTime,
         valid_from: seriesValidFrom,
         valid_until: seriesValidUntil,
+        rsvp_opt_out: gameRsvpOptOut,
+        rsvp_require_reason: gameRsvpRequireReason,
       })
       await loadTrainings()
       closeDialog()
@@ -944,6 +948,20 @@ export default function KalenderPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="space-y-2 pt-2 border-t border-brand-border-subtle">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={gameRsvpOptOut === 1}
+                        onChange={e => setGameRsvpOptOut(e.target.checked ? 1 : 0)}
+                        className="w-4 h-4 accent-brand-yellow" />
+                      <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={gameRsvpRequireReason === 1}
+                        onChange={e => setGameRsvpRequireReason(e.target.checked ? 1 : 0)}
+                        className="w-4 h-4 accent-brand-yellow" />
+                      <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
+                    </label>
+                  </div>
                   {createError && <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>}
                 </div>
                 <div className="flex gap-2 pt-4">
@@ -1001,6 +1019,20 @@ export default function KalenderPage() {
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig bis *</label>
                     <input type="date" value={seriesValidUntil} onChange={e => setSeriesValidUntil(e.target.value)} className={INPUT_WIZ} />
+                  </div>
+                  <div className="space-y-2 pt-2 border-t border-brand-border-subtle">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={gameRsvpOptOut === 1}
+                        onChange={e => setGameRsvpOptOut(e.target.checked ? 1 : 0)}
+                        className="w-4 h-4 accent-brand-yellow" />
+                      <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={gameRsvpRequireReason === 1}
+                        onChange={e => setGameRsvpRequireReason(e.target.checked ? 1 : 0)}
+                        className="w-4 h-4 accent-brand-yellow" />
+                      <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
+                    </label>
                   </div>
                   {createError && <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>}
                 </div>

@@ -717,14 +717,22 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	err = h.db.QueryRowContext(r.Context(), `
 		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.location, ts.note, ts.status, ts.cancel_reason,
-		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0),
+		       CASE WHEN ts.rsvp_opt_out = 1
+		            THEN COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
+		                 + (SELECT COUNT(*) FROM team_memberships tm2
+		                    WHERE tm2.team_id = ts.team_id
+		                    AND NOT EXISTS (SELECT 1 FROM training_responses tr2 WHERE tr2.training_id=ts.id AND tr2.member_id=tm2.member_id))
+		            ELSE COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
+		       END,
 		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='maybe'),0),
-		       (SELECT status FROM training_responses WHERE training_id=ts.id AND member_id=?)
+		       (SELECT status FROM training_responses WHERE training_id=ts.id AND member_id=?),
+		       ts.rsvp_opt_out, ts.rsvp_require_reason
 		FROM training_sessions ts WHERE ts.id = ?`, memberID, sessionID).Scan(
 		&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 		&s.Location, &s.Note, &s.Status, &s.CancelReason,
-		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP)
+		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP,
+		&s.RsvpOptOut, &s.RsvpRequireReason)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -740,6 +748,9 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if myRSVP.Valid {
 		s.MyRSVP = &myRSVP.String
+	} else if s.RsvpOptOut == 1 {
+		confirmed := "confirmed"
+		s.MyRSVP = &confirmed
 	}
 
 	// Load responses
@@ -898,9 +909,9 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var teamID, seasonID int
+	var teamID, seasonID, rsvpOptOut int
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID, &seasonID)
+		`SELECT team_id, season_id, rsvp_opt_out FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID, &seasonID, &rsvpOptOut)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -917,46 +928,13 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isTrainerLike {
-		// Allow if user is a kader member of this team/season
-		myMemberID, err := h.memberIDForUser(r.Context(), claims.UserID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		allowed := false
-		if myMemberID > 0 {
-			var count int
-			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM kader_members km JOIN kader k ON k.id = km.kader_id WHERE km.member_id = ? AND k.team_id = ? AND k.season_id = ?`,
-				myMemberID, teamID, seasonID).Scan(&count)
-			allowed = count > 0
-		}
-		if !allowed && claims.IsParent {
-			var count int
-			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM family_links fl JOIN members m ON m.id = fl.member_id JOIN kader_members km ON km.member_id = m.id JOIN kader k ON k.id = km.kader_id WHERE fl.parent_user_id = ? AND k.team_id = ? AND k.season_id = ?`,
-				claims.UserID, teamID, seasonID).Scan(&count)
-			allowed = count > 0
-		}
-		if !allowed {
+		var count int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM user_accessible_teams WHERE user_id = ? AND team_id = ? AND season_id = ?`,
+			claims.UserID, teamID, seasonID).Scan(&count)
+		if count == 0 {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
-		}
-	}
-
-	// Pre-fetch child member IDs for reason visibility
-	myMemberID, _ := h.memberIDForUser(r.Context(), claims.UserID)
-	childMemberIDs := map[int]bool{}
-	if claims.IsParent {
-		childRows, err := h.db.QueryContext(r.Context(),
-			`SELECT member_id FROM family_links WHERE parent_user_id = ?`, claims.UserID)
-		if err == nil {
-			defer childRows.Close()
-			for childRows.Next() {
-				var cid int
-				childRows.Scan(&cid)
-				childMemberIDs[cid] = true
-			}
 		}
 	}
 
@@ -964,8 +942,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		SELECT m.id, m.first_name || ' ' || m.last_name,
 		       tr.status, tr.reason, ta.present
 		FROM members m
-		JOIN kader_members km ON km.member_id = m.id
-		JOIN kader k ON k.id = km.kader_id AND k.team_id = ? AND k.season_id = ?
+		JOIN team_memberships tm ON tm.member_id = m.id AND tm.team_id = ? AND tm.season_id = ?
 		LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 		LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
 		GROUP BY m.id
@@ -985,10 +962,11 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&item.MemberID, &item.MemberName, &rsvp, &reason, &present)
 		if rsvp.Valid {
 			item.RSVPStatus = &rsvp.String
+		} else if rsvpOptOut == 1 {
+			confirmed := "confirmed"
+			item.RSVPStatus = &confirmed
 		}
-		canSeeReason := isTrainerLike ||
-			(myMemberID > 0 && item.MemberID == myMemberID) ||
-			childMemberIDs[item.MemberID]
+		canSeeReason := isTrainerLike
 		if canSeeReason && reason.Valid && reason.String != "" {
 			item.Reason = &reason.String
 		}

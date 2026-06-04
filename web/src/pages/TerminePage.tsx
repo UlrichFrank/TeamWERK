@@ -310,12 +310,12 @@ export default function TerminePage() {
               return (
                 <div
                   key={key}
-                  onClick={isTrainer ? () => navigate(`/termine/training/${s.id}`) : undefined}
-                  className={`rounded-xl shadow border-t-4 p-4 transition-shadow ${
+                  onClick={() => navigate(`/termine/training/${s.id}`)}
+                  className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${
                     s.status === 'cancelled'
                       ? 'bg-brand-surface-card border-brand-border opacity-60'
                       : `${getEventColors('training').card.bg} ${getEventColors('training').card.border}`
-                  } ${isTrainer ? 'cursor-pointer hover:shadow-md' : ''}`}
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-3 min-w-0">
@@ -405,8 +405,8 @@ export default function TerminePage() {
             return (
               <div
                 key={key}
-                onClick={isTrainer ? () => navigate(`/termine/spiel/${g.id}`) : undefined}
-                className={`rounded-xl shadow border-t-4 p-4 transition-shadow ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border} ${isTrainer ? 'cursor-pointer hover:shadow-md' : ''}`}
+                onClick={() => navigate(`/termine/spiel/${g.id}`)}
+                className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-start gap-3 min-w-0">

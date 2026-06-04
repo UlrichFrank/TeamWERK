@@ -187,6 +187,7 @@ func serve() {
 		r.Get("/api/training-sessions", trainingH.ListSessions)
 		r.Get("/api/training-sessions/{id}", trainingH.GetSession)
 		r.Post("/api/training-sessions/{id}/respond", trainingH.Respond)
+		r.Get("/api/training-sessions/{id}/attendances", trainingH.GetAttendances)
 
 		// Games RSVP (user-facing; /my must come before /{id})
 		r.Get("/api/games/my", gameH.ListMyGames)
@@ -207,7 +208,6 @@ func serve() {
 			r.Post("/api/training-sessions", trainingH.CreateSession)
 			r.Put("/api/training-sessions/{id}", trainingH.UpdateSession)
 			r.Delete("/api/training-sessions/{id}", trainingH.DeleteSession)
-			r.Get("/api/training-sessions/{id}/attendances", trainingH.GetAttendances)
 			r.Post("/api/training-sessions/{id}/attendances", trainingH.SaveAttendances)
 			r.Post("/api/duty-slots", dutyH.CreateSlot)
 			r.Put("/api/duty-slots/{id}", dutyH.UpdateSlot)

@@ -128,7 +128,8 @@ export default function TermineDetailPage() {
   }, [id, type])
 
   useLiveUpdates((event) => {
-    if ((isTraining && event === 'trainings') || (!isTraining && event === 'games')) load()
+    if (isTraining && event === 'trainings') { load(); loadAttendances() }
+    else if (!isTraining && event === 'games') load()
   })
 
   const toggleAttendance = async (memberId: number, newValue: boolean) => {
@@ -153,7 +154,7 @@ export default function TermineDetailPage() {
   // --- Training detail ---
   if (isTraining && session) {
     const noRsvpCount = attendances.length - session.confirmed_count - session.declined_count - session.maybe_count
-    const showAttendanceCol = isTrainer && isPast
+    const showAttendanceCol = isPast
 
     const tableRows: TableRow[] = attendances.map(a => ({
       member_id: a.member_id,
@@ -363,8 +364,9 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
                         <input
                           type="checkbox"
                           checked={attendanceMap[row.member_id] ?? false}
-                          onChange={e => onToggleAttendance(row.member_id, e.target.checked)}
-                          className="w-4 h-4 rounded border-brand-border"
+                          onChange={isTrainer ? e => onToggleAttendance(row.member_id, e.target.checked) : undefined}
+                          readOnly={!isTrainer}
+                          className={`w-4 h-4 rounded border-brand-border ${isTrainer ? '' : 'cursor-default opacity-60'}`}
                         />
                       </td>
                     )}
