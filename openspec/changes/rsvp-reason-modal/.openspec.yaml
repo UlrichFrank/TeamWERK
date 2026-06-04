@@ -1,2 +1,4 @@
 schema: spec-driven
 created: 2026-06-04
+status: archived
+archived_reason: Superseded by rsvp-event-config which implements modal logic with configurable rsvp_require_reason flag

@@ -37,6 +37,8 @@ interface Session {
   maybe_count: number
   my_rsvp: string | null
   children_rsvp?: ChildRSVP[]
+  rsvp_opt_out: number
+  rsvp_require_reason: number
 }
 
 interface Game {
@@ -54,6 +56,8 @@ interface Game {
   maybe_count: number
   my_rsvp: string | null
   children_rsvp?: ChildRSVP[]
+  rsvp_opt_out: number
+  rsvp_require_reason: number
 }
 
 interface Team {
@@ -360,22 +364,26 @@ export default function TerminePage() {
                       {isParent ? (
                         (s.children_rsvp ?? []).map(child => {
                           const childKey = `t-${s.id}-${child.member_id}`
+                          const handleChildDecline = (status: 'declined' | 'maybe') =>
+                            s.rsvp_require_reason
+                              ? openReasonModal('training', s.id, status, child.member_id)
+                              : respondTraining(s.id, status, '', child.member_id)
                           return (
                             <div key={child.member_id} className="space-y-1.5">
                               <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
                               <div className="flex gap-2">
-                                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === childKey} onClick={() => respondTraining(s.id, child.rsvp === 'confirmed' ? 'maybe' : 'confirmed', '', child.member_id)} />
-                                <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === childKey} onClick={() => openReasonModal('training', s.id, 'maybe', child.member_id)} />
-                                <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === childKey} onClick={() => openReasonModal('training', s.id, 'declined', child.member_id)} />
+                                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === childKey} onClick={() => respondTraining(s.id, 'confirmed', '', child.member_id)} />
+                                <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
+                                <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                               </div>
                             </div>
                           )
                         })
                       ) : (
                         <div className="flex gap-2">
-                          <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === key} onClick={() => respondTraining(s.id, s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed')} />
-                          <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === key} onClick={() => openReasonModal('training', s.id, 'maybe')} />
-                          <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === key} onClick={() => openReasonModal('training', s.id, 'declined')} />
+                          <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === key} onClick={() => respondTraining(s.id, s.rsvp_opt_out ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                          <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'maybe') : respondTraining(s.id, 'maybe')} />
+                          <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'declined') : respondTraining(s.id, 'declined')} />
                         </div>
                       )}
                       {rsvpErrors[key] && (
@@ -435,22 +443,26 @@ export default function TerminePage() {
                     {isParent ? (
                       (g.children_rsvp ?? []).map(child => {
                         const childKey = `g-${g.id}-${child.member_id}`
+                        const handleChildDecline = (status: 'declined' | 'maybe') =>
+                          g.rsvp_require_reason
+                            ? openReasonModal('game', g.id, status, child.member_id)
+                            : respondGame(g.id, status, '', child.member_id)
                         return (
                           <div key={child.member_id} className="space-y-1.5">
                             <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
                             <div className="flex gap-2">
-                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === childKey} onClick={() => respondGame(g.id, child.rsvp === 'confirmed' ? 'maybe' : 'confirmed', '', child.member_id)} />
-                              <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === childKey} onClick={() => openReasonModal('game', g.id, 'maybe', child.member_id)} />
-                              <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === childKey} onClick={() => openReasonModal('game', g.id, 'declined', child.member_id)} />
+                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === childKey} onClick={() => respondGame(g.id, 'confirmed', '', child.member_id)} />
+                              <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
+                              <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                             </div>
                           </div>
                         )
                       })
                     ) : (
                       <div className="flex gap-2">
-                        <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed')} />
-                        <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === key} onClick={() => openReasonModal('game', g.id, 'maybe')} />
-                        <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === key} onClick={() => openReasonModal('game', g.id, 'declined')} />
+                        <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === key} onClick={() => respondGame(g.id, g.rsvp_opt_out ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                        <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
+                        <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
                       </div>
                     )}
                     {rsvpErrors[key] && (

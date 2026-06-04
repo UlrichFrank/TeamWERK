@@ -36,5 +36,5 @@
 - [x] 7.1 `go build ./...` erfolgreich
 - [x] 7.2 `pnpm --prefix web build` erfolgreich (TypeScript ohne Fehler)
 - [x] 7.3 Migration lokal testen: `make migrate-up` und `make migrate-down` ohne Fehler
-- [ ] 7.4 Manuell prüfen: Test-User mit `sportliche_leitung` anlegen, Kader-Seite öffnet, alle Teams sichtbar
-- [ ] 7.5 Manuell prüfen: Test-User mit `kassierer` anlegen, Funktion im Profil sichtbar
+- [x] 7.4 Manuell prüfen: Test-User mit `sportliche_leitung` anlegen, Kader-Seite öffnet, alle Teams sichtbar
+- [x] 7.5 Manuell prüfen: Test-User mit `kassierer` anlegen, Funktion im Profil sichtbar

@@ -22,5 +22,5 @@
 
 ## 6. Verifikation
 
-- [ ] 6.1 Alle betroffenen Seiten in DevTools bei 375px prüfen — kein horizontaler Overflow, korrekte Stapelung
-- [ ] 6.2 Desktop (> 640px) unverändert sicherstellen
+- [x] 6.1 Alle betroffenen Seiten in DevTools bei 375px prüfen — kein horizontaler Overflow, korrekte Stapelung
+- [x] 6.2 Desktop (> 640px) unverändert sicherstellen

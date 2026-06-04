@@ -162,6 +162,8 @@ export default function KalenderPage() {
   const [seriesWeekday, setSeriesWeekday] = useState(1)
   const [seriesValidFrom, setSeriesValidFrom] = useState('')
   const [seriesValidUntil, setSeriesValidUntil] = useState('')
+  const [gameRsvpOptOut, setGameRsvpOptOut] = useState(0)
+  const [gameRsvpRequireReason, setGameRsvpRequireReason] = useState(1)
   // Inline edit modal
   const [editingTraining, setEditingTraining] = useState<Training | null>(null)
 
@@ -329,6 +331,8 @@ export default function KalenderPage() {
         team_ids: selectedTeamIds,
         event_type: eventType,
         template_id: selectedTemplate ?? undefined,
+        rsvp_opt_out: gameRsvpOptOut,
+        rsvp_require_reason: gameRsvpRequireReason,
         slots: slots.map(s => ({
           duty_type_id: s.duty_type_id,
           event_time: s.event_time,
@@ -486,6 +490,8 @@ export default function KalenderPage() {
     setSeriesWeekday(1)
     setSeriesValidFrom('')
     setSeriesValidUntil('')
+    setGameRsvpOptOut(0)
+    setGameRsvpRequireReason(1)
   }
 
   useEscapeKey(
@@ -761,6 +767,7 @@ export default function KalenderPage() {
                       key={type}
                       onClick={() => {
                         setEventType(type)
+                        setGameRsvpRequireReason(type === 'generisch' ? 0 : 1)
                         setWizardStep(2)
                       }}
                       className="w-full p-4 border-2 border-brand-border rounded-lg text-left hover:bg-brand-border-subtle hover:border-brand-yellow transition-colors"
@@ -869,6 +876,20 @@ export default function KalenderPage() {
                         ))}
                       </select>
                     )}
+                  </div>
+                  <div className="space-y-2 pt-2 border-t border-brand-border-subtle">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={gameRsvpOptOut === 1}
+                        onChange={e => setGameRsvpOptOut(e.target.checked ? 1 : 0)}
+                        className="w-4 h-4 accent-brand-yellow" />
+                      <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={gameRsvpRequireReason === 1}
+                        onChange={e => setGameRsvpRequireReason(e.target.checked ? 1 : 0)}
+                        className="w-4 h-4 accent-brand-yellow" />
+                      <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
+                    </label>
                   </div>
                   {createError && <p className="text-brand-danger text-sm">{createError}</p>}
                 </div>

@@ -22,6 +22,8 @@ interface Series {
   note: string
   team_name: string
   session_count: number
+  rsvp_opt_out: number
+  rsvp_require_reason: number
 }
 
 interface Team { id: number; name: string }
@@ -50,6 +52,8 @@ type SeriesModal = {
   valid_from: string
   valid_until: string
   note: string
+  rsvp_opt_out: number
+  rsvp_require_reason: number
 }
 
 type SessionModal = {
@@ -117,14 +121,14 @@ export default function AdminTrainingsPage() {
     setError('')
     setEditScope('this_and_following')
     setEditFromDate('')
-    setSeriesModal({ team_id: 0, season_id: activeSeasonId, name: '', location: '', day_of_week: 0, start_time: '18:00', end_time: '19:30', valid_from: '', valid_until: '', note: '' })
+    setSeriesModal({ team_id: 0, season_id: activeSeasonId, name: '', location: '', day_of_week: 0, start_time: '18:00', end_time: '19:30', valid_from: '', valid_until: '', note: '', rsvp_opt_out: 0, rsvp_require_reason: 1 })
   }
 
   const openEditSeries = (s: Series) => {
     setError('')
     setEditScope('this_and_following')
     setEditFromDate('')
-    setSeriesModal({ id: s.id, team_id: s.team_id, season_id: s.season_id, name: s.name, location: s.location, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, valid_from: s.valid_from.slice(0, 10), valid_until: s.valid_until.slice(0, 10), note: s.note })
+    setSeriesModal({ id: s.id, team_id: s.team_id, season_id: s.season_id, name: s.name, location: s.location, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, valid_from: s.valid_from.slice(0, 10), valid_until: s.valid_until.slice(0, 10), note: s.note, rsvp_opt_out: s.rsvp_opt_out ?? 0, rsvp_require_reason: s.rsvp_require_reason ?? 1 })
   }
 
   const openNewSession = () => {
@@ -158,6 +162,8 @@ export default function AdminTrainingsPage() {
           valid_from: seriesModal.valid_from,
           valid_until: seriesModal.valid_until,
           note: seriesModal.note,
+          rsvp_opt_out: seriesModal.rsvp_opt_out,
+          rsvp_require_reason: seriesModal.rsvp_require_reason,
           scope: editScope,
           from_date: editScope === 'this_and_following' ? editFromDate : undefined,
         })
@@ -486,6 +492,31 @@ export default function AdminTrainingsPage() {
                   <input value={seriesModal.note}
                     onChange={e => setSeriesModal(f => f ? { ...f, note: e.target.value } : f)}
                     className={INPUT} placeholder="Hinweis für alle Termine dieser Serie" />
+                </div>
+                <div className="sm:col-span-2 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={seriesModal.rsvp_opt_out === 1}
+                      disabled={!isNewSeries}
+                      onChange={e => setSeriesModal(f => f ? { ...f, rsvp_opt_out: e.target.checked ? 1 : 0 } : f)}
+                      className="w-4 h-4 accent-brand-yellow"
+                    />
+                    <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={seriesModal.rsvp_require_reason === 1}
+                      disabled={!isNewSeries}
+                      onChange={e => setSeriesModal(f => f ? { ...f, rsvp_require_reason: e.target.checked ? 1 : 0 } : f)}
+                      className="w-4 h-4 accent-brand-yellow"
+                    />
+                    <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
+                  </label>
+                  {!isNewSeries && (
+                    <p className="text-xs text-brand-text-subtle">Diese Einstellungen gelten nur für neue Termine.</p>
+                  )}
                 </div>
               </div>
 

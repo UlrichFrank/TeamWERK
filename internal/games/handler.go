@@ -424,15 +424,17 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/games
 func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Date       string  `json:"date"`
-		Time       string  `json:"time"`
-		EndTime    *string `json:"end_time"`
-		Opponent   string  `json:"opponent"`
-		TeamIDs    []int   `json:"team_ids"`
-		EventType  string  `json:"event_type"`
-		SeasonID   int     `json:"season_id"`
-		TemplateID *int    `json:"template_id"`
-		Slots      []struct {
+		Date              string  `json:"date"`
+		Time              string  `json:"time"`
+		EndTime           *string `json:"end_time"`
+		Opponent          string  `json:"opponent"`
+		TeamIDs           []int   `json:"team_ids"`
+		EventType         string  `json:"event_type"`
+		SeasonID          int     `json:"season_id"`
+		TemplateID        *int    `json:"template_id"`
+		RsvpOptOut        int     `json:"rsvp_opt_out"`
+		RsvpRequireReason *int    `json:"rsvp_require_reason"`
+		Slots             []struct {
 			DutyTypeID int    `json:"duty_type_id"`
 			EventTime  string `json:"event_time"`
 			SlotsCount int    `json:"slots_count"`
@@ -480,6 +482,13 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 
 	isHome := req.EventType == "heim"
 
+	rsvpRequireReason := 1
+	if req.RsvpRequireReason != nil {
+		rsvpRequireReason = *req.RsvpRequireReason
+	} else if req.EventType == "generisch" {
+		rsvpRequireReason = 0
+	}
+
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -496,8 +505,8 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		endTimeVal = *req.EndTime
 	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO games (season_id, opponent, date, time, end_time, is_home, event_type, template_id) VALUES (?,?,?,?,?,?,?,?)`,
-		req.SeasonID, req.Opponent, req.Date, req.Time, endTimeVal, isHome, req.EventType, templateIDVal)
+		`INSERT INTO games (season_id, opponent, date, time, end_time, is_home, event_type, template_id, rsvp_opt_out, rsvp_require_reason) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		req.SeasonID, req.Opponent, req.Date, req.Time, endTimeVal, isHome, req.EventType, templateIDVal, req.RsvpOptOut, rsvpRequireReason)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1454,20 +1463,22 @@ type childRSVP struct {
 }
 
 type gameListItem struct {
-	ID             int          `json:"id"`
-	Date           string       `json:"date"`
-	Time           string       `json:"time"`
-	Opponent       string       `json:"opponent"`
-	EventType      string       `json:"event_type"`
-	IsHome         bool         `json:"is_home"`
-	SeasonID       int          `json:"season_id"`
-	TeamNames      string       `json:"team_names"`
-	TeamIDs        []int        `json:"team_ids"`
-	ConfirmedCount int          `json:"confirmed_count"`
-	DeclinedCount  int          `json:"declined_count"`
-	MaybeCount     int          `json:"maybe_count"`
-	MyRSVP         *string      `json:"my_rsvp"`
-	ChildrenRSVP   []childRSVP  `json:"children_rsvp,omitempty"`
+	ID                int         `json:"id"`
+	Date              string      `json:"date"`
+	Time              string      `json:"time"`
+	Opponent          string      `json:"opponent"`
+	EventType         string      `json:"event_type"`
+	IsHome            bool        `json:"is_home"`
+	SeasonID          int         `json:"season_id"`
+	TeamNames         string      `json:"team_names"`
+	TeamIDs           []int       `json:"team_ids"`
+	ConfirmedCount    int         `json:"confirmed_count"`
+	DeclinedCount     int         `json:"declined_count"`
+	MaybeCount        int         `json:"maybe_count"`
+	MyRSVP            *string     `json:"my_rsvp"`
+	ChildrenRSVP      []childRSVP `json:"children_rsvp,omitempty"`
+	RsvpOptOut        int         `json:"rsvp_opt_out"`
+	RsvpRequireReason int         `json:"rsvp_require_reason"`
 }
 
 // memberIDForUser returns the member_id for a user, or 0 if not found.
@@ -1548,10 +1559,20 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		SELECT DISTINCT g.id, g.date, g.time, g.opponent, g.event_type, g.is_home, g.season_id,
 		       (SELECT GROUP_CONCAT(t.name, ', ') FROM game_teams gt2 JOIN teams t ON t.id = gt2.team_id WHERE gt2.game_id = g.id),
 		       (SELECT GROUP_CONCAT(gt3.team_id) FROM game_teams gt3 WHERE gt3.game_id = g.id),
-		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0),
+		       CASE WHEN g.rsvp_opt_out = 1
+		            THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
+		                   SELECT COUNT(*) FROM game_teams gt4
+		                   JOIN team_memberships tm ON tm.team_id = gt4.team_id
+		                   JOIN members m ON m.id = tm.member_id
+		                   WHERE gt4.game_id = g.id AND tm.season_id = g.season_id
+		                   AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = m.id)
+		                 )
+		            ELSE COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0)
+		       END,
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
-		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?)
+		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?),
+		       g.rsvp_opt_out, g.rsvp_require_reason
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
 		WHERE %s AND g.date >= ? AND g.date <= ?
@@ -1572,7 +1593,8 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var myRSVP sql.NullString
 		var teamNames, teamIDsCSV sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
-			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP); err != nil {
+			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP,
+			&g.RsvpOptOut, &g.RsvpRequireReason); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -1589,6 +1611,9 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		}
 		if myRSVP.Valid {
 			g.MyRSVP = &myRSVP.String
+		} else if g.RsvpOptOut == 1 {
+			confirmed := "confirmed"
+			g.MyRSVP = &confirmed
 		}
 		result = append(result, g)
 	}
