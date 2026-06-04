@@ -7,6 +7,7 @@ import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
+
 import TrainingEditModal from '../components/TrainingEditModal'
 
 interface Training {
@@ -124,6 +125,7 @@ export default function KalenderPage() {
   const [loading, setLoading] = useState(true)
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
+  const compact = useCompactHeader(950)
 
   // Day-regen dialog
   const [showDayRegen, setShowDayRegen] = useState(false)
@@ -486,8 +488,6 @@ export default function KalenderPage() {
     setSeriesValidUntil('')
   }
 
-  const { ref: filterRef, compact } = useCompactHeader(450)
-
   useEscapeKey(
     showDayRegen ? () => setShowDayRegen(false) :
     showCreate ? closeDialog :
@@ -499,7 +499,7 @@ export default function KalenderPage() {
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
-        <div ref={filterRef} className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+        <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
           <select
             value={filterTeamId ?? ''}
             onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
@@ -534,11 +534,11 @@ export default function KalenderPage() {
         {user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer')) && (
           <button
             onClick={() => setShowCreate(true)}
-            aria-label="Event anlegen"
+            aria-label="Event"
             className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'}`}
           >
             <Plus className="w-3.5 h-3.5" />
-            {!compact && <span>Event anlegen</span>}
+            {!compact && <span>Event</span>}
           </button>
         )}
       </div>

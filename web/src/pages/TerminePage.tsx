@@ -7,6 +7,7 @@ import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
+
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 
 function fmtDate(iso: string) {
@@ -99,8 +100,7 @@ export default function TerminePage() {
   const [reasons, setReasons] = useState<Record<string, string>>({})
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
-
-  const { ref: filterRef, compact } = useCompactHeader(450)
+  const compact = useCompactHeader(950)
 
   const toggleType = (type: string) => {
     setFilterTypes(prev => {
@@ -182,7 +182,7 @@ export default function TerminePage() {
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Termine</h1>
-        <div ref={filterRef} className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+        <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
           <select
             value={filterTeamId ?? ''}
             onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
