@@ -1447,20 +1447,27 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 
 // ── Game RSVP ────────────────────────────────────────────────────────────────
 
+type childRSVP struct {
+	MemberID int     `json:"member_id"`
+	Name     string  `json:"name"`
+	RSVP     *string `json:"rsvp"`
+}
+
 type gameListItem struct {
-	ID             int     `json:"id"`
-	Date           string  `json:"date"`
-	Time           string  `json:"time"`
-	Opponent       string  `json:"opponent"`
-	EventType      string  `json:"event_type"`
-	IsHome         bool    `json:"is_home"`
-	SeasonID       int     `json:"season_id"`
-	TeamNames      string  `json:"team_names"`
-	TeamIDs        []int   `json:"team_ids"`
-	ConfirmedCount int     `json:"confirmed_count"`
-	DeclinedCount  int     `json:"declined_count"`
-	MaybeCount     int     `json:"maybe_count"`
-	MyRSVP         *string `json:"my_rsvp"`
+	ID             int          `json:"id"`
+	Date           string       `json:"date"`
+	Time           string       `json:"time"`
+	Opponent       string       `json:"opponent"`
+	EventType      string       `json:"event_type"`
+	IsHome         bool         `json:"is_home"`
+	SeasonID       int          `json:"season_id"`
+	TeamNames      string       `json:"team_names"`
+	TeamIDs        []int        `json:"team_ids"`
+	ConfirmedCount int          `json:"confirmed_count"`
+	DeclinedCount  int          `json:"declined_count"`
+	MaybeCount     int          `json:"maybe_count"`
+	MyRSVP         *string      `json:"my_rsvp"`
+	ChildrenRSVP   []childRSVP  `json:"children_rsvp,omitempty"`
 }
 
 // memberIDForUser returns the member_id for a user, or 0 if not found.
@@ -1585,6 +1592,13 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, g)
 	}
+
+	if claims.IsParent && len(result) > 0 {
+		if err := h.attachChildrenRSVPToGames(r.Context(), claims.UserID, result); err != nil {
+			fmt.Fprintf(os.Stderr, "ListMyGames children_rsvp: %v\n", err)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
@@ -1674,12 +1688,10 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 }
 
 type gameResponse struct {
-	MemberID    int     `json:"member_id"`
-	MemberName  string  `json:"member_name"`
-	Status      string  `json:"status"`
-	Reason      *string `json:"reason"`
-	RespondedBy int     `json:"responded_by"`
-	RespondedAt string  `json:"responded_at"`
+	MemberID   int     `json:"member_id"`
+	MemberName string  `json:"member_name"`
+	Status     *string `json:"status"`
+	Reason     *string `json:"reason"`
 }
 
 // GET /api/games/{id}/responses
@@ -1713,15 +1725,18 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Return all kader members for the game's teams/season, LEFT JOIN responses
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT gr.member_id,
-		       m.first_name || ' ' || m.last_name,
-		       gr.status, gr.reason, gr.responded_by, gr.responded_at
-		FROM game_responses gr
-		JOIN members m ON m.id = gr.member_id
-		WHERE gr.game_id = ?
-		ORDER BY m.last_name, m.first_name`, gameID)
+		SELECT DISTINCT m.id, m.first_name || ' ' || m.last_name,
+		       gr.status, gr.reason
+		FROM members m
+		JOIN kader_members km ON km.member_id = m.id
+		JOIN kader k ON k.id = km.kader_id AND k.season_id = (SELECT season_id FROM games WHERE id = ?)
+		JOIN game_teams gt ON gt.game_id = ? AND gt.team_id = k.team_id
+		LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
+		ORDER BY m.last_name, m.first_name`, gameID, gameID, gameID)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "ListGameResponses: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -1730,13 +1745,16 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 	result := []gameResponse{}
 	for rows.Next() {
 		var resp gameResponse
-		var reason string
-		rows.Scan(&resp.MemberID, &resp.MemberName, &resp.Status, &reason, &resp.RespondedBy, &resp.RespondedAt)
+		var status, reason sql.NullString
+		rows.Scan(&resp.MemberID, &resp.MemberName, &status, &reason)
+		if status.Valid {
+			resp.Status = &status.String
+		}
 		canSeeReason := isTrainerLike ||
 			(memberID > 0 && resp.MemberID == memberID) ||
 			childMemberIDs[resp.MemberID]
-		if canSeeReason && reason != "" {
-			resp.Reason = &reason
+		if canSeeReason && reason.Valid && reason.String != "" {
+			resp.Reason = &reason.String
 		}
 		result = append(result, resp)
 	}
@@ -1763,4 +1781,74 @@ func audiencesToDB(audiences []string) *string {
 	b, _ := json.Marshal(audiences)
 	s := string(b)
 	return &s
+}
+
+// attachChildrenRSVPToGames fills ChildrenRSVP on each item for parent users.
+func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID int, items []gameListItem) error {
+	childRows, err := h.db.QueryContext(ctx,
+		`SELECT m.id, m.first_name || ' ' || m.last_name
+		 FROM family_links fl JOIN members m ON m.id = fl.member_id
+		 WHERE fl.parent_user_id = ?
+		 ORDER BY m.last_name, m.first_name`, parentUserID)
+	if err != nil {
+		return err
+	}
+	defer childRows.Close()
+	var allChildren []childRSVP
+	for childRows.Next() {
+		var c childRSVP
+		childRows.Scan(&c.MemberID, &c.Name)
+		allChildren = append(allChildren, c)
+	}
+	if len(allChildren) == 0 {
+		return nil
+	}
+
+	gameIDs := make([]any, len(items))
+	gamePlaceholders := make([]string, len(items))
+	for i, g := range items {
+		gameIDs[i] = g.ID
+		gamePlaceholders[i] = "?"
+	}
+	childMemberIDs := make([]any, len(allChildren))
+	childPlaceholders := make([]string, len(allChildren))
+	for i, c := range allChildren {
+		childMemberIDs[i] = c.MemberID
+		childPlaceholders[i] = "?"
+	}
+	respRows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT game_id, member_id, status
+		FROM game_responses
+		WHERE game_id IN (%s) AND member_id IN (%s)`,
+		strings.Join(gamePlaceholders, ","),
+		strings.Join(childPlaceholders, ",")),
+		append(gameIDs, childMemberIDs...)...)
+	if err != nil {
+		return err
+	}
+	defer respRows.Close()
+
+	rsvpMap := map[int]map[int]string{}
+	for respRows.Next() {
+		var gid, mid int
+		var status string
+		respRows.Scan(&gid, &mid, &status)
+		if rsvpMap[gid] == nil {
+			rsvpMap[gid] = map[int]string{}
+		}
+		rsvpMap[gid][mid] = status
+	}
+
+	for i := range items {
+		children := make([]childRSVP, len(allChildren))
+		copy(children, allChildren)
+		for j := range children {
+			if status, ok := rsvpMap[items[i].ID][children[j].MemberID]; ok {
+				s := status
+				children[j].RSVP = &s
+			}
+		}
+		items[i].ChildrenRSVP = children
+	}
+	return nil
 }

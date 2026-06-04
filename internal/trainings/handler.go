@@ -521,24 +521,31 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type childRSVP struct {
+	MemberID int     `json:"member_id"`
+	Name     string  `json:"name"`
+	RSVP     *string `json:"rsvp"`
+}
+
 type sessionListItem struct {
-	ID             int     `json:"id"`
-	SeriesID       *int    `json:"series_id,omitempty"`
-	TeamID         int     `json:"team_id"`
-	TeamName       string  `json:"team_name"`
-	SeasonID       int     `json:"season_id"`
-	Title          string  `json:"title"`
-	Date           string  `json:"date"`
-	StartTime      string  `json:"start_time"`
-	EndTime        string  `json:"end_time"`
-	Location       string  `json:"location"`
-	Note           string  `json:"note"`
-	Status         string  `json:"status"`
-	CancelReason   string  `json:"cancel_reason,omitempty"`
-	ConfirmedCount int     `json:"confirmed_count"`
-	DeclinedCount  int     `json:"declined_count"`
-	MaybeCount     int     `json:"maybe_count"`
-	MyRSVP         *string `json:"my_rsvp"`
+	ID             int          `json:"id"`
+	SeriesID       *int         `json:"series_id,omitempty"`
+	TeamID         int          `json:"team_id"`
+	TeamName       string       `json:"team_name"`
+	SeasonID       int          `json:"season_id"`
+	Title          string       `json:"title"`
+	Date           string       `json:"date"`
+	StartTime      string       `json:"start_time"`
+	EndTime        string       `json:"end_time"`
+	Location       string       `json:"location"`
+	Note           string       `json:"note"`
+	Status         string       `json:"status"`
+	CancelReason   string       `json:"cancel_reason,omitempty"`
+	ConfirmedCount int          `json:"confirmed_count"`
+	DeclinedCount  int          `json:"declined_count"`
+	MaybeCount     int          `json:"maybe_count"`
+	MyRSVP         *string      `json:"my_rsvp"`
+	ChildrenRSVP   []childRSVP  `json:"children_rsvp,omitempty"`
 }
 
 // GET /api/training-sessions
@@ -639,6 +646,13 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, s)
 	}
+
+	if claims.IsParent && len(result) > 0 {
+		if err := h.attachChildrenRSVPToSessions(r.Context(), claims.UserID, result); err != nil {
+			fmt.Fprintf(os.Stderr, "ListSessions children_rsvp: %v\n", err)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
@@ -847,6 +861,7 @@ type attendanceItem struct {
 	MemberID   int     `json:"member_id"`
 	MemberName string  `json:"member_name"`
 	RSVPStatus *string `json:"rsvp_status"`
+	Reason     *string `json:"reason"`
 	Present    *bool   `json:"present"`
 }
 
@@ -869,16 +884,60 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
-	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+
+	isTrainerLike, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	// Get all kader members for this team/season with RSVP and attendance
+	if !isTrainerLike {
+		// Allow if user is a kader member of this team/season
+		myMemberID, err := h.memberIDForUser(r.Context(), claims.UserID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		allowed := false
+		if myMemberID > 0 {
+			var count int
+			h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM kader_members km JOIN kader k ON k.id = km.kader_id WHERE km.member_id = ? AND k.team_id = ? AND k.season_id = ?`,
+				myMemberID, teamID, seasonID).Scan(&count)
+			allowed = count > 0
+		}
+		if !allowed && claims.IsParent {
+			var count int
+			h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM family_links fl JOIN members m ON m.id = fl.member_id JOIN kader_members km ON km.member_id = m.id JOIN kader k ON k.id = km.kader_id WHERE fl.parent_user_id = ? AND k.team_id = ? AND k.season_id = ?`,
+				claims.UserID, teamID, seasonID).Scan(&count)
+			allowed = count > 0
+		}
+		if !allowed {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	// Pre-fetch child member IDs for reason visibility
+	myMemberID, _ := h.memberIDForUser(r.Context(), claims.UserID)
+	childMemberIDs := map[int]bool{}
+	if claims.IsParent {
+		childRows, err := h.db.QueryContext(r.Context(),
+			`SELECT member_id FROM family_links WHERE parent_user_id = ?`, claims.UserID)
+		if err == nil {
+			defer childRows.Close()
+			for childRows.Next() {
+				var cid int
+				childRows.Scan(&cid)
+				childMemberIDs[cid] = true
+			}
+		}
+	}
+
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT m.id, m.first_name || ' ' || m.last_name,
-		       tr.status, ta.present
+		       tr.status, tr.reason, ta.present
 		FROM members m
 		JOIN kader_members km ON km.member_id = m.id
 		JOIN kader k ON k.id = km.kader_id AND k.team_id = ? AND k.season_id = ?
@@ -896,13 +955,19 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	result := []attendanceItem{}
 	for rows.Next() {
 		var item attendanceItem
-		var rsvp sql.NullString
+		var rsvp, reason sql.NullString
 		var present sql.NullInt64
-		rows.Scan(&item.MemberID, &item.MemberName, &rsvp, &present)
+		rows.Scan(&item.MemberID, &item.MemberName, &rsvp, &reason, &present)
 		if rsvp.Valid {
 			item.RSVPStatus = &rsvp.String
 		}
-		if present.Valid {
+		canSeeReason := isTrainerLike ||
+			(myMemberID > 0 && item.MemberID == myMemberID) ||
+			childMemberIDs[item.MemberID]
+		if canSeeReason && reason.Valid && reason.String != "" {
+			item.Reason = &reason.String
+		}
+		if isTrainerLike && present.Valid {
 			b := present.Int64 == 1
 			item.Present = &b
 		}
@@ -983,4 +1048,74 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 	h.hub.Broadcast("trainings")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// attachChildrenRSVPToSessions fills ChildrenRSVP on each item for parent users.
+func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID int, items []sessionListItem) error {
+	childRows, err := h.db.QueryContext(ctx,
+		`SELECT m.id, m.first_name || ' ' || m.last_name
+		 FROM family_links fl JOIN members m ON m.id = fl.member_id
+		 WHERE fl.parent_user_id = ?
+		 ORDER BY m.last_name, m.first_name`, parentUserID)
+	if err != nil {
+		return err
+	}
+	defer childRows.Close()
+	var allChildren []childRSVP
+	for childRows.Next() {
+		var c childRSVP
+		childRows.Scan(&c.MemberID, &c.Name)
+		allChildren = append(allChildren, c)
+	}
+	if len(allChildren) == 0 {
+		return nil
+	}
+
+	sessionIDs := make([]any, len(items))
+	sessionPlaceholders := make([]string, len(items))
+	for i, s := range items {
+		sessionIDs[i] = s.ID
+		sessionPlaceholders[i] = "?"
+	}
+	childMemberIDs := make([]any, len(allChildren))
+	childPlaceholders := make([]string, len(allChildren))
+	for i, c := range allChildren {
+		childMemberIDs[i] = c.MemberID
+		childPlaceholders[i] = "?"
+	}
+	respRows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT training_id, member_id, status
+		FROM training_responses
+		WHERE training_id IN (%s) AND member_id IN (%s)`,
+		strings.Join(sessionPlaceholders, ","),
+		strings.Join(childPlaceholders, ",")),
+		append(sessionIDs, childMemberIDs...)...)
+	if err != nil {
+		return err
+	}
+	defer respRows.Close()
+
+	rsvpMap := map[int]map[int]string{}
+	for respRows.Next() {
+		var sid, mid int
+		var status string
+		respRows.Scan(&sid, &mid, &status)
+		if rsvpMap[sid] == nil {
+			rsvpMap[sid] = map[int]string{}
+		}
+		rsvpMap[sid][mid] = status
+	}
+
+	for i := range items {
+		children := make([]childRSVP, len(allChildren))
+		copy(children, allChildren)
+		for j := range children {
+			if status, ok := rsvpMap[items[i].ID][children[j].MemberID]; ok {
+				s := status
+				children[j].RSVP = &s
+			}
+		}
+		items[i].ChildrenRSVP = children
+	}
+	return nil
 }

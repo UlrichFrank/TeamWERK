@@ -58,6 +58,7 @@ interface AttendanceItem {
   member_id: number
   member_name: string
   rsvp_status: string | null
+  reason: string | null
   present: boolean | null
 }
 
@@ -123,7 +124,7 @@ export default function TermineDetailPage() {
 
   useEffect(() => {
     load()
-    if (isTrainer && isTraining) loadAttendances()
+    if (isTraining) loadAttendances()
   }, [id, type])
 
   useLiveUpdates((event) => {
@@ -151,25 +152,16 @@ export default function TermineDetailPage() {
 
   // --- Training detail ---
   if (isTraining && session) {
-    const responseMap = Object.fromEntries(session.responses.map(r => [r.member_id, r]))
     const noRsvpCount = attendances.length - session.confirmed_count - session.declined_count - session.maybe_count
     const showAttendanceCol = isTrainer && isPast
 
-    const tableRows: TableRow[] = isTrainer
-      ? attendances.map(a => ({
-          member_id: a.member_id,
-          member_name: a.member_name,
-          rsvp_status: a.rsvp_status,
-          reason: responseMap[a.member_id]?.reason ?? null,
-          present: a.present,
-        }))
-      : session.responses.map(r => ({
-          member_id: r.member_id,
-          member_name: r.member_name,
-          rsvp_status: r.status,
-          reason: r.reason,
-          present: null,
-        }))
+    const tableRows: TableRow[] = attendances.map(a => ({
+      member_id: a.member_id,
+      member_name: a.member_name,
+      rsvp_status: a.rsvp_status,
+      reason: a.reason,
+      present: a.present,
+    }))
 
     return (
       <div className="max-w-2xl space-y-4">

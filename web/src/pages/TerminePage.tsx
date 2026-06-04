@@ -15,6 +15,12 @@ function fmtDate(iso: string) {
   return `${WEEKDAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
 }
 
+interface ChildRSVP {
+  member_id: number
+  name: string
+  rsvp: string | null
+}
+
 interface Session {
   id: number
   date: string
@@ -30,6 +36,7 @@ interface Session {
   declined_count: number
   maybe_count: number
   my_rsvp: string | null
+  children_rsvp?: ChildRSVP[]
 }
 
 interface Game {
@@ -46,6 +53,7 @@ interface Game {
   declined_count: number
   maybe_count: number
   my_rsvp: string | null
+  children_rsvp?: ChildRSVP[]
 }
 
 interface Team {
@@ -91,6 +99,7 @@ export default function TerminePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer')
+  const isParent = user?.isParent === true
 
   const [termine, setTermine] = useState<Termin[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -98,6 +107,7 @@ export default function TerminePage() {
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
   const [reasons, setReasons] = useState<Record<string, string>>({})
+  const [rsvpErrors, setRsvpErrors] = useState<Record<string, string>>({})
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
   const compact = useCompactHeader(950)
@@ -148,31 +158,41 @@ export default function TerminePage() {
     return true
   })
 
-  const respondTraining = async (sessionId: number, status: string, reason = '') => {
-    const key = `t-${sessionId}`
+  const respondTraining = async (sessionId: number, status: string, reason = '', memberId?: number) => {
+    const key = memberId ? `t-${sessionId}-${memberId}` : `t-${sessionId}`
     setRsvpLoading(key)
+    setRsvpErrors(prev => { const n = { ...prev }; delete n[`t-${sessionId}`]; return n })
     try {
-      await api.post(`/training-sessions/${sessionId}/respond`, { status, reason })
-      setTermine(prev => prev.map(t =>
-        t.kind === 'training' && t.data.id === sessionId
-          ? { ...t, data: { ...t.data, my_rsvp: status } }
-          : t
-      ))
+      await api.post(`/training-sessions/${sessionId}/respond`, { status, reason, ...(memberId ? { member_id: memberId } : {}) })
+      setTermine(prev => prev.map(t => {
+        if (t.kind !== 'training' || t.data.id !== sessionId) return t
+        if (memberId) {
+          return { ...t, data: { ...t.data, children_rsvp: (t.data.children_rsvp ?? []).map(c => c.member_id === memberId ? { ...c, rsvp: status } : c) } }
+        }
+        return { ...t, data: { ...t.data, my_rsvp: status } }
+      }))
+    } catch {
+      setRsvpErrors(prev => ({ ...prev, [`t-${sessionId}`]: 'Fehler beim Speichern. Bitte nochmal versuchen.' }))
     } finally {
       setRsvpLoading(null)
     }
   }
 
-  const respondGame = async (gameId: number, status: string, reason = '') => {
-    const key = `g-${gameId}`
+  const respondGame = async (gameId: number, status: string, reason = '', memberId?: number) => {
+    const key = memberId ? `g-${gameId}-${memberId}` : `g-${gameId}`
     setRsvpLoading(key)
+    setRsvpErrors(prev => { const n = { ...prev }; delete n[`g-${gameId}`]; return n })
     try {
-      await api.post(`/games/${gameId}/respond`, { status, reason })
-      setTermine(prev => prev.map(t =>
-        t.kind === 'game' && t.data.id === gameId
-          ? { ...t, data: { ...t.data, my_rsvp: status } }
-          : t
-      ))
+      await api.post(`/games/${gameId}/respond`, { status, reason, ...(memberId ? { member_id: memberId } : {}) })
+      setTermine(prev => prev.map(t => {
+        if (t.kind !== 'game' || t.data.id !== gameId) return t
+        if (memberId) {
+          return { ...t, data: { ...t.data, children_rsvp: (t.data.children_rsvp ?? []).map(c => c.member_id === memberId ? { ...c, rsvp: status } : c) } }
+        }
+        return { ...t, data: { ...t.data, my_rsvp: status } }
+      }))
+    } catch {
+      setRsvpErrors(prev => ({ ...prev, [`g-${gameId}`]: 'Fehler beim Speichern. Bitte nochmal versuchen.' }))
     } finally {
       setRsvpLoading(null)
     }
@@ -307,39 +327,35 @@ export default function TerminePage() {
 
                   {s.status === 'active' && !isTrainer && (
                     <div className="mt-3 space-y-2" onClick={e => e.stopPropagation()}>
-                      <div className="flex gap-2">
-                        <RsvpButton
-                          label="Zusagen"
-                          icon={<Check className="w-4 h-4" />}
-                          active={s.my_rsvp === 'confirmed'}
-                          activeClass="bg-green-600 text-white border-green-600"
-                          disabled={rsvpLoading === key}
-                          onClick={() => respondTraining(s.id, s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed')}
-                        />
-                        <RsvpButton
-                          label="Vielleicht"
-                          icon={<HelpCircle className="w-4 h-4" />}
-                          active={s.my_rsvp === 'maybe'}
-                          activeClass="bg-brand-yellow text-brand-black border-brand-yellow"
-                          disabled={rsvpLoading === key}
-                          onClick={() => respondTraining(s.id, 'maybe', reasons[key] ?? '')}
-                        />
-                        <RsvpButton
-                          label="Absagen"
-                          icon={<X className="w-4 h-4" />}
-                          active={s.my_rsvp === 'declined'}
-                          activeClass="bg-brand-danger text-white border-brand-danger"
-                          disabled={rsvpLoading === key}
-                          onClick={() => respondTraining(s.id, 'declined', reasons[key] ?? '')}
-                        />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Begründung für Absage / Vielleicht (optional)"
-                        value={reasons[key] ?? ''}
-                        onChange={e => setReasons(prev => ({ ...prev, [key]: e.target.value }))}
-                        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-                      />
+                      {isParent ? (
+                        (s.children_rsvp ?? []).map(child => {
+                          const childKey = `t-${s.id}-${child.member_id}`
+                          const reasonKey = childKey
+                          return (
+                            <div key={child.member_id} className="space-y-1.5">
+                              <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
+                              <div className="flex gap-2">
+                                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === childKey} onClick={() => respondTraining(s.id, child.rsvp === 'confirmed' ? 'maybe' : 'confirmed', '', child.member_id)} />
+                                <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === childKey} onClick={() => respondTraining(s.id, 'maybe', reasons[reasonKey] ?? '', child.member_id)} />
+                                <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === childKey} onClick={() => respondTraining(s.id, 'declined', reasons[reasonKey] ?? '', child.member_id)} />
+                              </div>
+                              <input type="text" placeholder="Begründung für Absage / Vielleicht (optional)" value={reasons[reasonKey] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [reasonKey]: e.target.value }))} className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow" />
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <>
+                          <div className="flex gap-2">
+                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === key} onClick={() => respondTraining(s.id, s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed')} />
+                            <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === key} onClick={() => respondTraining(s.id, 'maybe', reasons[key] ?? '')} />
+                            <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === key} onClick={() => respondTraining(s.id, 'declined', reasons[key] ?? '')} />
+                          </div>
+                          <input type="text" placeholder="Begründung für Absage / Vielleicht (optional)" value={reasons[key] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [key]: e.target.value }))} className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow" />
+                        </>
+                      )}
+                      {rsvpErrors[key] && (
+                        <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{rsvpErrors[key]}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -391,39 +407,35 @@ export default function TerminePage() {
 
                 {!isTrainer && (
                   <div className="mt-3 space-y-2" onClick={e => e.stopPropagation()}>
-                    <div className="flex gap-2">
-                      <RsvpButton
-                        label="Zusagen"
-                        icon={<Check className="w-4 h-4" />}
-                        active={g.my_rsvp === 'confirmed'}
-                        activeClass="bg-green-600 text-white border-green-600"
-                        disabled={rsvpLoading === key}
-                        onClick={() => respondGame(g.id, g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed')}
-                      />
-                      <RsvpButton
-                        label="Vielleicht"
-                        icon={<HelpCircle className="w-4 h-4" />}
-                        active={g.my_rsvp === 'maybe'}
-                        activeClass="bg-brand-yellow text-brand-black border-brand-yellow"
-                        disabled={rsvpLoading === key}
-                        onClick={() => respondGame(g.id, 'maybe', reasons[key] ?? '')}
-                      />
-                      <RsvpButton
-                        label="Absagen"
-                        icon={<X className="w-4 h-4" />}
-                        active={g.my_rsvp === 'declined'}
-                        activeClass="bg-brand-danger text-white border-brand-danger"
-                        disabled={rsvpLoading === key}
-                        onClick={() => respondGame(g.id, 'declined', reasons[key] ?? '')}
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Begründung für Absage / Vielleicht (optional)"
-                      value={reasons[key] ?? ''}
-                      onChange={e => setReasons(prev => ({ ...prev, [key]: e.target.value }))}
-                      className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-                    />
+                    {isParent ? (
+                      (g.children_rsvp ?? []).map(child => {
+                        const childKey = `g-${g.id}-${child.member_id}`
+                        const reasonKey = childKey
+                        return (
+                          <div key={child.member_id} className="space-y-1.5">
+                            <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
+                            <div className="flex gap-2">
+                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === childKey} onClick={() => respondGame(g.id, child.rsvp === 'confirmed' ? 'maybe' : 'confirmed', '', child.member_id)} />
+                              <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === childKey} onClick={() => respondGame(g.id, 'maybe', reasons[reasonKey] ?? '', child.member_id)} />
+                              <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === childKey} onClick={() => respondGame(g.id, 'declined', reasons[reasonKey] ?? '', child.member_id)} />
+                            </div>
+                            <input type="text" placeholder="Begründung für Absage / Vielleicht (optional)" value={reasons[reasonKey] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [reasonKey]: e.target.value }))} className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow" />
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed')} />
+                          <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={rsvpLoading === key} onClick={() => respondGame(g.id, 'maybe', reasons[key] ?? '')} />
+                          <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={rsvpLoading === key} onClick={() => respondGame(g.id, 'declined', reasons[key] ?? '')} />
+                        </div>
+                        <input type="text" placeholder="Begründung für Absage / Vielleicht (optional)" value={reasons[key] ?? ''} onChange={e => setReasons(prev => ({ ...prev, [key]: e.target.value }))} className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow" />
+                      </>
+                    )}
+                    {rsvpErrors[key] && (
+                      <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{rsvpErrors[key]}</p>
+                    )}
                   </div>
                 )}
               </div>
