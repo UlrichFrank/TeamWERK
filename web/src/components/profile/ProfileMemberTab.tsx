@@ -10,7 +10,8 @@ interface Props {
 }
 
 const CLUB_FUNCTION_LABELS: Record<string, string> = {
-  spieler: 'Spieler', trainer: 'Trainer', vorstand: 'Vorstand', vorstand_beisitzer: 'Vorstands-Beisitzer',
+  spieler: 'Spieler', trainer: 'Trainer', sportliche_leitung: 'Sportliche Leitung',
+  vorstand: 'Vorstand', vorstand_beisitzer: 'Vorstands-Beisitzer', kassierer: 'Kassierer',
 }
 
 const FIELD_LABELS: Record<string, string> = {

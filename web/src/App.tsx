@@ -91,7 +91,7 @@ export default function App() {
               <Route path="admin/verein" element={<Navigate to="/admin/einstellungen?tab=verein" replace />} />
               <Route path="admin/saisons" element={<Navigate to="/admin/einstellungen?tab=saisons" replace />} />
               <Route path="admin/altersklassen" element={<Navigate to="/admin/einstellungen?tab=altersklassen" replace />} />
-              <Route path="admin/kader" element={<RoleRoute roles={['admin','vorstand','trainer']}><AdminKaderPage /></RoleRoute>} />
+              <Route path="admin/kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
               <Route path="admin/nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="admin/diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
               <Route path="kalender" element={<KalenderPage />} />

@@ -198,7 +198,7 @@ func serve() {
 
 		// Admin + Trainer
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireClubFunction("trainer"))
+			r.Use(auth.RequireClubFunction("trainer", "sportliche_leitung"))
 			// Trainings management
 			r.Get("/api/training-series", trainingH.ListSeries)
 			r.Post("/api/training-series", trainingH.CreateSeries)
@@ -223,7 +223,7 @@ func serve() {
 
 		// Admin + Vorstand + Trainer
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireClubFunction("vorstand", "trainer"))
+			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
 			r.Post("/api/admin/kalender", gameH.CreateGame)
 			r.Put("/api/admin/kalender/{id}", gameH.UpdateGame)
 			r.Delete("/api/admin/kalender/{id}", gameH.DeleteGame)
@@ -288,7 +288,7 @@ func serve() {
 
 		// Admin + Vorstand + Trainer
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireClubFunction("vorstand", "trainer"))
+			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
 			r.Get("/api/admin/seasons", cfgH.ListSeasons)
 			// Kader (season-based teams)
 			r.Get("/api/admin/kader", kaderH.ListKader)

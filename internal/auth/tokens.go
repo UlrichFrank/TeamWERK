@@ -28,6 +28,10 @@ func (c *Claims) HasFunction(f string) bool {
 	return slices.Contains(c.ClubFunctions, f)
 }
 
+func (c *Claims) IsTrainerLike() bool {
+	return c.HasFunction("trainer") || c.HasFunction("sportliche_leitung")
+}
+
 func IssueAccessToken(secret string, userID int, email, role string, clubFunctions []string, isParent bool) (string, error) {
 	if clubFunctions == nil {
 		clubFunctions = []string{}

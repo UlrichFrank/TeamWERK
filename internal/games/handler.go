@@ -686,7 +686,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 
 	var rows *sql.Rows
 	var err error
-	if claims.HasFunction("trainer") {
+	if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
 			 FROM teams t
@@ -1505,7 +1505,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 	// Build team filter based on role
 	var teamSQL string
 	var teamArgs []any
-	if claims.Role == "admin" {
+	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
 		teamSQL = "1=1"
 	} else {
 		var conds []string

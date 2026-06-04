@@ -38,7 +38,7 @@ const navModules: NavModule[] = [
     items: [
       { to: '/admin/nutzer', label: 'Nutzerverwaltung', roles: ['admin', 'vorstand'] },
       { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand'] },
-      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer'] },
+      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer', 'sportliche_leitung'] },
       { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
       { to: '/admin/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
       { to: '/admin/einstellungen', label: 'Einstellungen', roles: ['admin', 'vorstand'] },

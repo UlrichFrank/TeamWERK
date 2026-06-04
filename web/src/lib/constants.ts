@@ -1,15 +1,19 @@
 export const CLUB_FUNCTION_OPTIONS = [
   { value: 'spieler', label: 'Spieler' },
   { value: 'trainer', label: 'Trainer' },
+  { value: 'sportliche_leitung', label: 'Sportliche Leitung' },
   { value: 'vorstand', label: 'Vorstand' },
   { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
+  { value: 'kassierer', label: 'Kassierer' },
 ] as const
 
 export const AUDIENCE_OPTIONS = [
   { value: 'spieler', label: 'Spieler' },
   { value: 'trainer', label: 'Trainer' },
+  { value: 'sportliche_leitung', label: 'Sportliche Leitung' },
   { value: 'vorstand', label: 'Vorstand' },
   { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
+  { value: 'kassierer', label: 'Kassierer' },
   { value: 'eltern', label: 'Eltern' },
 ] as const
 

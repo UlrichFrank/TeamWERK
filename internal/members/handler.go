@@ -125,7 +125,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Trainers searching specifically for trainers see all trainers club-wide
 	// (not restricted to their team) — needed for kader trainer assignment.
-	wideSearch := claims.Role == "admin" || claims.HasFunction("vorstand") ||
+	// sportliche_leitung always gets wide search (spans all teams).
+	wideSearch := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") ||
 		(claims.HasFunction("trainer") && clubFuncFilter == "trainer")
 
 	if wideSearch {
@@ -343,7 +344,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	base.ClubFunctions = parseFunctions(clubFunctionsStr)
 
 	isAdmin := claims.Role == "admin"
-	isPrivileged := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("trainer")
+	isPrivileged := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("trainer") || claims.HasFunction("sportliche_leitung")
 	isOwn := base.UserID != nil && *base.UserID == claims.UserID
 
 	if mStreet.Valid && mStreet.String != "" {
