@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
@@ -13,10 +13,33 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [tokenInvalid, setTokenInvalid] = useState(false)
+  const [nameReadOnly, setNameReadOnly] = useState(false)
 
-  if (!token) return (
+  useEffect(() => {
+    if (!token) { setLoading(false); return }
+    axios.get(`/api/auth/token-info?token=${token}`)
+      .then(r => {
+        if (r.data.first_name) {
+          setFirstName(r.data.first_name)
+          setLastName(r.data.last_name)
+          setNameReadOnly(true)
+        }
+      })
+      .catch(() => setTokenInvalid(true))
+      .finally(() => setLoading(false))
+  }, [token])
+
+  if (!token || tokenInvalid) return (
     <div className="min-h-screen flex items-center justify-center">
       <p className="text-brand-danger">Ungültiger oder abgelaufener Einladungslink.</p>
+    </div>
+  )
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-brand-text-muted text-sm">Wird geladen…</p>
     </div>
   )
 
@@ -50,11 +73,25 @@ export default function RegisterPage() {
           )}
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">Vorname</label>
-            <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required className={INPUT} />
+            <input
+              type="text"
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+              required
+              readOnly={nameReadOnly}
+              className={nameReadOnly ? `${INPUT} bg-gray-50 text-brand-text-muted cursor-default` : INPUT}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">Nachname</label>
-            <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} required className={INPUT} />
+            <input
+              type="text"
+              value={lastName}
+              onChange={e => setLastName(e.target.value)}
+              required
+              readOnly={nameReadOnly}
+              className={nameReadOnly ? `${INPUT} bg-gray-50 text-brand-text-muted cursor-default` : INPUT}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">Passwort</label>

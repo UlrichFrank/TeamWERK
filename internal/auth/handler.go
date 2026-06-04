@@ -200,8 +200,8 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 	plain, tokenHash, _ := GenerateOpaqueToken()
 	expiry := InvitationExpiry()
 	if _, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at) VALUES (?,?,?,?,?)`,
-		email, nil, "standard", tokenHash, expiry,
+		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at, first_name, last_name) VALUES (?,?,?,?,?,?,?)`,
+		email, nil, "standard", tokenHash, expiry, firstName, lastName,
 	); err != nil {
 		log.Printf("DB ERROR (ApproveMembership token for %s): %v", email, err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -311,21 +311,33 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenHash := HashToken(req.Token)
 	var id int
-	var email, role string
+	var email, role, tokenFirstName, tokenLastName string
 	var teamID sql.NullInt64
 	var expiresAt time.Time
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, email, role, team_id, expires_at FROM invitation_tokens WHERE token = ? AND used_at IS NULL`,
+		`SELECT id, email, role, team_id, expires_at, first_name, last_name FROM invitation_tokens WHERE token = ? AND used_at IS NULL`,
 		tokenHash,
-	).Scan(&id, &email, &role, &teamID, &expiresAt)
+	).Scan(&id, &email, &role, &teamID, &expiresAt, &tokenFirstName, &tokenLastName)
 	if err != nil || time.Now().After(expiresAt) {
 		http.Error(w, "invalid or expired token", http.StatusBadRequest)
+		return
+	}
+	firstName := req.FirstName
+	if firstName == "" {
+		firstName = tokenFirstName
+	}
+	lastName := req.LastName
+	if lastName == "" {
+		lastName = tokenLastName
+	}
+	if firstName == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	res, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO users (email, first_name, last_name, password, role, team_id) VALUES (?,?,?,?,?,?)`,
-		email, req.FirstName, req.LastName, string(hash), role, teamID,
+		email, firstName, lastName, string(hash), role, teamID,
 	)
 	if err != nil {
 		http.Error(w, "email already registered", http.StatusConflict)
@@ -334,6 +346,27 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	_ = res
 	h.db.ExecContext(r.Context(), `UPDATE invitation_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?`, id)
 	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *Handler) GetTokenInfo(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	tokenHash := HashToken(token)
+	var firstName, lastName string
+	var expiresAt time.Time
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT first_name, last_name, expires_at FROM invitation_tokens WHERE token = ? AND used_at IS NULL`,
+		tokenHash,
+	).Scan(&firstName, &lastName, &expiresAt)
+	if err != nil || time.Now().After(expiresAt) {
+		http.Error(w, "invalid or expired token", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"first_name": firstName, "last_name": lastName})
 }
 
 func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {

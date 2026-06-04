@@ -106,6 +106,7 @@ func serve() {
 	r.Post("/api/auth/logout", authH.Logout)
 	r.Post("/api/auth/request-membership", authH.RequestMembership)
 	r.Post("/api/auth/register", authH.Register)
+	r.Get("/api/auth/token-info", authH.GetTokenInfo)
 	r.Post("/api/auth/forgot-password", authH.ForgotPassword)
 	r.Post("/api/auth/reset-password", authH.ResetPassword)
 	r.Get("/api/profile/email/confirm", authH.ConfirmEmailChange)
