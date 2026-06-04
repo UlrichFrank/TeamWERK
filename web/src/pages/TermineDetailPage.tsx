@@ -90,12 +90,12 @@ export default function TermineDetailPage() {
   const today = new Date().toISOString().slice(0, 10)
   const isPast = date ? date.slice(0, 10) <= today : false
 
-  const load = () => {
-    setLoading(true)
+  const load = (silent = false) => {
+    if (!silent) setLoading(true)
     if (isTraining) {
       api.get(`/training-sessions/${id}`)
         .then(r => setSession(r.data))
-        .finally(() => setLoading(false))
+        .finally(() => { if (!silent) setLoading(false) })
     } else {
       Promise.all([
         api.get(`/kalender/${id}`),
@@ -105,7 +105,7 @@ export default function TermineDetailPage() {
           setGame(gameRes.data.game ?? gameRes.data)
           setGameResponses(responsesRes.data ?? [])
         })
-        .finally(() => setLoading(false))
+        .finally(() => { if (!silent) setLoading(false) })
     }
   }
 
@@ -128,8 +128,8 @@ export default function TermineDetailPage() {
   }, [id, type])
 
   useLiveUpdates((event) => {
-    if (isTraining && event === 'trainings') { load(); loadAttendances() }
-    else if (!isTraining && event === 'games') load()
+    if (isTraining && event === 'trainings') { load(true); loadAttendances() }
+    else if (!isTraining && event === 'games') load(true)
   })
 
   const toggleAttendance = async (memberId: number, newValue: boolean) => {
