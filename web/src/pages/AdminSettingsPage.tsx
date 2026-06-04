@@ -67,6 +67,17 @@ interface Season {
   is_active: boolean
 }
 
+interface KaderRow {
+  id: number
+  age_class: string
+  gender: string
+  team_number: number
+  type: 'regular' | 'qualification'
+  is_active: boolean
+}
+
+const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
+
 function generateSeasonOptions() {
   const now = new Date()
   const currentYear = now.getFullYear()
@@ -102,12 +113,24 @@ function SaisonsTab() {
   const [deleting, setDeleting] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Kader state
+  const [kader, setKader] = useState<KaderRow[]>([])
+  const [showQualiModal, setShowQualiModal] = useState(false)
+  const [qualiAgeClass, setQualiAgeClass] = useState('')
+  const [qualiGender, setQualiGender] = useState('')
+  const [qualiName, setQualiName] = useState('')
+  const [qualiCreating, setQualiCreating] = useState(false)
+  const [qualiError, setQualiError] = useState<string | null>(null)
+
+  const loadKader = () =>
+    api.get<KaderRow[]>('/admin/kader').then(r => setKader(r.data ?? [])).catch(() => setKader([]))
+
   const load = () => api.get('/admin/seasons').then(r => setSeasons(r.data ?? []))
 
   useEffect(() => {
     if (loaded) return
     setLoading(true)
-    load().finally(() => { setLoading(false); setLoaded(true) })
+    Promise.all([load(), loadKader()]).finally(() => { setLoading(false); setLoaded(true) })
   }, [loaded])
 
   const handlePreset = (label: string) => {
@@ -160,7 +183,45 @@ function SaisonsTab() {
 
   const handleActivate = async (id: number) => {
     await api.put(`/admin/seasons/${id}/activate`, {})
-    await load()
+    await Promise.all([load(), loadKader()])
+  }
+
+  const openQualiModal = (ageClass: string, gender: string) => {
+    setQualiAgeClass(ageClass)
+    setQualiGender(gender)
+    setQualiName('')
+    setQualiError(null)
+    setShowQualiModal(true)
+  }
+
+  const handleCreateQuali = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!qualiName) return
+    const activeSeason = seasons.find(s => s.is_active)
+    if (!activeSeason) return
+    setQualiCreating(true)
+    setQualiError(null)
+    try {
+      const res = await api.post<KaderRow>('/admin/kader', {
+        season_id: activeSeason.id,
+        age_class: qualiAgeClass,
+        gender: qualiGender,
+        team_number: 1,
+        type: 'qualification',
+      })
+      await api.put(`/admin/kader/${res.data.id}/activate`, {})
+      setShowQualiModal(false)
+      await loadKader()
+    } catch {
+      setQualiError('Qualifikationskader konnte nicht angelegt werden.')
+    } finally {
+      setQualiCreating(false)
+    }
+  }
+
+  const handleDeactivateQuali = async (id: number) => {
+    await api.put(`/admin/kader/${id}/deactivate`, {})
+    await loadKader()
   }
 
   const handleDelete = async (id: number) => {
@@ -177,7 +238,7 @@ function SaisonsTab() {
     }
   }
 
-  useEscapeKey(showCreate ? () => setShowCreate(false) : null)
+  useEscapeKey(showCreate ? () => setShowCreate(false) : showQualiModal ? () => setShowQualiModal(false) : null)
 
   return (
     <div>

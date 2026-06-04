@@ -57,6 +57,8 @@ type kaderRow struct {
 	TeamID             int64  `json:"team_id"`
 	DedicatedBirthYear *int   `json:"dedicated_birth_year"`
 	GamesPerSeason     int    `json:"games_per_season"`
+	Type               string `json:"type"`
+	IsActive           bool   `json:"is_active"`
 }
 
 type memberRow struct {
@@ -101,7 +103,8 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 	var k kaderRow
 	var seasonStartYear int
 	var dedicatedBirthYear sql.NullInt64
-	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &k.GamesPerSeason, &seasonStartYear)
+	var isActive int
+	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &k.GamesPerSeason, &k.Type, &isActive, &seasonStartYear)
 	if err != nil {
 		return k, 0, err
 	}
@@ -109,11 +112,13 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 		v := int(dedicatedBirthYear.Int64)
 		k.DedicatedBirthYear = &v
 	}
+	k.IsActive = isActive == 1
 	return k, seasonStartYear, nil
 }
 
 const kaderSelectSQL = `
 	SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year, k.games_per_season,
+	       k.type, k.is_active,
 	       CAST(strftime('%Y', s.start_date) AS INTEGER)
 	FROM kader k JOIN seasons s ON s.id = k.season_id`
 
@@ -124,10 +129,10 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	var args []any
 
 	if seasonID != "" {
-		query = kaderSelectSQL + ` WHERE k.season_id=? ORDER BY k.age_class, k.gender, k.team_number`
+		query = kaderSelectSQL + ` WHERE k.season_id=? AND k.is_active=1 ORDER BY k.age_class, k.gender, k.team_number`
 		args = append(args, seasonID)
 	} else {
-		query = kaderSelectSQL + ` WHERE k.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) ORDER BY k.age_class, k.gender, k.team_number`
+		query = kaderSelectSQL + ` WHERE k.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) AND k.is_active=1 ORDER BY k.age_class, k.gender, k.team_number`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
@@ -307,15 +312,19 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/kader — initialize standard kader OR create a single new kader
 func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SeasonID           int  `json:"season_id"`
+		SeasonID           int    `json:"season_id"`
 		AgeClass           string `json:"age_class"`
 		Gender             string `json:"gender"`
-		TeamNumber         int  `json:"team_number"`
-		DedicatedBirthYear *int `json:"dedicated_birth_year"`
+		TeamNumber         int    `json:"team_number"`
+		DedicatedBirthYear *int   `json:"dedicated_birth_year"`
+		Type               string `json:"type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SeasonID == 0 {
 		http.Error(w, "season_id required", http.StatusBadRequest)
 		return
+	}
+	if req.Type == "" {
+		req.Type = "regular"
 	}
 
 	// Single kader creation when age_class and gender are provided
@@ -323,7 +332,7 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 		if req.TeamNumber == 0 {
 			req.TeamNumber = 1
 		}
-		h.createSingleKader(w, r, req.SeasonID, req.AgeClass, req.Gender, req.TeamNumber, req.DedicatedBirthYear)
+		h.createSingleKader(w, r, req.SeasonID, req.AgeClass, req.Gender, req.TeamNumber, req.DedicatedBirthYear, req.Type)
 		return
 	}
 
@@ -348,15 +357,20 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 }
 
 // createSingleKader inserts one kader entry and returns 201 with the new object, or 409 on conflict.
-func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seasonID int, ageClass, gender string, teamNumber int, dedicatedBirthYear *int) {
+func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seasonID int, ageClass, gender string, teamNumber int, dedicatedBirthYear *int, kaderType string) {
 	teamID, err := ensureTeam(r.Context(), h.db, ageClass, gender, teamNumber)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Qualification kader start inactive; regular kader start active.
+	isActive := 1
+	if kaderType == "qualification" {
+		isActive = 0
+	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO kader (season_id, age_class, gender, team_number, dedicated_birth_year, team_id) VALUES (?,?,?,?,?,?)`,
-		seasonID, ageClass, gender, teamNumber, dedicatedBirthYear, teamID)
+		`INSERT INTO kader (season_id, age_class, gender, team_number, dedicated_birth_year, team_id, type, is_active) VALUES (?,?,?,?,?,?,?,?)`,
+		seasonID, ageClass, gender, teamNumber, dedicatedBirthYear, teamID, kaderType, isActive)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			http.Error(w, `{"error":"Kader existiert bereits"}`, http.StatusConflict)
@@ -384,6 +398,59 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 		MemberCount:  0,
 		Trainers:     []trainerRow{},
 	})
+}
+
+// PUT /api/admin/kader/{id}/activate
+func (h *Handler) ActivateKader(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var seasonID int
+	var ageClass, gender, kaderType string
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT season_id, age_class, gender, type FROM kader WHERE id=?`, id).
+		Scan(&seasonID, &ageClass, &gender, &kaderType)
+	if err != nil {
+		http.Error(w, "Kader nicht gefunden", http.StatusNotFound)
+		return
+	}
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(r.Context(),
+		`UPDATE kader SET is_active=0 WHERE season_id=? AND age_class=? AND gender=? AND type=?`,
+		seasonID, ageClass, gender, kaderType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = tx.ExecContext(r.Context(), `UPDATE kader SET is_active=1 WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/admin/kader/{id}/deactivate
+func (h *Handler) DeactivateKader(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	res, err := h.db.ExecContext(r.Context(), `UPDATE kader SET is_active=0 WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "Kader nicht gefunden", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DELETE /api/admin/kader/{id}

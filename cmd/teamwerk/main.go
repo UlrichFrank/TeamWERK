@@ -296,6 +296,8 @@ func serve() {
 			r.Get("/api/admin/kader/{id}", kaderH.GetKader)
 			r.Put("/api/admin/kader/{id}", kaderH.UpdateKader)
 			r.Delete("/api/admin/kader/{id}", kaderH.DeleteKader)
+			r.Put("/api/admin/kader/{id}/activate", kaderH.ActivateKader)
+			r.Put("/api/admin/kader/{id}/deactivate", kaderH.DeactivateKader)
 			r.Get("/api/admin/kader/{id}/member-suggestions", kaderH.MemberSuggestions)
 			r.Patch("/api/admin/kader/{id}/games-per-season", kaderH.PatchGamesPerSeason)
 			r.Post("/api/admin/kader/copy-from-season", kaderH.CopyFromSeason)
