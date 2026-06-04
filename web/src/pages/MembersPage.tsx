@@ -63,8 +63,10 @@ const rowStatusColor = (s: ImportRow['status']) => {
 const CLUB_FUNCTION_LABELS: Record<string, string> = {
   spieler: 'Spieler',
   trainer: 'Trainer',
+  sportliche_leitung: 'Sportliche Leitung',
   vorstand: 'Vorstand',
   vorstand_beisitzer: 'Vorstands-Beisitzer',
+  kassierer: 'Kassierer',
 }
 
 export default function MembersPage() {
