@@ -19,16 +19,16 @@ const EVENT_COLORS: Record<EventType, {
     pillIcon: 'text-brand-yellow',
   },
   'auswärts': {
-    card: { border: 'border-brand-blue', bg: 'bg-brand-blue/10', icon: 'text-brand-blue' },
-    filter: 'bg-brand-blue text-white border-brand-blue',
-    pill: 'bg-brand-blue/10 hover:bg-brand-blue/20 border-brand-blue/30',
-    pillIcon: 'text-brand-blue',
-  },
-  generisch: {
     card: { border: 'border-brand-text-muted', bg: 'bg-brand-gray/40', icon: 'text-brand-text-muted' },
     filter: 'bg-brand-gray text-brand-black border-brand-gray',
     pill: 'bg-brand-gray/60 hover:bg-brand-gray border-brand-border',
     pillIcon: 'text-brand-text-muted',
+  },
+  generisch: {
+    card: { border: 'border-brand-blue', bg: 'bg-brand-blue/10', icon: 'text-brand-blue' },
+    filter: 'bg-brand-blue text-white border-brand-blue',
+    pill: 'bg-brand-blue/10 hover:bg-brand-blue/20 border-brand-blue/30',
+    pillIcon: 'text-brand-blue',
   },
 }
 

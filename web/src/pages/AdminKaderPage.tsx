@@ -49,7 +49,8 @@ function birthYearLabel(years: number[]) {
 }
 
 export default function AdminKaderPage() {
-  const [activeSeason, setActiveSeason] = useState<Season | null>(null)
+  const [seasons, setSeasons] = useState<Season[]>([])
+  const [selectedSeason, setSelectedSeason] = useState<Season | null>(null)
   const [kaderList, setKaderList] = useState<Kader[]>([])
   const [loading, setLoading] = useState(true)
   const [showCopyModal, setShowCopyModal] = useState(false)
@@ -86,14 +87,11 @@ export default function AdminKaderPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const loadAll = async () => {
-    const [seasonsRes, kaderRes, ageClassRes] = await Promise.all([
-      api.get('/admin/seasons'),
-      api.get('/admin/kader'),
+  const loadKader = async (seasonId: number) => {
+    const [kaderRes, ageClassRes] = await Promise.all([
+      api.get(`/admin/kader?season_id=${seasonId}`),
       api.get('/admin/age-class-rules'),
     ])
-    const seasons: Season[] = seasonsRes.data ?? []
-    setActiveSeason(seasons.find(s => s.is_active) ?? null)
     const list: Kader[] = Array.isArray(kaderRes.data) ? kaderRes.data : []
     setKaderList(list)
     setPendingDedicated(new Set())
@@ -110,7 +108,16 @@ export default function AdminKaderPage() {
   }
 
   useEffect(() => {
-    loadAll().finally(() => setLoading(false))
+    const init = async () => {
+      const res = await api.get('/admin/seasons')
+      const all: Season[] = res.data ?? []
+      setSeasons(all)
+      const active = all.find(s => s.is_active) ?? null
+      const defaultSeason = active ?? all[0] ?? null
+      setSelectedSeason(defaultSeason)
+      if (defaultSeason) await loadKader(defaultSeason.id)
+    }
+    init().finally(() => setLoading(false))
   }, [])
 
   const handleRemoveMember = async (kaderId: number, memberId: number) => {
@@ -118,7 +125,7 @@ export default function AdminKaderPage() {
     setRemoving(prev => ({ ...prev, [key]: true }))
     try {
       await api.put(`/admin/kader/${kaderId}`, { members_add: [], members_remove: [memberId] })
-      await loadAll()
+      if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
     } finally {
@@ -129,7 +136,7 @@ export default function AdminKaderPage() {
   const handleAddTrainer = async (kaderId: number, memberId: number) => {
     try {
       await api.put(`/admin/kader/${kaderId}`, { trainers_add: [memberId] })
-      await loadAll()
+      if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Hinzufügen')
     }
@@ -138,18 +145,18 @@ export default function AdminKaderPage() {
   const handleRemoveTrainer = async (kaderId: number, memberId: number) => {
     try {
       await api.put(`/admin/kader/${kaderId}`, { trainers_remove: [memberId] })
-      await loadAll()
+      if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
     }
   }
 
   const handleInitialize = async () => {
-    if (!activeSeason) return
+    if (!selectedSeason) return
     setInitializing(true)
     try {
-      await api.post('/admin/kader', { season_id: activeSeason.id })
-      await loadAll()
+      await api.post('/admin/kader', { season_id: selectedSeason.id })
+      await loadKader(selectedSeason.id)
       showToast('Kader angelegt')
     } catch {
       showToast('Fehler beim Anlegen')
@@ -161,7 +168,7 @@ export default function AdminKaderPage() {
   const handleSetDedicatedYear = async (k: Kader, year: number) => {
     try {
       await api.put(`/admin/kader/${k.id}`, { dedicated_birth_year: year })
-      await loadAll()
+      if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Speichern')
     }
@@ -174,26 +181,28 @@ export default function AdminKaderPage() {
     }
     try {
       await api.put(`/admin/kader/${k.id}`, { set_dedicated_birth_year: true })
-      await loadAll()
+      if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Speichern')
     }
   }
 
   const handleCreateKader = async () => {
-    if (!createModal || !activeSeason) return
+    if (!createModal || !selectedSeason) return
+    if (!createModal.ageClass || !createModal.gender) return
+    const teamNumber = kaderList.filter(k => k.age_class === createModal.ageClass && k.gender === createModal.gender).length + 1
     setCreating(true)
     try {
       await api.post('/admin/kader', {
-        season_id: activeSeason.id,
+        season_id: selectedSeason.id,
         age_class: createModal.ageClass,
         gender: createModal.gender,
-        team_number: createModal.nextTeamNumber,
+        team_number: teamNumber,
         dedicated_birth_year: createDedicatedYear,
       })
       setCreateModal(null)
       setCreateDedicatedYear(null)
-      await loadAll()
+      await loadKader(selectedSeason.id)
       showToast('Kader angelegt')
     } catch (err: any) {
       if (err?.response?.status === 409) {
@@ -211,7 +220,7 @@ export default function AdminKaderPage() {
     try {
       await api.put(`/admin/kader/${k.id}`, { age_class: newAgeClass })
       setActiveAgeClass(newAgeClass)
-      await loadAll()
+      if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Speichern der Altersklasse')
     }
@@ -231,7 +240,7 @@ export default function AdminKaderPage() {
     try {
       await api.delete(`/admin/kader/${deleteConfirm.id}`)
       setDeleteConfirm(null)
-      await loadAll()
+      if (selectedSeason) await loadKader(selectedSeason.id)
       showToast('Kader gelöscht')
     } catch (err: any) {
       if (err?.response?.status === 409) {
@@ -275,26 +284,51 @@ export default function AdminKaderPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold">
-          Kader
-          {activeSeason && (
-            <span className="ml-2 text-base font-normal text-brand-text-muted">{activeSeason.name}</span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold">Kader</h1>
+          {seasons.length > 0 && (
+            <select
+              value={selectedSeason?.id ?? ''}
+              onChange={e => {
+                const id = parseInt(e.target.value)
+                const season = seasons.find(s => s.id === id) ?? null
+                setSelectedSeason(season)
+                if (season) loadKader(season.id)
+              }}
+              className="border border-brand-border rounded-md px-3 py-1.5 text-sm text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            >
+              {seasons.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.is_active ? ' (aktiv)' : ''}
+                </option>
+              ))}
+            </select>
           )}
-        </h1>
-        {activeSeason && kaderList.length > 0 && (
+        </div>
+        {selectedSeason && (
           <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setShowCopyModal(true)}
-              className="bg-brand-yellow text-brand-black px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
-            >
-              Aus vorheriger Saison kopieren
-            </button>
-            <button
-              onClick={() => setShowAutoAssignModal(true)}
-              className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
-            >
-              Auto-Assign
-            </button>
+            {kaderList.length > 0 && (
+              <>
+                <button
+                  onClick={() => { setCreateModal({ ageClass: '', gender: '', nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
+                  className="bg-brand-yellow text-brand-black px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
+                >
+                  + Mannschaft anlegen
+                </button>
+                <button
+                  onClick={() => setShowCopyModal(true)}
+                  className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
+                >
+                  Aus vorheriger Saison kopieren
+                </button>
+                <button
+                  onClick={() => setShowAutoAssignModal(true)}
+                  className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
+                >
+                  Auto-Assign
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -318,17 +352,17 @@ export default function AdminKaderPage() {
         </div>
       )}
 
-      {/* No active season */}
-      {!activeSeason && (
+      {/* No seasons at all */}
+      {seasons.length === 0 && (
         <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow p-8 text-center">
-          <p className="text-brand-text-muted text-sm">Bitte aktivieren Sie eine Saison unter <strong>Saisons</strong>.</p>
+          <p className="text-brand-text-muted text-sm">Bitte legen Sie eine Saison unter <strong>Einstellungen → Saisons</strong> an.</p>
         </div>
       )}
 
       {/* No kader yet */}
-      {activeSeason && kaderList.length === 0 && (
+      {selectedSeason && kaderList.length === 0 && (
         <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow p-8 text-center space-y-4">
-          <p className="text-brand-text-muted text-sm">Noch keine Kader für <strong>{activeSeason.name}</strong> vorhanden.</p>
+          <p className="text-brand-text-muted text-sm">Noch keine Kader für <strong>{selectedSeason.name}</strong> vorhanden.</p>
           <div className="flex gap-3 justify-center flex-wrap">
             <button
               onClick={handleInitialize}
@@ -336,6 +370,12 @@ export default function AdminKaderPage() {
               className="bg-brand-yellow text-brand-black px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
             >
               {initializing ? 'Anlegen…' : 'Kader für Saison anlegen'}
+            </button>
+            <button
+              onClick={() => { setCreateModal({ ageClass: '', gender: '', nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
+              className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors"
+            >
+              + Einzelne Mannschaft
             </button>
             <button
               onClick={() => setShowCopyModal(true)}
@@ -476,7 +516,7 @@ export default function AdminKaderPage() {
                   <div className="px-5 pt-2 pb-2 border-t border-brand-border-subtle">
                     <KaderMemberSearch
                       kaderId={k.id}
-                      onMemberAdded={loadAll}
+                      onMemberAdded={() => selectedSeason && loadKader(selectedSeason.id)}
                       birthYears={k.birth_years}
                     />
                   </div>
@@ -512,7 +552,7 @@ export default function AdminKaderPage() {
             })}
 
             {/* Add second team button */}
-            {canAddMore && activeSeason && (
+            {canAddMore && selectedSeason && (
               <button
                 onClick={() => {
                   const nextNum = group.length + 1
@@ -541,10 +581,42 @@ export default function AdminKaderPage() {
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h3 className="font-semibold text-base text-brand-text">
-                Neue Mannschaft — {createModal.ageClass} {GENDER_LABEL[createModal.gender]} #{createModal.nextTeamNumber}
+                {createModal.ageClass && createModal.gender
+                  ? `Neue Mannschaft — ${createModal.ageClass} ${GENDER_LABEL[createModal.gender]}`
+                  : 'Neue Mannschaft anlegen'}
               </h3>
             </div>
             <div className="px-6 py-5 space-y-3">
+              {!createModal.ageClass && (
+                <div>
+                  <label className="text-xs font-medium text-brand-text-muted block mb-1">Altersklasse</label>
+                  <select
+                    value={createModal.ageClass}
+                    onChange={e => setCreateModal(prev => prev && ({ ...prev, ageClass: e.target.value }))}
+                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  >
+                    <option value="">Bitte wählen…</option>
+                    {ageClassOptions.map(ac => (
+                      <option key={ac} value={ac}>{ac}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {!createModal.gender && (
+                <div>
+                  <label className="text-xs font-medium text-brand-text-muted block mb-1">Geschlecht</label>
+                  <select
+                    value={createModal.gender}
+                    onChange={e => setCreateModal(prev => prev && ({ ...prev, gender: e.target.value }))}
+                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  >
+                    <option value="">Bitte wählen…</option>
+                    <option value="m">männlich</option>
+                    <option value="f">weiblich</option>
+                    <option value="mixed">gemischt</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-brand-text-muted block mb-1">Jahrgang</label>
                 <select
@@ -571,7 +643,7 @@ export default function AdminKaderPage() {
               </button>
               <button
                 onClick={handleCreateKader}
-                disabled={creating}
+                disabled={creating || !createModal.ageClass || !createModal.gender}
                 className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
               >
                 {creating ? 'Anlegen…' : 'Anlegen'}
@@ -613,13 +685,13 @@ export default function AdminKaderPage() {
       )}
 
       {/* Copy modal */}
-      {showCopyModal && activeSeason && (
+      {showCopyModal && selectedSeason && (
         <CopyKaderModal
-          toSeasonId={activeSeason.id}
-          toSeasonName={activeSeason.name}
+          toSeasonId={selectedSeason.id}
+          toSeasonName={selectedSeason.name}
           onDone={async () => {
             setShowCopyModal(false)
-            await loadAll()
+            await loadKader(selectedSeason.id)
             showToast('Kader erfolgreich kopiert')
           }}
           onClose={() => setShowCopyModal(false)}
@@ -627,12 +699,12 @@ export default function AdminKaderPage() {
       )}
 
       {/* Auto-Assign modal */}
-      {showAutoAssignModal && activeSeason && (
+      {showAutoAssignModal && selectedSeason && (
         <AutoAssignModal
-          seasonId={activeSeason.id}
+          seasonId={selectedSeason.id}
           onDone={async () => {
             setShowAutoAssignModal(false)
-            await loadAll()
+            await loadKader(selectedSeason.id)
             showToast('Auto-Assign abgeschlossen')
           }}
           onClose={() => setShowAutoAssignModal(false)}
