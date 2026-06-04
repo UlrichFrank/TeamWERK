@@ -90,11 +90,26 @@ export default function TermineDetailPage() {
   const today = new Date().toISOString().slice(0, 10)
   const isPast = date ? date.slice(0, 10) <= today : false
 
+  const applyAttendances = (data: AttendanceItem[]) => {
+    setAttendances(data)
+    const map: Record<number, boolean> = {}
+    for (const a of data) {
+      if (a.present !== null) map[a.member_id] = a.present
+    }
+    setAttendanceMap(map)
+  }
+
   const load = (silent = false) => {
     if (!silent) setLoading(true)
     if (isTraining) {
-      api.get(`/training-sessions/${id}`)
-        .then(r => setSession(r.data))
+      Promise.all([
+        api.get(`/training-sessions/${id}`),
+        api.get(`/training-sessions/${id}/attendances`),
+      ])
+        .then(([sessionRes, attendancesRes]) => {
+          setSession(sessionRes.data)
+          applyAttendances(attendancesRes.data ?? [])
+        })
         .finally(() => { if (!silent) setLoading(false) })
     } else {
       Promise.all([
@@ -111,20 +126,13 @@ export default function TermineDetailPage() {
 
   const loadAttendances = () => {
     if (!isTraining) return
-    api.get(`/training-sessions/${id}/attendances`).then(r => {
-      const data: AttendanceItem[] = r.data ?? []
-      setAttendances(data)
-      const map: Record<number, boolean> = {}
-      for (const a of data) {
-        if (a.present !== null) map[a.member_id] = a.present
-      }
-      setAttendanceMap(map)
-    })
+    api.get(`/training-sessions/${id}/attendances`)
+      .then(r => applyAttendances(r.data ?? []))
+      .catch(() => {})
   }
 
   useEffect(() => {
     load()
-    if (isTraining) loadAttendances()
   }, [id, type])
 
   useLiveUpdates((event) => {

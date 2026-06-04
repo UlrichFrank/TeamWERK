@@ -970,7 +970,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		if canSeeReason && reason.Valid && reason.String != "" {
 			item.Reason = &reason.String
 		}
-		if isTrainerLike && present.Valid {
+		if present.Valid {
 			b := present.Int64 == 1
 			item.Present = &b
 		}

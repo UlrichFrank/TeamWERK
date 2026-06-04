@@ -1,7 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { getAccessToken } from '../lib/api'
 
 export function useLiveUpdates(onEvent: (eventType: string) => void) {
+  const onEventRef = useRef(onEvent)
+  useEffect(() => { onEventRef.current = onEvent })
+
   useEffect(() => {
     const token = getAccessToken()
     if (!token) return
@@ -9,7 +12,7 @@ export function useLiveUpdates(onEvent: (eventType: string) => void) {
     const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`)
 
     es.onmessage = (e) => {
-      if (e.data && !e.data.startsWith('__version:')) onEvent(e.data)
+      if (e.data && !e.data.startsWith('__version:')) onEventRef.current(e.data)
     }
 
     es.onerror = () => {
