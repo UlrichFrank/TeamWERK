@@ -2,7 +2,8 @@ import { useState } from 'react'
 
 interface User {
   id: number
-  name: string
+  first_name: string
+  last_name: string
   email: string
 }
 
@@ -53,7 +54,7 @@ export default function MemberFamilieTab({ isNew, users, linkedParents, onAddPar
             {linkedParents.map(parent => (
               <div key={parent.id} className="flex items-center justify-between border border-gray-200 rounded-lg p-3 text-sm">
                 <div>
-                  <span className="font-medium">{parent.name}</span>
+                  <span className="font-medium">{parent.first_name} {parent.last_name}</span>
                   <p className="text-xs text-gray-500">{parent.email}</p>
                 </div>
                 <button
@@ -79,7 +80,7 @@ export default function MemberFamilieTab({ isNew, users, linkedParents, onAddPar
               >
                 <option value="">– Nutzer wählen –</option>
                 {availableUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                  <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.email})</option>
                 ))}
               </select>
               <button

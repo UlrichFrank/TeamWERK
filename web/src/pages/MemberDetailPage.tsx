@@ -40,7 +40,8 @@ interface Member {
   welcome_email_sent_at?: string
 }
 
-interface User { id: number; name: string; email: string; role: string }
+interface User { id: number; first_name: string; last_name: string; email: string; role: string }
+interface PendingInvitation { id: number; email: string; member_id?: number | null }
 
 type TabName = 'stammdaten' | 'kontakt' | 'datenschutz' | 'familie' | 'admin'
 
@@ -70,6 +71,7 @@ export default function MemberDetailPage() {
     sepa_mandat: false, sepa_mandat_date: '', sepa_mandat_url: '',
   })
   const [users, setUsers] = useState<User[]>([])
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([])
   const [linkedParents, setLinkedParents] = useState<User[]>([])
   const [currentUserID, setCurrentUserID] = useState<number | null>(null)
   const [welcomeEmailSentAt, setWelcomeEmailSentAt] = useState<string | null>(null)
@@ -142,7 +144,10 @@ export default function MemberDetailPage() {
   useEffect(() => {
     if (authLoading) return
     let cancelled = false
-    if (isAdmin) api.get('/admin/users').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
+    if (isAdmin) {
+      api.get('/admin/users').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
+      api.get('/admin/invitations').then(r => { if (!cancelled) setInvitations(r.data ?? []) })
+    }
     if (!isNew && id) {
       loadDrafts()
       api.get(`/members/${id}`).then(r => {
@@ -202,6 +207,19 @@ export default function MemberDetailPage() {
     if (!id) return
     await api.put(`/admin/members/${id}/user`, { user_id: userId })
     setCurrentUserID(userId)
+    setSaved(true); setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleLinkInvitation = async (invitationId: number | null) => {
+    if (!id) return
+    const memberId = Number(id)
+    const prev = invitations.find(i => i.member_id === memberId)
+    if (prev && prev.id !== invitationId)
+      await api.put(`/admin/invitations/${prev.id}/member`, { member_id: null })
+    if (invitationId !== null)
+      await api.put(`/admin/invitations/${invitationId}/member`, { member_id: memberId })
+    const r = await api.get('/admin/invitations')
+    setInvitations(r.data ?? [])
     setSaved(true); setTimeout(() => setSaved(false), 2000)
   }
 
@@ -304,10 +322,12 @@ export default function MemberDetailPage() {
           isNew={isNew}
           memberId={id && !isNew ? Number(id) : undefined}
           users={users}
+          invitations={invitations}
           currentUserId={currentUserID}
           welcomeEmailSentAt={welcomeEmailSentAt}
           onWelcomeEmailSent={sentAt => setWelcomeEmailSentAt(sentAt)}
           onLinkUser={handleLinkUser}
+          onLinkInvitation={handleLinkInvitation}
           saving={saving}
           saved={saved}
           error={error}

@@ -4,18 +4,27 @@ import { api } from '../../lib/api'
 
 interface User {
   id: number
-  name: string
+  first_name: string
+  last_name: string
   email: string
+}
+
+interface PendingInvitation {
+  id: number
+  email: string
+  member_id?: number | null
 }
 
 interface Props {
   isNew: boolean
   memberId?: number
   users: User[]
+  invitations: PendingInvitation[]
   currentUserId: number | null
   welcomeEmailSentAt: string | null
   onWelcomeEmailSent: (sentAt: string) => void
   onLinkUser: (userId: number | null) => Promise<void>
+  onLinkInvitation: (invitationId: number | null) => Promise<void>
   saving: boolean
   saved: boolean
   error: string
@@ -27,18 +36,34 @@ function formatSentAt(iso: string) {
 }
 
 export default function MemberAdminTab({
-  isNew, memberId, users, currentUserId, welcomeEmailSentAt, onWelcomeEmailSent,
-  onLinkUser, saving, saved, error,
+  isNew, memberId, users, invitations, currentUserId, welcomeEmailSentAt, onWelcomeEmailSent,
+  onLinkUser, onLinkInvitation, saving, saved, error,
 }: Props) {
-  const [selectedUser, setSelectedUser] = useState<string>(currentUserId ? String(currentUserId) : '')
+  const linkedInvitation = memberId != null
+    ? invitations.find(i => i.member_id === memberId) ?? null
+    : null
+
+  const initialValue = currentUserId
+    ? `u:${currentUserId}`
+    : linkedInvitation
+      ? `i:${linkedInvitation.id}`
+      : ''
+
+  const [selected, setSelected] = useState<string>(initialValue)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
 
   const currentUser = currentUserId ? users.find(u => u.id === currentUserId) : null
 
   const handleSave = async () => {
-    const userId = selectedUser ? Number(selectedUser) : null
-    await onLinkUser(userId)
+    if (!selected) {
+      if (currentUserId) await onLinkUser(null)
+      else if (linkedInvitation) await onLinkInvitation(null)
+      return
+    }
+    const [type, rawId] = selected.split(':')
+    if (type === 'u') await onLinkUser(Number(rawId))
+    else await onLinkInvitation(Number(rawId))
   }
 
   const handleSendWelcome = async () => {
@@ -65,24 +90,42 @@ export default function MemberAdminTab({
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text mb-4">Nutzer verknüpfen</h2>
 
-        {currentUser && (
+        {(currentUser || linkedInvitation) && (
           <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm">
             <p className="font-medium text-brand-text">Aktuell verknüpft:</p>
-            <p className="text-brand-text-muted">{currentUser.name} ({currentUser.email})</p>
+            {currentUser
+              ? <p className="text-brand-text-muted">{currentUser.first_name} {currentUser.last_name} ({currentUser.email})</p>
+              : <p className="text-brand-text-muted">{linkedInvitation!.email} <span className="italic">(Einladung ausstehend)</span></p>
+            }
           </div>
         )}
 
         <div>
           <label className="block text-sm font-medium text-brand-text-muted mb-1">Nutzer ändern</label>
           <select
-            value={selectedUser}
-            onChange={e => setSelectedUser(e.target.value)}
+            value={selected}
+            onChange={e => setSelected(e.target.value)}
             className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
           >
             <option value="">– Keine Verknüpfung –</option>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-            ))}
+            {users.length > 0 && (
+              <optgroup label="Registrierte Nutzer">
+                {users.map(u => (
+                  <option key={`u:${u.id}`} value={`u:${u.id}`}>
+                    {u.first_name} {u.last_name} ({u.email})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {invitations.length > 0 && (
+              <optgroup label="Ausstehende Einladungen">
+                {invitations.map(i => (
+                  <option key={`i:${i.id}`} value={`i:${i.id}`}>
+                    {i.email}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
 
           <button
