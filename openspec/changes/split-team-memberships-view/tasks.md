@@ -31,5 +31,5 @@
 
 - [x] 6.1 `make migrate-up` lokal ausführen — keine Fehler
 - [x] 6.2 `go build ./...` — keine Compile-Fehler
-- [ ] 6.3 Manuell prüfen: `/termine/training/242` zeigt keine Trainer mehr in der Teilnahmeliste
+- [x] 6.3 Manuell prüfen: `/termine/training/242` zeigt keine Trainer mehr in der Teilnahmeliste
 - [x] 6.4 `grep -rn "team_memberships" internal/ cmd/` — nur noch `games/handler.go` und die Migration selbst sollten treffen
