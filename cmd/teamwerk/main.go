@@ -128,8 +128,6 @@ func serve() {
 		r.Get("/api/events", hubH.Events)
 
 		// Members
-		r.Get("/api/members", membH.List)
-		r.Get("/api/members/{id}", membH.Get)
 		r.Get("/api/users/{id}/contact", membH.GetContact)
 		r.Get("/api/members/{id}/change-drafts", membH.GetChangeRequestsHandler)
 		r.Post("/api/members/{id}/change-request", membH.CreateChangeRequestHandler)
@@ -259,8 +257,10 @@ func serve() {
 		// Admin + Vorstand
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))
-			r.Post("/api/members", membH.Create)
+			r.Get("/api/members", membH.List)
 			r.Get("/api/members/export", membH.Export)
+			r.Get("/api/members/{id}", membH.Get)
+			r.Post("/api/members", membH.Create)
 			r.Put("/api/members/{id}", membH.Update)
 			r.Put("/api/members/{id}/status", membH.UpdateStatus)
 			r.Get("/api/admin/club", cfgH.GetClub)

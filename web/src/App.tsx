@@ -80,8 +80,8 @@ export default function App() {
             {/* Protected */}
             <Route path="/" element={<PrivateRoute><AppShell /></PrivateRoute>}>
               <Route index element={<DashboardPage />} />
-              <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand','trainer']}><MembersPage /></RoleRoute>} />
-              <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand','trainer']}><MemberDetailPage /></RoleRoute>} />
+              <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand']}><MembersPage /></RoleRoute>} />
+              <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand']}><MemberDetailPage /></RoleRoute>} />
               <Route path="profil" element={<ProfilePage />} />
               <Route path="profil/kind/:memberId" element={<ChildProfilePage />} />
               <Route path="dokumente" element={<DocumentsPage />} />
