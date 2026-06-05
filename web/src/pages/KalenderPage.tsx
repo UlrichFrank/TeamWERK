@@ -523,31 +523,17 @@ export default function KalenderPage() {
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
-        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-sm shrink-0">
-          <button
-            onClick={() => setKalenderMode('dienste')}
-            className={`px-3 py-1.5 ${kalenderMode === 'dienste' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-          >
-            Dienste
-          </button>
-          <button
-            onClick={() => setKalenderMode('termine')}
-            className={`px-3 py-1.5 border-l border-brand-border-subtle ${kalenderMode === 'termine' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-          >
-            Termine
-          </button>
-        </div>
+        <select
+          value={filterTeamId ?? ''}
+          onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
+          className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow shrink-0"
+        >
+          <option value="">Alle Teams</option>
+          {teams.map(t => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
-          <select
-            value={filterTeamId ?? ''}
-            onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
-            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-0 shrink"
-          >
-            <option value="">Alle Teams</option>
-            {teams.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
           {([
             ['heim',      'Heim',       <Home className="w-3.5 h-3.5" />],
             ['auswärts',  'Auswärts',   <Plane className="w-3.5 h-3.5" />],
@@ -586,6 +572,21 @@ export default function KalenderPage() {
         <button onClick={prevMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">◀</button>
         <span className="text-lg font-semibold w-44 text-center">{MONTHS[month]} {year}</span>
         <button onClick={nextMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">▶</button>
+        <div className="flex-1" />
+        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
+          <button
+            onClick={() => setKalenderMode('dienste')}
+            className={`px-3 py-1.5 ${kalenderMode === 'dienste' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+          >
+            Dienste
+          </button>
+          <button
+            onClick={() => setKalenderMode('termine')}
+            className={`px-3 py-1.5 border-l border-brand-border-subtle ${kalenderMode === 'termine' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+          >
+            Termine
+          </button>
+        </div>
       </div>
 
       {/* Calendar */}

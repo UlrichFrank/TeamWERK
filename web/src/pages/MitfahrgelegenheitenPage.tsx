@@ -551,7 +551,7 @@ export default function MitfahrgelegenheitenPage() {
   const tabs: EventTab[] = ['auswärts', 'heim', 'generisch']
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-brand-text">Mitfahrgelegenheiten</h1>
         <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
