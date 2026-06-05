@@ -1543,3 +1543,103 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
+
+// isParentOf returns true if parentUserID has a family_links entry for memberID.
+func (h *Handler) isParentOf(ctx context.Context, parentUserID, memberID int) bool {
+	var count int
+	h.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM family_links WHERE parent_user_id=? AND member_id=?`,
+		parentUserID, memberID).Scan(&count)
+	return count > 0
+}
+
+// GET /api/profile/kind/:memberId
+func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !h.isParentOf(r.Context(), claims.UserID, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	m, err := h.getMember(memberID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(m)
+}
+
+// PUT /api/profile/kind/:memberId/member
+func (h *Handler) UpdateChildMember(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !h.isParentOf(r.Context(), claims.UserID, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		FirstName    string `json:"first_name"`
+		LastName     string `json:"last_name"`
+		DateOfBirth  string `json:"date_of_birth"`
+		JerseyNumber *int   `json:"jersey_number"`
+		Position     string `json:"position"`
+		Street       string `json:"street"`
+		Zip          string `json:"zip"`
+		City         string `json:"city"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	_, err = h.db.ExecContext(r.Context(),
+		`UPDATE members SET first_name=?, last_name=?, date_of_birth=?, jersey_number=?, position=?, street=?, zip=?, city=?, updated_at=? WHERE id=?`,
+		req.FirstName, req.LastName, nullableString(req.DateOfBirth),
+		req.JerseyNumber, nullableString(req.Position),
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
+		time.Now(), memberID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("members")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/profile/kind/:memberId/bank
+func (h *Handler) UpdateChildBank(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !h.isParentOf(r.Context(), claims.UserID, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IBAN          string `json:"iban"`
+		AccountHolder string `json:"account_holder"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	_, err = h.db.ExecContext(r.Context(),
+		`UPDATE members SET iban=?, account_holder=?, updated_at=? WHERE id=?`,
+		nullableString(req.IBAN), nullableString(req.AccountHolder), time.Now(), memberID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

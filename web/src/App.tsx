@@ -16,6 +16,7 @@ import DashboardPage from './pages/DashboardPage'
 import MembersPage from './pages/MembersPage'
 import MemberDetailPage from './pages/MemberDetailPage'
 import ProfilePage from './pages/ProfilePage'
+import ChildProfilePage from './pages/ChildProfilePage'
 import DutyPage from './pages/DutyPage'
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
@@ -82,6 +83,7 @@ export default function App() {
               <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand','trainer']}><MembersPage /></RoleRoute>} />
               <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand','trainer']}><MemberDetailPage /></RoleRoute>} />
               <Route path="profil" element={<ProfilePage />} />
+              <Route path="profil/kind/:memberId" element={<ChildProfilePage />} />
               <Route path="dokumente" element={<DocumentsPage />} />
               <Route path="dokumente/:folderId" element={<DocumentsPage />} />
               <Route path="dienste" element={<DutyPage />} />

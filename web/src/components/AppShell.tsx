@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X, ChevronRight, ChevronDown, Eye } from 'lucide-react'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
+import { api } from '../lib/api'
 
 interface NavModule {
   label: string
@@ -55,6 +56,8 @@ function initOpenModules(): Record<string, boolean> {
   return state
 }
 
+interface ChildEntry { id: number; first_name: string; last_name: string }
+
 export default function AppShell() {
   const { user, logout, impersonating, stopImpersonation } = useAuth()
   const navigate = useNavigate()
@@ -63,6 +66,18 @@ export default function AppShell() {
   usePushSubscription()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
+  const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
+
+  useEffect(() => {
+    if (user?.role === 'elternteil') {
+      api.get('/profile/me').then(r => {
+        const kids: ChildEntry[] = (r.data?.children ?? [])
+          .slice()
+          .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
+        setNavChildren(kids)
+      }).catch(() => {})
+    }
+  }, [user?.role])
 
   const handleLogout = async () => {
     await logout()
@@ -125,6 +140,18 @@ export default function AppShell() {
                   }
                 >
                   {item.label}
+                </NavLink>
+              ))}
+              {isOpen && mod.label === 'Nutzer' && navChildren.map(child => (
+                <NavLink
+                  key={`kind-${child.id}`}
+                  to={`/profil/kind/${child.id}`}
+                  onClick={closeSidebar}
+                  className={({ isActive }) =>
+                    `block pl-10 pr-4 py-2 text-sm transition-colors ${isActive ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-black/60 hover:bg-brand-black hover:text-brand-yellow'}`
+                  }
+                >
+                  {child.first_name}s Profil
                 </NavLink>
               ))}
             </div>

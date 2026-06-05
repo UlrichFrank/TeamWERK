@@ -146,6 +146,9 @@ func serve() {
 		r.Delete("/api/profile/phones/{id}", membH.DeletePhone)
 		r.Put("/api/profile/visibility", membH.UpdateVisibility)
 		r.Put("/api/profile/reminder-preference", membH.UpdateReminderPreference)
+		r.Get("/api/profile/kind/{memberId}", membH.GetChildProfile)
+		r.Put("/api/profile/kind/{memberId}/member", membH.UpdateChildMember)
+		r.Put("/api/profile/kind/{memberId}/bank", membH.UpdateChildBank)
 		r.Post("/api/upload/user-photo", uploadH.UploadUserPhoto)
 
 		// Dashboard
