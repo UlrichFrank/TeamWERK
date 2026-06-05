@@ -4,9 +4,10 @@ import { Member, ChangeDraft } from '../../pages/ProfilePage'
 
 interface Props {
   ownMember: Member | null
+  onSaveDirectly?: (iban: string, accountHolder: string) => Promise<void>
 }
 
-export default function ProfileBankTab({ ownMember }: Props) {
+export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
   const [bankdatenDraft, setBankdatenDraft] = useState<ChangeDraft | null>(null)
   const [iban, setIban] = useState('')
   const [accountHolder, setAccountHolder] = useState('')
@@ -30,7 +31,7 @@ export default function ProfileBankTab({ ownMember }: Props) {
     if (!ownMember) return
     setIban(ownMember.iban ?? '')
     setAccountHolder(ownMember.account_holder ?? '')
-    loadDrafts(ownMember.id)
+    if (!onSaveDirectly) loadDrafts(ownMember.id)
   }, [ownMember?.id])
 
   if (!ownMember) return null
@@ -44,16 +45,20 @@ export default function ProfileBankTab({ ownMember }: Props) {
     setError('')
     try {
       const raw = iban.replace(/\s/g, '').toUpperCase()
-      if (ibanChanged && !raw) { setError('IBAN darf nicht leer sein.'); setSaving(false); return }
-      await api.post(`/members/${ownMember.id}/change-request`, {
-        field_name: 'bankdaten',
-        new_value: { iban: raw || (ownMember.iban ?? ''), account_holder: accountHolder },
-      })
-      await loadDrafts(ownMember.id)
+      if (onSaveDirectly) {
+        await onSaveDirectly(raw, accountHolder)
+      } else {
+        if (ibanChanged && !raw) { setError('IBAN darf nicht leer sein.'); setSaving(false); return }
+        await api.post(`/members/${ownMember.id}/change-request`, {
+          field_name: 'bankdaten',
+          new_value: { iban: raw || (ownMember.iban ?? ''), account_holder: accountHolder },
+        })
+        await loadDrafts(ownMember.id)
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch {
-      setError('Fehler beim Senden der Änderungsanfrage.')
+      setError(onSaveDirectly ? 'Fehler beim Speichern.' : 'Fehler beim Senden der Änderungsanfrage.')
     } finally {
       setSaving(false)
     }
@@ -77,7 +82,7 @@ export default function ProfileBankTab({ ownMember }: Props) {
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
 
-        {bankdatenDraft && (
+        {!onSaveDirectly && bankdatenDraft && (
           <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
             Änderungsanfrage ausstehend — wird beim Speichern aktualisiert.{' '}
             <button onClick={handleCancel} className="text-brand-danger hover:underline">
@@ -110,7 +115,9 @@ export default function ProfileBankTab({ ownMember }: Props) {
               placeholder="DE89 3704 0044 0532 0130 00"
               className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
-            <p className="text-xs text-brand-text-subtle mt-1">Bankdaten-Änderungen müssen vom Verein übernommen werden.</p>
+            {!onSaveDirectly && (
+              <p className="text-xs text-brand-text-subtle mt-1">Bankdaten-Änderungen müssen vom Verein übernommen werden.</p>
+            )}
           </div>
         </div>
 
@@ -121,9 +128,9 @@ export default function ProfileBankTab({ ownMember }: Props) {
               disabled={saving}
               className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {saving ? 'Senden…' : 'Änderung anfordern'}
+              {saving ? (onSaveDirectly ? 'Speichern…' : 'Senden…') : (onSaveDirectly ? 'Speichern' : 'Änderung anfordern')}
             </button>
-            {saved && <span className="text-sm text-green-600">Anfrage gesendet</span>}
+            {saved && <span className="text-sm text-green-600">{onSaveDirectly ? 'Gespeichert' : 'Anfrage gesendet'}</span>}
             {error && <span className="text-sm text-brand-danger">{error}</span>}
           </div>
         )}

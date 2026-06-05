@@ -1570,8 +1570,27 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+
+	type parentEntry struct {
+		ID    int    `json:"id"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	rows, _ := h.db.QueryContext(r.Context(),
+		`SELECT u.id, u.name, u.email FROM users u JOIN family_links fl ON fl.parent_user_id=u.id WHERE fl.member_id=?`,
+		memberID)
+	parents := []parentEntry{}
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var p parentEntry
+			rows.Scan(&p.ID, &p.Name, &p.Email)
+			parents = append(parents, p)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(m)
+	json.NewEncoder(w).Encode(map[string]any{"member": m, "parents": parents})
 }
 
 // PUT /api/profile/kind/:memberId/member

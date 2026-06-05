@@ -69,15 +69,14 @@ export default function AppShell() {
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
 
   useEffect(() => {
-    if (user?.role === 'elternteil') {
-      api.get('/profile/me').then(r => {
-        const kids: ChildEntry[] = (r.data?.children ?? [])
-          .slice()
-          .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
-        setNavChildren(kids)
-      }).catch(() => {})
-    }
-  }, [user?.role])
+    if (!user) return
+    api.get('/profile/me').then(r => {
+      const kids: ChildEntry[] = (r.data?.children ?? [])
+        .slice()
+        .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
+      setNavChildren(kids)
+    }).catch(() => {})
+  }, [user?.id])
 
   const handleLogout = async () => {
     await logout()

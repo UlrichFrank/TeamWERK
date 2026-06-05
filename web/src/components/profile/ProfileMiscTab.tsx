@@ -2,18 +2,22 @@ import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../../lib/api'
 
 interface Props {
-  dutyReminderDays: number | null
+  dutyReminderDays?: number | null
 }
 
 export default function ProfileMiscTab({ dutyReminderDays: initialReminder }: Props) {
-  const [reminderEnabled, setReminderEnabled] = useState(initialReminder !== null)
+  const [reminderEnabled, setReminderEnabled] = useState(false)
   const [changed, setChanged] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    setReminderEnabled(initialReminder !== null)
+    if (initialReminder !== undefined) {
+      setReminderEnabled(initialReminder !== null)
+    } else {
+      api.get('/profile/me').then(r => setReminderEnabled(r.data?.duty_reminder_days !== null)).catch(() => {})
+    }
   }, [initialReminder])
 
   const handleSave = async (e: FormEvent) => {
