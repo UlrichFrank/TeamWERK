@@ -1803,6 +1803,131 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+type participantItem struct {
+	MemberID   int     `json:"member_id"`
+	MemberName string  `json:"member_name"`
+	IsExtended bool    `json:"is_extended"`
+	RsvpStatus *string `json:"rsvp_status"`
+	InLineup   bool    `json:"in_lineup"`
+}
+
+// GET /api/games/{id}/participants
+func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT member_id, member_name, is_extended, rsvp_status, in_lineup
+		FROM (
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       0 AS is_extended,
+			       gr.status AS rsvp_status,
+			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup
+			FROM members m
+			JOIN kader_members km ON km.member_id = m.id
+			JOIN kader k ON k.id = km.kader_id
+			  AND k.season_id = (SELECT season_id FROM games WHERE id = ?)
+			JOIN game_teams gt ON gt.game_id = ? AND gt.team_id = k.team_id
+			LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
+
+			UNION
+
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       1 AS is_extended,
+			       NULL AS rsvp_status,
+			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup
+			FROM members m
+			JOIN kader_extended_members kem ON kem.member_id = m.id
+			JOIN kader k ON k.id = kem.kader_id
+			  AND k.season_id = (SELECT season_id FROM games WHERE id = ?)
+			JOIN game_teams gt ON gt.game_id = ? AND gt.team_id = k.team_id
+		)
+		ORDER BY member_name`,
+		gameID, gameID, gameID, gameID,
+		gameID, gameID, gameID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "GetParticipants: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	result := []participantItem{}
+	for rows.Next() {
+		var p participantItem
+		var status sql.NullString
+		var isExtended, inLineup int
+		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &status, &inLineup)
+		p.IsExtended = isExtended == 1
+		p.InLineup = inLineup == 1
+		if status.Valid {
+			p.RsvpStatus = &status.String
+		}
+		result = append(result, p)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// POST /api/games/{id}/lineup
+func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims.Role != "admin" && !claims.HasFunction("trainer") {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		MemberIDs []int `json:"member_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Delete all existing lineup entries for this game
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM game_lineup WHERE game_id=?`, gameID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Insert new lineup
+	for _, memberID := range req.MemberIDs {
+		if _, err := tx.ExecContext(r.Context(),
+			`INSERT INTO game_lineup (game_id, member_id, added_by) VALUES (?,?,?)`,
+			gameID, memberID, claims.UserID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.Broadcast("games")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func audiencesFromDB(ns sql.NullString) []string {
 	if !ns.Valid || ns.String == "" {
 		return nil

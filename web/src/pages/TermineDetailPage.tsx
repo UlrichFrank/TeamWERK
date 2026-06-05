@@ -28,6 +28,14 @@ interface RSVPEntry {
   responded_at: string
 }
 
+interface ParticipantItem {
+  member_id: number
+  member_name: string
+  is_extended: boolean
+  rsvp_status: string | null
+  in_lineup: boolean
+}
+
 interface SessionDetail {
   id: number
   date: string
@@ -68,6 +76,8 @@ interface TableRow {
   rsvp_status: string | null
   reason: string | null
   present: boolean | null
+  is_extended?: boolean
+  in_lineup?: boolean
 }
 
 export default function TermineDetailPage() {
@@ -78,11 +88,12 @@ export default function TermineDetailPage() {
 
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [game, setGame] = useState<GameDetail | null>(null)
-  const [gameResponses, setGameResponses] = useState<RSVPEntry[]>([])
+  const [participants, setParticipants] = useState<ParticipantItem[]>([])
   const [attendances, setAttendances] = useState<AttendanceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [attendanceMap, setAttendanceMap] = useState<Record<number, boolean>>({})
   const [attendanceError, setAttendanceError] = useState<string | null>(null)
+  const [lineupMap, setLineupMap] = useState<Record<number, boolean>>({})
   const [showReasonId, setShowReasonId] = useState<number | null>(null)
 
   const isTraining = type === 'training'
@@ -114,11 +125,15 @@ export default function TermineDetailPage() {
     } else {
       Promise.all([
         api.get(`/kalender/${id}`),
-        api.get(`/games/${id}/responses`),
+        api.get(`/games/${id}/participants`),
       ])
-        .then(([gameRes, responsesRes]) => {
+        .then(([gameRes, participantsRes]) => {
           setGame(gameRes.data.game ?? gameRes.data)
-          setGameResponses(responsesRes.data ?? [])
+          const items: ParticipantItem[] = participantsRes.data ?? []
+          setParticipants(items)
+          const map: Record<number, boolean> = {}
+          for (const p of items) map[p.member_id] = p.in_lineup
+          setLineupMap(map)
         })
         .finally(() => { if (!silent) setLoading(false) })
     }
@@ -152,6 +167,19 @@ export default function TermineDetailPage() {
     } catch {
       setAttendanceMap(prev => ({ ...prev, [memberId]: !newValue }))
       setAttendanceError('Fehler beim Speichern. Bitte nochmal versuchen.')
+    }
+  }
+
+  const saveLineup = async (memberId: number, newValue: boolean) => {
+    const updatedMap = { ...lineupMap, [memberId]: newValue }
+    setLineupMap(updatedMap)
+    const memberIds = Object.entries(updatedMap)
+      .filter(([, v]) => v)
+      .map(([k]) => parseInt(k))
+    try {
+      await api.post(`/games/${id}/lineup`, { member_ids: memberIds })
+    } catch {
+      setLineupMap(prev => ({ ...prev, [memberId]: !newValue }))
     }
   }
 
@@ -251,17 +279,19 @@ export default function TermineDetailPage() {
     ? g.opponent
     : (g.is_home ? `Heimspiel vs. ${g.opponent}` : `Auswärtsspiel vs. ${g.opponent}`)
 
-  const tableRows: TableRow[] = gameResponses.map(r => ({
-    member_id: r.member_id,
-    member_name: r.member_name,
-    rsvp_status: r.status,
-    reason: r.reason,
+  const tableRows: TableRow[] = participants.map(p => ({
+    member_id: p.member_id,
+    member_name: p.member_name,
+    rsvp_status: p.rsvp_status,
+    reason: null,
     present: null,
+    is_extended: p.is_extended,
+    in_lineup: p.in_lineup,
   }))
 
-  const confirmedCount = gameResponses.filter(r => r.status === 'confirmed').length
-  const declinedCount = gameResponses.filter(r => r.status === 'declined').length
-  const maybeCount = gameResponses.filter(r => r.status === 'maybe').length
+  const confirmedCount = participants.filter(p => p.rsvp_status === 'confirmed').length
+  const declinedCount = participants.filter(p => p.rsvp_status === 'declined').length
+  const maybeCount = participants.filter(p => p.rsvp_status === 'maybe').length
 
   return (
     <div className="max-w-2xl space-y-4">
@@ -307,12 +337,14 @@ export default function TermineDetailPage() {
         setShowReasonId={setShowReasonId}
         onToggleAttendance={() => Promise.resolve()}
         onDismissError={() => {}}
+        lineupMap={lineupMap}
+        onToggleLineup={isTrainer ? saveLineup : undefined}
       />
     </div>
   )
 }
 
-function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError }: {
+function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup }: {
   rows: TableRow[]
   showAttendanceCol: boolean
   attendanceMap: Record<number, boolean>
@@ -322,6 +354,8 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
   setShowReasonId: (id: number | null) => void
   onToggleAttendance: (memberId: number, value: boolean) => Promise<void>
   onDismissError: () => void
+  lineupMap?: Record<number, boolean>
+  onToggleLineup?: (memberId: number, value: boolean) => void
 }) {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
@@ -339,6 +373,9 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
               <tr className="border-b border-brand-border-subtle">
                 <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Mitglied</th>
                 <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Rückmeldung</th>
+                {lineupMap !== undefined && (
+                  <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-center">Aufstellung</th>
+                )}
                 {showAttendanceCol && (
                   <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-center">Anwesend</th>
                 )}
@@ -348,7 +385,12 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
               {rows.map(row => (
                 <Fragment key={row.member_id}>
                   <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
-                    <td className="px-4 py-3 text-sm text-brand-text font-medium">{row.member_name}</td>
+                    <td className="px-4 py-3 text-sm text-brand-text font-medium">
+                      <span>{row.member_name}</span>
+                      {row.is_extended && (
+                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Erw.</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="relative group flex items-center gap-1">
                         <RsvpIcon status={row.rsvp_status} />
@@ -367,6 +409,22 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
                         )}
                       </div>
                     </td>
+                    {lineupMap !== undefined && (
+                      <td className="px-4 py-3 text-center">
+                        {onToggleLineup ? (
+                          <input
+                            type="checkbox"
+                            checked={lineupMap[row.member_id] ?? false}
+                            onChange={e => onToggleLineup(row.member_id, e.target.checked)}
+                            className="w-4 h-4 rounded border-brand-border"
+                          />
+                        ) : (
+                          lineupMap[row.member_id]
+                            ? <Check className="w-4 h-4 text-green-600 mx-auto" />
+                            : <span className="text-brand-text-muted text-sm">–</span>
+                        )}
+                      </td>
+                    )}
                     {showAttendanceCol && (
                       <td className="px-4 py-3 text-center">
                         <input
@@ -381,7 +439,7 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
                   </tr>
                   {showReasonId === row.member_id && row.reason && (
                     <tr className="bg-brand-surface-card">
-                      <td colSpan={showAttendanceCol ? 3 : 2} className="px-4 pb-2 text-xs text-brand-text-muted italic">
+                      <td colSpan={2 + (lineupMap !== undefined ? 1 : 0) + (showAttendanceCol ? 1 : 0)} className="px-4 pb-2 text-xs text-brand-text-muted italic">
                         {row.reason}
                       </td>
                     </tr>

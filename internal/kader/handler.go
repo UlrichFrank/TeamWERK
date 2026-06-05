@@ -76,11 +76,12 @@ type trainerRow struct {
 
 type kaderDetail struct {
 	kaderRow
-	BirthYears   []int        `json:"birth_years"`   // filtered: [dedicated] or [yr1, yr2]
-	BracketYears []int        `json:"bracket_years"` // always both bracket years [yr1, yr2]
-	Members      []memberRow  `json:"members"`
-	MemberCount  int          `json:"member_count"`
-	Trainers     []trainerRow `json:"trainers"`
+	BirthYears      []int        `json:"birth_years"`      // filtered: [dedicated] or [yr1, yr2]
+	BracketYears    []int        `json:"bracket_years"`    // always both bracket years [yr1, yr2]
+	Members         []memberRow  `json:"members"`
+	MemberCount     int          `json:"member_count"`
+	Trainers        []trainerRow `json:"trainers"`
+	ExtendedMembers []memberRow  `json:"extended_members"`
 }
 
 func computeBirthYears(k kaderRow, seasonStartYear int) (birthYears []int, bracketYears []int) {
@@ -147,14 +148,16 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 		}
 		members, _ := h.loadMembers(r.Context(), k.ID)
 		trainers, _ := h.loadTrainers(r.Context(), k.ID)
+		extended, _ := h.loadExtendedMembers(r.Context(), k.ID)
 		bys, bkys := computeBirthYears(k, seasonStartYear)
 		result = append(result, kaderDetail{
-			kaderRow:     k,
-			BirthYears:   bys,
-			BracketYears: bkys,
-			Members:      members,
-			MemberCount:  len(members),
-			Trainers:     trainers,
+			kaderRow:        k,
+			BirthYears:      bys,
+			BracketYears:    bkys,
+			Members:         members,
+			MemberCount:     len(members),
+			Trainers:        trainers,
+			ExtendedMembers: extended,
 		})
 	}
 
@@ -178,15 +181,17 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 
 	members, _ := h.loadMembers(r.Context(), k.ID)
 	trainers, _ := h.loadTrainers(r.Context(), k.ID)
+	extended, _ := h.loadExtendedMembers(r.Context(), k.ID)
 	bys, bkys := computeBirthYears(k, seasonStartYear)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(kaderDetail{
-		kaderRow:     k,
-		BirthYears:   bys,
-		BracketYears: bkys,
-		Members:      members,
-		MemberCount:  len(members),
-		Trainers:     trainers,
+		kaderRow:        k,
+		BirthYears:      bys,
+		BracketYears:    bkys,
+		Members:         members,
+		MemberCount:     len(members),
+		Trainers:        trainers,
+		ExtendedMembers: extended,
 	})
 }
 
@@ -194,13 +199,15 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		MembersAdd            []int   `json:"members_add"`
-		MembersRemove         []int   `json:"members_remove"`
-		DedicatedBirthYear    *int    `json:"dedicated_birth_year"`
-		SetDedicatedBirthYear bool    `json:"set_dedicated_birth_year"`
-		TrainersAdd           []int   `json:"trainers_add"`
-		TrainersRemove        []int   `json:"trainers_remove"`
-		AgeClass              *string `json:"age_class"`
+		MembersAdd              []int   `json:"members_add"`
+		MembersRemove           []int   `json:"members_remove"`
+		DedicatedBirthYear      *int    `json:"dedicated_birth_year"`
+		SetDedicatedBirthYear   bool    `json:"set_dedicated_birth_year"`
+		TrainersAdd             []int   `json:"trainers_add"`
+		TrainersRemove          []int   `json:"trainers_remove"`
+		AgeClass                *string `json:"age_class"`
+		ExtendedMembersAdd      []int   `json:"extended_members_add"`
+		ExtendedMembersRemove   []int   `json:"extended_members_remove"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -229,6 +236,14 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	for _, memberID := range req.TrainersRemove {
 		tx.ExecContext(r.Context(),
 			`DELETE FROM kader_trainers WHERE kader_id=? AND member_id=?`, id, memberID)
+	}
+	for _, memberID := range req.ExtendedMembersAdd {
+		tx.ExecContext(r.Context(),
+			`INSERT OR IGNORE INTO kader_extended_members (kader_id, member_id) VALUES (?,?)`, id, memberID)
+	}
+	for _, memberID := range req.ExtendedMembersRemove {
+		tx.ExecContext(r.Context(),
+			`DELETE FROM kader_extended_members WHERE kader_id=? AND member_id=?`, id, memberID)
 	}
 
 	if req.DedicatedBirthYear != nil {
@@ -378,12 +393,13 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(kaderDetail{
-		kaderRow:     k,
-		BirthYears:   bys,
-		BracketYears: bkys,
-		Members:      []memberRow{},
-		MemberCount:  0,
-		Trainers:     []trainerRow{},
+		kaderRow:        k,
+		BirthYears:      bys,
+		BracketYears:    bkys,
+		Members:         []memberRow{},
+		MemberCount:     0,
+		Trainers:        []trainerRow{},
+		ExtendedMembers: []memberRow{},
 	})
 }
 
@@ -577,4 +593,78 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 		result = append(result, m)
 	}
 	return result, nil
+}
+
+func (h *Handler) loadExtendedMembers(ctx context.Context, kaderID int) ([]memberRow, error) {
+	rows, err := h.db.QueryContext(ctx,
+		`SELECT m.id,
+		        m.first_name || ' ' || m.last_name,
+		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
+		        m.gender,
+		        m.position
+		 FROM kader_extended_members kem
+		 JOIN members m ON m.id=kem.member_id
+		 WHERE kem.kader_id=?
+		 ORDER BY m.last_name, m.first_name`, kaderID)
+	if err != nil {
+		return []memberRow{}, err
+	}
+	defer rows.Close()
+
+	result := []memberRow{}
+	for rows.Next() {
+		var m memberRow
+		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions)
+		result = append(result, m)
+	}
+	return result, nil
+}
+
+// GET /api/admin/kader/{id}/extended-member-suggestions?search=
+func (h *Handler) ExtendedMemberSuggestions(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
+	var kaderID int
+	if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM kader WHERE id=?`, id).Scan(&kaderID); err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT m.id,
+		        m.first_name || ' ' || m.last_name,
+		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
+		        m.gender,
+		        EXISTS(SELECT 1 FROM kader_extended_members kem WHERE kem.kader_id=? AND kem.member_id=m.id) AS in_extended
+		 FROM members m
+		 WHERE m.status != 'ausgetreten'
+		   AND (? = '' OR (m.first_name || ' ' || m.last_name) LIKE ?)
+		 ORDER BY m.last_name, m.first_name
+		 LIMIT 20`,
+		kaderID, search, "%"+search+"%")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type suggestion struct {
+		ID              int    `json:"id"`
+		Name            string `json:"name"`
+		BirthYear       int    `json:"birth_year"`
+		Gender          string `json:"gender"`
+		AlreadyInKader  bool   `json:"already_in_kader"`
+	}
+	result := []suggestion{}
+	for rows.Next() {
+		var s suggestion
+		var inExtended int
+		rows.Scan(&s.ID, &s.Name, &s.BirthYear, &s.Gender, &inExtended)
+		s.AlreadyInKader = inExtended == 1
+		result = append(result, s)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"suggestions": result})
 }

@@ -200,6 +200,8 @@ func serve() {
 		r.Get("/api/games/my", gameH.ListMyGames)
 		r.Post("/api/games/{id}/respond", gameH.RespondToGame)
 		r.Get("/api/games/{id}/responses", gameH.ListGameResponses)
+		r.Get("/api/games/{id}/participants", gameH.GetParticipants)
+		r.Post("/api/games/{id}/lineup", gameH.SaveLineup)
 
 		// Teams (filtered by user role)
 		r.Get("/api/teams", gameH.ListTeamsForUser)
@@ -307,6 +309,7 @@ func serve() {
 			r.Put("/api/admin/kader/{id}", kaderH.UpdateKader)
 			r.Delete("/api/admin/kader/{id}", kaderH.DeleteKader)
 			r.Get("/api/admin/kader/{id}/member-suggestions", kaderH.MemberSuggestions)
+			r.Get("/api/admin/kader/{id}/extended-member-suggestions", kaderH.ExtendedMemberSuggestions)
 			r.Patch("/api/admin/kader/{id}/games-per-season", kaderH.PatchGamesPerSeason)
 			r.Post("/api/admin/kader/copy-from-season", kaderH.CopyFromSeason)
 			r.Post("/api/admin/kader/auto-assign", kaderH.AutoAssign)

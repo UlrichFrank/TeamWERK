@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import KaderMemberSearch from '../components/KaderMemberSearch'
+import KaderExtendedSearch from '../components/KaderExtendedSearch'
 import KaderTrainerSearch from '../components/KaderTrainerSearch'
 import PositionStatus from '../components/PositionStatus'
 import CopyKaderModal from '../components/CopyKaderModal'
@@ -35,6 +36,7 @@ interface Kader {
   members: Member[]
   member_count: number
   trainers: { id: number; name: string; user_id?: number; status?: string }[]
+  extended_members: Member[]
 }
 
 const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
@@ -148,6 +150,19 @@ export default function AdminKaderPage() {
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
+    }
+  }
+
+  const handleRemoveExtendedMember = async (kaderId: number, memberId: number) => {
+    const key = `ext-${kaderId}-${memberId}`
+    setRemoving(prev => ({ ...prev, [key]: true }))
+    try {
+      await api.put(`/admin/kader/${kaderId}`, { extended_members_remove: [memberId] })
+      if (selectedSeason) await loadKader(selectedSeason.id)
+    } catch {
+      showToast('Fehler beim Entfernen')
+    } finally {
+      setRemoving(prev => ({ ...prev, [key]: false }))
     }
   }
 
@@ -538,6 +553,42 @@ export default function AdminKaderPage() {
                             className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
                             aria-label="Mitglied entfernen"
                             title="Mitglied entfernen"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* Extended member search */}
+                  <div className="px-5 pt-2 pb-2 border-t border-brand-border-subtle">
+                    <p className="text-xs font-medium text-brand-text-muted mb-2">Erweiterter Kader</p>
+                    <KaderExtendedSearch
+                      kaderId={k.id}
+                      onMemberAdded={() => selectedSeason && loadKader(selectedSeason.id)}
+                    />
+                  </div>
+
+                  {/* Extended member list */}
+                  {(k.extended_members ?? []).length === 0 ? (
+                    <p className="text-xs text-brand-text-subtle italic px-5 py-3">Keine erweiterten Mitglieder</p>
+                  ) : (
+                    <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
+                      {(k.extended_members ?? []).map(m => (
+                        <li key={m.id} className="flex items-center justify-between py-2 gap-2">
+                          <span className="text-sm text-brand-text">
+                            {m.name}{' '}
+                            <span className="text-brand-text-muted text-xs">
+                              ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
+                            </span>
+                          </span>
+                          <button
+                            onClick={() => handleRemoveExtendedMember(k.id, m.id)}
+                            disabled={removing[`ext-${k.id}-${m.id}`]}
+                            className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
+                            aria-label="Aus erweitertem Kader entfernen"
+                            title="Aus erweitertem Kader entfernen"
                           >
                             <X className="w-3 h-3" />
                           </button>
