@@ -16,6 +16,11 @@ export interface Member {
   iban?: string
   account_holder?: string
   club_functions?: string[]
+  photo_url?: string
+  photo_visible?: boolean
+  phones_visible?: boolean
+  address_visible?: boolean
+  email_visible?: boolean
 }
 
 export interface Parent {

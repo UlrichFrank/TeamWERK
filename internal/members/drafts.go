@@ -53,22 +53,24 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
-		       m.photo_visible
+		       m.photo_visible, m.photo_path,
+		       COALESCE(m.phones_visible,0), COALESCE(m.address_visible,0), COALESCE(m.email_visible,0)
 		FROM members m
 		WHERE m.id=?`, memberID)
 
 	var m Member
 	var jerseyNum, userID sql.NullInt64
 	var clubFunctionsStr string
-	var street, zip, city, joinDate, iban, accountHolder sql.NullString
-	var photoVisible int64
+	var street, zip, city, joinDate, iban, accountHolder, photoPath sql.NullString
+	var photoVisible, phonesVisible, addressVisible, emailVisible int64
 
 	err := row.Scan(
 		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
 		&m.MemberNumber, &m.PassNumber,
 		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunctionsStr,
 		&street, &zip, &city, &joinDate, &iban, &accountHolder,
-		&photoVisible,
+		&photoVisible, &photoPath,
+		&phonesVisible, &addressVisible, &emailVisible,
 	)
 	if err != nil {
 		return nil, err
@@ -102,6 +104,13 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		m.AccountHolder = &accountHolder.String
 	}
 	m.PhotoVisible = photoVisible != 0
+	if photoPath.Valid && photoPath.String != "" {
+		u := "/api/uploads/" + photoPath.String
+		m.PhotoURL = &u
+	}
+	m.PhonesVisible = phonesVisible != 0
+	m.AddressVisible = addressVisible != 0
+	m.EmailVisible = emailVisible != 0
 
 	return &m, nil
 }

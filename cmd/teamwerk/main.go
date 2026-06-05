@@ -149,6 +149,10 @@ func serve() {
 		r.Get("/api/profile/kind/{memberId}", membH.GetChildProfile)
 		r.Put("/api/profile/kind/{memberId}/member", membH.UpdateChildMember)
 		r.Put("/api/profile/kind/{memberId}/bank", membH.UpdateChildBank)
+		r.Post("/api/profile/kind/{memberId}/photo", uploadH.UploadChildPhoto)
+		r.Post("/api/profile/kind/{memberId}/phones", membH.AddChildPhone)
+		r.Delete("/api/profile/kind/{memberId}/phones/{phoneId}", membH.DeleteChildPhone)
+		r.Put("/api/profile/kind/{memberId}/visibility", membH.UpdateChildVisibility)
 		r.Post("/api/upload/user-photo", uploadH.UploadUserPhoto)
 
 		// Dashboard

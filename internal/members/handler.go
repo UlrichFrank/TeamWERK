@@ -47,7 +47,10 @@ type Member struct {
 	IBAN          *string `json:"iban,omitempty"`
 	AccountHolder *string `json:"account_holder,omitempty"`
 	PhotoURL      *string `json:"photo_url,omitempty"`
-	PhotoVisible bool `json:"photo_visible,omitempty"`
+	PhotoVisible  bool    `json:"photo_visible,omitempty"`
+	PhonesVisible  bool   `json:"phones_visible,omitempty"`
+	AddressVisible bool   `json:"address_visible,omitempty"`
+	EmailVisible   bool   `json:"email_visible,omitempty"`
 
 	DsgvoVerarbeitung     bool    `json:"dsgvo_verarbeitung,omitempty"`
 	DsgvoVerarbeitungDate *string `json:"dsgvo_verarbeitung_date,omitempty"`
@@ -1576,21 +1579,40 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 		Email string `json:"email"`
 	}
-	rows, _ := h.db.QueryContext(r.Context(),
+	pRows, _ := h.db.QueryContext(r.Context(),
 		`SELECT u.id, u.name, u.email FROM users u JOIN family_links fl ON fl.parent_user_id=u.id WHERE fl.member_id=?`,
 		memberID)
 	parents := []parentEntry{}
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
+	if pRows != nil {
+		defer pRows.Close()
+		for pRows.Next() {
 			var p parentEntry
-			rows.Scan(&p.ID, &p.Name, &p.Email)
+			pRows.Scan(&p.ID, &p.Name, &p.Email)
 			parents = append(parents, p)
 		}
 	}
 
+	type phoneEntry struct {
+		ID        int    `json:"id"`
+		Label     string `json:"label"`
+		Number    string `json:"number"`
+		SortOrder int    `json:"sort_order"`
+	}
+	phRows, _ := h.db.QueryContext(r.Context(),
+		`SELECT id, label, number, sort_order FROM member_phones WHERE member_id=? ORDER BY sort_order`,
+		memberID)
+	phones := []phoneEntry{}
+	if phRows != nil {
+		defer phRows.Close()
+		for phRows.Next() {
+			var p phoneEntry
+			phRows.Scan(&p.ID, &p.Label, &p.Number, &p.SortOrder)
+			phones = append(phones, p)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"member": m, "parents": parents})
+	json.NewEncoder(w).Encode(map[string]any{"member": m, "parents": parents, "phones": phones})
 }
 
 // PUT /api/profile/kind/:memberId/member
@@ -1630,6 +1652,90 @@ func (h *Handler) UpdateChildMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("members")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/profile/kind/:memberId/phones
+func (h *Handler) AddChildPhone(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !h.isParentOf(r.Context(), claims.UserID, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Label     string `json:"label"`
+		Number    string `json:"number"`
+		SortOrder int    `json:"sort_order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO member_phones (member_id, label, number, sort_order) VALUES (?,?,?,?)`,
+		memberID, req.Label, req.Number, req.SortOrder)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	id, _ := res.LastInsertId()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"id": id})
+}
+
+// DELETE /api/profile/kind/:memberId/phones/:phoneId
+func (h *Handler) DeleteChildPhone(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !h.isParentOf(r.Context(), claims.UserID, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	phoneID, err := strconv.Atoi(r.PathValue("phoneId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	h.db.ExecContext(r.Context(),
+		`DELETE FROM member_phones WHERE id=? AND member_id=?`, phoneID, memberID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/profile/kind/:memberId/visibility
+func (h *Handler) UpdateChildVisibility(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !h.isParentOf(r.Context(), claims.UserID, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		PhonesVisible  bool `json:"phones_visible"`
+		AddressVisible bool `json:"address_visible"`
+		PhotoVisible   bool `json:"photo_visible"`
+		EmailVisible   bool `json:"email_visible"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	h.db.ExecContext(r.Context(),
+		`UPDATE members SET phones_visible=?, address_visible=?, photo_visible=?, email_visible=? WHERE id=?`,
+		boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible),
+		memberID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

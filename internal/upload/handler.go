@@ -109,6 +109,42 @@ func (h *Handler) UploadMemberPhoto(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"photo_url": h.photoURL(filename)})
 }
 
+// POST /api/profile/kind/:memberId/photo — parent auth
+func (h *Handler) UploadChildPhoto(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID := r.PathValue("memberId")
+
+	var count int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM family_links WHERE parent_user_id=? AND member_id=?`,
+		claims.UserID, memberID).Scan(&count)
+	if count == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	filename, err := h.saveFile(r, "member-photos", imageTypes, maxPhotoBytes)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var oldPath sql.NullString
+	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM members WHERE id=?`, memberID).Scan(&oldPath)
+	if oldPath.Valid && oldPath.String != "" {
+		os.Remove(filepath.Join(h.uploadDir, oldPath.String))
+	}
+
+	if _, err := h.db.ExecContext(r.Context(), `UPDATE members SET photo_path=? WHERE id=?`, filename, memberID); err != nil {
+		os.Remove(filepath.Join(h.uploadDir, filename))
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"photo_url": h.photoURL(filename)})
+}
+
 // POST /api/upload/user-photo — own user
 func (h *Handler) UploadUserPhoto(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())

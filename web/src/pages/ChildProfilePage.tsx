@@ -6,7 +6,7 @@ import ProfileProfilTab from '../components/profile/ProfileProfilTab'
 import ProfileMemberTab from '../components/profile/ProfileMemberTab'
 import ProfileBankTab from '../components/profile/ProfileBankTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
-import { Member, Parent } from './ProfilePage'
+import { Member, Parent, Phone } from './ProfilePage'
 
 type TabName = 'profile' | 'member' | 'banking' | 'misc'
 
@@ -22,6 +22,7 @@ export default function ChildProfilePage() {
   const navigate = useNavigate()
   const [member, setMember] = useState<Member | null>(null)
   const [parents, setParents] = useState<Parent[]>([])
+  const [phones, setPhones] = useState<Phone[]>([])
   const [activeTab, setActiveTab] = useState<TabName>('profile')
 
   const load = () => {
@@ -29,6 +30,7 @@ export default function ChildProfilePage() {
       .then(r => {
         setMember(r.data.member)
         setParents(r.data.parents ?? [])
+        setPhones(r.data.phones ?? [])
       })
       .catch(err => { if (err.response?.status === 403) navigate('/') })
   }
@@ -75,8 +77,10 @@ export default function ChildProfilePage() {
       {activeTab === 'profile' && (
         <ProfileProfilTab
           mode="child"
+          childMemberId={memberId}
           ownMember={member}
           onSaveDirect={handleSaveKontakt}
+          initialPhones={phones}
           children={[]}
           parents={parents}
         />
