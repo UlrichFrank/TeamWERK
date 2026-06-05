@@ -34,7 +34,7 @@ interface Kader {
   bracket_years: number[]
   members: Member[]
   member_count: number
-  trainers: { id: number; name: string; user_id?: number }[]
+  trainers: { id: number; name: string; user_id?: number; status?: string }[]
 }
 
 const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }

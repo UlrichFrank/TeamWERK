@@ -13,6 +13,7 @@ interface Trainer {
   id: number
   name: string
   user_id?: number
+  status?: string
 }
 
 interface Props {
@@ -127,7 +128,12 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
         <ul className="divide-y divide-brand-border-subtle mt-1">
           {assignedTrainers.map(t => (
             <li key={t.id} className="flex items-center justify-between py-2 gap-2">
-              <PersonChip userId={t.user_id} name={t.name} />
+              <div className="flex items-center gap-2 min-w-0">
+                <PersonChip userId={t.user_id} name={t.name} />
+                {t.status === 'honorar' && (
+                  <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-blue/10 text-brand-blue shrink-0">Honorar</span>
+                )}
+              </div>
               <button
                 onClick={() => handleRemove(t.id)}
                 disabled={busy[t.id]}

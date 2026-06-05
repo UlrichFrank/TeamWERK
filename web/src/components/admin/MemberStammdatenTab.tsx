@@ -50,7 +50,7 @@ const GENDER_OPTIONS = [
 ]
 
 
-const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'ausgetreten']
+const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'honorar', 'ausgetreten']
 const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']
 
 export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
@@ -74,7 +74,10 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const clubFunctions = form.club_functions ?? []
   const hasSpieler = clubFunctions.includes('spieler')
 
+  const isHonorar = form.status === 'honorar'
+
   const toggleClubFunction = (fn: string) => {
+    if (isHonorar && fn !== 'trainer') return
     const next = clubFunctions.includes(fn)
       ? clubFunctions.filter(f => f !== fn)
       : [...clubFunctions, fn]
@@ -202,15 +205,17 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mitgliedsnummer</label>
-            <input
-              type="text"
-              value={form.member_number}
-              onChange={e => onFormChange({ member_number: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-            />
-          </div>
+          {!isHonorar && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mitgliedsnummer</label>
+              <input
+                type="text"
+                value={form.member_number}
+                onChange={e => onFormChange({ member_number: e.target.value })}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          )}
           {hasSpieler && (
             <>
               <div>
@@ -289,7 +294,16 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               <button
                 key={s}
                 type="button"
-                onClick={() => onFormChange({ status: s })}
+                onClick={() => {
+                  const updates: Record<string, unknown> = { status: s }
+                  if (s === 'honorar') {
+                    updates.club_functions = clubFunctions.filter(f => f === 'trainer')
+                    updates.member_number = ''
+                    updates.pass_number = ''
+                    updates.home_club = ''
+                  }
+                  onFormChange(updates)
+                }}
                 className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                   form.status === s
                     ? 'bg-brand-yellow text-brand-black border-brand-yellow'
@@ -306,31 +320,37 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">Vereinsfunktion</label>
           <div className="flex flex-wrap gap-2">
-            {CLUB_FUNCTION_OPTIONS.map(opt => (
-              <label key={opt.value} className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={clubFunctions.includes(opt.value)}
-                  onChange={() => toggleClubFunction(opt.value)}
-                  className="w-4 h-4 accent-brand-yellow"
-                />
-                <span className="text-sm text-brand-text">{opt.label}</span>
-              </label>
-            ))}
+            {CLUB_FUNCTION_OPTIONS.map(opt => {
+              const disabled = isHonorar && opt.value !== 'trainer'
+              return (
+                <label key={opt.value} className={`flex items-center gap-2 select-none ${disabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    checked={clubFunctions.includes(opt.value)}
+                    onChange={() => toggleClubFunction(opt.value)}
+                    disabled={disabled}
+                    className="w-4 h-4 accent-brand-yellow"
+                  />
+                  <span className="text-sm text-brand-text">{opt.label}</span>
+                </label>
+              )
+            })}
           </div>
         </div>
 
-        {/* Stammverein */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Stammverein</label>
-          <input
-            type="text"
-            value={form.home_club ?? ''}
-            onChange={e => onFormChange({ home_club: e.target.value })}
-            placeholder="z. B. TV Cannstatt"
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-          />
-        </div>
+        {/* Stammverein — nicht für Honorar-Mitglieder */}
+        {!isHonorar && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Stammverein</label>
+            <input
+              type="text"
+              value={form.home_club ?? ''}
+              onChange={e => onFormChange({ home_club: e.target.value })}
+              placeholder="z. B. TV Cannstatt"
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            />
+          </div>
+        )}
       </div>
 
       {/* Foto */}

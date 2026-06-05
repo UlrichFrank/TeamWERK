@@ -116,7 +116,19 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		whereExtra += ` AND EXISTS(SELECT 1 FROM member_club_functions WHERE member_id=m.id AND function=?)`
 	}
 	if search != "" {
-		whereExtra += ` AND (first_name LIKE ? OR last_name LIKE ? OR position LIKE ?)`
+		whereExtra += ` AND (
+			m.first_name LIKE ? OR m.last_name LIKE ? OR
+			COALESCE(m.position,'') LIKE ? OR
+			COALESCE(m.member_number,'') LIKE ? OR
+			COALESCE(m.pass_number,'') LIKE ? OR
+			COALESCE(CAST(m.jersey_number AS TEXT),'') LIKE ? OR
+			COALESCE(m.street,'') LIKE ? OR
+			COALESCE(m.zip,'') LIKE ? OR
+			COALESCE(m.city,'') LIKE ? OR
+			COALESCE(m.home_club,'') LIKE ? OR
+			m.status LIKE ? OR
+			EXISTS(SELECT 1 FROM users u WHERE u.id = m.user_id AND u.email LIKE ?)
+		)`
 	}
 
 	var err error
@@ -234,14 +246,17 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildListArgs constructs the args slice for list queries in order:
-// prefix args, club_function, search x3, limit, offset
+// prefix args, club_function, search x12, limit, offset
 func buildListArgs(prefix []any, clubFunc, search string, limit, offset *int) []any {
 	args := append([]any{}, prefix...)
 	if clubFunc != "" {
 		args = append(args, clubFunc)
 	}
 	if search != "" {
-		args = append(args, "%"+search+"%", "%"+search+"%", "%"+search+"%")
+		s := "%" + search + "%"
+		for range 12 {
+			args = append(args, s)
+		}
 	}
 	if limit != nil {
 		args = append(args, *limit)
@@ -483,6 +498,18 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Status == "" {
 		req.Status = "aktiv"
+	}
+	if req.Status == "honorar" {
+		req.MemberNumber = ""
+		req.PassNumber = ""
+		req.HomeClub = ""
+		filtered := []string{}
+		for _, f := range req.ClubFunctions {
+			if f == "trainer" {
+				filtered = append(filtered, f)
+			}
+		}
+		req.ClubFunctions = filtered
 	}
 
 	_, err := h.db.ExecContext(r.Context(),
@@ -1115,7 +1142,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizeStatus := func(s string) string {
 		switch s {
-		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv":
+		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar":
 			return s
 		case "gekündigt", "Vereinswechsel":
 			return "ausgetreten"

@@ -43,6 +43,7 @@ const genderLabel = (g?: string) => g === 'm' ? 'm' : g === 'f' ? 'w' : 'd'
 const statusBadgeStyles = (status: string) => {
   if (status === 'aktiv') return 'bg-brand-black text-white'
   if (status === 'verletzt') return 'bg-brand-yellow text-brand-black'
+  if (status === 'honorar') return 'bg-brand-blue/10 text-brand-blue'
   return 'bg-brand-border-subtle text-brand-text-muted'
 }
 

@@ -71,6 +71,7 @@ type trainerRow struct {
 	ID     int    `json:"id"`
 	Name   string `json:"name"`
 	UserID *int   `json:"user_id,omitempty"`
+	Status string `json:"status"`
 }
 
 type kaderDetail struct {
@@ -530,7 +531,7 @@ func (h *Handler) PatchGamesPerSeason(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) loadTrainers(ctx context.Context, kaderID int) ([]trainerRow, error) {
 	rows, err := h.db.QueryContext(ctx,
-		`SELECT m.id, m.first_name || ' ' || m.last_name, m.user_id
+		`SELECT m.id, m.first_name || ' ' || m.last_name, m.user_id, m.status
 		 FROM kader_trainers kt
 		 JOIN members m ON m.id = kt.member_id
 		 WHERE kt.kader_id = ?
@@ -543,7 +544,7 @@ func (h *Handler) loadTrainers(ctx context.Context, kaderID int) ([]trainerRow, 
 	for rows.Next() {
 		var t trainerRow
 		var userID sql.NullInt64
-		rows.Scan(&t.ID, &t.Name, &userID)
+		rows.Scan(&t.ID, &t.Name, &userID, &t.Status)
 		if userID.Valid {
 			n := int(userID.Int64)
 			t.UserID = &n
