@@ -49,8 +49,6 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   const [startTime, setStartTime] = useState(session.start_time)
   const [endTime, setEndTime] = useState(session.end_time)
   const [location, setLocation] = useState(session.location)
-  const [status, setStatus] = useState<'active' | 'cancelled'>(session.status)
-  const [cancelReason, setCancelReason] = useState(session.cancel_reason ?? '')
   const [scope, setScope] = useState<Scope>('this_one')
   const [series, setSeries] = useState<Series | null>(null)
   const [saving, setSaving] = useState(false)
@@ -82,8 +80,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           end_time: endTime,
           location,
           note: session.note,
-          status,
-          cancel_reason: cancelReason,
+          status: session.status,
+          cancel_reason: session.cancel_reason ?? '',
         })
       } else if (series) {
         await api.put(`/training-series/${series.id}`, {
@@ -195,23 +193,17 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
             <input type="text" value={location} onChange={e => setLocation(e.target.value)}
               placeholder="Sporthalle…" className={INPUT} />
           </div>
-          {scope === 'this_one' && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Status</label>
-                <select value={status} onChange={e => setStatus(e.target.value as 'active' | 'cancelled')} className={INPUT}>
-                  <option value="active">Aktiv</option>
-                  <option value="cancelled">Abgesagt</option>
-                </select>
-              </div>
-              {status === 'cancelled' && (
-                <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Absagegrund</label>
-                  <input type="text" value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                    placeholder="z. B. Hallensperrung" className={INPUT} />
-                </div>
-              )}
-            </>
+          {series && (
+            <div className="space-y-2 pt-1">
+              <label className="flex items-center gap-2 cursor-default">
+                <input type="checkbox" checked={series.rsvp_opt_out === 1} disabled className="w-4 h-4 accent-brand-yellow" />
+                <span className="text-sm text-brand-text-muted">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-default">
+                <input type="checkbox" checked={series.rsvp_require_reason === 1} disabled className="w-4 h-4 accent-brand-yellow" />
+                <span className="text-sm text-brand-text-muted">Begründung bei Absage erforderlich</span>
+              </label>
+            </div>
           )}
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
