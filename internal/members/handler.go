@@ -39,10 +39,11 @@ type Member struct {
 	ClubFunctions []string `json:"club_functions"`
 
 	// Extended fields (populated by GetMember)
-	Street   *string `json:"street,omitempty"`
-	Zip      *string `json:"zip,omitempty"`
-	City     *string `json:"city,omitempty"`
-	JoinDate *string `json:"join_date,omitempty"`
+	Street    *string `json:"street,omitempty"`
+	Zip       *string `json:"zip,omitempty"`
+	City      *string `json:"city,omitempty"`
+	HomeClub  *string `json:"home_club,omitempty"`
+	JoinDate  *string `json:"join_date,omitempty"`
 	IBAN          *string `json:"iban,omitempty"`
 	AccountHolder *string `json:"account_holder,omitempty"`
 	PhotoURL      *string `json:"photo_url,omitempty"`
@@ -296,7 +297,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
-		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
+		       m.street, m.zip, m.city, m.home_club, m.join_date, m.iban, m.account_holder,
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
@@ -309,7 +310,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var base Member
 	var jerseyNum, userID sql.NullInt64
 	var clubFunctionsStr string
-	var mStreet, mZip, mCity sql.NullString
+	var mStreet, mZip, mCity, mHomeClub sql.NullString
 	var joinDate, iban, accountHolder sql.NullString
 	var photoPath sql.NullString
 	var photoVisible int64
@@ -321,7 +322,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
 		&base.MemberNumber, &base.PassNumber,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunctionsStr,
-		&mStreet, &mZip, &mCity, &joinDate, &iban, &accountHolder,
+		&mStreet, &mZip, &mCity, &mHomeClub, &joinDate, &iban, &accountHolder,
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
@@ -354,6 +355,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		base.Street = &s
 		base.Zip = &z
 		base.City = &c
+	}
+	if mHomeClub.Valid && mHomeClub.String != "" {
+		base.HomeClub = &mHomeClub.String
 	}
 
 	// Photo: always for privileged roles; others only if photo_visible=1
@@ -459,6 +463,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Street   string `json:"street"`
 		Zip      string `json:"zip"`
 		City     string `json:"city"`
+		HomeClub string `json:"home_club"`
 		JoinDate      string `json:"join_date"`
 		IBAN          string `json:"iban"`
 		AccountHolder string `json:"account_holder"`
@@ -484,14 +489,14 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		`UPDATE members SET
 			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
 			jersey_number=?, position=?, gender=?,
-			street=?, zip=?, city=?,
+			street=?, zip=?, city=?, home_club=?,
 			status=?,
 			photo_visible=?,
 			updated_at=?
 		WHERE id=?`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender,
-		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub),
 		req.Status,
 		boolToInt(req.PhotoVisible),
 		time.Now(), id)
@@ -603,7 +608,7 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT m.member_number, m.first_name, m.last_name, COALESCE(m.date_of_birth,''),
 		        m.gender, COALESCE(m.pass_number,''), m.jersey_number,
-		        COALESCE(m.position,''), m.status,
+		        COALESCE(m.position,''), m.status, COALESCE(m.home_club,''),
 		        COALESCE(u.email,'') AS user_email,
 		        COALESCE(up1.email,'') AS parent1_email,
 		        COALESCE(up2.email,'') AS parent2_email
@@ -635,22 +640,22 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	cw.Comma = ';'
 	cw.Write([]string{
 		"Mitgliedsnummer", "Vorname", "Nachname", "Geburtsdatum", "Geschlecht",
-		"Passnummer", "Trikotnummer", "Position", "Status",
+		"Passnummer", "Trikotnummer", "Position", "Status", "Stammverein",
 		"Benutzer_Email", "Erziehungsberechtigter1_Email", "Erziehungsberechtigter2_Email",
 	})
 	for rows.Next() {
 		var memberNum, position, userEmail, parent1, parent2 sql.NullString
-		var firstName, lastName, dob, passNum, gender, status string
+		var firstName, lastName, dob, passNum, gender, status, homeClub string
 		var jerseyNum sql.NullInt64
 		rows.Scan(&memberNum, &firstName, &lastName, &dob, &gender, &passNum, &jerseyNum,
-			&position, &status, &userEmail, &parent1, &parent2)
+			&position, &status, &homeClub, &userEmail, &parent1, &parent2)
 		jerseyStr := ""
 		if jerseyNum.Valid {
 			jerseyStr = fmt.Sprintf("%d", jerseyNum.Int64)
 		}
 		cw.Write([]string{
 			memberNum.String, firstName, lastName, dob, gender,
-			passNum, jerseyStr, position.String, status,
+			passNum, jerseyStr, position.String, status, homeClub,
 			userEmail.String, parent1.String, parent2.String,
 		})
 	}
@@ -1136,7 +1141,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 		// DB lookup by name (+ dob as tiebreaker when present)
 		query := `SELECT id, member_number, COALESCE(date_of_birth,''),
-		                 pass_number, jersey_number, position, status, gender, user_id
+		                 pass_number, jersey_number, position, status, gender, user_id, home_club
 		          FROM members
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
 		args := []interface{}{firstName, lastName}
@@ -1152,10 +1157,11 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			dbDOB, dbGender, dbStatus              string
 			dbJerseyNum                            sql.NullInt64
 			dbUserID                               sql.NullInt64
+			dbHomeClub                             sql.NullString
 		)
 		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
 			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
-				&dbStatus, &dbGender, &dbUserID)
+				&dbStatus, &dbGender, &dbUserID, &dbHomeClub)
 
 		if scanErr == sql.ErrNoRows {
 			// New member — insert
@@ -1170,11 +1176,12 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
 			res, insErr := h.db.ExecContext(r.Context(),
 				`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
-				                      pass_number, jersey_number, position, status, gender)
-				 VALUES (?,?,?,?,?,?,?,?,?)`,
+				                      pass_number, jersey_number, position, status, gender, home_club)
+				 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 				nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
 				nullableString(dob), nullableString(col(row, "Passnummer")),
-				jerseyArg, nullableString(col(row, "Position")), status, gender)
+				jerseyArg, nullableString(col(row, "Position")), status, gender,
+				nullableString(col(row, "Stammverein")))
 			if insErr != nil {
 				report.Rows = append(report.Rows, ImportRow{
 					Line: lineNum, Status: "error", Name: displayName,
@@ -1237,6 +1244,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		addNullableChange(col(row, "Passnummer"), dbPassNum, "Passnummer", "pass_number")
 		addNullableChange(col(row, "Position"), dbPosition, "Position", "position")
 		addChange(col(row, "Status"), dbStatus, "Status", "status")
+		addNullableChange(col(row, "Stammverein"), dbHomeClub, "Stammverein", "home_club")
 
 		if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" {
 			dbJerseyStr := ""

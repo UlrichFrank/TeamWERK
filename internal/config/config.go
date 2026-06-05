@@ -45,7 +45,7 @@ func Load() (*Config, error) {
 		},
 		VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
 		VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
-		VAPIDEmail:      getEnv("VAPID_EMAIL", "mailto:vorstand@team-stuttgart.org"),
+		VAPIDEmail:      getEnv("VAPID_EMAIL", "vorstand@team-stuttgart.org"),
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, Settings, History } from 'lucide-react'
+import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { useAuth, hasFunction } from '../contexts/AuthContext'

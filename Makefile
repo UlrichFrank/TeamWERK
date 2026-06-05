@@ -7,7 +7,7 @@ EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote env clean backup restore-local pull-db
+.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup restore-local pull-db
 
 .DEFAULT_GOAL := help
 
@@ -89,6 +89,9 @@ create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
 
 create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
 	ssh $(REMOTE) "/usr/local/bin/teamwerk create-admin --db $(DB_PATH) --email=$(EMAIL) --password=$(PASSWORD) --name='$(NAME)'"
+
+push-test-remote: ## Test-Push an User senden (USER=<id> TITLE=... BODY=... URL=...)
+	ssh $(REMOTE) "/usr/local/bin/teamwerk push-test --env=/etc/teamwerk/env --db=$(DB_PATH) --user=$(USER) --title='$(TITLE)' --body='$(BODY)' --url='$(or $(URL),/)'"
 
 backup: ## Prod-DB auf VPS sichern und lokal herunterladen (./teamwerk-backup.db)
 	@echo "Erstelle Backup auf VPS..."

@@ -1,5 +1,3 @@
-## ADDED Requirements
-
 ### Requirement: Spielplan für alle eingeloggten User lesbar
 
 `GET /api/games` und `GET /api/games/{id}` SHALL ohne Rollen-Einschränkung für alle authentifizierten User zugänglich sein.
@@ -24,6 +22,22 @@
 
 #### Scenario: Spieler kann kein Event anlegen
 - **WHEN** ein User mit Rolle spieler oder elternteil `POST /api/admin/games` aufruft
+- **THEN** antwortet der Server mit HTTP 403
+
+---
+
+### Requirement: PUT /api/admin/games/{id} erreichbar für trainer und vorstand
+
+`PUT /api/admin/games/{id}` SHALL für die Rollen admin, trainer und vorstand zugänglich sein. Dies ermöglicht dem `GameEditModal` im Kalender das direkte Bearbeiten von Spieltagen durch Trainer.
+
+#### Scenario: Trainer bearbeitet Spieltag via PUT
+
+- **WHEN** ein User mit Rolle trainer `PUT /api/admin/games/{id}` mit gültigen Feldern aufruft
+- **THEN** antwortet der Server mit HTTP 200 und den aktualisierten Spieltag-Daten
+
+#### Scenario: Spieler kann Spieltag nicht bearbeiten
+
+- **WHEN** ein User mit Rolle spieler `PUT /api/admin/games/{id}` aufruft
 - **THEN** antwortet der Server mit HTTP 403
 
 ---
@@ -57,22 +71,42 @@ Jedes Event SHALL einen `event_type` haben: `heim`, `auswärts` oder `generisch`
 
 ---
 
-### Requirement: Explizite Vorlage bei Erstellung
+### Requirement: Spiel-Detail zeigt vollständige Kaderliste für alle authentifizierten User
 
-(Existing requirements below this line preserved as-is)
+`GET /api/games/{id}/responses` SHALL nicht nur Spieler zurückgeben, die bereits geantwortet haben, sondern alle Kader-Mitglieder aller zugeordneten Teams für die aktive Saison. User ohne Antwort erscheinen mit `status: null`.
 
-## MODIFIED Requirements
+#### Scenario: Spieler ruft Spiel-Detail ab
 
-### Requirement: PUT /api/admin/games/{id} erreichbar für trainer und vorstand
+- **WHEN** ein User mit Rolle `spieler` `GET /api/games/{id}/responses` aufruft
+- **THEN** antwortet der Server mit HTTP 200
+- **THEN** enthält die Antwort alle Kader-Mitglieder des Teams, auch solche ohne RSVP
 
-`PUT /api/admin/games/{id}` SHALL für die Rollen admin, trainer und vorstand zugänglich sein (bisher nur admin). Dies ermöglicht dem `GameEditModal` im Kalender das direkte Bearbeiten von Spieltagen durch Trainer.
+#### Scenario: Elternteil ruft Spiel-Detail ab
 
-#### Scenario: Trainer bearbeitet Spieltag via PUT
+- **WHEN** ein User mit `is_parent = true` `GET /api/games/{id}/responses` aufruft
+- **THEN** antwortet der Server mit HTTP 200
+- **THEN** enthält die Antwort alle Kader-Mitglieder des Teams
 
-- **WHEN** ein User mit Rolle trainer `PUT /api/admin/games/{id}` mit gültigen Feldern aufruft
-- **THEN** antwortet der Server mit HTTP 200 und den aktualisierten Spieltag-Daten
+---
 
-#### Scenario: Spieler kann Spieltag nicht bearbeiten
+### Requirement: Kommentar-Sichtbarkeit auf der Spiel-Detail-Seite
 
-- **WHEN** ein User mit Rolle spieler `PUT /api/admin/games/{id}` aufruft
-- **THEN** antwortet der Server mit HTTP 403
+`GET /api/games/{id}/responses` SHALL Kommentare (`reason`) rollenabhängig zurückgeben:
+- Trainer/Admin: alle Kommentare aller Spieler
+- Spieler: nur der eigene Kommentar
+- Elternteil: nur Kommentare der eigenen Kinder (via `family_links`)
+
+#### Scenario: Trainer sieht alle Kommentare
+
+- **WHEN** ein Trainer `GET /api/games/{id}/responses` aufruft
+- **THEN** enthält jeder Eintrag mit vorhandenem Kommentar das Feld `reason` befüllt
+
+#### Scenario: Spieler sieht nur eigenen Kommentar
+
+- **WHEN** ein Spieler `GET /api/games/{id}/responses` aufruft
+- **THEN** ist `reason` nur für den eigenen Eintrag befüllt; alle anderen haben `reason: null`
+
+#### Scenario: Elternteil sieht nur Kinder-Kommentare
+
+- **WHEN** ein Elternteil `GET /api/games/{id}/responses` aufruft
+- **THEN** ist `reason` nur für Einträge der eigenen Kinder befüllt

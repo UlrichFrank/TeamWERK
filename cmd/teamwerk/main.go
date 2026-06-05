@@ -2,12 +2,15 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"golang.org/x/crypto/bcrypt"
@@ -60,6 +63,10 @@ func main() {
 	}
 	if len(os.Args) > 1 && os.Args[1] == "gen-vapid" {
 		runGenVapid()
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "push-test" {
+		runPushTest()
 		return
 	}
 
@@ -320,6 +327,93 @@ func runGenVapid() {
 		log.Fatalf("gen-vapid: %v", err)
 	}
 	fmt.Printf("VAPID_PRIVATE_KEY=%s\nVAPID_PUBLIC_KEY=%s\n", priv, pub)
+}
+
+func runPushTest() {
+	fs := flag.NewFlagSet("push-test", flag.ExitOnError)
+	userID := fs.Int("user", 0, "User-ID (Pflicht)")
+	title := fs.String("title", "TeamWERK Test", "Titel der Notification")
+	body := fs.String("body", "Das ist eine Test-Notification.", "Text der Notification")
+	url := fs.String("url", "/", "Ziel-URL beim Klick")
+	envFile := fs.String("env", "", "Pfad zur Env-Datei (default: .env, VPS: /etc/teamwerk/env)")
+	dbPath := fs.String("db", "", "Pfad zur SQLite-Datenbank (default: aus DB_PATH)")
+	_ = fs.Parse(os.Args[2:])
+
+	if *envFile != "" {
+		_ = godotenv.Load(*envFile)
+	} else {
+		_ = godotenv.Load()
+	}
+	if *dbPath == "" {
+		*dbPath = getEnvOrDefault("DB_PATH", "./teamwerk.db")
+	}
+
+	if *userID == 0 {
+		fmt.Fprintln(os.Stderr, "Verwendung: teamwerk push-test --user=<id> [--title=...] [--body=...] [--url=...] [--db=...]")
+		os.Exit(1)
+	}
+
+	cfg, err := appconfig.Load()
+	if err != nil {
+		log.Fatalf("push-test: load config: %v", err)
+	}
+	if cfg.VAPIDPrivateKey == "" {
+		log.Fatal("push-test: VAPID_PRIVATE_KEY nicht gesetzt")
+	}
+
+	database, err := db.Open(*dbPath)
+	if err != nil {
+		log.Fatalf("push-test: open db: %v", err)
+	}
+	defer database.Close()
+
+	rows, err := database.Query(`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`, *userID)
+	if err != nil {
+		log.Fatalf("push-test: query: %v", err)
+	}
+	defer rows.Close()
+
+	type sub struct {
+		id       int
+		endpoint string
+		p256dh   string
+		auth     string
+	}
+	var subs []sub
+	for rows.Next() {
+		var s sub
+		rows.Scan(&s.id, &s.endpoint, &s.p256dh, &s.auth)
+		subs = append(subs, s)
+	}
+	if len(subs) == 0 {
+		log.Fatalf("push-test: keine Subscriptions für User %d gefunden", *userID)
+	}
+
+	payload, _ := json.Marshal(map[string]string{"title": *title, "body": *body, "url": *url})
+
+	for _, s := range subs {
+		fmt.Printf("  Sub %d: %s…\n", s.id, s.endpoint[:60])
+		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
+			Endpoint: s.endpoint,
+			Keys:     webpush.Keys{P256dh: s.p256dh, Auth: s.auth},
+		}, &webpush.Options{
+			VAPIDPublicKey:  cfg.VAPIDPublicKey,
+			VAPIDPrivateKey: cfg.VAPIDPrivateKey,
+			Subscriber:      cfg.VAPIDEmail,
+			TTL:             3600,
+		})
+		if err != nil {
+			fmt.Printf("  → Fehler: %v\n", err)
+			continue
+		}
+		body2, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		fmt.Printf("  → HTTP %d  %s\n", resp.StatusCode, strings.TrimSpace(string(body2)))
+		if resp.StatusCode == http.StatusGone {
+			database.Exec(`DELETE FROM push_subscriptions WHERE id = ?`, s.id)
+			fmt.Printf("  → Subscription %d gelöscht (expired)\n", s.id)
+		}
+	}
 }
 
 func runCreateAdmin() {
