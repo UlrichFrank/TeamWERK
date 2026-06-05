@@ -992,6 +992,33 @@ func nullableString(s string) interface{} {
 	return s
 }
 
+// normalizeDate converts German DD.MM.YY / DD.MM.YYYY to ISO YYYY-MM-DD.
+// Leaves already-ISO or unrecognized strings unchanged.
+func normalizeDate(s string) string {
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return s
+	}
+	day, month, year := parts[0], parts[1], parts[2]
+	switch len(year) {
+	case 2:
+		y, err := strconv.Atoi(year)
+		if err != nil {
+			return s
+		}
+		if y >= 30 {
+			year = "19" + year
+		} else {
+			year = "20" + year
+		}
+	case 4:
+		// already full year
+	default:
+		return s
+	}
+	return year + "-" + month + "-" + day
+}
+
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line    int      `json:"line"`
@@ -1056,9 +1083,18 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cannot read CSV header", http.StatusBadRequest)
 		return
 	}
+	// Canonical names for columns that external tools export differently.
+	columnAliases := map[string]string{
+		"Name":       "Nachname",
+		"geboren am": "Geburtsdatum",
+	}
 	colIdx := make(map[string]int, len(header))
 	for i, name := range header {
-		colIdx[strings.TrimSpace(name)] = i
+		trimmed := strings.TrimSpace(name)
+		colIdx[trimmed] = i
+		if canonical, ok := columnAliases[trimmed]; ok {
+			colIdx[canonical] = i
+		}
 	}
 	col := func(row []string, name string) string {
 		idx, ok := colIdx[name]
@@ -1066,6 +1102,28 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			return ""
 		}
 		return strings.TrimSpace(row[idx])
+	}
+	normalizeGender := func(s string) string {
+		switch s {
+		case "m":
+			return "m"
+		case "w", "f":
+			return "f"
+		default:
+			return "u"
+		}
+	}
+	normalizeStatus := func(s string) string {
+		switch s {
+		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv":
+			return s
+		case "gekündigt", "Vereinswechsel":
+			return "ausgetreten"
+		case "kein aktiver Sportler mehr":
+			return "passiv"
+		default:
+			return "aktiv"
+		}
 	}
 	if _, ok := colIdx["Vorname"]; !ok {
 		http.Error(w, "missing required column: Vorname", http.StatusBadRequest)
@@ -1093,7 +1151,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		k := dupKey{
 			first: strings.ToLower(col(row, "Vorname")),
 			last:  strings.ToLower(col(row, "Nachname")),
-			dob:   col(row, "Geburtsdatum"),
+			dob:   normalizeDate(col(row, "Geburtsdatum")),
 		}
 		if prev, exists := seenAt[k]; exists {
 			dupOf[lineNum] = prev
@@ -1114,7 +1172,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		firstName := col(row, "Vorname")
 		lastName := col(row, "Nachname")
 		displayName := lastName + ", " + firstName
-		dob := col(row, "Geburtsdatum")
+		dob := normalizeDate(col(row, "Geburtsdatum"))
 
 		if firstName == "" || lastName == "" {
 			report.Rows = append(report.Rows, ImportRow{
@@ -1165,14 +1223,8 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 		if scanErr == sql.ErrNoRows {
 			// New member — insert
-			gender := col(row, "Geschlecht")
-			if gender == "" {
-				gender = "u"
-			}
-			status := col(row, "Status")
-			if status == "" {
-				status = "aktiv"
-			}
+			gender := normalizeGender(col(row, "Geschlecht"))
+			status := normalizeStatus(col(row, "Status"))
 			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
 			res, insErr := h.db.ExecContext(r.Context(),
 				`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
@@ -1239,11 +1291,11 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 
 		addNullableChange(col(row, "Mitgliedsnummer"), dbMemberNum, "Mitgliedsnummer", "member_number")
-		addChange(col(row, "Geburtsdatum"), dbDOB, "Geburtsdatum", "date_of_birth")
-		addChange(col(row, "Geschlecht"), dbGender, "Geschlecht", "gender")
+		addChange(dob, dbDOB, "Geburtsdatum", "date_of_birth")
+		addChange(normalizeGender(col(row, "Geschlecht")), dbGender, "Geschlecht", "gender")
 		addNullableChange(col(row, "Passnummer"), dbPassNum, "Passnummer", "pass_number")
 		addNullableChange(col(row, "Position"), dbPosition, "Position", "position")
-		addChange(col(row, "Status"), dbStatus, "Status", "status")
+		addChange(normalizeStatus(col(row, "Status")), dbStatus, "Status", "status")
 		addNullableChange(col(row, "Stammverein"), dbHomeClub, "Stammverein", "home_club")
 
 		if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" {
