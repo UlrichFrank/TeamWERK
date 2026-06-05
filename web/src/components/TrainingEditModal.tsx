@@ -27,6 +27,8 @@ interface Series {
   valid_from: string
   valid_until: string
   note: string
+  rsvp_opt_out: number
+  rsvp_require_reason: number
 }
 
 type Scope = 'this_one' | 'this_and_following' | 'all'
@@ -93,6 +95,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           valid_from: series.valid_from.slice(0, 10),
           valid_until: series.valid_until.slice(0, 10),
           note: series.note,
+          rsvp_opt_out: series.rsvp_opt_out,
+          rsvp_require_reason: series.rsvp_require_reason,
           scope: scope === 'this_and_following' ? 'this_and_following' : 'all',
           from_date: scope === 'this_and_following' ? session.date.slice(0, 10) : undefined,
         })
