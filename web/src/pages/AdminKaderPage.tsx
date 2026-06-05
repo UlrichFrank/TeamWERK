@@ -295,7 +295,7 @@ export default function AdminKaderPage() {
                 setSelectedSeason(season)
                 if (season) loadKader(season.id)
               }}
-              className="border border-brand-border rounded-md px-3 py-1.5 text-sm text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className="border border-brand-border rounded-md px-3 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-[9rem]"
             >
               {seasons.map(s => (
                 <option key={s.id} value={s.id}>
@@ -311,19 +311,19 @@ export default function AdminKaderPage() {
               <>
                 <button
                   onClick={() => { setCreateModal({ ageClass: '', gender: '', nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
-                  className="bg-brand-yellow text-brand-black px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
+                  className="bg-brand-yellow text-brand-black px-4 py-1.5 rounded-md text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
                 >
-                  + Mannschaft anlegen
+                  + Mannschaft
                 </button>
                 <button
                   onClick={() => setShowCopyModal(true)}
-                  className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
+                  className="border border-brand-border text-brand-text-muted px-4 py-1.5 rounded-md text-xs font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
                 >
                   Aus vorheriger Saison kopieren
                 </button>
                 <button
                   onClick={() => setShowAutoAssignModal(true)}
-                  className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
+                  className="border border-brand-border text-brand-text-muted px-4 py-1.5 rounded-md text-xs font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
                 >
                   Auto-Assign
                 </button>
@@ -391,8 +391,6 @@ export default function AdminKaderPage() {
       {groupOrder.map(key => {
         const group = groups.get(key)!
         const hasMultiple = group.length > 1
-        const firstK = group[0]
-        const canAddMore = group.length < 3
 
         return (
           <div key={key} className="mb-6">
@@ -551,93 +549,45 @@ export default function AdminKaderPage() {
               )
             })}
 
-            {/* Add second team button */}
-            {canAddMore && selectedSeason && (
-              <button
-                onClick={() => {
-                  const nextNum = group.length + 1
-                  const bracketYears = firstK.bracket_years
-                  setCreateModal({
-                    ageClass: firstK.age_class,
-                    gender: firstK.gender,
-                    nextTeamNumber: nextNum,
-                    bracketYears,
-                  })
-                  setCreateDedicatedYear(null)
-                }}
-                className="text-sm text-brand-blue hover:text-brand-black transition-colors flex items-center gap-1 px-1 py-1"
-              >
-                <span className="text-base leading-none">+</span>
-                Mannschaft anlegen ({firstK.age_class} {GENDER_LABEL[firstK.gender]})
-              </button>
-            )}
           </div>
         )
       })}
 
-      {/* Missing gender combinations in active age class */}
-      {activeAgeClass && selectedSeason && (() => {
-        const presentGenders = new Set(kaderList.filter(k => k.age_class === activeAgeClass).map(k => k.gender))
-        const missing = (['m', 'f', 'mixed'] as const).filter(g => !presentGenders.has(g))
-        if (missing.length === 0) return null
-        return (
-          <div className="flex flex-col gap-1">
-            {missing.map(gender => (
-              <button
-                key={gender}
-                onClick={() => { setCreateModal({ ageClass: activeAgeClass, gender, nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
-                className="text-sm text-brand-blue hover:text-brand-black transition-colors flex items-center gap-1 px-1 py-1"
-              >
-                <span className="text-base leading-none">+</span>
-                Mannschaft anlegen ({activeAgeClass} {GENDER_LABEL[gender]})
-              </button>
-            ))}
-          </div>
-        )
-      })()}
 
       {/* Create team modal */}
       {createModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
-              <h3 className="font-semibold text-base text-brand-text">
-                {createModal.ageClass && createModal.gender
-                  ? `Neue Mannschaft — ${createModal.ageClass} ${GENDER_LABEL[createModal.gender]}`
-                  : 'Neue Mannschaft anlegen'}
-              </h3>
+              <h3 className="font-semibold text-base text-brand-text">Neue Mannschaft anlegen</h3>
             </div>
             <div className="px-6 py-5 space-y-3">
-              {!createModal.ageClass && (
-                <div>
-                  <label className="text-xs font-medium text-brand-text-muted block mb-1">Altersklasse</label>
-                  <select
-                    value={createModal.ageClass}
-                    onChange={e => setCreateModal(prev => prev && ({ ...prev, ageClass: e.target.value }))}
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-                  >
-                    <option value="">Bitte wählen…</option>
-                    {ageClassOptions.map(ac => (
-                      <option key={ac} value={ac}>{ac}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {!createModal.gender && (
-                <div>
-                  <label className="text-xs font-medium text-brand-text-muted block mb-1">Geschlecht</label>
-                  <select
-                    value={createModal.gender}
-                    onChange={e => setCreateModal(prev => prev && ({ ...prev, gender: e.target.value }))}
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-                  >
-                    <option value="">Bitte wählen…</option>
-                    <option value="m">männlich</option>
-                    <option value="f">weiblich</option>
-                    <option value="mixed">gemischt</option>
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="text-xs font-medium text-brand-text-muted block mb-1">Altersklasse</label>
+                <select
+                  value={createModal.ageClass}
+                  onChange={e => setCreateModal(prev => prev && ({ ...prev, ageClass: e.target.value }))}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                >
+                  <option value="">Bitte wählen…</option>
+                  {ageClassOptions.map(ac => (
+                    <option key={ac} value={ac}>{ac}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-brand-text-muted block mb-1">Geschlecht</label>
+                <select
+                  value={createModal.gender}
+                  onChange={e => setCreateModal(prev => prev && ({ ...prev, gender: e.target.value }))}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                >
+                  <option value="">Bitte wählen…</option>
+                  <option value="m">männlich</option>
+                  <option value="f">weiblich</option>
+                  <option value="mixed">gemischt</option>
+                </select>
+              </div>
               <div>
                 <label className="text-xs font-medium text-brand-text-muted block mb-1">Jahrgang</label>
                 <select

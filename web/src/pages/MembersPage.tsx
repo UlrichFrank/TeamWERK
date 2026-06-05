@@ -1,7 +1,7 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { X, User, CreditCard } from 'lucide-react'
+import { X, User, CreditCard, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
@@ -127,6 +127,8 @@ export default function MembersPage() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportReport | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showActionsMenu, setShowActionsMenu] = useState(false)
+  const actionsMenuRef = useRef<HTMLDivElement>(null)
 
   const handleExport = () => {
     api.get('/members/export', { responseType: 'blob' }).then(r => {
@@ -164,7 +166,18 @@ export default function MembersPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  useEscapeKey(showNew ? resetNew : showImport ? resetImport : null)
+  useEscapeKey(showNew ? resetNew : showImport ? resetImport : showActionsMenu ? () => setShowActionsMenu(false) : null)
+
+  useEffect(() => {
+    if (!showActionsMenu) return
+    const handler = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showActionsMenu])
 
   return (
     <div>
@@ -176,12 +189,12 @@ export default function MembersPage() {
               type="search"
               placeholder="Suchen…"
               onChange={e => setSearch(e.target.value)}
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
             />
             <select
               value={clubFunctionFilter}
               onChange={e => setClubFunctionFilter(e.target.value)}
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
             >
               <option value="">Alle Funktionen</option>
               {Object.entries(CLUB_FUNCTION_LABELS).map(([val, label]) => (
@@ -189,26 +202,42 @@ export default function MembersPage() {
               ))}
             </select>
             {isAdmin && (
-              <>
-                <button
-                  onClick={() => setShowNew(true)}
-                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
-                >
-                  + Neu
-                </button>
-                <button
-                  onClick={() => setShowImport(true)}
-                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
-                >
-                  Import CSV
-                </button>
-                <button
-                  onClick={handleExport}
-                  className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
-                >
-                  Export CSV
-                </button>
-              </>
+              <div ref={actionsMenuRef} className="relative">
+                <div className="flex">
+                  <button
+                    onClick={() => setShowNew(true)}
+                    className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow rounded-l-md px-3 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+                  >
+                    + Neu
+                  </button>
+                  <button
+                    onClick={() => setShowActionsMenu(v => !v)}
+                    aria-label="Weitere Aktionen"
+                    className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow border-l-brand-black/20 border-l rounded-r-md px-2 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {showActionsMenu && (
+                  <div
+                    className="absolute right-0 mt-1 w-40 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden"
+                    onBlur={() => setShowActionsMenu(false)}
+                  >
+                    <button
+                      onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                    >
+                      Import CSV
+                    </button>
+                    <button
+                      onClick={() => { setShowActionsMenu(false); handleExport() }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                    >
+                      Export CSV
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

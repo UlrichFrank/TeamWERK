@@ -247,9 +247,9 @@ export default function AdminDutyTypesPage() {
           <h1 className="text-2xl font-bold">Diensttypen</h1>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
           >
-            + Neuer Diensttyp
+            + Diensttyp
           </button>
         </div>
       </div>

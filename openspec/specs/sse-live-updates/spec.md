@@ -1,6 +1,6 @@
 ### Requirement: SSE-Endpoint sendet typisierte Refresh-Signale
 
-Der Server SHALL einen SSE-Endpoint `GET /api/events` bereitstellen. Der Endpoint SHALL authentifizierte Verbindungen offen halten und typisierte Event-Strings senden (`data: <event-typ>\n\n`), wenn eine Mutation in einem der folgenden Bereiche stattfindet: `mitfahrgelegenheiten`, `members`, `duties`, `games`, `settings`.
+Der Server SHALL einen SSE-Endpoint `GET /api/events` bereitstellen. Der Endpoint SHALL authentifizierte Verbindungen offen halten und typisierte Event-Strings senden (`data: <event-typ>\n\n`), wenn eine Mutation in einem der folgenden Bereiche stattfindet: `mitfahrgelegenheiten`, `members`, `duties`, `games`, `settings`, `trainings`.
 
 #### Scenario: Neuer Mitfahrgelegenheiten-Eintrag löst Event aus
 
@@ -21,6 +21,11 @@ Der Server SHALL einen SSE-Endpoint `GET /api/events` bereitstellen. Der Endpoin
 
 - **WHEN** ein Admin oder Trainer einen Dienst-Slot anlegt, bearbeitet oder löscht, oder eine Zuweisung erfüllt/als Geldersatz markiert
 - **THEN** erhalten alle verbundenen SSE-Clients `data: duties`
+
+#### Scenario: Trainings-Mutation löst Event aus
+
+- **WHEN** ein Nutzer eine Trainings-Session oder Trainingsserie erstellt, bearbeitet oder löscht, oder einen RSVP abgibt
+- **THEN** erhalten alle verbundenen SSE-Clients `data: trainings`
 
 #### Scenario: Keepalive verhindert Verbindungsabbruch
 

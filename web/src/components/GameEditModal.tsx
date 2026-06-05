@@ -1,0 +1,98 @@
+import { useState } from 'react'
+import { X } from 'lucide-react'
+import { api } from '../lib/api'
+import { useEscapeKey } from '../lib/useEscapeKey'
+
+interface Game {
+  id: number
+  date: string
+  time: string
+  opponent: string
+  event_type: string
+}
+
+const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
+
+interface Props {
+  game: Game
+  onClose: () => void
+  onSaved: () => void
+}
+
+export default function GameEditModal({ game, onClose, onSaved }: Props) {
+  const [opponent, setOpponent] = useState(game.opponent)
+  const [date, setDate] = useState(game.date.slice(0, 10))
+  const [time, setTime] = useState(game.time)
+  const [eventType, setEventType] = useState(game.event_type)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEscapeKey(onClose)
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      await api.put(`/admin/kalender/${game.id}`, { date, time, opponent, event_type: eventType })
+      onSaved()
+    } catch {
+      setError('Speichern fehlgeschlagen.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-brand-text">Spieltag bearbeiten</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
+            <X className="w-5 h-5 text-brand-text-muted" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Gegner</label>
+            <input type="text" value={opponent} onChange={e => setOpponent(e.target.value)}
+              placeholder="Gegner…" className={INPUT} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
+            <input type="time" value={time} onChange={e => setTime(e.target.value)} className={INPUT} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
+            <select value={eventType} onChange={e => setEventType(e.target.value)} className={INPUT}>
+              <option value="heim">Heimspiel</option>
+              <option value="auswärts">Auswärtsspiel</option>
+              <option value="generisch">Sonstiges</option>
+            </select>
+          </div>
+          {error && (
+            <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-4">
+          <button onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Speichern…' : 'Speichern'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

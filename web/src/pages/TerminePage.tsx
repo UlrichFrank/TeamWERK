@@ -281,16 +281,6 @@ export default function TerminePage() {
             <History className="w-3.5 h-3.5" />
             {!compact && <span>Vergangene</span>}
           </button>
-          {isTrainer && (
-            <button
-              onClick={() => navigate('/admin/trainings')}
-              aria-label="Verwalten"
-              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors ${compact ? 'px-2' : 'px-3'}`}
-            >
-              <Settings className="w-3.5 h-3.5" />
-              {!compact && <span>Verwalten</span>}
-            </button>
-          )}
         </div>
       </div>
 

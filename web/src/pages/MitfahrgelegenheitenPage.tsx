@@ -554,7 +554,7 @@ export default function MitfahrgelegenheitenPage() {
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-brand-text">Mitfahrgelegenheiten</h1>
-        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-sm">
+        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
           <button
             onClick={() => setViewMine(false)}
             className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}

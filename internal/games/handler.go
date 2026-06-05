@@ -264,7 +264,10 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 
 	const base = `
 		SELECT g.id, g.date, g.time, g.opponent, g.event_type,
-		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0)
+		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0)
 		FROM games g
 		LEFT JOIN duty_slots ds ON ds.game_id = g.id`
 	const suffix = ` GROUP BY g.id ORDER BY g.date, g.time`
@@ -290,22 +293,26 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	type game struct {
-		ID          int    `json:"id"`
-		Date        string `json:"date"`
-		Time        string `json:"time"`
-		Opponent    string `json:"opponent"`
-		EventType   string `json:"event_type"`
-		Teams       []team `json:"teams"`
-		SlotCount   int    `json:"slot_count"`
-		FilledCount int    `json:"filled_count"`
-		TotalCount  int    `json:"total_count"`
+		ID             int    `json:"id"`
+		Date           string `json:"date"`
+		Time           string `json:"time"`
+		Opponent       string `json:"opponent"`
+		EventType      string `json:"event_type"`
+		Teams          []team `json:"teams"`
+		SlotCount      int    `json:"slot_count"`
+		FilledCount    int    `json:"filled_count"`
+		TotalCount     int    `json:"total_count"`
+		ConfirmedCount int    `json:"confirmed_count"`
+		DeclinedCount  int    `json:"declined_count"`
+		MaybeCount     int    `json:"maybe_count"`
 	}
 
 	var games []*game
 	for rows.Next() {
 		var g game
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType,
-			&g.SlotCount, &g.FilledCount, &g.TotalCount); err != nil {
+			&g.SlotCount, &g.FilledCount, &g.TotalCount,
+			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount); err != nil {
 			continue
 		}
 		g.Teams = []team{}
@@ -581,11 +588,12 @@ func toAny(teamIDs []int) []any {
 func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Date     string  `json:"date"`
-		Time     string  `json:"time"`
-		EndTime  *string `json:"end_time"`
-		Opponent string  `json:"opponent"`
-		TeamIDs  []int   `json:"team_ids"`
+		Date      string  `json:"date"`
+		Time      string  `json:"time"`
+		EndTime   *string `json:"end_time"`
+		Opponent  string  `json:"opponent"`
+		TeamIDs   []int   `json:"team_ids"`
+		EventType string  `json:"event_type"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
@@ -600,9 +608,17 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	if req.EndTime != nil && *req.EndTime != "" {
 		endTimeVal = *req.EndTime
 	}
-	res, err := tx.ExecContext(r.Context(),
-		`UPDATE games SET date=?, time=?, end_time=?, opponent=? WHERE id=?`,
-		req.Date, req.Time, endTimeVal, req.Opponent, id)
+	var res sql.Result
+	if req.EventType == "heim" || req.EventType == "auswärts" || req.EventType == "generisch" {
+		isHome := req.EventType == "heim"
+		res, err = tx.ExecContext(r.Context(),
+			`UPDATE games SET date=?, time=?, end_time=?, opponent=?, event_type=?, is_home=? WHERE id=?`,
+			req.Date, req.Time, endTimeVal, req.Opponent, req.EventType, isHome, id)
+	} else {
+		res, err = tx.ExecContext(r.Context(),
+			`UPDATE games SET date=?, time=?, end_time=?, opponent=? WHERE id=?`,
+			req.Date, req.Time, endTimeVal, req.Opponent, id)
+	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

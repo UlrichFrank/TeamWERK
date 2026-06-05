@@ -47,7 +47,7 @@ export default function DutyPage() {
         <h1 className="text-2xl font-bold">Dienste</h1>
         <div className="flex items-center gap-3 flex-wrap">
           {isAdminOrTrainer && (
-            <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-sm">
+            <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
               <button
                 onClick={() => setViewMine(false)}
                 className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
@@ -64,7 +64,7 @@ export default function DutyPage() {
           )}
           <button
             onClick={() => setShowPast(p => !p)}
-            className="text-sm text-brand-text-muted hover:text-brand-blue transition-colors"
+            className="text-xs text-brand-text-muted hover:text-brand-blue transition-colors"
           >
             {showPast ? 'Vergangene ausblenden' : 'Vergangene einblenden'}
           </button>

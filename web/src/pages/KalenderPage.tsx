@@ -9,6 +9,8 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
 import TrainingEditModal from '../components/TrainingEditModal'
+import GameEditModal from '../components/GameEditModal'
+import EventInfoModal from '../components/EventInfoModal'
 
 interface Training {
   id: number
@@ -39,6 +41,9 @@ interface Game {
   slot_count: number
   filled_count: number
   total_count: number
+  confirmed_count: number
+  declined_count: number
+  maybe_count: number
 }
 
 interface SlotPreview {
@@ -166,6 +171,11 @@ export default function KalenderPage() {
   const [gameRsvpRequireReason, setGameRsvpRequireReason] = useState(1)
   // Inline edit modal
   const [editingTraining, setEditingTraining] = useState<Training | null>(null)
+  const [editingGame, setEditingGame] = useState<Game | null>(null)
+  const [infoItem, setInfoItem] = useState<{ type: 'game' | 'training'; game?: Game; training?: Training } | null>(null)
+
+  // Modus-Toggle
+  const [kalenderMode, setKalenderMode] = useState<'dienste' | 'termine'>('dienste')
 
   const loadGames = async () => {
     try {
@@ -501,14 +511,32 @@ export default function KalenderPage() {
   useEscapeKey(
     showDayRegen ? () => setShowDayRegen(false) :
     showCreate ? closeDialog :
+    editingGame ? () => setEditingGame(null) :
     editingTraining ? () => setEditingTraining(null) :
+    infoItem ? () => setInfoItem(null) :
     null
   )
+
+  const canEdit = Boolean(user && (user.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')))
 
   return (
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
+        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-sm shrink-0">
+          <button
+            onClick={() => setKalenderMode('dienste')}
+            className={`px-3 py-1.5 ${kalenderMode === 'dienste' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+          >
+            Dienste
+          </button>
+          <button
+            onClick={() => setKalenderMode('termine')}
+            className={`px-3 py-1.5 border-l border-brand-border-subtle ${kalenderMode === 'termine' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+          >
+            Termine
+          </button>
+        </div>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
           <select
             value={filterTeamId ?? ''}
@@ -541,7 +569,7 @@ export default function KalenderPage() {
             </button>
           ))}
         </div>
-        {user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer')) && (
+        {canEdit && (
           <button
             onClick={() => setShowCreate(true)}
             aria-label="Event"
@@ -586,7 +614,6 @@ export default function KalenderPage() {
             const dayGames = gamesByDate[dateStr] ?? []
             const dayTrainings = trainingsByDate[dateStr] ?? []
             const isToday = dateStr === todayStr
-            const canEdit = user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer'))
             const canRegen = canEdit && dayGames.length > 0
             return (
               <div key={day} className="@container group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
@@ -607,7 +634,15 @@ export default function KalenderPage() {
                   <button
                     key={g.id}
                     onPointerDown={e => e.stopPropagation()}
-                    onClick={() => navigate(`/kalender/${g.id}`)}
+                    onClick={() => {
+                      if (kalenderMode === 'dienste') {
+                        navigate(`/kalender/${g.id}`)
+                      } else if (canEdit) {
+                        setEditingGame(g)
+                      } else {
+                        setInfoItem({ type: 'game', game: g })
+                      }
+                    }}
                     title={`${g.teams.length > 1 ? 'Mehrere Teams' : (shortNames.get(g.teams[0]?.id) ?? g.teams[0]?.name ?? '?')} · ${g.opponent || '–'} · ${g.time}`}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${getEventColors(g.event_type).pill}`}
                   >
@@ -637,17 +672,19 @@ export default function KalenderPage() {
                     key={`t-${t.id}`}
                     onPointerDown={e => e.stopPropagation()}
                     title={`${shortNames.get(t.team_id) ?? (t.title || 'Training')} · ${t.start_time}`}
-                    onClick={() => {
-                      if (user && (user.role === 'admin' || hasFunction(user, 'trainer'))) {
+                    onClick={kalenderMode === 'termine' ? () => {
+                      if (canEdit) {
                         setEditingTraining(t)
                       } else {
-                        navigate(`/trainings/${t.id}`)
+                        setInfoItem({ type: 'training', training: t })
                       }
-                    }}
-                    className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${
+                    } : undefined}
+                    className={`w-full text-left mb-1 p-1.5 rounded-md text-xs border ${
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
-                        : getEventColors('training').pill
+                        : kalenderMode === 'dienste'
+                        ? 'bg-brand-green/10 border-brand-green/30 cursor-default'
+                        : `${getEventColors('training').pill} transition-colors`
                     }`}
                   >
                     <div className="flex items-center gap-1 mb-0.5">
@@ -1140,12 +1177,27 @@ export default function KalenderPage() {
           </div>
         </div>
       )}
+      {editingGame && (
+        <GameEditModal
+          game={editingGame}
+          onClose={() => setEditingGame(null)}
+          onSaved={() => { loadGames(); setEditingGame(null) }}
+        />
+      )}
       {editingTraining && (
         <TrainingEditModal
           session={editingTraining}
           teamName={teams.find(t => t.id === editingTraining.team_id)?.name}
           onClose={() => setEditingTraining(null)}
           onSaved={() => { loadTrainings(); setEditingTraining(null) }}
+        />
+      )}
+      {infoItem && (
+        <EventInfoModal
+          type={infoItem.type}
+          game={infoItem.game}
+          training={infoItem.training}
+          onClose={() => setInfoItem(null)}
         />
       )}
     </div>

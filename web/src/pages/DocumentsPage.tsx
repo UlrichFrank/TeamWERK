@@ -635,7 +635,7 @@ export default function DocumentsPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowNewFolder(true)}
-                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
+                className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
               >
                 <FolderPlus className="w-4 h-4" />
                 <span className="hidden sm:inline">Neuer Ordner</span>
@@ -643,7 +643,7 @@ export default function DocumentsPage() {
               {currentFolderId && (
                 <button
                   onClick={() => setShowUpload(true)}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
+                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
                 >
                   <Upload className="w-4 h-4" />
                   <span className="hidden sm:inline">Hochladen</span>

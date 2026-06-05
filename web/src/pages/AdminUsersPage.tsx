@@ -130,11 +130,11 @@ export default function AdminUsersPage() {
               type="search"
               placeholder="Suchen…"
               onChange={e => setSearch(e.target.value)}
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-32 sm:w-auto"
+              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-32 sm:w-auto"
             />
             <button
               onClick={() => setShowInviteModal(true)}
-              className="text-sm bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-2.5 sm:py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors whitespace-nowrap"
+              className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow rounded-md px-3 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors whitespace-nowrap"
             >
               + Einladung
             </button>

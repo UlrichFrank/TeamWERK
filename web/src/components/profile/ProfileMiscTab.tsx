@@ -1,18 +1,11 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../../lib/api'
-import NumberSpinner from '../NumberSpinner'
-
-interface Vehicle {
-  seats: number | null
-  notes: string
-}
 
 interface Props {
   dutyReminderDays: number | null
 }
 
 export default function ProfileMiscTab({ dutyReminderDays: initialReminder }: Props) {
-  const [vehicle, setVehicle] = useState<Vehicle>({ seats: null, notes: '' })
   const [reminderEnabled, setReminderEnabled] = useState(initialReminder !== null)
   const [changed, setChanged] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -23,23 +16,12 @@ export default function ProfileMiscTab({ dutyReminderDays: initialReminder }: Pr
     setReminderEnabled(initialReminder !== null)
   }, [initialReminder])
 
-  useEffect(() => {
-    api.get('/profile/vehicle').then(r => {
-      if (r.data) {
-        setVehicle({ seats: r.data.seats ?? null, notes: r.data.notes ?? '' })
-      }
-    })
-  }, [])
-
   const handleSave = async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      await Promise.all([
-        api.put('/profile/vehicle', { seats: vehicle.seats, notes: vehicle.notes }),
-        api.put('/profile/reminder-preference', { duty_reminder_days: reminderEnabled ? 2 : null }),
-      ])
+      await api.put('/profile/reminder-preference', { duty_reminder_days: reminderEnabled ? 2 : null })
       setSaved(true)
       setChanged(false)
       setTimeout(() => setSaved(false), 2000)
@@ -72,32 +54,6 @@ export default function ProfileMiscTab({ dutyReminderDays: initialReminder }: Pr
             }`} />
           </button>
         </div>
-      </div>
-
-      {/* Fahrzeug */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Fahrzeug</h2>
-        <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Sitzplätze</label>
-            <NumberSpinner
-              value={vehicle.seats ?? 0}
-              min={0}
-              max={10}
-              onChange={v => { setVehicle(prev => ({ ...prev, seats: v })); setChanged(true) }}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Anmerkungen</label>
-            <textarea
-              value={vehicle.notes}
-              onChange={(e) => { setVehicle({ ...vehicle, notes: e.target.value }); setChanged(true) }}
-              placeholder="z.B. Hänger vorhanden, Fahrradträger, etc."
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-              rows={3}
-            />
-          </div>
-        </form>
       </div>
 
       {/* Save Button */}
