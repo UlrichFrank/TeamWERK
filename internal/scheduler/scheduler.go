@@ -145,7 +145,7 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
 				JOIN members m ON m.user_id = u.id
-				JOIN team_memberships tm ON tm.member_id = m.id
+				JOIN player_memberships tm ON tm.member_id = m.id
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
 				WHERE u.role = 'spieler'
 				  AND tm.team_id = ?
@@ -169,7 +169,7 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				FROM users u
 				JOIN family_links fl ON fl.parent_user_id = u.id
 				JOIN members m ON m.id = fl.member_id
-				JOIN team_memberships tm ON tm.member_id = m.id
+				JOIN player_memberships tm ON tm.member_id = m.id
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
 				WHERE u.role = 'elternteil'
 				  AND tm.team_id = ?

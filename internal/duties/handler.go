@@ -283,7 +283,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		whereParts = `WHERE (
 		     ds.team_id IN (
 		         SELECT DISTINCT tm.team_id
-		         FROM team_memberships tm
+		         FROM player_memberships tm
 		         JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
 		         WHERE tm.member_id IN (
 		             SELECT id FROM members WHERE user_id = ?
@@ -295,7 +295,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		         SELECT gt.game_id FROM game_teams gt
 		         WHERE gt.team_id IN (
 		             SELECT DISTINCT tm2.team_id
-		             FROM team_memberships tm2
+		             FROM player_memberships tm2
 		             JOIN seasons s2 ON s2.id = tm2.season_id AND s2.is_active = 1
 		             WHERE tm2.member_id IN (
 		                 SELECT id FROM members WHERE user_id = ?

@@ -136,7 +136,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	} else {
 		countQuery := `SELECT COUNT(DISTINCT m.id) FROM members m
-		 JOIN team_memberships tm ON tm.member_id = m.id
+		 JOIN player_memberships tm ON tm.member_id = m.id
 		 WHERE tm.team_id IN (
 		   SELECT DISTINCT k.team_id FROM kader k
 		   JOIN kader_trainers kt ON kt.kader_id = k.id
@@ -162,7 +162,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		query := `SELECT DISTINCT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
 		 FROM members m
-		 JOIN team_memberships tm ON tm.member_id = m.id
+		 JOIN player_memberships tm ON tm.member_id = m.id
 		 WHERE tm.team_id IN (
 		   SELECT DISTINCT k.team_id FROM kader k
 		   JOIN kader_trainers kt ON kt.kader_id = k.id

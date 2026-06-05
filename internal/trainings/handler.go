@@ -595,10 +595,10 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			teamArgs = append(teamArgs, claims.UserID)
 		}
 		if claims.IsParent {
-			conds = append(conds, "ts.team_id IN (SELECT DISTINCT tm.team_id FROM team_memberships tm JOIN members m ON m.id = tm.member_id JOIN family_links fl ON fl.member_id = m.id WHERE fl.parent_user_id = ?)")
+			conds = append(conds, "ts.team_id IN (SELECT DISTINCT tm.team_id FROM player_memberships tm JOIN members m ON m.id = tm.member_id JOIN family_links fl ON fl.member_id = m.id WHERE fl.parent_user_id = ?)")
 			teamArgs = append(teamArgs, claims.UserID)
 		}
-		conds = append(conds, "ts.team_id IN (SELECT DISTINCT tm.team_id FROM team_memberships tm JOIN members m ON m.id = tm.member_id WHERE m.user_id = ?)")
+		conds = append(conds, "ts.team_id IN (SELECT DISTINCT tm.team_id FROM player_memberships tm JOIN members m ON m.id = tm.member_id WHERE m.user_id = ?)")
 		teamArgs = append(teamArgs, claims.UserID)
 		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
 	}
@@ -618,7 +618,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		       ts.location, ts.note, ts.status, ts.cancel_reason,
 		       CASE WHEN ts.rsvp_opt_out = 1
 		            THEN COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0) + (
-		                   SELECT COUNT(*) FROM team_memberships tm2
+		                   SELECT COUNT(*) FROM player_memberships tm2
 		                   JOIN members m2 ON m2.id = tm2.member_id
 		                   WHERE tm2.team_id = ts.team_id
 		                   AND NOT EXISTS (SELECT 1 FROM training_responses tr2 WHERE tr2.training_id = ts.id AND tr2.member_id = tm2.member_id)
@@ -719,7 +719,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		       ts.location, ts.note, ts.status, ts.cancel_reason,
 		       CASE WHEN ts.rsvp_opt_out = 1
 		            THEN COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
-		                 + (SELECT COUNT(*) FROM team_memberships tm2
+		                 + (SELECT COUNT(*) FROM player_memberships tm2
 		                    WHERE tm2.team_id = ts.team_id
 		                    AND NOT EXISTS (SELECT 1 FROM training_responses tr2 WHERE tr2.training_id=ts.id AND tr2.member_id=tm2.member_id))
 		            ELSE COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
@@ -942,7 +942,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		SELECT m.id, m.first_name || ' ' || m.last_name,
 		       tr.status, tr.reason, ta.present
 		FROM members m
-		JOIN team_memberships tm ON tm.member_id = m.id AND tm.team_id = ? AND tm.season_id = ?
+		JOIN player_memberships tm ON tm.member_id = m.id AND tm.team_id = ? AND tm.season_id = ?
 		LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 		LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
 		GROUP BY m.id
