@@ -33,6 +33,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
+	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 )
@@ -101,6 +102,7 @@ func serve() {
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
 	trainingH := trainings.NewHandler(database, hubInstance)
+	teamsH := teams.NewHandler(database)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -208,8 +210,10 @@ func serve() {
 		r.Get("/api/games/{id}/participants", gameH.GetParticipants)
 		r.Post("/api/games/{id}/lineup", gameH.SaveLineup)
 
-		// Teams (filtered by user role)
+		// Teams
 		r.Get("/api/teams", gameH.ListTeamsForUser)
+		r.Get("/api/teams/my", teamsH.ListMyTeams)
+		r.Get("/api/teams/{id}/roster", teamsH.GetRoster)
 
 		// Admin + Trainer
 		r.Group(func(r chi.Router) {

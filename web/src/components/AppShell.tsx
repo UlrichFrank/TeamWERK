@@ -29,6 +29,7 @@ const navModules: NavModule[] = [
   {
     label: 'Verein',
     items: [
+      { to: '/mein-team', label: 'Mein Team', roles: [] },
       { to: '/dokumente', label: 'Dokumente', roles: [] },
       { to: '/dienste', label: 'Dienste', roles: [] },
       { to: '/mitfahrgelegenheiten', label: 'Mitfahrten', roles: [] },
