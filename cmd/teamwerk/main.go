@@ -21,6 +21,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
+	"github.com/teamstuttgart/teamwerk/internal/chat"
 	"github.com/teamstuttgart/teamwerk/internal/files"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
@@ -100,6 +101,7 @@ func serve() {
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
 	filesH := files.NewHandler(database, cfg.FilesDir)
 	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)
+	chatH := chat.NewHandler(database, hubInstance, cfg)
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
 	trainingH := trainings.NewHandler(database, hubInstance)
@@ -130,6 +132,19 @@ func serve() {
 
 		// SSE live updates
 		r.Get("/api/events", hubH.Events)
+		r.Get("/api/chat/events", chatH.ChatEvents)
+
+		// Chat
+		r.Get("/api/chat/users", chatH.Users)
+		r.Get("/api/chat/conversations", chatH.ListConversations)
+		r.Post("/api/chat/conversations", chatH.CreateConversation)
+		r.Get("/api/chat/conversations/{id}/messages", chatH.ListMessages)
+		r.Post("/api/chat/conversations/{id}/messages", chatH.SendMessage)
+		r.Post("/api/chat/conversations/{id}/read", chatH.MarkRead)
+		r.Delete("/api/chat/conversations/{id}/members/me", chatH.LeaveConversation)
+		r.Get("/api/chat/broadcasts", chatH.ListBroadcasts)
+		r.Post("/api/chat/broadcasts", chatH.SendBroadcast)
+		r.Post("/api/chat/broadcasts/{id}/read", chatH.MarkBroadcastRead)
 
 		// Members
 		r.Get("/api/users/{id}/contact", membH.GetContact)

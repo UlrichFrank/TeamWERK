@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X, ChevronRight, ChevronDown, Eye } from 'lucide-react'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
+import { useChatEvents } from '../hooks/useChatEvents'
 import { api } from '../lib/api'
 
 interface NavModule {
@@ -33,6 +34,7 @@ const navModules: NavModule[] = [
       { to: '/dokumente', label: 'Dokumente', roles: [] },
       { to: '/dienste', label: 'Dienste', roles: [] },
       { to: '/mitfahrgelegenheiten', label: 'Mitfahrten', roles: [] },
+      { to: '/chat', label: 'Nachrichten', roles: [] },
     ],
   },
   {
@@ -69,6 +71,20 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
+  const [chatUnread, setChatUnread] = useState(0)
+
+  const loadChatUnread = useCallback(async () => {
+    if (!user) return
+    try {
+      const [convs, bcs] = await Promise.all([
+        api.get('/chat/conversations'),
+        api.get('/chat/broadcasts'),
+      ])
+      const convUnread = (convs.data ?? []).reduce((s: number, c: any) => s + (c.unreadCount ?? 0), 0)
+      const bcUnread = (bcs.data ?? []).filter((b: any) => !b.isRead && !b.isSent).length
+      setChatUnread(convUnread + bcUnread)
+    } catch {}
+  }, [user])
 
   useEffect(() => {
     if (!user) return
@@ -78,7 +94,14 @@ export default function AppShell() {
         .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
       setNavChildren(kids)
     }).catch(() => {})
-  }, [user?.id])
+    loadChatUnread()
+  }, [user?.id, loadChatUnread])
+
+  useChatEvents((event) => {
+    if (event.startsWith('chat:new-message') || event === 'chat:new-broadcast') {
+      loadChatUnread()
+    }
+  })
 
   const handleLogout = async () => {
     await logout()
@@ -137,10 +160,15 @@ export default function AppShell() {
                   end={item.end}
                   onClick={closeSidebar}
                   className={({ isActive }) =>
-                    `block pl-7 pr-4 py-2 text-sm transition-colors ${isActive ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-black/60 hover:bg-brand-black hover:text-brand-yellow'}`
+                    `flex items-center justify-between pl-7 pr-4 py-2 text-sm transition-colors ${isActive ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-black/60 hover:bg-brand-black hover:text-brand-yellow'}`
                   }
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.to === '/chat' && chatUnread > 0 && (
+                    <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                      {chatUnread}
+                    </span>
+                  )}
                 </NavLink>
               ))}
               {isOpen && mod.label === 'Nutzer' && navChildren.map(child => (
