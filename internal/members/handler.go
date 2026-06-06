@@ -1598,21 +1598,102 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		Number    string `json:"number"`
 		SortOrder int    `json:"sort_order"`
 	}
-	phRows, _ := h.db.QueryContext(r.Context(),
-		`SELECT id, label, number, sort_order FROM member_phones WHERE member_id=? ORDER BY sort_order`,
-		memberID)
-	phones := []phoneEntry{}
-	if phRows != nil {
-		defer phRows.Close()
-		for phRows.Next() {
-			var p phoneEntry
-			phRows.Scan(&p.ID, &p.Label, &p.Number, &p.SortOrder)
-			phones = append(phones, p)
+
+	// user_contact: wenn Kind User-Account hat, User-Strang-Daten laden
+	type visibilityEntry struct {
+		PhonesVisible  bool `json:"phones_visible"`
+		AddressVisible bool `json:"address_visible"`
+		PhotoVisible   bool `json:"photo_visible"`
+		EmailVisible   bool `json:"email_visible"`
+	}
+	type userContactEntry struct {
+		FirstName  string        `json:"first_name"`
+		LastName   string        `json:"last_name"`
+		Street     string        `json:"street"`
+		Zip        string        `json:"zip"`
+		City       string        `json:"city"`
+		Phones     []phoneEntry  `json:"phones"`
+		Visibility visibilityEntry `json:"visibility"`
+	}
+
+	var userContact *userContactEntry
+	if m.UserID != nil {
+		uc := userContactEntry{Phones: []phoneEntry{}}
+		var street, zip, city sql.NullString
+		h.db.QueryRowContext(r.Context(),
+			`SELECT first_name, last_name, COALESCE(street,''), COALESCE(zip,''), COALESCE(city,'') FROM users WHERE id=?`,
+			*m.UserID).Scan(&uc.FirstName, &uc.LastName, &street, &zip, &city)
+		uc.Street = street.String
+		uc.Zip = zip.String
+		uc.City = city.String
+
+		upRows, _ := h.db.QueryContext(r.Context(),
+			`SELECT id, label, number, sort_order FROM user_phones WHERE user_id=? ORDER BY sort_order, id`,
+			*m.UserID)
+		if upRows != nil {
+			defer upRows.Close()
+			for upRows.Next() {
+				var p phoneEntry
+				upRows.Scan(&p.ID, &p.Label, &p.Number, &p.SortOrder)
+				uc.Phones = append(uc.Phones, p)
+			}
 		}
+
+		var pv, av, phv, ev int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COALESCE(phones_visible,0), COALESCE(address_visible,0), COALESCE(photo_visible,0), COALESCE(email_visible,0) FROM user_visibility WHERE user_id=?`,
+			*m.UserID).Scan(&pv, &av, &phv, &ev)
+		uc.Visibility = visibilityEntry{
+			PhonesVisible:  pv == 1,
+			AddressVisible: av == 1,
+			PhotoVisible:   phv == 1,
+			EmailVisible:   ev == 1,
+		}
+		userContact = &uc
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"member": m, "parents": parents, "phones": phones})
+	json.NewEncoder(w).Encode(map[string]any{"member": m, "parents": parents, "phones": nil, "user_contact": userContact})
+}
+
+// PUT /api/profile/kind/:memberId/account — aktualisiert users-Datensatz des Kindes (User-Strang)
+func (h *Handler) UpdateChildAccount(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !h.isParentOf(r.Context(), claims.UserID, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var childUserID sql.NullInt64
+	if err := h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&childUserID); err != nil || !childUserID.Valid {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	var req struct {
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Street    string `json:"street"`
+		Zip       string `json:"zip"`
+		City      string `json:"city"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, updated_at=? WHERE id=?`,
+		req.FirstName, req.LastName,
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
+		time.Now(), childUserID.Int64,
+	); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // PUT /api/profile/kind/:memberId/member
@@ -1667,6 +1748,11 @@ func (h *Handler) AddChildPhone(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	var childUserID sql.NullInt64
+	if err := h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&childUserID); err != nil || !childUserID.Valid {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	var req struct {
 		Label     string `json:"label"`
 		Number    string `json:"number"`
@@ -1677,8 +1763,8 @@ func (h *Handler) AddChildPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO member_phones (member_id, label, number, sort_order) VALUES (?,?,?,?)`,
-		memberID, req.Label, req.Number, req.SortOrder)
+		`INSERT INTO user_phones (user_id, label, number, sort_order) VALUES (?,?,?,?)`,
+		childUserID.Int64, req.Label, req.Number, req.SortOrder)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1700,13 +1786,18 @@ func (h *Handler) DeleteChildPhone(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	var childUserID sql.NullInt64
+	if err := h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&childUserID); err != nil || !childUserID.Valid {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	phoneID, err := strconv.Atoi(r.PathValue("phoneId"))
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	h.db.ExecContext(r.Context(),
-		`DELETE FROM member_phones WHERE id=? AND member_id=?`, phoneID, memberID)
+		`DELETE FROM user_phones WHERE id=? AND user_id=?`, phoneID, childUserID.Int64)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1722,6 +1813,11 @@ func (h *Handler) UpdateChildVisibility(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	var childUserID sql.NullInt64
+	if err := h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&childUserID); err != nil || !childUserID.Valid {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	var req struct {
 		PhonesVisible  bool `json:"phones_visible"`
 		AddressVisible bool `json:"address_visible"`
@@ -1733,9 +1829,15 @@ func (h *Handler) UpdateChildVisibility(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE members SET phones_visible=?, address_visible=?, photo_visible=?, email_visible=? WHERE id=?`,
-		boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible),
-		memberID)
+		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible, email_visible)
+		 VALUES (?,?,?,?,?)
+		 ON CONFLICT(user_id) DO UPDATE SET
+		   phones_visible=excluded.phones_visible,
+		   address_visible=excluded.address_visible,
+		   photo_visible=excluded.photo_visible,
+		   email_visible=excluded.email_visible`,
+		childUserID.Int64,
+		boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible))
 	w.WriteHeader(http.StatusNoContent)
 }
 

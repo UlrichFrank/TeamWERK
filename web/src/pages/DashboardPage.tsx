@@ -252,8 +252,8 @@ function MeinTeamSection() {
   )
 }
 
-function FahrgemeinschaftenSection({ confirmed }: { confirmed: CarpoolingConfirmed[] }) {
-  const withPairings = confirmed.filter(c => c.paarungen.length > 0)
+function FahrgemeinschaftenSection({ confirmed }: { confirmed: CarpoolingConfirmed[] | undefined }) {
+  const withPairings = (confirmed ?? []).filter(c => (c.paarungen ?? []).length > 0)
 
   if (withPairings.length === 0) {
     return (
@@ -346,7 +346,7 @@ export default function DashboardPage() {
   }
 
   const showDienste = !!data.meineDienste
-  const showFahrt = data.carpoolingConfirmed.length > 0 || !!user
+  const showFahrt = (data.carpoolingConfirmed?.length ?? 0) > 0 || !!user
 
   return (
     <div className="max-w-2xl mx-auto">

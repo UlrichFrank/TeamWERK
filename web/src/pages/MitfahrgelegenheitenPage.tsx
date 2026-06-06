@@ -343,13 +343,13 @@ interface GameCardProps {
 
 function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }: GameCardProps) {
   const [activeTab, setActiveTab] = useState<'biete' | 'suche'>('biete')
-  const hasOwnBiete = data.biete.some(e => e.isOwn)
-  const hasOwn = hasOwnBiete || data.suche.some(e => e.isOwn)
+  const hasOwnBiete = (data.biete ?? []).some(e => e.isOwn)
+  const hasOwn = hasOwnBiete || (data.suche ?? []).some(e => e.isOwn)
 
-  const myBieteIds = data.biete.filter(e => e.isOwn).map(e => e.id)
-  const mySucheIds = data.suche.filter(e => e.isOwn).map(e => e.id)
+  const myBieteIds = (data.biete ?? []).filter(e => e.isOwn).map(e => e.id)
+  const mySucheIds = (data.suche ?? []).filter(e => e.isOwn).map(e => e.id)
 
-  const confirmedPaarungen = data.paarungen.filter(p => p.status === 'confirmed')
+  const confirmedPaarungen = (data.paarungen ?? []).filter(p => p.status === 'confirmed')
 
   const entryCardProps = { paarungen: data.paarungen, myBieteIds, mySucheIds, onDelete, onRequest, onConfirm, onReject }
 
@@ -398,23 +398,23 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
             onClick={() => setActiveTab('biete')}
             className={`flex-1 py-2 text-sm font-medium transition-colors ${activeTab === 'biete' ? 'text-brand-text border-b-2 border-brand-yellow' : 'text-brand-text-muted'}`}
           >
-            Fahrangebote ({data.biete.length})
+            Fahrangebote ({(data.biete ?? []).length})
           </button>
           <button
             onClick={() => setActiveTab('suche')}
             className={`flex-1 py-2 text-sm font-medium transition-colors ${activeTab === 'suche' ? 'text-brand-text border-b-2 border-brand-yellow' : 'text-brand-text-muted'}`}
           >
-            Mitfahrgesuche ({data.suche.length})
+            Mitfahrgesuche ({(data.suche ?? []).length})
           </button>
         </div>
         <div className="px-4 py-2">
           {activeTab === 'biete'
-            ? data.biete.length === 0
+            ? (data.biete ?? []).length === 0
               ? <p className="text-sm text-brand-text-muted py-2">Noch keine Fahrangebote.</p>
-              : data.biete.map(e => <EntryCard key={e.id} entry={e} typ="biete" {...entryCardProps} />)
-            : data.suche.length === 0
+              : (data.biete ?? []).map(e => <EntryCard key={e.id} entry={e} typ="biete" {...entryCardProps} />)
+            : (data.suche ?? []).length === 0
               ? <p className="text-sm text-brand-text-muted py-2">Noch keine Mitfahrgesuche.</p>
-              : data.suche.map(e => <EntryCard key={e.id} entry={e} typ="suche" {...entryCardProps} />)
+              : (data.suche ?? []).map(e => <EntryCard key={e.id} entry={e} typ="suche" {...entryCardProps} />)
           }
         </div>
       </div>
@@ -422,17 +422,17 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
       {/* Desktop: two columns */}
       <div className="hidden sm:grid grid-cols-2 divide-x divide-brand-border-subtle">
         <div className="px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-2">Fahrangebote ({data.biete.length})</p>
-          {data.biete.length === 0
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-2">Fahrangebote ({(data.biete ?? []).length})</p>
+          {(data.biete ?? []).length === 0
             ? <p className="text-sm text-brand-text-muted">Noch keine Angebote.</p>
-            : data.biete.map(e => <EntryCard key={e.id} entry={e} typ="biete" {...entryCardProps} />)
+            : (data.biete ?? []).map(e => <EntryCard key={e.id} entry={e} typ="biete" {...entryCardProps} />)
           }
         </div>
         <div className="px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-2">Mitfahrgesuche ({data.suche.length})</p>
-          {data.suche.length === 0
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-2">Mitfahrgesuche ({(data.suche ?? []).length})</p>
+          {(data.suche ?? []).length === 0
             ? <p className="text-sm text-brand-text-muted">Noch keine Gesuche.</p>
-            : data.suche.map(e => <EntryCard key={e.id} entry={e} typ="suche" {...entryCardProps} />)
+            : (data.suche ?? []).map(e => <EntryCard key={e.id} entry={e} typ="suche" {...entryCardProps} />)
           }
         </div>
       </div>
@@ -541,8 +541,8 @@ export default function MitfahrgelegenheitenPage() {
 
   const filteredGames = viewMine
     ? response.games.filter(d =>
-        [...d.biete, ...d.suche].some(e => e.isOwn) ||
-        d.paarungen.some(p => p.bieteIsOwn || p.sucheIsOwn)
+        [...(d.biete ?? []), ...(d.suche ?? [])].some(e => e.isOwn) ||
+        (d.paarungen ?? []).some(p => p.bieteIsOwn || p.sucheIsOwn)
       )
     : response.games
   const tabGames = filteredGames.filter(d => d.game.eventType === activeTab)

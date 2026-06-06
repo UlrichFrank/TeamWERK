@@ -8,6 +8,21 @@ import ProfileBankTab from '../components/profile/ProfileBankTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
 import { Member, Parent, Phone } from './ProfilePage'
 
+export interface UserContact {
+  first_name: string
+  last_name: string
+  street: string
+  zip: string
+  city: string
+  phones: Phone[]
+  visibility: {
+    phones_visible: boolean
+    address_visible: boolean
+    photo_visible: boolean
+    email_visible: boolean
+  }
+}
+
 type TabName = 'profile' | 'member' | 'banking' | 'misc'
 
 const labels: Record<TabName, string> = {
@@ -22,7 +37,7 @@ export default function ChildProfilePage() {
   const navigate = useNavigate()
   const [member, setMember] = useState<Member | null>(null)
   const [parents, setParents] = useState<Parent[]>([])
-  const [phones, setPhones] = useState<Phone[]>([])
+  const [userContact, setUserContact] = useState<UserContact | null>(null)
   const [activeTab, setActiveTab] = useState<TabName>('profile')
 
   const load = () => {
@@ -30,7 +45,7 @@ export default function ChildProfilePage() {
       .then(r => {
         setMember(r.data.member)
         setParents(r.data.parents ?? [])
-        setPhones(r.data.phones ?? [])
+        setUserContact(r.data.user_contact ?? null)
       })
       .catch(err => { if (err.response?.status === 403) navigate('/') })
   }
@@ -39,20 +54,6 @@ export default function ChildProfilePage() {
   useLiveUpdates(event => { if (event === 'members') load() })
 
   if (!member) return null
-
-  const handleSaveKontakt = async (data: { firstName: string; lastName: string; street: string; zip: string; city: string }) => {
-    await api.put(`/profile/kind/${memberId}/member`, {
-      first_name: data.firstName,
-      last_name: data.lastName,
-      date_of_birth: member.date_of_birth,
-      jersey_number: member.jersey_number ?? null,
-      position: member.position,
-      street: data.street,
-      zip: data.zip,
-      city: data.city,
-    })
-    load()
-  }
 
   return (
     <div className="max-w-4xl">
@@ -79,8 +80,7 @@ export default function ChildProfilePage() {
           mode="child"
           childMemberId={memberId}
           ownMember={member}
-          onSaveDirect={handleSaveKontakt}
-          initialPhones={phones}
+          userContact={userContact}
           children={[]}
           parents={parents}
         />

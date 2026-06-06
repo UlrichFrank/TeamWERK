@@ -147,6 +147,7 @@ func serve() {
 		r.Put("/api/profile/visibility", membH.UpdateVisibility)
 		r.Put("/api/profile/reminder-preference", membH.UpdateReminderPreference)
 		r.Get("/api/profile/kind/{memberId}", membH.GetChildProfile)
+		r.Put("/api/profile/kind/{memberId}/account", membH.UpdateChildAccount)
 		r.Put("/api/profile/kind/{memberId}/member", membH.UpdateChildMember)
 		r.Put("/api/profile/kind/{memberId}/bank", membH.UpdateChildBank)
 		r.Post("/api/profile/kind/{memberId}/photo", uploadH.UploadChildPhoto)

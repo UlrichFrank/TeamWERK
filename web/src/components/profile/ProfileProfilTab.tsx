@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import { Member, Parent, Phone, Visibility } from '../../pages/ProfilePage'
+import { UserContact } from '../../pages/ChildProfilePage'
 
 interface Props {
   children: Member[]
@@ -9,14 +10,12 @@ interface Props {
   draftRefreshKey?: number
   mode?: 'own' | 'child'
   childMemberId?: string
-  initialPhones?: Phone[]
-  onSaveDirect?: (data: { firstName: string; lastName: string; street: string; zip: string; city: string }) => Promise<void>
+  userContact?: UserContact | null
 }
 
 export default function ProfileProfilTab({
   children, parents, ownMember, draftRefreshKey,
-  mode = 'own', childMemberId, initialPhones,
-  onSaveDirect,
+  mode = 'own', childMemberId, userContact,
 }: Props) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -58,43 +57,56 @@ export default function ProfileProfilTab({
   }, [])
 
   useEffect(() => {
-    if (!ownMember || mode === 'child') return
+    if (mode === 'child') {
+      if (!childMemberId) return
+      api.get(`/members/${childMemberId}/change-drafts`).then(r => {
+        const drafts: any[] = r.data?.drafts ?? []
+        setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
+      }).catch(() => {})
+      return
+    }
+    if (!ownMember) return
     api.get(`/members/${ownMember.id}/change-drafts`).then(r => {
       const drafts: any[] = r.data?.drafts ?? []
       setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
     }).catch(() => {})
-  }, [ownMember?.id, draftRefreshKey])
+  }, [ownMember?.id, childMemberId, draftRefreshKey])
 
-  // Child-mode: init from ownMember prop
-  useEffect(() => {
-    if (mode !== 'child' || !ownMember) return
-    setFirstName(ownMember.first_name)
-    setLastName(ownMember.last_name)
-    setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
-    setPhotoURL(ownMember.photo_url ?? '')
-    setVisibility({
-      phones_visible: ownMember.phones_visible ?? false,
-      address_visible: ownMember.address_visible ?? false,
-      photo_visible: ownMember.photo_visible ?? false,
-      email_visible: ownMember.email_visible ?? false,
-    })
-  }, [ownMember?.id])
-
+  // Child-mode: init from userContact (wenn Kind Account hat) oder ownMember (Fallback)
   useEffect(() => {
     if (mode !== 'child') return
-    setPhones(initialPhones ?? [])
-  }, [initialPhones])
+    if (userContact) {
+      setFirstName(userContact.first_name)
+      setLastName(userContact.last_name)
+      setAddress({ street: userContact.street, zip: userContact.zip, city: userContact.city })
+      setPhones(userContact.phones)
+      setVisibility(userContact.visibility)
+    } else if (ownMember) {
+      setFirstName(ownMember.first_name)
+      setLastName(ownMember.last_name)
+      setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
+      setPhotoURL(ownMember.photo_url ?? '')
+    }
+  }, [ownMember?.id, userContact])
 
-  const childChanged = mode === 'child' && ownMember != null && (
-    firstName !== ownMember.first_name ||
-    lastName !== ownMember.last_name ||
-    address.street !== (ownMember.street ?? '') ||
-    address.zip !== (ownMember.zip ?? '') ||
-    address.city !== (ownMember.city ?? '') ||
-    (ownMember.phones_visible ?? false) !== visibility.phones_visible ||
-    (ownMember.address_visible ?? false) !== visibility.address_visible ||
-    (ownMember.photo_visible ?? false) !== visibility.photo_visible ||
-    (ownMember.email_visible ?? false) !== visibility.email_visible
+  const childChanged = mode === 'child' && (
+    userContact ? (
+      firstName !== userContact.first_name ||
+      lastName !== userContact.last_name ||
+      address.street !== userContact.street ||
+      address.zip !== userContact.zip ||
+      address.city !== userContact.city ||
+      visibility.phones_visible !== userContact.visibility.phones_visible ||
+      visibility.address_visible !== userContact.visibility.address_visible ||
+      visibility.photo_visible !== userContact.visibility.photo_visible ||
+      visibility.email_visible !== userContact.visibility.email_visible
+    ) : ownMember != null && (
+      firstName !== ownMember.first_name ||
+      lastName !== ownMember.last_name ||
+      address.street !== (ownMember.street ?? '') ||
+      address.zip !== (ownMember.zip ?? '') ||
+      address.city !== (ownMember.city ?? '')
+    )
   )
   const isChanged = mode === 'child' ? childChanged : changed
 
@@ -106,10 +118,19 @@ export default function ProfileProfilTab({
     setError('')
     try {
       if (mode === 'child' && childMemberId) {
-        if (onSaveDirect) {
-          await onSaveDirect({ firstName, lastName, street: address.street, zip: address.zip, city: address.city })
+        if (userContact) {
+          await api.put(`/profile/kind/${childMemberId}/account`, {
+            first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city,
+          })
+          await api.put(`/profile/kind/${childMemberId}/visibility`, visibility)
         }
-        await api.put(`/profile/kind/${childMemberId}/visibility`, visibility)
+        await api.post(`/members/${childMemberId}/change-request`, {
+          field_name: 'profil',
+          new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city },
+        })
+        const r = await api.get(`/members/${childMemberId}/change-drafts`)
+        const drafts: any[] = r.data?.drafts ?? []
+        setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
       } else {
         await api.put('/profile/me', { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city })
         if (ownMember) {
@@ -192,7 +213,7 @@ export default function ProfileProfilTab({
       {/* Pending draft banner */}
       {profilDraft && (
         <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
-          Änderungsanfrage ausstehend — wird beim Speichern aktualisiert. Zum Zurückziehen den Tab „Mitgliedsdaten" öffnen.
+          Änderungsanfrage ausstehend — wird beim Speichern aktualisiert.{mode === 'own' && ' Zum Zurückziehen den Tab „Mitgliedsdaten" öffnen.'}
         </div>
       )}
 
@@ -275,8 +296,8 @@ export default function ProfileProfilTab({
         </form>
       </div>
 
-      {/* Telefonnummern */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      {/* Telefonnummern — nur wenn User-Strang vorhanden */}
+      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Telefonnummern</h2>
         <div className="space-y-3">
           {phones.length > 0 && (
@@ -341,10 +362,10 @@ export default function ProfileProfilTab({
             </button>
           )}
         </div>
-      </div>
+      </div>}
 
-      {/* Sichtbarkeit */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      {/* Sichtbarkeit — nur wenn User-Strang vorhanden */}
+      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Sichtbarkeit für Mitglieder</h2>
         <p className="text-xs text-brand-text-subtle mb-4">Wähle, welche Kontaktdaten andere Mitglieder sehen dürfen.</p>
         <div className="space-y-2">
@@ -365,7 +386,7 @@ export default function ProfileProfilTab({
             </label>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* Familie */}
       {(children.length > 0 || parents.length > 0) && (
