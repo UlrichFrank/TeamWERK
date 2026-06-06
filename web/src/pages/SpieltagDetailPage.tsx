@@ -87,7 +87,6 @@ export default function SpieltagDetailPage() {
 
   const [showDeleteGame, setShowDeleteGame] = useState(false)
   const [deletingGame, setDeletingGame] = useState(false)
-  const [deleteWithSlots, setDeleteWithSlots] = useState(true)
 
   const [showRegen, setShowRegen] = useState(false)
   const [regenTemplates, setRegenTemplates] = useState<Template[]>([])
@@ -208,10 +207,7 @@ export default function SpieltagDetailPage() {
     if (!gameId) return
     setDeletingGame(true)
     try {
-      const url = deleteWithSlots
-        ? `/admin/kalender/${gameId}?delete_slots=true`
-        : `/admin/kalender/${gameId}`
-      await api.delete(url)
+      await api.delete(`/admin/kalender/${gameId}?delete_slots=true`)
       navigate(game ? `/kalender?date=${game.date.slice(0, 10)}` : '/kalender')
     } finally {
       setDeletingGame(false)
@@ -572,21 +568,8 @@ export default function SpieltagDetailPage() {
               <strong>{game.event_type === 'generisch' ? (game.opponent || '(kein Name)') : `Team vs ${game.opponent || '(kein Gegner)'}`}</strong> ({dateFormatted})
             </p>
             <p className="text-sm text-brand-text-muted mb-4">
-              Dieses Spiel wird endgültig gelöscht.
+              Dieses Spiel wird endgültig gelöscht.{slots.length > 0 && ` Dabei werden auch ${slots.length} ${slots.length === 1 ? 'verknüpfter Dienst' : 'verknüpfte Dienste'} gelöscht.`}
             </p>
-            {slots.length > 0 && (
-              <label className="flex items-start gap-2 mb-5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 accent-brand-yellow"
-                  checked={deleteWithSlots}
-                  onChange={e => setDeleteWithSlots(e.target.checked)}
-                />
-                <span className="text-sm text-brand-text">
-                  Verknüpfte Dienste ebenfalls löschen ({slots.length} {slots.length === 1 ? 'Dienst' : 'Dienste'})
-                </span>
-              </label>
-            )}
             <div className="flex gap-2">
               <button onClick={() => setShowDeleteGame(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
               <button onClick={handleDeleteGame} disabled={deletingGame}
