@@ -119,7 +119,7 @@ export default function MemberAdminTab({
             )}
             {invitations.length > 0 && (
               <optgroup label="Ausstehende Einladungen">
-                {invitations.map(i => (
+                {invitations.slice().sort((a, b) => a.email.localeCompare(b.email)).map(i => (
                   <option key={`i:${i.id}`} value={`i:${i.id}`}>
                     {i.email}
                   </option>
