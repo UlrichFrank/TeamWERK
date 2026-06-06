@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { getAccessToken } from '../lib/api'
 
 export function useVersionCheck(): boolean {
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -7,10 +6,7 @@ export function useVersionCheck(): boolean {
   useEffect(() => {
     if (import.meta.env.DEV) return
 
-    const token = getAccessToken()
-    if (!token) return
-
-    const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`)
+    const es = new EventSource('/api/events')
     let knownVersion: string | null = null
 
     es.onmessage = (e) => {
