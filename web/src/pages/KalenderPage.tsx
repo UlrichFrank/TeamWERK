@@ -138,7 +138,6 @@ export default function KalenderPage() {
   const [games, setGames] = useState<Game[]>([])
   const [trainings, setTrainings] = useState<Training[]>([])
   const [teams, setTeams] = useState<Team[]>([])
-  const [loading, setLoading] = useState(true)
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
   const compact = useCompactHeader(950)
@@ -232,7 +231,6 @@ export default function KalenderPage() {
           .then(r => setAllVenues(r.data ?? []))
           .catch(() => {}),
       ])
-      setLoading(false)
     }
     loadInitialData()
   }, [])
