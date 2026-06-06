@@ -79,19 +79,19 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		rows, err = h.db.QueryContext(r.Context(), `
-			SELECT id, name FROM users
-			WHERE id != ? AND name LIKE ?
-			ORDER BY name LIMIT 50`, claims.UserID, q)
+			SELECT id, first_name || ' ' || last_name AS name FROM users
+			WHERE id != ? AND (first_name || ' ' || last_name LIKE ? OR email LIKE ?)
+			ORDER BY first_name, last_name LIMIT 50`, claims.UserID, q, q)
 	} else {
 		rows, err = h.db.QueryContext(r.Context(), `
-			SELECT DISTINCT u.id, u.name FROM users u
+			SELECT DISTINCT u.id, u.first_name || ' ' || u.last_name AS name FROM users u
 			JOIN user_accessible_teams uat ON uat.user_id = u.id
 			WHERE u.id != ?
-			  AND u.name LIKE ?
+			  AND (u.first_name || ' ' || u.last_name LIKE ? OR u.email LIKE ?)
 			  AND uat.team_id IN (
 			    SELECT team_id FROM user_accessible_teams WHERE user_id = ?
 			  )
-			ORDER BY u.name LIMIT 50`, claims.UserID, q, claims.UserID)
+			ORDER BY u.first_name, u.last_name LIMIT 50`, claims.UserID, q, q, claims.UserID)
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -191,10 +191,10 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) loadMembers(r *http.Request, convID int) ([]Member, error) {
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT u.id, u.name FROM users u
+		SELECT u.id, u.first_name || ' ' || u.last_name FROM users u
 		JOIN conversation_members cm ON cm.user_id = u.id
 		WHERE cm.conversation_id = ? AND cm.left_at IS NULL
-		ORDER BY u.name`, convID)
+		ORDER BY u.first_name, u.last_name`, convID)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +407,7 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, m.sender_id, u.name, m.body, m.sent_at
+		SELECT m.id, m.sender_id, u.first_name || ' ' || u.last_name, m.body, m.sent_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		WHERE m.conversation_id = ?
@@ -473,7 +473,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go notifications.SendToUsers(h.db, h.cfg, recipientIDs,
-		claims.Email, truncate(body.Body, 80), "/chat")
+		h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -540,7 +540,7 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT b.id, u.name, b.body, b.sent_at,
+		SELECT b.id, u.first_name || ' ' || u.last_name, b.body, b.sent_at,
 		       CASE WHEN br.read_at IS NOT NULL THEN 1 ELSE 0 END AS is_read,
 		       CASE WHEN b.sender_id = ? THEN 1 ELSE 0 END AS is_sent
 		FROM broadcasts b
@@ -667,7 +667,7 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 			pushIDs = append(pushIDs, uid)
 		}
 	}
-	go notifications.SendToUsers(h.db, h.cfg, pushIDs, claims.Email, truncate(body.Body, 80), "/chat")
+	go notifications.SendToUsers(h.db, h.cfg, pushIDs, h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
 
 	w.WriteHeader(http.StatusCreated)
 }
@@ -750,6 +750,19 @@ func (h *Handler) resolveBroadcastRecipients(r *http.Request, targetType string,
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+func (h *Handler) senderName(r *http.Request, userID int, fallback string) string {
+	var first, last string
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT first_name, last_name FROM users WHERE id = ?`, userID).Scan(&first, &last); err != nil {
+		return fallback
+	}
+	name := strings.TrimSpace(first + " " + last)
+	if name == "" {
+		return fallback
+	}
+	return name
 }
 
 func truncate(s string, n int) string {

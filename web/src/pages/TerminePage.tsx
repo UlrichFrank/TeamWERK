@@ -8,11 +8,11 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
 
-const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
+const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
 function fmtDate(iso: string) {
   const d = new Date(iso.slice(0, 10) + 'T12:00:00')
-  return `${WEEKDAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+  return `${WEEKDAYS[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
 }
 
 interface ChildRSVP {
@@ -388,10 +388,10 @@ export default function TerminePage() {
             // Game card
             const g = t.data
             const key = `g-${g.id}`
-            const Icon = g.event_type === 'generisch' ? Calendar : (g.is_home ? Home : Plane)
+            const Icon = g.event_type === 'heim' ? Home : g.event_type === 'auswärts' ? Plane : Calendar
             const label = g.event_type === 'generisch'
               ? g.opponent
-              : (g.is_home ? `Heim: ${g.opponent}` : `Auswärts: ${g.opponent}`)
+              : (g.event_type === 'heim' ? `Heim: ${g.opponent}` : `Auswärts: ${g.opponent}`)
             return (
               <div
                 key={key}

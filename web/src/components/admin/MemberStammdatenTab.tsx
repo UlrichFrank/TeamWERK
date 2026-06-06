@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
 import { CLUB_FUNCTION_OPTIONS } from '../../lib/constants'
+import ImageCropModal from '../ImageCropModal'
 
 interface Member {
   id?: number
@@ -56,6 +57,7 @@ const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum
 export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
+  const [cropFile, setCropFile] = useState<File | null>(null)
   const [photoURL, setPhotoURL] = useState(form.photo_url || '')
 
   useEffect(() => {
@@ -87,13 +89,20 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const nameDraft = drafts.find(d => d.field_name === 'name')
   const profilDraft = drafts.find(d => d.field_name === 'profil')
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || isNew || !memberId) return
+    setCropFile(file)
+    if (photoInputRef.current) photoInputRef.current.value = ''
+  }
+
+  const handleCropConfirm = async (blob: Blob) => {
+    if (!memberId) return
+    setCropFile(null)
     setPhotoUploading(true)
     try {
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', blob, 'photo.jpg')
       const r = await api.post(`/upload/member-photo/${memberId}`, fd)
       setPhotoURL(r.data.photo_url || '')
       onFormChange({ photo_url: r.data.photo_url || '' })
@@ -101,7 +110,6 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
       // error handled by parent
     } finally {
       setPhotoUploading(false)
-      if (photoInputRef.current) photoInputRef.current.value = ''
     }
   }
 
@@ -361,7 +369,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           {!photoURL && <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Kein Bild</div>}
           {!isNew && (
             <>
-              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoUpload} />
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
               <button
                 onClick={() => photoInputRef.current?.click()}
                 disabled={photoUploading}
@@ -397,6 +405,12 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           {error && <span className="text-sm text-red-600">{error}</span>}
         </div>
       )}
+
+      <ImageCropModal
+        file={cropFile}
+        onConfirm={handleCropConfirm}
+        onCancel={() => { setCropFile(null); if (photoInputRef.current) photoInputRef.current.value = '' }}
+      />
     </div>
   )
 }

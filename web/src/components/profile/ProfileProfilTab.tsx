@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import { Member, Parent, Phone, Visibility } from '../../pages/ProfilePage'
 import { UserContact } from '../../pages/ChildProfilePage'
+import ImageCropModal from '../ImageCropModal'
 
 interface Props {
   children: Member[]
@@ -33,6 +34,7 @@ export default function ProfileProfilTab({
   const [showAddPhone, setShowAddPhone] = useState(false)
   const [newPhone, setNewPhone] = useState({ label: '', number: '' })
   const [photoUploading, setPhotoUploading] = useState(false)
+  const [cropFile, setCropFile] = useState<File | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
 
   const PHONE_LABEL_SUGGESTIONS = ['Privat', 'Mobil', 'Firma', 'Notfall']
@@ -186,13 +188,19 @@ export default function ProfileProfilTab({
     }
   }
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setCropFile(file)
+    if (photoInputRef.current) photoInputRef.current.value = ''
+  }
+
+  const handleCropConfirm = async (blob: Blob) => {
+    setCropFile(null)
     setPhotoUploading(true)
     try {
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', blob, 'photo.jpg')
       const endpoint = mode === 'child' && childMemberId
         ? `/profile/kind/${childMemberId}/photo`
         : '/upload/user-photo'
@@ -202,7 +210,6 @@ export default function ProfileProfilTab({
       setError('Foto-Upload fehlgeschlagen')
     } finally {
       setPhotoUploading(false)
-      if (photoInputRef.current) photoInputRef.current.value = ''
     }
   }
 
@@ -227,7 +234,7 @@ export default function ProfileProfilTab({
             <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-brand-text-subtle text-xs">Kein Bild</div>
           )}
           <div>
-            <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoUpload} />
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
             <button
               onClick={() => photoInputRef.current?.click()}
               disabled={photoUploading}
@@ -427,6 +434,12 @@ export default function ProfileProfilTab({
         {saved && <span className="text-sm text-green-600">Gespeichert</span>}
         {error && <span className="text-sm text-brand-danger">{error}</span>}
       </div>
+
+      <ImageCropModal
+        file={cropFile}
+        onConfirm={handleCropConfirm}
+        onCancel={() => { setCropFile(null); if (photoInputRef.current) photoInputRef.current.value = '' }}
+      />
     </div>
   )
 }
