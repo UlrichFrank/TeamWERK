@@ -182,7 +182,7 @@ export default function AppShell() {
                     `block pl-10 pr-4 py-2 text-sm transition-colors ${isActive ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-black/60 hover:bg-brand-black hover:text-brand-yellow'}`
                   }
                 >
-                  {child.first_name}s Profil
+                  {child.first_name}
                 </NavLink>
               ))}
             </div>
