@@ -1135,7 +1135,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 	}
 	// Single query: for each session, return only children who are in the kader of that session's team/season
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_opt_out
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_members km ON km.kader_id = k.id
@@ -1156,10 +1156,14 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 		var sid int
 		var c childRSVP
 		var rsvp sql.NullString
-		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp)
+		var rsvpOptOut int
+		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &rsvpOptOut)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
+		} else if rsvpOptOut == 1 {
+			confirmed := "confirmed"
+			c.RSVP = &confirmed
 		}
 		bySession[sid] = append(bySession[sid], c)
 	}

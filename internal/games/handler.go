@@ -2016,10 +2016,11 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 	}
 	// Single query: for each game, return only children who are in the kader of one of the game's teams
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_opt_out
 		FROM game_teams gt
+		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
-		  AND k.season_id = (SELECT season_id FROM games WHERE id = gt.game_id)
+		  AND k.season_id = g.season_id
 		JOIN kader_members km ON km.kader_id = k.id
 		JOIN members m ON m.id = km.member_id
 		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
@@ -2038,10 +2039,14 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 		var gid int
 		var c childRSVP
 		var rsvp sql.NullString
-		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp)
+		var rsvpOptOut int
+		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &rsvpOptOut)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
+		} else if rsvpOptOut == 1 {
+			confirmed := "confirmed"
+			c.RSVP = &confirmed
 		}
 		byGame[gid] = append(byGame[gid], c)
 	}
