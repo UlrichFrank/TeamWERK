@@ -289,6 +289,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Gender == "" {
 		req.Gender = "u"
 	}
+	if req.MemberNumber == "" {
+		var maxNum sql.NullInt64
+		h.db.QueryRowContext(r.Context(), `SELECT MAX(CAST(member_number AS INTEGER)) FROM members`).Scan(&maxNum)
+		if maxNum.Valid {
+			req.MemberNumber = strconv.FormatInt(maxNum.Int64+1, 10)
+		} else {
+			req.MemberNumber = "1"
+		}
+	}
 	res, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender) VALUES (?,?,?,?,?,?,?)`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),

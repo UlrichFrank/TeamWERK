@@ -281,8 +281,10 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	if seasonID != "" {
 		rows, err = h.db.QueryContext(r.Context(), base+` WHERE g.season_id=?`+suffix, seasonID)
 	} else {
+		// Show active-season games plus any future games from other seasons
+		// (prevents games from stranding when seasons are switched).
 		rows, err = h.db.QueryContext(r.Context(),
-			base+` WHERE g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`+suffix)
+			base+` WHERE g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) OR DATE(g.date) >= DATE('now','-1 day')`+suffix)
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)

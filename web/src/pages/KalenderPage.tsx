@@ -708,9 +708,6 @@ export default function KalenderPage() {
       </div>
       </div>
 
-      {!loading && monthGames.length === 0 && (
-        <p className="text-brand-text-subtle text-center mt-10 text-sm">Keine Heimspiele in diesem Monat</p>
-      )}
 
       {/* Day Regeneration Dialog */}
       {showDayRegen && (
@@ -1177,6 +1174,7 @@ export default function KalenderPage() {
           game={editingGame}
           onClose={() => setEditingGame(null)}
           onSaved={() => { loadGames(); setEditingGame(null) }}
+          onDeleted={() => { loadGames(); setEditingGame(null) }}
         />
       )}
       {editingTraining && (

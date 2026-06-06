@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import VenuePicker from './VenuePicker'
 
@@ -214,46 +214,44 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           )}
         </div>
 
-        {confirmDelete && (
-          <div className="mt-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
-            {scope === 'this_one' && 'Diesen Termin wirklich löschen?'}
-            {scope === 'this_and_following' && 'Diesen und alle folgenden Termine der Serie löschen?'}
-            {scope === 'all' && 'Die gesamte Serie und alle Termine löschen?'}
+        {confirmDelete ? (
+          <div className="mt-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg">
+            <p className="text-sm text-brand-danger mb-3">
+              {scope === 'this_one' && 'Diesen Termin wirklich löschen?'}
+              {scope === 'this_and_following' && 'Diesen und alle folgenden Termine der Serie löschen?'}
+              {scope === 'all' && 'Die gesamte Serie und alle Termine löschen?'}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>Abbrechen</button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Löschen…' : 'Ja, löschen'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2 pt-4">
+            <button
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting || saving || (scope !== 'this_one' && !series)}
+              className="p-2 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger-light rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Training löschen"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
+            <button
+              onClick={handleSave}
+              disabled={saving || deleting || (scope !== 'this_one' && !series)}
+              className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Speichern…' : 'Speichern'}
+            </button>
           </div>
         )}
-
-        <div className="flex gap-2 pt-4">
-          <button
-            onClick={() => {
-              if (!confirmDelete) {
-                setConfirmDelete(true)
-              } else {
-                handleDelete()
-              }
-            }}
-            disabled={deleting || saving || (scope !== 'this_one' && !series)}
-            className="bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {deleting ? 'Löschen…' : confirmDelete ? 'Bestätigen' : 'Löschen'}
-          </button>
-          {confirmDelete && (
-            <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>
-              Abbrechen
-            </button>
-          )}
-          {!confirmDelete && (
-            <>
-              <button onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
-              <button
-                onClick={handleSave}
-                disabled={saving || deleting || (scope !== 'this_one' && !series)}
-                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Speichern…' : 'Speichern'}
-              </button>
-            </>
-          )}
-        </div>
       </div>
     </div>
   )
