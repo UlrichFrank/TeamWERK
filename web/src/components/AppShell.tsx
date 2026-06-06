@@ -5,6 +5,7 @@ import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { useChatEvents } from '../hooks/useChatEvents'
+import { useVersionCheck } from '../hooks/useVersionCheck'
 import { api } from '../lib/api'
 
 interface NavModule {
@@ -68,6 +69,7 @@ export default function AppShell() {
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
   usePushSubscription()
+  const { version } = useVersionCheck()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
@@ -193,6 +195,11 @@ export default function AppShell() {
           Abmelden
         </button>
       </div>
+      {version && (
+        <div className="px-4 py-3 border-t border-brand-black/10">
+          <span className="text-xs text-brand-black/40">v {version}</span>
+        </div>
+      )}
     </aside>
   )
 

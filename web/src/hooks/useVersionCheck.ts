@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
 
-export function useVersionCheck(): boolean {
+interface VersionCheckResult {
+  updateAvailable: boolean
+  version: string | null
+}
+
+export function useVersionCheck(): VersionCheckResult {
   const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [version, setVersion] = useState<string | null>(null)
 
   useEffect(() => {
     if (import.meta.env.DEV) return
@@ -11,20 +17,17 @@ export function useVersionCheck(): boolean {
 
     es.onmessage = (e) => {
       if (!e.data?.startsWith('__version:')) return
-      const version = e.data.slice('__version:'.length)
+      const v = e.data.slice('__version:'.length)
       if (knownVersion === null) {
-        knownVersion = version
-      } else if (version !== knownVersion) {
+        knownVersion = v
+        setVersion(v)
+      } else if (v !== knownVersion) {
         setUpdateAvailable(true)
       }
-    }
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) es.close()
     }
 
     return () => es.close()
   }, [])
 
-  return updateAvailable
+  return { updateAvailable, version }
 }

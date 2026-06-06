@@ -50,7 +50,7 @@ function RoleRoute({ roles, children }: { roles: string[]; children: React.React
 }
 
 function AppUpdateBanner() {
-  const sseUpdateAvailable = useVersionCheck()
+  const { updateAvailable: sseUpdateAvailable } = useVersionCheck()
   const [swUpdateAvailable, setSwUpdateAvailable] = useState(false)
   const [dismissed, setDismissed] = useState(false)
 
