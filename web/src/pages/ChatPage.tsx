@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users } from 'lucide-react'
+import { Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users, UserPlus, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [showNewModal, setShowNewModal] = useState(false)
   const [showBroadcastModal, setShowBroadcastModal] = useState(false)
+  const [showAddMember, setShowAddMember] = useState(false)
   const [activeBroadcast, setActiveBroadcast] = useState<Broadcast | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isMobile = window.innerWidth < 640
@@ -55,6 +56,15 @@ export default function ChatPage() {
   const loadConversations = useCallback(async () => {
     try {
       const r = await api.get('/chat/conversations')
+      setConversations(r.data ?? [])
+    } catch {}
+  }, [])
+
+  const reloadActiveConv = useCallback(async (convId: number) => {
+    try {
+      const r = await api.get('/chat/conversations')
+      const updated = (r.data ?? []).find((c: Conversation) => c.id === convId)
+      if (updated) setActiveConv(updated)
       setConversations(r.data ?? [])
     } catch {}
   }, [])
@@ -122,8 +132,29 @@ export default function ChatPage() {
     loadConversations()
   }
 
+  const deleteConversation = async (conv: Conversation) => {
+    if (!confirm('Gespräch löschen?')) return
+    await api.delete(`/chat/conversations/${conv.id}`).catch(() => {})
+    if (activeConv?.id === conv.id) {
+      setActiveConv(null)
+      setMobileShowChat(false)
+    }
+    loadConversations()
+  }
+
+  const deleteBroadcast = async (bc: Broadcast) => {
+    if (!confirm('Mitteilung löschen?')) return
+    await api.delete(`/chat/broadcasts/${bc.id}`).catch(() => {})
+    if (activeBroadcast?.id === bc.id) {
+      setActiveBroadcast(null)
+      setMobileShowChat(false)
+    }
+    loadBroadcasts()
+  }
+
   const openBroadcast = async (bc: Broadcast) => {
     setActiveBroadcast(bc)
+    setMobileShowChat(true)
     if (!bc.isRead && !bc.isSent) {
       await api.post(`/chat/broadcasts/${bc.id}/read`).catch(() => {})
       loadBroadcasts()
@@ -190,21 +221,32 @@ export default function ChatPage() {
                   <p className="text-brand-text-muted text-sm p-4 text-center">Noch keine Gespräche</p>
                 )}
                 {conversations.map(conv => (
-                  <button
+                  <div
                     key={conv.id}
-                    onClick={() => openConversation(conv)}
-                    className={`w-full text-left px-4 py-3 border-b border-brand-border-subtle hover:bg-brand-table-select transition-colors ${activeConv?.id === conv.id ? 'bg-brand-table-select' : ''}`}
+                    className={`flex items-center border-b border-brand-border-subtle hover:bg-brand-table-select transition-colors ${activeConv?.id === conv.id ? 'bg-brand-table-select' : ''}`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-brand-text truncate">{convName(conv)}</span>
-                      {conv.unreadCount > 0 && (
-                        <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 shrink-0">{conv.unreadCount}</span>
+                    <button
+                      onClick={() => openConversation(conv)}
+                      className="flex-1 min-w-0 text-left px-4 py-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-brand-text truncate">{convName(conv)}</span>
+                        {conv.unreadCount > 0 && (
+                          <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 shrink-0">{conv.unreadCount}</span>
+                        )}
+                      </div>
+                      {conv.lastMessage && (
+                        <p className="text-xs text-brand-text-muted truncate mt-0.5">{conv.lastMessage.body}</p>
                       )}
-                    </div>
-                    {conv.lastMessage && (
-                      <p className="text-xs text-brand-text-muted truncate mt-0.5">{conv.lastMessage.body}</p>
-                    )}
-                  </button>
+                    </button>
+                    <button
+                      onClick={() => deleteConversation(conv)}
+                      className="shrink-0 px-3 py-3 text-brand-text-subtle hover:text-brand-danger transition-colors"
+                      aria-label="Gespräch löschen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </>
@@ -228,21 +270,32 @@ export default function ChatPage() {
                   <p className="text-brand-text-muted text-sm p-4 text-center">Keine Mitteilungen</p>
                 )}
                 {broadcasts.map(bc => (
-                  <button
+                  <div
                     key={bc.id}
-                    onClick={() => openBroadcast(bc)}
-                    className={`w-full text-left px-4 py-3 border-b border-brand-border-subtle hover:bg-brand-table-select transition-colors ${activeBroadcast?.id === bc.id ? 'bg-brand-table-select' : ''}`}
+                    className={`flex items-center border-b border-brand-border-subtle hover:bg-brand-table-select transition-colors ${activeBroadcast?.id === bc.id ? 'bg-brand-table-select' : ''}`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm truncate ${!bc.isRead && !bc.isSent ? 'font-semibold text-brand-text' : 'font-medium text-brand-text-muted'}`}>
-                        {bc.isSent ? 'Gesendet' : bc.senderName}
-                      </span>
-                      {!bc.isRead && !bc.isSent && (
-                        <span className="w-2 h-2 rounded-full bg-brand-yellow shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-xs text-brand-text-muted truncate mt-0.5">{bc.body}</p>
-                  </button>
+                    <button
+                      onClick={() => openBroadcast(bc)}
+                      className="flex-1 min-w-0 text-left px-4 py-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-sm truncate ${!bc.isRead && !bc.isSent ? 'font-semibold text-brand-text' : 'font-medium text-brand-text-muted'}`}>
+                          {bc.isSent ? 'Gesendet' : bc.senderName}
+                        </span>
+                        {!bc.isRead && !bc.isSent && (
+                          <span className="w-2 h-2 rounded-full bg-brand-yellow shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-xs text-brand-text-muted truncate mt-0.5">{bc.body}</p>
+                    </button>
+                    <button
+                      onClick={() => deleteBroadcast(bc)}
+                      className="shrink-0 px-3 py-3 text-brand-text-subtle hover:text-brand-danger transition-colors"
+                      aria-label="Mitteilung löschen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </>
@@ -268,13 +321,24 @@ export default function ChatPage() {
                   )}
                 </div>
                 {activeConv.type === 'group' && (
-                  <button
-                    onClick={leaveGroup}
-                    className="text-brand-text-muted hover:text-brand-danger transition-colors shrink-0"
-                    aria-label="Gruppe verlassen"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {activeConv.createdBy === user?.id && (
+                      <button
+                        onClick={() => setShowAddMember(true)}
+                        className="text-brand-text-muted hover:text-brand-text transition-colors"
+                        aria-label="Mitglied hinzufügen"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={leaveGroup}
+                      className="text-brand-text-muted hover:text-brand-danger transition-colors"
+                      aria-label="Gruppe verlassen"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
@@ -355,6 +419,15 @@ export default function ChatPage() {
           onClose={() => setShowBroadcastModal(false)}
           onSent={() => { setShowBroadcastModal(false); loadBroadcasts() }}
           isAdmin={user?.role === 'admin' || hasFunction(user!, 'vorstand')}
+        />
+      )}
+
+      {showAddMember && activeConv && (
+        <AddMemberModal
+          convId={activeConv.id}
+          existingMemberIds={activeConv.members.map(m => m.id)}
+          onClose={() => setShowAddMember(false)}
+          onAdded={() => { setShowAddMember(false); reloadActiveConv(activeConv.id) }}
         />
       )}
     </div>
@@ -574,6 +647,89 @@ function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onS
           className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {loading ? 'Sende…' : 'Mitteilung senden'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// --- Add Member Modal ---
+function AddMemberModal({ convId, existingMemberIds, onClose, onAdded }: {
+  convId: number
+  existingMemberIds: number[]
+  onClose: () => void
+  onAdded: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [users, setUsers] = useState<ChatUser[]>([])
+  const [selected, setSelected] = useState<ChatUser | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.get('/chat/users', { params: { q: query } })
+        setUsers((r.data ?? []).filter((u: ChatUser) => !existingMemberIds.includes(u.id)))
+      } catch {}
+    }, 200)
+    return () => clearTimeout(t)
+  }, [query, existingMemberIds])
+
+  const submit = async () => {
+    if (!selected) return
+    setLoading(true)
+    setError('')
+    try {
+      await api.post(`/chat/conversations/${convId}/members`, { userId: selected.id })
+      onAdded()
+    } catch (e: any) {
+      setError(e.response?.data || 'Fehler beim Hinzufügen')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-brand-text">Mitglied hinzufügen</h2>
+          <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
+        </div>
+
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-subtle" />
+          <input
+            type="text"
+            placeholder="Person suchen…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="w-full border border-brand-border rounded-md pl-9 pr-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+          />
+        </div>
+
+        <div className="max-h-48 overflow-y-auto border border-brand-border-subtle rounded-md mb-4">
+          {users.map(u => (
+            <button
+              key={u.id}
+              onClick={() => setSelected(u)}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-table-select transition-colors ${selected?.id === u.id ? 'bg-brand-yellow/10 font-medium' : 'text-brand-text'}`}
+            >
+              {u.name}
+            </button>
+          ))}
+          {users.length === 0 && <p className="text-brand-text-muted text-sm p-3 text-center">Keine Ergebnisse</p>}
+        </div>
+
+        {error && <p className="text-brand-danger text-sm mb-3">{error}</p>}
+
+        <button
+          onClick={submit}
+          disabled={loading || !selected}
+          className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Hinzufügen…' : selected ? `${selected.name} hinzufügen` : 'Person auswählen'}
         </button>
       </div>
     </div>

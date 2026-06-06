@@ -142,9 +142,12 @@ func serve() {
 		r.Post("/api/chat/conversations/{id}/messages", chatH.SendMessage)
 		r.Post("/api/chat/conversations/{id}/read", chatH.MarkRead)
 		r.Delete("/api/chat/conversations/{id}/members/me", chatH.LeaveConversation)
+		r.Delete("/api/chat/conversations/{id}", chatH.DeleteConversation)
+		r.Post("/api/chat/conversations/{id}/members", chatH.AddMember)
 		r.Get("/api/chat/broadcasts", chatH.ListBroadcasts)
 		r.Post("/api/chat/broadcasts", chatH.SendBroadcast)
 		r.Post("/api/chat/broadcasts/{id}/read", chatH.MarkBroadcastRead)
+		r.Delete("/api/chat/broadcasts/{id}", chatH.DeleteBroadcast)
 
 		// Members
 		r.Get("/api/users/{id}/contact", membH.GetContact)

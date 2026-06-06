@@ -546,6 +546,7 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 		FROM broadcasts b
 		JOIN users u ON u.id = b.sender_id
 		JOIN broadcast_reads br ON br.broadcast_id = b.id AND br.user_id = ?
+		WHERE br.hidden_at IS NULL
 		ORDER BY b.sent_at DESC
 		LIMIT 100`, claims.UserID, claims.UserID)
 	if err != nil {
@@ -685,6 +686,133 @@ func (h *Handler) MarkBroadcastRead(w http.ResponseWriter, r *http.Request) {
 		UPDATE broadcast_reads SET read_at = CURRENT_TIMESTAMP
 		WHERE broadcast_id = ? AND user_id = ? AND read_at IS NULL`,
 		broadcastID, claims.UserID)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/chat/conversations/{id}
+func (h *Handler) DeleteConversation(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	if !h.isMember(r, convID, claims.UserID) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	h.db.ExecContext(r.Context(),
+		`UPDATE conversation_members SET left_at = CURRENT_TIMESTAMP
+		 WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL`,
+		convID, claims.UserID)
+
+	var remaining int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM conversation_members WHERE conversation_id = ? AND left_at IS NULL`, convID).Scan(&remaining)
+	if remaining == 0 {
+		h.db.ExecContext(r.Context(), `DELETE FROM conversations WHERE id = ?`, convID)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/chat/broadcasts/{id}
+func (h *Handler) DeleteBroadcast(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	broadcastID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE broadcast_reads SET hidden_at = CURRENT_TIMESTAMP
+		 WHERE broadcast_id = ? AND user_id = ? AND hidden_at IS NULL`,
+		broadcastID, claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var remaining int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM broadcast_reads WHERE broadcast_id = ? AND hidden_at IS NULL`, broadcastID).Scan(&remaining)
+	if remaining == 0 {
+		h.db.ExecContext(r.Context(), `DELETE FROM broadcasts WHERE id = ?`, broadcastID)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/chat/conversations/{id}/members
+func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		UserID int `json:"userId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UserID == 0 {
+		http.Error(w, "userId required", http.StatusBadRequest)
+		return
+	}
+
+	var convType string
+	var createdBy int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT type, created_by FROM conversations WHERE id = ?`, convID).Scan(&convType, &createdBy); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if convType != "group" {
+		http.Error(w, "only group conversations support adding members", http.StatusBadRequest)
+		return
+	}
+	if createdBy != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	ok, err := h.canContactUser(r, claims, body.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE conversation_members SET left_at = NULL WHERE conversation_id = ? AND user_id = ?`,
+		convID, body.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		if _, err := h.db.ExecContext(r.Context(),
+			`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`,
+			convID, body.UserID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	h.hub.BroadcastToUser(body.UserID, fmt.Sprintf("chat:new-message:%d", convID))
 
 	w.WriteHeader(http.StatusNoContent)
 }
