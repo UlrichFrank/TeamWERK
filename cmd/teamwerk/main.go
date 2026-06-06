@@ -330,6 +330,7 @@ func serve() {
 			r.Delete("/api/admin/duty-templates/{id}", gameH.DeleteTemplate)
 			r.Get("/api/admin/duty-templates/{id}/preview", gameH.PreviewSlots)
 			r.Post("/api/upload/member-photo/{id}", uploadH.UploadMemberPhoto)
+				r.Delete("/api/upload/member-photo/{id}", uploadH.DeleteMemberPhoto)
 			r.Post("/api/upload/sepa-mandat/{id}", uploadH.UploadSepaMandat)
 			r.Put("/api/admin/age-class-rules/{ageClass}", cfgH.UpdateAgeClassRuleHandler)
 		})

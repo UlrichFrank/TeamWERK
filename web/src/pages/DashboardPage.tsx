@@ -21,6 +21,7 @@ interface NextEvent {
   title: string
   teamName: string
   detailUrl: string
+  isHome: boolean | null
 }
 
 interface DiensteSlot {
@@ -131,7 +132,7 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
             <span className="flex-shrink-0 text-brand-text-muted">
               {e.eventType === 'training'
                 ? <Dumbbell className="w-4 h-4" />
-                : e.title.startsWith('vs.') ? <Plane className="w-4 h-4" /> : <Home className="w-4 h-4" />}
+                : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
             </span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-brand-text truncate">{e.title}</p>

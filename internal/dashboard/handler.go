@@ -30,6 +30,7 @@ type NextEvent struct {
 	Title     string `json:"title"`
 	TeamName  string `json:"teamName"`
 	DetailURL string `json:"detailUrl"`
+	IsHome    *bool  `json:"isHome"` // nil for training, true/false for games
 }
 
 type DiensteSlot struct {
@@ -138,7 +139,8 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       ts.start_time AS time,
 			       CASE WHEN ts.title != '' THEN ts.title ELSE 'Training' END AS title,
 			       t.name AS team_name,
-			       '/termine/training/' || ts.id AS detail_url
+			       '/termine/training/' || ts.id AS detail_url,
+			       NULL AS is_home
 			FROM training_sessions ts
 			JOIN teams t ON t.id = ts.team_id
 			WHERE ts.team_id IN (%s)
@@ -152,7 +154,8 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       g.time,
 			       CASE WHEN g.event_type = 'generisch' THEN g.opponent ELSE 'vs. ' || g.opponent END,
 			       MIN(t.name),
-			       '/termine/spiel/' || g.id
+			       '/termine/spiel/' || g.id,
+			       g.is_home
 			FROM games g
 			JOIN game_teams gt ON g.id = gt.game_id
 			JOIN teams t ON t.id = gt.team_id
@@ -162,7 +165,7 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			GROUP BY g.id
 		),
 		min_date AS (SELECT MIN(date) AS d FROM upcoming)
-		SELECT event_id, event_type, date, time, title, team_name, detail_url
+		SELECT event_id, event_type, date, time, title, team_name, detail_url, is_home
 		FROM upcoming
 		WHERE date = (SELECT d FROM min_date)
 		ORDER BY time ASC`, teamSubquery, teamSubquery),
@@ -176,7 +179,12 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 	events := []NextEvent{}
 	for rows.Next() {
 		var e NextEvent
-		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL)
+		var isHome sql.NullInt64
+		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL, &isHome)
+		if isHome.Valid {
+			v := isHome.Int64 == 1
+			e.IsHome = &v
+		}
 		events = append(events, e)
 	}
 	return events

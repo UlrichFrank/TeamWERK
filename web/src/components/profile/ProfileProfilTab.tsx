@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from 'react'
+import { ChevronDown, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Member, Parent, Phone, Visibility } from '../../pages/ProfilePage'
 import { UserContact } from '../../pages/ChildProfilePage'
@@ -35,7 +36,9 @@ export default function ProfileProfilTab({
   const [newPhone, setNewPhone] = useState({ label: '', number: '' })
   const [photoUploading, setPhotoUploading] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
+  const [photoDropdown, setPhotoDropdown] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const photoDropdownRef = useRef<HTMLDivElement>(null)
 
   const PHONE_LABEL_SUGGESTIONS = ['Privat', 'Mobil', 'Firma', 'Notfall']
 
@@ -90,6 +93,16 @@ export default function ProfileProfilTab({
       setPhotoURL(ownMember.photo_url ?? '')
     }
   }, [ownMember?.id, userContact])
+
+  useEffect(() => {
+    if (!photoDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (photoDropdownRef.current && !photoDropdownRef.current.contains(e.target as Node))
+        setPhotoDropdown(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [photoDropdown])
 
   const childChanged = mode === 'child' && (
     userContact ? (
@@ -213,6 +226,19 @@ export default function ProfileProfilTab({
     }
   }
 
+  const handlePhotoDelete = async () => {
+    setPhotoDropdown(false)
+    try {
+      const endpoint = mode === 'child' && childMemberId
+        ? `/profile/kind/${childMemberId}/photo`
+        : '/upload/user-photo'
+      await api.delete(endpoint)
+      setPhotoURL('')
+    } catch {
+      setError('Foto konnte nicht gelöscht werden')
+    }
+  }
+
   const inputCls = `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
 
   return (
@@ -235,14 +261,41 @@ export default function ProfileProfilTab({
           )}
           <div>
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
-            <button
-              onClick={() => photoInputRef.current?.click()}
-              disabled={photoUploading}
-              className="bg-brand-yellow text-brand-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {photoUploading ? 'Hochladen…' : photoURL ? 'Bild ersetzen' : 'Bild hochladen'}
-            </button>
-            <p className="text-xs text-brand-text-subtle mt-1">JPEG, PNG oder WebP, max. 5 MB</p>
+            <div className="space-y-1">
+              <div ref={photoDropdownRef} className="relative inline-flex">
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  className={`bg-brand-yellow text-brand-black px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${photoURL ? 'rounded-l-md border-r border-brand-black/20' : 'rounded-md'}`}
+                >
+                  {photoUploading ? 'Hochladen…' : 'Bild hochladen'}
+                </button>
+                {photoURL && (
+                  <>
+                    <button
+                      onClick={() => setPhotoDropdown(v => !v)}
+                      disabled={photoUploading}
+                      aria-label="Weitere Optionen"
+                      className="bg-brand-yellow text-brand-black rounded-r-md px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                    {photoDropdown && (
+                      <div className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                        <button
+                          onClick={handlePhotoDelete}
+                          className="w-full text-left px-4 py-2.5 text-xs text-brand-danger hover:bg-brand-danger-light transition-colors flex items-center gap-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Bild löschen
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-brand-text-subtle">JPEG, PNG oder WebP, max. 5 MB</p>
+            </div>
           </div>
         </div>
       </div>

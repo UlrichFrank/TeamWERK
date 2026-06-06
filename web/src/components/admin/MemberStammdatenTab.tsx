@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { CLUB_FUNCTION_OPTIONS } from '../../lib/constants'
 import ImageCropModal from '../ImageCropModal'
@@ -56,8 +57,10 @@ const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum
 
 export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const photoDropdownRef = useRef<HTMLDivElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
+  const [photoDropdown, setPhotoDropdown] = useState(false)
   const [photoURL, setPhotoURL] = useState(form.photo_url || '')
 
   useEffect(() => {
@@ -65,6 +68,16 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
       setPhotoURL(form.photo_url)
     }
   }, [form.photo_url, photoURL])
+
+  useEffect(() => {
+    if (!photoDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (photoDropdownRef.current && !photoDropdownRef.current.contains(e.target as Node))
+        setPhotoDropdown(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [photoDropdown])
 
   const togglePosition = (pos: string) => {
     const current = form.position ? form.position.split(',').filter(Boolean) : []
@@ -110,6 +123,18 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
       // error handled by parent
     } finally {
       setPhotoUploading(false)
+    }
+  }
+
+  const handlePhotoDelete = async () => {
+    if (!memberId) return
+    setPhotoDropdown(false)
+    try {
+      await api.delete(`/upload/member-photo/${memberId}`)
+      setPhotoURL('')
+      onFormChange({ photo_url: '' })
+    } catch {
+      // error handled by parent
     }
   }
 
@@ -370,13 +395,38 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           {!isNew && (
             <>
               <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
-              <button
-                onClick={() => photoInputRef.current?.click()}
-                disabled={photoUploading}
-                className="bg-brand-yellow text-black px-3 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40"
-              >
-                {photoUploading ? 'Hochladen…' : 'Foto hochladen'}
-              </button>
+              <div ref={photoDropdownRef} className="relative inline-flex">
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  className={`bg-brand-yellow text-brand-black px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${photoURL ? 'rounded-l-md border-r border-brand-black/20' : 'rounded-md'}`}
+                >
+                  {photoUploading ? 'Hochladen…' : 'Bild hochladen'}
+                </button>
+                {photoURL && (
+                  <>
+                    <button
+                      onClick={() => setPhotoDropdown(v => !v)}
+                      disabled={photoUploading}
+                      aria-label="Weitere Optionen"
+                      className="bg-brand-yellow text-brand-black rounded-r-md px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                    {photoDropdown && (
+                      <div className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                        <button
+                          onClick={handlePhotoDelete}
+                          className="w-full text-left px-4 py-2.5 text-xs text-brand-danger hover:bg-brand-danger-light transition-colors flex items-center gap-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Bild löschen
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </>
           )}
         </div>
