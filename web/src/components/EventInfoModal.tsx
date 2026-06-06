@@ -1,4 +1,4 @@
-import { Home, Plane, Calendar, Dumbbell, X, Check } from 'lucide-react'
+import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 
 interface Game {
@@ -29,6 +29,8 @@ interface Props {
   game?: Game
   training?: Training
   onClose: () => void
+  onEdit?: () => void
+  onDienste?: () => void
 }
 
 function formatDate(dateStr: string): string {
@@ -55,7 +57,7 @@ function RsvpRow({ confirmed, declined, maybe }: { confirmed: number; declined: 
   )
 }
 
-export default function EventInfoModal({ type, game, training, onClose }: Props) {
+export default function EventInfoModal({ type, game, training, onClose, onEdit, onDienste }: Props) {
   useEscapeKey(onClose)
 
   const eventTypeLabel = game?.event_type === 'heim' ? 'Heimspiel'
@@ -78,9 +80,21 @@ export default function EventInfoModal({ type, game, training, onClose }: Props)
               {type === 'game' ? eventTypeLabel : (training?.title || 'Training')}
             </h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
-            <X className="w-5 h-5 text-brand-text-muted" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <button onClick={onEdit} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Bearbeiten">
+                <Pencil className="w-4 h-4 text-brand-text-muted" />
+              </button>
+            )}
+            {onDienste && (
+              <button onClick={onDienste} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Dienste">
+                <ClipboardList className="w-4 h-4 text-brand-text-muted" />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
+              <X className="w-5 h-5 text-brand-text-muted" />
+            </button>
+          </div>
         </div>
 
         {type === 'game' && game ? (

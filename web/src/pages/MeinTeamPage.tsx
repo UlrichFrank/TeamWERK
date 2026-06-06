@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import PersonChip from '../components/PersonChip'
 
-interface TrainerEntry { name: string; email: string }
-interface PlayerEntry { name: string; jerseyNumber: number | null; status: string; email: string }
-interface ParentEntry { name: string; email: string; children: string[] }
+interface TrainerEntry { userId: number; name: string }
+interface PlayerEntry { userId: number; name: string; jerseyNumber: number | null }
+interface ParentEntry { userId: number; name: string; children: string[] }
 
 interface TeamRoster {
   team: { id: number; name: string }
@@ -15,26 +16,6 @@ interface TeamRoster {
 
 interface MyTeam { id: number; name: string }
 
-const STATUS_LABELS: Record<string, string> = {
-  aktiv: 'Aktiv',
-  verletzt: 'Verletzt',
-  pausiert: 'Pausiert',
-  ausgetreten: 'Ausgetreten',
-  passiv: 'Passiv',
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const cls = status === 'aktiv'
-    ? 'bg-brand-success-light text-brand-success'
-    : status === 'verletzt'
-    ? 'bg-brand-danger-light text-brand-danger'
-    : 'bg-brand-border-subtle text-brand-text-muted'
-  return (
-    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${cls}`}>
-      {STATUS_LABELS[status] ?? status}
-    </span>
-  )
-}
 
 function RosterSection({ roster }: { roster: TeamRoster }) {
   return (
@@ -51,9 +32,8 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
             <tbody>
               {roster.trainers.map((t, i) => (
                 <tr key={i} className="border-b border-brand-border-subtle last:border-0">
-                  <td className="py-2 pr-4 text-brand-text font-medium">{t.name}</td>
-                  <td className="py-2 text-brand-text-muted">
-                    {t.email && <a href={`mailto:${t.email}`} className="hover:text-brand-text transition-colors">{t.email}</a>}
+                  <td className="py-2">
+                    <PersonChip userId={t.userId || undefined} name={t.name} />
                   </td>
                 </tr>
               ))}
@@ -71,9 +51,7 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
               <thead>
                 <tr className="text-left">
                   <th className="pb-2 pr-4 text-xs text-brand-text-muted font-medium">#</th>
-                  <th className="pb-2 pr-4 text-xs text-brand-text-muted font-medium">Name</th>
-                  <th className="pb-2 pr-4 text-xs text-brand-text-muted font-medium hidden sm:table-cell">Status</th>
-                  <th className="pb-2 text-xs text-brand-text-muted font-medium hidden sm:table-cell">E-Mail</th>
+                  <th className="pb-2 text-xs text-brand-text-muted font-medium">Name</th>
                 </tr>
               </thead>
               <tbody>
@@ -82,17 +60,8 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
                     <td className="py-2 pr-4 text-brand-text-muted w-8">
                       {p.jerseyNumber != null ? p.jerseyNumber : '–'}
                     </td>
-                    <td className="py-2 pr-4 text-brand-text font-medium">
-                      {p.name}
-                      <span className="sm:hidden ml-2">
-                        <StatusBadge status={p.status} />
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 hidden sm:table-cell">
-                      <StatusBadge status={p.status} />
-                    </td>
-                    <td className="py-2 text-brand-text-muted hidden sm:table-cell">
-                      {p.email && <a href={`mailto:${p.email}`} className="hover:text-brand-text transition-colors">{p.email}</a>}
+                    <td className="py-2">
+                      <PersonChip userId={p.userId || undefined} name={p.name} />
                     </td>
                   </tr>
                 ))}
@@ -110,14 +79,11 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
             <tbody>
               {roster.parents.map((p, i) => (
                 <tr key={i} className="border-b border-brand-border-subtle last:border-0">
-                  <td className="py-2 pr-4">
-                    <p className="text-brand-text font-medium">{p.name}</p>
+                  <td className="py-2">
+                    <PersonChip userId={p.userId || undefined} name={p.name} />
                     {p.children.length > 0 && (
-                      <p className="text-xs text-brand-text-muted">{p.children.join(', ')}</p>
+                      <p className="text-xs text-brand-text-muted mt-0.5">{p.children.join(', ')}</p>
                     )}
-                  </td>
-                  <td className="py-2 text-brand-text-muted">
-                    {p.email && <a href={`mailto:${p.email}`} className="hover:text-brand-text transition-colors">{p.email}</a>}
                   </td>
                 </tr>
               ))}

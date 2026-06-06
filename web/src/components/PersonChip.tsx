@@ -47,7 +47,11 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
   }, [open])
 
   if (!userId) {
-    return <span className="text-xs text-brand-text">{name}</span>
+    return (
+      <span className="inline-flex items-center rounded-full border border-brand-border-subtle px-2 py-0.5 text-xs text-brand-text-muted">
+        {name}
+      </span>
+    )
   }
 
   const state = get(userId)

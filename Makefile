@@ -2,12 +2,16 @@ BINARY     := teamwerk
 BUILD_DIR  := bin
 REMOTE     := $(shell grep '^REMOTE=' .env 2>/dev/null | cut -d= -f2)
 REMOTE_DIR := $(shell grep '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2)
-DB_PATH    := /var/lib/teamwerk/teamwerk.db
+DB_PATH        := /var/lib/teamwerk/teamwerk.db
+UPLOAD_DIR_REMOTE := /var/lib/teamwerk/uploads
+FILES_DIR_REMOTE  := /var/lib/teamwerk/files
+UPLOAD_DIR_LOCAL  := ./storage/uploads
+FILES_DIR_LOCAL   := ./storage/files
 EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup restore-local pull-db
+.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local pull-db
 
 .DEFAULT_GOAL := help
 
@@ -93,21 +97,33 @@ create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
 push-test-remote: ## Test-Push an User senden (USER=<id> TITLE=... BODY=... URL=...)
 	ssh $(REMOTE) "/usr/local/bin/teamwerk push-test --env=/etc/teamwerk/env --db=$(DB_PATH) --user=$(USER) --title='$(TITLE)' --body='$(BODY)' --url='$(or $(URL),/)'"
 
-backup: ## Prod-DB auf VPS sichern und lokal herunterladen (./teamwerk-backup.db)
-	@echo "Erstelle Backup auf VPS..."
+backup: ## Prod-DB + Bilder (uploads) auf VPS sichern (./teamwerk-backup.db, ./backup/uploads/)
+	@echo "Erstelle DB-Backup auf VPS..."
 	ssh $(REMOTE) "sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-backup.db'"
 	scp $(REMOTE):/tmp/teamwerk-backup.db ./teamwerk-backup.db
 	ssh $(REMOTE) "rm -f /tmp/teamwerk-backup.db"
-	@echo "Backup gespeichert: ./teamwerk-backup.db"
+	@echo "Synchronisiere Bilder..."
+	@mkdir -p ./backup/uploads
+	rsync -az $(REMOTE):$(UPLOAD_DIR_REMOTE)/ ./backup/uploads/
+	@echo "Backup gespeichert: ./teamwerk-backup.db, ./backup/uploads/"
 
-restore-local: ## Backup (teamwerk-backup.db) als lokale Entwicklungsdatenbank einspielen
+backup-files: ## Dokumente vom VPS sichern (./backup/files/)
+	@echo "Synchronisiere Dokumente..."
+	@mkdir -p ./backup/files
+	rsync -az $(REMOTE):$(FILES_DIR_REMOTE)/ ./backup/files/
+	@echo "Backup gespeichert: ./backup/files/"
+
+restore-local: ## Backup (DB + Bilder) lokal einspielen
 	@if [ ! -f ./teamwerk-backup.db ]; then echo "Fehler: teamwerk-backup.db nicht gefunden. Zuerst 'make backup' ausführen."; exit 1; fi
-	@echo "WARNUNG: ./teamwerk.db wird mit dem Backup überschrieben."
+	@echo "WARNUNG: ./teamwerk.db und $(UPLOAD_DIR_LOCAL) werden überschrieben."
 	@printf "Fortfahren? [y/N] "; \
 	read ans; \
 	if [ "$$ans" = "y" ]; then \
 		cp ./teamwerk-backup.db ./teamwerk.db; \
 		rm -f ./teamwerk.db-wal ./teamwerk.db-shm; \
+		if [ -d ./backup/uploads ]; then \
+			mkdir -p $(UPLOAD_DIR_LOCAL) && rsync -a --delete ./backup/uploads/ $(UPLOAD_DIR_LOCAL)/; \
+		fi; \
 		echo "Restore abgeschlossen."; \
 	else \
 		echo "Abgebrochen."; \

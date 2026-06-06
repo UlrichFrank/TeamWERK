@@ -7,6 +7,11 @@ cmd/teamwerk/web/dist/
 
 # SQLite
 *.db
+
+# Lokale Backups und Uploads
+teamwerk-backup.db
+backup/
+storage/
 *.db-shm
 *.db-wal
 

@@ -174,8 +174,6 @@ export default function KalenderPage() {
   const [editingGame, setEditingGame] = useState<Game | null>(null)
   const [infoItem, setInfoItem] = useState<{ type: 'game' | 'training'; game?: Game; training?: Training } | null>(null)
 
-  // Modus-Toggle
-  const [kalenderMode, setKalenderMode] = useState<'dienste' | 'termine'>('dienste')
 
   const loadGames = async () => {
     try {
@@ -573,20 +571,6 @@ export default function KalenderPage() {
         <span className="text-lg font-semibold w-44 text-center">{MONTHS[month]} {year}</span>
         <button onClick={nextMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">▶</button>
         <div className="flex-1" />
-        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
-          <button
-            onClick={() => setKalenderMode('dienste')}
-            className={`px-3 py-1.5 ${kalenderMode === 'dienste' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-          >
-            Dienste
-          </button>
-          <button
-            onClick={() => setKalenderMode('termine')}
-            className={`px-3 py-1.5 border-l border-brand-border-subtle ${kalenderMode === 'termine' ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-          >
-            Termine
-          </button>
-        </div>
       </div>
 
       {/* Calendar */}
@@ -635,15 +619,7 @@ export default function KalenderPage() {
                   <button
                     key={g.id}
                     onPointerDown={e => e.stopPropagation()}
-                    onClick={() => {
-                      if (kalenderMode === 'dienste') {
-                        navigate(`/kalender/${g.id}`)
-                      } else if (canEdit) {
-                        setEditingGame(g)
-                      } else {
-                        setInfoItem({ type: 'game', game: g })
-                      }
-                    }}
+                    onClick={() => setInfoItem({ type: 'game', game: g })}
                     title={`${g.teams.length > 1 ? 'Mehrere Teams' : (shortNames.get(g.teams[0]?.id) ?? g.teams[0]?.name ?? '?')} · ${g.opponent || '–'} · ${g.time}`}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${getEventColors(g.event_type).pill}`}
                   >
@@ -673,18 +649,10 @@ export default function KalenderPage() {
                     key={`t-${t.id}`}
                     onPointerDown={e => e.stopPropagation()}
                     title={`${shortNames.get(t.team_id) ?? (t.title || 'Training')} · ${t.start_time}`}
-                    onClick={kalenderMode === 'termine' ? () => {
-                      if (canEdit) {
-                        setEditingTraining(t)
-                      } else {
-                        setInfoItem({ type: 'training', training: t })
-                      }
-                    } : undefined}
+                    onClick={() => setInfoItem({ type: 'training', training: t })}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs border ${
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
-                        : kalenderMode === 'dienste'
-                        ? 'bg-brand-green/10 border-brand-green/30 cursor-default'
                         : `${getEventColors('training').pill} transition-colors`
                     }`}
                   >
@@ -1199,6 +1167,13 @@ export default function KalenderPage() {
           game={infoItem.game}
           training={infoItem.training}
           onClose={() => setInfoItem(null)}
+          onEdit={canEdit ? () => {
+            if (infoItem.type === 'game' && infoItem.game) { setInfoItem(null); setEditingGame(infoItem.game) }
+            else if (infoItem.type === 'training' && infoItem.training) { setInfoItem(null); setEditingTraining(infoItem.training) }
+          } : undefined}
+          onDienste={infoItem.type === 'game' && infoItem.game
+            ? () => { setInfoItem(null); navigate(`/kalender/${infoItem.game!.id}`) }
+            : undefined}
         />
       )}
     </div>
