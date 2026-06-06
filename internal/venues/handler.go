@@ -2,11 +2,14 @@ package venues
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
@@ -189,6 +192,164 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	h.hub.Broadcast("venues")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type importError struct {
+	Line   int    `json:"line"`
+	Reason string `json:"reason"`
+}
+
+type importResult struct {
+	Imported int           `json:"imported"`
+	Updated  int           `json:"updated"`
+	Skipped  int           `json:"skipped"`
+	Errors   []importError `json:"errors"`
+}
+
+// POST /api/admin/venues/import
+func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "invalid multipart form", http.StatusBadRequest)
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "missing file field", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.FieldsPerRecord = -1
+	reader.LazyQuotes = true
+
+	// Skip until header row (first cell == "Name" after stripping BOM)
+	headerFound := false
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		if strings.TrimPrefix(strings.TrimSpace(row[0]), "\xEF\xBB\xBF") == "Name" {
+			headerFound = true
+			break
+		}
+	}
+	if !headerFound {
+		http.Error(w, "header row not found", http.StatusBadRequest)
+		return
+	}
+
+	type venueRow struct {
+		name, street, postalCode, city, note string
+	}
+
+	var rows []venueRow
+	result := importResult{Errors: []importError{}}
+	lineNum := 4 // 3 preamble lines + header = line 4 is first data line
+
+	for {
+		row, err := reader.Read()
+		lineNum++
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			result.Errors = append(result.Errors, importError{Line: lineNum, Reason: err.Error()})
+			continue
+		}
+		if len(row) == 0 {
+			continue
+		}
+		name := strings.TrimSpace(row[0])
+		if name == "" {
+			result.Errors = append(result.Errors, importError{Line: lineNum, Reason: "kein Name"})
+			result.Skipped++
+			continue
+		}
+		vr := venueRow{name: name}
+		if len(row) > 2 {
+			vr.street = strings.TrimSpace(row[2])
+		}
+		if len(row) > 3 {
+			vr.postalCode = strings.TrimSpace(row[3])
+		}
+		if len(row) > 4 {
+			vr.city = strings.TrimSpace(row[4])
+		}
+		if len(row) > 5 {
+			vr.note = strings.TrimSpace(row[5])
+		}
+		if len(row) > 6 && strings.TrimSpace(row[6]) != "" {
+			extra := strings.TrimSpace(row[6])
+			if vr.note != "" {
+				vr.note += " — " + extra
+			} else {
+				vr.note = extra
+			}
+		}
+		rows = append(rows, vr)
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for _, vr := range rows {
+		var existingID int
+		err := tx.QueryRowContext(r.Context(),
+			`SELECT id FROM venues WHERE name = ? AND city = ?`, vr.name, vr.city).Scan(&existingID)
+		if err == sql.ErrNoRows {
+			_, err = tx.ExecContext(r.Context(),
+				`INSERT INTO venues (name, street, city, postal_code, country, note, is_home_venue)
+				 VALUES (?, ?, ?, ?, 'DE', ?, 0)`,
+				vr.name, vr.street, vr.city, vr.postalCode, vr.note)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "venues Import insert: %v\n", err)
+				result.Skipped++
+				continue
+			}
+			result.Imported++
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "venues Import lookup: %v\n", err)
+			result.Skipped++
+		} else {
+			_, err = tx.ExecContext(r.Context(),
+				`UPDATE venues SET street=?, postal_code=?, note=? WHERE id=?`,
+				vr.street, vr.postalCode, vr.note, existingID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "venues Import update: %v\n", err)
+				result.Skipped++
+				continue
+			}
+			result.Updated++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("venues")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// DELETE /api/admin/venues
+func (h *Handler) DeleteAll(w http.ResponseWriter, r *http.Request) {
+	if _, err := h.db.ExecContext(r.Context(), `DELETE FROM venues WHERE is_home_venue = 0`); err != nil {
+		fmt.Fprintf(os.Stderr, "venues DeleteAll: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	h.hub.Broadcast("venues")

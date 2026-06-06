@@ -265,6 +265,8 @@ func serve() {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
 			// Venues (write)
 			r.Post("/api/admin/venues", venueH.Create)
+			r.Post("/api/admin/venues/import", venueH.Import)
+			r.Delete("/api/admin/venues", venueH.DeleteAll)
 			r.Put("/api/admin/venues/{id}", venueH.Update)
 			r.Delete("/api/admin/venues/{id}", venueH.Delete)
 			r.Post("/api/admin/kalender", gameH.CreateGame)

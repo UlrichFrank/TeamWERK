@@ -86,6 +86,7 @@ export default function ProfileProfilTab({
       setAddress({ street: userContact.street, zip: userContact.zip, city: userContact.city })
       setPhones(userContact.phones)
       setVisibility(userContact.visibility)
+      setPhotoURL(ownMember?.photo_url ?? '')
     } else if (ownMember) {
       setFirstName(ownMember.first_name)
       setLastName(ownMember.last_name)

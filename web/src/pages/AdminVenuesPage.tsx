@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Home, MapPin, Plus, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, Home, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
 import MapsLink from '../components/MapsLink'
@@ -26,6 +26,13 @@ interface VenueForm {
   is_home_venue: boolean
 }
 
+interface ImportResult {
+  imported: number
+  updated: number
+  skipped: number
+  errors: { line: number; reason: string }[]
+}
+
 const emptyForm: VenueForm = {
   name: '', street: '', city: '', postal_code: '', country: 'DE', note: '', is_home_venue: false,
 }
@@ -40,6 +47,15 @@ export default function AdminVenuesPage() {
   const [error, setError] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
 
+  const [showActionsMenu, setShowActionsMenu] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [showDeleteAll, setShowDeleteAll] = useState(false)
+
+  const actionsMenuRef = useRef<HTMLDivElement>(null)
+
   function load() {
     api.get<Venue[]>('/admin/venues').then(r => {
       setVenues(r.data)
@@ -49,6 +65,16 @@ export default function AdminVenuesPage() {
 
   useEffect(() => { load() }, [])
   useLiveUpdates((event: string) => { if (event === 'venues') load() })
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false)
+      }
+    }
+    if (showActionsMenu) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showActionsMenu])
 
   function openCreate() {
     setEditVenue(null)
@@ -96,14 +122,76 @@ export default function AdminVenuesPage() {
     }
   }
 
+  async function handleImport() {
+    if (!importFile) return
+    setImporting(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', importFile)
+      const res = await api.post<ImportResult>('/admin/venues/import', fd)
+      setImportResult(res.data)
+      load()
+    } catch {
+      alert('Import fehlgeschlagen. Bitte CSV-Format prüfen.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  function resetImport() {
+    setShowImport(false)
+    setImportFile(null)
+    setImportResult(null)
+  }
+
+  async function handleDeleteAll() {
+    try {
+      await api.delete('/admin/venues')
+      setShowDeleteAll(false)
+      load()
+    } catch {
+      alert('Fehler beim Löschen.')
+    }
+  }
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-brand-text">Veranstaltungsorte</h1>
-        <button onClick={openCreate} className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Neuer Ort
-        </button>
+        <div ref={actionsMenuRef} className="relative">
+          <div className="flex">
+            <button
+              onClick={openCreate}
+              className="bg-brand-yellow text-brand-black rounded-l-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Neuer Ort
+            </button>
+            <button
+              onClick={() => setShowActionsMenu(v => !v)}
+              aria-label="Weitere Aktionen"
+              className="bg-brand-yellow text-brand-black border-l border-brand-black/20 rounded-r-md px-2 py-2.5 sm:py-2 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+          {showActionsMenu && (
+            <div className="absolute right-0 mt-1 w-44 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
+              <button
+                onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
+                className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+              >
+                Import CSV
+              </button>
+              <button
+                onClick={() => { setShowActionsMenu(false); setShowDeleteAll(true) }}
+                className="w-full text-left px-4 py-2.5 text-sm text-brand-danger hover:bg-brand-danger-light transition-colors"
+              >
+                Alle löschen
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -276,6 +364,100 @@ export default function AdminVenuesPage() {
                 className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saving ? 'Speichern...' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-brand-text mb-4">CSV importieren</h2>
+
+            {!importResult ? (
+              <>
+                <p className="text-sm text-brand-text-muted mb-4">
+                  BWHV-Hallenliste hochladen. Bestehende Orte (gleicher Name) werden aktualisiert, neue werden angelegt.
+                </p>
+                <label className="block w-full border-2 border-dashed border-brand-border rounded-lg p-6 text-center cursor-pointer hover:border-brand-yellow transition-colors">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="sr-only"
+                    onChange={e => setImportFile(e.target.files?.[0] ?? null)}
+                  />
+                  {importFile ? (
+                    <span className="text-sm text-brand-text font-medium">{importFile.name}</span>
+                  ) : (
+                    <span className="text-sm text-brand-text-muted">CSV-Datei auswählen</span>
+                  )}
+                </label>
+                <div className="flex justify-end gap-2 mt-5">
+                  <button
+                    type="button"
+                    onClick={resetImport}
+                    className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImport}
+                    disabled={!importFile || importing}
+                    className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {importing ? 'Importiere...' : 'Importieren'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2 mb-5">
+                  <p className="text-sm text-brand-text">
+                    <span className="font-semibold text-brand-text">{importResult.imported}</span> neu importiert
+                    {' · '}
+                    <span className="font-semibold text-brand-text">{importResult.updated}</span> aktualisiert
+                    {' · '}
+                    <span className="font-semibold text-brand-text">{importResult.skipped}</span> übersprungen
+                  </p>
+                  {importResult.errors.length > 0 && (
+                    <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg">
+                      <p className="text-xs font-medium text-brand-danger mb-1">{importResult.errors.length} Fehler:</p>
+                      <ul className="text-xs text-brand-danger space-y-0.5 max-h-32 overflow-y-auto">
+                        {importResult.errors.map((e, i) => (
+                          <li key={i}>Zeile {e.line}: {e.reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={resetImport}
+                    className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  >
+                    Schließen
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete all confirmation */}
+      {showDeleteAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm">
+            <h2 className="text-lg font-semibold text-brand-text mb-2">Alle Orte löschen?</h2>
+            <p className="text-sm text-brand-text-muted mb-5">Alle Veranstaltungsorte außer der Heimhalle werden unwiderruflich gelöscht.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowDeleteAll(false)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors">Abbrechen</button>
+              <button onClick={handleDeleteAll} className="bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors">
+                Alle löschen
               </button>
             </div>
           </div>
