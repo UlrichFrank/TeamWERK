@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import VenuePicker from './VenuePicker'
 
 interface Game {
   id: number
@@ -9,6 +10,7 @@ interface Game {
   time: string
   opponent: string
   event_type: string
+  venue?: { id: number; name: string; street: string; city: string; postal_code: string; note: string } | null
 }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -25,6 +27,7 @@ export default function GameEditModal({ game, onClose, onSaved }: Props) {
   const [date, setDate] = useState(game.date.slice(0, 10))
   const [time, setTime] = useState(game.time)
   const [eventType, setEventType] = useState(game.event_type)
+  const [venueId, setVenueId] = useState<number | null>(game.venue?.id ?? null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,7 +37,7 @@ export default function GameEditModal({ game, onClose, onSaved }: Props) {
     setSaving(true)
     setError(null)
     try {
-      await api.put(`/admin/kalender/${game.id}`, { date, time, opponent, event_type: eventType })
+      await api.put(`/admin/kalender/${game.id}`, { date, time, opponent, event_type: eventType, venue_id: venueId })
       onSaved()
     } catch {
       setError('Speichern fehlgeschlagen.')
@@ -74,6 +77,10 @@ export default function GameEditModal({ game, onClose, onSaved }: Props) {
               <option value="auswärts">Auswärtsspiel</option>
               <option value="generisch">Sonstiges</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+            <VenuePicker value={venueId} onChange={setVenueId} />
           </div>
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">

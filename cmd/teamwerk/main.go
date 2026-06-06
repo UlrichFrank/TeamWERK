@@ -36,6 +36,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
+	"github.com/teamstuttgart/teamwerk/internal/venues"
 )
 
 //go:embed all:web/dist
@@ -103,6 +104,7 @@ func serve() {
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
 	trainingH := trainings.NewHandler(database, hubInstance)
 	teamsH := teams.NewHandler(database)
+	venueH := venues.NewHandler(database, hubInstance)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -219,6 +221,8 @@ func serve() {
 		// Admin + Trainer
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("trainer", "sportliche_leitung"))
+			// Venues (read)
+			r.Get("/api/admin/venues", venueH.List)
 			// Trainings management
 			r.Get("/api/training-series", trainingH.ListSeries)
 			r.Post("/api/training-series", trainingH.CreateSeries)
@@ -243,6 +247,10 @@ func serve() {
 		// Admin + Vorstand + Trainer
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
+			// Venues (write)
+			r.Post("/api/admin/venues", venueH.Create)
+			r.Put("/api/admin/venues/{id}", venueH.Update)
+			r.Delete("/api/admin/venues/{id}", venueH.Delete)
 			r.Post("/api/admin/kalender", gameH.CreateGame)
 			r.Put("/api/admin/kalender/{id}", gameH.UpdateGame)
 			r.Delete("/api/admin/kalender/{id}", gameH.DeleteGame)

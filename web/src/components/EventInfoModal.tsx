@@ -1,5 +1,15 @@
 import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import MapsLink from './MapsLink'
+
+interface VenueRef {
+  id: number
+  name: string
+  street: string
+  city: string
+  postal_code: string
+  note: string
+}
 
 interface Game {
   id: number
@@ -10,6 +20,7 @@ interface Game {
   confirmed_count: number
   declined_count: number
   maybe_count: number
+  venue?: VenueRef | null
 }
 
 interface Training {
@@ -18,7 +29,7 @@ interface Training {
   date: string
   start_time: string
   end_time: string
-  location: string
+  venue?: VenueRef | null
   confirmed_count: number
   declined_count: number
   maybe_count: number
@@ -113,6 +124,12 @@ export default function EventInfoModal({ type, game, training, onClose, onEdit, 
               <span className="text-brand-text-muted">Uhrzeit</span>
               <span className="font-medium text-brand-text">{game.time}</span>
             </div>
+            {game.venue && (
+              <div className="flex justify-between items-center">
+                <span className="text-brand-text-muted">Ort</span>
+                <MapsLink venue={game.venue} />
+              </div>
+            )}
             <RsvpRow confirmed={game.confirmed_count} declined={game.declined_count} maybe={game.maybe_count} />
           </div>
         ) : training ? (
@@ -125,10 +142,10 @@ export default function EventInfoModal({ type, game, training, onClose, onEdit, 
               <span className="text-brand-text-muted">Uhrzeit</span>
               <span className="font-medium text-brand-text">{training.start_time}–{training.end_time}</span>
             </div>
-            {training.location && (
-              <div className="flex justify-between">
+            {training.venue && (
+              <div className="flex justify-between items-center">
                 <span className="text-brand-text-muted">Ort</span>
-                <span className="font-medium text-brand-text">{training.location}</span>
+                <MapsLink venue={training.venue} />
               </div>
             )}
             <RsvpRow confirmed={training.confirmed_count} declined={training.declined_count} maybe={training.maybe_count} />

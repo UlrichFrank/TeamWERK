@@ -11,6 +11,16 @@ import { useCompactHeader } from '../hooks/useCompactHeader'
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
 import EventInfoModal from '../components/EventInfoModal'
+import VenuePicker, { Venue as VenueType } from '../components/VenuePicker'
+
+interface VenueRef {
+  id: number
+  name: string
+  street: string
+  city: string
+  postal_code: string
+  note: string
+}
 
 interface Training {
   id: number
@@ -18,7 +28,7 @@ interface Training {
   date: string
   start_time: string
   end_time: string
-  location: string
+  venue?: VenueRef | null
   status: 'active' | 'cancelled'
   confirmed_count: number
   declined_count: number
@@ -44,6 +54,7 @@ interface Game {
   confirmed_count: number
   declined_count: number
   maybe_count: number
+  venue?: VenueRef | null
 }
 
 interface SlotPreview {
@@ -163,7 +174,9 @@ export default function KalenderPage() {
   const [trainingTitle, setTrainingTitle] = useState('')
   const [trainingStartTime, setTrainingStartTime] = useState('18:00')
   const [trainingEndTime, setTrainingEndTime] = useState('19:30')
-  const [trainingLocation, setTrainingLocation] = useState('')
+  const [trainingVenueId, setTrainingVenueId] = useState<number | null>(null)
+  const [selectedVenueId, setSelectedVenueId] = useState<number | null>(null)
+  const [allVenues, setAllVenues] = useState<VenueType[]>([])
   const [seriesWeekday, setSeriesWeekday] = useState(1)
   const [seriesValidFrom, setSeriesValidFrom] = useState('')
   const [seriesValidUntil, setSeriesValidUntil] = useState('')
@@ -214,6 +227,9 @@ export default function KalenderPage() {
             const active = seasons.find((s: any) => s.is_active)
             if (active) setActiveSeasonId(active.id)
           })
+          .catch(() => {}),
+        api.get<VenueType[]>('/admin/venues')
+          .then(r => setAllVenues(r.data ?? []))
           .catch(() => {}),
       ])
       setLoading(false)
@@ -339,6 +355,7 @@ export default function KalenderPage() {
         team_ids: selectedTeamIds,
         event_type: eventType,
         template_id: selectedTemplate ?? undefined,
+        venue_id: selectedVenueId,
         rsvp_opt_out: gameRsvpOptOut,
         rsvp_require_reason: gameRsvpRequireReason,
         slots: slots.map(s => ({
@@ -372,7 +389,7 @@ export default function KalenderPage() {
         date: selectedDate,
         start_time: trainingStartTime,
         end_time: trainingEndTime,
-        location: trainingLocation,
+        venue_id: trainingVenueId,
         rsvp_opt_out: gameRsvpOptOut,
         rsvp_require_reason: gameRsvpRequireReason,
       })
@@ -398,7 +415,7 @@ export default function KalenderPage() {
         team_id: selectedTeamIds[0],
         season_id: activeSeasonId,
         name: `Training ${teamName}`,
-        location: trainingLocation,
+        venue_id: trainingVenueId,
         day_of_week: seriesWeekday,
         start_time: trainingStartTime,
         end_time: trainingEndTime,
@@ -498,7 +515,8 @@ export default function KalenderPage() {
     setTrainingTitle('')
     setTrainingStartTime('18:00')
     setTrainingEndTime('19:30')
-    setTrainingLocation('')
+    setTrainingVenueId(null)
+    setSelectedVenueId(null)
     setSeriesWeekday(1)
     setSeriesValidFrom('')
     setSeriesValidUntil('')
@@ -524,11 +542,11 @@ export default function KalenderPage() {
         <select
           value={filterTeamId ?? ''}
           onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
-          className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow shrink-0"
+          className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow shrink-0 max-w-[6rem]"
         >
-          <option value="">Alle Teams</option>
+          <option value="">Alle</option>
           {teams.map(t => (
-            <option key={t.id} value={t.id}>{t.name}</option>
+            <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
           ))}
         </select>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
@@ -778,6 +796,12 @@ export default function KalenderPage() {
                       onClick={() => {
                         setEventType(type)
                         setGameRsvpRequireReason(type === 'generisch' ? 0 : 1)
+                        if (type === 'heim') {
+                          const homeVenue = allVenues.find(v => v.is_home_venue)
+                          setSelectedVenueId(homeVenue?.id ?? null)
+                        } else {
+                          setSelectedVenueId(null)
+                        }
                         setWizardStep(2)
                       }}
                       className="w-full p-4 border-2 border-brand-border rounded-lg text-left hover:bg-brand-border-subtle hover:border-brand-yellow transition-colors"
@@ -857,6 +881,10 @@ export default function KalenderPage() {
                         placeholder="Name des Events" className={INPUT_WIZ} />
                     </div>
                   )}
+                  <div>
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+                    <VenuePicker value={selectedVenueId} onChange={setSelectedVenueId} />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-2">
                       {eventType === 'generisch' ? 'Mannschaften *' : 'Mannschaft *'}
@@ -941,8 +969,7 @@ export default function KalenderPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
-                    <input type="text" value={trainingLocation} onChange={e => setTrainingLocation(e.target.value)}
-                      placeholder="Sporthalle…" className={INPUT_WIZ} />
+                    <VenuePicker value={trainingVenueId} onChange={setTrainingVenueId} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Mannschaft *</label>
@@ -1005,8 +1032,7 @@ export default function KalenderPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
-                    <input type="text" value={trainingLocation} onChange={e => setTrainingLocation(e.target.value)}
-                      placeholder="Sporthalle…" className={INPUT_WIZ} />
+                    <VenuePicker value={trainingVenueId} onChange={setTrainingVenueId} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Mannschaft *</label>

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import VenuePicker from './VenuePicker'
+
+interface VenueRef { id: number; name: string; street: string; city: string; postal_code: string; note: string }
 
 interface Training {
   id: number
@@ -8,7 +11,7 @@ interface Training {
   date: string
   start_time: string
   end_time: string
-  location: string
+  venue?: VenueRef | null
   status: 'active' | 'cancelled'
   note: string
   cancel_reason?: string
@@ -20,7 +23,7 @@ interface Training {
 interface Series {
   id: number
   name: string
-  location: string
+  venue_id?: number | null
   day_of_week: number
   start_time: string
   end_time: string
@@ -48,7 +51,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   const [date, setDate] = useState(session.date.slice(0, 10))
   const [startTime, setStartTime] = useState(session.start_time)
   const [endTime, setEndTime] = useState(session.end_time)
-  const [location, setLocation] = useState(session.location)
+  const [venueId, setVenueId] = useState<number | null>(session.venue?.id ?? null)
   const [scope, setScope] = useState<Scope>('this_one')
   const [series, setSeries] = useState<Series | null>(null)
   const [saving, setSaving] = useState(false)
@@ -78,7 +81,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           date,
           start_time: startTime,
           end_time: endTime,
-          location,
+          venue_id: venueId,
           note: session.note,
           status: session.status,
           cancel_reason: session.cancel_reason ?? '',
@@ -86,7 +89,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
       } else if (series) {
         await api.put(`/training-series/${series.id}`, {
           name: series.name,
-          location,
+          venue_id: venueId,
           day_of_week: series.day_of_week,
           start_time: startTime,
           end_time: endTime,
@@ -190,8 +193,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
-            <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-              placeholder="Sporthalle…" className={INPUT} />
+            <VenuePicker value={venueId} onChange={setVenueId} />
           </div>
           {series && (
             <div className="space-y-2 pt-1">

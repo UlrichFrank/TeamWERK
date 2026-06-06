@@ -31,6 +31,7 @@ import DocumentsPage from './pages/DocumentsPage'
 import TerminePage from './pages/TerminePage'
 import TermineDetailPage from './pages/TermineDetailPage'
 import MeinTeamPage from './pages/MeinTeamPage'
+import AdminVenuesPage from './pages/AdminVenuesPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -106,6 +107,7 @@ export default function App() {
               <Route path="trainings/:id" element={<Navigate to="/termine" replace />} />
               <Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
               <Route path="admin/dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
+              <Route path="admin/veranstaltungsorte" element={<RoleRoute roles={['admin','vorstand']}><AdminVenuesPage /></RoleRoute>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

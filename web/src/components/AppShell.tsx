@@ -43,6 +43,7 @@ const navModules: NavModule[] = [
       { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer', 'sportliche_leitung'] },
       { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
       { to: '/admin/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
+      { to: '/admin/veranstaltungsorte', label: 'Veranstaltungsorte', roles: ['admin', 'vorstand'] },
       { to: '/admin/einstellungen', label: 'Einstellungen', roles: ['admin', 'vorstand'] },
     ],
   },

@@ -2,18 +2,29 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Dumbbell, AlertTriangle, X } from 'lucide-react'
 import { api } from '../lib/api'
+import VenuePicker from '../components/VenuePicker'
+import MapsLink from '../components/MapsLink'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 const WEEKDAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
+interface VenueRef {
+  id: number
+  name: string
+  street: string
+  city: string
+  postal_code: string
+  note: string
+}
+
 interface Series {
   id: number
   team_id: number
   season_id: number
   name: string
-  location: string
+  venue?: VenueRef | null
   day_of_week: number
   start_time: string
   end_time: string
@@ -34,7 +45,7 @@ interface StandaloneSession {
   date: string
   start_time: string
   end_time: string
-  location: string
+  venue?: VenueRef | null
   note: string
   status: string
   cancel_reason: string
@@ -45,7 +56,7 @@ type SeriesModal = {
   team_id: number
   season_id: number
   name: string
-  location: string
+  venue_id: number | null
   day_of_week: number
   start_time: string
   end_time: string
@@ -63,7 +74,7 @@ type SessionModal = {
   date: string
   start_time: string
   end_time: string
-  location: string
+  venue_id: number | null
   note: string
   status: string
   cancel_reason: string
@@ -121,24 +132,24 @@ export default function AdminTrainingsPage() {
     setError('')
     setEditScope('this_and_following')
     setEditFromDate('')
-    setSeriesModal({ team_id: 0, season_id: activeSeasonId, name: '', location: '', day_of_week: 0, start_time: '18:00', end_time: '19:30', valid_from: '', valid_until: '', note: '', rsvp_opt_out: 0, rsvp_require_reason: 1 })
+    setSeriesModal({ team_id: 0, season_id: activeSeasonId, name: '', venue_id: null, day_of_week: 0, start_time: '18:00', end_time: '19:30', valid_from: '', valid_until: '', note: '', rsvp_opt_out: 0, rsvp_require_reason: 1 })
   }
 
   const openEditSeries = (s: Series) => {
     setError('')
     setEditScope('this_and_following')
     setEditFromDate('')
-    setSeriesModal({ id: s.id, team_id: s.team_id, season_id: s.season_id, name: s.name, location: s.location, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, valid_from: s.valid_from.slice(0, 10), valid_until: s.valid_until.slice(0, 10), note: s.note, rsvp_opt_out: s.rsvp_opt_out ?? 0, rsvp_require_reason: s.rsvp_require_reason ?? 1 })
+    setSeriesModal({ id: s.id, team_id: s.team_id, season_id: s.season_id, name: s.name, venue_id: s.venue?.id ?? null, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, valid_from: s.valid_from.slice(0, 10), valid_until: s.valid_until.slice(0, 10), note: s.note, rsvp_opt_out: s.rsvp_opt_out ?? 0, rsvp_require_reason: s.rsvp_require_reason ?? 1 })
   }
 
   const openNewSession = () => {
     setError('')
-    setSessionModal({ team_id: 0, season_id: activeSeasonId, date: '', start_time: '18:00', end_time: '19:30', location: '', note: '', status: 'active', cancel_reason: '' })
+    setSessionModal({ team_id: 0, season_id: activeSeasonId, date: '', start_time: '18:00', end_time: '19:30', venue_id: null, note: '', status: 'active', cancel_reason: '' })
   }
 
   const openEditSession = (s: StandaloneSession) => {
     setError('')
-    setSessionModal({ id: s.id, team_id: s.team_id, season_id: 0, date: s.date.slice(0, 10), start_time: s.start_time, end_time: s.end_time, location: s.location, note: s.note, status: s.status, cancel_reason: s.cancel_reason })
+    setSessionModal({ id: s.id, team_id: s.team_id, season_id: 0, date: s.date.slice(0, 10), start_time: s.start_time, end_time: s.end_time, venue_id: s.venue?.id ?? null, note: s.note, status: s.status, cancel_reason: s.cancel_reason })
   }
 
   const handleSubmitSeries = async (e: React.FormEvent) => {
@@ -155,7 +166,7 @@ export default function AdminTrainingsPage() {
       } else {
         await api.put(`/training-series/${seriesModal.id}`, {
           name: seriesModal.name,
-          location: seriesModal.location,
+          venue_id: seriesModal.venue_id,
           day_of_week: seriesModal.day_of_week,
           start_time: seriesModal.start_time,
           end_time: seriesModal.end_time,
@@ -193,7 +204,7 @@ export default function AdminTrainingsPage() {
           date: sessionModal.date,
           start_time: sessionModal.start_time,
           end_time: sessionModal.end_time,
-          location: sessionModal.location,
+          venue_id: sessionModal.venue_id,
           note: sessionModal.note,
           status: sessionModal.status,
           cancel_reason: sessionModal.cancel_reason,
@@ -334,7 +345,7 @@ export default function AdminTrainingsPage() {
                           <p className="font-semibold text-brand-text">{s.name}</p>
                           <p className="text-sm text-brand-text-muted">
                             {WEEKDAY_LABELS[s.day_of_week]} · {s.start_time}–{s.end_time}
-                            {s.location ? ` · ${s.location}` : ''}
+                            {s.venue ? ` · ${s.venue.name}` : ''}
                           </p>
                           <p className="text-xs text-brand-text-subtle mt-0.5">
                             {s.team_name} · {s.session_count} Termine · bis {s.valid_until.slice(0, 10)}
@@ -387,7 +398,10 @@ export default function AdminTrainingsPage() {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-brand-text">{fmtDate(s.date)}</p>
-                      <p className="text-xs text-brand-text-muted">{s.start_time}–{s.end_time}{s.location ? ` · ${s.location}` : ''}</p>
+                      <div className="flex items-center gap-2 text-xs text-brand-text-muted">
+                        <span>{s.start_time}–{s.end_time}</span>
+                        {s.venue && <MapsLink venue={s.venue} />}
+                      </div>
                       {s.status === 'cancelled' && <span className="text-xs text-brand-danger">Abgesagt</span>}
                     </div>
                     <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
@@ -459,9 +473,7 @@ export default function AdminTrainingsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-brand-text-muted mb-1">Ort</label>
-                  <input value={seriesModal.location}
-                    onChange={e => setSeriesModal(f => f ? { ...f, location: e.target.value } : f)}
-                    className={INPUT} placeholder="Sporthalle" />
+                  <VenuePicker value={seriesModal.venue_id} onChange={v => setSeriesModal(f => f ? { ...f, venue_id: v } : f)} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-brand-text-muted mb-1">Beginn</label>
@@ -611,9 +623,7 @@ export default function AdminTrainingsPage() {
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-brand-text-muted mb-1">Ort</label>
-                  <input value={sessionModal.location}
-                    onChange={e => setSessionModal(f => f ? { ...f, location: e.target.value } : f)}
-                    className={INPUT} placeholder="Sporthalle" />
+                  <VenuePicker value={sessionModal.venue_id} onChange={v => setSessionModal(f => f ? { ...f, venue_id: v } : f)} />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-brand-text-muted mb-1">Hinweis</label>

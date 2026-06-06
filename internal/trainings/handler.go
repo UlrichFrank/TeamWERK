@@ -73,12 +73,16 @@ func generateSessionDates(from, until time.Time, dayOfWeek int) []time.Time {
 }
 
 // insertSessions bulk-inserts training_sessions within an existing transaction.
-func insertSessions(ctx context.Context, tx *sql.Tx, seriesID int, teamID, seasonID int, startTime, endTime, location, note string, rsvpOptOut, rsvpRequireReason int, dates []time.Time) error {
+func insertSessions(ctx context.Context, tx *sql.Tx, seriesID int, teamID, seasonID int, startTime, endTime string, venueID *int, note string, rsvpOptOut, rsvpRequireReason int, dates []time.Time) error {
+	var venueIDVal interface{}
+	if venueID != nil {
+		venueIDVal = *venueID
+	}
 	for _, d := range dates {
 		_, err := tx.ExecContext(ctx,
-			`INSERT INTO training_sessions (series_id, team_id, season_id, date, start_time, end_time, location, note, rsvp_opt_out, rsvp_require_reason)
+			`INSERT INTO training_sessions (series_id, team_id, season_id, date, start_time, end_time, venue_id, note, rsvp_opt_out, rsvp_require_reason)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			seriesID, teamID, seasonID, d.Format("2006-01-02"), startTime, endTime, location, note, rsvpOptOut, rsvpRequireReason)
+			seriesID, teamID, seasonID, d.Format("2006-01-02"), startTime, endTime, venueIDVal, note, rsvpOptOut, rsvpRequireReason)
 		if err != nil {
 			return err
 		}
@@ -108,14 +112,16 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := fmt.Sprintf(`
-		SELECT s.id, s.team_id, s.season_id, s.name, s.location, s.day_of_week,
+		SELECT s.id, s.team_id, s.season_id, s.name, s.day_of_week,
 		       s.start_time, s.end_time, s.valid_from, s.valid_until, s.note,
 		       t.name as team_name,
 		       COUNT(ts.id) as session_count,
-		       s.rsvp_opt_out, s.rsvp_require_reason
+		       s.rsvp_opt_out, s.rsvp_require_reason,
+		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_series s
 		JOIN teams t ON t.id = s.team_id
 		LEFT JOIN training_sessions ts ON ts.series_id = s.id
+		LEFT JOIN venues v ON v.id = s.venue_id
 		WHERE %s
 		GROUP BY s.id
 		ORDER BY s.valid_from DESC`, whereSQL)
@@ -128,29 +134,46 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	type venueRef struct {
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		Street     string `json:"street"`
+		City       string `json:"city"`
+		PostalCode string `json:"postal_code"`
+		Note       string `json:"note"`
+	}
 	type seriesItem struct {
-		ID                int    `json:"id"`
-		TeamID            int    `json:"team_id"`
-		SeasonID          int    `json:"season_id"`
-		Name              string `json:"name"`
-		Location          string `json:"location"`
-		DayOfWeek         int    `json:"day_of_week"`
-		StartTime         string `json:"start_time"`
-		EndTime           string `json:"end_time"`
-		ValidFrom         string `json:"valid_from"`
-		ValidUntil        string `json:"valid_until"`
-		Note              string `json:"note"`
-		TeamName          string `json:"team_name"`
-		SessionCount      int    `json:"session_count"`
-		RsvpOptOut        int    `json:"rsvp_opt_out"`
-		RsvpRequireReason int    `json:"rsvp_require_reason"`
+		ID                int       `json:"id"`
+		TeamID            int       `json:"team_id"`
+		SeasonID          int       `json:"season_id"`
+		Name              string    `json:"name"`
+		DayOfWeek         int       `json:"day_of_week"`
+		StartTime         string    `json:"start_time"`
+		EndTime           string    `json:"end_time"`
+		ValidFrom         string    `json:"valid_from"`
+		ValidUntil        string    `json:"valid_until"`
+		Note              string    `json:"note"`
+		TeamName          string    `json:"team_name"`
+		SessionCount      int       `json:"session_count"`
+		RsvpOptOut        int       `json:"rsvp_opt_out"`
+		RsvpRequireReason int       `json:"rsvp_require_reason"`
+		Venue             *venueRef `json:"venue,omitempty"`
 	}
 	result := []seriesItem{}
 	for rows.Next() {
 		var s seriesItem
-		rows.Scan(&s.ID, &s.TeamID, &s.SeasonID, &s.Name, &s.Location, &s.DayOfWeek,
+		var vID sql.NullInt64
+		var vName, vStreet, vCity, vPostal, vNote sql.NullString
+		rows.Scan(&s.ID, &s.TeamID, &s.SeasonID, &s.Name, &s.DayOfWeek,
 			&s.StartTime, &s.EndTime, &s.ValidFrom, &s.ValidUntil, &s.Note,
-			&s.TeamName, &s.SessionCount, &s.RsvpOptOut, &s.RsvpRequireReason)
+			&s.TeamName, &s.SessionCount, &s.RsvpOptOut, &s.RsvpRequireReason,
+			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
+		if vID.Valid {
+			s.Venue = &venueRef{
+				ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
+				City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
+			}
+		}
 		result = append(result, s)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -164,7 +187,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		TeamID            int    `json:"team_id"`
 		SeasonID          int    `json:"season_id"`
 		Name              string `json:"name"`
-		Location          string `json:"location"`
+		VenueID           *int   `json:"venue_id"`
 		DayOfWeek         int    `json:"day_of_week"`
 		StartTime         string `json:"start_time"`
 		EndTime           string `json:"end_time"`
@@ -210,10 +233,14 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var venueIDVal interface{}
+	if req.VenueID != nil {
+		venueIDVal = *req.VenueID
+	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO training_series (team_id, season_id, name, location, day_of_week, start_time, end_time, valid_from, valid_until, note, created_by, rsvp_opt_out, rsvp_require_reason)
+		`INSERT INTO training_series (team_id, season_id, name, venue_id, day_of_week, start_time, end_time, valid_from, valid_until, note, created_by, rsvp_opt_out, rsvp_require_reason)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		req.TeamID, req.SeasonID, req.Name, req.Location, req.DayOfWeek,
+		req.TeamID, req.SeasonID, req.Name, venueIDVal, req.DayOfWeek,
 		req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, claims.UserID,
 		req.RsvpOptOut, req.RsvpRequireReason)
 	if err != nil {
@@ -224,7 +251,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	seriesID, _ := res.LastInsertId()
 
 	dates := generateSessionDates(from, until, req.DayOfWeek)
-	if err := insertSessions(r.Context(), tx, int(seriesID), req.TeamID, req.SeasonID, req.StartTime, req.EndTime, req.Location, req.Note, req.RsvpOptOut, req.RsvpRequireReason, dates); err != nil {
+	if err := insertSessions(r.Context(), tx, int(seriesID), req.TeamID, req.SeasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpOptOut, req.RsvpRequireReason, dates); err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSeries insert sessions: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -254,7 +281,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Name              string `json:"name"`
-		Location          string `json:"location"`
+		VenueID           *int   `json:"venue_id"`
 		DayOfWeek         int    `json:"day_of_week"`
 		StartTime         string `json:"start_time"`
 		EndTime           string `json:"end_time"`
@@ -305,9 +332,13 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var venueIDVal interface{}
+	if req.VenueID != nil {
+		venueIDVal = *req.VenueID
+	}
 	_, err = tx.ExecContext(r.Context(),
-		`UPDATE training_series SET name=?, location=?, day_of_week=?, start_time=?, end_time=?, valid_from=?, valid_until=?, note=?, rsvp_opt_out=?, rsvp_require_reason=? WHERE id=?`,
-		req.Name, req.Location, req.DayOfWeek, req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, req.RsvpOptOut, req.RsvpRequireReason, seriesID)
+		`UPDATE training_series SET name=?, venue_id=?, day_of_week=?, start_time=?, end_time=?, valid_from=?, valid_until=?, note=?, rsvp_opt_out=?, rsvp_require_reason=? WHERE id=?`,
+		req.Name, venueIDVal, req.DayOfWeek, req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, req.RsvpOptOut, req.RsvpRequireReason, seriesID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -338,7 +369,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dates := generateSessionDates(genFrom, until, req.DayOfWeek)
-	if err := insertSessions(r.Context(), tx, seriesID, teamID, seasonID, req.StartTime, req.EndTime, req.Location, req.Note, req.RsvpOptOut, req.RsvpRequireReason, dates); err != nil {
+	if err := insertSessions(r.Context(), tx, seriesID, teamID, seasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpOptOut, req.RsvpRequireReason, dates); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -443,7 +474,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		Date              string `json:"date"`
 		StartTime         string `json:"start_time"`
 		EndTime           string `json:"end_time"`
-		Location          string `json:"location"`
+		VenueID           *int   `json:"venue_id"`
 		Note              string `json:"note"`
 		RsvpOptOut        int    `json:"rsvp_opt_out"`
 		RsvpRequireReason int    `json:"rsvp_require_reason"`
@@ -457,10 +488,14 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	var venueIDVal interface{}
+	if req.VenueID != nil {
+		venueIDVal = *req.VenueID
+	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO training_sessions (team_id, season_id, title, date, start_time, end_time, location, note, rsvp_opt_out, rsvp_require_reason)
+		`INSERT INTO training_sessions (team_id, season_id, title, date, start_time, end_time, venue_id, note, rsvp_opt_out, rsvp_require_reason)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		req.TeamID, req.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, req.Location, req.Note, req.RsvpOptOut, req.RsvpRequireReason)
+		req.TeamID, req.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, req.RsvpOptOut, req.RsvpRequireReason)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSession: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -503,7 +538,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		Date         string `json:"date"`
 		StartTime    string `json:"start_time"`
 		EndTime      string `json:"end_time"`
-		Location     string `json:"location"`
+		VenueID      *int   `json:"venue_id"`
 		Note         string `json:"note"`
 		Status       string `json:"status"`
 		CancelReason string `json:"cancel_reason"`
@@ -520,9 +555,13 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "active"
 	}
+	var venueIDVal interface{}
+	if req.VenueID != nil {
+		venueIDVal = *req.VenueID
+	}
 	_, err = h.db.ExecContext(r.Context(),
-		`UPDATE training_sessions SET title=?, date=?, start_time=?, end_time=?, location=?, note=?, status=?, cancel_reason=? WHERE id=?`,
-		req.Title, req.Date, req.StartTime, req.EndTime, req.Location, req.Note, status, req.CancelReason, sessionID)
+		`UPDATE training_sessions SET title=?, date=?, start_time=?, end_time=?, venue_id=?, note=?, status=?, cancel_reason=? WHERE id=?`,
+		req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, status, req.CancelReason, sessionID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -537,27 +576,36 @@ type childRSVP struct {
 	RSVP     *string `json:"rsvp"`
 }
 
+type sessionVenueRef struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	Street     string `json:"street"`
+	City       string `json:"city"`
+	PostalCode string `json:"postal_code"`
+	Note       string `json:"note"`
+}
+
 type sessionListItem struct {
-	ID                int         `json:"id"`
-	SeriesID          *int        `json:"series_id,omitempty"`
-	TeamID            int         `json:"team_id"`
-	TeamName          string      `json:"team_name"`
-	SeasonID          int         `json:"season_id"`
-	Title             string      `json:"title"`
-	Date              string      `json:"date"`
-	StartTime         string      `json:"start_time"`
-	EndTime           string      `json:"end_time"`
-	Location          string      `json:"location"`
-	Note              string      `json:"note"`
-	Status            string      `json:"status"`
-	CancelReason      string      `json:"cancel_reason,omitempty"`
-	ConfirmedCount    int         `json:"confirmed_count"`
-	DeclinedCount     int         `json:"declined_count"`
-	MaybeCount        int         `json:"maybe_count"`
-	MyRSVP            *string     `json:"my_rsvp"`
-	ChildrenRSVP      []childRSVP `json:"children_rsvp,omitempty"`
-	RsvpOptOut        int         `json:"rsvp_opt_out"`
-	RsvpRequireReason int         `json:"rsvp_require_reason"`
+	ID                int               `json:"id"`
+	SeriesID          *int              `json:"series_id,omitempty"`
+	TeamID            int               `json:"team_id"`
+	TeamName          string            `json:"team_name"`
+	SeasonID          int               `json:"season_id"`
+	Title             string            `json:"title"`
+	Date              string            `json:"date"`
+	StartTime         string            `json:"start_time"`
+	EndTime           string            `json:"end_time"`
+	Venue             *sessionVenueRef  `json:"venue,omitempty"`
+	Note              string            `json:"note"`
+	Status            string            `json:"status"`
+	CancelReason      string            `json:"cancel_reason,omitempty"`
+	ConfirmedCount    int               `json:"confirmed_count"`
+	DeclinedCount     int               `json:"declined_count"`
+	MaybeCount        int               `json:"maybe_count"`
+	MyRSVP            *string           `json:"my_rsvp"`
+	ChildrenRSVP      []childRSVP       `json:"children_rsvp,omitempty"`
+	RsvpOptOut        int               `json:"rsvp_opt_out"`
+	RsvpRequireReason int               `json:"rsvp_require_reason"`
 }
 
 // GET /api/training-sessions
@@ -615,7 +663,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	query := fmt.Sprintf(`
 		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
-		       ts.location, ts.note, ts.status, ts.cancel_reason,
+		       ts.note, ts.status, ts.cancel_reason,
 		       CASE WHEN ts.rsvp_opt_out = 1
 		            THEN COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0) + (
 		                   SELECT COUNT(*) FROM player_memberships tm2
@@ -628,10 +676,12 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(SUM(CASE WHEN tr.status='declined'  THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN tr.status='maybe'     THEN 1 ELSE 0 END), 0),
 		       (SELECT status FROM training_responses WHERE training_id = ts.id AND member_id = ?),
-		       ts.rsvp_opt_out, ts.rsvp_require_reason
+		       ts.rsvp_opt_out, ts.rsvp_require_reason,
+		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
 		LEFT JOIN teams t ON t.id = ts.team_id
 		LEFT JOIN training_responses tr ON tr.training_id = ts.id
+		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE %s AND ts.date >= ? AND ts.date <= ? %s
 		GROUP BY ts.id
 		ORDER BY ts.date, ts.start_time`, teamSQL, optTeamFilter)
@@ -649,11 +699,14 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		var s sessionListItem
 		var seriesID sql.NullInt64
 		var myRSVP sql.NullString
+		var vID sql.NullInt64
+		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		err := rows.Scan(
 			&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
-			&s.Location, &s.Note, &s.Status, &s.CancelReason,
+			&s.Note, &s.Status, &s.CancelReason,
 			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP,
-			&s.RsvpOptOut, &s.RsvpRequireReason)
+			&s.RsvpOptOut, &s.RsvpRequireReason,
+			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ListSessions scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -668,6 +721,12 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		} else if s.RsvpOptOut == 1 {
 			confirmed := "confirmed"
 			s.MyRSVP = &confirmed
+		}
+		if vID.Valid {
+			s.Venue = &sessionVenueRef{
+				ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
+				City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
+			}
 		}
 		result = append(result, s)
 	}
@@ -714,9 +773,11 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	var s sessionListItem
 	var seriesID sql.NullInt64
 	var myRSVP sql.NullString
+	var vID sql.NullInt64
+	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err = h.db.QueryRowContext(r.Context(), `
 		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
-		       ts.location, ts.note, ts.status, ts.cancel_reason,
+		       ts.note, ts.status, ts.cancel_reason,
 		       CASE WHEN ts.rsvp_opt_out = 1
 		            THEN COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
 		                 + (SELECT COUNT(*) FROM player_memberships tm2
@@ -727,12 +788,16 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='maybe'),0),
 		       (SELECT status FROM training_responses WHERE training_id=ts.id AND member_id=?),
-		       ts.rsvp_opt_out, ts.rsvp_require_reason
-		FROM training_sessions ts WHERE ts.id = ?`, memberID, sessionID).Scan(
+		       ts.rsvp_opt_out, ts.rsvp_require_reason,
+		       v.id, v.name, v.street, v.city, v.postal_code, v.note
+		FROM training_sessions ts
+		LEFT JOIN venues v ON v.id = ts.venue_id
+		WHERE ts.id = ?`, memberID, sessionID).Scan(
 		&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
-		&s.Location, &s.Note, &s.Status, &s.CancelReason,
+		&s.Note, &s.Status, &s.CancelReason,
 		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP,
-		&s.RsvpOptOut, &s.RsvpRequireReason)
+		&s.RsvpOptOut, &s.RsvpRequireReason,
+		&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -751,6 +816,12 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	} else if s.RsvpOptOut == 1 {
 		confirmed := "confirmed"
 		s.MyRSVP = &confirmed
+	}
+	if vID.Valid {
+		s.Venue = &sessionVenueRef{
+			ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
+			City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
+		}
 	}
 
 	// Load responses

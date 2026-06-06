@@ -267,9 +267,11 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
-		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0)
+		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
+		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM games g
-		LEFT JOIN duty_slots ds ON ds.game_id = g.id`
+		LEFT JOIN duty_slots ds ON ds.game_id = g.id
+		LEFT JOIN venues v ON v.id = g.venue_id`
 	const suffix = ` GROUP BY g.id ORDER BY g.date, g.time`
 
 	var (
@@ -292,28 +294,46 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
+	type venueRef struct {
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		Street     string `json:"street"`
+		City       string `json:"city"`
+		PostalCode string `json:"postal_code"`
+		Note       string `json:"note"`
+	}
 	type game struct {
-		ID             int    `json:"id"`
-		Date           string `json:"date"`
-		Time           string `json:"time"`
-		Opponent       string `json:"opponent"`
-		EventType      string `json:"event_type"`
-		Teams          []team `json:"teams"`
-		SlotCount      int    `json:"slot_count"`
-		FilledCount    int    `json:"filled_count"`
-		TotalCount     int    `json:"total_count"`
-		ConfirmedCount int    `json:"confirmed_count"`
-		DeclinedCount  int    `json:"declined_count"`
-		MaybeCount     int    `json:"maybe_count"`
+		ID             int       `json:"id"`
+		Date           string    `json:"date"`
+		Time           string    `json:"time"`
+		Opponent       string    `json:"opponent"`
+		EventType      string    `json:"event_type"`
+		Teams          []team    `json:"teams"`
+		SlotCount      int       `json:"slot_count"`
+		FilledCount    int       `json:"filled_count"`
+		TotalCount     int       `json:"total_count"`
+		ConfirmedCount int       `json:"confirmed_count"`
+		DeclinedCount  int       `json:"declined_count"`
+		MaybeCount     int       `json:"maybe_count"`
+		Venue          *venueRef `json:"venue,omitempty"`
 	}
 
 	var games []*game
 	for rows.Next() {
 		var g game
+		var vID sql.NullInt64
+		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType,
 			&g.SlotCount, &g.FilledCount, &g.TotalCount,
-			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount); err != nil {
+			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
+			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			continue
+		}
+		if vID.Valid {
+			g.Venue = &venueRef{
+				ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
+				City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
+			}
 		}
 		g.Teams = []team{}
 		games = append(games, &g)
@@ -346,6 +366,14 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
+	type venueRef struct {
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		Street     string `json:"street"`
+		City       string `json:"city"`
+		PostalCode string `json:"postal_code"`
+		Note       string `json:"note"`
+	}
 	var g struct {
 		ID         int     `json:"id"`
 		Date       string  `json:"date"`
@@ -356,6 +384,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		IsHome     bool    `json:"is_home"`
 		SeasonID   int     `json:"season_id"`
 		TemplateID *int    `json:"template_id"`
+		Venue      *venueRef `json:"venue,omitempty"`
 		Teams      []struct {
 			ID   int    `json:"id"`
 			Name string `json:"name"`
@@ -363,16 +392,26 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	}
 	var templateIDNull sql.NullInt64
 	var endTimeNull sql.NullString
+	var vID sql.NullInt64
+	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT g.id, g.date, g.time, g.end_time, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id
-		 FROM games g WHERE g.id=?`, id).
-		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull)
+		`SELECT g.id, g.date, g.time, g.end_time, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id,
+		        v.id, v.name, v.street, v.city, v.postal_code, v.note
+		 FROM games g LEFT JOIN venues v ON v.id = g.venue_id WHERE g.id=?`, id).
+		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull,
+			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if templateIDNull.Valid {
 		v := int(templateIDNull.Int64)
 		g.TemplateID = &v
 	}
 	if endTimeNull.Valid {
 		g.EndTime = &endTimeNull.String
+	}
+	if vID.Valid {
+		g.Venue = &venueRef{
+			ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
+			City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
+		}
 	}
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -439,6 +478,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		EventType         string  `json:"event_type"`
 		SeasonID          int     `json:"season_id"`
 		TemplateID        *int    `json:"template_id"`
+		VenueID           *int    `json:"venue_id"`
 		RsvpOptOut        int     `json:"rsvp_opt_out"`
 		RsvpRequireReason *int    `json:"rsvp_require_reason"`
 		Slots             []struct {
@@ -511,9 +551,13 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	if req.EndTime != nil && *req.EndTime != "" {
 		endTimeVal = *req.EndTime
 	}
+	var venueIDVal interface{}
+	if req.VenueID != nil {
+		venueIDVal = *req.VenueID
+	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO games (season_id, opponent, date, time, end_time, is_home, event_type, template_id, rsvp_opt_out, rsvp_require_reason) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-		req.SeasonID, req.Opponent, req.Date, req.Time, endTimeVal, isHome, req.EventType, templateIDVal, req.RsvpOptOut, rsvpRequireReason)
+		`INSERT INTO games (season_id, opponent, date, time, end_time, is_home, event_type, template_id, venue_id, rsvp_opt_out, rsvp_require_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		req.SeasonID, req.Opponent, req.Date, req.Time, endTimeVal, isHome, req.EventType, templateIDVal, venueIDVal, req.RsvpOptOut, rsvpRequireReason)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -594,6 +638,7 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		Opponent  string  `json:"opponent"`
 		TeamIDs   []int   `json:"team_ids"`
 		EventType string  `json:"event_type"`
+		VenueID   *int    `json:"venue_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
@@ -608,16 +653,20 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	if req.EndTime != nil && *req.EndTime != "" {
 		endTimeVal = *req.EndTime
 	}
+	var venueIDVal interface{}
+	if req.VenueID != nil {
+		venueIDVal = *req.VenueID
+	}
 	var res sql.Result
 	if req.EventType == "heim" || req.EventType == "auswärts" || req.EventType == "generisch" {
 		isHome := req.EventType == "heim"
 		res, err = tx.ExecContext(r.Context(),
-			`UPDATE games SET date=?, time=?, end_time=?, opponent=?, event_type=?, is_home=? WHERE id=?`,
-			req.Date, req.Time, endTimeVal, req.Opponent, req.EventType, isHome, id)
+			`UPDATE games SET date=?, time=?, end_time=?, opponent=?, event_type=?, is_home=?, venue_id=? WHERE id=?`,
+			req.Date, req.Time, endTimeVal, req.Opponent, req.EventType, isHome, venueIDVal, id)
 	} else {
 		res, err = tx.ExecContext(r.Context(),
-			`UPDATE games SET date=?, time=?, end_time=?, opponent=? WHERE id=?`,
-			req.Date, req.Time, endTimeVal, req.Opponent, id)
+			`UPDATE games SET date=?, time=?, end_time=?, opponent=?, venue_id=? WHERE id=?`,
+			req.Date, req.Time, endTimeVal, req.Opponent, venueIDVal, id)
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
