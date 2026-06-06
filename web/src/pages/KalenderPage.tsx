@@ -45,6 +45,7 @@ interface Game {
   id: number
   date: string
   time: string
+  end_time?: string | null
   opponent: string
   teams: Array<{ id: number; name: string }>
   event_type: string

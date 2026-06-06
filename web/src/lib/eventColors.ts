@@ -27,7 +27,7 @@ const EVENT_COLORS: Record<EventType, {
   generisch: {
     card: { border: 'border-brand-blue', bg: 'bg-brand-blue/10', icon: 'text-brand-blue' },
     filter: 'bg-brand-blue text-white border-brand-blue',
-    pill: 'bg-brand-blue/10 hover:bg-brand-blue/20 border-brand-blue/30',
+    pill: 'bg-brand-blue/20 hover:bg-brand-blue/30 border-brand-blue/50',
     pillIcon: 'text-brand-blue',
   },
 }

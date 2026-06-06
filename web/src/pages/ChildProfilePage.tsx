@@ -57,7 +57,7 @@ export default function ChildProfilePage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">{member.first_name}s Profil</h1>
+      <h1 className="text-2xl font-bold mb-6">{member.first_name}</h1>
 
       <div className="flex gap-1 mb-6 border-b border-brand-border-subtle flex-wrap">
         {(['profile', 'member', 'banking', 'misc'] as TabName[]).map(tab => (

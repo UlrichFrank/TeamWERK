@@ -8,6 +8,7 @@ interface Game {
   id: number
   date: string
   time: string
+  end_time?: string | null
   opponent: string
   event_type: string
   venue?: { id: number; name: string; street: string; city: string; postal_code: string; note: string } | null
@@ -24,9 +25,11 @@ interface Props {
 }
 
 export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Props) {
+  const isGeneric = game.event_type === 'generisch'
   const [opponent, setOpponent] = useState(game.opponent)
   const [date, setDate] = useState(game.date.slice(0, 10))
   const [time, setTime] = useState(game.time)
+  const [endTime, setEndTime] = useState(game.end_time ?? '')
   const [eventType, setEventType] = useState(game.event_type)
   const [venueId, setVenueId] = useState<number | null>(game.venue?.id ?? null)
   const [saving, setSaving] = useState(false)
@@ -54,7 +57,14 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setSaving(true)
     setError(null)
     try {
-      await api.put(`/admin/kalender/${game.id}`, { date, time, opponent, event_type: eventType, venue_id: venueId })
+      await api.put(`/admin/kalender/${game.id}`, {
+        date,
+        time,
+        end_time: isGeneric ? (endTime || null) : null,
+        opponent,
+        event_type: eventType,
+        venue_id: venueId,
+      })
       onSaved()
     } catch {
       setError('Speichern fehlgeschlagen.')
@@ -67,7 +77,9 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">Spieltag bearbeiten</h2>
+          <h2 className="text-lg font-bold text-brand-text">
+            {isGeneric ? 'Event bearbeiten' : 'Spieltag bearbeiten'}
+          </h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>
@@ -75,26 +87,39 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Gegner</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">
+              {isGeneric ? 'Event-Name' : 'Gegner'}
+            </label>
             <input type="text" value={opponent} onChange={e => setOpponent(e.target.value)}
-              placeholder="Gegner…" className={INPUT} />
+              placeholder={isGeneric ? 'Event-Name…' : 'Gegner…'} className={INPUT} />
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
-            <input type="time" value={time} onChange={e => setTime(e.target.value)} className={INPUT} />
+          <div className={isGeneric ? 'grid grid-cols-2 gap-3' : ''}>
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                {isGeneric ? 'Beginn' : 'Uhrzeit'}
+              </label>
+              <input type="time" value={time} onChange={e => setTime(e.target.value)} className={INPUT} />
+            </div>
+            {isGeneric && (
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Ende</label>
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={INPUT} />
+              </div>
+            )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
-            <select value={eventType} onChange={e => setEventType(e.target.value)} className={INPUT}>
-              <option value="heim">Heimspiel</option>
-              <option value="auswärts">Auswärtsspiel</option>
-              <option value="generisch">Sonstiges</option>
-            </select>
-          </div>
+          {!isGeneric && (
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
+              <select value={eventType} onChange={e => setEventType(e.target.value)} className={INPUT}>
+                <option value="heim">Heimspiel</option>
+                <option value="auswärts">Auswärtsspiel</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
             <VenuePicker value={venueId} onChange={setVenueId} />

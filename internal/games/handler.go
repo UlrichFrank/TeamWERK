@@ -263,7 +263,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
 
 	const base = `
-		SELECT g.id, g.date, g.time, g.opponent, g.event_type,
+		SELECT g.id, g.date, g.time, g.end_time, g.opponent, g.event_type,
 		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
@@ -308,6 +308,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		ID             int       `json:"id"`
 		Date           string    `json:"date"`
 		Time           string    `json:"time"`
+		EndTime        *string   `json:"end_time,omitempty"`
 		Opponent       string    `json:"opponent"`
 		EventType      string    `json:"event_type"`
 		Teams          []team    `json:"teams"`
@@ -323,13 +324,17 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	var games []*game
 	for rows.Next() {
 		var g game
+		var endTimeNull sql.NullString
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
-		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType,
+		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &g.Opponent, &g.EventType,
 			&g.SlotCount, &g.FilledCount, &g.TotalCount,
 			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			continue
+		}
+		if endTimeNull.Valid {
+			g.EndTime = &endTimeNull.String
 		}
 		if vID.Valid {
 			g.Venue = &venueRef{
