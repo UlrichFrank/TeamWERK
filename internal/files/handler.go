@@ -21,13 +21,14 @@ import (
 type Handler struct {
 	db       *sql.DB
 	filesDir string
+	secret   string
 }
 
-func NewHandler(db *sql.DB, filesDir string) *Handler {
+func NewHandler(db *sql.DB, filesDir, secret string) *Handler {
 	if err := os.MkdirAll(filesDir, 0755); err != nil {
 		panic(fmt.Sprintf("files: cannot create storage dir %s: %v", filesDir, err))
 	}
-	return &Handler{db: db, filesDir: filesDir}
+	return &Handler{db: db, filesDir: filesDir, secret: secret}
 }
 
 // folderPath returns [folderID, parentID, grandparentID, ...] up to the root.
@@ -615,9 +616,40 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"id": id, "name": header.Filename, "size": written})
 }
 
-// GET /api/files/{id}/download
-func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
+// GET /api/files/{id}/download-token
+func (h *Handler) HandleDownloadToken(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var folderID int
+	err = h.db.QueryRowContext(r.Context(), `SELECT folder_id FROM files WHERE id = ?`, id).Scan(&folderID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+
+	cr, _, err := resolveAccess(h.db, claims, folderID)
+	if err != nil || !cr {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	token := generateDownloadToken(id, claims.UserID, h.secret)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"token": token})
+}
+
+// GET /api/files/{id}/download
+// Accepts either a Bearer JWT (via auth middleware context) or a ?token= query param.
+func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
@@ -638,10 +670,36 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cr, _, err := resolveAccess(h.db, claims, folderID)
-	if err != nil || !cr {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+	inline := false
+	tokenParam := r.URL.Query().Get("token")
+	if tokenParam != "" {
+		userID, err := validateDownloadToken(tokenParam, id, h.secret)
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		claims, err := h.claimsForUser(r, userID)
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		cr, _, err := resolveAccess(h.db, claims, folderID)
+		if err != nil || !cr {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		inline = true
+	} else {
+		claims := auth.ClaimsFromCtx(r.Context())
+		if claims == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		cr, _, err := resolveAccess(h.db, claims, folderID)
+		if err != nil || !cr {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 	}
 
 	path := filepath.Join(h.filesDir, diskName)
@@ -655,9 +713,32 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if mimeType != "" {
 		w.Header().Set("Content-Type", mimeType)
 	}
-	w.Header().Set("Content-Disposition", `attachment; filename="`+sanitizeFilename(originalName)+`"`)
+	disposition := "attachment"
+	if inline {
+		disposition = "inline"
+	}
+	w.Header().Set("Content-Disposition", disposition+`; filename="`+sanitizeFilename(originalName)+`"`)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, originalName, time.Time{}, f)
+}
+
+// claimsForUser builds auth.Claims from the DB for token-based download auth.
+func (h *Handler) claimsForUser(r *http.Request, userID int) (*auth.Claims, error) {
+	var role string
+	if err := h.db.QueryRowContext(r.Context(), `SELECT role FROM users WHERE id = ?`, userID).Scan(&role); err != nil {
+		return nil, err
+	}
+	var functionsStr string
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COALESCE(GROUP_CONCAT(mcf.function, ','), '')
+		   FROM member_club_functions mcf
+		   JOIN members m ON m.id = mcf.member_id
+		  WHERE m.user_id = ?`, userID).Scan(&functionsStr)
+	var clubFunctions []string
+	if functionsStr != "" {
+		clubFunctions = strings.Split(functionsStr, ",")
+	}
+	return &auth.Claims{UserID: userID, Role: role, ClubFunctions: clubFunctions}, nil
 }
 
 // PUT /api/files/{id}

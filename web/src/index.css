@@ -3,8 +3,10 @@
 @tailwind utilities;
 
 /* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */
-input, textarea, select {
-  font-size: 16px;
+@media screen and (max-width: 639px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
 }
 
 input:-webkit-autofill,

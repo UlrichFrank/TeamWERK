@@ -566,22 +566,15 @@ export default function DocumentsPage() {
     }
   }
 
+  const [fileError, setFileError] = useState('')
+
   async function openFile(file: FileItem) {
+    setFileError('')
     try {
-      const { data } = await api.get(`/files/${file.id}/download`, { responseType: 'blob' })
-      const blobUrl = URL.createObjectURL(data)
-      const isViewable = file.mime_type.startsWith('image/') || file.mime_type === 'application/pdf'
-      if (isViewable) {
-        window.open(blobUrl, '_blank')
-      } else {
-        const a = document.createElement('a')
-        a.href = blobUrl
-        a.download = file.name
-        a.click()
-      }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000)
+      const { data } = await api.get<{ token: string }>(`/files/${file.id}/download-token`)
+      window.open(`/api/files/${file.id}/download?token=${data.token}`, '_blank')
     } catch {
-      alert('Datei konnte nicht geladen werden.')
+      setFileError('Datei konnte nicht geöffnet werden.')
     }
   }
 
@@ -657,6 +650,11 @@ export default function DocumentsPage() {
       {error && (
         <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger mb-4 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />{error}
+        </div>
+      )}
+      {fileError && (
+        <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger mb-4 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />{fileError}
         </div>
       )}
 

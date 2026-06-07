@@ -99,7 +99,7 @@ func serve() {
 	gameH := games.NewHandler(database, hubInstance)
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
-	filesH := files.NewHandler(database, cfg.FilesDir)
+	filesH := files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret)
 	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)
 	chatH := chat.NewHandler(database, hubInstance, cfg)
 	notifH := notifications.NewHandler(database, cfg)
@@ -116,6 +116,7 @@ func serve() {
 
 	// Public routes
 	r.Get("/api/uploads/*", uploadH.ServeUpload)
+	r.Get("/api/files/{id}/download", filesH.DownloadFile) // token-auth handled internally
 	r.Post("/api/auth/login", authH.Login)
 	r.Post("/api/auth/refresh", authH.Refresh)
 	r.Post("/api/auth/logout", authH.Logout)
@@ -211,7 +212,7 @@ func serve() {
 		r.Post("/api/folders/{id}/permissions", filesH.AddPermission)
 		r.Delete("/api/folders/{id}/permissions/{permId}", filesH.DeletePermission)
 		r.Post("/api/folders/{folderId}/files", filesH.UploadFile)
-		r.Get("/api/files/{id}/download", filesH.DownloadFile)
+		r.Get("/api/files/{id}/download-token", filesH.HandleDownloadToken)
 		r.Put("/api/files/{id}", filesH.RenameFile)
 		r.Delete("/api/files/{id}", filesH.DeleteFile)
 
