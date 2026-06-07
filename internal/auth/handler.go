@@ -423,7 +423,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if lastName != "" {
 		fullName += " " + lastName
 	}
-	h.mailer.Send(req.Email, "Passwort zurücksetzen – TeamWERK",
+	h.mailer.Send(req.Email, "Passwort zurücksetzen – TeamWERK", //nolint:errcheck // best-effort; token is stored regardless
 		fmt.Sprintf("Hallo %s,\n\nPasswort zurücksetzen:\n%s\n\nDer Link ist 1 Stunde gültig.", fullName, link))
 }
 
@@ -880,29 +880,6 @@ func (h *Handler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(), `UPDATE email_change_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?`, id)
 	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE user_id=?`, userID)
 	http.Redirect(w, r, "/login", http.StatusFound)
-}
-
-func (h *Handler) notifyTrainersOfRequest(r *http.Request, teamID int, name, email string) {
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT u.email FROM users u
-		 JOIN members m ON m.user_id = u.id
-		 JOIN kader_trainers kt ON kt.member_id = m.id
-		 JOIN kader k ON k.id = kt.kader_id
-		 WHERE k.team_id = ?
-		 UNION
-		 SELECT u2.email FROM users u2 WHERE u2.role = 'admin'`,
-		teamID,
-	)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var trainerEmail string
-		rows.Scan(&trainerEmail)
-		h.mailer.Send(trainerEmail, "Neuer Beitrittsantrag – TeamWERK",
-			fmt.Sprintf("Neuer Antrag von %s (%s).\nBitte in TeamWERK prüfen: %s/admin/membership-requests", name, email, h.baseURL))
-	}
 }
 
 // loadJWTExtras queries club_functions and is_parent for inclusion in the JWT.

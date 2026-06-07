@@ -43,7 +43,7 @@ func (m *Mailer) SendWithAttachments(to, subject, body string, attachments []Att
 	th.Set("Content-Type", "text/plain; charset=utf-8")
 	th.Set("Content-Transfer-Encoding", "8bit")
 	pw, _ := mw.CreatePart(th)
-	pw.Write([]byte(body))
+	pw.Write([]byte(body)) //nolint:errcheck // multipart write errors only occur on fundamental I/O failures
 
 	// Attachment parts
 	for _, a := range attachments {
@@ -53,7 +53,7 @@ func (m *Mailer) SendWithAttachments(to, subject, body string, attachments []Att
 		ah.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, a.Filename))
 		aw, _ := mw.CreatePart(ah)
 		enc := base64.NewEncoder(base64.StdEncoding, aw)
-		enc.Write(a.Data)
+		enc.Write(a.Data) //nolint:errcheck // base64 encoder write errors only occur on fundamental I/O failures
 		enc.Close()
 	}
 

@@ -439,13 +439,6 @@ func computeSollForElternteil(ctx context.Context, db *sql.DB, userID int, seaso
 	return int(math.Round(total)), nil
 }
 
-func formatDate(date string) string {
-	if len(date) >= 10 {
-		return date[8:10] + "." + date[5:7] + "." + date[0:4]
-	}
-	return date
-}
-
 func effectivePersona(clubFunctions []string, isParent bool) string {
 	for _, p := range []string{"trainer", "vorstand", "vorstand_beisitzer", "spieler"} {
 		if slices.Contains(clubFunctions, p) {
