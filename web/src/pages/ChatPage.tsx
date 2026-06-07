@@ -134,15 +134,17 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Close context menu on outside click or Escape
+  // Close context menu on outside click/tap or Escape
   useEffect(() => {
     if (!contextMenu) return
     const close = () => setContextMenu(null)
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
     document.addEventListener('mousedown', close)
+    document.addEventListener('touchstart', close)
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('mousedown', close)
+      document.removeEventListener('touchstart', close)
       document.removeEventListener('keydown', onKey)
     }
   }, [contextMenu])
@@ -201,7 +203,16 @@ export default function ChatPage() {
   const handleContextMenu = (e: React.MouseEvent, msg: Message) => {
     if (msg.deletedAt) return
     e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, message: msg })
+    const x = Math.min(e.clientX, window.innerWidth - 170)
+    const y = Math.min(e.clientY, window.innerHeight - 120)
+    setContextMenu({ x, y, message: msg })
+  }
+
+  const handleLongPress = (msg: Message, x: number, y: number) => {
+    if (msg.deletedAt) return
+    const cx = Math.min(x, window.innerWidth - 170)
+    const cy = Math.min(y, window.innerHeight - 120)
+    setContextMenu({ x: cx, y: cy, message: msg })
   }
 
   const leaveGroup = async () => {
@@ -436,6 +447,7 @@ export default function ChatPage() {
                       isOwn={isOwn}
                       onContextMenu={handleContextMenu}
                       onSwipeReply={startReply}
+                      onLongPress={handleLongPress}
                     />
                   )
                 })}
@@ -528,6 +540,7 @@ export default function ChatPage() {
           className="fixed z-50 bg-white rounded-lg shadow-lg border border-brand-border py-1 min-w-[160px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
         >
           <button
             onClick={() => startReply(contextMenu.message)}
@@ -606,26 +619,45 @@ function MessageBubble({
   isOwn,
   onContextMenu,
   onSwipeReply,
+  onLongPress,
 }: {
   msg: Message
   isOwn: boolean
   onContextMenu: (e: React.MouseEvent, msg: Message) => void
   onSwipeReply: (msg: Message) => void
+  onLongPress: (msg: Message, x: number, y: number) => void
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [swipeDelta, setSwipeDelta] = useState(0)
   const [showReplyIcon, setShowReplyIcon] = useState(false)
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
+    if (!msg.deletedAt) {
+      const x = e.touches[0].clientX
+      const y = e.touches[0].clientY
+      longPressTimer.current = setTimeout(() => {
+        longPressTimer.current = null
+        onLongPress(msg, x, y)
+      }, 500)
+    }
   }
 
   const onTouchMove = (e: React.TouchEvent) => {
     const dx = e.touches[0].clientX - touchStartX.current
     const dy = e.touches[0].clientY - touchStartY.current
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) cancelLongPress()
     if (Math.abs(dy) > Math.abs(dx) || dx < 0) return
     const delta = Math.min(dx, 70)
     setSwipeDelta(delta)
@@ -633,6 +665,7 @@ function MessageBubble({
   }
 
   const onTouchEnd = () => {
+    cancelLongPress()
     if (swipeDelta >= 60 && !msg.deletedAt) {
       onSwipeReply(msg)
     }
@@ -666,7 +699,7 @@ function MessageBubble({
 
       <div
         ref={wrapperRef}
-        className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} flex-1`}
+        className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} flex-1 select-none`}
         style={{
           transform: `translateX(${isOwn ? -swipeDelta : swipeDelta}px)`,
           transition: swipeDelta === 0 ? 'transform 0.2s ease' : 'none',
