@@ -1,7 +1,7 @@
 # chat-broadcasts Specification
 
 ## Purpose
-TBD - created by archiving change chat-feature. Update Purpose after archive.
+Einweg-Mitteilungen an Zielgruppen (alle, Team, Rolle). Sender kann Broadcasts bearbeiten und löschen.
 ## Requirements
 ### Requirement: Broadcast senden
 
@@ -35,19 +35,29 @@ Das System SHALL es Usern mit der Rolle admin, vorstand oder trainer erlauben ei
 
 ### Requirement: Empfangene Broadcasts abrufen
 
-Das System SHALL für jeden User eine Liste der für ihn bestimmten Broadcasts zurückgeben, sortiert nach `sent_at` absteigend. Der Sender ist namentlich sichtbar. Andere Empfänger sind NICHT sichtbar (anonym). Jeder Broadcast zeigt ob er gelesen wurde.
+Das System SHALL für jeden User eine Liste der für ihn bestimmten Broadcasts zurückgeben, sortiert nach `sent_at` absteigend. Der Sender ist namentlich sichtbar. Andere Empfänger sind NICHT sichtbar (anonym). Jeder Broadcast zeigt ob er gelesen wurde. Das Feld `editedAt` (null wenn nie bearbeitet) wird ebenfalls zurückgegeben.
 
 #### Scenario: User ruft empfangene Broadcasts ab
 
 - **WHEN** ein User `GET /api/chat/broadcasts` aufruft
 - **THEN** gibt der Server alle Broadcasts zurück die für diesen User bestimmt waren
-- **THEN** jeder Broadcast enthält `senderName`, `body`, `sentAt`, `isRead`
+- **THEN** jeder Broadcast enthält `senderName`, `body`, `sentAt`, `isRead`, `editedAt`
 - **THEN** andere Empfänger sind NICHT im Response enthalten
 
 #### Scenario: Gesendete Broadcasts für Sender
 
 - **WHEN** ein Admin `GET /api/chat/broadcasts` aufruft
 - **THEN** erscheinen auch selbst gesendete Broadcasts in der Liste (mit Markierung `isSent: true`)
+
+#### Scenario: Unbearbeiteter Broadcast
+
+- **WHEN** ein Broadcast nie bearbeitet wurde
+- **THEN** ist `editedAt: null` in der Antwort
+
+#### Scenario: Bearbeiteter Broadcast
+
+- **WHEN** ein Broadcast bearbeitet wurde
+- **THEN** enthält `editedAt` den Timestamp der letzten Bearbeitung
 
 ### Requirement: Broadcast als gelesen markieren
 

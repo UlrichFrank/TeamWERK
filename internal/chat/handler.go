@@ -399,17 +399,35 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type Message struct {
-		ID         int    `json:"id"`
-		SenderID   int    `json:"senderId"`
-		SenderName string `json:"senderName"`
-		Body       string `json:"body"`
-		SentAt     string `json:"sentAt"`
+		ID                int     `json:"id"`
+		SenderID          int     `json:"senderId"`
+		SenderName        string  `json:"senderName"`
+		Body              string  `json:"body"`
+		SentAt            string  `json:"sentAt"`
+		ReplyToID         *int    `json:"replyToId"`
+		ReplyToBody       *string `json:"replyToBody"`
+		ReplyToSenderName *string `json:"replyToSenderName"`
+		EditedAt          *string `json:"editedAt"`
+		DeletedAt         *string `json:"deletedAt"`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, m.sender_id, u.first_name || ' ' || u.last_name, m.body, m.sent_at
+		SELECT m.id, m.sender_id, u.first_name || ' ' || u.last_name,
+		       CASE WHEN m.deleted_at IS NOT NULL THEN '' ELSE m.body END,
+		       m.sent_at,
+		       m.reply_to_id,
+		       CASE
+		         WHEN m.reply_to_id IS NULL THEN NULL
+		         WHEN rm.deleted_at IS NOT NULL THEN '[Nachricht gelöscht]'
+		         ELSE rm.body
+		       END AS reply_to_body,
+		       CASE WHEN m.reply_to_id IS NOT NULL THEN ru.first_name || ' ' || ru.last_name ELSE NULL END,
+		       m.edited_at,
+		       m.deleted_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
+		LEFT JOIN messages rm ON rm.id = m.reply_to_id
+		LEFT JOIN users ru ON ru.id = rm.sender_id
 		WHERE m.conversation_id = ?
 		ORDER BY m.sent_at DESC
 		LIMIT 100`, convID)
@@ -422,7 +440,26 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	msgs := []Message{}
 	for rows.Next() {
 		var msg Message
-		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &msg.Body, &msg.SentAt)
+		var replyToID sql.NullInt64
+		var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
+		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &msg.Body, &msg.SentAt,
+			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt)
+		if replyToID.Valid {
+			id := int(replyToID.Int64)
+			msg.ReplyToID = &id
+		}
+		if replyToBody.Valid {
+			msg.ReplyToBody = &replyToBody.String
+		}
+		if replyToSenderName.Valid {
+			msg.ReplyToSenderName = &replyToSenderName.String
+		}
+		if editedAt.Valid {
+			msg.EditedAt = &editedAt.String
+		}
+		if deletedAt.Valid {
+			msg.DeletedAt = &deletedAt.String
+		}
 		msgs = append(msgs, msg)
 	}
 
@@ -450,16 +487,30 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Body string `json:"body"`
+		Body      string `json:"body"`
+		ReplyToID *int   `json:"replyToId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Body) == "" {
 		http.Error(w, "body required", http.StatusBadRequest)
 		return
 	}
 
+	var replyToID sql.NullInt64
+	if body.ReplyToID != nil {
+		var count int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM messages WHERE id = ? AND conversation_id = ?`,
+			*body.ReplyToID, convID).Scan(&count)
+		if count == 0 {
+			http.Error(w, "invalid replyToId", http.StatusBadRequest)
+			return
+		}
+		replyToID = sql.NullInt64{Int64: int64(*body.ReplyToID), Valid: true}
+	}
+
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO messages (conversation_id, sender_id, body) VALUES (?, ?, ?)`,
-		convID, claims.UserID, body.Body)
+		`INSERT INTO messages (conversation_id, sender_id, body, reply_to_id) VALUES (?, ?, ?, ?)`,
+		convID, claims.UserID, body.Body, replyToID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -478,6 +529,67 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int64{"id": msgID})
+}
+
+// PUT /api/chat/messages/{id}
+func (h *Handler) EditMessage(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	msgID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Body string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Body) == "" {
+		http.Error(w, "body required", http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE messages SET body = ?, edited_at = CURRENT_TIMESTAMP
+		 WHERE id = ? AND sender_id = ? AND deleted_at IS NULL`,
+		body.Body, msgID, claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/chat/messages/{id}
+func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	msgID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var senderID int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT sender_id FROM messages WHERE id = ?`, msgID).Scan(&senderID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if senderID != claims.UserID && claims.Role != "admin" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	h.db.ExecContext(r.Context(),
+		`UPDATE messages SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL`, msgID)
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /api/chat/conversations/{id}/read
@@ -531,18 +643,20 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 
 	type Broadcast struct {
-		ID         int    `json:"id"`
-		SenderName string `json:"senderName"`
-		Body       string `json:"body"`
-		SentAt     string `json:"sentAt"`
-		IsRead     bool   `json:"isRead"`
-		IsSent     bool   `json:"isSent"`
+		ID         int     `json:"id"`
+		SenderName string  `json:"senderName"`
+		Body       string  `json:"body"`
+		SentAt     string  `json:"sentAt"`
+		IsRead     bool    `json:"isRead"`
+		IsSent     bool    `json:"isSent"`
+		EditedAt   *string `json:"editedAt"`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT b.id, u.first_name || ' ' || u.last_name, b.body, b.sent_at,
 		       CASE WHEN br.read_at IS NOT NULL THEN 1 ELSE 0 END AS is_read,
-		       CASE WHEN b.sender_id = ? THEN 1 ELSE 0 END AS is_sent
+		       CASE WHEN b.sender_id = ? THEN 1 ELSE 0 END AS is_sent,
+		       b.edited_at
 		FROM broadcasts b
 		JOIN users u ON u.id = b.sender_id
 		JOIN broadcast_reads br ON br.broadcast_id = b.id AND br.user_id = ?
@@ -559,14 +673,52 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var b Broadcast
 		var isRead, isSent int
-		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent)
+		var editedAt sql.NullString
+		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent, &editedAt)
 		b.IsRead = isRead == 1
 		b.IsSent = isSent == 1
+		if editedAt.Valid {
+			b.EditedAt = &editedAt.String
+		}
 		broadcasts = append(broadcasts, b)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(broadcasts)
+}
+
+// PUT /api/chat/broadcasts/{id}
+func (h *Handler) EditBroadcast(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	broadcastID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Body string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Body) == "" {
+		http.Error(w, "body required", http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE broadcasts SET body = ?, edited_at = CURRENT_TIMESTAMP
+		 WHERE id = ? AND sender_id = ?`,
+		body.Body, broadcastID, claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /api/chat/broadcasts

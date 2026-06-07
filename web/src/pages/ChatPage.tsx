@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users, UserPlus, Trash2 } from 'lucide-react'
+import {
+  Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users, UserPlus,
+  Trash2, CornerUpLeft, Pencil
+} from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
@@ -21,6 +24,11 @@ interface Message {
   senderName: string
   body: string
   sentAt: string
+  replyToId: number | null
+  replyToBody: string | null
+  replyToSenderName: string | null
+  editedAt: string | null
+  deletedAt: string | null
 }
 interface Broadcast {
   id: number
@@ -29,10 +37,17 @@ interface Broadcast {
   sentAt: string
   isRead: boolean
   isSent: boolean
+  editedAt: string | null
 }
 interface ChatUser { id: number; name: string }
 
 type Tab = 'chats' | 'broadcasts'
+
+interface ContextMenuState {
+  x: number
+  y: number
+  message: Message
+}
 
 export default function ChatPage() {
   const { user } = useAuth()
@@ -47,7 +62,12 @@ export default function ChatPage() {
   const [showBroadcastModal, setShowBroadcastModal] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
   const [activeBroadcast, setActiveBroadcast] = useState<Broadcast | null>(null)
+  const [showBroadcastEdit, setShowBroadcastEdit] = useState(false)
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const isMobile = window.innerWidth < 640
   const [mobileShowChat, setMobileShowChat] = useState(false)
 
@@ -103,6 +123,9 @@ export default function ChatPage() {
   const openConversation = async (conv: Conversation) => {
     setActiveConv(conv)
     setMobileShowChat(true)
+    setReplyTo(null)
+    setEditingMessage(null)
+    setMsgInput('')
     await loadMessages(conv.id)
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
@@ -111,16 +134,74 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Close context menu on outside click or Escape
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [contextMenu])
+
   const sendMessage = async () => {
     if (!activeConv || !msgInput.trim() || sending) return
     setSending(true)
     try {
-      await api.post(`/chat/conversations/${activeConv.id}/messages`, { body: msgInput.trim() })
+      if (editingMessage) {
+        await api.put(`/chat/messages/${editingMessage.id}`, { body: msgInput.trim() })
+        setEditingMessage(null)
+      } else {
+        await api.post(`/chat/conversations/${activeConv.id}/messages`, {
+          body: msgInput.trim(),
+          replyToId: replyTo?.id ?? null,
+        })
+        setReplyTo(null)
+      }
       setMsgInput('')
       await loadMessages(activeConv.id)
     } catch {} finally {
       setSending(false)
     }
+  }
+
+  const startReply = (msg: Message) => {
+    setReplyTo(msg)
+    setEditingMessage(null)
+    setMsgInput('')
+    setContextMenu(null)
+    inputRef.current?.focus()
+  }
+
+  const startEdit = (msg: Message) => {
+    setEditingMessage(msg)
+    setReplyTo(null)
+    setMsgInput(msg.body)
+    setContextMenu(null)
+    inputRef.current?.focus()
+  }
+
+  const cancelReplyOrEdit = () => {
+    setReplyTo(null)
+    setEditingMessage(null)
+    setMsgInput('')
+  }
+
+  const deleteMsg = async (msg: Message) => {
+    setContextMenu(null)
+    try {
+      await api.delete(`/chat/messages/${msg.id}`)
+      if (activeConv) await loadMessages(activeConv.id)
+    } catch {}
+  }
+
+  const handleContextMenu = (e: React.MouseEvent, msg: Message) => {
+    if (msg.deletedAt) return
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, message: msg })
   }
 
   const leaveGroup = async () => {
@@ -169,6 +250,9 @@ export default function ChatPage() {
 
   const totalUnread = conversations.reduce((s, c) => s + c.unreadCount, 0)
     + broadcasts.filter(b => !b.isRead && !b.isSent).length
+
+  const canDelete = (msg: Message) =>
+    msg.senderId === user?.id || user?.role === 'admin'
 
   return (
     <div className="flex flex-col h-full">
@@ -341,25 +425,48 @@ export default function ChatPage() {
                   </div>
                 )}
               </div>
+
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
                 {messages.map(msg => {
                   const isOwn = msg.senderId === user?.id
                   return (
-                    <div key={msg.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
-                      {!isOwn && <span className="text-xs text-brand-text-muted mb-0.5">{msg.senderName}</span>}
-                      <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
-                        {msg.body}
-                      </div>
-                      <span className="text-xs text-brand-text-subtle mt-0.5">
-                        {new Date(msg.sentAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
+                    <MessageBubble
+                      key={msg.id}
+                      msg={msg}
+                      isOwn={isOwn}
+                      onContextMenu={handleContextMenu}
+                      onSwipeReply={startReply}
+                    />
                   )
                 })}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Reply / Edit bar */}
+              {(replyTo || editingMessage) && (
+                <div className="px-4 py-2 border-t border-brand-border-subtle bg-white flex items-center gap-2">
+                  {replyTo ? (
+                    <CornerUpLeft className="w-4 h-4 text-brand-text-muted shrink-0" />
+                  ) : (
+                    <Pencil className="w-4 h-4 text-brand-text-muted shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-brand-text">
+                      {replyTo ? `Antwort auf ${replyTo.senderName}` : 'Nachricht bearbeiten'}
+                    </p>
+                    {replyTo && (
+                      <p className="text-xs text-brand-text-muted truncate">{replyTo.body.slice(0, 60)}</p>
+                    )}
+                  </div>
+                  <button onClick={cancelReplyOrEdit} aria-label="Abbrechen" className="text-brand-text-muted hover:text-brand-text shrink-0">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="px-4 py-3 border-t border-brand-border-subtle flex gap-2">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={msgInput}
                   onChange={e => setMsgInput(e.target.value)}
@@ -372,9 +479,9 @@ export default function ChatPage() {
                   onClick={sendMessage}
                   disabled={!msgInput.trim() || sending}
                   className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label="Senden"
+                  aria-label={editingMessage ? 'Speichern' : 'Senden'}
                 >
-                  <Send className="w-4 h-4" />
+                  {editingMessage ? <Pencil className="w-4 h-4" /> : <Send className="w-4 h-4" />}
                 </button>
               </div>
             </>
@@ -388,10 +495,20 @@ export default function ChatPage() {
                     <X className="w-5 h-5" />
                   </button>
                 )}
-                <span className="font-semibold text-brand-text">{activeBroadcast.isSent ? 'Gesendet von mir' : activeBroadcast.senderName}</span>
+                <span className="font-semibold text-brand-text flex-1">{activeBroadcast.isSent ? 'Gesendet von mir' : activeBroadcast.senderName}</span>
+                {activeBroadcast.isSent && (
+                  <button
+                    onClick={() => setShowBroadcastEdit(true)}
+                    className="text-brand-text-muted hover:text-brand-text transition-colors"
+                    aria-label="Mitteilung bearbeiten"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               <p className="text-xs text-brand-text-muted mb-4">
                 {new Date(activeBroadcast.sentAt).toLocaleString('de-DE')}
+                {activeBroadcast.editedAt && <span className="ml-2">(bearbeitet)</span>}
               </p>
               <p className="text-sm text-brand-text whitespace-pre-wrap">{activeBroadcast.body}</p>
             </div>
@@ -404,6 +521,41 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-white rounded-lg shadow-lg border border-brand-border py-1 min-w-[160px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          <button
+            onClick={() => startReply(contextMenu.message)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors"
+          >
+            <CornerUpLeft className="w-4 h-4" />
+            Antworten
+          </button>
+          {contextMenu.message.senderId === user?.id && (
+            <button
+              onClick={() => startEdit(contextMenu.message)}
+              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+              Bearbeiten
+            </button>
+          )}
+          {canDelete(contextMenu.message) && (
+            <button
+              onClick={() => deleteMsg(contextMenu.message)}
+              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-danger hover:bg-brand-danger-light transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Löschen
+            </button>
+          )}
+        </div>
+      )}
 
       {showNewModal && (
         <NewConversationModal onClose={() => setShowNewModal(false)} onCreated={(conv) => {
@@ -422,6 +574,20 @@ export default function ChatPage() {
         />
       )}
 
+      {showBroadcastEdit && activeBroadcast && (
+        <BroadcastEditModal
+          broadcast={activeBroadcast}
+          onClose={() => setShowBroadcastEdit(false)}
+          onSaved={async () => {
+            setShowBroadcastEdit(false)
+            await loadBroadcasts()
+            const r = await api.get('/chat/broadcasts').catch(() => ({ data: [] }))
+            const updated = (r.data ?? []).find((b: Broadcast) => b.id === activeBroadcast.id)
+            if (updated) setActiveBroadcast(updated)
+          }}
+        />
+      )}
+
       {showAddMember && activeConv && (
         <AddMemberModal
           convId={activeConv.id}
@@ -430,6 +596,108 @@ export default function ChatPage() {
           onAdded={() => { setShowAddMember(false); reloadActiveConv(activeConv.id) }}
         />
       )}
+    </div>
+  )
+}
+
+// --- Message Bubble ---
+function MessageBubble({
+  msg,
+  isOwn,
+  onContextMenu,
+  onSwipeReply,
+}: {
+  msg: Message
+  isOwn: boolean
+  onContextMenu: (e: React.MouseEvent, msg: Message) => void
+  onSwipeReply: (msg: Message) => void
+}) {
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const [swipeDelta, setSwipeDelta] = useState(0)
+  const [showReplyIcon, setShowReplyIcon] = useState(false)
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    const dx = e.touches[0].clientX - touchStartX.current
+    const dy = e.touches[0].clientY - touchStartY.current
+    if (Math.abs(dy) > Math.abs(dx) || dx < 0) return
+    const delta = Math.min(dx, 70)
+    setSwipeDelta(delta)
+    setShowReplyIcon(delta > 20)
+  }
+
+  const onTouchEnd = () => {
+    if (swipeDelta >= 60 && !msg.deletedAt) {
+      onSwipeReply(msg)
+    }
+    setSwipeDelta(0)
+    setShowReplyIcon(false)
+  }
+
+  if (msg.deletedAt) {
+    return (
+      <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface-card border border-brand-border-subtle text-brand-text-subtle text-sm italic">
+          <Trash2 className="w-3.5 h-3.5 shrink-0" />
+          Nachricht gelöscht
+        </div>
+        <span className="text-xs text-brand-text-subtle mt-0.5">
+          {new Date(msg.sentAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`flex items-center gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+      {/* Swipe reply icon */}
+      <div
+        className="shrink-0 transition-opacity duration-100"
+        style={{ opacity: showReplyIcon ? 1 : 0 }}
+      >
+        <CornerUpLeft className="w-4 h-4 text-brand-text-muted" />
+      </div>
+
+      <div
+        ref={wrapperRef}
+        className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} flex-1`}
+        style={{
+          transform: `translateX(${isOwn ? -swipeDelta : swipeDelta}px)`,
+          transition: swipeDelta === 0 ? 'transform 0.2s ease' : 'none',
+        }}
+        onContextMenu={e => onContextMenu(e, msg)}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {!isOwn && <span className="text-xs text-brand-text-muted mb-0.5">{msg.senderName}</span>}
+
+        <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
+          {/* Reply quote */}
+          {msg.replyToId && (
+            <div className={`mb-1.5 pl-2 border-l-2 ${isOwn ? 'border-brand-black/40' : 'border-brand-yellow'} text-xs opacity-80`}>
+              <p className="font-semibold">{msg.replyToSenderName}</p>
+              <p className="truncate">{(msg.replyToBody ?? '').slice(0, 60)}</p>
+            </div>
+          )}
+          {msg.body}
+        </div>
+
+        <div className="flex items-center gap-1 mt-0.5">
+          <span className="text-xs text-brand-text-subtle">
+            {new Date(msg.sentAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {msg.editedAt && (
+            <span className="text-xs text-brand-text-subtle">(bearbeitet)</span>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -647,6 +915,61 @@ function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onS
           className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {loading ? 'Sende…' : 'Mitteilung senden'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// --- Broadcast Edit Modal ---
+function BroadcastEditModal({ broadcast, onClose, onSaved }: {
+  broadcast: Broadcast
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [body, setBody] = useState(broadcast.body)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async () => {
+    if (!body.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      await api.put(`/chat/broadcasts/${broadcast.id}`, { body: body.trim() })
+      onSaved()
+    } catch (e: any) {
+      setError(e.response?.data || 'Fehler beim Speichern')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-brand-text">Mitteilung bearbeiten</h2>
+          <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
+        </div>
+
+        <textarea
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          maxLength={2000}
+          rows={5}
+          className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none mb-1"
+        />
+        <p className="text-xs text-brand-text-subtle text-right mb-3">{body.length}/2000</p>
+
+        {error && <p className="text-brand-danger text-sm mb-3">{error}</p>}
+
+        <button
+          onClick={submit}
+          disabled={loading || !body.trim()}
+          className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Speichere…' : 'Speichern'}
         </button>
       </div>
     </div>
