@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Menu, X, ChevronRight, ChevronDown, Eye } from 'lucide-react'
+import { Menu, X, ChevronRight, ChevronDown, Eye, RefreshCw } from 'lucide-react'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
@@ -69,8 +69,9 @@ export default function AppShell() {
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
   usePushSubscription()
-  const { version } = useVersionCheck()
+  const { version, updateAvailable, updateDescription } = useVersionCheck()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showUpdateDetails, setShowUpdateDetails] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
   const [chatUnread, setChatUnread] = useState(0)
@@ -235,6 +236,36 @@ export default function AppShell() {
           </button>
           <span className="font-bold text-lg">TeamWERK</span>
         </header>
+
+        {/* Update banner */}
+        {updateAvailable && (
+          <div className="bg-brand-yellow text-brand-black text-sm font-medium shrink-0">
+            <div className="px-4 py-2 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span className="flex-1">Neue Version verfügbar</span>
+              {updateDescription && (
+                <button
+                  onClick={() => setShowUpdateDetails(d => !d)}
+                  className="flex items-center gap-1 text-xs text-brand-black/60 hover:text-brand-black transition-colors"
+                >
+                  Details
+                  {showUpdateDetails ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                </button>
+              )}
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-brand-black text-brand-yellow rounded px-2 py-0.5 text-xs font-semibold hover:bg-brand-black/80 transition-colors"
+              >
+                Jetzt laden
+              </button>
+            </div>
+            {showUpdateDetails && updateDescription && (
+              <div className="px-4 pb-3 text-xs text-brand-black/70 whitespace-pre-line border-t border-brand-black/10 pt-2">
+                {updateDescription}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Impersonation banner */}
         {impersonating && (

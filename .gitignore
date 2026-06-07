@@ -36,3 +36,7 @@ build-errors.log
 
 # Claude Code
 .claude/settings.local.json
+
+# Deploy tracking
+.deployed-hash
+web/public/changes.json

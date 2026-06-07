@@ -462,3 +462,42 @@ Nützliche Remote-Befehle:
 make migrate-remote-up                                      # Migrationen auf VPS anwenden
 make create-admin-remote EMAIL=… PASSWORD=… NAME=…         # Admin-User anlegen
 ```
+
+---
+
+## OpenSpec-Workflow: Commit-Konventionen
+
+Am Ende jedes OpenSpec Change Proposals **müssen Conventional Commits** verwendet werden. Kein freier Commit-Text.
+
+### Format
+
+```
+<type>(<scope>): <beschreibung>
+```
+
+**Typen:**
+
+| Typ | Bedeutung |
+|-----|-----------|
+| `feat` | Neues Feature |
+| `fix` | Bugfix |
+| `refactor` | Umstrukturierung ohne Verhaltensänderung |
+| `chore` | Migrations, Dependencies, Build-Skripte |
+| `docs` | Nur Dokumentation |
+| `style` | Formatierung, kein Logik-Wechsel |
+| `test` | Tests hinzufügen oder korrigieren |
+
+**Scope:** Domänen-Package oder Bereich, z.B. `duties`, `members`, `games`, `auth`, `pwa`, `db`.
+
+### Beispiele
+
+```
+feat(duties): Dienstbörse zeigt offene Slots nach Datum sortiert
+fix(auth): Refresh-Token-Cookie wird bei Logout korrekt gelöscht
+chore(db): Migration 011 – push_subscriptions-Tabelle
+refactor(members): Paginierung serverseitig, clientseitige filter() entfernt
+```
+
+### Wann committen
+
+Pro OpenSpec-Task ein Commit — nicht alle Tasks in einem Commit zusammenfassen. Nach dem letzten Task folgt ein abschließender Commit, der ggf. die OpenSpec-Proposal-Datei archiviert.
