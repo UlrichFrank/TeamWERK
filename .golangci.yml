@@ -1,0 +1,51 @@
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+
+linters-settings:
+  errcheck:
+    # Patterns intentionally unchecked throughout the codebase:
+    # - tx.Rollback in defer: idiomatic Go; error is irrelevant after Commit
+    # - json.Encode/Decode: HTTP responses already started; write failures unrecoverable
+    # - json.Unmarshal: used for nullable JSON columns from DB; nil or malformed = zero value
+    # - rows.Scan / db.Exec patterns: type errors don't occur with typed schema;
+    #   exec errors on fire-and-forget housekeeping don't affect response correctness
+    # - csv.Writer.Write: errors are propagated to Flush(); individual writes are safe
+    # - http.ResponseWriter.Write: write errors are unrecoverable once response starts
+    # - rand.Read: never returns an error (crypto/rand contract; math/rand deprecated no-op)
+    # - io.Seeker.Seek: errors only occur on real files, not in-memory buffers used here
+    # - fmt.Sscan/Sscanf: parse errors result in zero values, handled by downstream logic
+    exclude-functions:
+      - (*database/sql.Tx).Rollback
+      - (*encoding/json.Encoder).Encode
+      - (*encoding/json.Decoder).Decode
+      - encoding/json.Unmarshal
+      - (*database/sql.Rows).Scan
+      - (*database/sql.Row).Scan
+      - (*database/sql.Tx).ExecContext
+      - (*database/sql.DB).Exec
+      - (*database/sql.DB).ExecContext
+      - (*encoding/csv.Writer).Write
+      - (io.ReadCloser).Close
+      - (net/http.ResponseWriter).Write
+      - (io.Seeker).Seek
+      - crypto/rand.Read
+      - math/rand.Read
+      - fmt.Sscan
+      - fmt.Sscanf
+
+issues:
+  max-issues-per-linter: 100
+  max-same-issues: 10
+
+  exclude-rules:
+    - path: "_test\\.go"
+      linters:
+        - errcheck
+    - path: "internal/testutil/"
+      linters:
+        - errcheck

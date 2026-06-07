@@ -11,7 +11,7 @@ EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local pull-db
+.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local pull-db test lint
 
 .DEFAULT_GOAL := help
 
@@ -137,6 +137,16 @@ restore-local: ## Backup (DB + Bilder) lokal einspielen
 	fi
 
 pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal einspielen
+
+test: ## Alle Go-Tests mit Race-Detector ausführen
+	go test -race ./...
+
+lint: ## Statische Codeanalyse mit golangci-lint
+	@if ! command -v golangci-lint > /dev/null 2>&1; then \
+		echo "golangci-lint nicht gefunden. Installieren: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		exit 1; \
+	fi
+	golangci-lint run ./...
 
 clean: ## Build-Artefakte löschen
 	rm -rf $(BUILD_DIR) cmd/teamwerk/web/dist
