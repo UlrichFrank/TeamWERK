@@ -6,6 +6,9 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 type Mailer interface {
@@ -14,14 +17,20 @@ type Mailer interface {
 
 type Scheduler struct {
 	db     *sql.DB
+	cfg    *appconfig.Config
 	mailer Mailer
 }
 
-func New(db *sql.DB, m Mailer) *Scheduler { return &Scheduler{db: db, mailer: m} }
+func New(db *sql.DB, cfg *appconfig.Config, m Mailer) *Scheduler {
+	return &Scheduler{db: db, cfg: cfg, mailer: m}
+}
 
 func (s *Scheduler) Run() {
 	s.cleanExpiredTokens()
 	s.sendDutyReminders()
+	s.sendGameReminders()
+	s.sendTrainingReminders()
+	s.sendCarpoolingReminders()
 }
 
 func (s *Scheduler) cleanExpiredTokens() {
@@ -40,14 +49,14 @@ func (s *Scheduler) cleanExpiredTokens() {
 }
 
 type openSlot struct {
-	id         int
-	eventName  string
-	eventDate  string
-	eventTime  string
-	dutyType   string
-	roleDesc   string
-	slotsOpen  int
-	teamID     sql.NullInt64
+	id        int
+	eventName string
+	eventDate string
+	eventTime string
+	dutyType  string
+	roleDesc  string
+	slotsOpen int
+	teamID    sql.NullInt64
 	targetRole string
 }
 
@@ -85,7 +94,6 @@ func (s *Scheduler) sendDutyReminders() {
 		return
 	}
 
-	// Build user → relevant slots map
 	userSlots := map[int][]openSlot{}
 	userInfo := map[int]reminderUser{}
 
@@ -101,30 +109,246 @@ func (s *Scheduler) sendDutyReminders() {
 		}
 	}
 
-	sent := 0
+	emailSent, pushSent := 0, 0
 	for uid, uSlots := range userSlots {
 		u := userInfo[uid]
 
-		// Skip if already reminded for this event_date
-		var exists int
-		s.db.QueryRow(`SELECT 1 FROM duty_reminder_log WHERE user_id=? AND event_date=?`, uid, targetDate).Scan(&exists)
-		if exists == 1 {
-			continue
+		// Email reminder (opt-in via notification_preferences)
+		if push.HasEmailEnabled(s.db, uid, "duty_reminders") {
+			var exists int
+			s.db.QueryRow(`SELECT 1 FROM duty_reminder_log WHERE user_id=? AND event_date=?`, uid, targetDate).Scan(&exists)
+			if exists == 0 {
+				body := buildReminderMail(u.name, targetDate, uSlots)
+				subject := fmt.Sprintf("Offene Dienste am %s", formatDate(targetDate))
+				if err := s.mailer.Send(u.email, subject, body); err != nil {
+					log.Printf("scheduler: duty reminders: send mail to %s: %v", u.email, err)
+				} else {
+					s.db.Exec(`INSERT OR IGNORE INTO duty_reminder_log (user_id, event_date) VALUES (?,?)`, uid, targetDate)
+					emailSent++
+				}
+			}
 		}
 
-		body := buildReminderMail(u.name, targetDate, uSlots)
-		subject := fmt.Sprintf("Offene Dienste am %s", formatDate(targetDate))
-		if err := s.mailer.Send(u.email, subject, body); err != nil {
-			log.Printf("scheduler: duty reminders: send to %s: %v", u.email, err)
+		// Push reminder (opt-in via notification_preferences, default: enabled)
+		pushUsers := push.FilterByPushPref(s.db, []int{uid}, "duty_reminders")
+		if len(pushUsers) == 0 {
 			continue
 		}
-		s.db.Exec(`INSERT OR IGNORE INTO duty_reminder_log (user_id, event_date) VALUES (?,?)`, uid, targetDate)
+		// Idempotency via notification_log
+		var logExists int
+		s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='duty_reminder' AND ref_id=?`,
+			uid, hashDate(targetDate)).Scan(&logExists)
+		if logExists == 0 {
+			go push.SendToUsers(s.db, s.cfg, []int{uid},
+				"Offene Dienste", "Am "+formatDate(targetDate)+" gibt es noch offene Dienste", "/dienste")
+			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+				uid, "duty_reminder", hashDate(targetDate))
+			pushSent++
+		}
+	}
+
+	if emailSent > 0 {
+		log.Printf("scheduler: duty reminders: sent %d email(s) for %s", emailSent, targetDate)
+	}
+	if pushSent > 0 {
+		log.Printf("scheduler: duty reminders: sent %d push(s) for %s", pushSent, targetDate)
+	}
+}
+
+// hashDate converts a YYYY-MM-DD string to an integer for use as ref_id.
+func hashDate(date string) int {
+	// Format: YYYYMMDD as integer
+	clean := strings.ReplaceAll(date, "-", "")
+	var n int
+	fmt.Sscan(clean, &n)
+	return n
+}
+
+func (s *Scheduler) sendGameReminders() {
+	// Target: games starting in 20-28h (generous window to handle minute-level cron)
+	now := time.Now()
+	from := now.Add(20 * time.Hour).Format("2006-01-02")
+	to := now.Add(28 * time.Hour).Format("2006-01-02")
+
+	rows, err := s.db.Query(`
+		SELECT g.id, g.opponent, g.date, g.time, gt.team_id
+		FROM games g
+		JOIN game_teams gt ON gt.game_id = g.id
+		WHERE g.date BETWEEN ? AND ?`, from, to)
+	if err != nil {
+		log.Printf("scheduler: game reminders: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type gameRow struct {
+		id       int
+		opponent string
+		date     string
+		time     string
+		teamID   int
+	}
+	var games []gameRow
+	for rows.Next() {
+		var g gameRow
+		rows.Scan(&g.id, &g.opponent, &g.date, &g.time, &g.teamID)
+		games = append(games, g)
+	}
+
+	sent := 0
+	for _, g := range games {
+		uids := s.teamMembersAndParents(g.teamID)
+		for _, uid := range push.FilterByPushPref(s.db, uids, "games") {
+			var exists int
+			s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='game_reminder' AND ref_id=?`,
+				uid, g.id).Scan(&exists)
+			if exists != 0 {
+				continue
+			}
+			go push.SendToUsers(s.db, s.cfg, []int{uid},
+				"Spielerinnerung", g.opponent+" — morgen um "+g.time+" Uhr", "/kalender")
+			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+				uid, "game_reminder", g.id)
+			sent++
+		}
+	}
+	if sent > 0 {
+		log.Printf("scheduler: game reminders: sent %d push(s)", sent)
+	}
+}
+
+func (s *Scheduler) sendTrainingReminders() {
+	now := time.Now()
+	from := now.Add(20 * time.Hour).Format("2006-01-02")
+	to := now.Add(28 * time.Hour).Format("2006-01-02")
+
+	rows, err := s.db.Query(`
+		SELECT ts.id, ts.team_id, COALESCE(ts.title,'Training'), ts.date, ts.start_time
+		FROM training_sessions ts
+		WHERE ts.date BETWEEN ? AND ?
+		  AND ts.status = 'active'`, from, to)
+	if err != nil {
+		log.Printf("scheduler: training reminders: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type sessionRow struct {
+		id        int
+		teamID    int
+		title     string
+		date      string
+		startTime string
+	}
+	var sessions []sessionRow
+	for rows.Next() {
+		var s sessionRow
+		rows.Scan(&s.id, &s.teamID, &s.title, &s.date, &s.startTime)
+		sessions = append(sessions, s)
+	}
+
+	sent := 0
+	for _, sess := range sessions {
+		uids := s.teamMembersAndParents(sess.teamID)
+		for _, uid := range push.FilterByPushPref(s.db, uids, "trainings") {
+			var exists int
+			s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='training_reminder' AND ref_id=?`,
+				uid, sess.id).Scan(&exists)
+			if exists != 0 {
+				continue
+			}
+			go push.SendToUsers(s.db, s.cfg, []int{uid},
+				"Trainingserinnerung", sess.title+" — morgen um "+sess.startTime+" Uhr", "/training")
+			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+				uid, "training_reminder", sess.id)
+			sent++
+		}
+	}
+	if sent > 0 {
+		log.Printf("scheduler: training reminders: sent %d push(s)", sent)
+	}
+}
+
+func (s *Scheduler) sendCarpoolingReminders() {
+	now := time.Now()
+	from := now.Add(2 * time.Hour).Format("2006-01-02 15:04")
+	to := now.Add(4 * time.Hour).Format("2006-01-02 15:04")
+
+	// Find games in ~3h that have confirmed pairings
+	rows, err := s.db.Query(`
+		SELECT DISTINCT mg.user_id, g.id, g.opponent, g.date, g.time
+		FROM mitfahrgelegenheiten mg
+		JOIN games g ON g.id = mg.game_id
+		JOIN mitfahrt_paarungen p ON (p.biete_id = mg.id OR p.suche_id = mg.id) AND p.status = 'confirmed'
+		WHERE (g.date || ' ' || g.time) BETWEEN ? AND ?`, from, to)
+	if err != nil {
+		log.Printf("scheduler: carpooling reminders: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type carpoolRow struct {
+		userID   int
+		gameID   int
+		opponent string
+		date     string
+		time     string
+	}
+	var entries []carpoolRow
+	for rows.Next() {
+		var c carpoolRow
+		rows.Scan(&c.userID, &c.gameID, &c.opponent, &c.date, &c.time)
+		entries = append(entries, c)
+	}
+
+	sent := 0
+	for _, c := range entries {
+		uids := push.FilterByPushPref(s.db, []int{c.userID}, "carpooling")
+		if len(uids) == 0 {
+			continue
+		}
+		var exists int
+		s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='carpooling_reminder' AND ref_id=?`,
+			c.userID, c.gameID).Scan(&exists)
+		if exists != 0 {
+			continue
+		}
+		go push.SendToUsers(s.db, s.cfg, []int{c.userID},
+			"Fahrgemeinschaft heute", c.opponent+" — Abfahrt um "+c.time+" Uhr", "/mitfahrgelegenheiten")
+		s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+			c.userID, "carpooling_reminder", c.gameID)
 		sent++
 	}
-
 	if sent > 0 {
-		log.Printf("scheduler: duty reminders: sent %d reminder mails for %s", sent, targetDate)
+		log.Printf("scheduler: carpooling reminders: sent %d push(s)", sent)
 	}
+}
+
+// teamMembersAndParents returns user IDs of kader members + parents for a team in the active season.
+func (s *Scheduler) teamMembersAndParents(teamID int) []int {
+	rows, err := s.db.Query(
+		`SELECT DISTINCT u.id FROM users u
+		 JOIN members m ON m.user_id = u.id
+		 JOIN player_memberships pm ON pm.member_id = m.id
+		 JOIN seasons se ON se.id = pm.season_id AND se.is_active = 1
+		 WHERE pm.team_id = ?
+		 UNION
+		 SELECT DISTINCT fl.parent_user_id FROM family_links fl
+		 JOIN members m ON m.id = fl.member_id
+		 JOIN player_memberships pm ON pm.member_id = m.id
+		 JOIN seasons se ON se.id = pm.season_id AND se.is_active = 1
+		 WHERE pm.team_id = ?`, teamID, teamID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
@@ -149,7 +373,6 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
 				WHERE u.role = 'spieler'
 				  AND tm.team_id = ?
-				  AND u.duty_reminder_days IS NOT NULL
 				  AND ` + notAssigned
 			args = []any{sl.teamID.Int64, sl.id}
 		} else {
@@ -157,7 +380,6 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
 				WHERE u.role = 'spieler'
-				  AND u.duty_reminder_days IS NOT NULL
 				  AND ` + notAssigned
 			args = []any{sl.id}
 		}
@@ -173,7 +395,6 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
 				WHERE u.role = 'elternteil'
 				  AND tm.team_id = ?
-				  AND u.duty_reminder_days IS NOT NULL
 				  AND ` + notAssigned
 			args = []any{sl.teamID.Int64, sl.id}
 		} else {
@@ -181,7 +402,6 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
 				WHERE u.role = 'elternteil'
-				  AND u.duty_reminder_days IS NOT NULL
 				  AND ` + notAssigned
 			args = []any{sl.id}
 		}
@@ -196,7 +416,6 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				JOIN kader_trainers kt ON kt.member_id = m.id
 				JOIN kader k ON k.id = kt.kader_id
 				WHERE k.team_id = ?
-				  AND u.duty_reminder_days IS NOT NULL
 				  AND ` + notAssigned
 			args = []any{sl.teamID.Int64, sl.id}
 		} else {
@@ -205,8 +424,7 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				FROM users u
 				JOIN members m ON m.user_id = u.id
 				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'trainer'
-				WHERE u.duty_reminder_days IS NOT NULL
-				  AND ` + notAssigned
+				WHERE ` + notAssigned
 			args = []any{sl.id}
 		}
 
@@ -215,7 +433,6 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 			SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 			FROM users u
 			WHERE u.role = ?
-			  AND u.duty_reminder_days IS NOT NULL
 			  AND ` + notAssigned
 		args = []any{sl.targetRole, sl.id}
 	}

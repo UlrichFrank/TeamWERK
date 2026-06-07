@@ -10,15 +10,73 @@ import (
 	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 type Handler struct {
 	db  *sql.DB
+	cfg *appconfig.Config
 	hub *hub.EventHub
 }
 
-func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
+func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
+	return &Handler{db: db, cfg: cfg, hub: h}
+}
+
+// eligibleDutyUsers returns user IDs that are eligible for a duty slot (spieler + elternteil + trainer)
+// optionally filtered to a specific team.
+func (h *Handler) eligibleDutyUsers(teamID *int) []int {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if teamID != nil {
+		rows, err = h.db.Query(
+			`SELECT DISTINCT u.id FROM users u
+			 LEFT JOIN members m ON m.user_id = u.id
+			 LEFT JOIN player_memberships pm ON pm.member_id = m.id
+			 LEFT JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
+			 LEFT JOIN family_links fl ON fl.parent_user_id = u.id
+			 LEFT JOIN members cm ON cm.id = fl.member_id
+			 LEFT JOIN player_memberships cpm ON cpm.member_id = cm.id
+			 LEFT JOIN seasons cs ON cs.id = cpm.season_id AND cs.is_active = 1
+			 WHERE u.role IN ('spieler','elternteil','trainer')
+			   AND (pm.team_id = ? OR cpm.team_id = ?)`, *teamID, *teamID)
+	} else {
+		rows, err = h.db.Query(
+			`SELECT id FROM users WHERE role IN ('spieler','elternteil','trainer')`)
+	}
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// assignedUsers returns user IDs assigned to a duty slot.
+func (h *Handler) assignedUsers(slotID string) []int {
+	rows, err := h.db.Query(
+		`SELECT user_id FROM duty_assignments WHERE duty_slot_id = ?`, slotID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
 
 // GET /api/admin/duty-types
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +273,9 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences))
 	h.hub.Broadcast("duties")
+	uids := push.FilterByPushPref(h.db, h.eligibleDutyUsers(req.TeamID), "duties")
+	go push.SendToUsers(h.db, h.cfg, uids,
+		"Neuer Dienst verfügbar", req.EventName+" — jetzt eintragen", "/dienste")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -244,6 +305,7 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/duty-slots/:id
 func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	assigned := h.assignedUsers(id)
 	res, err := h.db.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE id=?`, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -255,6 +317,10 @@ func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("duties")
+	if len(assigned) > 0 {
+		uids := push.FilterByPushPref(h.db, assigned, "duties")
+		go push.SendToUsers(h.db, h.cfg, uids, "Dienst abgesagt", "Ein Dienst, für den du eingetragen warst, wurde abgesagt", "/dienste")
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

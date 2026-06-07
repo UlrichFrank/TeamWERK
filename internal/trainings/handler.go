@@ -12,15 +12,47 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 type Handler struct {
 	db  *sql.DB
+	cfg *appconfig.Config
 	hub *hub.EventHub
 }
 
-func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
+func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
+	return &Handler{db: db, cfg: cfg, hub: h}
+}
+
+// teamMembersAndParents returns user IDs of all active kader members (and their parents) for a team.
+func (h *Handler) teamMembersAndParents(teamID int) []int {
+	rows, err := h.db.Query(
+		`SELECT DISTINCT u.id FROM users u
+		 JOIN members m ON m.user_id = u.id
+		 JOIN player_memberships pm ON pm.member_id = m.id
+		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
+		 WHERE pm.team_id = ?
+		 UNION
+		 SELECT DISTINCT fl.parent_user_id FROM family_links fl
+		 JOIN members m ON m.id = fl.member_id
+		 JOIN player_memberships pm ON pm.member_id = m.id
+		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
+		 WHERE pm.team_id = ?`, teamID, teamID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
 
 // hasTeamAccess returns true if the user is admin or a kader trainer of teamID.
 func (h *Handler) hasTeamAccess(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
@@ -429,6 +461,8 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("trainings")
+	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamID), "trainings")
+	go push.SendToUsers(h.db, h.cfg, uids, "Trainingsserie gelöscht", "Eine Trainingsserie wurde beendet", "/training")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -461,6 +495,8 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("trainings")
+	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamID), "trainings")
+	go push.SendToUsers(h.db, h.cfg, uids, "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/training")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -567,6 +603,8 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("trainings")
+	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamID), "trainings")
+	go push.SendToUsers(h.db, h.cfg, uids, "Training geändert", "Eine Trainingseinheit wurde aktualisiert", "/training")
 	w.WriteHeader(http.StatusNoContent)
 }
 

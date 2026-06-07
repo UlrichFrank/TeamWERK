@@ -12,19 +12,22 @@ import (
 	"strings"
 	"time"
 
+	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Handler struct {
 	db        *sql.DB
+	cfg       *appconfig.Config
 	jwtSecret string
 	mailer    *mailer.Mailer
 	baseURL   string
 }
 
-func NewHandler(db *sql.DB, jwtSecret string, m *mailer.Mailer, baseURL string) *Handler {
-	return &Handler{db: db, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL}
+func NewHandler(db *sql.DB, cfg *appconfig.Config, jwtSecret string, m *mailer.Mailer, baseURL string) *Handler {
+	return &Handler{db: db, cfg: cfg, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL}
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +162,24 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+	go func() {
+		rows, err := h.db.Query(`SELECT id FROM users WHERE role = 'admin'`)
+		if err != nil {
+			return
+		}
+		defer rows.Close()
+		var adminIDs []int
+		for rows.Next() {
+			var id int
+			rows.Scan(&id)
+			adminIDs = append(adminIDs, id)
+		}
+		uids := push.FilterByPushPref(h.db, adminIDs, "membership")
+		push.SendToUsers(h.db, h.cfg, uids,
+			"Neue Beitrittsanfrage",
+			req.FirstName+" "+req.LastName+" möchte Mitglied werden",
+			"/admin/mitgliedschaft")
+	}()
 }
 
 func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request) {

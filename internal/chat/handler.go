@@ -13,7 +13,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
-	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 type Handler struct {
@@ -472,7 +472,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		h.hub.BroadcastToUser(uid, event)
 	}
 
-	go notifications.SendToUsers(h.db, h.cfg, recipientIDs,
+	go push.SendToUsers(h.db, h.cfg, recipientIDs,
 		h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
 
 	w.Header().Set("Content-Type", "application/json")
@@ -668,7 +668,7 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 			pushIDs = append(pushIDs, uid)
 		}
 	}
-	go notifications.SendToUsers(h.db, h.cfg, pushIDs, h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
+	go push.SendToUsers(h.db, h.cfg, pushIDs, h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
 
 	w.WriteHeader(http.StatusCreated)
 }

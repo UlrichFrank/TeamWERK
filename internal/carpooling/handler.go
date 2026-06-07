@@ -11,7 +11,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
-	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 type Handler struct {
@@ -451,7 +451,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			} else {
 				body = fmt.Sprintf("%s hat seine Mitfahrzusage zurückgezogen — %s, %s", actorName, opponent, date)
 			}
-			notifications.SendToUsers(h.db, h.cfg, pushUserIDs, "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
+			push.SendToUsers(h.db, h.cfg, pushUserIDs, "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
 		}()
 	}
 }
@@ -522,7 +522,8 @@ func (h *Handler) notifyOpposite(gameID, senderID int, senderName, senderTyp, ta
 		title = "Mitfahrgelegenheit"
 		body = fmt.Sprintf("%s sucht noch einen Platz — %s, %s", senderName, opponent, date)
 	}
-	notifications.SendToUsers(h.db, h.cfg, userIDs, title, body, "/mitfahrgelegenheiten")
+	filteredIDs := push.FilterByPushPref(h.db, userIDs, "carpooling")
+	push.SendToUsers(h.db, h.cfg, filteredIDs, title, body, "/mitfahrgelegenheiten")
 }
 
 func (h *Handler) usersWithTyp(gameID int, typ string, excludeID int) []int {

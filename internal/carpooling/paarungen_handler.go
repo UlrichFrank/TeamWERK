@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
-	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 // POST /api/mitfahrt-paarungen
@@ -135,7 +135,7 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 		} else {
 			msg = fmt.Sprintf("%s bietet dir einen Platz an — %s, %s", actorName, opponent, date)
 		}
-		notifications.SendToUsers(h.db, h.cfg, []int{oppositeUserID}, "Mitfahranfrage", msg, "/mitfahrgelegenheiten")
+		push.SendToUsers(h.db, h.cfg, []int{oppositeUserID}, "Mitfahranfrage", msg, "/mitfahrgelegenheiten")
 	}()
 }
 
@@ -229,7 +229,8 @@ func (h *Handler) ConfirmPairing(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		opponent, date := h.gameInfo(gameID)
 		msg := fmt.Sprintf("%s hat die Mitfahrt bestätigt — %s, %s", actorName, opponent, date)
-		notifications.SendToUsers(h.db, h.cfg, []int{initiatorUserID}, "Mitfahrt bestätigt", msg, "/mitfahrgelegenheiten")
+		uids := push.FilterByPushPref(h.db, []int{initiatorUserID}, "carpooling")
+		push.SendToUsers(h.db, h.cfg, uids, "Mitfahrt bestätigt", msg, "/mitfahrgelegenheiten")
 	}()
 }
 
@@ -309,6 +310,7 @@ func (h *Handler) RejectPairing(w http.ResponseWriter, r *http.Request) {
 			title = "Mitfahranfrage abgelehnt"
 			msg = fmt.Sprintf("%s hat die Mitfahranfrage abgelehnt — %s, %s", actorName, opponent, date)
 		}
-		notifications.SendToUsers(h.db, h.cfg, []int{oppositeUserID}, title, msg, "/mitfahrgelegenheiten")
+		uids := push.FilterByPushPref(h.db, []int{oppositeUserID}, "carpooling")
+		push.SendToUsers(h.db, h.cfg, uids, title, msg, "/mitfahrgelegenheiten")
 	}()
 }

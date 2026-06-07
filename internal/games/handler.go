@@ -11,15 +11,74 @@ import (
 	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 type Handler struct {
 	db  *sql.DB
+	cfg *appconfig.Config
 	hub *hub.EventHub
 }
 
-func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
+func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
+	return &Handler{db: db, cfg: cfg, hub: h}
+}
+
+// teamMembersAndParents returns user IDs of all active kader members (and their parents)
+// for the given team IDs in the current active season.
+func (h *Handler) teamMembersAndParents(teamIDs []int) []int {
+	if len(teamIDs) == 0 {
+		return nil
+	}
+	placeholders := strings.Repeat("?,", len(teamIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(teamIDs))
+	for i, id := range teamIDs {
+		args[i] = id
+	}
+	rows, err := h.db.Query(
+		`SELECT DISTINCT u.id FROM users u
+		 JOIN members m ON m.user_id = u.id
+		 JOIN player_memberships pm ON pm.member_id = m.id
+		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
+		 WHERE pm.team_id IN (`+placeholders+`)
+		 UNION
+		 SELECT DISTINCT fl.parent_user_id FROM family_links fl
+		 JOIN members m ON m.id = fl.member_id
+		 JOIN player_memberships pm ON pm.member_id = m.id
+		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
+		 WHERE pm.team_id IN (`+placeholders+`)`,
+		append(args, args...)...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// gameTeamIDs returns the team IDs for a given game.
+func (h *Handler) gameTeamIDs(gameID any) []int {
+	rows, err := h.db.Query(`SELECT team_id FROM game_teams WHERE game_id=?`, gameID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
 
 // addMinutes adds offset to a "HH:MM" string, wrapping around 24 hours.
 func addMinutes(t string, offset int) string {
@@ -622,6 +681,10 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("games")
+	uids := push.FilterByPushPref(h.db,
+		h.teamMembersAndParents(req.TeamIDs), "games")
+	go push.SendToUsers(h.db, h.cfg, uids,
+		"Neues Spiel", eventName+" am "+req.Date, "/kalender")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"id": gameID})
@@ -698,6 +761,12 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("games")
+	gameIDInt := 0
+	fmt.Sscan(id, &gameIDInt)
+	uids := push.FilterByPushPref(h.db,
+		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)), "games")
+	go push.SendToUsers(h.db, h.cfg, uids,
+		"Spielinfo geändert", req.Opponent+" — Details aktualisiert", "/kalender")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -705,6 +774,8 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	deleteSlots := r.URL.Query().Get("delete_slots") == "true"
+	// Fetch team IDs before deleting (game_teams rows are cascade-deleted)
+	teamIDs := h.gameTeamIDs(id)
 
 	if deleteSlots {
 		tx, err := h.db.BeginTx(r.Context(), nil)
@@ -744,6 +815,8 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.hub.Broadcast("games")
+	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamIDs), "games")
+	go push.SendToUsers(h.db, h.cfg, uids, "Spiel abgesagt", "Ein Spiel wurde abgesagt", "/kalender")
 	w.WriteHeader(http.StatusNoContent)
 }
 

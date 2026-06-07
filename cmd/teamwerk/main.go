@@ -91,12 +91,12 @@ func serve() {
 	m := mailer.New(cfg.SMTP)
 	hubInstance := hub.NewHub()
 	hubH := hub.NewHandler(hubInstance, buildHash)
-	authH := auth.NewHandler(database, cfg.JWTSecret, m, cfg.BaseURL)
+	authH := auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL)
 	cfgH := appconfig.NewHandler(database, hubInstance)
 	membH := members.NewHandler(database, hubInstance)
-	dutyH := duties.NewHandler(database, hubInstance)
+	dutyH := duties.NewHandler(database, cfg, hubInstance)
 	dashH := dashboard.NewHandler(database)
-	gameH := games.NewHandler(database, hubInstance)
+	gameH := games.NewHandler(database, cfg, hubInstance)
 	kaderH := kader.NewHandler(database)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
 	filesH := files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret)
@@ -104,7 +104,7 @@ func serve() {
 	chatH := chat.NewHandler(database, hubInstance, cfg)
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
-	trainingH := trainings.NewHandler(database, hubInstance)
+	trainingH := trainings.NewHandler(database, cfg, hubInstance)
 	teamsH := teams.NewHandler(database)
 	venueH := venues.NewHandler(database, hubInstance)
 
@@ -201,6 +201,8 @@ func serve() {
 		r.Get("/api/push/vapid-public-key", notifH.GetVAPIDPublicKey)
 		r.Post("/api/push/subscribe", notifH.Subscribe)
 		r.Delete("/api/push/subscribe", notifH.Unsubscribe)
+			r.Get("/api/profile/notification-preferences", notifH.GetNotificationPreferences)
+			r.Put("/api/profile/notification-preferences", notifH.UpdateNotificationPreferences)
 
 		// Dokumente
 		r.Get("/api/folders", filesH.ListRootFolders)
@@ -511,7 +513,7 @@ func runScheduler() {
 		log.Fatalf("scheduler: open db: %v", err)
 	}
 	defer database.Close()
-	scheduler.New(database, mailer.New(cfg.SMTP)).Run()
+	scheduler.New(database, cfg, mailer.New(cfg.SMTP)).Run()
 }
 
 func runMigrateForce() {

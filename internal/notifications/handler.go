@@ -6,10 +6,9 @@ import (
 	"log"
 	"net/http"
 
-	webpush "github.com/SherClockHolmes/webpush-go"
-
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 type Handler struct {
@@ -19,6 +18,52 @@ type Handler struct {
 
 func NewHandler(db *sql.DB, cfg *appconfig.Config) *Handler {
 	return &Handler{db: db, cfg: cfg}
+}
+
+// GET /api/profile/notification-preferences
+func (h *Handler) GetNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	prefs := push.GetAllPreferences(h.db, claims.UserID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(prefs)
+}
+
+// PUT /api/profile/notification-preferences
+func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+
+	var body map[string]struct {
+		Push  bool `json:"push"`
+		Email bool `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	for category, pref := range body {
+		pushVal := 0
+		if pref.Push {
+			pushVal = 1
+		}
+		emailVal := 0
+		if pref.Email {
+			emailVal = 1
+		}
+		_, err := h.db.ExecContext(r.Context(), `
+			INSERT INTO notification_preferences (user_id, category, push_enabled, email_enabled)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(user_id, category) DO UPDATE SET
+			  push_enabled  = excluded.push_enabled,
+			  email_enabled = excluded.email_enabled`,
+			claims.UserID, category, pushVal, emailVal)
+		if err != nil {
+			log.Printf("notifications: update preferences for user %d category %s: %v", claims.UserID, category, err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET /api/push/vapid-public-key
@@ -76,72 +121,4 @@ func (h *Handler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?`,
 		body.Endpoint, claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// SendToUsers sends a push notification to all subscriptions of the given users.
-// Runs as fire-and-forget — call via `go SendToUsers(...)`.
-func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, url string) {
-	if len(userIDs) == 0 || cfg.VAPIDPrivateKey == "" {
-		return
-	}
-
-	placeholders := make([]any, len(userIDs))
-	inClause := "?"
-	for i, id := range userIDs {
-		placeholders[i] = id
-		if i > 0 {
-			inClause += ",?"
-		}
-	}
-
-	rows, err := db.Query(
-		`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN (`+inClause+`)`,
-		placeholders...)
-	if err != nil {
-		log.Printf("notifications: query subscriptions: %v", err)
-		return
-	}
-	defer rows.Close()
-
-	type sub struct {
-		id       int
-		endpoint string
-		p256dh   string
-		auth     string
-	}
-	var subs []sub
-	for rows.Next() {
-		var s sub
-		rows.Scan(&s.id, &s.endpoint, &s.p256dh, &s.auth)
-		subs = append(subs, s)
-	}
-
-	payload, _ := json.Marshal(map[string]string{
-		"title": title,
-		"body":  body,
-		"url":   url,
-	})
-
-	for _, s := range subs {
-		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
-			Endpoint: s.endpoint,
-			Keys: webpush.Keys{
-				P256dh: s.p256dh,
-				Auth:   s.auth,
-			},
-		}, &webpush.Options{
-			VAPIDPublicKey:  cfg.VAPIDPublicKey,
-			VAPIDPrivateKey: cfg.VAPIDPrivateKey,
-			Subscriber:      cfg.VAPIDEmail,
-			TTL:             3600,
-		})
-		if err != nil {
-			log.Printf("notifications: send to subscription %d: %v", s.id, err)
-			continue
-		}
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusGone {
-			db.Exec(`DELETE FROM push_subscriptions WHERE id = ?`, s.id)
-		}
-	}
 }
