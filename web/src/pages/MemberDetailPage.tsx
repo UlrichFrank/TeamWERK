@@ -307,10 +307,13 @@ export default function MemberDetailPage() {
       {activeTab === 'familie' && !isNew && (
         <MemberFamilieTab
           isNew={isNew}
+          memberId={id && !isNew ? Number(id) : undefined}
+          memberUserId={currentUserID}
           users={users}
           linkedParents={linkedParents}
           onAddParent={handleFamilyLink}
           onRemoveParent={handleRemoveParent}
+          onReload={() => { if (id) api.get(`/members/${id}`).then(r => applyMemberToForm(r.data)) }}
           saving={saving}
           saved={saved}
           error={error}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { api } from '../../lib/api'
 
 interface User {
   id: number
@@ -9,18 +10,26 @@ interface User {
 
 interface Props {
   isNew: boolean
+  memberId?: number
+  memberUserId?: number | null
   users: User[]
   linkedParents: User[]
   onAddParent: (userId: number) => Promise<void>
   onRemoveParent: (userId: number) => Promise<void>
+  onReload?: () => void
   saving: boolean
   saved?: boolean
   error: string
 }
 
-export default function MemberFamilieTab({ isNew, users, linkedParents, onAddParent, onRemoveParent, saving, saved, error }: Props) {
+export default function MemberFamilieTab({
+  isNew, memberId, memberUserId, users, linkedParents,
+  onAddParent, onRemoveParent, onReload, saving, saved, error
+}: Props) {
   const [selectedParent, setSelectedParent] = useState('')
   const [removing, setRemoving] = useState<Record<number, boolean>>({})
+  const [proxyLoading, setProxyLoading] = useState(false)
+  const [proxyError, setProxyError] = useState('')
 
   const availableUsers = users.filter(u => !linkedParents.find(p => p.id === u.id))
   const canAddMore = linkedParents.length < 2
@@ -40,27 +49,45 @@ export default function MemberFamilieTab({ isNew, users, linkedParents, onAddPar
     }
   }
 
+  const handleCreateProxyAccount = async () => {
+    if (!memberId) return
+    setProxyLoading(true)
+    setProxyError('')
+    try {
+      await api.post(`/members/${memberId}/proxy-account`)
+      onReload?.()
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        setProxyError('Mitglied hat bereits einen Account.')
+      } else {
+        setProxyError('Fehler beim Anlegen des Proxy-Accounts.')
+      }
+    } finally {
+      setProxyLoading(false)
+    }
+  }
+
   if (isNew) {
     return <div className="text-gray-600">Familie kann nach dem Erstellen hinzugefügt werden.</div>
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Erziehungsberechtigte</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Erziehungsberechtigte</h2>
 
         {linkedParents.length > 0 && (
           <div className="space-y-2 mb-6">
             {linkedParents.map(parent => (
-              <div key={parent.id} className="flex items-center justify-between border border-gray-200 rounded-lg p-3 text-sm">
+              <div key={parent.id} className="flex items-center justify-between border border-brand-border-subtle rounded-lg p-3 text-sm">
                 <div>
-                  <span className="font-medium">{parent.first_name} {parent.last_name}</span>
-                  <p className="text-xs text-gray-500">{parent.email}</p>
+                  <span className="font-medium text-brand-text">{parent.first_name} {parent.last_name}</span>
+                  <p className="text-xs text-brand-text-muted">{parent.email}</p>
                 </div>
                 <button
                   onClick={() => handleRemove(parent.id)}
                   disabled={removing[parent.id]}
-                  className="text-red-600 hover:text-red-800 disabled:opacity-40"
+                  className="text-brand-danger hover:text-brand-danger/80 disabled:opacity-40 text-sm"
                 >
                   Entfernen
                 </button>
@@ -71,12 +98,12 @@ export default function MemberFamilieTab({ isNew, users, linkedParents, onAddPar
 
         {canAddMore && availableUsers.length > 0 && (
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Hinzufügen (max. 2)</label>
+            <label className="block text-sm font-medium text-brand-text">Hinzufügen (max. 2)</label>
             <div className="flex gap-2">
               <select
                 value={selectedParent}
                 onChange={e => setSelectedParent(e.target.value)}
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className="flex-1 border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text"
               >
                 <option value="">– Nutzer wählen –</option>
                 {availableUsers.map(u => (
@@ -86,7 +113,7 @@ export default function MemberFamilieTab({ isNew, users, linkedParents, onAddPar
               <button
                 onClick={handleAdd}
                 disabled={!selectedParent || saving}
-                className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40"
+                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow disabled:opacity-40"
               >
                 Hinzufügen
               </button>
@@ -94,9 +121,27 @@ export default function MemberFamilieTab({ isNew, users, linkedParents, onAddPar
           </div>
         )}
 
-        {error && <p className="text-sm text-red-600 mt-4">{error}</p>}
+        {error && <p className="text-sm text-brand-danger mt-4">{error}</p>}
         {saved && <p className="text-sm text-green-600 mt-4">Gespeichert</p>}
       </div>
+
+      {memberId && memberUserId == null && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+          <h2 className="font-semibold text-brand-text-muted mb-2">Proxy-Account</h2>
+          <p className="text-sm text-brand-text-muted mb-4">
+            Dieses Mitglied hat keinen Nutzeraccount. Ein Proxy-Account ermöglicht die Zuordnung im Dienstsystem,
+            ohne dass sich das Mitglied einloggen kann.
+          </p>
+          <button
+            onClick={handleCreateProxyAccount}
+            disabled={proxyLoading}
+            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {proxyLoading ? 'Anlegen…' : 'Proxy-Account anlegen'}
+          </button>
+          {proxyError && <p className="text-sm text-brand-danger mt-3">{proxyError}</p>}
+        </div>
+      )}
     </div>
   )
 }

@@ -599,6 +599,34 @@ func (h *Handler) Unclaim(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 	slotID := r.PathValue("slotId")
 	claims := auth.ClaimsFromCtx(r.Context())
+
+	var req struct {
+		UserID *int `json:"user_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	targetUserID := claims.UserID
+	if req.UserID != nil {
+		targetUserID = *req.UserID
+	}
+
+	if targetUserID != claims.UserID {
+		// Verify the target is a proxy child linked to the logged-in user
+		var allowed bool
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*)>0
+			 FROM family_links fl
+			 JOIN members m ON m.id = fl.member_id
+			 JOIN users u ON u.id = m.user_id
+			 WHERE fl.parent_user_id = ? AND u.id = ? AND u.can_login = 0`,
+			claims.UserID, targetUserID,
+		).Scan(&allowed)
+		if !allowed {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
 	var total, filled int
 	err := h.db.QueryRowContext(r.Context(),
 		`SELECT slots_total, slots_filled FROM duty_slots WHERE id=?`, slotID).
@@ -608,13 +636,18 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err = h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_assignments (duty_slot_id, user_id) VALUES (?,?)`, slotID, claims.UserID)
+		`INSERT INTO duty_assignments (duty_slot_id, user_id) VALUES (?,?)`, slotID, targetUserID)
 	if err != nil {
 		http.Error(w, "already claimed", http.StatusConflict)
 		return
 	}
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_slots SET slots_filled = slots_filled + 1 WHERE id=?`, slotID)
+	// Ensure a duty_accounts row exists for the target user in the active season
+	h.db.ExecContext(r.Context(),
+		`INSERT OR IGNORE INTO duty_accounts (user_id, season_id, soll, ist)
+		 SELECT ?, id, 0, 0 FROM seasons WHERE is_active = 1`,
+		targetUserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

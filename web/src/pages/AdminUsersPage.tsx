@@ -15,6 +15,7 @@ interface User {
   role: string
   member_id?: number | null
   last_login_at?: string | null
+  proxy?: boolean
 }
 interface Invitation {
   id: number
@@ -49,7 +50,7 @@ function relativeTime(iso: string): string {
 
 export default function AdminUsersPage() {
   const { user: self, startImpersonation } = useAuth()
-  const { items: users, setSearch, total, currentPage, totalPages, goToPage } = usePagination<User>('/users')
+  const { items: users, setSearch, total, currentPage, totalPages, goToPage, refresh: refreshUsers } = usePagination<User>('/users')
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [requests, setRequests] = useState<MembershipRequest[]>([])
   const [filterText, setFilterText] = useState('')
@@ -87,6 +88,12 @@ export default function AdminUsersPage() {
   const [memberResults, setMemberResults] = useState<Member[]>([])
   const [linkLoading, setLinkLoading] = useState(false)
   const [linkError, setLinkError] = useState('')
+
+  // Proxy account activate modal
+  const [activateModal, setActivateModal] = useState<{ userId: number; name: string } | null>(null)
+  const [activateEmail, setActivateEmail] = useState('')
+  const [activateLoading, setActivateLoading] = useState(false)
+  const [activateError, setActivateError] = useState('')
 
   const loadInvitationsAndRequests = () => Promise.all([
     api.get('/invitations').then(r => setInvitations(r.data ?? [])),
@@ -151,7 +158,33 @@ export default function AdminUsersPage() {
     setLinkError('')
   }
 
-  useEscapeKey(showInviteModal ? closeInviteModal : showCsvModal ? closeCsvModal : linkModal ? closeLinkModal : null)
+  const closeActivateModal = () => {
+    setActivateModal(null)
+    setActivateEmail('')
+    setActivateError('')
+  }
+
+  const handleActivateProxy = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!activateModal) return
+    setActivateLoading(true)
+    setActivateError('')
+    try {
+      await api.put(`/users/${activateModal.userId}`, { can_login: 1, email: activateEmail })
+      closeActivateModal()
+      refreshUsers()
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        setActivateError('Diese E-Mail-Adresse ist bereits vergeben.')
+      } else {
+        setActivateError('Aktivierung fehlgeschlagen.')
+      }
+    } finally {
+      setActivateLoading(false)
+    }
+  }
+
+  useEscapeKey(showInviteModal ? closeInviteModal : showCsvModal ? closeCsvModal : linkModal ? closeLinkModal : activateModal ? closeActivateModal : null)
 
   const handleCsvUpload = async () => {
     if (!csvFile) return
@@ -467,6 +500,50 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      {/* Proxy account activate modal */}
+      {activateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
+              <h2 className="font-semibold text-lg">Proxy-Account aktivieren</h2>
+              <button onClick={closeActivateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleActivateProxy} className="px-6 py-5 space-y-4">
+              <p className="text-sm text-brand-text-muted">
+                Account <span className="font-medium text-brand-text">{activateModal.name}</span> wird login-fähig.
+                Eine E-Mail-Adresse ist erforderlich.
+              </p>
+              {activateError && (
+                <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{activateError}</p>
+              )}
+              <input
+                type="email"
+                required
+                placeholder="E-Mail-Adresse"
+                value={activateEmail}
+                onChange={e => setActivateEmail(e.target.value)}
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={activateLoading || !activateEmail}
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {activateLoading ? 'Aktivieren…' : 'Aktivieren'}
+                </button>
+                <button type="button" onClick={closeActivateModal} className="flex-1 px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Pending requests and invitations */}
       {(filteredRequests.length > 0 || filteredInvitations.length > 0) && (
         <div className="mb-8">
@@ -547,10 +624,15 @@ export default function AdminUsersPage() {
               const canEdit = self?.id !== u.id && self?.role === 'admin'
               return (
                 <tr key={`user-${u.id}`} className="hover:bg-brand-table-select transition-colors">
-                  <td className="px-4 py-3 font-medium text-brand-text">{u.first_name} {u.last_name}</td>
-                  <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{u.email}</td>
+                  <td className="px-4 py-3 font-medium text-brand-text">
+                    {u.first_name} {u.last_name}
+                    {u.proxy && (
+                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Proxy</span>
+                    )}
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{u.email || '–'}</td>
                   <td className="px-4 py-3">
-                    {canEdit ? (
+                    {!u.proxy && canEdit ? (
                       <select
                         value={u.role}
                         onChange={e => handleRoleChange(u, e.target.value)}
@@ -561,22 +643,26 @@ export default function AdminUsersPage() {
                         ))}
                       </select>
                     ) : (
-                      <span className="text-xs text-brand-text-muted">{ROLE_LABELS[u.role]}</span>
+                      <span className="text-xs text-brand-text-muted">{u.proxy ? '–' : ROLE_LABELS[u.role]}</span>
                     )}
                   </td>
                   <td className="hidden lg:table-cell px-4 py-3 text-xs text-brand-text-subtle">
-                    {u.last_login_at ? relativeTime(u.last_login_at) : '–'}
+                    {u.proxy ? '–' : u.last_login_at ? relativeTime(u.last_login_at) : '–'}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {createMemberErrors.get(u.id) && (
                       <span className="text-xs text-brand-danger mr-2">{createMemberErrors.get(u.id)}</span>
                     )}
                     <ActionMenu actions={[
-                      ...(!u.member_id && !createdMemberUserIds.has(u.id) ? [{
+                      ...(u.proxy ? [{
+                        label: 'Aktivieren',
+                        onClick: () => { setActivateModal({ userId: u.id, name: `${u.first_name} ${u.last_name}`.trim() }); setActivateEmail('') },
+                      }] : []),
+                      ...(!u.proxy && !u.member_id && !createdMemberUserIds.has(u.id) ? [{
                         label: createMemberLoading.has(u.id) ? 'Wird angelegt…' : 'Mitglied anlegen',
                         onClick: () => handleCreateMember(u),
                       }] : []),
-                      ...(self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' ? [{
+                      ...(!u.proxy && self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' ? [{
                         label: 'Testen als',
                         onClick: () => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim()),
                       }] : []),

@@ -43,7 +43,7 @@ The system SHALL allow admins to directly invite a person by e-mail address with
 - **THEN** the system returns an error message and prompts to contact the admin
 
 ### Requirement: User login with JWT
-The system SHALL authenticate users via e-mail and password and issue JWT tokens.
+The system SHALL authenticate users via e-mail and password and issue JWT tokens. Login SHALL only succeed for accounts with `can_login = 1`. Proxy accounts (`can_login = 0`) MUST be excluded from the login query.
 
 #### Scenario: Successful login
 - **WHEN** a user submits valid credentials
@@ -52,6 +52,10 @@ The system SHALL authenticate users via e-mail and password and issue JWT tokens
 #### Scenario: Invalid credentials
 - **WHEN** a user submits an unknown e-mail or wrong password
 - **THEN** the system returns HTTP 401 with a generic error message (no disclosure of which field is wrong)
+
+#### Scenario: Login attempt with proxy account e-mail
+- **WHEN** a user submits the e-mail address of a proxy account (`can_login = 0`)
+- **THEN** the system returns HTTP 401 with the same generic error message (no enumeration of account type)
 
 #### Scenario: Access Token used for API requests
 - **WHEN** a client sends a request with a valid Access Token in the `Authorization: Bearer` header
@@ -105,11 +109,15 @@ System roles: `admin` (full platform access), `standard` (regular user). Club fu
 - **THEN** the change takes effect only after the affected user's next login or token refresh (existing JWT claims are not updated mid-session)
 
 ### Requirement: Password reset
-The system SHALL allow users to reset a forgotten password via e-mail.
+The system SHALL allow users to reset a forgotten password via e-mail. Password reset SHALL only send reset links for accounts with `can_login = 1`.
 
 #### Scenario: Reset request
 - **WHEN** a user submits their e-mail address on the password-reset form
-- **THEN** the system sends a reset link (valid 1 hour) if the address exists — the response is identical whether the address exists or not (no enumeration)
+- **THEN** the system sends a reset link (valid 1 hour) if a `can_login = 1` account with that address exists — the response is identical whether the address exists or not (no enumeration)
+
+#### Scenario: Reset request for proxy account e-mail
+- **WHEN** a user submits an e-mail address that belongs only to a proxy account (`can_login = 0`)
+- **THEN** the system does NOT send a reset link, but the response is identical to the "address not found" case (no enumeration)
 
 #### Scenario: Password reset completion
 - **WHEN** a user opens a valid reset link and submits a new password

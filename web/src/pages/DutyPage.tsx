@@ -16,6 +16,12 @@ interface BoardGroup {
   slots: BoardSlot[]
 }
 
+export interface ProxyChild {
+  user_id: number
+  member_id: number
+  name: string
+}
+
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 
 function formatDate(iso: string): string {
@@ -30,6 +36,7 @@ export default function DutyPage() {
   const [groups, setGroups] = useState<BoardGroup[]>([])
   const [showPast, setShowPast] = useState(false)
   const [viewMine, setViewMine] = useState(false)
+  const [proxyChildren, setProxyChildren] = useState<ProxyChild[]>([])
 
   const load = () => {
     const url = viewMine ? '/duty-board?view=mine' : '/duty-board'
@@ -38,6 +45,12 @@ export default function DutyPage() {
 
   useEffect(() => { load() }, [viewMine])
   useLiveUpdates((event) => { if (event === 'duties') load() })
+
+  useEffect(() => {
+    api.get('/family/proxy-accounts')
+      .then(r => setProxyChildren(r.data ?? []))
+      .catch(() => setProxyChildren([]))
+  }, [])
 
   const visible = groups.filter(g => showPast || !g.past)
 
@@ -105,6 +118,7 @@ export default function DutyPage() {
               isPast={g.past}
               canEdit={isAdminOrTrainer}
               onReload={load}
+              proxyChildren={proxyChildren}
             />
           </div>
         ))}

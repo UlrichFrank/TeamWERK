@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import PersonChip from './PersonChip'
 import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
+import type { ProxyChild } from '../pages/DutyPage'
 
 export interface PublicAssignee {
   user_id: number
@@ -32,20 +34,40 @@ interface DutySlotListProps {
   onReload: () => void
   onSlotDeleted?: (id: number) => void
   onEdit?: (slotId: number) => void
+  proxyChildren?: ProxyChild[]
 }
 
-export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit }: DutySlotListProps) {
+export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit, proxyChildren = [] }: DutySlotListProps) {
+  const { user } = useAuth()
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [claimDialog, setClaimDialog] = useState<{ slotId: number; selectedUserId: number | null } | null>(null)
+  const [claimLoading, setClaimLoading] = useState(false)
 
-  useEscapeKey(deleteConfirm !== null ? () => setDeleteConfirm(null) : null)
+  useEscapeKey(deleteConfirm !== null ? () => setDeleteConfirm(null) : claimDialog !== null ? () => setClaimDialog(null) : null)
 
-  const claim = async (id: number) => {
+  const claimForUser = async (slotId: number, userId: number) => {
+    setClaimLoading(true)
     try {
-      await api.post(`/duty-board/${id}/claim`)
+      await api.post(`/duty-board/${slotId}/claim`, { user_id: userId })
+      setClaimDialog(null)
       onReload()
     } catch {
       alert('Dieser Dienst ist bereits vergeben oder du hast ihn bereits.')
+    } finally {
+      setClaimLoading(false)
     }
+  }
+
+  const handleClaimClick = (slotId: number) => {
+    if (proxyChildren.length > 0 && user) {
+      setClaimDialog({ slotId, selectedUserId: user.id ?? null })
+    } else if (user) {
+      claimForUser(slotId, user.id)
+    }
+  }
+
+  const claim = async (id: number) => {
+    handleClaimClick(id)
   }
 
   const unclaim = async (id: number) => {
@@ -168,6 +190,55 @@ onSlotDeleted?.(slotId)
                 className="text-sm px-4 py-2 rounded bg-brand-danger text-white font-medium hover:bg-brand-danger/90 transition-colors"
               >
                 Löschen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {claimDialog !== null && user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4">
+            <h2 className="text-lg font-bold mb-3 text-brand-text">Dienst übernehmen für…</h2>
+            <div className="space-y-2 mb-4">
+              <label className="flex items-center gap-3 p-2.5 rounded-lg border border-brand-border-subtle cursor-pointer hover:bg-brand-surface-card transition-colors">
+                <input
+                  type="radio"
+                  name="claim-for"
+                  value={user.id}
+                  checked={claimDialog.selectedUserId === user.id}
+                  onChange={() => setClaimDialog(d => d ? { ...d, selectedUserId: user.id } : d)}
+                  className="accent-brand-yellow"
+                />
+                <span className="text-sm font-medium text-brand-text">Mich selbst</span>
+              </label>
+              {proxyChildren.map(child => (
+                <label key={child.user_id} className="flex items-center gap-3 p-2.5 rounded-lg border border-brand-border-subtle cursor-pointer hover:bg-brand-surface-card transition-colors">
+                  <input
+                    type="radio"
+                    name="claim-for"
+                    value={child.user_id}
+                    checked={claimDialog.selectedUserId === child.user_id}
+                    onChange={() => setClaimDialog(d => d ? { ...d, selectedUserId: child.user_id } : d)}
+                    className="accent-brand-yellow"
+                  />
+                  <span className="text-sm text-brand-text">{child.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                disabled={claimDialog.selectedUserId === null || claimLoading}
+                onClick={() => claimDialog.selectedUserId !== null && claimForUser(claimDialog.slotId, claimDialog.selectedUserId)}
+                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {claimLoading ? 'Eintragen…' : 'Eintragen'}
+              </button>
+              <button
+                onClick={() => setClaimDialog(null)}
+                className="flex-1 px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+              >
+                Abbrechen
               </button>
             </div>
           </div>

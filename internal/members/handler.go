@@ -582,6 +582,55 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// POST /api/members/{id}/proxy-account
+func (h *Handler) CreateProxyAccount(w http.ResponseWriter, r *http.Request) {
+	memberID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Email *string `json:"email"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	var existingUserID sql.NullInt64
+	var firstName, lastName string
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT user_id, first_name, last_name FROM members WHERE id = ?`, memberID,
+	).Scan(&existingUserID, &firstName, &lastName)
+	if err != nil {
+		http.Error(w, "member not found", http.StatusNotFound)
+		return
+	}
+	if existingUserID.Valid {
+		http.Error(w, "member already has an account", http.StatusConflict)
+		return
+	}
+
+	var emailVal interface{}
+	if req.Email != nil && *req.Email != "" {
+		emailVal = *req.Email
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO users (email, password, first_name, last_name, can_login) VALUES (?,?,?,?,0)`,
+		emailVal, "", firstName, lastName,
+	)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	newUserID, _ := res.LastInsertId()
+	h.db.ExecContext(r.Context(),
+		`UPDATE members SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		newUserID, memberID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]int64{"user_id": newUserID})
+}
+
 // PUT /api/admin/members/:id/user
 func (h *Handler) LinkUser(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -1003,6 +1052,35 @@ func (h *Handler) GetMemberParents(w http.ResponseWriter, r *http.Request) {
 			var p ProfileParent
 			rows.Scan(&p.ID, &p.Name, &p.Email)
 			result = append(result, p)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// GET /api/family/proxy-accounts — returns proxy-account children linked to the logged-in user
+func (h *Handler) GetFamilyProxyAccounts(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT u.id, m.id, u.first_name || ' ' || u.last_name
+		 FROM family_links fl
+		 JOIN members m ON m.id = fl.member_id
+		 JOIN users u ON u.id = m.user_id
+		 WHERE fl.parent_user_id = ? AND u.can_login = 0`,
+		claims.UserID,
+	)
+	type proxyChild struct {
+		UserID   int    `json:"user_id"`
+		MemberID int    `json:"member_id"`
+		Name     string `json:"name"`
+	}
+	result := []proxyChild{}
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var c proxyChild
+			rows.Scan(&c.UserID, &c.MemberID, &c.Name)
+			result = append(result, c)
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

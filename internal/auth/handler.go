@@ -42,21 +42,33 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var id int
 	var hash, role string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, password, role FROM users WHERE LOWER(email) = LOWER(?)`, req.Email,
+		`SELECT id, password, role FROM users WHERE LOWER(email) = LOWER(?) AND can_login = 1`, req.Email,
 	).Scan(&id, &hash, &role)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
+	if err == sql.ErrNoRows {
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		return
+	} else if err != nil {
+		log.Printf("Login query error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 	h.db.ExecContext(r.Context(), `UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?`, id)
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
+	log.Printf("Login: loadJWTExtras done - clubFunctions=%v, isParent=%v", clubFunctions, isParent)
 	accessToken, err := IssueAccessToken(h.jwtSecret, id, req.Email, role, clubFunctions, isParent)
 	if err != nil {
+		log.Printf("Login: IssueAccessToken error: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	plain, tokenHash, err := GenerateOpaqueToken()
+	log.Printf("Login: GenerateOpaqueToken done")
 	if err != nil {
+		log.Printf("Login: GenerateOpaqueToken error: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -65,6 +77,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?,?,?)`,
 		id, tokenHash, expiry,
 	); err != nil {
+		log.Printf("Login: INSERT refresh_tokens error: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -406,7 +419,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var userID int
 	var firstName, lastName string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, first_name, last_name FROM users WHERE email = ?`, req.Email,
+		`SELECT id, first_name, last_name FROM users WHERE email = ? AND can_login = 1`, req.Email,
 	).Scan(&userID, &firstName, &lastName)
 	w.WriteHeader(http.StatusNoContent) // always same response
 	if err != nil {
@@ -487,7 +500,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	query := `SELECT u.id, u.first_name, u.last_name, u.email, u.role, m.id, u.last_login_at
+	query := `SELECT u.id, u.first_name, u.last_name, COALESCE(u.email,''), u.role, m.id, u.last_login_at, u.can_login
 		FROM users u LEFT JOIN members m ON m.user_id = u.id` + searchFilter + ` ORDER BY u.last_name, u.first_name LIMIT ? OFFSET ?`
 	var rows *sql.Rows
 	var err error
@@ -509,13 +522,15 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		Role        string  `json:"role"`
 		MemberID    *int    `json:"member_id"`
 		LastLoginAt *string `json:"last_login_at"`
+		Proxy       bool    `json:"proxy"`
 	}
 	result := []user{}
 	for rows.Next() {
 		var u user
 		var memberID sql.NullInt64
 		var lastLoginAt sql.NullString
-		rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Role, &memberID, &lastLoginAt)
+		var canLogin int
+		rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Role, &memberID, &lastLoginAt, &canLogin)
 		if memberID.Valid {
 			id := int(memberID.Int64)
 			u.MemberID = &id
@@ -523,6 +538,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		if lastLoginAt.Valid {
 			u.LastLoginAt = &lastLoginAt.String
 		}
+		u.Proxy = canLogin == 0
 		result = append(result, u)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -568,6 +584,50 @@ func (h *Handler) Impersonate(w http.ResponseWriter, r *http.Request) {
 		"access_token": accessToken,
 		"user":         map[string]any{"id": targetID, "name": name},
 	})
+}
+
+// PUT /api/users/{id} — activate proxy account (set can_login=1 + email)
+func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		CanLogin *int    `json:"can_login"`
+		Email    *string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var canLoginDB int
+	if err := h.db.QueryRowContext(r.Context(), `SELECT can_login FROM users WHERE id = ?`, targetID).Scan(&canLoginDB); err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if req.CanLogin != nil && *req.CanLogin == 1 && canLoginDB == 0 {
+		if req.Email == nil || *req.Email == "" {
+			http.Error(w, "email required to activate account", http.StatusBadRequest)
+			return
+		}
+		var conflict bool
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*)>0 FROM users WHERE LOWER(email)=LOWER(?) AND can_login=1 AND id != ?`,
+			*req.Email, targetID).Scan(&conflict)
+		if conflict {
+			http.Error(w, "email already taken", http.StatusConflict)
+			return
+		}
+		if _, err := h.db.ExecContext(r.Context(),
+			`UPDATE users SET can_login=1, email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+			*req.Email, targetID,
+		); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // PUT /api/admin/users/{id}/role
@@ -827,7 +887,7 @@ func (h *Handler) RequestEmailChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var exists bool
-	h.db.QueryRowContext(r.Context(), `SELECT COUNT(*)>0 FROM users WHERE email=?`, req.NewEmail).Scan(&exists)
+	h.db.QueryRowContext(r.Context(), `SELECT COUNT(*)>0 FROM users WHERE email=? AND can_login=1`, req.NewEmail).Scan(&exists)
 	if exists {
 		http.Error(w, "email already taken", http.StatusConflict)
 		return
@@ -965,7 +1025,7 @@ func (h *Handler) ImportCSV(w http.ResponseWriter, r *http.Request) {
 	for _, email := range candidates {
 		var exists bool
 		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) > 0 FROM users WHERE LOWER(email) = ?`, email,
+			`SELECT COUNT(*) > 0 FROM users WHERE LOWER(email) = ? AND can_login = 1`, email,
 		).Scan(&exists)
 		if exists {
 			skipped++
