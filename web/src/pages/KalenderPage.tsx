@@ -63,10 +63,12 @@ interface Absence {
   id: number
   member_id: number
   member_name: string
+  can_edit: boolean
   type: 'vacation' | 'injury'
   start_date: string
   end_date: string
   note: string
+  created_by: number
 }
 
 interface SlotPreview {
@@ -204,7 +206,7 @@ export default function KalenderPage() {
   // Inline edit modal
   const [editingTraining, setEditingTraining] = useState<Training | null>(null)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
-  const [infoItem, setInfoItem] = useState<{ type: 'game' | 'training'; game?: Game; training?: Training } | null>(null)
+  const [infoItem, setInfoItem] = useState<{ type: 'game' | 'training' | 'absence'; game?: Game; training?: Training; absence?: Absence } | null>(null)
 
 
   const loadGames = async () => {
@@ -618,8 +620,11 @@ export default function KalenderPage() {
       await api.post('/absences', body)
       closeDialog()
       loadAbsences()
-    } catch {
-      setAbsenceError('Fehler beim Speichern.')
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      setAbsenceError(status === 409
+        ? 'Eine Abwesenheit dieses Typs überschneidet sich bereits mit diesem Zeitraum.'
+        : 'Fehler beim Speichern.')
       setAbsenceSaving(false)
     }
   }
@@ -664,7 +669,7 @@ export default function KalenderPage() {
   )
 
   const canEdit = Boolean(user && (user.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')))
-  const canCreateAbsence = Boolean(user && (user.role === 'spieler' || user.role === 'elternteil' || hasFunction(user, 'spieler')))
+  const canCreateAbsence = Boolean(user && (user.role === 'spieler' || user.role === 'elternteil' || hasFunction(user, 'spieler') || user.isParent))
 
   return (
     <div>
@@ -758,9 +763,21 @@ export default function KalenderPage() {
             const isToday = dateStr === todayStr
             const canRegen = canEdit && dayGames.length > 0
             return (
-              <div key={day} className="@container group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
+              <div key={day} className="relative @container group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
+                {dayAbsences.map(({ absence, isFirst, isLast }) => (
+                  <div
+                    key={`abs-${absence.id}`}
+                    className={`absolute top-[4px] left-[4px] right-[4px] h-5 border cursor-pointer z-20 ${
+                      absence.type === 'injury' ? 'bg-red-400/20 border-red-400/60' : 'bg-brand-yellow/20 border-brand-yellow/60'
+                    } ${isFirst && isLast ? 'rounded-full' : isFirst ? 'rounded-l-full' : isLast ? 'rounded-r-full' : ''}`}
+                    title={`${absence.member_name}: ${absence.type === 'vacation' ? 'Urlaub' : 'Verletzung'} ${absence.start_date}–${absence.end_date}`}
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={() => setInfoItem({ type: 'absence', absence })}
+                  />
+                ))}
+                <div className="relative z-10">
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`text-xs leading-none flex items-center justify-center ${isToday ? 'font-bold w-5 h-5 rounded-full bg-brand-yellow text-brand-black' : 'text-brand-text-subtle'}`}>{day}</span>
+                  <span className={`text-xs leading-none flex items-center justify-center relative z-20 ${isToday ? 'font-bold w-5 h-5 rounded-full bg-brand-yellow text-brand-black' : 'text-brand-text-subtle'}`}>{day}</span>
                   {(canEdit || canCreateAbsence) && (
                     <button
                       onPointerDown={e => e.stopPropagation()}
@@ -772,15 +789,6 @@ export default function KalenderPage() {
                     </button>
                   )}
                 </div>
-                {dayAbsences.map(({ absence, isFirst, isLast }) => (
-                  <div
-                    key={`abs-${absence.id}`}
-                    className={`h-1.5 mb-1 bg-brand-yellow/40 border border-brand-yellow ${
-                      isFirst && isLast ? 'rounded-full' : isFirst ? 'rounded-l-full' : isLast ? 'rounded-r-full' : ''
-                    } ${isFirst || isLast ? '' : '-mx-1.5'}`}
-                    title={`${absence.member_name}: ${absence.type === 'vacation' ? 'Urlaub' : 'Verletzung'} ${absence.start_date}–${absence.end_date}`}
-                  />
-                ))}
                 {dayGames.map(g => (
                   <button
                     key={g.id}
@@ -857,6 +865,7 @@ export default function KalenderPage() {
                     Dienste generieren
                   </button>
                 )}
+                </div>
               </div>
             )
           })}
@@ -1276,7 +1285,7 @@ export default function KalenderPage() {
                       onChange={e => setAbsenceForm(f => ({ ...f, type: e.target.value }))}
                       className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                     >
-                      <option value="vacation">Urlaub</option>
+                      <option value="vacation">Urlaub / Sonstige Abwesenheit</option>
                       <option value="injury">Verletzung / Sportverbot</option>
                     </select>
                   </div>
@@ -1475,14 +1484,17 @@ export default function KalenderPage() {
           type={infoItem.type}
           game={infoItem.game}
           training={infoItem.training}
+          absence={infoItem.absence}
           onClose={() => setInfoItem(null)}
-          onEdit={canEdit ? () => {
+          onEdit={canEdit && infoItem.type !== 'absence' ? () => {
             if (infoItem.type === 'game' && infoItem.game) { setInfoItem(null); setEditingGame(infoItem.game) }
             else if (infoItem.type === 'training' && infoItem.training) { setInfoItem(null); setEditingTraining(infoItem.training) }
           } : undefined}
           onDienste={infoItem.type === 'game' && infoItem.game
             ? () => { setInfoItem(null); navigate(`/kalender/${infoItem.game!.id}`) }
             : undefined}
+          canEditAbsence={infoItem.type === 'absence' && !!infoItem.absence && infoItem.absence.can_edit}
+          onAbsenceChanged={() => { loadAbsences(); setInfoItem(null) }}
         />
       )}
     </div>

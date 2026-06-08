@@ -26,11 +26,13 @@ type absence struct {
 	ID         int    `json:"id"`
 	MemberID   int    `json:"member_id"`
 	MemberName string `json:"member_name"`
+	CanEdit    bool   `json:"can_edit"`
 	Type       string `json:"type"`
 	StartDate  string `json:"start_date"`
 	EndDate    string `json:"end_date"`
 	Note       string `json:"note"`
 	CreatedAt  string `json:"created_at"`
+	CreatedBy  int    `json:"created_by"`
 }
 
 type previewEvent struct {
@@ -49,28 +51,27 @@ func (h *Handler) memberIDForUser(ctx context.Context, userID int) int {
 
 // resolveMemberID returns the member_id the caller may act on, or 0 + error message.
 func (h *Handler) resolveMemberID(ctx context.Context, claims *auth.Claims, requestedMemberID int) (int, string) {
-	switch claims.Role {
-	case "spieler":
-		mid := h.memberIDForUser(ctx, claims.UserID)
-		if mid == 0 {
-			return 0, "account is not linked to a member record"
-		}
-		return mid, ""
-	case "elternteil":
-		if requestedMemberID == 0 {
-			return 0, "member_id required for elternteil"
+	if requestedMemberID != 0 {
+		if claims.Role == "admin" {
+			return requestedMemberID, ""
 		}
 		var count int
 		h.db.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM family_links WHERE parent_user_id = ? AND member_id = ?`,
 			claims.UserID, requestedMemberID).Scan(&count)
-		if count == 0 {
-			return 0, "forbidden"
+		if count > 0 {
+			return requestedMemberID, ""
 		}
-		return requestedMemberID, ""
-	default:
-		return 0, "only spieler and elternteil may manage absences"
+		return 0, "forbidden"
 	}
+	if claims.IsParent {
+		return 0, "member_id required for elternteil"
+	}
+	mid := h.memberIDForUser(ctx, claims.UserID)
+	if mid == 0 {
+		return 0, "account is not linked to a member record"
+	}
+	return mid, ""
 }
 
 // GET /api/absences/preview
@@ -182,6 +183,18 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, errMsg, http.StatusBadRequest)
 		}
+		return
+	}
+
+	var overlapCount int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM member_absences
+		 WHERE member_id = ? AND type = ? AND start_date <= ? AND end_date >= ?`,
+		memberID, req.Type, req.EndDate, req.StartDate).Scan(&overlapCount)
+	if overlapCount > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{"error": "overlap"})
 		return
 	}
 
@@ -326,7 +339,10 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT a.id, a.member_id, m.first_name || ' ' || m.last_name,
-		       a.type, a.start_date, a.end_date, a.note
+		       a.type, a.start_date, a.end_date, a.note, a.created_by,
+		       (a.created_by = ? OR m.user_id = ? OR EXISTS (
+		         SELECT 1 FROM family_links fl WHERE fl.parent_user_id = ? AND fl.member_id = a.member_id
+		       )) AS can_edit
 		FROM member_absences a
 		JOIN members m ON m.id = a.member_id
 		WHERE a.start_date <= ? AND a.end_date >= ?
@@ -338,7 +354,7 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 		    )
 		    OR m.absences_public = 1
 		  )
-		ORDER BY a.start_date`, to, from, claims.UserID, claims.UserID)
+		ORDER BY a.start_date`, claims.UserID, claims.UserID, claims.UserID, to, from, claims.UserID, claims.UserID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "absences calendar: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -349,11 +365,135 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 	result := []absence{}
 	for rows.Next() {
 		var a absence
-		rows.Scan(&a.ID, &a.MemberID, &a.MemberName, &a.Type, &a.StartDate, &a.EndDate, &a.Note)
+		var canEdit int
+		rows.Scan(&a.ID, &a.MemberID, &a.MemberName, &a.Type, &a.StartDate, &a.EndDate, &a.Note, &a.CreatedBy, &canEdit)
+		a.CanEdit = canEdit != 0 || claims.Role == "admin"
 		a.StartDate = a.StartDate[:10]
 		a.EndDate = a.EndDate[:10]
 		result = append(result, a)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// PUT /api/absences/{id}
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var existing absence
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT id, member_id, created_by FROM member_absences WHERE id = ?`, id).
+		Scan(&existing.ID, &existing.MemberID, &existing.CreatedBy)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if claims.Role != "admin" && existing.CreatedBy != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Type      string `json:"type"`
+		StartDate string `json:"start_date"`
+		EndDate   string `json:"end_date"`
+		Note      string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.Type != "vacation" && req.Type != "injury" {
+		http.Error(w, "type must be vacation or injury", http.StatusBadRequest)
+		return
+	}
+	if req.StartDate == "" || req.EndDate == "" {
+		http.Error(w, "start_date and end_date required", http.StatusBadRequest)
+		return
+	}
+	if req.StartDate > req.EndDate {
+		http.Error(w, "start_date must be <= end_date", http.StatusBadRequest)
+		return
+	}
+
+	var overlapCount int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM member_absences
+		 WHERE member_id = ? AND type = ? AND id != ?
+		   AND start_date <= ? AND end_date >= ?`,
+		existing.MemberID, req.Type, id, req.EndDate, req.StartDate).Scan(&overlapCount)
+	if overlapCount > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{"error": "overlap"})
+		return
+	}
+
+	_, err = h.db.ExecContext(r.Context(),
+		`UPDATE member_absences SET type = ?, start_date = ?, end_date = ?, note = ? WHERE id = ?`,
+		req.Type, req.StartDate, req.EndDate, req.Note, id)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "absences update: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Remove old auto-declines for this absence, then re-apply for new period
+	h.db.ExecContext(r.Context(),
+		`DELETE FROM training_responses WHERE absence_id = ?`, id)
+	h.db.ExecContext(r.Context(),
+		`DELETE FROM game_responses WHERE absence_id = ?`, id)
+
+	_, err = h.db.ExecContext(r.Context(), `
+		INSERT INTO training_responses (training_id, member_id, responded_by, status, reason, responded_at, absence_id)
+		SELECT ts.id, ?, ?, 'declined', ?, datetime('now'), ?
+		FROM training_sessions ts
+		JOIN kader_members km ON km.member_id = ?
+		JOIN kader k ON k.id = km.kader_id AND k.team_id = ts.team_id
+		WHERE ts.date BETWEEN ? AND ?
+		ON CONFLICT(training_id, member_id) DO UPDATE SET
+		  responded_by = excluded.responded_by,
+		  status       = 'declined',
+		  reason       = excluded.reason,
+		  responded_at = datetime('now'),
+		  absence_id   = excluded.absence_id`,
+		existing.MemberID, claims.UserID, req.Type, id,
+		existing.MemberID, req.StartDate, req.EndDate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "absences update auto-decline trainings: %v\n", err)
+	}
+
+	_, err = h.db.ExecContext(r.Context(), `
+		INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at, absence_id)
+		SELECT DISTINCT g.id, ?, ?, 'declined', ?, datetime('now'), ?
+		FROM games g
+		JOIN game_teams gt ON gt.game_id = g.id
+		JOIN kader_members km ON km.member_id = ?
+		JOIN kader k ON k.id = km.kader_id AND k.team_id = gt.team_id
+		WHERE g.date BETWEEN ? AND ?
+		ON CONFLICT(game_id, member_id) DO UPDATE SET
+		  responded_by = excluded.responded_by,
+		  status       = 'declined',
+		  reason       = excluded.reason,
+		  responded_at = datetime('now'),
+		  absence_id   = excluded.absence_id`,
+		existing.MemberID, claims.UserID, req.Type, id,
+		existing.MemberID, req.StartDate, req.EndDate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "absences update auto-decline games: %v\n", err)
+	}
+
+	h.hub.Broadcast("absences")
+	h.hub.Broadcast("trainings")
+	h.hub.Broadcast("games")
+	w.WriteHeader(http.StatusNoContent)
 }

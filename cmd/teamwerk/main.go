@@ -177,6 +177,7 @@ func serve() {
 		r.Get("/api/absences/calendar", absenceH.Calendar)
 		r.Get("/api/absences", absenceH.List)
 		r.Post("/api/absences", absenceH.Create)
+		r.Put("/api/absences/{id}", absenceH.Update)
 		r.Delete("/api/absences/{id}", absenceH.Delete)
 		r.Get("/api/profile/kind/{memberId}", membH.GetChildProfile)
 		r.Put("/api/profile/kind/{memberId}/account", membH.UpdateChildAccount)

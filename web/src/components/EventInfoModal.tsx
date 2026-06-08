@@ -1,6 +1,8 @@
-import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList } from 'lucide-react'
+import { useState } from 'react'
+import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList, Trash2, BriefcaseMedical } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import MapsLink from './MapsLink'
+import { api } from '../lib/api'
 
 interface VenueRef {
   id: number
@@ -35,13 +37,28 @@ interface Training {
   maybe_count: number
 }
 
+interface AbsenceInfo {
+  id: number
+  member_id: number
+  member_name: string
+  can_edit: boolean
+  type: 'vacation' | 'injury'
+  start_date: string
+  end_date: string
+  note: string
+  created_by: number
+}
+
 interface Props {
-  type: 'game' | 'training'
+  type: 'game' | 'training' | 'absence'
   game?: Game
   training?: Training
+  absence?: AbsenceInfo
   onClose: () => void
   onEdit?: () => void
   onDienste?: () => void
+  canEditAbsence?: boolean
+  onAbsenceChanged?: () => void
 }
 
 function formatDate(dateStr: string): string {
@@ -68,8 +85,18 @@ function RsvpRow({ confirmed, declined, maybe }: { confirmed: number; declined: 
   )
 }
 
-export default function EventInfoModal({ type, game, training, onClose, onEdit, onDienste }: Props) {
+const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+
+export default function EventInfoModal({ type, game, training, absence, onClose, onEdit, onDienste, canEditAbsence, onAbsenceChanged }: Props) {
   useEscapeKey(onClose)
+
+  const [editing, setEditing] = useState(false)
+  const [editType, setEditType] = useState<'vacation' | 'injury'>(absence?.type ?? 'vacation')
+  const [editStart, setEditStart] = useState(absence?.start_date ?? '')
+  const [editEnd, setEditEnd] = useState(absence?.end_date ?? '')
+  const [editNote, setEditNote] = useState(absence?.note ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const eventTypeLabel = game?.event_type === 'heim' ? 'Heimspiel'
     : game?.event_type === 'auswärts' ? 'Auswärtsspiel'
@@ -79,6 +106,32 @@ export default function EventInfoModal({ type, game, training, onClose, onEdit, 
     : game?.event_type === 'auswärts' ? Plane
     : Calendar
 
+  const absenceTypeLabel = absence?.type === 'vacation' ? 'Urlaub' : 'Verletzung'
+  const AbsenceIcon = absence?.type === 'injury' ? BriefcaseMedical : Plane
+
+  async function handleSaveAbsence() {
+    if (!absence) return
+    if (editStart > editEnd) { setError('Startdatum muss vor dem Enddatum liegen.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await api.put(`/absences/${absence.id}`, { type: editType, start_date: editStart, end_date: editEnd, note: editNote })
+      onAbsenceChanged?.()
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      setError(status === 409
+        ? 'Eine Abwesenheit dieses Typs überschneidet sich bereits mit diesem Zeitraum.'
+        : 'Fehler beim Speichern.')
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteAbsence() {
+    if (!absence) return
+    await api.delete(`/absences/${absence.id}`)
+    onAbsenceChanged?.()
+  }
+
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
@@ -86,9 +139,14 @@ export default function EventInfoModal({ type, game, training, onClose, onEdit, 
           <div className="flex items-center gap-2">
             {type === 'game'
               ? <EventIcon className="w-5 h-5 text-brand-text-muted" />
-              : <Dumbbell className="w-5 h-5 text-brand-green" />}
+              : type === 'training'
+              ? <Dumbbell className="w-5 h-5 text-brand-green" />
+              : <AbsenceIcon className="w-5 h-5 text-brand-text-muted" />}
             <h2 className="text-lg font-bold text-brand-text">
-              {type === 'game' ? eventTypeLabel : (training?.title || 'Training')}
+              {type === 'game' ? eventTypeLabel
+                : type === 'training' ? (training?.title || 'Training')
+                : editing ? (editType === 'vacation' ? 'Urlaub' : 'Verletzung') + ' bearbeiten'
+                : absenceTypeLabel}
             </h2>
           </div>
           <div className="flex items-center gap-1">
@@ -100,6 +158,11 @@ export default function EventInfoModal({ type, game, training, onClose, onEdit, 
             {onDienste && (
               <button onClick={onDienste} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Dienste">
                 <ClipboardList className="w-4 h-4 text-brand-text-muted" />
+              </button>
+            )}
+            {type === 'absence' && canEditAbsence && !editing && (
+              <button onClick={() => setEditing(true)} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Bearbeiten">
+                <Pencil className="w-4 h-4 text-brand-text-muted" />
               </button>
             )}
             <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
@@ -132,7 +195,7 @@ export default function EventInfoModal({ type, game, training, onClose, onEdit, 
             )}
             <RsvpRow confirmed={game.confirmed_count} declined={game.declined_count} maybe={game.maybe_count} />
           </div>
-        ) : training ? (
+        ) : type === 'training' && training ? (
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-brand-text-muted">Datum</span>
@@ -150,15 +213,88 @@ export default function EventInfoModal({ type, game, training, onClose, onEdit, 
             )}
             <RsvpRow confirmed={training.confirmed_count} declined={training.declined_count} maybe={training.maybe_count} />
           </div>
+        ) : type === 'absence' && absence ? (
+          editing ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-brand-text-muted mb-1">Typ</label>
+                <select value={editType} onChange={e => setEditType(e.target.value as 'vacation' | 'injury')} className={INPUT}>
+                  <option value="vacation">Urlaub</option>
+                  <option value="injury">Verletzung</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-brand-text-muted mb-1">Von</label>
+                  <input type="date" value={editStart} onChange={e => setEditStart(e.target.value)} className={INPUT} />
+                </div>
+                <div>
+                  <label className="block text-xs text-brand-text-muted mb-1">Bis</label>
+                  <input type="date" value={editEnd} onChange={e => setEditEnd(e.target.value)} className={INPUT} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-brand-text-muted mb-1">Notiz</label>
+                <input type="text" value={editNote} onChange={e => setEditNote(e.target.value)} placeholder="Optional" className={INPUT} />
+              </div>
+              {error && <p className="text-sm text-brand-danger">{error}</p>}
+            </div>
+          ) : (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-brand-text-muted">Mitglied</span>
+                <span className="font-medium text-brand-text">{absence.member_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-brand-text-muted">Von</span>
+                <span className="font-medium text-brand-text">{formatDate(absence.start_date)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-brand-text-muted">Bis</span>
+                <span className="font-medium text-brand-text">{formatDate(absence.end_date)}</span>
+              </div>
+              {absence.note && (
+                <div className="flex justify-between">
+                  <span className="text-brand-text-muted">Notiz</span>
+                  <span className="font-medium text-brand-text">{absence.note}</span>
+                </div>
+              )}
+            </div>
+          )
         ) : null}
 
-        <div className="pt-4">
-          <button
-            onClick={onClose}
-            className="w-full border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
-          >
-            Schließen
-          </button>
+        <div className="pt-4 flex gap-2">
+          {type === 'absence' && editing ? (
+            <>
+              <button
+                onClick={handleDeleteAbsence}
+                className="p-2 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger-light rounded-md transition-colors"
+                aria-label="Löschen"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => { setEditing(false); setError('') }}
+                className="border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleSaveAbsence}
+                disabled={saving}
+                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Speichern…' : 'Speichern'}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onClose}
+              className="w-full border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
+            >
+              Schließen
+            </button>
+          )}
         </div>
       </div>
     </div>
