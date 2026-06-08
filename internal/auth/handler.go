@@ -619,6 +619,8 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "email already taken", http.StatusConflict)
 			return
 		}
+		var firstName, lastName string
+		h.db.QueryRowContext(r.Context(), `SELECT first_name, last_name FROM users WHERE id = ?`, targetID).Scan(&firstName, &lastName)
 		if _, err := h.db.ExecContext(r.Context(),
 			`UPDATE users SET can_login=1, email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
 			*req.Email, targetID,
@@ -626,6 +628,23 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		go func() {
+			plain, tokenHash, err := GenerateOpaqueToken()
+			if err != nil {
+				return
+			}
+			h.db.ExecContext(r.Context(), //nolint:errcheck
+				`INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?,?,?)`,
+				targetID, tokenHash, PasswordResetExpiry(),
+			)
+			fullName := firstName
+			if lastName != "" {
+				fullName += " " + lastName
+			}
+			link := fmt.Sprintf("%s/reset-password?token=%s", h.baseURL, plain)
+			h.mailer.Send(*req.Email, "Dein TeamWERK-Konto wurde aktiviert", //nolint:errcheck
+				fmt.Sprintf("Hallo %s,\n\ndein Konto wurde aktiviert. Bitte setze jetzt dein Passwort:\n%s\n\nDer Link ist 1 Stunde gültig.", fullName, link))
+		}()
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
