@@ -19,7 +19,6 @@ const navModules: NavModule[] = [
     items: [
       { to: '/', label: 'Dashboard', roles: [], end: true },
       { to: '/profil', label: 'Mein Profil', roles: [], excludeRoles: ['admin'] },
-      { to: '/abwesenheiten', label: 'Abwesenheiten', roles: ['spieler', 'elternteil'] },
     ],
   },
   {

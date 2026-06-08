@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, Plus, Dumbbell, RefreshCw, Check, X } from 'lucide-react'
+import { Home, Plane, Calendar, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -168,7 +168,7 @@ export default function KalenderPage() {
   // Wizard dialog
   const [showCreate, setShowCreate] = useState(false)
   const [wizardStep, setWizardStep] = useState(1)
-  const [eventType, setEventType] = useState<'heim' | 'auswärts' | 'generisch' | 'training' | 'serie' | ''>('')
+  const [eventType, setEventType] = useState<'heim' | 'auswärts' | 'generisch' | 'training' | 'serie' | 'abwesenheit' | ''>('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('15:00')
   const [selectedOpponent, setSelectedOpponent] = useState('')
@@ -194,6 +194,13 @@ export default function KalenderPage() {
   const [seriesValidUntil, setSeriesValidUntil] = useState('')
   const [gameRsvpOptOut, setGameRsvpOptOut] = useState(0)
   const [gameRsvpRequireReason, setGameRsvpRequireReason] = useState(1)
+  // Absence wizard states
+  const [absenceForm, setAbsenceForm] = useState({ member_id: 0, type: 'vacation', start_date: '', end_date: '', note: '' })
+  const [absencePreviewEvents, setAbsencePreviewEvents] = useState<Array<{ event_type: string; event_id: number; name: string; date: string }> | null>(null)
+  const [absencePreviewLoading, setAbsencePreviewLoading] = useState(false)
+  const [absenceChildren, setAbsenceChildren] = useState<Array<{ id: number; name: string }>>([])
+  const [absenceSaving, setAbsenceSaving] = useState(false)
+  const [absenceError, setAbsenceError] = useState('')
   // Inline edit modal
   const [editingTraining, setEditingTraining] = useState<Training | null>(null)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
@@ -257,6 +264,9 @@ export default function KalenderPage() {
           .then(r => setAllVenues(r.data ?? []))
           .catch(() => {}),
       ])
+      if (user?.isParent) {
+        loadAbsenceChildren()
+      }
     }
     loadInitialData()
   }, [])
@@ -322,8 +332,15 @@ export default function KalenderPage() {
   const openWizardWithDate = (dateStr: string) => {
     setSelectedDate(dateStr)
     setShowCreate(true)
-    setWizardStep(1)
-    loadTemplates()
+    if (!canEdit && canCreateAbsence) {
+      setEventType('abwesenheit')
+      setAbsenceForm(f => ({ ...f, start_date: dateStr, end_date: dateStr }))
+      setWizardStep(2)
+      if (user?.isParent && absenceChildren.length === 0) loadAbsenceChildren()
+    } else {
+      setWizardStep(1)
+      loadTemplates()
+    }
   }
 
   const toggleType = (type: string) => {
@@ -542,6 +559,71 @@ export default function KalenderPage() {
     }
   }
 
+  const loadAbsenceChildren = async () => {
+    try {
+      const r = await api.get('/profile/me')
+      const kinder: Array<{ id: number; first_name: string; last_name: string }> = r.data?.children ?? []
+      setAbsenceChildren(kinder.map(k => ({ id: k.id, name: `${k.first_name} ${k.last_name}` })))
+    } catch {}
+  }
+
+  const handleAbsencePreview = async () => {
+    setAbsenceError('')
+    if (!absenceForm.start_date || !absenceForm.end_date) {
+      setAbsenceError('Bitte Start- und Enddatum angeben.')
+      return
+    }
+    if (absenceForm.start_date > absenceForm.end_date) {
+      setAbsenceError('Startdatum muss vor dem Enddatum liegen.')
+      return
+    }
+    if (user?.isParent && !absenceForm.member_id) {
+      setAbsenceError('Bitte ein Kind auswählen.')
+      return
+    }
+    setAbsencePreviewLoading(true)
+    try {
+      const params = new URLSearchParams({
+        from: absenceForm.start_date,
+        to: absenceForm.end_date,
+        ...(absenceForm.member_id ? { member_id: String(absenceForm.member_id) } : {}),
+      })
+      const r = await api.get(`/absences/preview?${params}`)
+      const events = r.data ?? []
+      if (events.length === 0) {
+        await doSaveAbsence()
+      } else {
+        setAbsencePreviewEvents(events)
+      }
+    } catch {
+      setAbsenceError('Fehler beim Laden der Vorschau.')
+    } finally {
+      setAbsencePreviewLoading(false)
+    }
+  }
+
+  const doSaveAbsence = async () => {
+    setAbsenceSaving(true)
+    setAbsenceError('')
+    try {
+      const body: Record<string, unknown> = {
+        type: absenceForm.type,
+        start_date: absenceForm.start_date,
+        end_date: absenceForm.end_date,
+        note: absenceForm.note,
+      }
+      if (user?.isParent && absenceForm.member_id) {
+        body.member_id = absenceForm.member_id
+      }
+      await api.post('/absences', body)
+      closeDialog()
+      loadAbsences()
+    } catch {
+      setAbsenceError('Fehler beim Speichern.')
+      setAbsenceSaving(false)
+    }
+  }
+
   const closeDialog = () => {
     setShowCreate(false)
     setWizardStep(1)
@@ -565,6 +647,11 @@ export default function KalenderPage() {
     setSeriesValidUntil('')
     setGameRsvpOptOut(0)
     setGameRsvpRequireReason(1)
+    setAbsenceForm({ member_id: 0, type: 'vacation', start_date: '', end_date: '', note: '' })
+    setAbsencePreviewEvents(null)
+    setAbsencePreviewLoading(false)
+    setAbsenceSaving(false)
+    setAbsenceError('')
   }
 
   useEscapeKey(
@@ -577,6 +664,7 @@ export default function KalenderPage() {
   )
 
   const canEdit = Boolean(user && (user.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')))
+  const canCreateAbsence = Boolean(user && (user.role === 'spieler' || user.role === 'elternteil' || hasFunction(user, 'spieler')))
 
   return (
     <div>
@@ -614,14 +702,21 @@ export default function KalenderPage() {
             </button>
           ))}
         </div>
-        {canEdit && (
+        {(canEdit || canCreateAbsence) && (
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => {
+              if (!canEdit && canCreateAbsence) {
+                setEventType('abwesenheit')
+                setWizardStep(2)
+                if (user?.isParent && absenceChildren.length === 0) loadAbsenceChildren()
+              }
+              setShowCreate(true)
+            }}
             aria-label="Event"
             className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'}`}
           >
             <Plus className="w-3.5 h-3.5" />
-            {!compact && <span>Event</span>}
+            {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
           </button>
         )}
       </div>
@@ -666,12 +761,12 @@ export default function KalenderPage() {
               <div key={day} className="@container group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
                 <div className="flex items-center justify-between mb-1">
                   <span className={`text-xs leading-none flex items-center justify-center ${isToday ? 'font-bold w-5 h-5 rounded-full bg-brand-yellow text-brand-black' : 'text-brand-text-subtle'}`}>{day}</span>
-                  {canEdit && (
+                  {(canEdit || canCreateAbsence) && (
                     <button
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => { e.stopPropagation(); openWizardWithDate(dateStr) }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-brand-text-subtle hover:text-brand-text hover:bg-brand-border-subtle"
-                      title="Event anlegen"
+                      title={canEdit ? 'Event anlegen' : 'Abwesenheit eintragen'}
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -897,6 +992,21 @@ export default function KalenderPage() {
                         <div className="text-xs text-brand-text-muted mt-1">Wöchentlich wiederkehrender Termin</div>
                       </button>
                     </>
+                  )}
+                  {canCreateAbsence && (
+                    <button
+                      onClick={() => {
+                        setEventType('abwesenheit')
+                        setWizardStep(2)
+                        if (user?.isParent && absenceChildren.length === 0) loadAbsenceChildren()
+                      }}
+                      className="w-full p-4 border-2 border-brand-border rounded-lg text-left hover:bg-brand-border-subtle hover:border-brand-yellow transition-colors"
+                    >
+                      <div className="font-semibold flex items-center gap-2 text-brand-text">
+                        <Calendar className="w-4 h-4" /> Abwesenheit
+                      </div>
+                      <div className="text-xs text-brand-text-muted mt-1">Urlaub oder Verletzung / Sportverbot eintragen</div>
+                    </button>
                   )}
                 </div>
                 <div className="flex gap-2 pt-4">
@@ -1134,6 +1244,120 @@ export default function KalenderPage() {
                     className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Serie anlegen'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 2 && eventType === 'abwesenheit' && !absencePreviewEvents && (
+              <div>
+                <h2 className="text-lg font-bold mb-4 text-brand-text">Abwesenheit eintragen</h2>
+                <div className="space-y-4">
+                  {user?.isParent && (
+                    <div>
+                      <label className="block text-xs font-medium text-brand-text-muted mb-1">Kind *</label>
+                      <select
+                        value={absenceForm.member_id}
+                        onChange={e => setAbsenceForm(f => ({ ...f, member_id: Number(e.target.value) }))}
+                        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                        disabled={absenceChildren.length === 0}
+                      >
+                        <option value={0}>{absenceChildren.length === 0 ? 'Lädt…' : 'Bitte wählen…'}</option>
+                        {absenceChildren.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-brand-text-muted mb-1">Typ</label>
+                    <select
+                      value={absenceForm.type}
+                      onChange={e => setAbsenceForm(f => ({ ...f, type: e.target.value }))}
+                      className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    >
+                      <option value="vacation">Urlaub</option>
+                      <option value="injury">Verletzung / Sportverbot</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-brand-text-muted mb-1">Von</label>
+                      <input
+                        type="date"
+                        value={absenceForm.start_date}
+                        onChange={e => setAbsenceForm(f => ({ ...f, start_date: e.target.value }))}
+                        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-brand-text-muted mb-1">Bis</label>
+                      <input
+                        type="date"
+                        value={absenceForm.end_date}
+                        onChange={e => setAbsenceForm(f => ({ ...f, end_date: e.target.value }))}
+                        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-brand-text-muted mb-1">Notiz (optional)</label>
+                    <input
+                      type="text"
+                      value={absenceForm.note}
+                      onChange={e => setAbsenceForm(f => ({ ...f, note: e.target.value }))}
+                      placeholder="z.B. Familienurlaub, Knieoperation…"
+                      className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    />
+                  </div>
+                  {absenceError && (
+                    <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{absenceError}</p>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-5">
+                  <button onClick={closeDialog} className="flex-1 border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors">Abbrechen</button>
+                  <button
+                    onClick={handleAbsencePreview}
+                    disabled={absencePreviewLoading}
+                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {absencePreviewLoading ? 'Prüfe…' : 'Weiter'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 2 && eventType === 'abwesenheit' && absencePreviewEvents && (
+              <div>
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertTriangle className="w-5 h-5 text-brand-danger shrink-0 mt-0.5" />
+                  <div>
+                    <h2 className="text-base font-semibold text-brand-text">Bestehende Zusagen werden zurückgezogen</h2>
+                    <p className="text-sm text-brand-text-muted mt-1">Folgende Events werden automatisch abgesagt:</p>
+                  </div>
+                </div>
+                <ul className="space-y-1.5 mb-5 max-h-48 overflow-y-auto">
+                  {absencePreviewEvents.map(ev => (
+                    <li key={`${ev.event_type}-${ev.event_id}`} className="flex items-center gap-2 text-sm text-brand-text">
+                      <span className="text-brand-text-muted w-16 shrink-0">{ev.date}</span>
+                      <span>{ev.name}</span>
+                      <span className="ml-auto text-xs text-brand-text-subtle">{ev.event_type === 'training' ? 'Training' : 'Spiel'}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setAbsencePreviewEvents(null)}
+                    className="flex-1 border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
+                  >
+                    Zurück
+                  </button>
+                  <button
+                    onClick={doSaveAbsence}
+                    disabled={absenceSaving}
+                    className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {absenceSaving ? 'Speichert…' : 'Trotzdem eintragen'}
                   </button>
                 </div>
               </div>
