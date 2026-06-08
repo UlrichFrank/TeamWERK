@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { X, User, CreditCard, ChevronDown } from 'lucide-react'
+import { X, User, CreditCard, ChevronDown, AlertTriangle, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
@@ -27,6 +27,7 @@ interface ImportRow {
   dob?: string
   changes?: string[]
   message?: string
+  iban_warning?: string
 }
 
 interface ImportReport {
@@ -127,6 +128,8 @@ export default function MembersPage() {
   const [importMode, setImportMode] = useState<'append' | 'update'>('append')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportReport | null>(null)
+  const [previewResult, setPreviewResult] = useState<ImportReport | null>(null)
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showActionsMenu, setShowActionsMenu] = useState(false)
   const actionsMenuRef = useRef<HTMLDivElement>(null)
@@ -142,6 +145,23 @@ export default function MembersPage() {
     })
   }
 
+  const handlePreview = async () => {
+    if (!importFile) return
+    setImporting(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', importFile)
+      fd.append('mode', 'preview')
+      const res = await api.post<ImportReport>('/members/import', fd)
+      setPreviewResult(res.data)
+      setExpandedRows(new Set())
+    } catch {
+      alert('Vorschau fehlgeschlagen. Bitte CSV-Format prüfen.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const handleImport = async () => {
     if (!importFile) return
     setImporting(true)
@@ -153,7 +173,6 @@ export default function MembersPage() {
       setImportResult(res.data)
       if (res.data.created > 0 || res.data.updated > 0) refresh()
     } catch {
-      setImportResult(null)
       alert('Import fehlgeschlagen. Bitte CSV-Format prüfen.')
     } finally {
       setImporting(false)
@@ -164,7 +183,17 @@ export default function MembersPage() {
     setShowImport(false)
     setImportFile(null)
     setImportResult(null)
+    setPreviewResult(null)
+    setExpandedRows(new Set())
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const toggleRow = (line: number) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      next.has(line) ? next.delete(line) : next.add(line)
+      return next
+    })
   }
 
   useEscapeKey(showNew ? resetNew : showImport ? resetImport : showActionsMenu ? () => setShowActionsMenu(false) : null)
@@ -358,7 +387,8 @@ export default function MembersPage() {
               </button>
             </div>
 
-            {!importResult ? (
+            {/* Step 1: file + mode selection */}
+            {!previewResult && !importResult && (
               <div className="px-6 py-5 space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-brand-text-muted mb-1">CSV-Datei</label>
@@ -366,38 +396,24 @@ export default function MembersPage() {
                     ref={fileInputRef}
                     type="file"
                     accept=".csv"
-                    onChange={e => setImportFile(e.target.files?.[0] ?? null)}
+                    onChange={e => { setImportFile(e.target.files?.[0] ?? null); setPreviewResult(null) }}
                     className="block w-full text-sm text-brand-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-brand-yellow file:text-brand-black hover:file:bg-black hover:file:text-white cursor-pointer"
                   />
-                  <p className="text-xs text-brand-text-subtle mt-1">Erwartet: Semikolon-getrennt, UTF-8. Spalten: Mitgliedsnummer, Vorname, Nachname, Geburtsdatum, Geschlecht, Passnummer, Trikotnummer, Position, Status, Benutzer_Email, Erziehungsberechtigter1_Email, Erziehungsberechtigter2_Email</p>
+                  <p className="text-xs text-brand-text-subtle mt-1">Semikolon-getrennt, UTF-8. Spalten: Name, Vorname, Mitgliedsnummer, Email, Email 2, Geschlecht, Adresse, PLZ, Ort, Mitglied seit, Stammverein, Status, geboren am, SEPA Mandat, Kontoinhaber, IBAN</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-brand-text-muted mb-2">Modus</label>
                   <div className="space-y-2">
                     <label className="flex items-start gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="importMode"
-                        value="append"
-                        checked={importMode === 'append'}
-                        onChange={() => setImportMode('append')}
-                        className="mt-0.5 accent-brand-yellow"
-                      />
+                      <input type="radio" name="importMode" value="append" checked={importMode === 'append'} onChange={() => setImportMode('append')} className="mt-0.5 accent-brand-yellow" />
                       <div>
                         <span className="text-sm font-medium text-brand-text">Nur ergänzen</span>
                         <p className="text-xs text-brand-text-subtle">Neue Mitglieder anlegen, bestehende unverändert lassen</p>
                       </div>
                     </label>
                     <label className="flex items-start gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="importMode"
-                        value="update"
-                        checked={importMode === 'update'}
-                        onChange={() => setImportMode('update')}
-                        className="mt-0.5 accent-brand-yellow"
-                      />
+                      <input type="radio" name="importMode" value="update" checked={importMode === 'update'} onChange={() => setImportMode('update')} className="mt-0.5 accent-brand-yellow" />
                       <div>
                         <span className="text-sm font-medium text-brand-text">Fehlende + geänderte Felder aktualisieren</span>
                         <p className="text-xs text-brand-text-subtle">Bestehende Mitglieder werden mit nicht-leeren CSV-Werten aktualisiert. Felder werden nie geleert.</p>
@@ -411,17 +427,81 @@ export default function MembersPage() {
                     Abbrechen
                   </button>
                   <button
-                    onClick={handleImport}
+                    onClick={handlePreview}
                     disabled={!importFile || importing}
                     className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
-                    {importing ? 'Importieren…' : 'Import starten'}
+                    {importing ? 'Analysiere…' : 'Vorschau'}
                   </button>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {/* Step 2: preview report */}
+            {previewResult && !importResult && (
               <div className="flex flex-col flex-1 min-h-0">
-                {/* Summary */}
+                <div className="px-6 py-4 border-b border-brand-border-subtle bg-brand-surface-card">
+                  <p className="text-sm font-medium text-brand-text mb-1">{previewResult.total} Zeilen analysiert — Vorschau (nichts gespeichert)</p>
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    {previewResult.created > 0 && <span className="text-brand-success font-medium">+ {previewResult.created} neu</span>}
+                    {previewResult.updated > 0 && <span className="text-brand-blue font-medium">~ {previewResult.updated} Änderungen</span>}
+                    {previewResult.unchanged > 0 && <span className="text-brand-text-subtle">= {previewResult.unchanged} unverändert</span>}
+                    {previewResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {previewResult.errors} Fehler</span>}
+                    {previewResult.rows.some(r => r.iban_warning) && (
+                      <span className="text-amber-600 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />{previewResult.rows.filter(r => r.iban_warning).length} IBAN-Warnungen
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="overflow-y-auto flex-1 px-6 py-3 space-y-0.5 text-xs font-mono">
+                  {previewResult.rows.filter(r => r.status !== 'unchanged').map((row, i) => {
+                    const hasDetails = (row.changes && row.changes.length > 0) || row.message || row.iban_warning
+                    const expanded = expandedRows.has(row.line)
+                    return (
+                      <div key={i}>
+                        <button
+                          onClick={() => hasDetails && toggleRow(row.line)}
+                          className={`flex items-center gap-1 w-full text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'}`}
+                        >
+                          {hasDetails && <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />}
+                          {!hasDetails && <span className="w-3" />}
+                          <span className="font-bold">{rowStatusIcon(row.status)}</span>
+                          <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
+                          {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
+                        </button>
+                        {expanded && (
+                          <div className="pl-7 space-y-0.5">
+                            {row.changes?.map((c, j) => <div key={j} className="text-brand-text-muted">{c}</div>)}
+                            {row.iban_warning && <div className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
+                            {row.message && <div className="italic text-brand-text-muted">{row.message}</div>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {previewResult.unchanged > 0 && (
+                    <div className="text-brand-text-subtle pt-1">= {previewResult.unchanged}× unverändert</div>
+                  )}
+                </div>
+                <div className="px-6 py-4 border-t border-brand-border-subtle flex justify-between">
+                  <button onClick={() => setPreviewResult(null)} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                    Zurück
+                  </button>
+                  <button
+                    onClick={handleImport}
+                    disabled={importing}
+                    className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                  >
+                    {importing ? 'Importieren…' : 'Jetzt anwenden'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: result */}
+            {importResult && (
+              <div className="flex flex-col flex-1 min-h-0">
                 <div className="px-6 py-4 border-b border-brand-border-subtle bg-brand-surface-card">
                   <p className="text-sm font-medium text-brand-text mb-2">{importResult.total} Zeilen verarbeitet</p>
                   <div className="flex flex-wrap gap-3 text-xs">
@@ -431,24 +511,36 @@ export default function MembersPage() {
                     {importResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {importResult.errors} Fehler</span>}
                   </div>
                 </div>
-
-                {/* Detail rows */}
-                <div className="overflow-y-auto flex-1 px-6 py-3 space-y-1 text-xs font-mono">
-                  {importResult.rows.filter(r => r.status !== 'unchanged').map((row, i) => (
-                    <div key={i} className={rowStatusColor(row.status)}>
-                      <span className="font-bold">{rowStatusIcon(row.status)}</span>{' '}
-                      <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
-                      {row.changes?.map((c, j) => (
-                        <div key={j} className="pl-4 text-brand-text-muted">{c}</div>
-                      ))}
-                      {row.message && <span className="pl-4 italic">{row.message}</span>}
-                    </div>
-                  ))}
+                <div className="overflow-y-auto flex-1 px-6 py-3 space-y-0.5 text-xs font-mono">
+                  {importResult.rows.filter(r => r.status !== 'unchanged').map((row, i) => {
+                    const hasDetails = (row.changes && row.changes.length > 0) || row.message || row.iban_warning
+                    const expanded = expandedRows.has(row.line)
+                    return (
+                      <div key={i}>
+                        <button
+                          onClick={() => hasDetails && toggleRow(row.line)}
+                          className={`flex items-center gap-1 w-full text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'}`}
+                        >
+                          {hasDetails && <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />}
+                          {!hasDetails && <span className="w-3" />}
+                          <span className="font-bold">{rowStatusIcon(row.status)}</span>
+                          <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
+                          {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
+                        </button>
+                        {expanded && (
+                          <div className="pl-7 space-y-0.5">
+                            {row.changes?.map((c, j) => <div key={j} className="text-brand-text-muted">{c}</div>)}
+                            {row.iban_warning && <div className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
+                            {row.message && <div className="italic text-brand-text-muted">{row.message}</div>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                   {importResult.unchanged > 0 && (
-                    <div className="text-brand-text-subtle">= {importResult.unchanged}× unverändert</div>
+                    <div className="text-brand-text-subtle pt-1">= {importResult.unchanged}× unverändert</div>
                   )}
                 </div>
-
                 <div className="px-6 py-4 border-t border-brand-border-subtle flex justify-end">
                   <button onClick={resetImport} className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors">
                     Schließen

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1154,14 +1155,78 @@ func normalizeDate(s string) string {
 	return year + "-" + month + "-" + day
 }
 
+// validateIBAN checks the MOD-97 checksum and length (22 chars for DE IBANs).
+// Returns (true, "") on success or (false, reason) on failure.
+func validateIBAN(s string) (bool, string) {
+	s = strings.ToUpper(strings.ReplaceAll(s, " ", ""))
+	if len(s) < 4 {
+		return false, "zu kurz"
+	}
+	if strings.HasPrefix(s, "DE") && len(s) != 22 {
+		return false, fmt.Sprintf("DE-IBAN muss 22 Zeichen haben, hat %d", len(s))
+	}
+	rearranged := s[4:] + s[:4]
+	var sb strings.Builder
+	for _, c := range rearranged {
+		switch {
+		case c >= '0' && c <= '9':
+			sb.WriteRune(c)
+		case c >= 'A' && c <= 'Z':
+			sb.WriteString(strconv.Itoa(int(c-'A') + 10))
+		default:
+			return false, fmt.Sprintf("ungültiges Zeichen: %q", c)
+		}
+	}
+	n := new(big.Int)
+	n.SetString(sb.String(), 10)
+	if new(big.Int).Mod(n, big.NewInt(97)).Int64() != 1 {
+		return false, "Prüfziffer falsch"
+	}
+	return true, ""
+}
+
+// classifyEmail returns "eigen", "eltern", or "kind-eigen".
+// Adults (≥18) → "eigen". Minors: first name in email local part → "kind-eigen", else → "eltern".
+func classifyEmail(email, firstName, dob string) string {
+	if email == "" {
+		return ""
+	}
+	isMinor := false
+	if dob != "" {
+		if t, err := time.Parse("2006-01-02", dob); err == nil {
+			isMinor = time.Since(t).Hours()/(24*365.25) < 18
+		}
+	}
+	if !isMinor {
+		return "eigen"
+	}
+	atIdx := strings.Index(email, "@")
+	if atIdx < 0 {
+		return "eltern"
+	}
+	filterAlpha := func(s string) string {
+		return strings.Map(func(r rune) rune {
+			if r >= 'a' && r <= 'z' {
+				return r
+			}
+			return -1
+		}, strings.ToLower(s))
+	}
+	if first := filterAlpha(firstName); first != "" && strings.Contains(filterAlpha(email[:atIdx]), first) {
+		return "kind-eigen"
+	}
+	return "eltern"
+}
+
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
-	Line    int      `json:"line"`
-	Status  string   `json:"status"` // created | updated | unchanged | error
-	Name    string   `json:"name"`
-	DOB     string   `json:"dob,omitempty"`
-	Changes []string `json:"changes,omitempty"`
-	Message string   `json:"message,omitempty"`
+	Line        int      `json:"line"`
+	Status      string   `json:"status"` // created | updated | unchanged | error
+	Name        string   `json:"name"`
+	DOB         string   `json:"dob,omitempty"`
+	Changes     []string `json:"changes,omitempty"`
+	Message     string   `json:"message,omitempty"`
+	IBANWarning string   `json:"iban_warning,omitempty"`
 }
 
 // ImportReport is the full response body for POST /api/members/import.
@@ -1186,10 +1251,11 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	mode := r.FormValue("mode") // "append" or "update"
-	if mode != "append" && mode != "update" {
+	mode := r.FormValue("mode") // "append", "update", or "preview"
+	if mode != "append" && mode != "update" && mode != "preview" {
 		mode = "append"
 	}
+	dryRun := mode == "preview"
 
 	raw, err := io.ReadAll(file)
 	if err != nil {
@@ -1220,8 +1286,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	// Canonical names for columns that external tools export differently.
 	columnAliases := map[string]string{
-		"Name":       "Nachname",
-		"geboren am": "Geburtsdatum",
+		"Name":          "Nachname",
+		"geboren am":    "Geburtsdatum",
+		"Mitglied seit": "join_date",
 	}
 	colIdx := make(map[string]int, len(header))
 	for i, name := range header {
@@ -1259,6 +1326,12 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		default:
 			return "aktiv"
 		}
+	}
+	normalizeSepa := func(s string) int {
+		if strings.TrimSpace(s) == "vorliegend" {
+			return 1
+		}
+		return 0
 	}
 	if _, ok := colIdx["Vorname"]; !ok {
 		http.Error(w, "missing required column: Vorname", http.StatusBadRequest)
@@ -1334,7 +1407,10 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 		// DB lookup by name (+ dob as tiebreaker when present)
 		query := `SELECT id, member_number, COALESCE(date_of_birth,''),
-		                 pass_number, jersey_number, position, status, gender, user_id, home_club
+		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
+		                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
+		                 COALESCE(join_date,''), COALESCE(iban,''), COALESCE(account_holder,''),
+		                 COALESCE(sepa_mandat,0)
 		          FROM members
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
 		args := []interface{}{firstName, lastName}
@@ -1345,42 +1421,66 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		query += ` LIMIT 1`
 
 		var (
-			existingID                             int
-			dbMemberNum, dbPassNum, dbPosition     sql.NullString
-			dbDOB, dbGender, dbStatus              string
-			dbJerseyNum                            sql.NullInt64
-			dbUserID                               sql.NullInt64
-			dbHomeClub                             sql.NullString
+			existingID                                     int
+			dbMemberNum, dbPassNum, dbPosition             sql.NullString
+			dbDOB, dbGender, dbStatus                      string
+			dbJerseyNum                                    sql.NullInt64
+			dbUserID                                       sql.NullInt64
+			dbHomeClub                                     sql.NullString
+			dbStreet, dbZip, dbCity                        string
+			dbJoinDate, dbIBAN, dbAccountHolder            string
+			dbSepaMandat                                   int
 		)
 		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
 			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
-				&dbStatus, &dbGender, &dbUserID, &dbHomeClub)
+				&dbStatus, &dbGender, &dbUserID, &dbHomeClub,
+				&dbStreet, &dbZip, &dbCity,
+				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat)
 
 		if scanErr == sql.ErrNoRows {
 			// New member — insert
 			gender := normalizeGender(col(row, "Geschlecht"))
 			status := normalizeStatus(col(row, "Status"))
 			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
-			res, insErr := h.db.ExecContext(r.Context(),
-				`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
-				                      pass_number, jersey_number, position, status, gender, home_club)
-				 VALUES (?,?,?,?,?,?,?,?,?,?)`,
-				nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
-				nullableString(dob), nullableString(col(row, "Passnummer")),
-				jerseyArg, nullableString(col(row, "Position")), status, gender,
-				nullableString(col(row, "Stammverein")))
-			if insErr != nil {
-				report.Rows = append(report.Rows, ImportRow{
-					Line: lineNum, Status: "error", Name: displayName,
-					Message: "Fehler beim Anlegen: " + insErr.Error(),
-				})
-				report.Errors++
-				continue
+			joinDate := normalizeDate(col(row, "join_date"))
+
+			var ibanWarn string
+			var ibanArg interface{}
+			if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" {
+				if ok, msg := validateIBAN(raw); ok {
+					ibanArg = raw
+				} else {
+					ibanWarn = "IBAN nicht gespeichert: " + msg
+				}
 			}
-			newID, _ := res.LastInsertId()
-			h.applyLinkUpdates(r, int(newID), row, col, sql.NullInt64{}, true)
+
+			var newID int64
+			if !dryRun {
+				res, insErr := h.db.ExecContext(r.Context(),
+					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
+					                      pass_number, jersey_number, position, status, gender, home_club,
+					                      street, zip, city, join_date, iban, account_holder, sepa_mandat)
+					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+					nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
+					nullableString(dob), nullableString(col(row, "Passnummer")),
+					jerseyArg, nullableString(col(row, "Position")), status, gender,
+					nullableString(col(row, "Stammverein")),
+					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
+					nullableString(joinDate), ibanArg, nullableString(col(row, "Kontoinhaber")),
+					normalizeSepa(col(row, "SEPA Mandat")))
+				if insErr != nil {
+					report.Rows = append(report.Rows, ImportRow{
+						Line: lineNum, Status: "error", Name: displayName,
+						Message: "Fehler beim Anlegen: " + insErr.Error(),
+					})
+					report.Errors++
+					continue
+				}
+				newID, _ = res.LastInsertId()
+			}
+			h.applyLinkUpdates(r, int(newID), row, col, sql.NullInt64{}, dob, true, dryRun)
 			report.Rows = append(report.Rows, ImportRow{
-				Line: lineNum, Status: "created", Name: displayName, DOB: dob,
+				Line: lineNum, Status: "created", Name: displayName, DOB: dob, IBANWarning: ibanWarn,
 			})
 			report.Created++
 			continue
@@ -1403,7 +1503,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// mode == "update": apply non-empty changed fields
+		// mode == "update" or "preview": apply non-empty changed fields
 		var setClauses []string
 		var setArgs []interface{}
 		var changes []string
@@ -1446,10 +1546,41 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		linkNotes := h.applyLinkUpdates(r, existingID, row, col, dbUserID, false)
+		// New fields: address, join_date, account_holder, sepa_mandat
+		joinDate := normalizeDate(col(row, "join_date"))
+		addChange(col(row, "Adresse"), dbStreet, "Adresse", "street")
+		addChange(col(row, "PLZ"), dbZip, "PLZ", "zip")
+		addChange(col(row, "Ort"), dbCity, "Ort", "city")
+		addChange(joinDate, dbJoinDate, "Mitglied seit", "join_date")
+		addChange(col(row, "Kontoinhaber"), dbAccountHolder, "Kontoinhaber", "account_holder")
+
+		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" {
+			sepaVal := normalizeSepa(sepaRaw)
+			if sepaVal != dbSepaMandat {
+				setClauses = append(setClauses, "sepa_mandat=?")
+				setArgs = append(setArgs, sepaVal)
+				changes = append(changes, fmt.Sprintf("SEPA Mandat: %d → %d", dbSepaMandat, sepaVal))
+			}
+		}
+
+		// IBAN with MOD-97 validation
+		var ibanWarn string
+		if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" {
+			if ok, msg := validateIBAN(raw); ok {
+				if raw != dbIBAN {
+					setClauses = append(setClauses, "iban=?")
+					setArgs = append(setArgs, raw)
+					changes = append(changes, fmt.Sprintf("IBAN: %q → %q", dbIBAN, raw))
+				}
+			} else {
+				ibanWarn = "IBAN nicht gespeichert: " + msg
+			}
+		}
+
+		linkNotes := h.applyLinkUpdates(r, existingID, row, col, dbUserID, dob, false, dryRun)
 		changes = append(changes, linkNotes...)
 
-		if len(setClauses) > 0 {
+		if len(setClauses) > 0 && !dryRun {
 			setArgs = append(setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
 				"UPDATE members SET "+strings.Join(setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -1464,9 +1595,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if len(changes) > 0 {
+		if len(changes) > 0 || ibanWarn != "" {
 			report.Rows = append(report.Rows, ImportRow{
-				Line: lineNum, Status: "updated", Name: displayName, Changes: changes,
+				Line: lineNum, Status: "updated", Name: displayName, Changes: changes, IBANWarning: ibanWarn,
 			})
 			report.Updated++
 		} else {
@@ -1482,42 +1613,59 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(report)
 }
 
-// applyLinkUpdates creates user/family-link associations and returns change notes.
-// Pass isNew=true for freshly inserted members to suppress notes (all links are trivially new).
-func (h *Handler) applyLinkUpdates(r *http.Request, memberID int, row []string, col func([]string, string) string, dbUserID sql.NullInt64, isNew bool) []string {
+// applyLinkUpdates classifies Email and Email 2 columns and creates user/family-link associations.
+// Pass isNew=true for freshly inserted members to suppress notes.
+// Pass dryRun=true to skip all DB writes (preview mode).
+func (h *Handler) applyLinkUpdates(r *http.Request, memberID int, row []string, col func([]string, string) string, dbUserID sql.NullInt64, dob string, isNew bool, dryRun bool) []string {
 	var notes []string
+	firstName := col(row, "Vorname")
 
-	if email := col(row, "Benutzer_Email"); email != "" && !dbUserID.Valid {
-		var uid int
-		if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE email=?`, email).Scan(&uid); err == nil {
-			h.db.ExecContext(r.Context(), `UPDATE members SET user_id=? WHERE id=?`, uid, memberID)
-			if !isNew {
-				notes = append(notes, fmt.Sprintf("Benutzer_Email: → %q (verknüpft)", email))
-			}
-		} else if !isNew {
-			notes = append(notes, fmt.Sprintf("Benutzer_Email: %q (nicht gefunden)", email))
-		}
-	}
-
-	for idx, colName := range []string{"Erziehungsberechtigter1_Email", "Erziehungsberechtigter2_Email"} {
-		email := col(row, colName)
+	for _, emailCol := range []string{"Email", "Email 2"} {
+		email := col(row, emailCol)
 		if email == "" {
 			continue
 		}
-		var uid int
-		if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE email=?`, email).Scan(&uid); err != nil {
-			if !isNew {
-				notes = append(notes, fmt.Sprintf("Erziehungsber. %d: %q (nicht gefunden)", idx+1, email))
+		switch classifyEmail(email, firstName, dob) {
+		case "eigen":
+			if dbUserID.Valid {
+				continue // already linked
 			}
-			continue
-		}
-		var exists int
-		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM family_links WHERE parent_user_id=? AND member_id=?`, uid, memberID).Scan(&exists)
-		if exists == 0 {
-			if _, insErr := h.db.ExecContext(r.Context(),
-				`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`, uid, memberID); insErr == nil && !isNew {
-				notes = append(notes, fmt.Sprintf("Erziehungsber. %d: → %q (verknüpft)", idx+1, email))
+			var uid int
+			if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?)`, email).Scan(&uid); err == nil {
+				if !dryRun {
+					h.db.ExecContext(r.Context(), `UPDATE members SET user_id=? WHERE id=?`, uid, memberID)
+				}
+				if !isNew {
+					notes = append(notes, fmt.Sprintf("%s: → %q (User verknüpft)", emailCol, email))
+				}
+			} else if !isNew {
+				notes = append(notes, fmt.Sprintf("%s: %q (kein User-Account gefunden)", emailCol, email))
+			}
+
+		case "eltern":
+			var uid int
+			if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?)`, email).Scan(&uid); err != nil {
+				if !isNew {
+					notes = append(notes, fmt.Sprintf("%s: %q (kein User-Account gefunden)", emailCol, email))
+				}
+				continue
+			}
+			var exists int
+			h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM family_links WHERE parent_user_id=? AND member_id=?`, uid, memberID).Scan(&exists)
+			if exists == 0 {
+				if !dryRun {
+					h.db.ExecContext(r.Context(),
+						`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`, uid, memberID)
+				}
+				if !isNew {
+					notes = append(notes, fmt.Sprintf("%s: → %q (Elternteil verknüpft)", emailCol, email))
+				}
+			}
+
+		case "kind-eigen":
+			if !isNew {
+				notes = append(notes, fmt.Sprintf("%s: %q (Kind-Email, kein automatischer Link)", emailCol, email))
 			}
 		}
 	}
