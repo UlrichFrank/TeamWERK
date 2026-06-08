@@ -126,7 +126,7 @@ export default function AdminKaderPage() {
     const key = `${kaderId}-${memberId}`
     setRemoving(prev => ({ ...prev, [key]: true }))
     try {
-      await api.put('/kader/${kaderId}`, { members_add: [], members_remove: [memberId] })
+      await api.put(`/kader/${kaderId}`, { members_add: [], members_remove: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
@@ -137,7 +137,7 @@ export default function AdminKaderPage() {
 
   const handleAddTrainer = async (kaderId: number, memberId: number) => {
     try {
-      await api.put('/kader/${kaderId}`, { trainers_add: [memberId] })
+      await api.put(`/kader/${kaderId}`, { trainers_add: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Hinzufügen')
@@ -146,7 +146,7 @@ export default function AdminKaderPage() {
 
   const handleRemoveTrainer = async (kaderId: number, memberId: number) => {
     try {
-      await api.put('/kader/${kaderId}`, { trainers_remove: [memberId] })
+      await api.put(`/kader/${kaderId}`, { trainers_remove: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
@@ -157,7 +157,7 @@ export default function AdminKaderPage() {
     const key = `ext-${kaderId}-${memberId}`
     setRemoving(prev => ({ ...prev, [key]: true }))
     try {
-      await api.put('/kader/${kaderId}`, { extended_members_remove: [memberId] })
+      await api.put(`/kader/${kaderId}`, { extended_members_remove: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
@@ -182,7 +182,7 @@ export default function AdminKaderPage() {
 
   const handleSetDedicatedYear = async (k: Kader, year: number) => {
     try {
-      await api.put('/kader/${k.id}`, { dedicated_birth_year: year })
+      await api.put(`/kader/${k.id}`, { dedicated_birth_year: year })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Speichern')
@@ -195,7 +195,7 @@ export default function AdminKaderPage() {
       return
     }
     try {
-      await api.put('/kader/${k.id}`, { set_dedicated_birth_year: true })
+      await api.put(`/kader/${k.id}`, { set_dedicated_birth_year: true })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Speichern')
@@ -233,7 +233,7 @@ export default function AdminKaderPage() {
   const handleSetAgeClass = async (k: Kader, newAgeClass: string) => {
     if (newAgeClass === k.age_class) return
     try {
-      await api.put('/kader/${k.id}`, { age_class: newAgeClass })
+      await api.put(`/kader/${k.id}`, { age_class: newAgeClass })
       setActiveAgeClass(newAgeClass)
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
@@ -243,7 +243,7 @@ export default function AdminKaderPage() {
 
   const handlePatchGamesPerSeason = async (kaderId: number, value: number) => {
     try {
-      await api.patch('/kader/${kaderId}/games-per-season`, { games_per_season: value })
+      await api.patch(`/kader/${kaderId}/games-per-season`, { games_per_season: value })
     } catch {
       showToast('Fehler beim Speichern der Spielanzahl')
     }

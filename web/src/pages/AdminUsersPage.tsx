@@ -174,7 +174,7 @@ export default function AdminUsersPage() {
   const handleSendInvitation = async (inv: Invitation) => {
     setSendingInvitation(prev => new Set(prev).add(inv.id))
     try {
-      await api.post('/invitations/${inv.id}/send`)
+      await api.post(`/invitations/${inv.id}/send`)
       setInvitationFeedback(prev => new Map(prev).set(inv.id, { ok: true, msg: 'Gesendet' }))
       setTimeout(() => setInvitationFeedback(prev => { const m = new Map(prev); m.delete(inv.id); return m }), 3000)
       loadInvitationsAndRequests()
@@ -190,7 +190,7 @@ export default function AdminUsersPage() {
     setLinkLoading(true)
     setLinkError('')
     try {
-      await api.put('/invitations/${linkModal.invId}/member`, { member_id: memberId })
+      await api.put(`/invitations/${linkModal.invId}/member`, { member_id: memberId })
       closeLinkModal()
       loadInvitationsAndRequests()
     } catch (e: any) {
@@ -201,34 +201,34 @@ export default function AdminUsersPage() {
   }
 
   const handleUnlinkMember = async (inv: Invitation) => {
-    await api.put('/invitations/${inv.id}/member`, { member_id: null })
+    await api.put(`/invitations/${inv.id}/member`, { member_id: null })
     loadInvitationsAndRequests()
   }
 
   const handleDeleteUser = async (u: User) => {
     if (!window.confirm(`Nutzer „${u.first_name} ${u.last_name}" (${u.email}) wirklich löschen?`)) return
-    await api.delete('/users/${u.id}`)
+    await api.delete(`/users/${u.id}`)
   }
 
   const handleDeleteInvitation = async (inv: Invitation) => {
     if (!window.confirm(`Einladung für ${inv.email} widerrufen?`)) return
-    await api.delete('/invitations/${inv.id}`)
+    await api.delete(`/invitations/${inv.id}`)
     setInvitations(prev => prev.filter(x => x.id !== inv.id))
   }
 
   const handleApproveRequest = async (req: MembershipRequest) => {
-    await api.post('/membership-requests/${req.id}/approve`)
+    await api.post(`/membership-requests/${req.id}/approve`)
     setRequests(prev => prev.filter(x => x.id !== req.id))
   }
 
   const handleRejectRequest = async (req: MembershipRequest) => {
-    await api.post('/membership-requests/${req.id}/reject`)
+    await api.post(`/membership-requests/${req.id}/reject`)
     setRequests(prev => prev.filter(x => x.id !== req.id))
   }
 
   const handleDeleteRequest = async (req: MembershipRequest) => {
     if (!window.confirm(`Beitrittsanfrage von ${req.name} löschen?`)) return
-    await api.delete('/membership-requests/${req.id}`)
+    await api.delete(`/membership-requests/${req.id}`)
     setRequests(prev => prev.filter(x => x.id !== req.id))
   }
 
@@ -244,7 +244,7 @@ export default function AdminUsersPage() {
     setCreateMemberLoading(prev => new Set(prev).add(u.id))
     setCreateMemberErrors(prev => { const m = new Map(prev); m.delete(u.id); return m })
     try {
-      await api.post('/users/${u.id}/create-member`)
+      await api.post(`/users/${u.id}/create-member`)
       setCreatedMemberUserIds(prev => new Set(prev).add(u.id))
     } catch {
       setCreateMemberErrors(prev => new Map(prev).set(u.id, 'Fehler beim Anlegen'))
@@ -254,7 +254,7 @@ export default function AdminUsersPage() {
   }
 
   const handleRoleChange = async (u: User, newRole: string) => {
-    await api.put('/users/${u.id}/role`, { role: newRole })
+    await api.put(`/users/${u.id}/role`, { role: newRole })
   }
 
   const allowedRoles = (callerRole: string) =>

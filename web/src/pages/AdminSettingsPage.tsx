@@ -150,7 +150,7 @@ function SaisonsTab() {
     if (!editId) return
     setSaving(true)
     try {
-      await api.put('/seasons/${editId}`, { name: editName, start_date: editStart, end_date: editEnd })
+      await api.put(`/seasons/${editId}`, { name: editName, start_date: editStart, end_date: editEnd })
       setEditId(null)
       await load()
     } finally {
@@ -159,7 +159,7 @@ function SaisonsTab() {
   }
 
   const handleActivate = async (id: number) => {
-    await api.put('/seasons/${id}/activate`, {})
+    await api.put(`/seasons/${id}/activate`, {})
     await load()
   }
 
@@ -168,7 +168,7 @@ function SaisonsTab() {
     setDeleting(id)
     setError(null)
     try {
-      await api.delete('/seasons/${id}`)
+      await api.delete(`/seasons/${id}`)
       await load()
     } catch {
       setError('Saison konnte nicht gelöscht werden.')
@@ -405,7 +405,7 @@ function AltersklassenTab() {
     }
     setRowStates(prev => ({ ...prev, [ageClass]: { ...prev[ageClass], saving: true, error: '' } }))
     try {
-      await api.put('/age-class-rules/${ageClass}`, { half_duration_minutes: half, break_minutes: brk })
+      await api.put(`/age-class-rules/${ageClass}`, { half_duration_minutes: half, break_minutes: brk })
       setRowStates(prev => ({ ...prev, [ageClass]: { ...prev[ageClass], saving: false, success: true } }))
     } catch {
       setRowStates(prev => ({ ...prev, [ageClass]: { ...prev[ageClass], saving: false, error: 'Speichern fehlgeschlagen.' } }))
