@@ -34,6 +34,7 @@ interface Training {
   declined_count: number
   maybe_count: number
   my_rsvp: string | null
+  my_rsvp_locked?: boolean
   series_id?: number
   team_id: number
   season_id: number
@@ -56,6 +57,16 @@ interface Game {
   declined_count: number
   maybe_count: number
   venue?: VenueRef | null
+}
+
+interface Absence {
+  id: number
+  member_id: number
+  member_name: string
+  type: 'vacation' | 'injury'
+  start_date: string
+  end_date: string
+  note: string
 }
 
 interface SlotPreview {
@@ -138,6 +149,7 @@ export default function KalenderPage() {
   const [month, setMonth] = useState(startDate.getMonth())
   const [games, setGames] = useState<Game[]>([])
   const [trainings, setTrainings] = useState<Training[]>([])
+  const [absences, setAbsences] = useState<Absence[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
@@ -213,11 +225,24 @@ export default function KalenderPage() {
     }
   }
 
+  const loadAbsences = async () => {
+    try {
+      const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
+      const lastDay = new Date(year, month + 1, 0).getDate()
+      const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      const r = await api.get(`/absences/calendar?from=${from}&to=${to}`)
+      setAbsences(Array.isArray(r.data) ? r.data : [])
+    } catch {
+      setAbsences([])
+    }
+  }
+
   useEffect(() => {
     const loadInitialData = async () => {
       await Promise.all([
         loadGames(),
         loadTrainings(),
+        loadAbsences(),
         api.get('/teams')
           .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
           .catch(() => setTeams([])),
@@ -236,9 +261,12 @@ export default function KalenderPage() {
     loadInitialData()
   }, [])
 
-  useEffect(() => { loadTrainings() }, [year, month])
+  useEffect(() => { loadTrainings(); loadAbsences() }, [year, month])
 
-  useLiveUpdates((event) => { if (event === 'games') loadGames() })
+  useLiveUpdates((event) => {
+    if (event === 'games') loadGames()
+    if (event === 'absences') loadAbsences()
+  })
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
   const nextMonth = () => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)
@@ -341,6 +369,22 @@ export default function KalenderPage() {
   const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const todayStr = padDate(now.getFullYear(), now.getMonth(), now.getDate())
+
+  // Compute which absences cover each day, and whether they start/end on that day or continue
+  const absencesForDay = (dateStr: string): Array<{ absence: Absence; isFirst: boolean; isLast: boolean }> => {
+    return absences
+      .filter(a => a.start_date <= dateStr && a.end_date >= dateStr)
+      .map(a => {
+        const d = new Date(dateStr + 'T12:00:00')
+        const isMonday = d.getDay() === 1
+        const isSunday = d.getDay() === 0
+        return {
+          absence: a,
+          isFirst: a.start_date === dateStr || isMonday,
+          isLast: a.end_date === dateStr || isSunday,
+        }
+      })
+  }
 
   const doCreateGame = async (slots: SlotPreview[]) => {
     setCreating(true)
@@ -615,6 +659,7 @@ export default function KalenderPage() {
             const dateStr = padDate(year, month, day)
             const dayGames = gamesByDate[dateStr] ?? []
             const dayTrainings = trainingsByDate[dateStr] ?? []
+            const dayAbsences = absencesForDay(dateStr)
             const isToday = dateStr === todayStr
             const canRegen = canEdit && dayGames.length > 0
             return (
@@ -632,6 +677,15 @@ export default function KalenderPage() {
                     </button>
                   )}
                 </div>
+                {dayAbsences.map(({ absence, isFirst, isLast }) => (
+                  <div
+                    key={`abs-${absence.id}`}
+                    className={`h-1.5 mb-1 bg-brand-yellow/40 border border-brand-yellow ${
+                      isFirst && isLast ? 'rounded-full' : isFirst ? 'rounded-l-full' : isLast ? 'rounded-r-full' : ''
+                    } ${isFirst || isLast ? '' : '-mx-1.5'}`}
+                    title={`${absence.member_name}: ${absence.type === 'vacation' ? 'Urlaub' : 'Verletzung'} ${absence.start_date}–${absence.end_date}`}
+                  />
+                ))}
                 {dayGames.map(g => (
                   <button
                     key={g.id}
@@ -682,12 +736,20 @@ export default function KalenderPage() {
                     <div className="hidden @tile-md:block leading-tight">&nbsp;</div>
                     <div className="flex items-center gap-1.5 text-brand-text-subtle leading-tight">
                       <span>{t.start_time}</span>
-                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-green-600">
-                        <Check className="w-2.5 h-2.5" />{t.confirmed_count}
-                      </span>
-                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
-                        <X className="w-2.5 h-2.5" />{t.declined_count}
-                      </span>
+                      {t.my_rsvp_locked ? (
+                        <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger" title="Durch Abwesenheit gesetzt">
+                          <X className="w-2.5 h-2.5" />
+                        </span>
+                      ) : (
+                        <>
+                          <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-green-600">
+                            <Check className="w-2.5 h-2.5" />{t.confirmed_count}
+                          </span>
+                          <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
+                            <X className="w-2.5 h-2.5" />{t.declined_count}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </button>
                 ))}

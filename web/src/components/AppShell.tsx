@@ -19,6 +19,7 @@ const navModules: NavModule[] = [
     items: [
       { to: '/', label: 'Dashboard', roles: [], end: true },
       { to: '/profil', label: 'Mein Profil', roles: [], excludeRoles: ['admin'] },
+      { to: '/abwesenheiten', label: 'Abwesenheiten', roles: ['spieler', 'elternteil'] },
     ],
   },
   {
@@ -138,8 +139,8 @@ export default function AppShell() {
         {navModules.map(mod => {
           const visibleItems = mod.items.filter(item => {
             if (!user) return false
-            if (item.excludeRoles?.some(r => r === 'admin' ? user.role === 'admin' : hasFunction(user, r))) return false
-            return item.roles.length === 0 || item.roles.some(r => r === 'admin' ? user.role === 'admin' : hasFunction(user, r))
+            if (item.excludeRoles?.some(r => user.role === r || hasFunction(user, r))) return false
+            return item.roles.length === 0 || item.roles.some(r => user.role === r || hasFunction(user, r))
           })
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))

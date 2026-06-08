@@ -30,8 +30,13 @@ export default function ProfileMiscTab() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [absencesPublic, setAbsencesPublic] = useState(false)
+  const [absenceSaving, setAbsenceSaving] = useState(false)
 
   useEffect(() => {
+    api.get('/profile/me').then(r => {
+      setAbsencesPublic(r.data?.own_member?.absences_public === 1 || r.data?.own_member?.absences_public === true)
+    }).catch(() => {})
     api.get('/profile/notification-preferences').then(r => {
       const loaded: Prefs = { ...defaults }
       for (const cat of Object.keys(defaults) as Category[]) {
@@ -42,6 +47,19 @@ export default function ProfileMiscTab() {
       setPrefs(loaded)
     }).catch(() => {})
   }, [])
+
+  const toggleAbsenceVisibility = async () => {
+    const newValue = !absencesPublic
+    setAbsencesPublic(newValue)
+    setAbsenceSaving(true)
+    try {
+      await api.put('/profile/absence-visibility', { public: newValue })
+    } catch {
+      setAbsencesPublic(!newValue)
+    } finally {
+      setAbsenceSaving(false)
+    }
+  }
 
   const togglePush = (cat: Category) => {
     setPrefs(p => ({ ...p, [cat]: { ...p[cat], push: !p[cat].push } }))
@@ -94,6 +112,23 @@ export default function ProfileMiscTab() {
               />
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <div className="p-6 pb-2">
+          <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit für Mitglieder</h2>
+          <p className="text-xs text-brand-text-subtle mb-3">Wenn aktiv, sehen Trainer deine Abwesenheiten im Kalender.</p>
+        </div>
+        <div className="divide-y divide-brand-border-subtle">
+          <div className="flex items-center justify-between px-6 py-3">
+            <p className="text-sm font-medium text-brand-text">Abwesenheiten für Trainer sichtbar</p>
+            <Toggle
+              enabled={absencesPublic}
+              onToggle={absenceSaving ? () => {} : toggleAbsenceVisibility}
+              label="Abwesenheiten für Trainer sichtbar"
+            />
+          </div>
         </div>
       </div>
 

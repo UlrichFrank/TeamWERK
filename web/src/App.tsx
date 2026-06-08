@@ -33,6 +33,7 @@ import TermineDetailPage from './pages/TermineDetailPage'
 import MeinTeamPage from './pages/MeinTeamPage'
 import AdminVenuesPage from './pages/AdminVenuesPage'
 import ChatPage from './pages/ChatPage'
+import AbsenzenPage from './pages/AbsenzenPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -105,6 +106,7 @@ export default function App() {
               <Route path="termine/:type/:id" element={<TermineDetailPage />} />
               <Route path="mein-team" element={<MeinTeamPage />} />
               <Route path="chat" element={<ChatPage />} />
+              <Route path="abwesenheiten" element={<AbsenzenPage />} />
               <Route path="trainings" element={<Navigate to="/termine" replace />} />
               <Route path="trainings/:id" element={<Navigate to="/termine" replace />} />
               <Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />

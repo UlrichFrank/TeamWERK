@@ -27,6 +27,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
+	"github.com/teamstuttgart/teamwerk/internal/absences"
 	"github.com/teamstuttgart/teamwerk/internal/games"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
@@ -105,6 +106,7 @@ func serve() {
 	notifH := notifications.NewHandler(database, cfg)
 	welcomeH := members.NewWelcomeEmailHandler(database, m)
 	trainingH := trainings.NewHandler(database, cfg, hubInstance)
+	absenceH := absences.NewHandler(database, hubInstance)
 	teamsH := teams.NewHandler(database)
 	venueH := venues.NewHandler(database, hubInstance)
 
@@ -170,6 +172,12 @@ func serve() {
 		r.Delete("/api/profile/phones/{id}", membH.DeletePhone)
 		r.Put("/api/profile/visibility", membH.UpdateVisibility)
 		r.Put("/api/profile/reminder-preference", membH.UpdateReminderPreference)
+		r.Put("/api/profile/absence-visibility", membH.UpdateAbsenceVisibility)
+		r.Get("/api/absences/preview", absenceH.Preview)
+		r.Get("/api/absences/calendar", absenceH.Calendar)
+		r.Get("/api/absences", absenceH.List)
+		r.Post("/api/absences", absenceH.Create)
+		r.Delete("/api/absences/{id}", absenceH.Delete)
 		r.Get("/api/profile/kind/{memberId}", membH.GetChildProfile)
 		r.Put("/api/profile/kind/{memberId}/account", membH.UpdateChildAccount)
 		r.Put("/api/profile/kind/{memberId}/member", membH.UpdateChildMember)

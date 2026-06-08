@@ -680,6 +680,20 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
+	for _, teamID := range req.TeamIDs {
+		h.db.ExecContext(r.Context(), `
+			INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at, absence_id)
+			SELECT ?, km.member_id, m.user_id, 'declined', a.type, datetime('now'), a.id
+			FROM member_absences a
+			JOIN members m ON m.id = a.member_id
+			JOIN kader_members km ON km.member_id = a.member_id
+			JOIN kader k ON k.id = km.kader_id AND k.team_id = ? AND k.season_id = ?
+			WHERE ? BETWEEN a.start_date AND a.end_date
+			ON CONFLICT(game_id, member_id) DO NOTHING`,
+			gameID, teamID, req.SeasonID, req.Date)
+	}
+
 	h.hub.Broadcast("games")
 	uids := push.FilterByPushPref(h.db,
 		h.teamMembersAndParents(req.TeamIDs), "games")
@@ -1624,6 +1638,7 @@ type gameListItem struct {
 	DeclinedCount     int         `json:"declined_count"`
 	MaybeCount        int         `json:"maybe_count"`
 	MyRSVP            *string     `json:"my_rsvp"`
+	MyRSVPLocked      bool        `json:"my_rsvp_locked"`
 	ChildrenRSVP      []childRSVP `json:"children_rsvp,omitempty"`
 	RsvpOptOut        int         `json:"rsvp_opt_out"`
 	RsvpRequireReason int         `json:"rsvp_require_reason"`
@@ -1699,8 +1714,8 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
 	}
 
-	// Args order: memberID (subquery), teamArgs, from, to
-	args := append([]any{memberID}, teamArgs...)
+	// Args order: memberID (my_rsvp subquery), memberID (my_rsvp_locked subquery), teamArgs, from, to
+	args := append([]any{memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 
 	query := fmt.Sprintf(`
@@ -1720,6 +1735,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
 		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?),
+		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
 		       g.rsvp_opt_out, g.rsvp_require_reason
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
@@ -1739,9 +1755,10 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var g gameListItem
 		var isHome int
 		var myRSVP sql.NullString
+		var myRSVPLocked sql.NullInt64
 		var teamNames, teamIDsCSV sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
-			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP,
+			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
 			&g.RsvpOptOut, &g.RsvpRequireReason); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -1763,6 +1780,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 			confirmed := "confirmed"
 			g.MyRSVP = &confirmed
 		}
+		g.MyRSVPLocked = myRSVPLocked.Valid && myRSVPLocked.Int64 == 1
 		result = append(result, g)
 	}
 
@@ -1840,6 +1858,15 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		} else {
 			memberID = req.MemberID
 		}
+	}
+
+	var existingAbsenceID sql.NullInt64
+	h.db.QueryRowContext(r.Context(),
+		`SELECT absence_id FROM game_responses WHERE game_id = ? AND member_id = ?`,
+		gameID, memberID).Scan(&existingAbsenceID)
+	if existingAbsenceID.Valid {
+		http.Error(w, "response is locked by an absence", http.StatusForbidden)
+		return
 	}
 
 	_, err = h.db.ExecContext(r.Context(), `

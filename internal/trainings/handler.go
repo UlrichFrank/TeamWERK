@@ -538,6 +538,18 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+
+	h.db.ExecContext(r.Context(), `
+		INSERT INTO training_responses (training_id, member_id, responded_by, status, reason, responded_at, absence_id)
+		SELECT ?, km.member_id, m.user_id, 'declined', a.type, datetime('now'), a.id
+		FROM member_absences a
+		JOIN members m ON m.id = a.member_id
+		JOIN kader_members km ON km.member_id = a.member_id
+		JOIN kader k ON k.id = km.kader_id AND k.team_id = ? AND k.season_id = ?
+		WHERE ? BETWEEN a.start_date AND a.end_date
+		ON CONFLICT(training_id, member_id) DO NOTHING`,
+		id, req.TeamID, req.SeasonID, req.Date)
+
 	h.hub.Broadcast("trainings")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -641,6 +653,7 @@ type sessionListItem struct {
 	DeclinedCount     int               `json:"declined_count"`
 	MaybeCount        int               `json:"maybe_count"`
 	MyRSVP            *string           `json:"my_rsvp"`
+	MyRSVPLocked      bool              `json:"my_rsvp_locked"`
 	ChildrenRSVP      []childRSVP       `json:"children_rsvp,omitempty"`
 	RsvpOptOut        int               `json:"rsvp_opt_out"`
 	RsvpRequireReason int               `json:"rsvp_require_reason"`
@@ -690,8 +703,8 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Order must match the ?-markers in the query:
-	// 1. member_id (SELECT subquery), 2. teamArgs (WHERE teamSQL), 3. from, 4. to, 5. optional team filter
-	args := append([]any{memberID}, teamArgs...)
+	// 1. member_id (my_rsvp subquery), 2. member_id (my_rsvp_locked subquery), 3. teamArgs (WHERE), 4. from, 5. to, 6. optional team filter
+	args := append([]any{memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 	optTeamFilter := ""
 	if teamFilter != "" {
@@ -714,6 +727,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(SUM(CASE WHEN tr.status='declined'  THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN tr.status='maybe'     THEN 1 ELSE 0 END), 0),
 		       (SELECT status FROM training_responses WHERE training_id = ts.id AND member_id = ?),
+		       (SELECT absence_id IS NOT NULL FROM training_responses WHERE training_id = ts.id AND member_id = ? LIMIT 1),
 		       ts.rsvp_opt_out, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
@@ -737,12 +751,13 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		var s sessionListItem
 		var seriesID sql.NullInt64
 		var myRSVP sql.NullString
+		var myRSVPLocked sql.NullInt64
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		err := rows.Scan(
 			&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 			&s.Note, &s.Status, &s.CancelReason,
-			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP,
+			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP, &myRSVPLocked,
 			&s.RsvpOptOut, &s.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 		if err != nil {
@@ -760,6 +775,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			confirmed := "confirmed"
 			s.MyRSVP = &confirmed
 		}
+		s.MyRSVPLocked = myRSVPLocked.Valid && myRSVPLocked.Int64 == 1
 		if vID.Valid {
 			s.Venue = &sessionVenueRef{
 				ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
@@ -982,6 +998,15 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		} else {
 			memberID = req.MemberID
 		}
+	}
+
+	var existingAbsenceID sql.NullInt64
+	h.db.QueryRowContext(r.Context(),
+		`SELECT absence_id FROM training_responses WHERE training_id = ? AND member_id = ?`,
+		sessionID, memberID).Scan(&existingAbsenceID)
+	if existingAbsenceID.Valid {
+		http.Error(w, "response is locked by an absence", http.StatusForbidden)
+		return
 	}
 
 	_, err = h.db.ExecContext(r.Context(), `

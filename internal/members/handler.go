@@ -853,6 +853,24 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/profile/reminder-preference
+func (h *Handler) UpdateAbsenceVisibility(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	var req struct {
+		Public bool `json:"public"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	val := 0
+	if req.Public {
+		val = 1
+	}
+	h.db.ExecContext(r.Context(),
+		`UPDATE members SET absences_public = ? WHERE user_id = ?`, val, claims.UserID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) UpdateReminderPreference(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
