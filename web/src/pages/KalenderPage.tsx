@@ -221,14 +221,14 @@ export default function KalenderPage() {
         api.get('/teams')
           .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
           .catch(() => setTeams([])),
-        api.get('/admin/seasons')
+        api.get('/seasons')
           .then(r => {
             const seasons = Array.isArray(r.data) ? r.data : []
             const active = seasons.find((s: any) => s.is_active)
             if (active) setActiveSeasonId(active.id)
           })
           .catch(() => {}),
-        api.get<VenueType[]>('/admin/venues')
+        api.get<VenueType[]>('/venues')
           .then(r => setAllVenues(r.data ?? []))
           .catch(() => {}),
       ])
@@ -346,7 +346,7 @@ export default function KalenderPage() {
     setCreating(true)
     setCreateError(null)
     try {
-      await api.post('/admin/kalender', {
+      await api.post('/kalender', {
         date: selectedDate,
         time: selectedTime,
         end_time: eventType === 'generisch' ? selectedEndTime : undefined,
@@ -434,7 +434,7 @@ export default function KalenderPage() {
 
   const loadTemplates = async () => {
     try {
-      const r = await api.get('/admin/duty-templates')
+      const r = await api.get('/duty-templates')
       setTemplates(r.data ?? [])
     } catch {
       setTemplates([])
@@ -447,7 +447,7 @@ export default function KalenderPage() {
     try {
       const dateParam = eventType === 'heim' ? `&date=${selectedDate}` : ''
       const endTimeParam = eventType === 'generisch' ? `&end_time=${selectedEndTime}` : ''
-      const r = await api.get(`/admin/duty-templates/${selectedTemplate}/preview?time=${selectedTime}${dateParam}${endTimeParam}`)
+      const r = await api.get(`/duty-templates/${selectedTemplate}/preview?time=${selectedTime}${dateParam}${endTimeParam}`)
       const slots: SlotPreview[] = r.data ?? []
       setPreview(slots)
       setSelectedSlotIndices(new Set(slots.map((_, i) => i)))
@@ -488,7 +488,7 @@ export default function KalenderPage() {
     setDayRegenError(null)
     setDayRegenResult(null)
     try {
-      const r = await api.post(`/admin/kalender/regenerate-day?date=${dayRegenDate}`)
+      const r = await api.post(`/kalender/regenerate-day?date=${dayRegenDate}`)
       setDayRegenResult(r.data)
       await loadGames()
     } catch {

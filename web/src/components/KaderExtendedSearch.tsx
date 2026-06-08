@@ -25,7 +25,7 @@ export default function KaderExtendedSearch({ kaderId, onMemberAdded }: Props) {
   const fetchSuggestions = useCallback(async (search: string) => {
     setLoading(true)
     try {
-      const res = await api.get(`/admin/kader/${kaderId}/extended-member-suggestions`, {
+      const res = await api.get(`/kader/${kaderId}/extended-member-suggestions`, {
         params: { search },
       })
       setSuggestions(res.data.suggestions ?? [])
@@ -57,7 +57,7 @@ export default function KaderExtendedSearch({ kaderId, onMemberAdded }: Props) {
   const handleSelect = async (s: Suggestion) => {
     if (s.already_in_kader) return
     try {
-      await api.put(`/admin/kader/${kaderId}`, { extended_members_add: [s.id] })
+      await api.put(`/kader/${kaderId}`, { extended_members_add: [s.id] })
       onMemberAdded()
     } catch {
       // ignore — parent will show error if needed

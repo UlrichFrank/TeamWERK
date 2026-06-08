@@ -43,14 +43,14 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.get('/admin/seasons').then(r => {
+    api.get('/seasons').then(r => {
       setSeasons((r.data ?? []).filter((s: Season) => !s.is_active))
     })
   }, [])
 
   const handleSelectSeason = async (seasonId: number) => {
     setFromSeasonId(seasonId)
-    const res = await api.get('/admin/kader', { params: { season_id: seasonId } })
+    const res = await api.get('/kader', { params: { season_id: seasonId } })
     const kader: SourceKader[] = res.data ?? []
     setSourceKader(kader)
     const keys = new Set(kader.map(k => `${k.age_class}|${k.gender}`))
@@ -85,7 +85,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
       return { age_class: ageClass, gender, member_source: memberSource }
     })
     try {
-      await api.post('/admin/kader/copy-from-season', {
+      await api.post('/kader/copy-from-season', {
         from_season_id: fromSeasonId,
         to_season_id: toSeasonId,
         assignments: assignmentList,

@@ -840,7 +840,10 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 
 	var rows *sql.Rows
 	var err error
-	if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
+	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+		rows, err = h.db.QueryContext(r.Context(),
+			`SELECT id, name, age_class, gender, is_active FROM teams ORDER BY name`)
+	} else if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
 			 FROM teams t

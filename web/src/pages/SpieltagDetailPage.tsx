@@ -130,7 +130,7 @@ export default function SpieltagDetailPage() {
     Promise.all([
       loadGame(),
       loadBoard(),
-      canEdit ? api.get('/admin/duty-types').then(r => setDutyTypes(r.data ?? [])) : Promise.resolve(),
+      canEdit ? api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])) : Promise.resolve(),
     ]).finally(() => setLoading(false))
   }, [gameId])
 
@@ -207,7 +207,7 @@ export default function SpieltagDetailPage() {
     if (!gameId) return
     setDeletingGame(true)
     try {
-      await api.delete(`/admin/kalender/${gameId}?delete_slots=true`)
+      await api.delete(`/kalender/${gameId}?delete_slots=true`)
       navigate(game ? `/kalender?date=${game.date.slice(0, 10)}` : '/kalender')
     } finally {
       setDeletingGame(false)
@@ -222,7 +222,7 @@ export default function SpieltagDetailPage() {
     const initialTemplateID = game.template_id ?? null
     setRegenTemplateID(initialTemplateID)
     try {
-      const r = await api.get('/admin/duty-templates')
+      const r = await api.get('/duty-templates')
       setRegenTemplates(r.data ?? [])
     } catch {
       setRegenTemplates([])
@@ -237,7 +237,7 @@ export default function SpieltagDetailPage() {
     setRegenPreviewLoading(true)
     setRegenError(null)
     try {
-      const r = await api.get(`/admin/duty-templates/${templateID}/preview?time=${gameTime}&game_id=${gameId}`)
+      const r = await api.get(`/duty-templates/${templateID}/preview?time=${gameTime}&game_id=${gameId}`)
       setRegenPreview(r.data ?? [])
     } catch {
       setRegenPreview([])
@@ -264,7 +264,7 @@ export default function SpieltagDetailPage() {
     setRegenSaving(true)
     setRegenError(null)
     try {
-      const r = await api.post(`/admin/kalender/${gameId}/regenerate`, { template_id: regenTemplateID })
+      const r = await api.post(`/kalender/${gameId}/regenerate`, { template_id: regenTemplateID })
       await Promise.all([loadGame(), loadBoard()])
       setRegenKeptSlots(r.data.kept_slots)
       setShowRegen(false)

@@ -110,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function startImpersonation(userId: number, name: string) {
-    const res = await api.post(`/admin/impersonate/${userId}`)
+    const res = await api.post(`/impersonate/${userId}`)
     const token: string = res.data.access_token
     setAccessToken(token)
     const payload = JSON.parse(atob(token.split('.')[1]))

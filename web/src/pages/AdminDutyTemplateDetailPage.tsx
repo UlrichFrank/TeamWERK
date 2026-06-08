@@ -50,8 +50,8 @@ export default function AdminDutyTemplateDetailPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get(`/admin/duty-templates/${id}`).then(r => setTemplate(r.data)),
-      api.get('/admin/duty-types').then(r => setDutyTypes(r.data ?? [])),
+      api.get(`/duty-templates/${id}`).then(r => setTemplate(r.data)),
+      api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])),
     ]).finally(() => setLoading(false))
   }, [id])
 
@@ -78,7 +78,7 @@ export default function AdminDutyTemplateDetailPage() {
     setSaving(true)
     setSaved(false)
     try {
-      await api.put(`/admin/duty-templates/${id}`, template)
+      await api.put(`/duty-templates/${id}`, template)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch {

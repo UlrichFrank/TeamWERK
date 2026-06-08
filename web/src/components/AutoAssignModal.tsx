@@ -28,7 +28,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
 
   useEffect(() => {
     setLoading(true)
-    api.get('/admin/kader', { params: { season_id: seasonId } })
+    api.get('/kader', { params: { season_id: seasonId } })
       .then(r => {
         const kadersData: Kader[] = r.data ?? []
         setKader(kadersData)
@@ -54,7 +54,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
     setSaving(true)
     setError(null)
     try {
-      await api.post('/admin/kader/auto-assign', {
+      await api.post('/kader/auto-assign', {
         kader_ids: Array.from(selectedIds),
       })
       alert(`Auto-Assign für ${selectedIds.size} Kader abgeschlossen`)

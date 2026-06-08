@@ -40,7 +40,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    api.get<Venue[]>('/admin/venues').then(r => setVenues(r.data)).catch(() => {})
+    api.get<Venue[]>('/venues').then(r => setVenues(r.data)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
     setSaving(true)
     setError('')
     try {
-      const res = await api.post<{ id: number }>('/admin/venues', form)
+      const res = await api.post<{ id: number }>('/venues', form)
       const newVenue: Venue = { id: res.data.id, ...form, country: 'DE', is_home_venue: false }
       setVenues(vs => [...vs, newVenue])
       onChange(res.data.id)

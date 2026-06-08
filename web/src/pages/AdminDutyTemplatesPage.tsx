@@ -251,14 +251,14 @@ export default function AdminDutyTemplatesPage() {
   const [modalError, setModalError] = useState('')
 
   const loadTemplates = async () => {
-    const r = await api.get('/admin/duty-templates')
+    const r = await api.get('/duty-templates')
     setTemplates(r.data ?? [])
   }
 
   useEffect(() => {
     Promise.all([
-      api.get('/admin/duty-templates').then(r => setTemplates(r.data ?? [])),
-      api.get('/admin/duty-types').then(r => setDutyTypes(r.data ?? [])),
+      api.get('/duty-templates').then(r => setTemplates(r.data ?? [])),
+      api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])),
     ]).finally(() => setLoading(false))
   }, [])
 
@@ -278,7 +278,7 @@ export default function AdminDutyTemplatesPage() {
     setEditingTemplateId(id)
     setModalTemplate(null)
     try {
-      const r = await api.get(`/admin/duty-templates/${id}`)
+      const r = await api.get(`/duty-templates/${id}`)
       setModalTemplate({
         name: r.data.name,
         template_type: r.data.template_type,
@@ -300,7 +300,7 @@ export default function AdminDutyTemplatesPage() {
     if (!confirm(`Vorlage „${name}" wirklich löschen?`)) return
     setDeleteError('')
     try {
-      await api.delete(`/admin/duty-templates/${id}`)
+      await api.delete(`/duty-templates/${id}`)
       setTemplates(prev => prev.filter(t => t.id !== id))
     } catch {
       setDeleteError('Löschen fehlgeschlagen.')
@@ -323,14 +323,14 @@ export default function AdminDutyTemplatesPage() {
 
     try {
       if (editingTemplateId == null) {
-        const createResponse = await api.post('/admin/duty-templates', {
+        const createResponse = await api.post('/duty-templates', {
           name: modalTemplate.name.trim(),
           template_type: modalTemplate.template_type,
           duration_minutes: modalTemplate.duration_minutes,
         })
         const createdId = createResponse.data.id
         if (modalTemplate.items.length > 0) {
-          await api.put(`/admin/duty-templates/${createdId}`, {
+          await api.put(`/duty-templates/${createdId}`, {
             name: modalTemplate.name.trim(),
             template_type: modalTemplate.template_type,
             duration_minutes: modalTemplate.duration_minutes,
@@ -338,7 +338,7 @@ export default function AdminDutyTemplatesPage() {
           })
         }
       } else {
-        await api.put(`/admin/duty-templates/${editingTemplateId}`, {
+        await api.put(`/duty-templates/${editingTemplateId}`, {
           name: modalTemplate.name.trim(),
           template_type: modalTemplate.template_type,
           duration_minutes: modalTemplate.duration_minutes,

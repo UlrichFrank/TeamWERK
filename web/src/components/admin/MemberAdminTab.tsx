@@ -71,7 +71,7 @@ export default function MemberAdminTab({
     setSending(true)
     setSendError('')
     try {
-      const res = await api.post<{ sent_at: string }>(`/admin/members/${memberId}/welcome-email`)
+      const res = await api.post<{ sent_at: string }>(`/members/${memberId}/welcome-email`)
       onWelcomeEmailSent(res.data.sent_at)
     } catch {
       setSendError('Fehler beim Senden der Willkommensmail. Bitte erneut versuchen.')

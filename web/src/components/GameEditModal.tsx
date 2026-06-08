@@ -43,7 +43,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setDeleting(true)
     setError(null)
     try {
-      await api.delete(`/admin/kalender/${game.id}?delete_slots=true`)
+      await api.delete(`/kalender/${game.id}?delete_slots=true`)
       onDeleted?.()
     } catch {
       setError('Löschen fehlgeschlagen.')
@@ -57,7 +57,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setSaving(true)
     setError(null)
     try {
-      await api.put(`/admin/kalender/${game.id}`, {
+      await api.put(`/kalender/${game.id}`, {
         date,
         time,
         end_time: isGeneric ? (endTime || null) : null,

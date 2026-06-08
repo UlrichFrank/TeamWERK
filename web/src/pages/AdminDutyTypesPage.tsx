@@ -190,12 +190,12 @@ export default function AdminDutyTypesPage() {
   const [edit, setEdit] = useState<EditState | null>(null)
   const [modalId, setModalId] = useState<number | null>(null)
 
-  const load = () => api.get('/admin/duty-types').then(r => setTypes(r.data ?? []))
+  const load = () => api.get('/duty-types').then(r => setTypes(r.data ?? []))
   useEffect(() => { load() }, [])
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault()
-    await api.post('/admin/duty-types', {
+    await api.post('/duty-types', {
       name: create.name,
       hours_value: parseHoursInput(create.hours),
       default_anchor: create.anchor,
@@ -218,7 +218,7 @@ export default function AdminDutyTypesPage() {
 
   const saveEdit = async (id: number) => {
     if (!edit) return
-    await api.put(`/admin/duty-types/${id}`, {
+    await api.put(`/duty-types/${id}`, {
       name: edit.name,
       hours_value: parseHoursInput(edit.hours),
       default_anchor: edit.anchor,
@@ -235,7 +235,7 @@ export default function AdminDutyTypesPage() {
 
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(`Diensttyp „${name}" wirklich löschen?`)) return
-    await api.delete(`/admin/duty-types/${id}`)
+    await api.delete(`/duty-types/${id}`)
     load()
   }
 

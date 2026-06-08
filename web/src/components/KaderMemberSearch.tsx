@@ -30,7 +30,7 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
   const fetchSuggestions = useCallback(async (search: string, filter: boolean) => {
     setLoading(true)
     try {
-      const res = await api.get(`/admin/kader/${kaderId}/member-suggestions`, {
+      const res = await api.get(`/kader/${kaderId}/member-suggestions`, {
         params: { search, filter_age_bracket: filter },
       })
       setSuggestions(res.data.suggestions ?? [])
@@ -62,7 +62,7 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
   const handleSelect = async (s: Suggestion) => {
     if (s.already_in_kader) return
     try {
-      await api.put(`/admin/kader/${kaderId}`, { members_add: [s.id], members_remove: [] })
+      await api.put(`/kader/${kaderId}`, { members_add: [s.id], members_remove: [] })
       onMemberAdded()
     } catch {
       // ignore — parent will show error if needed

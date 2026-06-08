@@ -221,67 +221,148 @@ POST /api/auth/request-membership
 POST /api/auth/register
 POST /api/auth/forgot-password
 POST /api/auth/reset-password
+GET  /api/auth/token-info
+GET  /api/profile/email/confirm
+GET  /api/uploads/*
+GET  /api/files/{id}/download
 ```
 
 ### Authenticated (alle eingeloggt)
 ```
-GET  /api/members
-GET  /api/members/{id}
-GET  /api/members/{id}/change-drafts
-POST /api/members/{id}/change-request
+GET  /api/kalender
+GET  /api/kalender/{id}
+GET  /api/teams                          ← rollenabhängig gefiltert (vorstand/admin → alle; andere → Kader-View)
+GET  /api/teams/my
+GET  /api/teams/{id}/roster
 GET  /api/profile/me
-GET  /api/profile/vehicle
-PUT  /api/profile/vehicle
+PUT  /api/profile/me
+GET/PUT  /api/profile/vehicle
+GET/PUT  /api/profile/account
+POST /api/profile/password
+POST /api/profile/email
+POST /api/profile/phones
+PUT/DELETE /api/profile/phones/{id}
+PUT  /api/profile/visibility
+PUT  /api/profile/reminder-preference
+GET/PUT  /api/profile/kind/{memberId}
 GET  /api/duty-board
 POST /api/duty-board/{slotId}/claim
+DELETE /api/duty-board/{slotId}/claim
 GET  /api/duty-accounts
 GET  /api/duty-slots
 GET  /api/duty-slots/{id}/assignments
+GET  /api/training-sessions
+GET  /api/training-sessions/{id}
+POST /api/training-sessions/{id}/respond
+GET  /api/training-sessions/{id}/attendances
+GET  /api/games/my
+POST /api/games/{id}/respond
+GET  /api/games/{id}/responses
+GET  /api/games/{id}/participants
+POST /api/games/{id}/lineup
+GET  /api/mitfahrgelegenheiten
+POST /api/mitfahrgelegenheiten
+DELETE /api/mitfahrgelegenheiten/{id}
+GET  /api/dashboard
+GET  /api/chat/conversations
+POST /api/chat/conversations
+GET/POST /api/chat/conversations/{id}/messages
+POST /api/chat/conversations/{id}/read
+GET  /api/chat/broadcasts
+POST /api/folders
+GET  /api/folders/{id}/contents
+GET  /api/push/vapid-public-key
+POST /api/push/subscribe
 ```
 
-### Admin + Trainer
+### Trainer + sportliche_leitung
 ```
+GET  /api/venues
+GET  /api/training-series
+POST /api/training-series
+PUT/DELETE /api/training-series/{id}
+POST /api/training-sessions
+PUT/DELETE /api/training-sessions/{id}
+POST /api/training-sessions/{id}/attendances
 POST /api/duty-slots
-PUT  /api/duty-slots/{id}
-DELETE /api/duty-slots/{id}
+PUT/DELETE /api/duty-slots/{id}
 POST /api/duty-assignments/{id}/fulfill
 POST /api/duty-assignments/{id}/cash-substitute
-GET  /api/admin/membership-requests
-POST /api/admin/membership-requests/{id}/approve
-POST /api/admin/membership-requests/{id}/reject
+GET  /api/membership-requests
+POST /api/membership-requests/{id}/approve
+POST /api/membership-requests/{id}/reject
+DELETE /api/membership-requests/{id}
 POST /api/auth/invite
-POST /api/members/{id}/change-drafts/{draftId}/accept
-DELETE /api/members/{id}/change-drafts/{draftId}
 ```
 
-### Admin + Vorstand
+### Vorstand + Trainer + sportliche_leitung
 ```
-POST /api/members
+POST /api/venues
+POST /api/venues/import
+DELETE /api/venues
+PUT/DELETE /api/venues/{id}
+POST /api/kalender
+PUT/DELETE /api/kalender/{id}
+POST /api/kalender/{id}/regenerate
+POST /api/kalender/regenerate-day
+POST /api/members/{id}/change-drafts/{draftId}/accept
+DELETE /api/members/{id}/change-drafts/{draftId}
+GET  /api/age-class-rules
+GET  /api/seasons                        ← auch Trainer-Gruppe
+GET  /api/kader
+POST /api/kader
+GET/PUT/DELETE /api/kader/{id}
+GET  /api/kader/{id}/member-suggestions
+GET  /api/kader/{id}/extended-member-suggestions
+PATCH /api/kader/{id}/games-per-season
+POST /api/kader/copy-from-season
+POST /api/kader/auto-assign
+```
+
+### Vorstand
+```
+GET  /api/members
 GET  /api/members/export
-PUT  /api/members/{id}
+POST /api/members
+POST /api/members/import
+GET/PUT /api/members/{id}
 PUT  /api/members/{id}/status
+DELETE /api/members/{id}
+PUT  /api/members/{id}/user
+POST /api/members/{id}/welcome-email
+GET  /api/members/{id}/parents
+GET/PUT /api/club
+POST /api/seasons
+PUT  /api/seasons/{id}
+PUT  /api/seasons/{id}/activate
+DELETE /api/seasons/{id}
+PUT  /api/seasons/{id}/duty-targets
+POST /api/teams
+PUT  /api/teams/{id}
+GET  /api/users
+PUT  /api/users/{id}/role
+DELETE /api/users/{id}
+POST /api/users/{id}/create-member
+GET  /api/invitations
+DELETE /api/invitations/{id}
+POST /api/invitations/import-csv
+POST /api/invitations/{id}/send
+PUT  /api/invitations/{id}/member
+POST /api/family-links
+DELETE /api/family-links
+GET/POST /api/duty-types
+PUT/DELETE /api/duty-types/{id}
+GET  /api/duty-accounts/export
+GET  /api/duty-templates
+POST /api/duty-templates
+GET/PUT/DELETE /api/duty-templates/{id}
+GET  /api/duty-templates/{id}/preview
+PUT  /api/age-class-rules/{ageClass}
 ```
-(plus alle weiteren Admin+Vorstand-Routen unten)
 
 ### Admin only
 ```
-GET/PUT  /api/admin/club
-GET/POST /api/admin/seasons
-PUT      /api/admin/seasons/{id}/activate      → Frontend: /admin/saisons
-PUT      /api/admin/seasons/{id}/duty-targets
-GET/POST /api/admin/teams
-PUT      /api/admin/teams/{id}
-POST     /api/admin/teams/{id}/assign-trainer
-GET      /api/admin/users
-POST     /api/admin/family-links
-GET/POST /api/admin/duty-types
-PUT/DELETE /api/admin/duty-types/{id}
-GET      /api/admin/duty-accounts/export
-POST     /api/admin/games
-PUT/DELETE /api/admin/games/{id}
-POST     /api/admin/games/{id}/regenerate
-GET/PUT  /api/admin/game-template             → Frontend: /admin/spielplan-template
-GET      /api/admin/game-template/preview
+POST /api/impersonate/{id}
 ```
 
 ---

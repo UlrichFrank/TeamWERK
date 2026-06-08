@@ -91,8 +91,8 @@ export default function AdminKaderPage() {
 
   const loadKader = async (seasonId: number) => {
     const [kaderRes, ageClassRes] = await Promise.all([
-      api.get(`/admin/kader?season_id=${seasonId}`),
-      api.get('/admin/age-class-rules'),
+      api.get(`/kader?season_id=${seasonId}`),
+      api.get('/age-class-rules'),
     ])
     const list: Kader[] = Array.isArray(kaderRes.data) ? kaderRes.data : []
     setKaderList(list)
@@ -111,7 +111,7 @@ export default function AdminKaderPage() {
 
   useEffect(() => {
     const init = async () => {
-      const res = await api.get('/admin/seasons')
+      const res = await api.get('/seasons')
       const all: Season[] = res.data ?? []
       setSeasons(all)
       const active = all.find(s => s.is_active) ?? null
@@ -126,7 +126,7 @@ export default function AdminKaderPage() {
     const key = `${kaderId}-${memberId}`
     setRemoving(prev => ({ ...prev, [key]: true }))
     try {
-      await api.put(`/admin/kader/${kaderId}`, { members_add: [], members_remove: [memberId] })
+      await api.put('/kader/${kaderId}`, { members_add: [], members_remove: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
@@ -137,7 +137,7 @@ export default function AdminKaderPage() {
 
   const handleAddTrainer = async (kaderId: number, memberId: number) => {
     try {
-      await api.put(`/admin/kader/${kaderId}`, { trainers_add: [memberId] })
+      await api.put('/kader/${kaderId}`, { trainers_add: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Hinzufügen')
@@ -146,7 +146,7 @@ export default function AdminKaderPage() {
 
   const handleRemoveTrainer = async (kaderId: number, memberId: number) => {
     try {
-      await api.put(`/admin/kader/${kaderId}`, { trainers_remove: [memberId] })
+      await api.put('/kader/${kaderId}`, { trainers_remove: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
@@ -157,7 +157,7 @@ export default function AdminKaderPage() {
     const key = `ext-${kaderId}-${memberId}`
     setRemoving(prev => ({ ...prev, [key]: true }))
     try {
-      await api.put(`/admin/kader/${kaderId}`, { extended_members_remove: [memberId] })
+      await api.put('/kader/${kaderId}`, { extended_members_remove: [memberId] })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Entfernen')
@@ -170,7 +170,7 @@ export default function AdminKaderPage() {
     if (!selectedSeason) return
     setInitializing(true)
     try {
-      await api.post('/admin/kader', { season_id: selectedSeason.id })
+      await api.post('/kader', { season_id: selectedSeason.id })
       await loadKader(selectedSeason.id)
       showToast('Kader angelegt')
     } catch {
@@ -182,7 +182,7 @@ export default function AdminKaderPage() {
 
   const handleSetDedicatedYear = async (k: Kader, year: number) => {
     try {
-      await api.put(`/admin/kader/${k.id}`, { dedicated_birth_year: year })
+      await api.put('/kader/${k.id}`, { dedicated_birth_year: year })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Speichern')
@@ -195,7 +195,7 @@ export default function AdminKaderPage() {
       return
     }
     try {
-      await api.put(`/admin/kader/${k.id}`, { set_dedicated_birth_year: true })
+      await api.put('/kader/${k.id}`, { set_dedicated_birth_year: true })
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
       showToast('Fehler beim Speichern')
@@ -208,7 +208,7 @@ export default function AdminKaderPage() {
     const teamNumber = kaderList.filter(k => k.age_class === createModal.ageClass && k.gender === createModal.gender).length + 1
     setCreating(true)
     try {
-      await api.post('/admin/kader', {
+      await api.post('/kader', {
         season_id: selectedSeason.id,
         age_class: createModal.ageClass,
         gender: createModal.gender,
@@ -233,7 +233,7 @@ export default function AdminKaderPage() {
   const handleSetAgeClass = async (k: Kader, newAgeClass: string) => {
     if (newAgeClass === k.age_class) return
     try {
-      await api.put(`/admin/kader/${k.id}`, { age_class: newAgeClass })
+      await api.put('/kader/${k.id}`, { age_class: newAgeClass })
       setActiveAgeClass(newAgeClass)
       if (selectedSeason) await loadKader(selectedSeason.id)
     } catch {
@@ -243,7 +243,7 @@ export default function AdminKaderPage() {
 
   const handlePatchGamesPerSeason = async (kaderId: number, value: number) => {
     try {
-      await api.patch(`/admin/kader/${kaderId}/games-per-season`, { games_per_season: value })
+      await api.patch('/kader/${kaderId}/games-per-season`, { games_per_season: value })
     } catch {
       showToast('Fehler beim Speichern der Spielanzahl')
     }
@@ -253,7 +253,7 @@ export default function AdminKaderPage() {
     if (!deleteConfirm) return
     setDeleting(true)
     try {
-      await api.delete(`/admin/kader/${deleteConfirm.id}`)
+      await api.delete(`/kader/${deleteConfirm.id}`)
       setDeleteConfirm(null)
       if (selectedSeason) await loadKader(selectedSeason.id)
       showToast('Kader gelöscht')

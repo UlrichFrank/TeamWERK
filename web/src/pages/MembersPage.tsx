@@ -88,7 +88,7 @@ export default function MembersPage() {
     if (!confirm(`Mitglied „${m.first_name} ${m.last_name}" wirklich löschen?`)) return
     setDeletingIds(prev => new Set(prev).add(m.id))
     try {
-      await api.delete(`/admin/members/${m.id}`)
+      await api.delete(`/members/${m.id}`)
       refresh()
     } catch {
       alert('Löschen fehlgeschlagen.')

@@ -57,7 +57,7 @@ export default function AdminVenuesPage() {
   const actionsMenuRef = useRef<HTMLDivElement>(null)
 
   function load() {
-    api.get<Venue[]>('/admin/venues').then(r => {
+    api.get<Venue[]>('/venues').then(r => {
       setVenues(r.data)
       setLoading(false)
     }).catch(() => setLoading(false))
@@ -99,9 +99,9 @@ export default function AdminVenuesPage() {
     setError('')
     try {
       if (editVenue) {
-        await api.put(`/admin/venues/${editVenue.id}`, form)
+        await api.put(`/venues/${editVenue.id}`, form)
       } else {
-        await api.post('/admin/venues', form)
+        await api.post('/venues', form)
       }
       setShowModal(false)
       load()
@@ -114,7 +114,7 @@ export default function AdminVenuesPage() {
 
   async function handleDelete(id: number) {
     try {
-      await api.delete(`/admin/venues/${id}`)
+      await api.delete(`/venues/${id}`)
       setDeleteConfirm(null)
       load()
     } catch {
@@ -128,7 +128,7 @@ export default function AdminVenuesPage() {
     try {
       const fd = new FormData()
       fd.append('file', importFile)
-      const res = await api.post<ImportResult>('/admin/venues/import', fd)
+      const res = await api.post<ImportResult>('/venues/import', fd)
       setImportResult(res.data)
       load()
     } catch {
@@ -146,7 +146,7 @@ export default function AdminVenuesPage() {
 
   async function handleDeleteAll() {
     try {
-      await api.delete('/admin/venues')
+      await api.delete('/venues')
       setShowDeleteAll(false)
       load()
     } catch {

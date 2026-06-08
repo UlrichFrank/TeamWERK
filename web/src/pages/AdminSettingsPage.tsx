@@ -24,7 +24,7 @@ function VereinTab() {
 
   useEffect(() => {
     if (loaded) return
-    api.get('/admin/club').then(r => {
+    api.get('/club').then(r => {
       setName(r.data.name ?? '')
       setAddress(r.data.address ?? '')
       setLoaded(true)
@@ -33,7 +33,7 @@ function VereinTab() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    await api.put('/admin/club', { name, address })
+    await api.put('/club', { name, address })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -102,7 +102,7 @@ function SaisonsTab() {
   const [deleting, setDeleting] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = () => api.get('/admin/seasons').then(r => setSeasons(r.data ?? []))
+  const load = () => api.get('/seasons').then(r => setSeasons(r.data ?? []))
 
   useEffect(() => {
     if (loaded) return
@@ -127,7 +127,7 @@ function SaisonsTab() {
     setCreating(true)
     setCreateError(null)
     try {
-      await api.post('/admin/seasons', { name: createName, start_date: createStart, end_date: createEnd })
+      await api.post('/seasons', { name: createName, start_date: createStart, end_date: createEnd })
       setShowCreate(false)
       setPreset(''); setCreateName(''); setCreateStart(''); setCreateEnd('')
       await load()
@@ -150,7 +150,7 @@ function SaisonsTab() {
     if (!editId) return
     setSaving(true)
     try {
-      await api.put(`/admin/seasons/${editId}`, { name: editName, start_date: editStart, end_date: editEnd })
+      await api.put('/seasons/${editId}`, { name: editName, start_date: editStart, end_date: editEnd })
       setEditId(null)
       await load()
     } finally {
@@ -159,7 +159,7 @@ function SaisonsTab() {
   }
 
   const handleActivate = async (id: number) => {
-    await api.put(`/admin/seasons/${id}/activate`, {})
+    await api.put('/seasons/${id}/activate`, {})
     await load()
   }
 
@@ -168,7 +168,7 @@ function SaisonsTab() {
     setDeleting(id)
     setError(null)
     try {
-      await api.delete(`/admin/seasons/${id}`)
+      await api.delete('/seasons/${id}`)
       await load()
     } catch {
       setError('Saison konnte nicht gelöscht werden.')
@@ -380,7 +380,7 @@ function AltersklassenTab() {
   useEffect(() => {
     if (loaded) return
     setLoading(true)
-    api.get<AgeClassRule[]>('/admin/age-class-rules').then(r => {
+    api.get<AgeClassRule[]>('/age-class-rules').then(r => {
       const data: AgeClassRule[] = Array.isArray(r.data) ? r.data : []
       setRules(data)
       const initial: Record<string, RowState> = {}
@@ -405,7 +405,7 @@ function AltersklassenTab() {
     }
     setRowStates(prev => ({ ...prev, [ageClass]: { ...prev[ageClass], saving: true, error: '' } }))
     try {
-      await api.put(`/admin/age-class-rules/${ageClass}`, { half_duration_minutes: half, break_minutes: brk })
+      await api.put('/age-class-rules/${ageClass}`, { half_duration_minutes: half, break_minutes: brk })
       setRowStates(prev => ({ ...prev, [ageClass]: { ...prev[ageClass], saving: false, success: true } }))
     } catch {
       setRowStates(prev => ({ ...prev, [ageClass]: { ...prev[ageClass], saving: false, error: 'Speichern fehlgeschlagen.' } }))

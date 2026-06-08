@@ -26,5 +26,5 @@ Das Chat-Kontextmenü bietet bisher nur Antworten, Bearbeiten und Löschen — N
 
 - **Backend:** Neues Handler-Methode in `internal/chat/`; Bildablage unter `/var/lib/teamwerk/chat-images/<uuid>.<ext>`; Migration für `image_url`-Spalte in `chat_messages`
 - **Frontend:** `ChatPage.tsx` — Kontextmenü, Sende-Bereich, MessageBubble
-- **Speicherplatz:** Bilder liegen auf VPS-Disk (Limit: 10 MB pro Bild, JPEG/PNG/GIF/WebP)
+- **Speicherplatz:** Bilder liegen auf VPS-Disk (Limit: 5 MB pro Bild, JPEG/PNG/GIF/WebP)
 - **Keine neuen externen Dependencies**

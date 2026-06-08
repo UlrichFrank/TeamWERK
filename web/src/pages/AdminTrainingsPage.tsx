@@ -111,7 +111,7 @@ export default function AdminTrainingsPage() {
   const isNewSession = sessionModal !== null && sessionModal.id === undefined
 
   useEffect(() => {
-    Promise.all([api.get('/teams'), api.get('/admin/seasons')]).then(([t, s]) => {
+    Promise.all([api.get('/teams'), api.get('/seasons')]).then(([t, s]) => {
       setTeams(t.data ?? [])
       setSeasons(s.data ?? [])
     })

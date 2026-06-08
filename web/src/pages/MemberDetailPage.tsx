@@ -82,7 +82,7 @@ export default function MemberDetailPage() {
 
   const loadLinkedParents = () => {
     if (isAdmin && !isNew && id) {
-      api.get(`/admin/members/${id}/parents`).then(r => setLinkedParents(r.data ?? []))
+      api.get(`/members/${id}/parents`).then(r => setLinkedParents(r.data ?? []))
     }
   }
 
@@ -145,8 +145,8 @@ export default function MemberDetailPage() {
     if (authLoading) return
     let cancelled = false
     if (isAdmin) {
-      api.get('/admin/users').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
-      api.get('/admin/invitations').then(r => { if (!cancelled) setInvitations(r.data ?? []) })
+      api.get('/users').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
+      api.get('/invitations').then(r => { if (!cancelled) setInvitations(r.data ?? []) })
     }
     if (!isNew && id) {
       loadDrafts()
@@ -185,7 +185,7 @@ export default function MemberDetailPage() {
   const handleFamilyLink = async (parentUserId: number) => {
     if (!id) return
     try {
-      await api.post('/admin/family-links', { parent_user_id: parentUserId, member_id: Number(id) })
+      await api.post('/family-links', { parent_user_id: parentUserId, member_id: Number(id) })
       loadLinkedParents()
       setSaved(true); setTimeout(() => setSaved(false), 2000)
     } catch {
@@ -196,7 +196,7 @@ export default function MemberDetailPage() {
   const handleRemoveParent = async (parentUserId: number) => {
     if (!id) return
     try {
-      await api.delete('/admin/family-links', { data: { parent_user_id: parentUserId, member_id: Number(id) } })
+      await api.delete('/family-links', { data: { parent_user_id: parentUserId, member_id: Number(id) } })
       loadLinkedParents()
     } catch {
       setError('Fehler beim Entfernen.')
@@ -205,7 +205,7 @@ export default function MemberDetailPage() {
 
   const handleLinkUser = async (userId: number | null) => {
     if (!id) return
-    await api.put(`/admin/members/${id}/user`, { user_id: userId })
+    await api.put(`/members/${id}/user`, { user_id: userId })
     setCurrentUserID(userId)
     setSaved(true); setTimeout(() => setSaved(false), 2000)
   }
@@ -215,10 +215,10 @@ export default function MemberDetailPage() {
     const memberId = Number(id)
     const prev = invitations.find(i => i.member_id === memberId)
     if (prev && prev.id !== invitationId)
-      await api.put(`/admin/invitations/${prev.id}/member`, { member_id: null })
+      await api.put(`/invitations/${prev.id}/member`, { member_id: null })
     if (invitationId !== null)
-      await api.put(`/admin/invitations/${invitationId}/member`, { member_id: memberId })
-    const r = await api.get('/admin/invitations')
+      await api.put(`/invitations/${invitationId}/member`, { member_id: memberId })
+    const r = await api.get('/invitations')
     setInvitations(r.data ?? [])
     setSaved(true); setTimeout(() => setSaved(false), 2000)
   }

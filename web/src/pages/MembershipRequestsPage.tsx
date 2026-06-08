@@ -6,11 +6,11 @@ interface Request { id: number; first_name: string; last_name: string; email: st
 export default function MembershipRequestsPage() {
   const [requests, setRequests] = useState<Request[]>([])
 
-  const load = () => api.get('/admin/membership-requests').then(r => setRequests(r.data ?? []))
+  const load = () => api.get('/membership-requests').then(r => setRequests(r.data ?? []))
   useEffect(() => { load() }, [])
 
-  const approve = async (id: number) => { await api.post(`/admin/membership-requests/${id}/approve`); load() }
-  const reject = async (id: number) => { await api.post(`/admin/membership-requests/${id}/reject`); load() }
+  const approve = async (id: number) => { await api.post(`/membership-requests/${id}/approve`); load() }
+  const reject = async (id: number) => { await api.post(`/membership-requests/${id}/reject`); load() }
 
   return (
     <div>
