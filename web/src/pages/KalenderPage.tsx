@@ -198,7 +198,7 @@ export default function KalenderPage() {
   const [gameRsvpRequireReason, setGameRsvpRequireReason] = useState(1)
   // Absence wizard states
   const [absenceForm, setAbsenceForm] = useState({ member_id: 0, type: 'vacation', start_date: '', end_date: '', note: '' })
-  const [absencePreviewEvents, setAbsencePreviewEvents] = useState<Array<{ event_type: string; event_id: number; name: string; date: string }> | null>(null)
+  const [absencePreviewEvents, setAbsencePreviewEvents] = useState<Array<{ event_type: string; event_id: number; name: string; date: string; pending: boolean }> | null>(null)
   const [absencePreviewLoading, setAbsencePreviewLoading] = useState(false)
   const [absenceChildren, setAbsenceChildren] = useState<Array<{ id: number; name: string }>>([])
   const [absenceSaving, setAbsenceSaving] = useState(false)
@@ -278,6 +278,7 @@ export default function KalenderPage() {
   useLiveUpdates((event) => {
     if (event === 'games') loadGames()
     if (event === 'absences') loadAbsences()
+    if (event === 'trainings') loadTrainings()
   })
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
@@ -620,6 +621,7 @@ export default function KalenderPage() {
       await api.post('/absences', body)
       closeDialog()
       loadAbsences()
+      loadTrainings()
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       setAbsenceError(status === 409
@@ -1341,14 +1343,14 @@ export default function KalenderPage() {
                 <div className="flex items-start gap-3 mb-4">
                   <AlertTriangle className="w-5 h-5 text-brand-danger shrink-0 mt-0.5" />
                   <div>
-                    <h2 className="text-base font-semibold text-brand-text">Bestehende Zusagen werden zurückgezogen</h2>
-                    <p className="text-sm text-brand-text-muted mt-1">Folgende Events werden automatisch abgesagt:</p>
+                    <h2 className="text-base font-semibold text-brand-text">Folgende Trainings &amp; Spiele werden automatisch abgesagt</h2>
+                    <p className="text-sm text-brand-text-muted mt-1">Bestätigte Zusagen werden zurückgezogen, offene Termine abgesagt.</p>
                   </div>
                 </div>
                 <ul className="space-y-1.5 mb-5 max-h-48 overflow-y-auto">
                   {absencePreviewEvents.map(ev => (
-                    <li key={`${ev.event_type}-${ev.event_id}`} className="flex items-center gap-2 text-sm text-brand-text">
-                      <span className="text-brand-text-muted w-16 shrink-0">{ev.date}</span>
+                    <li key={`${ev.event_type}-${ev.event_id}`} className={`flex items-center gap-2 text-sm ${ev.pending ? 'text-brand-text-muted' : 'text-brand-text'}`}>
+                      <span className="text-brand-text-subtle w-16 shrink-0">{ev.date}</span>
                       <span>{ev.name}</span>
                       <span className="ml-auto text-xs text-brand-text-subtle">{ev.event_type === 'training' ? 'Training' : 'Spiel'}</span>
                     </li>

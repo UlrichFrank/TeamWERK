@@ -40,6 +40,7 @@ type previewEvent struct {
 	EventID   int    `json:"event_id"`
 	Name      string `json:"name"`
 	Date      string `json:"date"`
+	Pending   bool   `json:"pending"` // true = no prior response, will be newly declined
 }
 
 // memberIDForUser returns the member ID linked to the given user, or 0.
@@ -101,6 +102,7 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events := []previewEvent{}
+	seenTrainingIDs := map[int]bool{}
 
 	// confirmed training responses in range
 	tRows, err := h.db.QueryContext(r.Context(), `
@@ -122,7 +124,39 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 			ev.Name = "Training"
 		}
 		ev.Date = ev.Date[:10]
+		seenTrainingIDs[ev.EventID] = true
 		events = append(events, ev)
+	}
+
+	// pending training sessions in range: member is in kader but has no response yet
+	pRows, err := h.db.QueryContext(r.Context(), `
+		SELECT ts.id, COALESCE(ts.title, ''), ts.date
+		FROM training_sessions ts
+		JOIN kader_members km ON km.member_id = ?
+		JOIN kader k ON k.id = km.kader_id AND k.team_id = ts.team_id
+		WHERE ts.date BETWEEN ? AND ?
+		  AND NOT EXISTS (
+		    SELECT 1 FROM training_responses tr
+		    WHERE tr.training_id = ts.id AND tr.member_id = ?
+		  )`, resolvedMemberID, from, to, resolvedMemberID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "absences preview pending training: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer pRows.Close()
+	for pRows.Next() {
+		var ev previewEvent
+		ev.EventType = "training"
+		ev.Pending = true
+		pRows.Scan(&ev.EventID, &ev.Name, &ev.Date)
+		if ev.Name == "" {
+			ev.Name = "Training"
+		}
+		ev.Date = ev.Date[:10]
+		if !seenTrainingIDs[ev.EventID] {
+			events = append(events, ev)
+		}
 	}
 
 	// confirmed game responses in range
