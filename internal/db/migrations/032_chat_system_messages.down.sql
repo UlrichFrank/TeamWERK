@@ -1,0 +1,1 @@
+-- no down migration (ALTER ADD COLUMN not reversible in SQLite)

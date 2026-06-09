@@ -29,6 +29,7 @@ interface Message {
   replyToSenderName: string | null
   editedAt: string | null
   deletedAt: string | null
+  isSystem: boolean
 }
 interface Broadcast {
   id: number
@@ -103,6 +104,12 @@ export default function ChatPage() {
 
   useChatEvents((event) => {
     if (event.startsWith('chat:new-message')) {
+      loadConversations()
+      const parts = event.split(':')
+      const convId = parseInt(parts[2])
+      if (activeConv?.id === convId) loadMessages(convId)
+    }
+    if (event.startsWith('chat:member-left')) {
       loadConversations()
       const parts = event.split(':')
       const convId = parseInt(parts[2])
@@ -439,6 +446,15 @@ export default function ChatPage() {
 
               <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2">
                 {messages.map(msg => {
+                  if (msg.isSystem) {
+                    return (
+                      <div key={msg.id} className="flex justify-center my-1">
+                        <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
+                          {msg.senderName} hat die Gruppe verlassen
+                        </span>
+                      </div>
+                    )
+                  }
                   const isOwn = msg.senderId === user?.id
                   return (
                     <MessageBubble

@@ -59,17 +59,22 @@ Das System SHALL die Erstellung von Gruppen-Konversationen mit einem frei wählb
 
 ### Requirement: Nachrichten einer Konversation abrufen
 
-Das System SHALL die letzten 100 Nachrichten einer Konversation zurückgeben (absteigend nach `sent_at`, dann im Frontend umgekehrt anzeigen). Zu jeder Nachricht werden folgende Felder geliefert: `id`, `senderId`, `senderName`, `body` (leer wenn gelöscht), `sentAt`, `replyToId` (null wenn kein Reply), `replyToBody` (null oder „[Nachricht gelöscht]"), `replyToSenderName`, `editedAt` (null wenn nicht bearbeitet), `deletedAt` (null wenn nicht gelöscht).
+Das System SHALL die letzten 100 Nachrichten einer Konversation zurückgeben (absteigend nach `sent_at`, dann im Frontend umgekehrt anzeigen). Zu jeder Nachricht werden folgende Felder geliefert: `id`, `senderId`, `senderName`, `body` (leer wenn gelöscht), `sentAt`, `replyToId` (null wenn kein Reply), `replyToBody` (null oder „[Nachricht gelöscht]"), `replyToSenderName`, `editedAt` (null wenn nicht bearbeitet), `deletedAt` (null wenn nicht gelöscht), `isSystem` (true wenn System-Nachricht).
 
 #### Scenario: Mitglied ruft Nachrichten ab
 
 - **WHEN** ein Mitglied `GET /api/chat/conversations/{id}/messages` aufruft
-- **THEN** gibt der Server bis zu 100 Nachrichten zurück mit allen o.g. Feldern
+- **THEN** gibt der Server bis zu 100 Nachrichten zurück mit allen o.g. Feldern inklusive `isSystem`
 
 #### Scenario: Normale Nachricht ohne Reply
 
 - **WHEN** eine Nachricht ohne Reply abgerufen wird
-- **THEN** sind `replyToId`, `replyToBody`, `replyToSenderName`, `editedAt`, `deletedAt` alle null
+- **THEN** sind `replyToId`, `replyToBody`, `replyToSenderName`, `editedAt`, `deletedAt` alle null und `isSystem` ist false
+
+#### Scenario: System-Nachricht in der Liste
+
+- **WHEN** eine Nachricht mit `is_system = 1` abgerufen wird
+- **THEN** ist `isSystem: true` im Response-Objekt gesetzt
 
 #### Scenario: Nachricht mit Reply-Referenz
 
@@ -93,13 +98,18 @@ Das System SHALL die letzten 100 Nachrichten einer Konversation zurückgeben (ab
 
 ### Requirement: Nachricht senden
 
-Das System SHALL das Senden einer Nachricht in einer Konversation erlauben. Der Request kann optional `replyToId` enthalten. Die referenzierte Nachricht MUSS zur selben Konversation gehören. Nach erfolgreichem Speichern SHALL der Server via SSE alle aktiven Mitglieder (left_at IS NULL) benachrichtigen und Push Notifications an Mitglieder senden die gerade offline sind.
+Das System SHALL das Senden einer Nachricht in einer Konversation erlauben. Der Request kann optional `replyToId` enthalten. Die referenzierte Nachricht MUSS zur selben Konversation gehören. Nach erfolgreichem Speichern SHALL der Server via SSE **alle** aktiven Mitglieder einschließlich des Senders selbst benachrichtigen (damit andere Geräte/Tabs des Senders die Nachricht erhalten) und Push Notifications an Mitglieder senden die gerade offline sind.
 
 #### Scenario: Nachricht erfolgreich gesendet
 
 - **WHEN** ein Mitglied `POST /api/chat/conversations/{id}/messages` mit `{ body: "Hallo!" }` aufruft
 - **THEN** wird die Nachricht gespeichert und HTTP 201 zurückgegeben
-- **THEN** erhalten alle anderen aktiven Mitglieder ein SSE-Event `chat:new-message:<conversationId>`
+- **THEN** erhalten alle aktiven Mitglieder (einschließlich Sender) ein SSE-Event `chat:new-message:<conversationId>`
+
+#### Scenario: Sender-Gerät B erhält Echtzeit-Update
+
+- **WHEN** der Sender auf Gerät A eine Nachricht sendet und gleichzeitig auf Gerät B eingeloggt ist
+- **THEN** empfängt Gerät B das SSE-Event `chat:new-message:{convId}` und zeigt die neue Nachricht an
 
 #### Scenario: Nachricht mit Reply senden
 

@@ -409,6 +409,7 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		ReplyToSenderName *string `json:"replyToSenderName"`
 		EditedAt          *string `json:"editedAt"`
 		DeletedAt         *string `json:"deletedAt"`
+		IsSystem          bool    `json:"isSystem"`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
@@ -423,7 +424,8 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		       END AS reply_to_body,
 		       CASE WHEN m.reply_to_id IS NOT NULL THEN ru.first_name || ' ' || ru.last_name ELSE NULL END,
 		       m.edited_at,
-		       m.deleted_at
+		       m.deleted_at,
+		       m.is_system
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		LEFT JOIN messages rm ON rm.id = m.reply_to_id
@@ -443,7 +445,7 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		var replyToID sql.NullInt64
 		var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
 		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &msg.Body, &msg.SentAt,
-			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt)
+			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem)
 		if replyToID.Valid {
 			id := int(replyToID.Int64)
 			msg.ReplyToID = &id
@@ -517,7 +519,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	msgID, _ := res.LastInsertId()
 
-	recipientIDs := h.activeMembers(r, convID, claims.UserID)
+	recipientIDs := h.activeMembers(r, convID, 0)
 	event := fmt.Sprintf("chat:new-message:%d", convID)
 	for _, uid := range recipientIDs {
 		h.hub.BroadcastToUser(uid, event)
@@ -548,6 +550,9 @@ func (h *Handler) EditMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var convID int
+	h.db.QueryRowContext(r.Context(), `SELECT conversation_id FROM messages WHERE id = ?`, msgID).Scan(&convID)
+
 	res, err := h.db.ExecContext(r.Context(),
 		`UPDATE messages SET body = ?, edited_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND sender_id = ? AND deleted_at IS NULL`,
@@ -562,6 +567,13 @@ func (h *Handler) EditMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if convID != 0 {
+		event := fmt.Sprintf("chat:new-message:%d", convID)
+		for _, uid := range h.activeMembers(r, convID, 0) {
+			h.hub.BroadcastToUser(uid, event)
+		}
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -574,9 +586,9 @@ func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var senderID int
+	var senderID, convID int
 	if err := h.db.QueryRowContext(r.Context(),
-		`SELECT sender_id FROM messages WHERE id = ?`, msgID).Scan(&senderID); err != nil {
+		`SELECT sender_id, conversation_id FROM messages WHERE id = ?`, msgID).Scan(&senderID, &convID); err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -588,6 +600,11 @@ func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 
 	h.db.ExecContext(r.Context(),
 		`UPDATE messages SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL`, msgID)
+
+	event := fmt.Sprintf("chat:new-message:%d", convID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -634,6 +651,15 @@ func (h *Handler) LeaveConversation(w http.ResponseWriter, r *http.Request) {
 		`UPDATE conversation_members SET left_at = CURRENT_TIMESTAMP
 		 WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL`,
 		convID, claims.UserID)
+
+	h.db.ExecContext(r.Context(),
+		`INSERT INTO messages (conversation_id, sender_id, body, is_system) VALUES (?, ?, 'hat die Gruppe verlassen', 1)`,
+		convID, claims.UserID)
+
+	event := fmt.Sprintf("chat:member-left:%d", convID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
