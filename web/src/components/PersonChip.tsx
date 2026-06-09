@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
+import { MessageSquare } from 'lucide-react'
 import { usePersonContact } from '../contexts/PersonContactContext'
+import { useAuth } from '../contexts/AuthContext'
 
 interface PersonChipProps {
   userId?: number
@@ -22,6 +25,8 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
   const tooltipRef = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { get, fetchContact } = usePersonContact()
+  const { user } = useAuth()
+  const navigate = useNavigate()
 
   function scheduleClose() {
     closeTimer.current = setTimeout(() => setOpen(false), 150)
@@ -111,6 +116,15 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
                 />
               )}
               <p className="font-semibold text-brand-text mb-1.5">{state.name}</p>
+              {userId !== user?.id && (
+                <button
+                  onClick={() => { setOpen(false); navigate(`/chat?openUser=${userId}`) }}
+                  className="flex items-center gap-1.5 mb-2 text-brand-text-muted hover:text-brand-text transition-colors"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Nachricht schreiben</span>
+                </button>
+              )}
               {(state.phones && state.phones.length > 0) || state.address || state.email ? (
                 <>
                   {state.phones && state.phones.length > 0 && (

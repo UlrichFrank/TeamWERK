@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users, UserPlus,
   Trash2, CornerUpLeft, Pencil
@@ -52,6 +53,7 @@ interface ContextMenuState {
 
 export default function ChatPage() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tab, setTab] = useState<Tab>('chats')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([])
@@ -101,6 +103,23 @@ export default function ChatPage() {
     loadConversations()
     loadBroadcasts()
   }, [loadConversations, loadBroadcasts])
+
+  useEffect(() => {
+    const openUser = searchParams.get('openUser')
+    if (!openUser) return
+    setSearchParams({}, { replace: true })
+    api.post('/chat/conversations', { type: 'direct', userId: Number(openUser) })
+      .then(r => {
+        const conv: Conversation = r.data
+        setConversations(prev => prev.some(c => c.id === conv.id) ? prev : [conv, ...prev])
+        setActiveConv(conv)
+        setTab('chats')
+        if (isMobile) setMobileShowChat(true)
+        loadMessages(conv.id)
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useChatEvents((event) => {
     if (event.startsWith('chat:new-message')) {

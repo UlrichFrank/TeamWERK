@@ -62,6 +62,13 @@ const rowStatusColor = (s: ImportRow['status']) => {
   return 'text-brand-danger'
 }
 
+// A change overwrites an existing value when the old (quoted) part before → is non-empty.
+// Format produced by backend: `Label: "old" → "new"` — link notes use a different pattern.
+const isOverwrite = (change: string) => /: ".+" →/.test(change)
+
+const rowHasOverwrites = (row: ImportRow) =>
+  row.status === 'updated' && (row.changes?.some(isOverwrite) ?? false)
+
 const CLUB_FUNCTION_LABELS: Record<string, string> = {
   spieler: 'Spieler',
   trainer: 'Trainer',
@@ -458,8 +465,9 @@ export default function MembersPage() {
                   {previewResult.rows.filter(r => r.status !== 'unchanged').map((row, i) => {
                     const hasDetails = (row.changes && row.changes.length > 0) || row.message || row.iban_warning
                     const expanded = expandedRows.has(row.line)
+                    const hasOw = rowHasOverwrites(row)
                     return (
-                      <div key={i}>
+                      <div key={i} className={hasOw ? 'bg-amber-50 -mx-2 px-2 rounded' : ''}>
                         <button
                           onClick={() => hasDetails && toggleRow(row.line)}
                           className={`flex items-center gap-1 w-full text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'}`}
@@ -468,11 +476,20 @@ export default function MembersPage() {
                           {!hasDetails && <span className="w-3" />}
                           <span className="font-bold">{rowStatusIcon(row.status)}</span>
                           <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
+                          {hasOw && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
                           {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
                         </button>
                         {expanded && (
                           <div className="pl-7 space-y-0.5">
-                            {row.changes?.map((c, j) => <div key={j} className="text-brand-text-muted">{c}</div>)}
+                            {row.changes?.map((c, j) => {
+                              const ow = isOverwrite(c)
+                              return (
+                                <div key={j} className={`flex items-center gap-1 ${ow ? 'text-amber-600' : 'text-brand-text-muted'}`}>
+                                  {ow && <AlertTriangle className="w-3 h-3 shrink-0" />}
+                                  <span>{c}</span>
+                                </div>
+                              )
+                            })}
                             {row.iban_warning && <div className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
                             {row.message && <div className="italic text-brand-text-muted">{row.message}</div>}
                           </div>
@@ -515,8 +532,9 @@ export default function MembersPage() {
                   {importResult.rows.filter(r => r.status !== 'unchanged').map((row, i) => {
                     const hasDetails = (row.changes && row.changes.length > 0) || row.message || row.iban_warning
                     const expanded = expandedRows.has(row.line)
+                    const hasOw = rowHasOverwrites(row)
                     return (
-                      <div key={i}>
+                      <div key={i} className={hasOw ? 'bg-amber-50 -mx-2 px-2 rounded' : ''}>
                         <button
                           onClick={() => hasDetails && toggleRow(row.line)}
                           className={`flex items-center gap-1 w-full text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'}`}
@@ -525,11 +543,20 @@ export default function MembersPage() {
                           {!hasDetails && <span className="w-3" />}
                           <span className="font-bold">{rowStatusIcon(row.status)}</span>
                           <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
+                          {hasOw && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
                           {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
                         </button>
                         {expanded && (
                           <div className="pl-7 space-y-0.5">
-                            {row.changes?.map((c, j) => <div key={j} className="text-brand-text-muted">{c}</div>)}
+                            {row.changes?.map((c, j) => {
+                              const ow = isOverwrite(c)
+                              return (
+                                <div key={j} className={`flex items-center gap-1 ${ow ? 'text-amber-600' : 'text-brand-text-muted'}`}>
+                                  {ow && <AlertTriangle className="w-3 h-3 shrink-0" />}
+                                  <span>{c}</span>
+                                </div>
+                              )
+                            })}
                             {row.iban_warning && <div className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
                             {row.message && <div className="italic text-brand-text-muted">{row.message}</div>}
                           </div>
