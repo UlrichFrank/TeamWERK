@@ -375,6 +375,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	isAdmin := claims.Role == "admin"
 	isPrivileged := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("trainer") || claims.HasFunction("sportliche_leitung")
 	isOwn := base.UserID != nil && *base.UserID == claims.UserID
+	isParent := h.isParentOf(r.Context(), claims.UserID, base.ID)
 
 	if mStreet.Valid && mStreet.String != "" {
 		s := mStreet.String
@@ -421,7 +422,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		base.WelcomeEmailSentAt = &welcomeEmailSentAt.String
 	}
 
-	// IBAN, account holder + SEPA document URL: admin only
+	// IBAN, account holder: admin only
 	if isAdmin {
 		if iban.Valid {
 			base.IBAN = &iban.String
@@ -429,10 +430,11 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		if accountHolder.Valid {
 			base.AccountHolder = &accountHolder.String
 		}
-		if sepaMandatPath.Valid && sepaMandatPath.String != "" {
-			url := "/api/uploads/" + sepaMandatPath.String
-			base.SepaMandatURL = &url
-		}
+	}
+	// SEPA document URL: admin, own member, parent, vorstand
+	if (isAdmin || isOwn || isParent || claims.HasFunction("vorstand")) && sepaMandatPath.Valid && sepaMandatPath.String != "" {
+		url := fmt.Sprintf("/api/members/%d/sepa-mandat/download", base.ID)
+		base.SepaMandatURL = &url
 	}
 
 	// Linked user contact data — shown to admin/own, or based on user_visibility
@@ -768,10 +770,11 @@ type UserPhone struct {
 }
 
 type UserVisibility struct {
-	PhonesVisible  bool `json:"phones_visible"`
-	AddressVisible bool `json:"address_visible"`
-	PhotoVisible   bool `json:"photo_visible"`
-	EmailVisible   bool `json:"email_visible"`
+	PhonesVisible   bool `json:"phones_visible"`
+	AddressVisible  bool `json:"address_visible"`
+	PhotoVisible    bool `json:"photo_visible"`
+	EmailVisible    bool `json:"email_visible"`
+	WhatsAppVisible bool `json:"whatsapp_visible"`
 }
 
 type ProfileResponse struct {
@@ -869,14 +872,15 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var vis UserVisibility
-	var pv, av, phv, ev int
+	var pv, av, phv, ev, wv int
 	h.db.QueryRowContext(r.Context(),
-		`SELECT phones_visible, address_visible, photo_visible, COALESCE(email_visible,0) FROM user_visibility WHERE user_id=?`,
-		claims.UserID).Scan(&pv, &av, &phv, &ev)
+		`SELECT phones_visible, address_visible, photo_visible, COALESCE(email_visible,0), COALESCE(whatsapp_visible,0) FROM user_visibility WHERE user_id=?`,
+		claims.UserID).Scan(&pv, &av, &phv, &ev, &wv)
 	vis.PhonesVisible = pv == 1
 	vis.AddressVisible = av == 1
 	vis.PhotoVisible = phv == 1
 	vis.EmailVisible = ev == 1
+	vis.WhatsAppVisible = wv == 1
 	resp.Visibility = vis
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1026,14 +1030,15 @@ func (h *Handler) UpdateVisibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible, email_visible)
-		 VALUES (?,?,?,?,?)
+		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible, email_visible, whatsapp_visible)
+		 VALUES (?,?,?,?,?,?)
 		 ON CONFLICT(user_id) DO UPDATE SET
 		   phones_visible=excluded.phones_visible,
 		   address_visible=excluded.address_visible,
 		   photo_visible=excluded.photo_visible,
-		   email_visible=excluded.email_visible`,
-		claims.UserID, boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible))
+		   email_visible=excluded.email_visible,
+		   whatsapp_visible=excluded.whatsapp_visible`,
+		claims.UserID, boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible), boolToInt(req.WhatsAppVisible))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1760,15 +1765,17 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 		Number string `json:"number"`
 	}
 	type contactResponse struct {
-		Name     string       `json:"name"`
-		PhotoURL *string      `json:"photo_url,omitempty"`
-		Phones   []phoneEntry `json:"phones,omitempty"`
-		Address  *string      `json:"address,omitempty"`
-		Email    *string      `json:"email,omitempty"`
+		Name            string       `json:"name"`
+		PhotoURL        *string      `json:"photo_url,omitempty"`
+		Phones          []phoneEntry `json:"phones,omitempty"`
+		Address         *string      `json:"address,omitempty"`
+		Email           *string      `json:"email,omitempty"`
+		WhatsAppVisible bool         `json:"whatsapp_visible"`
 	}
 
 	var resp contactResponse
 	var photoURL, phonesJSON, address, email sql.NullString
+	var wv int
 	err := h.db.QueryRowContext(r.Context(), `
 		SELECT u.first_name || ' ' || u.last_name,
 		       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != ''
@@ -1780,10 +1787,11 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 		       CASE WHEN COALESCE(uv.address_visible,0)=1 AND COALESCE(u.street,'') != '' THEN
 		           u.street || COALESCE(', ' || NULLIF(TRIM(COALESCE(u.zip,'') || ' ' || COALESCE(u.city,'')), ''), '')
 		       END,
-		       CASE WHEN COALESCE(uv.email_visible,0)=1 THEN u.email END
+		       CASE WHEN COALESCE(uv.email_visible,0)=1 THEN u.email END,
+		       COALESCE(uv.whatsapp_visible,0)
 		FROM users u
 		LEFT JOIN user_visibility uv ON uv.user_id = u.id
-		WHERE u.id = ?`, id).Scan(&resp.Name, &photoURL, &phonesJSON, &address, &email)
+		WHERE u.id = ?`, id).Scan(&resp.Name, &photoURL, &phonesJSON, &address, &email, &wv)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1804,6 +1812,7 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 	if email.Valid && email.String != "" {
 		resp.Email = &email.String
 	}
+	resp.WhatsAppVisible = wv == 1
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -1862,10 +1871,11 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 
 	// user_contact: wenn Kind User-Account hat, User-Strang-Daten laden
 	type visibilityEntry struct {
-		PhonesVisible  bool `json:"phones_visible"`
-		AddressVisible bool `json:"address_visible"`
-		PhotoVisible   bool `json:"photo_visible"`
-		EmailVisible   bool `json:"email_visible"`
+		PhonesVisible   bool `json:"phones_visible"`
+		AddressVisible  bool `json:"address_visible"`
+		PhotoVisible    bool `json:"photo_visible"`
+		EmailVisible    bool `json:"email_visible"`
+		WhatsAppVisible bool `json:"whatsapp_visible"`
 	}
 	type userContactEntry struct {
 		FirstName  string        `json:"first_name"`
@@ -1900,15 +1910,16 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var pv, av, phv, ev int
+		var pv, av, phv, ev, wv int
 		h.db.QueryRowContext(r.Context(),
-			`SELECT COALESCE(phones_visible,0), COALESCE(address_visible,0), COALESCE(photo_visible,0), COALESCE(email_visible,0) FROM user_visibility WHERE user_id=?`,
-			*m.UserID).Scan(&pv, &av, &phv, &ev)
+			`SELECT COALESCE(phones_visible,0), COALESCE(address_visible,0), COALESCE(photo_visible,0), COALESCE(email_visible,0), COALESCE(whatsapp_visible,0) FROM user_visibility WHERE user_id=?`,
+			*m.UserID).Scan(&pv, &av, &phv, &ev, &wv)
 		uc.Visibility = visibilityEntry{
-			PhonesVisible:  pv == 1,
-			AddressVisible: av == 1,
-			PhotoVisible:   phv == 1,
-			EmailVisible:   ev == 1,
+			PhonesVisible:   pv == 1,
+			AddressVisible:  av == 1,
+			PhotoVisible:    phv == 1,
+			EmailVisible:    ev == 1,
+			WhatsAppVisible: wv == 1,
 		}
 		userContact = &uc
 	}
@@ -2081,25 +2092,27 @@ func (h *Handler) UpdateChildVisibility(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var req struct {
-		PhonesVisible  bool `json:"phones_visible"`
-		AddressVisible bool `json:"address_visible"`
-		PhotoVisible   bool `json:"photo_visible"`
-		EmailVisible   bool `json:"email_visible"`
+		PhonesVisible   bool `json:"phones_visible"`
+		AddressVisible  bool `json:"address_visible"`
+		PhotoVisible    bool `json:"photo_visible"`
+		EmailVisible    bool `json:"email_visible"`
+		WhatsAppVisible bool `json:"whatsapp_visible"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible, email_visible)
-		 VALUES (?,?,?,?,?)
+		`INSERT INTO user_visibility (user_id, phones_visible, address_visible, photo_visible, email_visible, whatsapp_visible)
+		 VALUES (?,?,?,?,?,?)
 		 ON CONFLICT(user_id) DO UPDATE SET
 		   phones_visible=excluded.phones_visible,
 		   address_visible=excluded.address_visible,
 		   photo_visible=excluded.photo_visible,
-		   email_visible=excluded.email_visible`,
+		   email_visible=excluded.email_visible,
+		   whatsapp_visible=excluded.whatsapp_visible`,
 		childUserID.Int64,
-		boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible))
+		boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible), boolToInt(req.WhatsAppVisible))
 	w.WriteHeader(http.StatusNoContent)
 }
 

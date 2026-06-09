@@ -32,7 +32,7 @@ export interface Phone {
 }
 
 export interface Visibility {
-  phones_visible: boolean; address_visible: boolean; photo_visible: boolean; email_visible: boolean
+  phones_visible: boolean; address_visible: boolean; photo_visible: boolean; email_visible: boolean; whatsapp_visible: boolean
 }
 
 export interface ChangeDraft {

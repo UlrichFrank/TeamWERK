@@ -119,15 +119,19 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
                         <p key={i} className="text-brand-text-muted">
                           <span className="text-brand-text-subtle">{p.label}:</span>{' '}
                           <a href={`tel:${p.number}`} className={linkClass}>{p.number}</a>
-                          {' · '}
-                          <a
-                            href={`https://wa.me/${toWhatsAppNumber(p.number)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={linkClass}
-                          >
-                            WhatsApp
-                          </a>
+                          {state.whatsapp_visible && (
+                            <>
+                              {' · '}
+                              <a
+                                href={`https://wa.me/${toWhatsAppNumber(p.number)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className={linkClass}
+                              >
+                                WhatsApp
+                              </a>
+                            </>
+                          )}
                         </p>
                       ))}
                     </div>

@@ -13,6 +13,7 @@ export interface PersonContact {
   phones?: PhoneEntry[]
   address?: string
   email?: string
+  whatsapp_visible: boolean
 }
 
 type ContactState = PersonContact | 'loading' | 'error'

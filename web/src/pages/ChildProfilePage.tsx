@@ -20,6 +20,7 @@ export interface UserContact {
     address_visible: boolean
     photo_visible: boolean
     email_visible: boolean
+    whatsapp_visible: boolean
   }
 }
 

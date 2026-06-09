@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { Member, Parent, Phone, Visibility } from '../../pages/ProfilePage'
 import { UserContact } from '../../pages/ChildProfilePage'
 import ImageCropModal from '../ImageCropModal'
+import Toggle from '../Toggle'
 
 interface Props {
   children: Member[]
@@ -23,7 +24,7 @@ export default function ProfileProfilTab({
   const [lastName, setLastName] = useState('')
   const [address, setAddress] = useState({ street: '', zip: '', city: '' })
   const [phones, setPhones] = useState<Phone[]>([])
-  const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false, email_visible: false })
+  const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false, email_visible: false, whatsapp_visible: false })
   const [photoURL, setPhotoURL] = useState('')
   const [profilDraft, setProfilDraft] = useState<any>(null)
 
@@ -48,7 +49,7 @@ export default function ProfileProfilTab({
     api.get('/profile/me').then(r => {
       setAddress({ street: r.data?.street ?? '', zip: r.data?.zip ?? '', city: r.data?.city ?? '' })
       setPhones(r.data?.phones ?? [])
-      setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false, email_visible: false })
+      setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false, email_visible: false, whatsapp_visible: false })
       if (r.data?.photo_url) setPhotoURL(r.data.photo_url)
     })
   }, [])
@@ -115,7 +116,8 @@ export default function ProfileProfilTab({
       visibility.phones_visible !== userContact.visibility.phones_visible ||
       visibility.address_visible !== userContact.visibility.address_visible ||
       visibility.photo_visible !== userContact.visibility.photo_visible ||
-      visibility.email_visible !== userContact.visibility.email_visible
+      visibility.email_visible !== userContact.visibility.email_visible ||
+      visibility.whatsapp_visible !== userContact.visibility.whatsapp_visible
     ) : ownMember != null && (
       firstName !== ownMember.first_name ||
       lastName !== ownMember.last_name ||
@@ -426,25 +428,27 @@ export default function ProfileProfilTab({
       </div>}
 
       {/* Sichtbarkeit — nur wenn User-Strang vorhanden */}
-      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Sichtbarkeit für Mitglieder</h2>
-        <p className="text-xs text-brand-text-subtle mb-4">Wähle, welche Kontaktdaten andere Mitglieder sehen dürfen.</p>
-        <div className="space-y-2">
-          {[
+      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <div className="p-6 pb-2">
+          <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit für Mitglieder</h2>
+          <p className="text-xs text-brand-text-subtle mb-3">Wähle, welche Kontaktdaten andere Mitglieder sehen dürfen.</p>
+        </div>
+        <div className="divide-y divide-brand-border-subtle">
+          {([
             { key: 'phones_visible' as const, label: 'Telefonnummern sichtbar' },
+            { key: 'whatsapp_visible' as const, label: 'WhatsApp sichtbar' },
             { key: 'address_visible' as const, label: 'Adresse sichtbar' },
             { key: 'photo_visible' as const, label: 'Profilbild sichtbar' },
             { key: 'email_visible' as const, label: 'E-Mail-Adresse sichtbar' },
-          ].map(({ key, label }) => (
-            <label key={key} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={visibility[key]}
-                onChange={e => { setVisibility({ ...visibility, [key]: e.target.checked }); handleChange() }}
-                className="w-4 h-4 accent-brand-yellow"
+          ] as const).map(({ key, label }) => (
+            <div key={key} className="flex items-center justify-between px-6 py-3">
+              <p className="text-sm font-medium text-brand-text">{label}</p>
+              <Toggle
+                enabled={visibility[key]}
+                onToggle={() => { setVisibility({ ...visibility, [key]: !visibility[key] }); handleChange() }}
+                label={label}
               />
-              <span className="text-sm text-brand-text">{label}</span>
-            </label>
+            </div>
           ))}
         </div>
       </div>}
