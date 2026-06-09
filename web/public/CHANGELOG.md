@@ -1,4 +1,7 @@
 ## 09.06.2026
+- [feat] members: Checkboxen Beitragsfrei (Bankdaten) + Zweitspielrecht (Stammdaten)
+- [feat] members: CSV-Import leitet beitragsfrei aus Status-Feld ab
+- [feat] members: Felder beitragsfrei + zweitspielrecht – GET/PUT
 - [fix] chat: Anzahl an ungelesenen Nachrichten zurücksetzen
 - [feat] tooltip: Chat direkt aus Tooltip
 - [feat] notify: keine Pushnotifications für sender
