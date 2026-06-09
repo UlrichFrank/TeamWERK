@@ -1,4 +1,5 @@
 ## 09.06.2026
+- [fix] chat: Anzahl an ungelesenen Nachrichten zurücksetzen
 - [feat] tooltip: Chat direkt aus Tooltip
 - [feat] notify: keine Pushnotifications für sender
 - [feat] upload: SEPA-Mandat sicher hochladen, öffnen und löschen
