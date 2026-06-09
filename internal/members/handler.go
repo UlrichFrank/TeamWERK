@@ -60,6 +60,8 @@ type Member struct {
 	SepaMandat            bool    `json:"sepa_mandat,omitempty"`
 	SepaMandatDate        *string `json:"sepa_mandat_date,omitempty"`
 	SepaMandatURL         *string `json:"sepa_mandat_url,omitempty"`
+	Beitragsfrei          bool    `json:"beitragsfrei,omitempty"`
+	Zweitspielrecht       bool    `json:"zweitspielrecht,omitempty"`
 
 	// Linked user contact data (shown when user visibility allows)
 	UserPhones   []UserPhone `json:"user_phones,omitempty"`
@@ -330,7 +332,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
 		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path,
-		       m.welcome_email_sent_at
+		       m.welcome_email_sent_at,
+		       m.beitragsfrei, m.zweitspielrecht
 		FROM members m
 		LEFT JOIN users u ON u.id = m.user_id
 		WHERE m.id=?`, id)
@@ -345,6 +348,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
 	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
 	var welcomeEmailSentAt sql.NullString
+	var beitragsfrei, zweitspielrecht int64
 
 	err := row.Scan(
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
@@ -356,6 +360,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&dsgvoWeiter, &dsgvoWeiterDate,
 		&sepaMandat, &sepaMandatDate, &sepaMandatPath,
 		&welcomeEmailSentAt,
+		&beitragsfrei, &zweitspielrecht,
 	)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -388,6 +393,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	if mHomeClub.Valid && mHomeClub.String != "" {
 		base.HomeClub = &mHomeClub.String
 	}
+	base.Zweitspielrecht = zweitspielrecht == 1
 
 	// Photo: always for privileged roles; others only if photo_visible=1
 	base.PhotoVisible = photoVisible == 1
@@ -415,6 +421,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		if sepaMandatDate.Valid {
 			base.SepaMandatDate = &sepaMandatDate.String
 		}
+		base.Beitragsfrei = beitragsfrei == 1
 	}
 
 	// welcome_email_sent_at: admin only
@@ -506,6 +513,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		DsgvoWeitergabeDate   string `json:"dsgvo_weitergabe_date"`
 		SepaMandat            bool   `json:"sepa_mandat"`
 		SepaMandatDate        string `json:"sepa_mandat_date"`
+		Beitragsfrei          bool   `json:"beitragsfrei"`
+		Zweitspielrecht       bool   `json:"zweitspielrecht"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.Gender == "" {
@@ -534,6 +543,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			street=?, zip=?, city=?, home_club=?,
 			status=?,
 			photo_visible=?,
+			zweitspielrecht=?,
 			updated_at=?
 		WHERE id=?`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
@@ -541,6 +551,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub),
 		req.Status,
 		boolToInt(req.PhotoVisible),
+		boolToInt(req.Zweitspielrecht),
 		time.Now(), id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -557,12 +568,14 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 				join_date=?, iban=COALESCE(?, iban), account_holder=?,
 				dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
 				dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
-				sepa_mandat=?, sepa_mandat_date=?
+				sepa_mandat=?, sepa_mandat_date=?,
+				beitragsfrei=?
 			WHERE id=?`,
 			nullableString(req.JoinDate), ibanVal, nullableString(req.AccountHolder),
 			boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 			boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
 			boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
+			boolToInt(req.Beitragsfrei),
 			id)
 	}
 
