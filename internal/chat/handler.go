@@ -525,7 +525,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		h.hub.BroadcastToUser(uid, event)
 	}
 
-	go push.SendToUsers(h.db, h.cfg, recipientIDs,
+	go push.SendToUsers(h.db, h.cfg, h.activeMembers(r, convID, claims.UserID),
 		h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
 
 	w.Header().Set("Content-Type", "application/json")
