@@ -1349,6 +1349,8 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			return "ausgetreten"
 		case "kein aktiver Sportler mehr":
 			return "passiv"
+		case "beitragsfrei":
+			return "passiv"
 		default:
 			return "aktiv"
 		}
@@ -1436,7 +1438,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
 		                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
 		                 COALESCE(join_date,''), COALESCE(iban,''), COALESCE(account_holder,''),
-		                 COALESCE(sepa_mandat,0)
+		                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0)
 		          FROM members
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
 		args := []interface{}{firstName, lastName}
@@ -1456,17 +1458,20 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			dbStreet, dbZip, dbCity                        string
 			dbJoinDate, dbIBAN, dbAccountHolder            string
 			dbSepaMandat                                   int
+			dbBeitragsfrei                                 int
 		)
 		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
 			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
 				&dbStatus, &dbGender, &dbUserID, &dbHomeClub,
 				&dbStreet, &dbZip, &dbCity,
-				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat)
+				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat, &dbBeitragsfrei)
 
 		if scanErr == sql.ErrNoRows {
 			// New member — insert
+			csvStatusRaw := col(row, "Status")
+			csvBeitragsfrei := strings.EqualFold(strings.TrimSpace(csvStatusRaw), "beitragsfrei")
 			gender := normalizeGender(col(row, "Geschlecht"))
-			status := normalizeStatus(col(row, "Status"))
+			status := normalizeStatus(csvStatusRaw)
 			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
 			joinDate := normalizeDate(col(row, "join_date"))
 
@@ -1485,15 +1490,17 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				res, insErr := h.db.ExecContext(r.Context(),
 					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
 					                      pass_number, jersey_number, position, status, gender, home_club,
-					                      street, zip, city, join_date, iban, account_holder, sepa_mandat)
-					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+					                      street, zip, city, join_date, iban, account_holder, sepa_mandat,
+					                      beitragsfrei)
+					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 					nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
 					nullableString(dob), nullableString(col(row, "Passnummer")),
 					jerseyArg, nullableString(col(row, "Position")), status, gender,
 					nullableString(col(row, "Stammverein")),
 					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
 					nullableString(joinDate), ibanArg, nullableString(col(row, "Kontoinhaber")),
-					normalizeSepa(col(row, "SEPA Mandat")))
+					normalizeSepa(col(row, "SEPA Mandat")),
+					boolToInt(csvBeitragsfrei))
 				if insErr != nil {
 					report.Rows = append(report.Rows, ImportRow{
 						Line: lineNum, Status: "error", Name: displayName,
@@ -1586,6 +1593,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				setClauses = append(setClauses, "sepa_mandat=?")
 				setArgs = append(setArgs, sepaVal)
 				changes = append(changes, fmt.Sprintf("SEPA Mandat: %d → %d", dbSepaMandat, sepaVal))
+			}
+		}
+
+		// beitragsfrei aus CSV-Status ableiten
+		if csvStatusRaw2 := col(row, "Status"); csvStatusRaw2 != "" {
+			csvBeitragsfrei2 := boolToInt(strings.EqualFold(strings.TrimSpace(csvStatusRaw2), "beitragsfrei"))
+			if csvBeitragsfrei2 != dbBeitragsfrei {
+				setClauses = append(setClauses, "beitragsfrei=?")
+				setArgs = append(setArgs, csvBeitragsfrei2)
+				changes = append(changes, fmt.Sprintf("Beitragsfrei: %v → %v", dbBeitragsfrei == 1, csvBeitragsfrei2 == 1))
 			}
 		}
 
