@@ -422,7 +422,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(ds.team_id, 0),
 		    COALESCE(t.name, ''),
 		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END,
-		    COALESCE(ds.audiences, dt.audiences)
+		    COALESCE(ds.audiences, dt.audiences),
+		    COALESCE(ds.event_name, '')
 		 FROM duty_slots ds
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
@@ -469,18 +470,18 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt int
-		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, teamName string
+		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, teamName, eventName string
 		var gameID sql.NullInt64
 		var audiences sql.NullString
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
 			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime,
-			&teamID, &teamName, &isPastInt, &audiences)
+			&teamID, &teamName, &isPastInt, &audiences, &eventName)
 
 		var key string
 		if gameID.Valid {
 			key = fmt.Sprintf("game-%d", gameID.Int64)
 		} else {
-			key = fmt.Sprintf("other-%d", teamID)
+			key = fmt.Sprintf("other-%d-%s", teamID, eventDate)
 		}
 
 		if _, ok := groupMap[key]; !ok {
@@ -493,7 +494,12 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 				g.Opponent = opponent
 				g.EventType = eventType
 			} else {
-				g.Label = "Sonstige Dienste"
+				g.Date = eventDate
+				if eventName != "" {
+					g.Label = eventName
+				} else {
+					g.Label = "Sonstige Dienste"
+				}
 			}
 			groupMap[key] = g
 			groupOrder = append(groupOrder, key)

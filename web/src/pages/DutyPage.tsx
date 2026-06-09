@@ -107,7 +107,9 @@ export default function DutyPage() {
                     {g.opponent ? ` · ${g.event_type === 'generisch' ? g.opponent : `Team vs ${g.opponent}`}` : ''}
                   </span>
                 ) : (
-                  <span className="font-semibold text-sm text-brand-text">{g.label}</span>
+                  <span className="font-semibold text-sm text-brand-text">
+                    {g.date ? formatDate(g.date) : ''}{g.label ? ` · ${g.label}` : ''}
+                  </span>
                 )}
               </div>
               <span className="text-xs text-brand-text-muted font-medium">{g.team_name}</span>
