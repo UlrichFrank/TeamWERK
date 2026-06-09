@@ -300,6 +300,7 @@ export default function MemberDetailPage() {
 
       {activeTab === 'datenschutz' && (
         <MemberDatenschutzTab
+          memberId={Number(id)}
           form={form}
           isNew={isNew}
           drafts={drafts}

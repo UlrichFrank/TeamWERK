@@ -99,7 +99,7 @@ func serve() {
 	dashH := dashboard.NewHandler(database)
 	gameH := games.NewHandler(database, cfg, hubInstance)
 	kaderH := kader.NewHandler(database, hubInstance)
-	uploadH := upload.NewHandler(database, cfg.UploadDir)
+	uploadH := upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret)
 	filesH := files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret)
 	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)
 	chatH := chat.NewHandler(database, hubInstance, cfg)
@@ -118,7 +118,8 @@ func serve() {
 
 	// Public routes
 	r.Get("/api/uploads/*", uploadH.ServeUpload)
-	r.Get("/api/files/{id}/download", filesH.DownloadFile) // token-auth handled internally
+	r.Get("/api/files/{id}/download", filesH.DownloadFile)                     // token-auth handled internally
+	r.Get("/api/members/{id}/sepa-mandat/download", uploadH.SepaDownload) // token-auth handled internally
 	r.Post("/api/auth/login", authH.Login)
 	r.Post("/api/auth/refresh", authH.Refresh)
 	r.Post("/api/auth/logout", authH.Logout)
@@ -159,6 +160,8 @@ func serve() {
 		r.Get("/api/users/{id}/contact", membH.GetContact)
 		r.Get("/api/members/{id}/change-drafts", membH.GetChangeRequestsHandler)
 		r.Post("/api/members/{id}/change-request", membH.CreateChangeRequestHandler)
+		r.Get("/api/members/{id}/sepa-mandat/download-token", uploadH.SepaDownloadToken)
+		r.Delete("/api/members/{id}/sepa-mandat", uploadH.DeleteSepaMandat)
 		r.Get("/api/profile/me", membH.GetProfile)
 		r.Put("/api/profile/me", membH.UpdateProfile)
 		r.Get("/api/profile/vehicle", membH.GetVehicle)

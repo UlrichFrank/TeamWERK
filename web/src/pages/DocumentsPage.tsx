@@ -570,10 +570,12 @@ export default function DocumentsPage() {
 
   async function openFile(file: FileItem) {
     setFileError('')
+    const tab = window.open('about:blank', '_blank')
     try {
       const { data } = await api.get<{ token: string }>(`/files/${file.id}/download-token`)
-      window.open(`/api/files/${file.id}/download?token=${data.token}`, '_blank')
+      if (tab) tab.location.href = `/api/files/${file.id}/download?token=${data.token}`
     } catch {
+      if (tab) tab.close()
       setFileError('Datei konnte nicht geöffnet werden.')
     }
   }

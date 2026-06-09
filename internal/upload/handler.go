@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -25,10 +26,11 @@ const (
 type Handler struct {
 	db        *sql.DB
 	uploadDir string
+	secret    string
 }
 
-func NewHandler(db *sql.DB, uploadDir string) *Handler {
-	return &Handler{db: db, uploadDir: uploadDir}
+func NewHandler(db *sql.DB, uploadDir, secret string) *Handler {
+	return &Handler{db: db, uploadDir: uploadDir, secret: secret}
 }
 
 func sniffImageType(b []byte) string {
@@ -267,6 +269,112 @@ func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"sepa_mandat_url": "/api/uploads/" + filename})
+}
+
+// GET /api/members/{id}/sepa-mandat/download-token — authenticated
+func (h *Handler) SepaDownloadToken(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	isAdmin := claims.Role == "admin"
+	isVorstand := claims.HasFunction("vorstand")
+	isOwn := h.memberUserID(r, memberID) == claims.UserID
+	isParent := h.isParentOf(r, claims.UserID, memberID)
+
+	if !isAdmin && !isVorstand && !isOwn && !isParent {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var path sql.NullString
+	h.db.QueryRowContext(r.Context(), `SELECT sepa_mandat_path FROM members WHERE id=?`, memberID).Scan(&path)
+	if !path.Valid || path.String == "" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	token := generateSepaToken(memberID, claims.UserID, h.secret)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"token": token})
+}
+
+// GET /api/members/{id}/sepa-mandat/download?token=... — public (token-auth internally)
+func (h *Handler) SepaDownload(w http.ResponseWriter, r *http.Request) {
+	memberID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	token := r.URL.Query().Get("token")
+	if _, err := validateSepaToken(token, memberID, h.secret); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var path sql.NullString
+	h.db.QueryRowContext(r.Context(), `SELECT sepa_mandat_path FROM members WHERE id=?`, memberID).Scan(&path)
+	if !path.Valid || path.String == "" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if strings.Contains(path.String, "..") {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	http.ServeFile(w, r, filepath.Join(h.uploadDir, path.String))
+}
+
+// DELETE /api/members/{id}/sepa-mandat — authenticated
+func (h *Handler) DeleteSepaMandat(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	isAdmin := claims.Role == "admin"
+	isVorstand := claims.HasFunction("vorstand")
+	isOwn := h.memberUserID(r, memberID) == claims.UserID
+	isParent := h.isParentOf(r, claims.UserID, memberID)
+
+	if !isAdmin && !isVorstand && !isOwn && !isParent {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var path sql.NullString
+	h.db.QueryRowContext(r.Context(), `SELECT sepa_mandat_path FROM members WHERE id=?`, memberID).Scan(&path)
+	if path.Valid && path.String != "" {
+		os.Remove(filepath.Join(h.uploadDir, path.String))
+	}
+
+	h.db.ExecContext(r.Context(), `UPDATE members SET sepa_mandat_path=NULL WHERE id=?`, memberID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) memberUserID(r *http.Request, memberID int) int {
+	var userID sql.NullInt64
+	h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&userID)
+	if userID.Valid {
+		return int(userID.Int64)
+	}
+	return -1
+}
+
+func (h *Handler) isParentOf(r *http.Request, parentUserID, memberID int) bool {
+	var count int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM family_links WHERE parent_user_id=? AND member_id=?`,
+		parentUserID, memberID).Scan(&count)
+	return count > 0
 }
 
 // GET /api/uploads/* — Auth required
