@@ -18,6 +18,7 @@ const validateIBAN = (iban: string): boolean => {
 interface Member {
   iban?: string
   account_holder?: string
+  beitragsfrei?: boolean
 }
 
 interface Draft {
@@ -131,6 +132,15 @@ export default function MemberKontaktTab({ form, isNew, drafts, onFormChange, on
             />
             {ibanError && <p className="text-xs text-brand-danger mt-1">{ibanError}</p>}
           </div>
+          <label className="flex items-center gap-2 cursor-pointer mt-2">
+            <input
+              type="checkbox"
+              checked={form.beitragsfrei || false}
+              onChange={e => onFormChange({ beitragsfrei: e.target.checked })}
+              className="w-4 h-4 accent-brand-yellow"
+            />
+            <span className="text-sm text-brand-text">Beitragsfrei</span>
+          </label>
         </div>
       </div>
 

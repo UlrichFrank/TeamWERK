@@ -38,6 +38,8 @@ interface Member {
   sepa_mandat?: boolean
   sepa_mandat_date?: string
   sepa_mandat_url?: string
+  beitragsfrei?: boolean
+  zweitspielrecht?: boolean
   welcome_email_sent_at?: string
 }
 
@@ -70,6 +72,7 @@ export default function MemberDetailPage() {
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
     sepa_mandat: false, sepa_mandat_date: '', sepa_mandat_url: '',
+    beitragsfrei: false, zweitspielrecht: false,
   })
   const [users, setUsers] = useState<User[]>([])
   const [invitations, setInvitations] = useState<PendingInvitation[]>([])
@@ -116,6 +119,8 @@ export default function MemberDetailPage() {
       sepa_mandat: m.sepa_mandat ?? false,
       sepa_mandat_date: m.sepa_mandat_date?.slice(0, 10) ?? '',
       sepa_mandat_url: m.sepa_mandat_url ?? '',
+      beitragsfrei: m.beitragsfrei ?? false,
+      zweitspielrecht: m.zweitspielrecht ?? false,
     })
     setCurrentUserID(m.user_id ?? null)
     setWelcomeEmailSentAt(m.welcome_email_sent_at ?? null)

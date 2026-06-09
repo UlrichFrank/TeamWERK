@@ -17,6 +17,7 @@ interface Member {
   status: string
   club_functions?: string[]
   home_club?: string
+  zweitspielrecht?: boolean
   street?: string
   zip?: string
   city?: string
@@ -371,7 +372,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           </div>
         </div>
 
-        {/* Stammverein — nicht für Honorar-Mitglieder */}
+        {/* Stammverein + Zweitspielrecht — nicht für Honorar-Mitglieder */}
         {!isHonorar && (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Stammverein</label>
@@ -382,6 +383,15 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               placeholder="z. B. TV Cannstatt"
               className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
+            <label className="flex items-center gap-2 cursor-pointer mt-2">
+              <input
+                type="checkbox"
+                checked={form.zweitspielrecht || false}
+                onChange={e => onFormChange({ zweitspielrecht: e.target.checked })}
+                className="w-4 h-4 accent-brand-yellow"
+              />
+              <span className="text-sm text-brand-text">Zweitspielrecht</span>
+            </label>
           </div>
         )}
       </div>
