@@ -47,6 +47,7 @@ interface Game {
   date: string
   time: string
   end_time?: string | null
+  end_date?: string | null
   opponent: string
   teams: Array<{ id: number; name: string }>
   event_type: string
@@ -176,6 +177,7 @@ export default function KalenderPage() {
   const [selectedOpponent, setSelectedOpponent] = useState('')
   const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>([])
   const [selectedEndTime, setSelectedEndTime] = useState('16:00')
+  const [selectedEndDate, setSelectedEndDate] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
   const [templates, setTemplates] = useState<any[]>([])
   const [preview, setPreview] = useState<SlotPreview[]>([])
@@ -357,10 +359,13 @@ export default function KalenderPage() {
   const shortNames = useMemo(() => buildTeamShortNames(teams), [teams])
 
   const safeGames = Array.isArray(games) ? games : []
+  const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
   const monthGames = safeGames.filter(g => {
-    const y = parseInt(g.date.slice(0, 4))
-    const m = parseInt(g.date.slice(5, 7)) - 1
-    if (y !== year || m !== month) return false
+    const effectiveEnd = g.end_date ? g.end_date.slice(0, 10) : g.date.slice(0, 10)
+    const start = g.date.slice(0, 10)
+    if (start > monthEnd || effectiveEnd < monthStart) return false
     if (!filterTypes.has(g.event_type)) return false
     if (filterTeamId !== null && !g.teams.some(t => t.id === filterTeamId)) return false
     return true
@@ -368,9 +373,18 @@ export default function KalenderPage() {
 
   const gamesByDate: Record<string, Game[]> = {}
   for (const g of monthGames) {
-    const key = g.date.slice(0, 10)
-    if (!gamesByDate[key]) gamesByDate[key] = []
-    gamesByDate[key].push(g)
+    const start = g.date.slice(0, 10)
+    const end = g.end_date ? g.end_date.slice(0, 10) : start
+    const cur = new Date(start + 'T12:00:00')
+    const endDate = new Date(end + 'T12:00:00')
+    while (cur <= endDate) {
+      const key = cur.toISOString().slice(0, 10)
+      if (key >= monthStart && key <= monthEnd) {
+        if (!gamesByDate[key]) gamesByDate[key] = []
+        gamesByDate[key].push(g)
+      }
+      cur.setDate(cur.getDate() + 1)
+    }
   }
 
   const filteredTrainings = trainings.filter(t => {
@@ -414,6 +428,7 @@ export default function KalenderPage() {
         date: selectedDate,
         time: selectedTime,
         end_time: eventType === 'generisch' ? selectedEndTime : undefined,
+        end_date: eventType === 'generisch' && selectedEndDate ? selectedEndDate : undefined,
         opponent: selectedOpponent,
         team_ids: selectedTeamIds,
         event_type: eventType,
@@ -638,6 +653,7 @@ export default function KalenderPage() {
     setSelectedDate('')
     setSelectedTime('15:00')
     setSelectedEndTime('16:00')
+    setSelectedEndDate('')
     setSelectedOpponent('')
     setSelectedTeamIds([])
     setSelectedTemplate(null)
@@ -1046,6 +1062,16 @@ export default function KalenderPage() {
                       <input type="time" value={selectedEndTime} onChange={e => setSelectedEndTime(e.target.value)} className={INPUT_WIZ} />
                     </div>
                   )}
+                  {eventType === 'generisch' && (
+                    <div>
+                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Enddatum <span className="text-brand-text-subtle font-normal">(optional, für mehrtägige Events)</span></label>
+                      <input type="date" value={selectedEndDate} onChange={e => setSelectedEndDate(e.target.value)}
+                        min={selectedDate || undefined} className={INPUT_WIZ} />
+                      {selectedEndDate && selectedEndDate < selectedDate && (
+                        <p className="text-xs text-brand-danger mt-1">Enddatum muss nach dem Startdatum liegen.</p>
+                      )}
+                    </div>
+                  )}
                   {eventType !== 'generisch' && (
                     <div>
                       <label className="block text-sm font-medium text-brand-text-muted mb-1">Gegner *</label>
@@ -1118,7 +1144,7 @@ export default function KalenderPage() {
                         loadTemplates().then(() => setWizardStep(3))
                       }
                     }}
-                    disabled={!selectedDate || selectedTeamIds.length === 0}
+                    disabled={!selectedDate || selectedTeamIds.length === 0 || (eventType === 'generisch' && !!selectedEndDate && selectedEndDate < selectedDate)}
                     className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >Weiter →</button>
                 </div>

@@ -9,6 +9,7 @@ interface Game {
   date: string
   time: string
   end_time?: string | null
+  end_date?: string | null
   opponent: string
   event_type: string
   venue?: { id: number; name: string; street: string; city: string; postal_code: string; note: string } | null
@@ -30,6 +31,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [date, setDate] = useState(game.date.slice(0, 10))
   const [time, setTime] = useState(game.time)
   const [endTime, setEndTime] = useState(game.end_time ?? '')
+  const [endDate, setEndDate] = useState(game.end_date ? game.end_date.slice(0, 10) : '')
   const [eventType, setEventType] = useState(game.event_type)
   const [venueId, setVenueId] = useState<number | null>(game.venue?.id ?? null)
   const [saving, setSaving] = useState(false)
@@ -61,6 +63,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         date,
         time,
         end_time: isGeneric ? (endTime || null) : null,
+        end_date: endDate || null,
         opponent,
         event_type: eventType,
         venue_id: venueId,
@@ -120,6 +123,16 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
               </select>
             </div>
           )}
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">
+              Enddatum <span className="text-brand-text-subtle font-normal">(optional, für mehrtägige Events)</span>
+            </label>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              min={date || undefined} className={INPUT} />
+            {endDate && endDate < date && (
+              <p className="text-xs text-brand-danger mt-1">Enddatum muss nach dem Startdatum liegen.</p>
+            )}
+          </div>
           <div>
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
             <VenuePicker value={venueId} onChange={setVenueId} />
