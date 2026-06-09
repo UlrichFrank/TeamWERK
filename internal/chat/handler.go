@@ -624,6 +624,7 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		WHERE m.conversation_id = ? AND m.sender_id != ?`,
 		claims.UserID, convID, claims.UserID)
 
+	h.hub.BroadcastToUser(claims.UserID, "chat:conversation-read")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -865,6 +866,7 @@ func (h *Handler) MarkBroadcastRead(w http.ResponseWriter, r *http.Request) {
 		WHERE broadcast_id = ? AND user_id = ? AND read_at IS NULL`,
 		broadcastID, claims.UserID)
 
+	h.hub.BroadcastToUser(claims.UserID, "chat:conversation-read")
 	w.WriteHeader(http.StatusNoContent)
 }
 

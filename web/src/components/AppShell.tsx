@@ -102,7 +102,7 @@ export default function AppShell() {
   }, [user?.id, loadChatUnread])
 
   useChatEvents((event) => {
-    if (event.startsWith('chat:new-message') || event === 'chat:new-broadcast') {
+    if (event.startsWith('chat:new-message') || event === 'chat:new-broadcast' || event === 'chat:conversation-read') {
       loadChatUnread()
     }
   })
