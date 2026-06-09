@@ -1,4 +1,5 @@
 ## 09.06.2026
+- [feat] chat: Verlassen und Erneeutes Beitreten von Chats
 - [feat] members: Checkboxen Beitragsfrei (Bankdaten) + Zweitspielrecht (Stammdaten)
 - [feat] members: CSV-Import leitet beitragsfrei aus Status-Feld ab
 - [feat] members: Felder beitragsfrei + zweitspielrecht – GET/PUT
