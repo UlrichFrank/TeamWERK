@@ -1,4 +1,6 @@
 ## 09.06.2026
+- [feat] tooltip: Chat direkt aus Tooltip
+- [feat] notify: keine Pushnotifications für sender
 - [feat] upload: SEPA-Mandat sicher hochladen, öffnen und löschen
 - [feat] members: WhatsApp-Sichtbarkeit im Profil und Nutzer-Tooltip
 - [feat] version: Versionshistorie-Modal mit CHANGELOG.md
