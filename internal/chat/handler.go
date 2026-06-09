@@ -250,14 +250,24 @@ func (h *Handler) createDirect(w http.ResponseWriter, r *http.Request, claims *a
 		return
 	}
 
+	// Find existing conversation where target is still active (target.left_at IS NULL).
+	// Caller may have left_at set — no constraint on caller's left_at.
 	var existingID int
 	err = h.db.QueryRowContext(r.Context(), `
 		SELECT c.id FROM conversations c
-		JOIN conversation_members m1 ON m1.conversation_id = c.id AND m1.user_id = ? AND m1.left_at IS NULL
+		JOIN conversation_members m1 ON m1.conversation_id = c.id AND m1.user_id = ?
 		JOIN conversation_members m2 ON m2.conversation_id = c.id AND m2.user_id = ? AND m2.left_at IS NULL
 		WHERE c.type = 'direct' LIMIT 1`,
 		claims.UserID, targetUserID).Scan(&existingID)
 	if err == nil {
+		// Re-join if caller had previously left
+		res, _ := h.db.ExecContext(r.Context(),
+			`UPDATE conversation_members SET left_at = NULL
+			 WHERE conversation_id = ? AND user_id = ? AND left_at IS NOT NULL`,
+			existingID, claims.UserID)
+		if n, _ := res.RowsAffected(); n > 0 {
+			h.hub.BroadcastToUser(targetUserID, fmt.Sprintf("chat:new-message:%d", existingID))
+		}
 		conv, err := h.getConversation(r, existingID, claims.UserID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -279,6 +289,8 @@ func (h *Handler) createDirect(w http.ResponseWriter, r *http.Request, claims *a
 	h.db.ExecContext(r.Context(),
 		`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?), (?, ?)`,
 		convID, claims.UserID, convID, targetUserID)
+
+	h.hub.BroadcastToUser(targetUserID, fmt.Sprintf("chat:new-message:%d", convID))
 
 	conv, err := h.getConversation(r, int(convID), claims.UserID)
 	if err != nil {
@@ -518,6 +530,15 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msgID, _ := res.LastInsertId()
+
+	// For direct chats: restore any member who had left so they receive the SSE
+	var convType string
+	h.db.QueryRowContext(r.Context(), `SELECT type FROM conversations WHERE id = ?`, convID).Scan(&convType)
+	if convType == "direct" {
+		h.db.ExecContext(r.Context(),
+			`UPDATE conversation_members SET left_at = NULL WHERE conversation_id = ? AND left_at IS NOT NULL`,
+			convID)
+	}
 
 	recipientIDs := h.activeMembers(r, convID, 0)
 	event := fmt.Sprintf("chat:new-message:%d", convID)
@@ -884,10 +905,26 @@ func (h *Handler) DeleteConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var convType string
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT type FROM conversations WHERE id = ?`, convID).Scan(&convType); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
 	h.db.ExecContext(r.Context(),
 		`UPDATE conversation_members SET left_at = CURRENT_TIMESTAMP
 		 WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL`,
 		convID, claims.UserID)
+
+	if convType == "direct" {
+		h.db.ExecContext(r.Context(),
+			`INSERT INTO messages (conversation_id, sender_id, body, is_system) VALUES (?, ?, 'hat diesen Chat verlassen', 1)`,
+			convID, claims.UserID)
+		for _, uid := range h.activeMembers(r, convID, 0) {
+			h.hub.BroadcastToUser(uid, fmt.Sprintf("chat:member-left:%d", convID))
+		}
+	}
 
 	var remaining int
 	h.db.QueryRowContext(r.Context(),

@@ -469,7 +469,7 @@ export default function ChatPage() {
                     return (
                       <div key={msg.id} className="flex justify-center my-1">
                         <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
-                          {msg.senderName} hat die Gruppe verlassen
+                          {msg.senderName} {msg.body}
                         </span>
                       </div>
                     )
