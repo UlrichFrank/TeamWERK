@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Dumbbell, AlertTriangle, X } from 'lucide-react'
 import { api } from '../lib/api'
@@ -118,6 +119,8 @@ export default function AdminTrainingsPage() {
     loadSeries()
     loadStandalone()
   }, [])
+
+  useLiveUpdates(event => { if (event === 'trainings') { loadSeries(); loadStandalone() } })
 
   const loadSeries = () => api.get('/training-series').then(r => setSeries(r.data ?? []))
   const loadStandalone = () => {

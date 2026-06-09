@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react'
 import { X, Check, Upload, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { usePagination } from '../lib/usePagination'
 import ActionMenu from '../components/ActionMenu'
 import Pagination from '../components/Pagination'
@@ -101,6 +102,8 @@ export default function AdminUsersPage() {
   ])
 
   useEffect(() => { loadInvitationsAndRequests() }, [])
+
+  useLiveUpdates(event => { if (event === 'members') loadInvitationsAndRequests() })
 
   useEffect(() => {
     if (!showDropdown) return

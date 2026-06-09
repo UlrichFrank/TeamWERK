@@ -2,6 +2,7 @@ import { useEffect, useState, FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import EditModal from '../components/EditModal'
 import MobileCard from '../components/MobileCard'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -30,6 +31,8 @@ function VereinTab() {
       setLoaded(true)
     })
   }, [loaded])
+
+  useLiveUpdates(event => { if (event === 'settings') setLoaded(false) })
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -103,6 +106,8 @@ function SaisonsTab() {
   const [error, setError] = useState<string | null>(null)
 
   const load = () => api.get('/seasons').then(r => setSeasons(r.data ?? []))
+
+  useLiveUpdates(event => { if (event === 'settings') load() })
 
   useEffect(() => {
     if (loaded) return

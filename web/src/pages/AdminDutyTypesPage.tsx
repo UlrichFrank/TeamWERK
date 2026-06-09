@@ -1,6 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { formatOffset, parseOffset } from '../lib/time'
 import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
@@ -192,6 +193,7 @@ export default function AdminDutyTypesPage() {
 
   const load = () => api.get('/duty-types').then(r => setTypes(r.data ?? []))
   useEffect(() => { load() }, [])
+  useLiveUpdates(event => { if (event === 'duties') load() })
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault()

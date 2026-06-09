@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import KaderMemberSearch from '../components/KaderMemberSearch'
 import KaderExtendedSearch from '../components/KaderExtendedSearch'
 import KaderTrainerSearch from '../components/KaderTrainerSearch'
@@ -121,6 +122,8 @@ export default function AdminKaderPage() {
     }
     init().finally(() => setLoading(false))
   }, [])
+
+  useLiveUpdates(event => { if (event === 'kader' && selectedSeason) loadKader(selectedSeason.id) })
 
   const handleRemoveMember = async (kaderId: number, memberId: number) => {
     const key = `${kaderId}-${memberId}`

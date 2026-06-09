@@ -323,7 +323,7 @@ export default function DashboardPage() {
   useEffect(() => { load() }, [load])
 
   useLiveUpdates(event => {
-    if (event === 'mitfahrgelegenheiten') load(true)
+    if (event === 'mitfahrgelegenheiten' || event === 'games' || event === 'trainings' || event === 'duties' || event === 'absences') load(true)
   })
 
   if (loadState === 'loading') {

@@ -1033,6 +1033,7 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newID, _ := res.LastInsertId()
+	h.hub.Broadcast("games")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
@@ -1115,6 +1116,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("games")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1131,6 +1133,7 @@ func (h *Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	h.hub.Broadcast("games")
 	w.WriteHeader(http.StatusOK)
 }
 

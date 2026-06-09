@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Trash2, Check } from 'lucide-react'
 import { api } from '../lib/api'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
 import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
@@ -54,6 +55,10 @@ export default function AdminDutyTemplateDetailPage() {
       api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])),
     ]).finally(() => setLoading(false))
   }, [id])
+
+  useLiveUpdates(event => {
+    if (event === 'games' && id) api.get(`/duty-templates/${id}`).then(r => setTemplate(r.data)).catch(() => {})
+  })
 
   const updateItem = (i: number, patch: Partial<TemplateItem>) => {
     setTemplate(t => t ? { ...t, items: t.items.map((item, idx) => idx === i ? { ...item, ...patch } : item) } : t)

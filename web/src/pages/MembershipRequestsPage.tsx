@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 interface Request { id: number; first_name: string; last_name: string; email: string; comment: string; created_at: string }
 
@@ -8,6 +9,7 @@ export default function MembershipRequestsPage() {
 
   const load = () => api.get('/membership-requests').then(r => setRequests(r.data ?? []))
   useEffect(() => { load() }, [])
+  useLiveUpdates(event => { if (event === 'members') load() })
 
   const approve = async (id: number) => { await api.post(`/membership-requests/${id}/approve`); load() }
   const reject = async (id: number) => { await api.post(`/membership-requests/${id}/reject`); load() }

@@ -98,7 +98,7 @@ func serve() {
 	dutyH := duties.NewHandler(database, cfg, hubInstance)
 	dashH := dashboard.NewHandler(database)
 	gameH := games.NewHandler(database, cfg, hubInstance)
-	kaderH := kader.NewHandler(database)
+	kaderH := kader.NewHandler(database, hubInstance)
 	uploadH := upload.NewHandler(database, cfg.UploadDir)
 	filesH := files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret)
 	carpoolH := carpooling.NewHandler(database, cfg, hubInstance)

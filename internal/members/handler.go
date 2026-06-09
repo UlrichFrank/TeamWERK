@@ -642,6 +642,7 @@ func (h *Handler) LinkUser(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE members SET user_id=?, updated_at=? WHERE id=?`,
 		req.UserID, time.Now(), id)
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -664,6 +665,7 @@ func (h *Handler) CreateFamilyLink(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`INSERT OR IGNORE INTO family_links (parent_user_id, member_id) VALUES (?,?)`,
 		req.ParentUserID, req.MemberID)
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -689,6 +691,7 @@ func (h *Handler) DeleteFamilyLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -899,6 +902,7 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -960,6 +964,7 @@ func (h *Handler) AddPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	h.hub.Broadcast("members")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
@@ -989,6 +994,7 @@ func (h *Handler) UpdatePhone(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1007,6 +1013,7 @@ func (h *Handler) DeletePhone(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1111,6 +1118,7 @@ func (h *Handler) UpdateVehicle(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO vehicle_info (user_id, seats, notes, updated_at) VALUES (?,?,?,?)
 		 ON CONFLICT(user_id) DO UPDATE SET seats=excluded.seats, notes=excluded.notes, updated_at=excluded.updated_at`,
 		claims.UserID, req.Seats, req.Notes, time.Now())
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1946,6 +1954,7 @@ func (h *Handler) UpdateChildAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2121,5 +2130,6 @@ func (h *Handler) UpdateChildBank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
 }

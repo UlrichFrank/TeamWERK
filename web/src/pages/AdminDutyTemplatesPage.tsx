@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 import OffsetInput from '../components/OffsetInput'
@@ -261,6 +262,8 @@ export default function AdminDutyTemplatesPage() {
       api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])),
     ]).finally(() => setLoading(false))
   }, [])
+
+  useLiveUpdates(event => { if (event === 'games') loadTemplates() })
 
   const typeCounts = templates.reduce<Record<string, number>>((acc, t) => {
     acc[t.template_type] = (acc[t.template_type] || 0) + 1

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import MemberStammdatenTab from '../components/admin/MemberStammdatenTab'
 import MemberKontaktTab from '../components/admin/MemberKontaktTab'
 import MemberDatenschutzTab from '../components/admin/MemberDatenschutzTab'
@@ -158,6 +159,14 @@ export default function MemberDetailPage() {
     }
     return () => { cancelled = true }
   }, [id, isNew, isAdmin, authLoading])
+
+  useLiveUpdates(event => {
+    if (event === 'members' && !isNew && id) {
+      api.get(`/members/${id}`).then(r => applyMemberToForm(r.data)).catch(() => {})
+      loadLinkedParents()
+      loadDrafts()
+    }
+  })
 
   const handleSave = async () => {
     setSaving(true); setError('')

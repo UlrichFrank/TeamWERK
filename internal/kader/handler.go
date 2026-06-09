@@ -8,11 +8,16 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
-type Handler struct{ db *sql.DB }
+type Handler struct {
+	db  *sql.DB
+	hub *hub.EventHub
+}
 
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 type dbq interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
@@ -279,6 +284,7 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	if len(req.MembersAdd) > 0 || len(req.MembersRemove) > 0 {
 		h.db.ExecContext(r.Context(), `UPDATE kader SET updated_at=? WHERE id=?`, time.Now(), id)
 	}
+	h.hub.Broadcast("kader")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -360,6 +366,7 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 			`UPDATE kader SET team_id=? WHERE season_id=? AND age_class=? AND gender=? AND team_number=1 AND team_id IS NULL`,
 			teamID, req.SeasonID, s.ageClass, s.gender)
 	}
+	h.hub.Broadcast("kader")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -390,6 +397,7 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 		return
 	}
 	bys, bkys := computeBirthYears(k, seasonStartYear)
+	h.hub.Broadcast("kader")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(kaderDetail{
@@ -426,6 +434,7 @@ func (h *Handler) DeleteKader(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("kader")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -460,6 +469,7 @@ func (h *Handler) CopyFromSeason(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast("kader")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"created": created})
@@ -516,6 +526,7 @@ func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast("kader")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
@@ -542,6 +553,7 @@ func (h *Handler) PatchGamesPerSeason(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("kader")
 	w.WriteHeader(http.StatusNoContent)
 }
 

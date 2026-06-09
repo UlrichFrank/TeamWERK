@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import PersonChip from '../components/PersonChip'
+import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 interface TrainerEntry { userId: number; name: string }
 interface PlayerEntry { userId: number; name: string; jerseyNumber: number | null }
@@ -104,13 +105,11 @@ export default function MeinTeamPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const loadRosters = () => {
     api.get('/teams/my')
       .then(res => {
         const teams: MyTeam[] = res.data ?? []
         setMyTeams(teams)
-
-        // If a specific team is requested via ?team=id, only load that one
         const toLoad = focusTeamId != null ? teams.filter(t => t.id === focusTeamId) : teams
         return Promise.all(toLoad.map(t => api.get(`/teams/${t.id}/roster`).then(r => r.data as TeamRoster)))
       })
@@ -122,7 +121,11 @@ export default function MeinTeamPage() {
         setError(err.message)
         setLoading(false)
       })
-  }, [focusTeamId])
+  }
+
+  useEffect(() => { loadRosters() }, [focusTeamId])
+
+  useLiveUpdates(event => { if (event === 'members' || event === 'kader') loadRosters() })
 
   if (loading) {
     return (
