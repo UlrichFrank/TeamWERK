@@ -43,11 +43,9 @@ dev-remote: ## SSH-Tunnel zum VPS + Vite Dev-Server (kein lokales Backend)
 	@cd web && pnpm dev
 
 build: ## Frontend + Backend für Linux/amd64 bauen
-	@LAST=$$(cat .deployed-hash 2>/dev/null || git log --format="%H" | tail -1); \
-	CHANGES=$$(git log $$LAST..HEAD --pretty=format:"%s" --no-merges 2>/dev/null | \
-	  grep -E "^(feat|fix)(\([^)]*\))?:" | \
-	  sed 's/^feat[^:]*: */· Neu: /; s/^fix[^:]*: */· Behoben: /'); \
-	printf '{"description":%s}\n' "$$(printf '%s' "$$CHANGES" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" > web/public/changes.json
+	@git log --format="%ad|%s" --date=format:"%d.%m.%Y" --no-merges \
+	  | grep -E "\|(feat|fix)(\([^)]*\))?:" \
+	  | python3 scripts/gen-changelog.py > web/public/CHANGELOG.md
 	cd web && pnpm build
 	GOOS=linux GOARCH=amd64 go build -ldflags "-X 'main.buildHash=$(shell git rev-parse --short HEAD)'" -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
 
