@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Calendar, Check, ChevronLeft, Clock, Dumbbell, HelpCircle, Home, MapPin, Plane, MessageCircle, X } from 'lucide-react'
+import { AlertTriangle, Calendar, Check, ChevronLeft, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
+import MapsLink from '../components/MapsLink'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
@@ -244,12 +245,7 @@ export default function TermineDetailPage() {
                   <Clock className="w-4 h-4" />
                   {session.start_time} – {session.end_time} Uhr
                 </div>
-                {session.venue?.name && (
-                  <div className="flex items-center gap-2 text-sm text-brand-text-muted">
-                    <MapPin className="w-4 h-4" />
-                    {session.venue.name}
-                  </div>
-                )}
+                <MapsLink venue={session.venue} />
               </div>
               {session.note && (
                 <p className="mt-3 text-sm text-brand-text bg-white border border-brand-border-subtle rounded-lg p-3">{session.note}</p>

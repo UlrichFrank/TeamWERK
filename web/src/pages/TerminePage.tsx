@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History } from 'lucide-react'
 import { api } from '../lib/api'
+import MapsLink from '../components/MapsLink'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamDisplayNames } from '../lib/teamName'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -340,9 +341,7 @@ export default function TerminePage() {
                             </span>
                           )}
                         </div>
-                        {s.venue?.name && (
-                          <p className="text-sm text-brand-text-muted mt-0.5">{s.venue.name}</p>
-                        )}
+                        <MapsLink venue={s.venue} className="mt-0.5" />
                         {s.status === 'cancelled' && s.cancel_reason && (
                           <p className="text-sm text-brand-danger mt-0.5">{s.cancel_reason}</p>
                         )}
