@@ -22,6 +22,23 @@ type Handler struct {
 	cfg *appconfig.Config
 }
 
+var allowedEmojiOrder = []string{"👍", "👎", "❤️", "😂", "😮", "😢", "🙌", "🔥"}
+
+var allowedEmojis = func() map[string]bool {
+	m := map[string]bool{}
+	for _, e := range allowedEmojiOrder {
+		m[e] = true
+	}
+	return m
+}()
+
+type messageReaction struct {
+	Emoji      string   `json:"emoji"`
+	Count      int      `json:"count"`
+	UserNames  []string `json:"userNames"`
+	MyReaction bool     `json:"myReaction"`
+}
+
 func NewHandler(db *sql.DB, h *hub.EventHub, cfg *appconfig.Config) *Handler {
 	return &Handler{db: db, hub: h, cfg: cfg}
 }
@@ -411,17 +428,18 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type Message struct {
-		ID                int     `json:"id"`
-		SenderID          int     `json:"senderId"`
-		SenderName        string  `json:"senderName"`
-		Body              string  `json:"body"`
-		SentAt            string  `json:"sentAt"`
-		ReplyToID         *int    `json:"replyToId"`
-		ReplyToBody       *string `json:"replyToBody"`
-		ReplyToSenderName *string `json:"replyToSenderName"`
-		EditedAt          *string `json:"editedAt"`
-		DeletedAt         *string `json:"deletedAt"`
-		IsSystem          bool    `json:"isSystem"`
+		ID                int               `json:"id"`
+		SenderID          int               `json:"senderId"`
+		SenderName        string            `json:"senderName"`
+		Body              string            `json:"body"`
+		SentAt            string            `json:"sentAt"`
+		ReplyToID         *int              `json:"replyToId"`
+		ReplyToBody       *string           `json:"replyToBody"`
+		ReplyToSenderName *string           `json:"replyToSenderName"`
+		EditedAt          *string           `json:"editedAt"`
+		DeletedAt         *string           `json:"deletedAt"`
+		IsSystem          bool              `json:"isSystem"`
+		Reactions         []messageReaction `json:"reactions"`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
@@ -480,6 +498,61 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	// Reverse so oldest first
 	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
 		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+
+	// Attach emoji reactions
+	if len(msgs) > 0 {
+		placeholders := make([]string, len(msgs))
+		ids := make([]any, len(msgs))
+		for i, m := range msgs {
+			placeholders[i] = "?"
+			ids[i] = m.ID
+		}
+		type reactionRow struct {
+			msgID  int
+			emoji  string
+			name   string
+			userID int
+		}
+		rrows, rerr := h.db.QueryContext(r.Context(), fmt.Sprintf(
+			`SELECT mr.message_id, mr.emoji, u.first_name||' '||u.last_name, mr.user_id
+			 FROM message_reactions mr JOIN users u ON u.id = mr.user_id
+			 WHERE mr.message_id IN (%s)
+			 ORDER BY mr.message_id, mr.created_at`, strings.Join(placeholders, ",")), ids...)
+		if rerr == nil {
+			defer rrows.Close()
+			type reactionKey struct{ msgID int; emoji string }
+			type reactionAcc struct {
+				names []string
+				hasMe bool
+			}
+			rmap := map[reactionKey]*reactionAcc{}
+			for rrows.Next() {
+				var rr reactionRow
+				rrows.Scan(&rr.msgID, &rr.emoji, &rr.name, &rr.userID)
+				key := reactionKey{rr.msgID, rr.emoji}
+				if rmap[key] == nil {
+					rmap[key] = &reactionAcc{}
+				}
+				rmap[key].names = append(rmap[key].names, rr.name)
+				if rr.userID == claims.UserID {
+					rmap[key].hasMe = true
+				}
+			}
+			for i := range msgs {
+				for _, emoji := range allowedEmojiOrder {
+					key := reactionKey{msgs[i].ID, emoji}
+					if acc, ok := rmap[key]; ok {
+						msgs[i].Reactions = append(msgs[i].Reactions, messageReaction{
+							Emoji:      emoji,
+							Count:      len(acc.names),
+							UserNames:  acc.names,
+							MyReaction: acc.hasMe,
+						})
+					}
+				}
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1031,6 +1104,55 @@ func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
 
 	h.hub.BroadcastToUser(body.UserID, fmt.Sprintf("chat:new-message:%d", convID))
 
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/chat/messages/{id}/reactions
+func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	msgID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Emoji string `json:"emoji"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !allowedEmojis[body.Emoji] {
+		http.Error(w, "invalid emoji", http.StatusBadRequest)
+		return
+	}
+
+	var convID int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT conversation_id FROM messages WHERE id = ? AND deleted_at IS NULL`, msgID).Scan(&convID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !h.isMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var count int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM message_reactions WHERE message_id=? AND user_id=? AND emoji=?`,
+		msgID, claims.UserID, body.Emoji).Scan(&count)
+	if count > 0 {
+		h.db.ExecContext(r.Context(),
+			`DELETE FROM message_reactions WHERE message_id=? AND user_id=? AND emoji=?`,
+			msgID, claims.UserID, body.Emoji)
+	} else {
+		h.db.ExecContext(r.Context(),
+			`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?,?,?)`,
+			msgID, claims.UserID, body.Emoji)
+	}
+
+	event := fmt.Sprintf("chat:new-message:%d", convID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

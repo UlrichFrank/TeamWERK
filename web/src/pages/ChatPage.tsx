@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users, UserPlus,
-  Trash2, CornerUpLeft, Pencil
+  Trash2, CornerUpLeft, Pencil, SmilePlus
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { buildTeamDisplayNames } from '../lib/teamName'
@@ -20,6 +20,13 @@ interface Conversation {
   lastMessage: LastMessage | null
   members: ConvMember[]
 }
+interface Reaction {
+  emoji: string
+  count: number
+  userNames: string[]
+  myReaction: boolean
+}
+
 interface Message {
   id: number
   senderId: number
@@ -32,7 +39,10 @@ interface Message {
   editedAt: string | null
   deletedAt: string | null
   isSystem: boolean
+  reactions: Reaction[]
 }
+
+const REACTION_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🙌', '🔥']
 interface Broadcast {
   id: number
   senderName: string
@@ -70,6 +80,7 @@ export default function ChatPage() {
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const isMobile = window.innerWidth < 640
@@ -142,8 +153,16 @@ export default function ChatPage() {
     try {
       const r = await api.get(`/chat/conversations/${convId}/messages`)
       setMessages(r.data ?? [])
+      setEmojiPickerMsgId(null)
       await api.post(`/chat/conversations/${convId}/read`)
       loadConversations()
+    } catch {}
+  }
+
+  const toggleReaction = async (msgId: number, emoji: string) => {
+    try {
+      await api.post(`/chat/messages/${msgId}/reactions`, { emoji })
+      if (activeConv) loadMessages(activeConv.id)
     } catch {}
   }
 
@@ -161,11 +180,11 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Close context menu on outside click/tap or Escape
+  // Close context menu and emoji picker on outside click/tap or Escape
   useEffect(() => {
-    if (!contextMenu) return
-    const close = () => setContextMenu(null)
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
+    if (!contextMenu && !emojiPickerMsgId) return
+    const close = () => { setContextMenu(null); setEmojiPickerMsgId(null) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setContextMenu(null); setEmojiPickerMsgId(null) } }
     document.addEventListener('mousedown', close)
     document.addEventListener('touchstart', close)
     document.addEventListener('keydown', onKey)
@@ -174,7 +193,7 @@ export default function ChatPage() {
       document.removeEventListener('touchstart', close)
       document.removeEventListener('keydown', onKey)
     }
-  }, [contextMenu])
+  }, [contextMenu, emojiPickerMsgId])
 
   const sendMessage = async () => {
     if (!activeConv || !msgInput.trim() || sending) return
@@ -484,6 +503,10 @@ export default function ChatPage() {
                       onContextMenu={handleContextMenu}
                       onSwipeReply={startReply}
                       onLongPress={handleLongPress}
+                      isPickerOpen={emojiPickerMsgId === msg.id}
+                      onOpenPicker={(e) => { e.stopPropagation(); setEmojiPickerMsgId(msg.id) }}
+                      onClosePicker={() => setEmojiPickerMsgId(null)}
+                      onToggleReaction={toggleReaction}
                     />
                   )
                 })}
@@ -578,6 +601,24 @@ export default function ChatPage() {
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
         >
+          {/* Emoji reaction row */}
+          {!contextMenu.message.deletedAt && (
+            <div className="flex gap-0.5 px-2 py-2 border-b border-brand-border-subtle">
+              {REACTION_EMOJIS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => { toggleReaction(contextMenu.message.id, emoji); setContextMenu(null) }}
+                  className={`text-lg p-1 rounded-full transition-transform hover:scale-125 ${
+                    contextMenu.message.reactions?.some(r => r.emoji === emoji && r.myReaction)
+                      ? 'bg-brand-yellow/30'
+                      : 'hover:bg-brand-border-subtle'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={() => startReply(contextMenu.message)}
             className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors"
@@ -656,12 +697,20 @@ function MessageBubble({
   onContextMenu,
   onSwipeReply,
   onLongPress,
+  isPickerOpen,
+  onOpenPicker,
+  onClosePicker,
+  onToggleReaction,
 }: {
   msg: Message
   isOwn: boolean
   onContextMenu: (e: React.MouseEvent, msg: Message) => void
   onSwipeReply: (msg: Message) => void
   onLongPress: (msg: Message, x: number, y: number) => void
+  isPickerOpen: boolean
+  onOpenPicker: (e: React.MouseEvent) => void
+  onClosePicker: () => void
+  onToggleReaction: (msgId: number, emoji: string) => void
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const touchStartX = useRef(0)
@@ -723,14 +772,47 @@ function MessageBubble({
     )
   }
 
+  const reactions = msg.reactions ?? []
+
   return (
-    <div className={`flex items-center gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`flex items-center gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'} group/msg`}>
       {/* Swipe reply icon */}
       <div
         className="shrink-0 transition-opacity duration-100"
         style={{ opacity: showReplyIcon ? 1 : 0 }}
       >
         <CornerUpLeft className="w-4 h-4 text-brand-text-muted" />
+      </div>
+
+      {/* Smiley button — hover only, mobile uses long-press context menu */}
+      <div className="relative shrink-0 self-end mb-1" onMouseDown={e => e.stopPropagation()}>
+        <button
+          className="opacity-0 group-hover/msg:opacity-100 transition-opacity p-1 rounded-full hover:bg-brand-border-subtle text-brand-text-muted hidden sm:block"
+          onClick={onOpenPicker}
+          aria-label="Reaktion hinzufügen"
+        >
+          <SmilePlus className="w-4 h-4" />
+        </button>
+        {isPickerOpen && (
+          <div
+            className={`absolute bottom-full mb-1 z-50 bg-white rounded-full shadow-xl border border-brand-border-subtle flex gap-0.5 px-2 py-1.5 ${isOwn ? 'right-0' : 'left-0'}`}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            {REACTION_EMOJIS.map(emoji => (
+              <button
+                key={emoji}
+                onClick={() => { onToggleReaction(msg.id, emoji); onClosePicker() }}
+                className={`text-lg p-1 rounded-full transition-transform hover:scale-125 ${
+                  reactions.some(r => r.emoji === emoji && r.myReaction)
+                    ? 'bg-brand-yellow/30'
+                    : 'hover:bg-brand-border-subtle'
+                }`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div
@@ -757,6 +839,33 @@ function MessageBubble({
           )}
           {msg.body}
         </div>
+
+        {/* Reaction chips */}
+        {reactions.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {reactions.map(r => (
+              <div key={r.emoji} className="relative group/reaction">
+                <button
+                  onClick={() => onToggleReaction(msg.id, r.emoji)}
+                  className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-sm leading-none transition-colors ${
+                    r.myReaction
+                      ? 'bg-brand-yellow/20 border-brand-yellow text-brand-text'
+                      : 'bg-white border-brand-border-subtle text-brand-text hover:bg-brand-border-subtle'
+                  }`}
+                >
+                  <span>{r.emoji}</span>
+                  <span className="text-xs font-medium ml-0.5">{r.count}</span>
+                </button>
+                {/* Tooltip */}
+                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/reaction:block z-50">
+                  <div className="bg-brand-text text-white text-xs rounded px-2 py-1 whitespace-nowrap max-w-[180px] text-center">
+                    {r.userNames.join(', ')}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="flex items-center gap-1 mt-0.5">
           <span className="text-xs text-brand-text-subtle">
