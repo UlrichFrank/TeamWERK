@@ -1675,24 +1675,34 @@ type childRSVP struct {
 	RSVP     *string `json:"rsvp"`
 }
 
+type gameVenueRef struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	Street     string `json:"street"`
+	City       string `json:"city"`
+	PostalCode string `json:"postal_code"`
+	Note       string `json:"note"`
+}
+
 type gameListItem struct {
-	ID                int         `json:"id"`
-	Date              string      `json:"date"`
-	Time              string      `json:"time"`
-	Opponent          string      `json:"opponent"`
-	EventType         string      `json:"event_type"`
-	IsHome            bool        `json:"is_home"`
-	SeasonID          int         `json:"season_id"`
-	TeamNames         string      `json:"team_names"`
-	TeamIDs           []int       `json:"team_ids"`
-	ConfirmedCount    int         `json:"confirmed_count"`
-	DeclinedCount     int         `json:"declined_count"`
-	MaybeCount        int         `json:"maybe_count"`
-	MyRSVP            *string     `json:"my_rsvp"`
-	MyRSVPLocked      bool        `json:"my_rsvp_locked"`
-	ChildrenRSVP      []childRSVP `json:"children_rsvp,omitempty"`
-	RsvpOptOut        int         `json:"rsvp_opt_out"`
-	RsvpRequireReason int         `json:"rsvp_require_reason"`
+	ID                int             `json:"id"`
+	Date              string          `json:"date"`
+	Time              string          `json:"time"`
+	Opponent          string          `json:"opponent"`
+	EventType         string          `json:"event_type"`
+	IsHome            bool            `json:"is_home"`
+	SeasonID          int             `json:"season_id"`
+	TeamNames         string          `json:"team_names"`
+	TeamIDs           []int           `json:"team_ids"`
+	ConfirmedCount    int             `json:"confirmed_count"`
+	DeclinedCount     int             `json:"declined_count"`
+	MaybeCount        int             `json:"maybe_count"`
+	MyRSVP            *string         `json:"my_rsvp"`
+	MyRSVPLocked      bool            `json:"my_rsvp_locked"`
+	ChildrenRSVP      []childRSVP     `json:"children_rsvp,omitempty"`
+	RsvpOptOut        int             `json:"rsvp_opt_out"`
+	RsvpRequireReason int             `json:"rsvp_require_reason"`
+	Venue             *gameVenueRef   `json:"venue,omitempty"`
 }
 
 // memberIDForUser returns the member_id for a user, or 0 if not found.
@@ -1787,9 +1797,11 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
 		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
-		       g.rsvp_opt_out, g.rsvp_require_reason
+		       g.rsvp_opt_out, g.rsvp_require_reason,
+		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
+		LEFT JOIN venues v ON v.id = g.venue_id
 		WHERE %s AND g.date >= ? AND g.date <= ?
 		ORDER BY g.date, g.time`, teamSQL)
 
@@ -1808,9 +1820,12 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var myRSVP sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var teamNames, teamIDsCSV sql.NullString
+		var vID sql.NullInt64
+		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
 			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
-			&g.RsvpOptOut, &g.RsvpRequireReason); err != nil {
+			&g.RsvpOptOut, &g.RsvpRequireReason,
+			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -1832,6 +1847,12 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 			g.MyRSVP = &confirmed
 		}
 		g.MyRSVPLocked = myRSVPLocked.Valid && myRSVPLocked.Int64 == 1
+		if vID.Valid {
+			g.Venue = &gameVenueRef{
+				ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
+				City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
+			}
+		}
 		result = append(result, g)
 	}
 

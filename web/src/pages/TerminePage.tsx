@@ -69,6 +69,7 @@ interface Game {
   children_rsvp?: ChildRSVP[]
   rsvp_opt_out: number
   rsvp_require_reason: number
+  venue?: VenueRef | null
 }
 
 interface Team {
@@ -341,7 +342,9 @@ export default function TerminePage() {
                             </span>
                           )}
                         </div>
-                        <MapsLink venue={s.venue} className="mt-0.5" />
+                        <span onClick={e => e.stopPropagation()}>
+                          <MapsLink venue={s.venue} className="mt-0.5" />
+                        </span>
                         {s.status === 'cancelled' && s.cancel_reason && (
                           <p className="text-sm text-brand-danger mt-0.5">{s.cancel_reason}</p>
                         )}
@@ -426,6 +429,9 @@ export default function TerminePage() {
                         )}
                       </div>
                       <p className="text-sm text-brand-text-muted mt-0.5">{label}</p>
+                      <span onClick={e => e.stopPropagation()}>
+                        <MapsLink venue={g.venue} className="mt-0.5" />
+                      </span>
                     </div>
                   </div>
 

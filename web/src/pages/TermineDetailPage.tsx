@@ -72,6 +72,7 @@ interface GameDetail {
   event_type: string
   is_home: boolean
   season_id: number
+  venue?: VenueRef | null
 }
 
 interface AttendanceItem {
@@ -325,6 +326,7 @@ export default function TermineDetailPage() {
               <Clock className="w-4 h-4" />
               {g.time} Uhr
             </div>
+            <MapsLink venue={g.venue} className="mt-1.5" />
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 <Check className="w-3 h-3" /> {confirmedCount}
