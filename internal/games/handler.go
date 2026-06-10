@@ -898,7 +898,21 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			 JOIN members m ON m.id = kt.member_id
 			 WHERE k.season_id = `+activeSeasonSub+` AND m.user_id = ?
 			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
+	} else if !claims.IsTrainerLike() {
+		// spieler / elternteil: only teams the user or their children are in
+		rows, err = h.db.QueryContext(r.Context(),
+			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
+			 FROM teams t
+			 JOIN kader k ON k.team_id = t.id
+			 JOIN team_memberships tm ON tm.team_id = t.id AND tm.season_id = k.season_id
+			 WHERE k.season_id = `+activeSeasonSub+`
+			   AND (
+			     EXISTS(SELECT 1 FROM members m WHERE m.id = tm.member_id AND m.user_id = ?)
+			     OR EXISTS(SELECT 1 FROM family_links fl WHERE fl.member_id = tm.member_id AND fl.parent_user_id = ?)
+			   )
+			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID, claims.UserID)
 	} else {
+		// sportliche_leitung: all teams
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
 			 FROM teams t
