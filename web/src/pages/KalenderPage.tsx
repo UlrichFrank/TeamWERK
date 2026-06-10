@@ -28,6 +28,7 @@ interface Training {
   date: string
   start_time: string
   end_time: string
+  team_name?: string
   venue?: VenueRef | null
   status: 'active' | 'cancelled'
   confirmed_count: number
@@ -699,7 +700,7 @@ export default function KalenderPage() {
           className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow shrink-0 max-w-[6rem]"
         >
           <option value="">Alle</option>
-          {teams.map(t => (
+          {teams.filter(t => t.is_active).map(t => (
             <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
           ))}
         </select>
@@ -811,7 +812,7 @@ export default function KalenderPage() {
                   <button
                     key={g.id}
                     onPointerDown={e => e.stopPropagation()}
-                    onClick={() => setInfoItem({ type: 'game', game: g })}
+                    onClick={() => setInfoItem({ type: 'game', game: { ...g, teams: g.teams.map(t => ({ id: t.id, name: shortNames.get(t.id) ?? t.name })) } })}
                     title={`${g.teams.length > 1 ? 'Mehrere Teams' : (shortNames.get(g.teams[0]?.id) ?? g.teams[0]?.name ?? '?')} · ${g.opponent || '–'} · ${g.time}`}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${getEventColors(g.event_type).pill}`}
                   >
@@ -841,7 +842,7 @@ export default function KalenderPage() {
                     key={`t-${t.id}`}
                     onPointerDown={e => e.stopPropagation()}
                     title={`${shortNames.get(t.team_id) ?? (t.title || 'Training')} · ${t.start_time}`}
-                    onClick={() => setInfoItem({ type: 'training', training: t })}
+                    onClick={() => setInfoItem({ type: 'training', training: { ...t, team_name: shortNames.get(t.team_id) } })}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs border ${
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'

@@ -17,8 +17,10 @@ interface Game {
   id: number
   date: string
   time: string
+  end_date?: string | null
   opponent: string
   event_type: string
+  teams?: Array<{ id: number; name: string }>
   confirmed_count: number
   declined_count: number
   maybe_count: number
@@ -31,6 +33,7 @@ interface Training {
   date: string
   start_time: string
   end_time: string
+  team_name?: string
   venue?: VenueRef | null
   confirmed_count: number
   declined_count: number
@@ -64,6 +67,14 @@ interface Props {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr.slice(0, 10) + 'T12:00:00')
   return d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function formatDateRange(startStr: string, endStr: string): string {
+  const start = new Date(startStr.slice(0, 10) + 'T12:00:00')
+  const end = new Date(endStr.slice(0, 10) + 'T12:00:00')
+  const startFmt = start.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })
+  const endFmt = end.toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+  return `${startFmt} – ${endFmt}`
 }
 
 function RsvpRow({ confirmed, declined, maybe }: { confirmed: number; declined: number; maybe: number }) {
@@ -175,18 +186,28 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
           <div className="space-y-2 text-sm">
             {game.opponent && (
               <div className="flex justify-between">
-                <span className="text-brand-text-muted">Gegner</span>
+                <span className="text-brand-text-muted">{game.event_type === 'generisch' ? 'Event-Name' : 'Gegner'}</span>
                 <span className="font-medium text-brand-text">{game.opponent}</span>
               </div>
             )}
             <div className="flex justify-between">
               <span className="text-brand-text-muted">Datum</span>
-              <span className="font-medium text-brand-text">{formatDate(game.date)}</span>
+              <span className="font-medium text-brand-text">
+                {game.end_date && game.end_date.slice(0, 10) !== game.date.slice(0, 10)
+                  ? formatDateRange(game.date, game.end_date)
+                  : formatDate(game.date)}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-brand-text-muted">Uhrzeit</span>
               <span className="font-medium text-brand-text">{game.time}</span>
             </div>
+            {game.teams && game.teams.length > 0 && (
+              <div className="flex justify-between">
+                <span className="text-brand-text-muted">{game.teams.length === 1 ? 'Team' : 'Teams'}</span>
+                <span className="font-medium text-brand-text">{game.teams.map(t => t.name).join(', ')}</span>
+              </div>
+            )}
             {game.venue && (
               <div className="flex justify-between items-center">
                 <span className="text-brand-text-muted">Ort</span>
@@ -205,6 +226,12 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               <span className="text-brand-text-muted">Uhrzeit</span>
               <span className="font-medium text-brand-text">{training.start_time}–{training.end_time}</span>
             </div>
+            {training.team_name && (
+              <div className="flex justify-between">
+                <span className="text-brand-text-muted">Team</span>
+                <span className="font-medium text-brand-text">{training.team_name}</span>
+              </div>
+            )}
             {training.venue && (
               <div className="flex justify-between items-center">
                 <span className="text-brand-text-muted">Ort</span>
