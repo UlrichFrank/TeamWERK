@@ -875,23 +875,25 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		AgeClass   string `json:"age_class"`
 		Gender     string `json:"gender"`
 		TeamNumber int    `json:"team_number"`
+		GroupCount int    `json:"group_count"`
 		IsActive   bool   `json:"is_active"`
 	}
 
 	const activeSeasonSub = `(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
+	const groupCountSub = `(SELECT COUNT(*) FROM kader k2 WHERE k2.season_id=k.season_id AND k2.age_class=k.age_class AND k2.gender=k.gender)`
 
 	var rows *sql.Rows
 	var err error
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
 			 ORDER BY t.age_class, t.gender, k.team_number`)
 	} else if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 JOIN kader_trainers kt ON kt.kader_id = k.id
@@ -901,7 +903,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	} else if !claims.IsTrainerLike() {
 		// spieler / elternteil: only teams the user or their children are in
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
+			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 JOIN team_memberships tm ON tm.team_id = t.id AND tm.season_id = k.season_id
@@ -914,7 +916,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// sportliche_leitung: all teams
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
@@ -927,7 +929,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var t team
 			var active int
-			rows.Scan(&t.ID, &t.Name, &t.AgeClass, &t.Gender, &t.TeamNumber, &active)
+			rows.Scan(&t.ID, &t.Name, &t.AgeClass, &t.Gender, &t.TeamNumber, &t.GroupCount, &active)
 			t.IsActive = active == 1
 			result = append(result, t)
 		}

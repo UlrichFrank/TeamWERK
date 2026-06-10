@@ -39,7 +39,7 @@ interface Series {
   rsvp_require_reason: number
 }
 
-interface Team { id: number; name: string; age_class: string; gender: string; team_number: number }
+interface Team { id: number; name: string; age_class: string; gender: string; team_number: number; group_count: number }
 interface Season { id: number; name: string; is_active: boolean }
 interface StandaloneSession {
   id: number

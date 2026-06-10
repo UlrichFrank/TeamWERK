@@ -1008,7 +1008,7 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
 function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onSent: () => void; isAdmin: boolean }) {
   const [body, setBody] = useState('')
   const [targetType, setTargetType] = useState<'all' | 'team' | 'role'>('all')
-  const [teams, setTeams] = useState<{ id: number; name: string; age_class: string; gender: string; team_number: number }[]>([])
+  const [teams, setTeams] = useState<{ id: number; name: string; age_class: string; gender: string; team_number: number; group_count: number }[]>([])
   const teamDisplayNames = useMemo(() => buildTeamDisplayNames(teams), [teams])
   const [targetId, setTargetId] = useState(0)
   const [targetRole, setTargetRole] = useState('spieler')

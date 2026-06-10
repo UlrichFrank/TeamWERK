@@ -76,6 +76,7 @@ interface Team {
   age_class: string
   gender: string
   team_number: number
+  group_count: number
   is_active: boolean
 }
 
