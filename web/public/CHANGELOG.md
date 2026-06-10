@@ -1,3 +1,9 @@
+## 10.06.2026
+- [fix] kalender: Team-Filter auf eigene/Kinder-Teams für Spieler und Elternteile beschränken
+- [fix] teams: Mannschaftsnamen konsistent aus Kader-Nummerierung berechnen
+- [fix] kalender: Mannschaftsliste auf aktiven Kader beschränken + Bearbeiten
+- [fix] kalender: Detailanzeige zeigt Datumsrange, Event-Name und Teams
+
 ## 09.06.2026
 - [feat] chat: Verlassen und Erneeutes Beitreten von Chats
 - [feat] members: Checkboxen Beitragsfrei (Bankdaten) + Zweitspielrecht (Stammdaten)
