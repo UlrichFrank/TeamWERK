@@ -11,6 +11,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
@@ -420,7 +421,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(g.event_type, ''),
 		    COALESCE(g.time, ''),
 		    COALESCE(ds.team_id, 0),
-		    COALESCE(t.name, ''),
+		    COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, ''),
 		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END,
 		    COALESCE(ds.audiences, dt.audiences),
 		    COALESCE(ds.event_name, '')

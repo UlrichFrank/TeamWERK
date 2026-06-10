@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
+import { buildTeamDisplayNames } from '../lib/teamName'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -63,6 +64,9 @@ interface Game {
 interface Team {
   id: number
   name: string
+  age_class: string
+  gender: string
+  team_number: number
   is_active: boolean
 }
 
@@ -107,6 +111,7 @@ export default function TerminePage() {
 
   const [termine, setTermine] = useState<Termin[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const teamDisplayNames = useMemo(() => buildTeamDisplayNames(teams), [teams])
   const [showPast, setShowPast] = useState(false)
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
@@ -244,7 +249,7 @@ export default function TerminePage() {
           >
             <option value="">Alle Teams</option>
             {teams.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+              <option key={t.id} value={t.id}>{teamDisplayNames.get(t.id) ?? t.name}</option>
             ))}
           </select>
           {([

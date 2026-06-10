@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
+import { buildTeamShortNames, buildTeamDisplayNames } from '../lib/teamName'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -86,6 +87,7 @@ interface Team {
   name: string
   age_class: string
   gender: string
+  team_number: number
   is_active: boolean
 }
 
@@ -101,32 +103,6 @@ function dutyDotColor(filled: number, total: number): string {
   return 'bg-brand-danger'
 }
 
-function buildTeamShortNames(teams: Team[]): Map<number, string> {
-  const gLetter = (g: string) => g === 'f' ? 'w' : g === 'mixed' ? 'g' : 'm'
-  const aLetter = (a: string) => { const m = a.match(/^([A-F])/i); return m ? m[1].toUpperCase() : a.charAt(0) }
-
-  const groups = new Map<string, Team[]>()
-  for (const t of teams) {
-    const key = `${t.gender}|${t.age_class}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(t)
-  }
-
-  const result = new Map<number, string>()
-  for (const [, group] of groups) {
-    const multi = group.length > 1
-    for (const t of group) {
-      const base = `${gLetter(t.gender)}${aLetter(t.age_class)}`
-      if (multi) {
-        const numMatch = t.name.match(/\d+$/)
-        result.set(t.id, `${base}${numMatch ? numMatch[0] : ''}`)
-      } else {
-        result.set(t.id, base)
-      }
-    }
-  }
-  return result
-}
 
 function padDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -358,6 +334,7 @@ export default function KalenderPage() {
   }
 
   const shortNames = useMemo(() => buildTeamShortNames(teams), [teams])
+  const displayNames = useMemo(() => buildTeamDisplayNames(teams), [teams])
 
   const safeGames = Array.isArray(games) ? games : []
   const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
@@ -1107,7 +1084,7 @@ export default function KalenderPage() {
                                   setSelectedTeamIds(selectedTeamIds.filter(id => id !== t.id))
                                 }
                               }} className="rounded accent-brand-yellow" />
-                            <span className="text-sm text-brand-text">{t.name}</span>
+                            <span className="text-sm text-brand-text">{displayNames.get(t.id) ?? t.name}</span>
                           </label>
                         ))}
                       </div>
@@ -1116,7 +1093,7 @@ export default function KalenderPage() {
                         className={INPUT_WIZ}>
                         <option value="">Auswählen…</option>
                         {teams.filter(t => t.is_active).map(t => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
+                          <option key={t.id} value={t.id}>{displayNames.get(t.id) ?? t.name}</option>
                         ))}
                       </select>
                     )}
@@ -1183,7 +1160,7 @@ export default function KalenderPage() {
                       className={INPUT_WIZ}>
                       <option value="">Auswählen…</option>
                       {teams.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
+                        <option key={t.id} value={t.id}>{displayNames.get(t.id) ?? t.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1246,7 +1223,7 @@ export default function KalenderPage() {
                       className={INPUT_WIZ}>
                       <option value="">Auswählen…</option>
                       {teams.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
+                        <option key={t.id} value={t.id}>{displayNames.get(t.id) ?? t.name}</option>
                       ))}
                     </select>
                   </div>

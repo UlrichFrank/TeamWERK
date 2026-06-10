@@ -870,11 +870,12 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type team struct {
-		ID       int    `json:"id"`
-		Name     string `json:"name"`
-		AgeClass string `json:"age_class"`
-		Gender   string `json:"gender"`
-		IsActive bool   `json:"is_active"`
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		AgeClass   string `json:"age_class"`
+		Gender     string `json:"gender"`
+		TeamNumber int    `json:"team_number"`
+		IsActive   bool   `json:"is_active"`
 	}
 
 	const activeSeasonSub = `(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
@@ -883,27 +884,27 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
-			 ORDER BY t.name`)
+			 ORDER BY t.age_class, t.gender, k.team_number`)
 	} else if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 JOIN kader_trainers kt ON kt.kader_id = k.id
 			 JOIN members m ON m.id = kt.member_id
 			 WHERE k.season_id = `+activeSeasonSub+` AND m.user_id = ?
-			 ORDER BY t.name`, claims.UserID)
+			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
 	} else {
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
-			 ORDER BY t.name`)
+			 ORDER BY t.age_class, t.gender, k.team_number`)
 	}
 
 	result := []team{}
@@ -912,7 +913,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var t team
 			var active int
-			rows.Scan(&t.ID, &t.Name, &t.AgeClass, &t.Gender, &active)
+			rows.Scan(&t.ID, &t.Name, &t.AgeClass, &t.Gender, &t.TeamNumber, &active)
 			t.IsActive = active == 1
 			result = append(result, t)
 		}

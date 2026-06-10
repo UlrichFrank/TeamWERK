@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users, UserPlus,
   Trash2, CornerUpLeft, Pencil
 } from 'lucide-react'
 import { api } from '../lib/api'
+import { buildTeamDisplayNames } from '../lib/teamName'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
 
@@ -898,7 +899,8 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
 function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onSent: () => void; isAdmin: boolean }) {
   const [body, setBody] = useState('')
   const [targetType, setTargetType] = useState<'all' | 'team' | 'role'>('all')
-  const [teams, setTeams] = useState<{ id: number; name: string }[]>([])
+  const [teams, setTeams] = useState<{ id: number; name: string; age_class: string; gender: string; team_number: number }[]>([])
+  const teamDisplayNames = useMemo(() => buildTeamDisplayNames(teams), [teams])
   const [targetId, setTargetId] = useState(0)
   const [targetRole, setTargetRole] = useState('spieler')
   const [loading, setLoading] = useState(false)
@@ -948,7 +950,7 @@ function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onS
             className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
           >
             <option value={0}>Team wählen…</option>
-            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {teams.map(t => <option key={t.id} value={t.id}>{teamDisplayNames.get(t.id) ?? t.name}</option>)}
           </select>
         )}
 

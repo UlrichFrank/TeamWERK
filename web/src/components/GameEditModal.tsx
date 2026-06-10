@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
+import { buildTeamDisplayNames } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import VenuePicker from './VenuePicker'
 
@@ -24,6 +25,9 @@ interface Game {
 interface AvailableTeam {
   id: number
   name: string
+  age_class: string
+  gender: string
+  team_number: number
   is_active: boolean
 }
 
@@ -48,6 +52,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [venueId, setVenueId] = useState<number | null>(game.venue?.id ?? null)
   const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>(game.teams?.map(t => t.id) ?? [])
   const [availableTeams, setAvailableTeams] = useState<AvailableTeam[]>([])
+  const teamDisplayNames = useMemo(() => buildTeamDisplayNames(availableTeams), [availableTeams])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -176,7 +181,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
                       onChange={() => toggleTeam(t.id)}
                       className="rounded accent-brand-yellow"
                     />
-                    <span className="text-sm text-brand-text">{t.name}</span>
+                    <span className="text-sm text-brand-text">{teamDisplayNames.get(t.id) ?? t.name}</span>
                   </label>
                 ))}
               </div>
@@ -188,7 +193,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
               >
                 <option value="">Auswählen…</option>
                 {availableTeams.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>{teamDisplayNames.get(t.id) ?? t.name}</option>
                 ))}
               </select>
             )}

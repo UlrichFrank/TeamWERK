@@ -13,6 +13,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
@@ -146,7 +147,7 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	query := fmt.Sprintf(`
 		SELECT s.id, s.team_id, s.season_id, s.name, s.day_of_week,
 		       s.start_time, s.end_time, s.valid_from, s.valid_until, s.note,
-		       t.name as team_name,
+		       COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) as team_name,
 		       COUNT(ts.id) as session_count,
 		       s.rsvp_opt_out, s.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
@@ -713,7 +714,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := fmt.Sprintf(`
-		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
+		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.note, ts.status, ts.cancel_reason,
 		       CASE WHEN ts.rsvp_opt_out = 1
 		            THEN COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0) + (

@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 )
 
 type Handler struct{ db *sql.DB }
@@ -138,7 +139,7 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       ts.date,
 			       ts.start_time AS time,
 			       CASE WHEN ts.title != '' THEN ts.title ELSE 'Training' END AS title,
-			       t.name AS team_name,
+			       COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS team_name,
 			       '/termine/training/' || ts.id AS detail_url,
 			       NULL AS is_home
 			FROM training_sessions ts
@@ -153,7 +154,7 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       g.date,
 			       g.time,
 			       CASE WHEN g.event_type = 'generisch' THEN g.opponent ELSE 'vs. ' || g.opponent END,
-			       MIN(t.name),
+			       MIN(COALESCE(`+appdb.TeamDisplayName("t")+`, t.name)),
 			       '/termine/spiel/' || g.id,
 			       g.is_home
 			FROM games g
