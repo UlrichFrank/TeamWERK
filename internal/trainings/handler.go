@@ -831,7 +831,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	var vID sql.NullInt64
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err = h.db.QueryRowContext(r.Context(), `
-		SELECT ts.id, ts.series_id, ts.team_id, ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
+		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.note, ts.status, ts.cancel_reason,
 		       CASE WHEN ts.rsvp_opt_out = 1
 		            THEN COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
@@ -846,9 +846,10 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		       ts.rsvp_opt_out, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
+		LEFT JOIN teams t ON t.id = ts.team_id
 		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE ts.id = ?`, memberID, sessionID).Scan(
-		&s.ID, &seriesID, &s.TeamID, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
+		&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 		&s.Note, &s.Status, &s.CancelReason,
 		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP,
 		&s.RsvpOptOut, &s.RsvpRequireReason,

@@ -22,12 +22,21 @@ interface ChildRSVP {
   rsvp: string | null
 }
 
+interface VenueRef {
+  id: number
+  name: string
+  street: string
+  city: string
+  postal_code: string
+  note: string
+}
+
 interface Session {
   id: number
   date: string
   start_time: string
   end_time: string
-  location: string
+  venue?: VenueRef | null
   note: string
   status: 'active' | 'cancelled'
   cancel_reason: string
@@ -330,8 +339,8 @@ export default function TerminePage() {
                             </span>
                           )}
                         </div>
-                        {s.location && (
-                          <p className="text-sm text-brand-text-muted mt-0.5">{s.location}</p>
+                        {s.venue?.name && (
+                          <p className="text-sm text-brand-text-muted mt-0.5">{s.venue.name}</p>
                         )}
                         {s.status === 'cancelled' && s.cancel_reason && (
                           <p className="text-sm text-brand-danger mt-0.5">{s.cancel_reason}</p>

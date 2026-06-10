@@ -36,12 +36,23 @@ interface ParticipantItem {
   in_lineup: boolean
 }
 
+interface VenueRef {
+  id: number
+  name: string
+  street: string
+  city: string
+  postal_code: string
+  note: string
+}
+
 interface SessionDetail {
   id: number
   date: string
   start_time: string
   end_time: string
-  location: string
+  team_id: number
+  team_name: string
+  venue?: VenueRef | null
   note: string
   status: 'active' | 'cancelled'
   cancel_reason: string
@@ -223,14 +234,20 @@ export default function TermineDetailPage() {
                 </div>
               )}
               <div className="mt-3 space-y-1.5">
+                {session.team_name && (
+                  <div className="flex items-center gap-2 text-sm text-brand-text-muted">
+                    <Dumbbell className="w-4 h-4" />
+                    {session.team_name}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-sm text-brand-text-muted">
                   <Clock className="w-4 h-4" />
                   {session.start_time} – {session.end_time} Uhr
                 </div>
-                {session.location && (
+                {session.venue?.name && (
                   <div className="flex items-center gap-2 text-sm text-brand-text-muted">
                     <MapPin className="w-4 h-4" />
-                    {session.location}
+                    {session.venue.name}
                   </div>
                 )}
               </div>
