@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import VenuePicker from './VenuePicker'
+
+interface TeamRef {
+  id: number
+  name: string
+}
 
 interface Game {
   id: number
@@ -12,7 +17,14 @@ interface Game {
   end_date?: string | null
   opponent: string
   event_type: string
+  teams?: TeamRef[]
   venue?: { id: number; name: string; street: string; city: string; postal_code: string; note: string } | null
+}
+
+interface AvailableTeam {
+  id: number
+  name: string
+  is_active: boolean
 }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -34,12 +46,26 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [endDate, setEndDate] = useState(game.end_date ? game.end_date.slice(0, 10) : '')
   const [eventType, setEventType] = useState(game.event_type)
   const [venueId, setVenueId] = useState<number | null>(game.venue?.id ?? null)
+  const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>(game.teams?.map(t => t.id) ?? [])
+  const [availableTeams, setAvailableTeams] = useState<AvailableTeam[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   useEscapeKey(onClose)
+
+  useEffect(() => {
+    api.get<AvailableTeam[]>('/teams')
+      .then(r => setAvailableTeams((r.data ?? []).filter(t => t.is_active)))
+      .catch(() => {})
+  }, [])
+
+  const toggleTeam = (id: number) => {
+    setSelectedTeamIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -67,6 +93,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         opponent,
         event_type: eventType,
         venue_id: venueId,
+        team_ids: selectedTeamIds.length > 0 ? selectedTeamIds : undefined,
       })
       onSaved()
     } catch {
@@ -78,7 +105,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
 
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-brand-text">
             {isGeneric ? 'Event bearbeiten' : 'Spieltag bearbeiten'}
@@ -131,6 +158,39 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
               min={date || undefined} className={INPUT} />
             {endDate && endDate < date && (
               <p className="text-xs text-brand-danger mt-1">Enddatum muss nach dem Startdatum liegen.</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-2">
+              {isGeneric ? 'Mannschaften' : 'Mannschaft'}
+            </label>
+            {availableTeams.length === 0 ? (
+              <p className="text-xs text-brand-text-subtle">Lädt…</p>
+            ) : isGeneric ? (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {availableTeams.map(t => (
+                  <label key={t.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedTeamIds.includes(t.id)}
+                      onChange={() => toggleTeam(t.id)}
+                      className="rounded accent-brand-yellow"
+                    />
+                    <span className="text-sm text-brand-text">{t.name}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <select
+                value={selectedTeamIds[0] ?? ''}
+                onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
+                className={INPUT}
+              >
+                <option value="">Auswählen…</option>
+                {availableTeams.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
             )}
           </div>
           <div>

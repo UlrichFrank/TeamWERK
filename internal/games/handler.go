@@ -883,7 +883,11 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT id, name, age_class, gender, is_active FROM teams ORDER BY name`)
+			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
+			 FROM teams t
+			 JOIN kader k ON k.team_id = t.id
+			 WHERE k.season_id = `+activeSeasonSub+`
+			 ORDER BY t.name`)
 	} else if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, t.is_active
