@@ -1,4 +1,13 @@
 ## 10.06.2026
+- [fix] termine: Generische Events nutzen Route /termine/ereignis/:id
+- [feat] termine: Ort als Maps-Link bei Spielen und generischen Events
+- [fix] termine: Ort als anklickbarer Maps-Link mit Icon
+- [fix] upload: SEPA-Upload auf 2 MB begrenzen mit klarer Fehlermeldung
+- [feat] members: Vorstand sieht alle Tabs in der Mitglied-Detailseite
+- [feat] members: Vorstand erhält vollständigen Lese- und Schreibzugriff auf Mitgliederdaten
+- [fix] teams: Mannschaftsnummern anhand aller Kader-Einträge bestimmen
+- [feat] chat: Emoji-Reaktionen auf Nachrichten (WhatsApp-Style)
+- [fix] termine: Ort und Mannschaft in Terminliste und Trainingsdetail anzeigen
 - [fix] kalender: Team-Filter auf eigene/Kinder-Teams für Spieler und Elternteile beschränken
 - [fix] teams: Mannschaftsnamen konsistent aus Kader-Nummerierung berechnen
 - [fix] kalender: Mannschaftsliste auf aktiven Kader beschränken + Bearbeiten
