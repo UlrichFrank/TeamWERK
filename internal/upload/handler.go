@@ -19,8 +19,8 @@ var imageTypes = []string{"image/jpeg", "image/jpg", "image/png", "image/webp"}
 var pdfAndImageTypes = []string{"application/pdf", "image/jpeg", "image/png", "image/webp"}
 
 const (
-	maxPhotoBytes = 5 << 20  // 5 MB
-	maxSepaBytes  = 10 << 20 // 10 MB
+	maxPhotoBytes = 5 << 20 // 5 MB
+	maxSepaBytes  = 2 << 20 // 2 MB
 )
 
 type Handler struct {
@@ -50,7 +50,7 @@ func sniffImageType(b []byte) string {
 func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string, maxBytes int64) (string, error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, maxBytes+1024)
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		return "", fmt.Errorf("file too large or invalid form")
+		return "", fmt.Errorf("too_large")
 	}
 	file, hdr, err := r.FormFile("file")
 	if err != nil {

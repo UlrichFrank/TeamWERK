@@ -51,9 +51,16 @@ export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, on
   const isVorstand = hasFunction(user, 'vorstand')
   const canDeleteSepa = isAdmin || isVorstand || user?.isParent
 
+  const MAX_SEPA_BYTES = 2 * 1024 * 1024
+
   const handleSepaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || isNew) return
+    if (file.size > MAX_SEPA_BYTES) {
+      setSepaUploadError('Die Datei ist zu groß. Maximal erlaubt sind 2 MB.')
+      if (sepaInputRef.current) sepaInputRef.current.value = ''
+      return
+    }
     setSepaUploading(true)
     setSepaUploadError('')
     try {
@@ -65,8 +72,13 @@ export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, on
         { headers: { 'Content-Type': 'multipart/form-data' } }
       )
       onFormChange({ sepa_mandat_url: data.sepa_mandat_url })
-    } catch {
-      setSepaUploadError('Hochladen fehlgeschlagen.')
+    } catch (err: any) {
+      const msg: string = err?.response?.data ?? ''
+      setSepaUploadError(
+        msg.includes('too_large')
+          ? 'Die Datei ist zu groß. Maximal erlaubt sind 2 MB.'
+          : 'Hochladen fehlgeschlagen.'
+      )
     } finally {
       setSepaUploading(false)
       if (sepaInputRef.current) sepaInputRef.current.value = ''
