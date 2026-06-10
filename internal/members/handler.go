@@ -204,8 +204,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		result = append(result, m)
 	}
 
-	// For admin: mark members with pending draft types
-	if claims.Role == "admin" && len(result) > 0 {
+	// For admin/vorstand: mark members with pending draft types
+	if (claims.Role == "admin" || claims.HasFunction("vorstand")) && len(result) > 0 {
 		ids := make([]interface{}, len(result))
 		idxMap := make(map[int]int, len(result))
 		for i, m := range result {
@@ -377,7 +377,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	base.ClubFunctions = parseFunctions(clubFunctionsStr)
 
-	isAdmin := claims.Role == "admin"
+	isAdmin := claims.Role == "admin" || claims.HasFunction("vorstand")
 	isPrivileged := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("trainer") || claims.HasFunction("sportliche_leitung")
 	isOwn := base.UserID != nil && *base.UserID == claims.UserID
 	isParent := h.isParentOf(r.Context(), claims.UserID, base.ID)
@@ -558,7 +558,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if claims.Role == "admin" {
+	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		ibanVal := interface{}(nil)
 		if req.IBAN != "" {
 			ibanVal = req.IBAN
