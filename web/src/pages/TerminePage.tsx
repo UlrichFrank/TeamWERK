@@ -412,7 +412,7 @@ export default function TerminePage() {
             return (
               <div
                 key={key}
-                onClick={() => navigate(`/termine/spiel/${g.id}`)}
+                onClick={() => navigate(`/termine/${g.event_type === 'generisch' ? 'ereignis' : 'spiel'}/${g.id}`)}
                 className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
