@@ -1125,10 +1125,10 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sessionDate string
 	var teamID int
+	var isPastOrToday bool
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT date, team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&sessionDate, &teamID)
+		`SELECT team_id, date(date) <= date('now') FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID, &isPastOrToday)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1143,8 +1143,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	today := time.Now().Format("2006-01-02")
-	if sessionDate > today {
+	if !isPastOrToday {
 		http.Error(w, "attendance can only be recorded for past or current sessions", http.StatusUnprocessableEntity)
 		return
 	}
