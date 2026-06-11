@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
@@ -43,6 +45,11 @@ type previewEvent struct {
 	Pending   bool   `json:"pending"` // true = no prior response, will be newly declined
 }
 
+type previewKey struct {
+	eventType string
+	eventID   int
+}
+
 // memberIDForUser returns the member ID linked to the given user, or 0.
 func (h *Handler) memberIDForUser(ctx context.Context, userID int) int {
 	var id int
@@ -75,11 +82,69 @@ func (h *Handler) resolveMemberID(ctx context.Context, claims *auth.Claims, requ
 	return mid, ""
 }
 
+// parseMemberIDs normalizes the requested member IDs from either a CSV
+// "member_ids" param/body field or a legacy single "member_id". Returns
+// nil when neither is set, signaling "fall back to the caller's own member".
+func parseMemberIDs(csv, single string) []int {
+	if csv != "" {
+		parts := strings.Split(csv, ",")
+		ids := make([]int, 0, len(parts))
+		for _, p := range parts {
+			if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil && n > 0 {
+				ids = append(ids, n)
+			}
+		}
+		return ids
+	}
+	if single != "" {
+		if n, err := strconv.Atoi(single); err == nil && n > 0 {
+			return []int{n}
+		}
+	}
+	return nil
+}
+
+// resolveMemberIDs runs resolveMemberID for each requested ID and aggregates
+// the results. If the requested list is empty, it falls back to the caller's
+// own member exactly like resolveMemberID(0). On any failure it short-circuits
+// with the appropriate HTTP status and message.
+func (h *Handler) resolveMemberIDs(ctx context.Context, claims *auth.Claims, requested []int) ([]int, int, string) {
+	if len(requested) == 0 {
+		mid, errMsg := h.resolveMemberID(ctx, claims, 0)
+		if errMsg != "" {
+			if errMsg == "forbidden" {
+				return nil, http.StatusForbidden, "forbidden"
+			}
+			return nil, http.StatusBadRequest, errMsg
+		}
+		return []int{mid}, 0, ""
+	}
+	resolved := make([]int, 0, len(requested))
+	seen := map[int]bool{}
+	for _, mid := range requested {
+		if seen[mid] {
+			continue // ignore duplicates in the input
+		}
+		seen[mid] = true
+		r, errMsg := h.resolveMemberID(ctx, claims, mid)
+		if errMsg != "" {
+			if errMsg == "forbidden" {
+				return nil, http.StatusForbidden, "forbidden"
+			}
+			return nil, http.StatusBadRequest, errMsg
+		}
+		resolved = append(resolved, r)
+	}
+	return resolved, 0, ""
+}
+
 // GET /api/absences/preview
+// Accepts either ?member_id=N (single) or ?member_ids=1,2,3 (CSV).
+// With multiple members, returned events are the deduplicated union per
+// (event_type, event_id) so a shared training/game appears once.
 func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	q := r.URL.Query()
-	memberIDStr := q.Get("member_id")
 	from := q.Get("from")
 	to := q.Get("to")
 	if from == "" || to == "" {
@@ -87,35 +152,53 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var memberID int
-	if memberIDStr != "" {
-		memberID, _ = strconv.Atoi(memberIDStr)
-	}
-	resolvedMemberID, errMsg := h.resolveMemberID(r.Context(), claims, memberID)
+	requested := parseMemberIDs(q.Get("member_ids"), q.Get("member_id"))
+	resolvedIDs, errStatus, errMsg := h.resolveMemberIDs(r.Context(), claims, requested)
 	if errMsg != "" {
-		if errMsg == "forbidden" {
-			http.Error(w, "forbidden", http.StatusForbidden)
-		} else {
-			http.Error(w, errMsg, http.StatusBadRequest)
-		}
+		http.Error(w, errMsg, errStatus)
 		return
 	}
 
-	events := []previewEvent{}
-	seenTrainingIDs := map[int]bool{}
+	seen := map[previewKey]previewEvent{}
 
-	// confirmed training responses in range
-	tRows, err := h.db.QueryContext(r.Context(), `
+	for _, memberID := range resolvedIDs {
+		if err := h.collectPreviewEvents(r.Context(), memberID, from, to, seen); err != nil {
+			fmt.Fprintf(os.Stderr, "absences preview: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	events := make([]previewEvent, 0, len(seen))
+	for _, ev := range seen {
+		events = append(events, ev)
+	}
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].Date != events[j].Date {
+			return events[i].Date < events[j].Date
+		}
+		if events[i].EventType != events[j].EventType {
+			return events[i].EventType < events[j].EventType
+		}
+		return events[i].EventID < events[j].EventID
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(events)
+}
+
+// collectPreviewEvents fills seen with affected events for a single member.
+// A "confirmed" entry overrides a "pending" one for the same key.
+func (h *Handler) collectPreviewEvents(ctx context.Context, memberID int, from, to string, seen map[previewKey]previewEvent) error {
+	// confirmed training responses
+	tRows, err := h.db.QueryContext(ctx, `
 		SELECT ts.id, COALESCE(ts.title, ''), ts.date
 		FROM training_sessions ts
 		JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = ? AND tr.status = 'confirmed'
-		WHERE ts.date BETWEEN ? AND ?`, resolvedMemberID, from, to)
+		WHERE ts.date BETWEEN ? AND ?`, memberID, from, to)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "absences preview training: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return err
 	}
-	defer tRows.Close()
 	for tRows.Next() {
 		var ev previewEvent
 		ev.EventType = "training"
@@ -124,12 +207,12 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 			ev.Name = "Training"
 		}
 		ev.Date = ev.Date[:10]
-		seenTrainingIDs[ev.EventID] = true
-		events = append(events, ev)
+		seen[previewKey{ev.EventType, ev.EventID}] = ev // confirmed wins over pending
 	}
+	tRows.Close()
 
-	// pending training sessions in range: member is in kader but has no response yet
-	pRows, err := h.db.QueryContext(r.Context(), `
+	// pending training sessions: member is in kader but has no response yet
+	pRows, err := h.db.QueryContext(ctx, `
 		SELECT ts.id, COALESCE(ts.title, ''), ts.date
 		FROM training_sessions ts
 		JOIN kader_members km ON km.member_id = ?
@@ -138,13 +221,10 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 		  AND NOT EXISTS (
 		    SELECT 1 FROM training_responses tr
 		    WHERE tr.training_id = ts.id AND tr.member_id = ?
-		  )`, resolvedMemberID, from, to, resolvedMemberID)
+		  )`, memberID, from, to, memberID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "absences preview pending training: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return err
 	}
-	defer pRows.Close()
 	for pRows.Next() {
 		var ev previewEvent
 		ev.EventType = "training"
@@ -154,40 +234,42 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 			ev.Name = "Training"
 		}
 		ev.Date = ev.Date[:10]
-		if !seenTrainingIDs[ev.EventID] {
-			events = append(events, ev)
+		k := previewKey{ev.EventType, ev.EventID}
+		if _, exists := seen[k]; !exists {
+			seen[k] = ev
 		}
 	}
+	pRows.Close()
 
-	// confirmed game responses in range
-	gRows, err := h.db.QueryContext(r.Context(), `
+	// confirmed game responses
+	gRows, err := h.db.QueryContext(ctx, `
 		SELECT g.id, g.opponent, g.date
 		FROM games g
 		JOIN game_responses gr ON gr.game_id = g.id AND gr.member_id = ? AND gr.status = 'confirmed'
-		WHERE g.date BETWEEN ? AND ?`, resolvedMemberID, from, to)
+		WHERE g.date BETWEEN ? AND ?`, memberID, from, to)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "absences preview games: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return err
 	}
-	defer gRows.Close()
 	for gRows.Next() {
 		var ev previewEvent
 		ev.EventType = "game"
 		gRows.Scan(&ev.EventID, &ev.Name, &ev.Date)
 		ev.Date = ev.Date[:10]
-		events = append(events, ev)
+		seen[previewKey{ev.EventType, ev.EventID}] = ev
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(events)
+	gRows.Close()
+	return nil
 }
 
 // POST /api/absences
+// Accepts either { member_id: N } (legacy single) or { member_ids: [..] }
+// (multi). With multiple members the semantics are all-or-nothing: any overlap
+// or permission failure aborts the whole request and nothing is inserted.
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
 		MemberID  int    `json:"member_id"`
+		MemberIDs []int  `json:"member_ids"`
 		Type      string `json:"type"`
 		StartDate string `json:"start_date"`
 		EndDate   string `json:"end_date"`
@@ -210,78 +292,119 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	memberID, errMsg := h.resolveMemberID(r.Context(), claims, req.MemberID)
+	requested := req.MemberIDs
+	if len(requested) == 0 && req.MemberID > 0 {
+		requested = []int{req.MemberID}
+	}
+	resolvedIDs, errStatus, errMsg := h.resolveMemberIDs(r.Context(), claims, requested)
 	if errMsg != "" {
-		if errMsg == "forbidden" {
-			http.Error(w, "forbidden", http.StatusForbidden)
-		} else {
-			http.Error(w, errMsg, http.StatusBadRequest)
-		}
+		http.Error(w, errMsg, errStatus)
 		return
 	}
 
-	var overlapCount int
-	h.db.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM member_absences
-		 WHERE member_id = ? AND type = ? AND start_date <= ? AND end_date >= ?`,
-		memberID, req.Type, req.EndDate, req.StartDate).Scan(&overlapCount)
-	if overlapCount > 0 {
+	// Phase 1 — collect all overlap conflicts before touching the DB.
+	type conflictEntry struct {
+		MemberID   int    `json:"member_id"`
+		MemberName string `json:"member_name"`
+	}
+	var conflicts []conflictEntry
+	for _, mid := range resolvedIDs {
+		var n int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM member_absences
+			 WHERE member_id = ? AND type = ? AND start_date <= ? AND end_date >= ?`,
+			mid, req.Type, req.EndDate, req.StartDate).Scan(&n)
+		if n > 0 {
+			var first, last string
+			h.db.QueryRowContext(r.Context(),
+				`SELECT first_name, last_name FROM members WHERE id = ?`, mid).
+				Scan(&first, &last)
+			conflicts = append(conflicts, conflictEntry{
+				MemberID:   mid,
+				MemberName: strings.TrimSpace(first + " " + last),
+			})
+		}
+	}
+	if len(conflicts) > 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]string{"error": "overlap"})
+		// Single-member legacy callers expect the old shape; multi-member callers
+		// rely on the conflicts list to identify which child blocked the request.
+		body := map[string]any{"error": "overlap"}
+		if len(resolvedIDs) > 1 || len(req.MemberIDs) > 0 {
+			body["conflicts"] = conflicts
+		}
+		json.NewEncoder(w).Encode(body)
 		return
 	}
 
-	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO member_absences (member_id, type, start_date, end_date, note, created_by)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		memberID, req.Type, req.StartDate, req.EndDate, req.Note, claims.UserID)
+	// Phase 2 — insert + auto-decline per member in one transaction.
+	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "absences create: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	absenceID, _ := res.LastInsertId()
+	defer tx.Rollback()
 
-	// Auto-decline training responses in range
-	_, err = h.db.ExecContext(r.Context(), `
-		INSERT INTO training_responses (training_id, member_id, responded_by, status, reason, responded_at, absence_id)
-		SELECT ts.id, ?, ?, 'declined', ?, datetime('now'), ?
-		FROM training_sessions ts
-		JOIN kader_members km ON km.member_id = ?
-		JOIN kader k ON k.id = km.kader_id AND k.team_id = ts.team_id
-		WHERE ts.date BETWEEN ? AND ?
-		ON CONFLICT(training_id, member_id) DO UPDATE SET
-		  responded_by = excluded.responded_by,
-		  status       = 'declined',
-		  reason       = excluded.reason,
-		  responded_at = datetime('now'),
-		  absence_id   = excluded.absence_id`,
-		memberID, claims.UserID, req.Type, absenceID,
-		memberID, req.StartDate, req.EndDate)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "absences auto-decline trainings: %v\n", err)
+	absenceIDs := make([]int64, 0, len(resolvedIDs))
+	for _, mid := range resolvedIDs {
+		res, err := tx.ExecContext(r.Context(),
+			`INSERT INTO member_absences (member_id, type, start_date, end_date, note, created_by)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			mid, req.Type, req.StartDate, req.EndDate, req.Note, claims.UserID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "absences create: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		absenceID, _ := res.LastInsertId()
+		absenceIDs = append(absenceIDs, absenceID)
+
+		if _, err = tx.ExecContext(r.Context(), `
+			INSERT INTO training_responses (training_id, member_id, responded_by, status, reason, responded_at, absence_id)
+			SELECT ts.id, ?, ?, 'declined', ?, datetime('now'), ?
+			FROM training_sessions ts
+			JOIN kader_members km ON km.member_id = ?
+			JOIN kader k ON k.id = km.kader_id AND k.team_id = ts.team_id
+			WHERE ts.date BETWEEN ? AND ?
+			ON CONFLICT(training_id, member_id) DO UPDATE SET
+			  responded_by = excluded.responded_by,
+			  status       = 'declined',
+			  reason       = excluded.reason,
+			  responded_at = datetime('now'),
+			  absence_id   = excluded.absence_id`,
+			mid, claims.UserID, req.Type, absenceID,
+			mid, req.StartDate, req.EndDate); err != nil {
+			fmt.Fprintf(os.Stderr, "absences auto-decline trainings: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		if _, err = tx.ExecContext(r.Context(), `
+			INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at, absence_id)
+			SELECT DISTINCT g.id, ?, ?, 'declined', ?, datetime('now'), ?
+			FROM games g
+			JOIN game_teams gt ON gt.game_id = g.id
+			JOIN kader_members km ON km.member_id = ?
+			JOIN kader k ON k.id = km.kader_id AND k.team_id = gt.team_id
+			WHERE g.date BETWEEN ? AND ?
+			ON CONFLICT(game_id, member_id) DO UPDATE SET
+			  responded_by = excluded.responded_by,
+			  status       = 'declined',
+			  reason       = excluded.reason,
+			  responded_at = datetime('now'),
+			  absence_id   = excluded.absence_id`,
+			mid, claims.UserID, req.Type, absenceID,
+			mid, req.StartDate, req.EndDate); err != nil {
+			fmt.Fprintf(os.Stderr, "absences auto-decline games: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 
-	// Auto-decline game responses in range
-	_, err = h.db.ExecContext(r.Context(), `
-		INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at, absence_id)
-		SELECT DISTINCT g.id, ?, ?, 'declined', ?, datetime('now'), ?
-		FROM games g
-		JOIN game_teams gt ON gt.game_id = g.id
-		JOIN kader_members km ON km.member_id = ?
-		JOIN kader k ON k.id = km.kader_id AND k.team_id = gt.team_id
-		WHERE g.date BETWEEN ? AND ?
-		ON CONFLICT(game_id, member_id) DO UPDATE SET
-		  responded_by = excluded.responded_by,
-		  status       = 'declined',
-		  reason       = excluded.reason,
-		  responded_at = datetime('now'),
-		  absence_id   = excluded.absence_id`,
-		memberID, claims.UserID, req.Type, absenceID,
-		memberID, req.StartDate, req.EndDate)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "absences auto-decline games: %v\n", err)
+	if err = tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 
 	h.hub.Broadcast("absences")
@@ -290,7 +413,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"id": absenceID})
+	// Legacy single-member callers (or self-as-spieler) still get { id }.
+	// Multi-member callers get { absence_ids: [...] } in input order.
+	if len(req.MemberIDs) > 0 {
+		json.NewEncoder(w).Encode(map[string]any{"absence_ids": absenceIDs})
+	} else {
+		json.NewEncoder(w).Encode(map[string]any{"id": absenceIDs[0]})
+	}
 }
 
 // DELETE /api/absences/{id}

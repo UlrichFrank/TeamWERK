@@ -177,7 +177,7 @@ export default function KalenderPage() {
   const [gameRsvpOptOut, setGameRsvpOptOut] = useState(0)
   const [gameRsvpRequireReason, setGameRsvpRequireReason] = useState(1)
   // Absence wizard states
-  const [absenceForm, setAbsenceForm] = useState({ member_id: 0, type: 'vacation', start_date: '', end_date: '', note: '' })
+  const [absenceForm, setAbsenceForm] = useState<{ member_ids: number[]; type: string; start_date: string; end_date: string; note: string }>({ member_ids: [], type: 'vacation', start_date: '', end_date: '', note: '' })
   const [absencePreviewEvents, setAbsencePreviewEvents] = useState<Array<{ event_type: string; event_id: number; name: string; date: string; pending: boolean }> | null>(null)
   const [absencePreviewLoading, setAbsencePreviewLoading] = useState(false)
   const [absenceChildren, setAbsenceChildren] = useState<Array<{ id: number; name: string }>>([])
@@ -254,6 +254,14 @@ export default function KalenderPage() {
   }, [])
 
   useEffect(() => { loadTrainings(); loadAbsences() }, [year, month])
+
+  // Auto-select the only child once children have loaded — keeps the parent
+  // with exactly one linked kid from being forced through a useless selector.
+  useEffect(() => {
+    if (eventType === 'abwesenheit' && absenceChildren.length === 1 && absenceForm.member_ids.length === 0) {
+      setAbsenceForm(f => ({ ...f, member_ids: [absenceChildren[0].id] }))
+    }
+  }, [eventType, absenceChildren, absenceForm.member_ids.length])
 
   useLiveUpdates((event) => {
     if (event === 'games') loadGames()
@@ -574,8 +582,8 @@ export default function KalenderPage() {
       setAbsenceError('Startdatum muss vor dem Enddatum liegen.')
       return
     }
-    if (user?.isParent && !absenceForm.member_id) {
-      setAbsenceError('Bitte ein Kind auswählen.')
+    if (user?.isParent && absenceChildren.length > 0 && absenceForm.member_ids.length === 0) {
+      setAbsenceError(absenceChildren.length === 1 ? 'Bitte ein Kind auswählen.' : 'Bitte mindestens ein Kind auswählen.')
       return
     }
     setAbsencePreviewLoading(true)
@@ -583,7 +591,7 @@ export default function KalenderPage() {
       const params = new URLSearchParams({
         from: absenceForm.start_date,
         to: absenceForm.end_date,
-        ...(absenceForm.member_id ? { member_id: String(absenceForm.member_id) } : {}),
+        ...(absenceForm.member_ids.length > 0 ? { member_ids: absenceForm.member_ids.join(',') } : {}),
       })
       const r = await api.get(`/absences/preview?${params}`)
       const events = r.data ?? []
@@ -609,18 +617,27 @@ export default function KalenderPage() {
         end_date: absenceForm.end_date,
         note: absenceForm.note,
       }
-      if (user?.isParent && absenceForm.member_id) {
-        body.member_id = absenceForm.member_id
+      if (absenceForm.member_ids.length > 0) {
+        body.member_ids = absenceForm.member_ids
       }
       await api.post('/absences', body)
       closeDialog()
       loadAbsences()
       loadTrainings()
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status
-      setAbsenceError(status === 409
-        ? 'Eine Abwesenheit dieses Typs überschneidet sich bereits mit diesem Zeitraum.'
-        : 'Fehler beim Speichern.')
+      const resp = (err as { response?: { status?: number; data?: { conflicts?: Array<{ member_name: string }> } } })?.response
+      if (resp?.status === 409) {
+        const conflicts = resp.data?.conflicts ?? []
+        if (conflicts.length > 0) {
+          const names = conflicts.map(c => c.member_name).filter(Boolean).join(', ')
+          setAbsenceError(`Eintragung abgebrochen — ${names} ${conflicts.length === 1 ? 'hat' : 'haben'} in diesem Zeitraum bereits eine Abwesenheit.`)
+        } else {
+          setAbsenceError('Eine Abwesenheit dieses Typs überschneidet sich bereits mit diesem Zeitraum.')
+        }
+      } else {
+        setAbsenceError('Fehler beim Speichern.')
+      }
+      setAbsencePreviewEvents(null)
       setAbsenceSaving(false)
     }
   }
@@ -649,7 +666,7 @@ export default function KalenderPage() {
     setSeriesValidUntil('')
     setGameRsvpOptOut(0)
     setGameRsvpRequireReason(1)
-    setAbsenceForm({ member_id: 0, type: 'vacation', start_date: '', end_date: '', note: '' })
+    setAbsenceForm({ member_ids: [], type: 'vacation', start_date: '', end_date: '', note: '' })
     setAbsencePreviewEvents(null)
     setAbsencePreviewLoading(false)
     setAbsenceSaving(false)
@@ -1269,20 +1286,33 @@ export default function KalenderPage() {
               <div>
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Abwesenheit eintragen</h2>
                 <div className="space-y-4">
-                  {user?.isParent && (
+                  {user?.isParent && absenceChildren.length > 1 && (
                     <div>
-                      <label className="block text-xs font-medium text-brand-text-muted mb-1">Kind *</label>
-                      <select
-                        value={absenceForm.member_id}
-                        onChange={e => setAbsenceForm(f => ({ ...f, member_id: Number(e.target.value) }))}
-                        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-                        disabled={absenceChildren.length === 0}
-                      >
-                        <option value={0}>{absenceChildren.length === 0 ? 'Lädt…' : 'Bitte wählen…'}</option>
-                        {absenceChildren.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
+                      <label className="block text-xs font-medium text-brand-text-muted mb-1">Kinder *</label>
+                      <div className="space-y-1 border border-brand-border rounded-md p-2">
+                        {absenceChildren.map(c => {
+                          const checked = absenceForm.member_ids.includes(c.id)
+                          return (
+                            <label
+                              key={c.id}
+                              className="flex items-center gap-2 px-2 py-2.5 sm:py-1.5 rounded hover:bg-brand-table-select cursor-pointer text-sm text-brand-text"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => setAbsenceForm(f => ({
+                                  ...f,
+                                  member_ids: checked
+                                    ? f.member_ids.filter(id => id !== c.id)
+                                    : [...f.member_ids, c.id],
+                                }))}
+                                className="h-4 w-4 accent-brand-yellow"
+                              />
+                              <span>{c.name}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                   <div>

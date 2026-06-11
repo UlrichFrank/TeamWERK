@@ -1,3 +1,7 @@
+## 11.06.2026
+- [feat] abwesenheiten: Familienurlaub für mehrere Kinder gleichzeitig eintragen
+- [feat] notify: Kategorie-Fassade für Push+Email und Dienst-Notify bei Event-Löschung
+
 ## 10.06.2026
 - [fix] termine: Generische Events nutzen Route /termine/ereignis/:id
 - [feat] termine: Ort als Maps-Link bei Spielen und generischen Events

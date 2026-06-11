@@ -58,12 +58,17 @@ func CreateSeason(t *testing.T, database *sql.DB, name string) int {
 }
 
 // CreateMember inserts a member linked to the given userID and returns its ID.
+// Pass userID=0 to create a member without a user link (NULL).
 func CreateMember(t *testing.T, database *sql.DB, userID int) int {
 	t.Helper()
 	n := nextID()
+	var userArg any
+	if userID > 0 {
+		userArg = userID
+	}
 	res, err := database.Exec(
 		`INSERT INTO members (first_name, last_name, status, user_id) VALUES (?, ?, ?, ?)`,
-		"Test", fmt.Sprintf("Member%d", n), "aktiv", userID)
+		"Test", fmt.Sprintf("Member%d", n), "aktiv", userArg)
 	if err != nil {
 		t.Fatalf("CreateMember: %v", err)
 	}
