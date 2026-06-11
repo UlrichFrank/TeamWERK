@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
+import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, buildTeamDisplayNames } from '../lib/teamName'
@@ -271,6 +271,11 @@ export default function KalenderPage() {
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
   const nextMonth = () => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)
+  const goToToday = () => {
+    const today = new Date()
+    setYear(today.getFullYear())
+    setMonth(today.getMonth())
+  }
 
   const calendarRef = useRef<HTMLDivElement>(null)
   const pointerStart = useRef<{ x: number; y: number; committed: boolean } | null>(null)
@@ -745,6 +750,15 @@ export default function KalenderPage() {
         <button onClick={prevMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">◀</button>
         <span className="text-lg font-semibold w-44 text-center">{MONTHS[month]} {year}</span>
         <button onClick={nextMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">▶</button>
+        <button
+          onClick={goToToday}
+          disabled={year === now.getFullYear() && month === now.getMonth()}
+          aria-label="Heute"
+          title="Heute"
+          className="rounded-md p-2 bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <CalendarDays className="w-4 h-4" />
+        </button>
         <div className="flex-1" />
       </div>
 

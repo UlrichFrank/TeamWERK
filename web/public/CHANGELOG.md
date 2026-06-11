@@ -1,4 +1,6 @@
 ## 11.06.2026
+- [feat] kalender: "Heute"-Button zum Springen auf aktuellen Monat
+- [fix] trainings: Anwesenheitserfassung Datum SQL-seitig vergleichen
 - [feat] user: Direktes Erzeugen von Nutzeraccounts
 - [fix] trainings: sportliche_leitung kann Anwesenheiten erfassen
 - [fix] auth: Beitrittsanfrage-Name und Reload nach Genehmigung
