@@ -994,7 +994,7 @@ export default function KalenderPage() {
                       </div>
                     </button>
                   ))}
-                  {user && (user.role === 'admin' || hasFunction(user, 'trainer')) && (
+                  {user && (user.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')) && (
                     <>
                       <button
                         onClick={() => { setEventType('training'); setWizardStep(2) }}

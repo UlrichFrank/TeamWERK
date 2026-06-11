@@ -55,9 +55,9 @@ func (h *Handler) teamMembersAndParents(teamID int) []int {
 	return ids
 }
 
-// hasTeamAccess returns true if the user is admin or a kader trainer of teamID.
+// hasTeamAccess returns true if the user is admin, sportliche_leitung, or a kader trainer of teamID.
 func (h *Handler) hasTeamAccess(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
-	if claims.Role == "admin" {
+	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
 		return true, nil
 	}
 	var count int

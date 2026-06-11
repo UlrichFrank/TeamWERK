@@ -118,7 +118,7 @@ function RsvpButton({ label, icon, active, activeClass, disabled, onClick }: {
 export default function TerminePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer')
+  const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
   const isParent = user?.isParent === true
 
   const [termine, setTermine] = useState<Termin[]>([])

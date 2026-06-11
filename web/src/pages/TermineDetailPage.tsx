@@ -97,7 +97,7 @@ export default function TermineDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer')
+  const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
 
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [game, setGame] = useState<GameDetail | null>(null)
