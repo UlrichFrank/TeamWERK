@@ -1,4 +1,6 @@
 ## 11.06.2026
+- [feat] user: Direktes Erzeugen von Nutzeraccounts
+- [fix] trainings: sportliche_leitung kann Anwesenheiten erfassen
 - [fix] auth: Beitrittsanfrage-Name und Reload nach Genehmigung
 - [feat] abwesenheiten: Familienurlaub für mehrere Kinder gleichzeitig
 - [feat] chat: Teilnehmer-Verwaltung für Gruppen-Konversationen
