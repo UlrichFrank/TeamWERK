@@ -27,7 +27,7 @@ interface Invitation {
   member_id?: number | null
   member_name?: string
 }
-interface MembershipRequest { id: number; name: string; email: string; comment: string; status: string; created_at: string }
+interface MembershipRequest { id: number; first_name: string; last_name: string; email: string; comment: string; status: string; created_at: string }
 interface Member { id: number; first_name: string; last_name: string }
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Admin', standard: 'Standard' }
@@ -254,7 +254,7 @@ export default function AdminUsersPage() {
 
   const handleApproveRequest = async (req: MembershipRequest) => {
     await api.post(`/membership-requests/${req.id}/approve`)
-    setRequests(prev => prev.filter(x => x.id !== req.id))
+    await loadInvitationsAndRequests()
   }
 
   const handleRejectRequest = async (req: MembershipRequest) => {
@@ -263,14 +263,14 @@ export default function AdminUsersPage() {
   }
 
   const handleDeleteRequest = async (req: MembershipRequest) => {
-    if (!window.confirm(`Beitrittsanfrage von ${req.name} löschen?`)) return
+    if (!window.confirm(`Beitrittsanfrage von ${req.first_name} ${req.last_name} löschen?`)) return
     await api.delete(`/membership-requests/${req.id}`)
     setRequests(prev => prev.filter(x => x.id !== req.id))
   }
 
   const f = filterText.toLowerCase()
   const filteredRequests = f
-    ? requests.filter(r => r.name.toLowerCase().includes(f) || r.email.toLowerCase().includes(f))
+    ? requests.filter(r => `${r.first_name} ${r.last_name}`.toLowerCase().includes(f) || r.email.toLowerCase().includes(f))
     : requests
   const filteredInvitations = f
     ? invitations.filter(i => i.email.toLowerCase().includes(f) || (i.member_name ?? '').toLowerCase().includes(f))
@@ -558,7 +558,7 @@ export default function AdminUsersPage() {
               <tbody className="divide-y divide-brand-border-subtle">
                 {filteredRequests.map(req => (
                   <tr key={`req-${req.id}`} className="hover:bg-brand-table-select transition-colors">
-                    <td className="px-4 py-3 font-medium text-brand-text">{req.name}</td>
+                    <td className="px-4 py-3 font-medium text-brand-text">{req.first_name} {req.last_name}</td>
                     <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{req.email}</td>
                     <td className="hidden lg:table-cell px-4 py-3 text-brand-text-subtle text-xs">{req.comment || '–'}</td>
                     <td className="px-4 py-3">

@@ -1,5 +1,6 @@
 ## 11.06.2026
-- [feat] abwesenheiten: Familienurlaub für mehrere Kinder gleichzeitig eintragen
+- [feat] abwesenheiten: Familienurlaub für mehrere Kinder gleichzeitig
+- [feat] chat: Teilnehmer-Verwaltung für Gruppen-Konversationen
 - [feat] notify: Kategorie-Fassade für Push+Email und Dienst-Notify bei Event-Löschung
 
 ## 10.06.2026
