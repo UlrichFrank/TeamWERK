@@ -1102,7 +1102,229 @@ func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.hub.BroadcastToUser(body.UserID, fmt.Sprintf("chat:new-message:%d", convID))
+	h.db.ExecContext(r.Context(),
+		`INSERT INTO messages (conversation_id, sender_id, body, is_system) VALUES (?, ?, 'wurde hinzugefügt', 1)`,
+		convID, body.UserID)
+
+	event := fmt.Sprintf("chat:new-message:%d", convID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/chat/conversations/{id}/members/{uid}
+func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	targetUserID, err := strconv.Atoi(chi.URLParam(r, "uid"))
+	if err != nil {
+		http.Error(w, "invalid uid", http.StatusBadRequest)
+		return
+	}
+
+	var convType string
+	var createdBy int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT type, created_by FROM conversations WHERE id = ?`, convID).Scan(&convType, &createdBy); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if createdBy != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if convType != "group" {
+		http.Error(w, "only group conversations support removing members", http.StatusBadRequest)
+		return
+	}
+	if targetUserID == claims.UserID {
+		http.Error(w, "creator cannot remove themselves via this endpoint", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE conversation_members SET left_at = CURRENT_TIMESTAMP
+		 WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL`,
+		convID, targetUserID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	h.db.ExecContext(r.Context(),
+		`INSERT INTO messages (conversation_id, sender_id, body, is_system) VALUES (?, ?, 'wurde entfernt', 1)`,
+		convID, targetUserID)
+
+	event := fmt.Sprintf("chat:member-left:%d", convID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
+	h.hub.BroadcastToUser(targetUserID, event)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/chat/conversations/{id}
+func (h *Handler) UpdateConversation(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" || len([]rune(name)) > 100 {
+		http.Error(w, "name must be 1..100 chars", http.StatusBadRequest)
+		return
+	}
+
+	var convType string
+	var createdBy int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT type, created_by FROM conversations WHERE id = ?`, convID).Scan(&convType, &createdBy); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if createdBy != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if convType != "group" {
+		http.Error(w, "only group conversations can be renamed", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE conversations SET name = ? WHERE id = ?`, name, convID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	sysBody := fmt.Sprintf("hat die Gruppe in '%s' umbenannt", name)
+	h.db.ExecContext(r.Context(),
+		`INSERT INTO messages (conversation_id, sender_id, body, is_system) VALUES (?, ?, ?, 1)`,
+		convID, claims.UserID, sysBody)
+
+	event := fmt.Sprintf("chat:conv-updated:%d", convID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/chat/conversations/{id}/transfer-ownership
+func (h *Handler) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		NewOwnerID int `json:"newOwnerId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.NewOwnerID == 0 {
+		http.Error(w, "newOwnerId required", http.StatusBadRequest)
+		return
+	}
+
+	var convType string
+	var createdBy int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT type, created_by FROM conversations WHERE id = ?`, convID).Scan(&convType, &createdBy); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if createdBy != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if convType != "group" {
+		http.Error(w, "only group conversations support ownership transfer", http.StatusBadRequest)
+		return
+	}
+	if body.NewOwnerID == claims.UserID {
+		http.Error(w, "cannot transfer to self", http.StatusBadRequest)
+		return
+	}
+	if !h.isActiveMember(r, convID, body.NewOwnerID) {
+		http.Error(w, "new owner must be an active member", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE conversations SET created_by = ? WHERE id = ?`, body.NewOwnerID, convID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	newOwnerName := h.senderName(r, body.NewOwnerID, "")
+	sysBody := fmt.Sprintf("hat die Verwaltung an %s übergeben", newOwnerName)
+	h.db.ExecContext(r.Context(),
+		`INSERT INTO messages (conversation_id, sender_id, body, is_system) VALUES (?, ?, ?, 1)`,
+		convID, claims.UserID, sysBody)
+
+	event := fmt.Sprintf("chat:conv-updated:%d", convID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/chat/conversations/{id}/everyone
+func (h *Handler) DeleteConversationForEveryone(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var convType string
+	var createdBy int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT type, created_by FROM conversations WHERE id = ?`, convID).Scan(&convType, &createdBy); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if createdBy != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if convType != "group" {
+		http.Error(w, "only group conversations can be deleted for everyone", http.StatusBadRequest)
+		return
+	}
+
+	recipients := h.activeMembers(r, convID, 0)
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`DELETE FROM conversations WHERE id = ?`, convID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	event := fmt.Sprintf("chat:conv-deleted:%d", convID)
+	for _, uid := range recipients {
+		h.hub.BroadcastToUser(uid, event)
+	}
+	h.hub.BroadcastToUser(claims.UserID, event)
 
 	w.WriteHeader(http.StatusNoContent)
 }

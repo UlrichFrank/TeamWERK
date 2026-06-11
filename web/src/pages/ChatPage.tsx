@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users, UserPlus,
+  Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users,
   Trash2, CornerUpLeft, Pencil, SmilePlus
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { buildTeamDisplayNames } from '../lib/teamName'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
+import ConversationParticipantsModal from '../components/ConversationParticipantsModal'
+import CreatorExitChoiceModal from '../components/CreatorExitChoiceModal'
 
 interface ConvMember { id: number; name: string }
 interface LastMessage { body: string; sentAt: string }
@@ -74,7 +76,9 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [showNewModal, setShowNewModal] = useState(false)
   const [showBroadcastModal, setShowBroadcastModal] = useState(false)
-  const [showAddMember, setShowAddMember] = useState(false)
+  const [showParticipants, setShowParticipants] = useState(false)
+  const [showCreatorExit, setShowCreatorExit] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
   const [activeBroadcast, setActiveBroadcast] = useState<Broadcast | null>(null)
   const [showBroadcastEdit, setShowBroadcastEdit] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
@@ -145,6 +149,27 @@ export default function ChatPage() {
       const parts = event.split(':')
       const convId = parseInt(parts[2])
       if (activeConv?.id === convId) loadMessages(convId)
+    }
+    if (event.startsWith('chat:conv-updated')) {
+      const parts = event.split(':')
+      const convId = parseInt(parts[2])
+      if (activeConv?.id === convId) {
+        reloadActiveConv(convId)
+      } else {
+        loadConversations()
+      }
+    }
+    if (event.startsWith('chat:conv-deleted')) {
+      const parts = event.split(':')
+      const convId = parseInt(parts[2])
+      setConversations(prev => prev.filter(c => c.id !== convId))
+      if (activeConv?.id === convId) {
+        setActiveConv(null)
+        setMobileShowChat(false)
+        setShowParticipants(false)
+        setToast('Die Gruppe wurde gelöscht')
+        setTimeout(() => setToast(null), 4000)
+      }
     }
     if (event === 'chat:new-broadcast') loadBroadcasts()
   })
@@ -263,6 +288,10 @@ export default function ChatPage() {
 
   const leaveGroup = async () => {
     if (!activeConv || activeConv.type !== 'group') return
+    if (activeConv.createdBy === user?.id) {
+      setShowCreatorExit(true)
+      return
+    }
     if (!confirm('Gruppe verlassen?')) return
     await api.delete(`/chat/conversations/${activeConv.id}/members/me`)
     setActiveConv(null)
@@ -456,22 +485,17 @@ export default function ChatPage() {
                   )}
                   <span className="font-semibold text-brand-text truncate">{convName(activeConv)}</span>
                   {activeConv.type === 'group' && (
-                    <span className="text-xs text-brand-text-subtle shrink-0">
-                      <Users className="w-3.5 h-3.5 inline mr-0.5" />{activeConv.members.length}
-                    </span>
+                    <button
+                      onClick={() => setShowParticipants(true)}
+                      className="text-xs text-brand-text-subtle hover:text-brand-text shrink-0 inline-flex items-center"
+                      aria-label="Teilnehmer anzeigen"
+                    >
+                      <Users className="w-3.5 h-3.5 mr-0.5" />{activeConv.members.length}
+                    </button>
                   )}
                 </div>
                 {activeConv.type === 'group' && (
                   <div className="flex items-center gap-2 shrink-0">
-                    {activeConv.createdBy === user?.id && (
-                      <button
-                        onClick={() => setShowAddMember(true)}
-                        className="text-brand-text-muted hover:text-brand-text transition-colors"
-                        aria-label="Mitglied hinzufügen"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                      </button>
-                    )}
                     <button
                       onClick={leaveGroup}
                       className="text-brand-text-muted hover:text-brand-danger transition-colors"
@@ -678,13 +702,36 @@ export default function ChatPage() {
         />
       )}
 
-      {showAddMember && activeConv && (
-        <AddMemberModal
+      {showParticipants && activeConv && activeConv.type === 'group' && (
+        <ConversationParticipantsModal
           convId={activeConv.id}
-          existingMemberIds={activeConv.members.map(m => m.id)}
-          onClose={() => setShowAddMember(false)}
-          onAdded={() => { setShowAddMember(false); reloadActiveConv(activeConv.id) }}
+          initialName={activeConv.name}
+          createdBy={activeConv.createdBy}
+          members={activeConv.members}
+          onClose={() => setShowParticipants(false)}
+          onChanged={() => reloadActiveConv(activeConv.id)}
         />
+      )}
+
+      {showCreatorExit && activeConv && activeConv.type === 'group' && (
+        <CreatorExitChoiceModal
+          convId={activeConv.id}
+          ownerId={activeConv.createdBy}
+          members={activeConv.members}
+          onClose={() => setShowCreatorExit(false)}
+          onDone={() => {
+            setShowCreatorExit(false)
+            setActiveConv(null)
+            setMobileShowChat(false)
+            loadConversations()
+          }}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-brand-text text-white text-sm rounded-md shadow-lg px-4 py-2">
+          {toast}
+        </div>
       )}
     </div>
   )
@@ -1155,85 +1202,3 @@ function BroadcastEditModal({ broadcast, onClose, onSaved }: {
   )
 }
 
-// --- Add Member Modal ---
-function AddMemberModal({ convId, existingMemberIds, onClose, onAdded }: {
-  convId: number
-  existingMemberIds: number[]
-  onClose: () => void
-  onAdded: () => void
-}) {
-  const [query, setQuery] = useState('')
-  const [users, setUsers] = useState<ChatUser[]>([])
-  const [selected, setSelected] = useState<ChatUser | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    const t = setTimeout(async () => {
-      try {
-        const r = await api.get('/chat/users', { params: { q: query } })
-        setUsers((r.data ?? []).filter((u: ChatUser) => !existingMemberIds.includes(u.id)))
-      } catch {}
-    }, 200)
-    return () => clearTimeout(t)
-  }, [query, existingMemberIds])
-
-  const submit = async () => {
-    if (!selected) return
-    setLoading(true)
-    setError('')
-    try {
-      await api.post(`/chat/conversations/${convId}/members`, { userId: selected.id })
-      onAdded()
-    } catch (e: any) {
-      setError(e.response?.data || 'Fehler beim Hinzufügen')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">Mitglied hinzufügen</h2>
-          <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
-        </div>
-
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-subtle" />
-          <input
-            type="text"
-            placeholder="Person suchen…"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            className="w-full border border-brand-border rounded-md pl-9 pr-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-          />
-        </div>
-
-        <div className="max-h-48 overflow-y-auto border border-brand-border-subtle rounded-md mb-4">
-          {users.map(u => (
-            <button
-              key={u.id}
-              onClick={() => setSelected(u)}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-table-select transition-colors ${selected?.id === u.id ? 'bg-brand-yellow/10 font-medium' : 'text-brand-text'}`}
-            >
-              {u.name}
-            </button>
-          ))}
-          {users.length === 0 && <p className="text-brand-text-muted text-sm p-3 text-center">Keine Ergebnisse</p>}
-        </div>
-
-        {error && <p className="text-brand-danger text-sm mb-3">{error}</p>}
-
-        <button
-          onClick={submit}
-          disabled={loading || !selected}
-          className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Hinzufügen…' : selected ? `${selected.name} hinzufügen` : 'Person auswählen'}
-        </button>
-      </div>
-    </div>
-  )
-}
