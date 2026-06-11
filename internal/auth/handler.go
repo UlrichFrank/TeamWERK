@@ -14,7 +14,7 @@ import (
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
-	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -187,8 +187,7 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 			rows.Scan(&id)
 			adminIDs = append(adminIDs, id)
 		}
-		uids := push.FilterByPushPref(h.db, adminIDs, "membership")
-		push.SendToUsers(h.db, h.cfg, uids,
+		notify.Send(h.db, h.cfg, adminIDs, "membership",
 			"Neue Beitrittsanfrage",
 			req.FirstName+" "+req.LastName+" möchte Mitglied werden",
 			"/admin/mitgliedschaft")

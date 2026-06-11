@@ -13,7 +13,7 @@ import (
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
-	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 )
 
 type Handler struct {
@@ -274,9 +274,8 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences))
 	h.hub.Broadcast("duties")
-	uids := push.FilterByPushPref(h.db, h.eligibleDutyUsers(req.TeamID), "duties")
-	go push.SendToUsers(h.db, h.cfg, uids,
-		"Neuer Dienst verfügbar", req.EventName+" — jetzt eintragen", "/dienste")
+	notify.Send(h.db, h.cfg, h.eligibleDutyUsers(req.TeamID),
+		"duties", "Neuer Dienst verfügbar", req.EventName+" — jetzt eintragen", "/dienste")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -319,8 +318,8 @@ func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 	}
 	h.hub.Broadcast("duties")
 	if len(assigned) > 0 {
-		uids := push.FilterByPushPref(h.db, assigned, "duties")
-		go push.SendToUsers(h.db, h.cfg, uids, "Dienst abgesagt", "Ein Dienst, für den du eingetragen warst, wurde abgesagt", "/dienste")
+		notify.Send(h.db, h.cfg, assigned, "duties",
+			"Dienst abgesagt", "Ein Dienst, für den du eingetragen warst, wurde abgesagt", "/dienste")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

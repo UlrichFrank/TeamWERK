@@ -13,7 +13,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
-	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 )
 
 type Handler struct {
@@ -712,10 +712,8 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.hub.Broadcast("games")
-	uids := push.FilterByPushPref(h.db,
-		h.teamMembersAndParents(req.TeamIDs), "games")
-	go push.SendToUsers(h.db, h.cfg, uids,
-		"Neues Spiel", eventName+" am "+req.Date, "/kalender")
+	notify.Send(h.db, h.cfg, h.teamMembersAndParents(req.TeamIDs),
+		"games", "Neues Spiel", eventName+" am "+req.Date, "/kalender")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"id": gameID})
@@ -804,61 +802,142 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	h.hub.Broadcast("games")
 	gameIDInt := 0
 	fmt.Sscan(id, &gameIDInt)
-	uids := push.FilterByPushPref(h.db,
-		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)), "games")
-	go push.SendToUsers(h.db, h.cfg, uids,
-		"Spielinfo geändert", req.Opponent+" — Details aktualisiert", "/kalender")
+	notify.Send(h.db, h.cfg,
+		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)),
+		"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", "/kalender")
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/admin/games/{id}?delete_slots=true
+// DELETE /api/admin/games/{id}
+// Deletes a game (incl. generic events) together with all duty_slots and
+// duty_assignments referencing it (via ON DELETE CASCADE since migration 027).
+// For each fulfilled assignment that gets cascade-deleted, the corresponding
+// duty_accounts.ist is recomputed in the same transaction so no orphan hours
+// remain on user accounts.
 func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	deleteSlots := r.URL.Query().Get("delete_slots") == "true"
 	// Fetch team IDs before deleting (game_teams rows are cascade-deleted)
 	teamIDs := h.gameTeamIDs(id)
 
-	if deleteSlots {
-		tx, err := h.db.BeginTx(r.Context(), nil)
-		if err != nil {
+	// Collect event metadata + affected duty assignees before the cascade fires.
+	var (
+		seasonID  int
+		opponent  string
+		eventDate string
+	)
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT season_id, COALESCE(opponent, ''), date FROM games WHERE id=?`, id).
+		Scan(&seasonID, &opponent, &eventDate)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	assignedUIDs, fulfilledUIDs, err := h.dutyAssigneesForGame(r.Context(), id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(r.Context(), `DELETE FROM games WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	// Re-aggregate duty_accounts.ist for users whose fulfilled assignments just disappeared.
+	for _, uid := range fulfilledUIDs {
+		if _, err = tx.ExecContext(r.Context(), `
+			UPDATE duty_accounts SET ist = (
+				SELECT COALESCE(SUM(dt.hours_value), 0)
+				FROM duty_assignments da
+				JOIN duty_slots ds ON ds.id = da.duty_slot_id
+				JOIN duty_types dt ON dt.id = ds.duty_type_id
+				WHERE da.user_id = ? AND ds.season_id = ? AND da.status = 'fulfilled'
+			)
+			WHERE user_id = ? AND season_id = ?`,
+			uid, seasonID, uid, seasonID); err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		defer tx.Rollback()
-		if _, err = tx.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE game_id=?`, id); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		res, err := tx.ExecContext(r.Context(), `DELETE FROM games WHERE id=?`, id)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		if err = tx.Commit(); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		res, err := h.db.ExecContext(r.Context(), `DELETE FROM games WHERE id=?`, id)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
 	}
+
+	if err = tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	h.hub.Broadcast("games")
-	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamIDs), "games")
-	go push.SendToUsers(h.db, h.cfg, uids, "Spiel abgesagt", "Ein Spiel wurde abgesagt", "/kalender")
+
+	// Targeted notification to duty assignees in their "duties" category.
+	if len(assignedUIDs) > 0 {
+		eventName := opponent
+		if eventName == "" {
+			eventName = "Termin am " + formatDateDMY(eventDate)
+		}
+		body := fmt.Sprintf("Dein Dienst zum %s am %s wurde gelöscht.", eventName, formatDateDMY(eventDate))
+		notify.Send(h.db, h.cfg, assignedUIDs, "duties", "Dienst entfällt", body, "/dienste")
+	}
+
+	// Team-wide event-cancellation notification in "games" category (unchanged audience).
+	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamIDs),
+		"games", "Spiel abgesagt", "Ein Spiel wurde abgesagt", "/kalender")
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// dutyAssigneesForGame returns the user IDs of all duty_assignments for slots
+// of the given game. The second return is the subset whose status='fulfilled'.
+func (h *Handler) dutyAssigneesForGame(ctx context.Context, gameID string) (assigned, fulfilled []int, err error) {
+	rows, err := h.db.QueryContext(ctx, `
+		SELECT DISTINCT da.user_id, da.status
+		FROM duty_assignments da
+		JOIN duty_slots ds ON ds.id = da.duty_slot_id
+		WHERE ds.game_id = ?`, gameID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	seen := map[int]bool{}
+	for rows.Next() {
+		var uid int
+		var status string
+		if err = rows.Scan(&uid, &status); err != nil {
+			return nil, nil, err
+		}
+		if !seen[uid] {
+			seen[uid] = true
+			assigned = append(assigned, uid)
+		}
+		if status == "fulfilled" {
+			fulfilled = append(fulfilled, uid)
+		}
+	}
+	return assigned, fulfilled, rows.Err()
+}
+
+// formatDateDMY turns "2026-06-14" (or an ISO timestamp) into "14.06.2026".
+func formatDateDMY(s string) string {
+	if len(s) < 10 {
+		return s
+	}
+	d := s[:10]
+	return d[8:10] + "." + d[5:7] + "." + d[0:4]
 }
 
 // GET /api/teams — filtered by user role

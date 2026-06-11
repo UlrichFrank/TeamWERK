@@ -207,7 +207,7 @@ export default function SpieltagDetailPage() {
     if (!gameId) return
     setDeletingGame(true)
     try {
-      await api.delete(`/kalender/${gameId}?delete_slots=true`)
+      await api.delete(`/kalender/${gameId}`)
       navigate(game ? `/kalender?date=${game.date.slice(0, 10)}` : '/kalender')
     } finally {
       setDeletingGame(false)

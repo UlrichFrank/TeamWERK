@@ -77,7 +77,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setDeleting(true)
     setError(null)
     try {
-      await api.delete(`/kalender/${game.id}?delete_slots=true`)
+      await api.delete(`/kalender/${game.id}`)
       onDeleted?.()
     } catch {
       setError('Löschen fehlgeschlagen.')

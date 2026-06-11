@@ -8,6 +8,7 @@ import (
 	"time"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
@@ -197,24 +198,36 @@ func (s *Scheduler) sendGameReminders() {
 
 	sent := 0
 	for _, g := range games {
-		uids := s.teamMembersAndParents(g.teamID)
-		for _, uid := range push.FilterByPushPref(s.db, uids, "games") {
-			var exists int
-			s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='game_reminder' AND ref_id=?`,
-				uid, g.id).Scan(&exists)
-			if exists != 0 {
-				continue
-			}
-			go push.SendToUsers(s.db, s.cfg, []int{uid},
-				"Spielerinnerung", g.opponent+" — morgen um "+g.time+" Uhr", "/kalender")
+		uids := s.unsentUIDs(s.teamMembersAndParents(g.teamID), "game_reminder", g.id)
+		if len(uids) == 0 {
+			continue
+		}
+		notify.Send(s.db, s.cfg, uids, "games",
+			"Spielerinnerung", g.opponent+" — morgen um "+g.time+" Uhr", "/kalender")
+		for _, uid := range uids {
 			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 				uid, "game_reminder", g.id)
 			sent++
 		}
 	}
 	if sent > 0 {
-		log.Printf("scheduler: game reminders: sent %d push(s)", sent)
+		log.Printf("scheduler: game reminders: sent %d notification(s)", sent)
 	}
+}
+
+// unsentUIDs filters out users that already have a notification_log row
+// matching (refType, refID).
+func (s *Scheduler) unsentUIDs(uids []int, refType string, refID int) []int {
+	out := uids[:0:len(uids)]
+	for _, uid := range uids {
+		var exists int
+		s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type=? AND ref_id=?`,
+			uid, refType, refID).Scan(&exists)
+		if exists == 0 {
+			out = append(out, uid)
+		}
+	}
+	return out
 }
 
 func (s *Scheduler) sendTrainingReminders() {
@@ -249,23 +262,20 @@ func (s *Scheduler) sendTrainingReminders() {
 
 	sent := 0
 	for _, sess := range sessions {
-		uids := s.teamMembersAndParents(sess.teamID)
-		for _, uid := range push.FilterByPushPref(s.db, uids, "trainings") {
-			var exists int
-			s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='training_reminder' AND ref_id=?`,
-				uid, sess.id).Scan(&exists)
-			if exists != 0 {
-				continue
-			}
-			go push.SendToUsers(s.db, s.cfg, []int{uid},
-				"Trainingserinnerung", sess.title+" — morgen um "+sess.startTime+" Uhr", "/training")
+		uids := s.unsentUIDs(s.teamMembersAndParents(sess.teamID), "training_reminder", sess.id)
+		if len(uids) == 0 {
+			continue
+		}
+		notify.Send(s.db, s.cfg, uids, "trainings",
+			"Trainingserinnerung", sess.title+" — morgen um "+sess.startTime+" Uhr", "/training")
+		for _, uid := range uids {
 			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 				uid, "training_reminder", sess.id)
 			sent++
 		}
 	}
 	if sent > 0 {
-		log.Printf("scheduler: training reminders: sent %d push(s)", sent)
+		log.Printf("scheduler: training reminders: sent %d notification(s)", sent)
 	}
 }
 
@@ -303,24 +313,18 @@ func (s *Scheduler) sendCarpoolingReminders() {
 
 	sent := 0
 	for _, c := range entries {
-		uids := push.FilterByPushPref(s.db, []int{c.userID}, "carpooling")
+		uids := s.unsentUIDs([]int{c.userID}, "carpooling_reminder", c.gameID)
 		if len(uids) == 0 {
 			continue
 		}
-		var exists int
-		s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='carpooling_reminder' AND ref_id=?`,
-			c.userID, c.gameID).Scan(&exists)
-		if exists != 0 {
-			continue
-		}
-		go push.SendToUsers(s.db, s.cfg, []int{c.userID},
+		notify.Send(s.db, s.cfg, uids, "carpooling",
 			"Fahrgemeinschaft heute", c.opponent+" — Abfahrt um "+c.time+" Uhr", "/mitfahrgelegenheiten")
 		s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 			c.userID, "carpooling_reminder", c.gameID)
 		sent++
 	}
 	if sent > 0 {
-		log.Printf("scheduler: carpooling reminders: sent %d push(s)", sent)
+		log.Printf("scheduler: carpooling reminders: sent %d notification(s)", sent)
 	}
 }
 

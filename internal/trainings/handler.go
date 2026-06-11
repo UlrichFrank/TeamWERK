@@ -15,7 +15,7 @@ import (
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
-	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 )
 
 type Handler struct {
@@ -462,8 +462,8 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("trainings")
-	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamID), "trainings")
-	go push.SendToUsers(h.db, h.cfg, uids, "Trainingsserie gelöscht", "Eine Trainingsserie wurde beendet", "/training")
+	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+		"trainings", "Trainingsserie gelöscht", "Eine Trainingsserie wurde beendet", "/training")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -496,8 +496,8 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("trainings")
-	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamID), "trainings")
-	go push.SendToUsers(h.db, h.cfg, uids, "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/training")
+	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+		"trainings", "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/training")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -616,8 +616,8 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.hub.Broadcast("trainings")
-	uids := push.FilterByPushPref(h.db, h.teamMembersAndParents(teamID), "trainings")
-	go push.SendToUsers(h.db, h.cfg, uids, "Training geändert", "Eine Trainingseinheit wurde aktualisiert", "/training")
+	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+		"trainings", "Training geändert", "Eine Trainingseinheit wurde aktualisiert", "/training")
 	w.WriteHeader(http.StatusNoContent)
 }
 
