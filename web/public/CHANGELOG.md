@@ -1,4 +1,5 @@
 ## 11.06.2026
+- [fix] auth: Beitrittsanfrage-Name und Reload nach Genehmigung
 - [feat] abwesenheiten: Familienurlaub für mehrere Kinder gleichzeitig
 - [feat] chat: Teilnehmer-Verwaltung für Gruppen-Konversationen
 - [feat] notify: Kategorie-Fassade für Push+Email und Dienst-Notify bei Event-Löschung

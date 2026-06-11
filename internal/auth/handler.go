@@ -648,6 +648,32 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email     string `json:"email"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Password  string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || req.FirstName == "" || req.Password == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	res, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO users (email, first_name, last_name, password, role) VALUES (?,?,?,?,'standard')`,
+		req.Email, req.FirstName, req.LastName, string(hash),
+	)
+	if err != nil {
+		http.Error(w, "email already registered", http.StatusConflict)
+		return
+	}
+	newID, _ := res.LastInsertId()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]int64{"id": newID}) //nolint:errcheck
+}
+
 // PUT /api/admin/users/{id}/role
 func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	caller := ClaimsFromCtx(r.Context())

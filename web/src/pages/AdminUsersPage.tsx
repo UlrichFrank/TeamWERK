@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef, FormEvent } from 'react'
-import { X, Check, Upload, ChevronDown } from 'lucide-react'
+import { X, Check, Upload, ChevronDown, Copy, RefreshCw } from 'lucide-react'
+
+function generatePassword(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*'
+  const arr = new Uint8Array(16)
+  crypto.getRandomValues(arr)
+  return Array.from(arr, b => chars[b % chars.length]).join('')
+}
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -63,6 +70,16 @@ export default function AdminUsersPage() {
   const [sendingInvitation, setSendingInvitation] = useState<Set<number>>(new Set())
   const [invitationFeedback, setInvitationFeedback] = useState<Map<number, { ok: boolean; msg: string }>>(new Map())
 
+  // Account direkt anlegen modal
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createEmail, setCreateEmail] = useState('')
+  const [createFirstName, setCreateFirstName] = useState('')
+  const [createLastName, setCreateLastName] = useState('')
+  const [createPassword, setCreatePassword] = useState('')
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createCopied, setCreateCopied] = useState(false)
+
   // + Neu modal (single invite)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -123,6 +140,49 @@ export default function AdminUsersPage() {
     }, 300)
     return () => clearTimeout(t)
   }, [memberSearch, linkModal])
+
+  const openCreateModal = () => {
+    setCreateEmail('')
+    setCreateFirstName('')
+    setCreateLastName('')
+    setCreatePassword(generatePassword())
+    setCreateLoading(false)
+    setCreateError('')
+    setCreateCopied(false)
+    setShowDropdown(false)
+    setShowCreateModal(true)
+  }
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false)
+    setCreateError('')
+  }
+
+  const handleCreateUser = async (e: FormEvent) => {
+    e.preventDefault()
+    setCreateLoading(true)
+    setCreateError('')
+    try {
+      await api.post('/users', {
+        email: createEmail,
+        first_name: createFirstName,
+        last_name: createLastName,
+        password: createPassword,
+      })
+      closeCreateModal()
+      refreshUsers()
+    } catch (err: any) {
+      setCreateError(err?.response?.status === 409 ? 'Diese E-Mail-Adresse ist bereits vergeben.' : 'Account konnte nicht angelegt werden.')
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  const handleCopyPassword = async () => {
+    await navigator.clipboard.writeText(createPassword)
+    setCreateCopied(true)
+    setTimeout(() => setCreateCopied(false), 2000)
+  }
 
   const closeInviteModal = () => {
     setShowInviteModal(false)
@@ -187,7 +247,7 @@ export default function AdminUsersPage() {
     }
   }
 
-  useEscapeKey(showInviteModal ? closeInviteModal : showCsvModal ? closeCsvModal : linkModal ? closeLinkModal : activateModal ? closeActivateModal : null)
+  useEscapeKey(showCreateModal ? closeCreateModal : showInviteModal ? closeInviteModal : showCsvModal ? closeCsvModal : linkModal ? closeLinkModal : activateModal ? closeActivateModal : null)
 
   const handleCsvUpload = async () => {
     if (!csvFile) return
@@ -326,7 +386,14 @@ export default function AdminUsersPage() {
                 </button>
               </div>
               {showDropdown && (
-                <div className="absolute right-0 mt-1 w-44 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                <div className="absolute right-0 mt-1 w-48 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                  <button
+                    onClick={openCreateModal}
+                    className="w-full text-left px-4 py-2.5 text-xs text-brand-text hover:bg-brand-surface-card transition-colors flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-brand-text-muted" />
+                    Account anlegen
+                  </button>
                   <button
                     onClick={() => { setShowDropdown(false); setShowCsvModal(true) }}
                     className="w-full text-left px-4 py-2.5 text-xs text-brand-text hover:bg-brand-surface-card transition-colors flex items-center gap-2"
@@ -388,6 +455,73 @@ export default function AdminUsersPage() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Account direkt anlegen Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
+              <h2 className="font-semibold text-lg">Account anlegen</h2>
+              <button onClick={closeCreateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateUser} className="px-6 py-5 space-y-3">
+              {createError && (
+                <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">E-Mail</label>
+                <input value={createEmail} onChange={e => setCreateEmail(e.target.value)} type="email" placeholder="name@beispiel.de" required className={INPUT} />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+                  <input value={createFirstName} onChange={e => setCreateFirstName(e.target.value)} type="text" placeholder="Max" required className={INPUT} />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+                  <input value={createLastName} onChange={e => setCreateLastName(e.target.value)} type="text" placeholder="Mustermann" className={INPUT} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-text-muted mb-1">Passwort</label>
+                <div className="flex gap-1.5">
+                  <input value={createPassword} readOnly className={`${INPUT} font-mono text-xs tracking-wide flex-1`} />
+                  <button
+                    type="button"
+                    onClick={handleCopyPassword}
+                    aria-label="Passwort kopieren"
+                    className="flex-shrink-0 border border-brand-border rounded-md px-2.5 text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                  >
+                    {createCopied ? <Check className="w-4 h-4 text-brand-info" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreatePassword(generatePassword())}
+                    aria-label="Neu generieren"
+                    className="flex-shrink-0 border border-brand-border rounded-md px-2.5 text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {createLoading ? 'Wird angelegt…' : 'Account anlegen'}
+                </button>
+                <button type="button" onClick={closeCreateModal} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                  Abbrechen
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

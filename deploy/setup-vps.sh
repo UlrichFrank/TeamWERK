@@ -32,7 +32,7 @@ SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587
 SMTP_USER=p459264p5
 SMTP_PASS=REPLACE_WITH_SMTP_PASSWORD
-SMTP_FROM=TeamWERK <teamwerk@team-stuttgart.org>
+SMTP_FROM="TeamWERK <teamwerk@team-stuttgart.org>"
 EOF
     chmod 600 /etc/teamwerk/env
     echo "⚠️  Bitte /etc/teamwerk/env mit echten Werten befüllen!"
