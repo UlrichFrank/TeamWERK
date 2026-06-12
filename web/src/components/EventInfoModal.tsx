@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList, Trash2, BriefcaseMedical } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import MapsLink from './MapsLink'
@@ -100,6 +101,7 @@ const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm te
 
 export default function EventInfoModal({ type, game, training, absence, onClose, onEdit, onDienste, canEditAbsence, onAbsenceChanged }: Props) {
   useEscapeKey(onClose)
+  const navigate = useNavigate()
 
   const [editing, setEditing] = useState(false)
   const [editType, setEditType] = useState<'vacation' | 'injury'>(absence?.type ?? 'vacation')
@@ -315,12 +317,26 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               </button>
             </>
           ) : (
-            <button
-              onClick={onClose}
-              className="w-full border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
-            >
-              Schließen
-            </button>
+            <>
+              {(type === 'game' || type === 'training') && (
+                <button
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  onClick={() => {
+                    onClose()
+                    const id = type === 'game' ? game?.id : training?.id
+                    navigate(`/termine?focus=${type}-${id}`)
+                  }}
+                >
+                  In Terminen öffnen
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="flex-1 border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
+              >
+                Schließen
+              </button>
+            </>
           )}
         </div>
       </div>

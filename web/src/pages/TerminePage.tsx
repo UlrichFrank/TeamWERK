@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History } from 'lucide-react'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
@@ -86,6 +86,24 @@ type Termin =
   | { kind: 'training'; data: Session }
   | { kind: 'game'; data: Game }
 
+const ALL_TYPES = new Set(['heim', 'auswärts', 'generisch', 'training'])
+
+function parseFilters(sp: URLSearchParams) {
+  const team = parseInt(sp.get('team') ?? '') || null
+  const typesRaw = sp.get('types')
+  const types = typesRaw
+    ? (() => {
+        const parsed = new Set(typesRaw.split(',').filter(t => ALL_TYPES.has(t)))
+        return parsed.size > 0 ? parsed : new Set(ALL_TYPES)
+      })()
+    : new Set(ALL_TYPES)
+  const past = sp.get('past') === '1'
+  const focusRaw = sp.get('focus')
+  const focusMatch = focusRaw?.match(/^(training|game)-(\d+)$/)
+  const focus = focusMatch ? { kind: focusMatch[1] as 'training' | 'game', id: parseInt(focusMatch[2]) } : null
+  return { team, types, past, focus }
+}
+
 function sortKey(t: Termin): string {
   if (t.kind === 'training') return t.data.date + 'T' + t.data.start_time
   return t.data.date + 'T' + t.data.time
@@ -121,25 +139,42 @@ export default function TerminePage() {
   const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
   const isParent = user?.isParent === true
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { team: filterTeamId, types: filterTypes, past: showPast, focus } = parseFilters(searchParams)
+  const triedPastExpansion = useRef(false)
+
   const [termine, setTermine] = useState<Termin[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const teamDisplayNames = useMemo(() => buildTeamDisplayNames(teams), [teams])
-  const [showPast, setShowPast] = useState(false)
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
   const [rsvpErrors, setRsvpErrors] = useState<Record<string, string>>({})
   const [pendingRSVP, setPendingRSVP] = useState<{ kind: 'training' | 'game'; id: number; status: 'declined' | 'maybe'; memberId?: number } | null>(null)
   const [modalReason, setModalReason] = useState('')
-  const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
-  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
   const compact = useCompactHeader(950)
 
+  const updateFilter = (patch: { team?: number | null; types?: Set<string>; past?: boolean }) => {
+    const next = new URLSearchParams(searchParams)
+    if ('team' in patch) {
+      if (patch.team === null) next.delete('team')
+      else next.set('team', String(patch.team))
+    }
+    if ('types' in patch && patch.types) {
+      const isDefault = patch.types.size === ALL_TYPES.size && [...ALL_TYPES].every(t => patch.types!.has(t))
+      if (isDefault) next.delete('types')
+      else next.set('types', [...patch.types].join(','))
+    }
+    if ('past' in patch) {
+      if (patch.past) next.set('past', '1')
+      else next.delete('past')
+    }
+    setSearchParams(next, { replace: true })
+  }
+
   const toggleType = (type: string) => {
-    setFilterTypes(prev => {
-      const next = new Set(prev)
-      next.has(type) ? next.delete(type) : next.add(type)
-      return next
-    })
+    const next = new Set(filterTypes)
+    next.has(type) ? next.delete(type) : next.add(type)
+    updateFilter({ types: next })
   }
 
   const today = new Date().toISOString().slice(0, 10)
@@ -170,6 +205,7 @@ export default function TerminePage() {
   useLiveUpdates((event) => { if (event === 'trainings' || event === 'games') load() })
 
   const visibleTermine = termine.filter(t => {
+    if (focus && t.kind === focus.kind && t.data.id === focus.id) return true
     if (t.kind === 'training') {
       if (!filterTypes.has('training')) return false
       if (filterTeamId !== null && t.data.team_id !== filterTeamId) return false
@@ -179,6 +215,29 @@ export default function TerminePage() {
     }
     return true
   })
+
+  const focusNotFound = !loading && !!focus && showPast && !termine.some(t => t.kind === focus.kind && t.data.id === focus.id)
+
+  useEffect(() => {
+    if (!focus || loading || showPast || triedPastExpansion.current) return
+    const found = termine.some(t => t.kind === focus.kind && t.data.id === focus.id)
+    if (!found) {
+      triedPastExpansion.current = true
+      updateFilter({ past: true })
+    }
+  }, [focus?.kind, focus?.id, loading])
+
+  useEffect(() => { triedPastExpansion.current = false }, [focus?.kind, focus?.id])
+
+  useEffect(() => {
+    if (!focus || loading) return
+    const el = document.getElementById(`termin-${focus.kind}-${focus.id}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('ring-2', 'ring-brand-yellow', 'transition-all')
+    const t = setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
+    return () => clearTimeout(t)
+  }, [focus?.kind, focus?.id, loading, visibleTermine.length])
 
   const respondTraining = async (sessionId: number, status: string, reason = '', memberId?: number) => {
     const key = memberId ? `t-${sessionId}-${memberId}` : `t-${sessionId}`
@@ -256,7 +315,7 @@ export default function TerminePage() {
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
           <select
             value={filterTeamId ?? ''}
-            onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
+            onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
             className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-0 shrink"
           >
             <option value="">Alle Teams</option>
@@ -287,7 +346,7 @@ export default function TerminePage() {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setShowPast(p => !p)}
+            onClick={() => updateFilter({ past: !showPast })}
             aria-label="Vergangene anzeigen"
             className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
               showPast
@@ -300,6 +359,12 @@ export default function TerminePage() {
           </button>
         </div>
       </div>
+
+      {focusNotFound && (
+        <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+          Dieser Termin ist nicht verfügbar.
+        </div>
+      )}
 
       {loading ? (
         <p className="text-brand-text-muted text-sm">Laden…</p>
@@ -316,6 +381,7 @@ export default function TerminePage() {
               const key = `t-${s.id}`
               return (
                 <div
+                  id={`termin-training-${s.id}`}
                   key={key}
                   onClick={() => navigate(`/termine/training/${s.id}`)}
                   className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${
@@ -411,6 +477,7 @@ export default function TerminePage() {
               : (g.event_type === 'heim' ? `Heim: ${g.opponent}` : `Auswärts: ${g.opponent}`)
             return (
               <div
+                id={`termin-game-${g.id}`}
                 key={key}
                 onClick={() => navigate(`/termine/${g.event_type === 'generisch' ? 'ereignis' : 'spiel'}/${g.id}`)}
                 className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
