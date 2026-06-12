@@ -3,7 +3,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Dumbbell, AlertTriangle, X } from 'lucide-react'
 import { api } from '../lib/api'
-import { buildTeamDisplayNames } from '../lib/teamName'
+import { buildTeamShortNames } from '../lib/teamName'
 import VenuePicker from '../components/VenuePicker'
 import MapsLink from '../components/MapsLink'
 
@@ -94,7 +94,7 @@ export default function AdminTrainingsPage() {
   const [standalone, setStandalone] = useState<StandaloneSession[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
-  const teamDisplayNames = useMemo(() => buildTeamDisplayNames(teams), [teams])
+  const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
   const [expandedSeries, setExpandedSeries] = useState<Set<number>>(new Set())
 
   const [seriesModal, setSeriesModal] = useState<SeriesModal | null>(null)
@@ -462,10 +462,10 @@ export default function AdminTrainingsPage() {
                       onChange={e => setSeriesModal(f => f ? { ...f, team_id: Number(e.target.value) } : f)}
                       className={INPUT}>
                       <option value={0}>– Team wählen –</option>
-                      {teams.map(t => <option key={t.id} value={t.id}>{teamDisplayNames.get(t.id) ?? t.name}</option>)}
+                      {teams.map(t => <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? t.name}</option>)}
                     </select>
                   ) : (
-                    <p className="text-sm text-brand-text py-2">{teamDisplayNames.get(seriesModal.team_id) ?? teams.find(t => t.id === seriesModal.team_id)?.name ?? '–'}</p>
+                    <p className="text-sm text-brand-text py-2">{teamShortNames.get(seriesModal.team_id) ?? teams.find(t => t.id === seriesModal.team_id)?.name ?? '–'}</p>
                   )}
                 </div>
                 <div>
@@ -602,10 +602,10 @@ export default function AdminTrainingsPage() {
                       onChange={e => setSessionModal(f => f ? { ...f, team_id: Number(e.target.value) } : f)}
                       className={INPUT}>
                       <option value={0}>– Team wählen –</option>
-                      {teams.map(t => <option key={t.id} value={t.id}>{teamDisplayNames.get(t.id) ?? t.name}</option>)}
+                      {teams.map(t => <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? t.name}</option>)}
                     </select>
                   ) : (
-                    <p className="text-sm text-brand-text py-2">{teamDisplayNames.get(sessionModal.team_id) ?? teams.find(t => t.id === sessionModal.team_id)?.name ?? '–'}</p>
+                    <p className="text-sm text-brand-text py-2">{teamShortNames.get(sessionModal.team_id) ?? teams.find(t => t.id === sessionModal.team_id)?.name ?? '–'}</p>
                   )}
                 </div>
                 <div>

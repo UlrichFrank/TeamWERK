@@ -2040,3 +2040,37 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 	}
 	return nil
 }
+
+// GET /api/teams/names — all active teams for client-side name computation, available to all authenticated users
+func (h *Handler) ListTeamNames(w http.ResponseWriter, r *http.Request) {
+	const activeSeasonSub = `(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
+	const groupCountSub = `(SELECT COUNT(*) FROM kader k2 WHERE k2.season_id=k.season_id AND k2.age_class=k.age_class AND k2.gender=k.gender)`
+
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT DISTINCT t.id, t.age_class, t.gender, k.team_number, `+groupCountSub+`
+		 FROM teams t
+		 JOIN kader k ON k.team_id = t.id
+		 WHERE k.season_id = `+activeSeasonSub+` AND t.is_active = 1
+		 ORDER BY t.age_class, t.gender, k.team_number`)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type teamName struct {
+		ID         int    `json:"id"`
+		AgeClass   string `json:"age_class"`
+		Gender     string `json:"gender"`
+		TeamNumber int    `json:"team_number"`
+		GroupCount int    `json:"group_count"`
+	}
+	result := []teamName{}
+	for rows.Next() {
+		var t teamName
+		rows.Scan(&t.ID, &t.AgeClass, &t.Gender, &t.TeamNumber, &t.GroupCount)
+		result = append(result, t)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}

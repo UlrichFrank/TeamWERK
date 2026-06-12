@@ -258,6 +258,7 @@ func serve() {
 
 		// Teams
 		r.Get("/api/teams", gameH.ListTeamsForUser)
+		r.Get("/api/teams/names", gameH.ListTeamNames)
 		r.Get("/api/teams/my", teamsH.ListMyTeams)
 		r.Get("/api/teams/{id}/roster", teamsH.GetRoster)
 

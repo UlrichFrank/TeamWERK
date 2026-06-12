@@ -20,16 +20,6 @@ function ageInitial(ageClass: string): string {
 }
 
 
-/** Full display name: "A-Jugend männlich" or "A-Jugend männlich 1" */
-export function buildTeamDisplayNames<T extends TeamForName>(teams: T[]): Map<number, string> {
-  const result = new Map<number, string>()
-  for (const t of teams) {
-    const base = `${t.age_class} ${GENDER_LABEL[t.gender] ?? t.gender}`
-    result.set(t.id, t.group_count > 1 ? `${base} ${t.team_number}` : base)
-  }
-  return result
-}
-
 /** Short name for calendar tiles: "mA" or "mA1" */
 export function buildTeamShortNames<T extends TeamForName>(teams: T[]): Map<number, string> {
   const result = new Map<number, string>()

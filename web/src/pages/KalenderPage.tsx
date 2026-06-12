@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
-import { buildTeamShortNames, buildTeamDisplayNames } from '../lib/teamName'
+import { buildTeamShortNames, TeamForName } from '../lib/teamName'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -132,6 +132,7 @@ export default function KalenderPage() {
   const [trainings, setTrainings] = useState<Training[]>([])
   const [absences, setAbsences] = useState<Absence[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const [allTeamNames, setAllTeamNames] = useState<TeamForName[]>([])
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
   const compact = useCompactHeader(950)
@@ -235,6 +236,9 @@ export default function KalenderPage() {
         api.get('/teams')
           .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
           .catch(() => setTeams([])),
+        api.get('/teams/names')
+          .then(r => setAllTeamNames(Array.isArray(r.data) ? r.data : []))
+          .catch(() => setAllTeamNames([])),
         api.get('/seasons')
           .then(r => {
             const seasons = Array.isArray(r.data) ? r.data : []
@@ -347,8 +351,7 @@ export default function KalenderPage() {
     })
   }
 
-  const shortNames = useMemo(() => buildTeamShortNames(teams), [teams])
-  const displayNames = useMemo(() => buildTeamDisplayNames(teams), [teams])
+  const shortNames = useMemo(() => buildTeamShortNames(allTeamNames), [allTeamNames])
 
   const safeGames = Array.isArray(games) ? games : []
   const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
@@ -1116,7 +1119,7 @@ export default function KalenderPage() {
                                   setSelectedTeamIds(selectedTeamIds.filter(id => id !== t.id))
                                 }
                               }} className="rounded accent-brand-yellow" />
-                            <span className="text-sm text-brand-text">{displayNames.get(t.id) ?? t.name}</span>
+                            <span className="text-sm text-brand-text">{shortNames.get(t.id) ?? t.name}</span>
                           </label>
                         ))}
                       </div>
@@ -1125,7 +1128,7 @@ export default function KalenderPage() {
                         className={INPUT_WIZ}>
                         <option value="">Auswählen…</option>
                         {teams.filter(t => t.is_active).map(t => (
-                          <option key={t.id} value={t.id}>{displayNames.get(t.id) ?? t.name}</option>
+                          <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
                         ))}
                       </select>
                     )}
@@ -1192,7 +1195,7 @@ export default function KalenderPage() {
                       className={INPUT_WIZ}>
                       <option value="">Auswählen…</option>
                       {teams.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>{displayNames.get(t.id) ?? t.name}</option>
+                        <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1255,7 +1258,7 @@ export default function KalenderPage() {
                       className={INPUT_WIZ}>
                       <option value="">Auswählen…</option>
                       {teams.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>{displayNames.get(t.id) ?? t.name}</option>
+                        <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
                       ))}
                     </select>
                   </div>
