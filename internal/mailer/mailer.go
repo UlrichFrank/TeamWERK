@@ -135,8 +135,7 @@ func (m *Mailer) textToHTML(text string) string {
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="font-family:Arial,Helvetica,sans-serif;background:#ffffff;margin:0;padding:24px">
-<div style="max-width:520px;margin:0 auto;background:#F9FAFB;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.12)">
-  <div style="background:#FDE400;height:4px"></div>
+<div style="max-width:520px;margin:0 auto;background:#F9FAFB;border-radius:12px;overflow:hidden;border-top:4px solid #FDE400;box-shadow:0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px -1px rgba(0,0,0,.1)">
   <div style="padding:20px 24px;border-bottom:1px solid #E5E7EB">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
       <td width="52" style="vertical-align:middle">
