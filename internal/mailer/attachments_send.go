@@ -5,9 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"mime/multipart"
+	"mime/quotedprintable"
 	"net/smtp"
-	"net/textproto"
 	"time"
 )
 
@@ -17,7 +16,7 @@ type Attachment struct {
 	MIMEType string
 }
 
-func (m *Mailer) SendWithAttachments(to, subject, body string, attachments []Attachment) error {
+func (m *Mailer) SendWithAttachments(to, subject, textBody string, attachments []Attachment) error {
 	auth := smtp.PlainAuth("", m.cfg.User, m.cfg.Password, m.cfg.Host)
 
 	b := make([]byte, 12)
@@ -25,39 +24,53 @@ func (m *Mailer) SendWithAttachments(to, subject, body string, attachments []Att
 	msgID := fmt.Sprintf("<%x@%s>", b, m.cfg.Host)
 	encodedSubject := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?="
 
+	mixedBoundary := fmt.Sprintf("=_%x_mixed", b)
+	altBoundary := fmt.Sprintf("=_%x_alt", b)
+
 	var buf bytes.Buffer
 
-	// Headers
+	// Outer headers
 	fmt.Fprintf(&buf, "From: %s\r\n", m.cfg.From)
 	fmt.Fprintf(&buf, "To: %s\r\n", to)
 	fmt.Fprintf(&buf, "Subject: %s\r\n", encodedSubject)
 	fmt.Fprintf(&buf, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	fmt.Fprintf(&buf, "Message-ID: %s\r\n", msgID)
 	fmt.Fprintf(&buf, "MIME-Version: 1.0\r\n")
+	fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n\r\n", mixedBoundary)
 
-	mw := multipart.NewWriter(&buf)
-	fmt.Fprintf(&buf, "Content-Type: multipart/mixed; boundary=%s\r\n\r\n", mw.Boundary())
+	// multipart/alternative block (text + html)
+	fmt.Fprintf(&buf, "--%s\r\n", mixedBoundary)
+	fmt.Fprintf(&buf, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", altBoundary)
 
-	// Text part
-	th := textproto.MIMEHeader{}
-	th.Set("Content-Type", "text/plain; charset=utf-8")
-	th.Set("Content-Transfer-Encoding", "8bit")
-	pw, _ := mw.CreatePart(th)
-	pw.Write([]byte(body)) //nolint:errcheck // multipart write errors only occur on fundamental I/O failures
+	fmt.Fprintf(&buf, "--%s\r\n", altBoundary)
+	buf.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	qpw := quotedprintable.NewWriter(&buf)
+	qpw.Write([]byte(textBody)) //nolint:errcheck
+	qpw.Close()
+
+	fmt.Fprintf(&buf, "\r\n--%s\r\n", altBoundary)
+	buf.WriteString("Content-Type: text/html; charset=utf-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	qpw = quotedprintable.NewWriter(&buf)
+	qpw.Write([]byte(m.textToHTML(textBody))) //nolint:errcheck
+	qpw.Close()
+
+	fmt.Fprintf(&buf, "\r\n--%s--\r\n", altBoundary)
 
 	// Attachment parts
 	for _, a := range attachments {
-		ah := textproto.MIMEHeader{}
-		ah.Set("Content-Type", a.MIMEType)
-		ah.Set("Content-Transfer-Encoding", "base64")
-		ah.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, a.Filename))
-		aw, _ := mw.CreatePart(ah)
-		enc := base64.NewEncoder(base64.StdEncoding, aw)
-		enc.Write(a.Data) //nolint:errcheck // base64 encoder write errors only occur on fundamental I/O failures
+		fmt.Fprintf(&buf, "\r\n--%s\r\n", mixedBoundary)
+		fmt.Fprintf(&buf, "Content-Type: %s\r\n", a.MIMEType)
+		buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+		fmt.Fprintf(&buf, "Content-Disposition: attachment; filename=\"%s\"\r\n\r\n", a.Filename)
+		enc := base64.NewEncoder(base64.StdEncoding, &buf)
+		enc.Write(a.Data) //nolint:errcheck
 		enc.Close()
+		buf.WriteString("\r\n")
 	}
 
-	mw.Close()
+	fmt.Fprintf(&buf, "\r\n--%s--\r\n", mixedBoundary)
 
 	addr := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
 	return smtp.SendMail(addr, auth, m.fromAddr, []string{to}, buf.Bytes())
