@@ -1,87 +1,70 @@
-### Requirement: Chronologisch gemischte Termine-Liste
+## ADDED Requirements
 
-Die `/termine`-Seite SHALL eine chronologisch sortierte Liste aus Trainings und Spielen
-des eigenen Teams anzeigen, zeitlich gefiltert auf zukünftige Termine (+ optional vergangene).
+### Requirement: Filterzustand in URL-Query-Parametern
 
-#### Scenario: Spieler sieht eigene Trainings und Spiele gemischt
-- **WHEN** ein User mit Rolle `spieler` die `/termine`-Seite aufruft
-- **THEN** werden Trainings und Spiele seines Teams chronologisch gemischt angezeigt
-- **THEN** sind vergangene Termine standardmäßig ausgeblendet (Checkbox „Vergangene anzeigen")
+Die `/termine`-Seite SHALL ihren Filterzustand vollständig über URL-Query-Parameter abbilden. Beim Mount liest sie die Parameter aus `useSearchParams()` und initialisiert daraus den State. Jede Änderung an Filtern (Team-Auswahl, Termin-Typen, Vergangene anzeigen) MUSS die URL via `setSearchParams()` (Replace, nicht Push) aktualisieren, sodass die Seite per Browser-Back/Forward navigierbar und per Link teilbar ist.
 
-#### Scenario: Leere Liste wenn keine Termine
-- **WHEN** ein User keine Team-Zugehörigkeit hat oder keine Termine im Zeitraum existieren
-- **THEN** wird ein leerer Zustand mit erklärendem Text angezeigt
+Unterstützte Parameter:
+- `team` (eine numerische Team-ID; fehlt → kein Team-Filter)
+- `types` (kommaseparierte Werte aus `training`, `heim`, `auswaerts`; fehlt → alle Typen aktiv, identisch zum bisherigen Default)
+- `past` (`1` zeigt vergangene Termine, default `0`)
 
-#### Scenario: Termin-Typ ist visuell erkennbar
-- **WHEN** Trainings und Spiele in der Liste angezeigt werden
-- **THEN** ist der Typ jedes Termins durch ein Icon unterscheidbar (Dumbbell für Training, Home/MapPin für Spiel)
+Ungültige oder unbekannte Werte SHALL ignoriert und der jeweilige Filter auf seinen Default zurückgesetzt werden — ohne Fehlermeldung.
 
----
+#### Scenario: Page lädt mit Team-Filter aus URL
+- **WHEN** ein User `/termine?team=3` aufruft
+- **THEN** ist der Team-Filter beim ersten Render auf Team-ID 3 vorbelegt
+- **THEN** zeigt die Liste ausschließlich Termine dieses Teams
 
-### Requirement: RSVP-Buttons in der Termine-Liste
+#### Scenario: Page lädt mit Typ- und Past-Filter aus URL
+- **WHEN** ein User `/termine?types=heim,auswaerts&past=1` aufruft
+- **THEN** sind nur die Termin-Typen „Heimspiel" und „Auswärtsspiel" aktiv
+- **THEN** ist „Vergangene anzeigen" aktiviert
 
-Jeder aktive Termin in der Liste SHALL für Spieler und Eltern RSVP-Buttons (Zusagen/Vielleicht/Absagen)
-mit optionalem Grund-Textfeld direkt in der Karte anzeigen.
+#### Scenario: Filteränderung schreibt URL zurück
+- **WHEN** ein User auf der `/termine`-Seite den Team-Filter auf Team 5 ändert
+- **THEN** wird die URL via `replaceState` auf `/termine?team=5` aktualisiert
+- **THEN** verändert sich der Browser-History-Stack nicht (kein neuer Eintrag pro Filteränderung)
 
-#### Scenario: RSVP-Buttons sichtbar für Spieler
-- **WHEN** ein User mit Rolle `spieler` oder `elternteil` die `/termine`-Seite aufruft
-- **THEN** sind RSVP-Buttons für jeden aktiven Termin sichtbar
+#### Scenario: Ungültiger Query-Parameter
+- **WHEN** ein User `/termine?team=abc&types=foo,bar` aufruft
+- **THEN** verhält sich die Seite wie ohne Filter (Default-State, kein Fehler)
 
-#### Scenario: RSVP-Buttons nicht sichtbar für Trainer
-- **WHEN** ein User mit Trainer-Funktion die `/termine`-Seite aufruft
-- **THEN** werden keine RSVP-Buttons angezeigt (Trainer klicken auf den Termin für die Übersicht)
-
-#### Scenario: Aktiver RSVP-Status visuell hervorgehoben
-- **WHEN** ein User bereits eine Rückmeldung abgegeben hat
-- **THEN** ist der entsprechende Button visuell aktiv (farblich hervorgehoben)
-
-#### Scenario: Abgesagter Termin zeigt keine RSVP-Buttons
-- **WHEN** ein Training den Status `cancelled` hat
-- **THEN** werden keine RSVP-Buttons angezeigt, und der Termin ist als abgesagt markiert
+#### Scenario: Kein Query-Parameter (Rückwärtskompatibilität)
+- **WHEN** ein User `/termine` ohne Query-Parameter aufruft
+- **THEN** ist das Verhalten identisch zu vorher (Default-Filter, keine sichtbare Änderung)
 
 ---
 
-### Requirement: Trainer-Link zur Detailübersicht
+### Requirement: Deep-Link-Fokus auf einzelnen Termin
 
-Für Trainer SHALL jede Termin-Karte anklickbar sein und zur Detailseite führen.
+Die `/termine`-Seite SHALL einen zusätzlichen Query-Parameter `focus` akzeptieren. Format: `focus=<type>-<id>` mit `type ∈ {training, game}` und `id` als numerische ID (z.B. `focus=training-42`, `focus=game-17`). Bei gültigem `focus` MUSS die Seite:
 
-#### Scenario: Trainer klickt auf Trainingstermin
-- **WHEN** ein User mit Trainer-Funktion auf eine Trainingskarte klickt
-- **THEN** wird zur Route `/termine/training/:id` navigiert
+1. nach Datenladen den betreffenden Termin in den Viewport scrollen (`scrollIntoView({ behavior: 'smooth', block: 'center' })`),
+2. die Karte für ca. 2 Sekunden visuell hervorheben (Yellow-Ring, fade-out via Tailwind-Animation),
+3. automatisch „Vergangene anzeigen" aktivieren, falls der Termin in der Vergangenheit liegt (damit Push-Links zu Spielen, die kurz danach beginnen, nicht ins Leere zeigen).
 
-#### Scenario: Trainer klickt auf Spieltermin
-- **WHEN** ein User mit Trainer-Funktion auf eine Spielkarte klickt
-- **THEN** wird zur Route `/termine/spiel/:id` navigiert
+Wenn die ID nicht in der geladenen Liste existiert (z.B. fremdes Team, gelöschter Termin), SHALL die Seite eine dezente Hinweismeldung „Dieser Termin ist nicht verfügbar" anzeigen — als nicht-blockierende Info oberhalb der Liste — und ansonsten normal funktionieren.
 
----
+#### Scenario: Push-Notification öffnet konkreten Spieltermin
+- **WHEN** ein User über einen Push-Link `/termine?focus=game-17` öffnet
+- **THEN** wird zum Spiel mit ID 17 in der Liste gescrollt
+- **THEN** ist die Karte kurzzeitig visuell hervorgehoben
 
-### Requirement: Detailseite zeigt Rückmeldungs-Tabelle
+#### Scenario: Focus auf vergangenen Termin
+- **WHEN** ein User `/termine?focus=training-5` öffnet und Training 5 liegt in der Vergangenheit
+- **THEN** aktiviert die Seite automatisch „Vergangene anzeigen"
+- **THEN** scrollt sie zum Training 5
 
-`/termine/training/:id` und `/termine/spiel/:id` SHALL für Trainer eine Übersichtstabelle
-aller Teammitglieder mit RSVP-Status und Grund anzeigen.
+#### Scenario: Focus auf nicht existierende ID
+- **WHEN** ein User `/termine?focus=game-99999` öffnet und das Spiel existiert nicht (oder gehört zu einem fremden Team)
+- **THEN** zeigt die Seite eine Info „Dieser Termin ist nicht verfügbar"
+- **THEN** rendert die Seite ansonsten normal die Termin-Liste
 
-#### Scenario: Trainer sieht alle Mitglieder mit Status
-- **WHEN** ein Trainer `/termine/training/:id` oder `/termine/spiel/:id` aufruft
-- **THEN** wird eine Tabelle mit allen Kader-Mitgliedern, RSVP-Status und Grund angezeigt
-- **THEN** sind Mitglieder ohne Rückmeldung als „–" (kein Status) gelistet
+#### Scenario: Ungültiges Focus-Format
+- **WHEN** ein User `/termine?focus=foobar` öffnet
+- **THEN** wird der `focus`-Parameter ignoriert, die Seite rendert normal
 
-#### Scenario: Anwesenheits-Tracking nur für Trainings
-- **WHEN** ein Trainer `/termine/training/:id` für einen vergangenen Termin aufruft
-- **THEN** ist eine Anwesenheits-Spalte mit Checkboxen sichtbar
-- **WHEN** ein Trainer `/termine/spiel/:id` aufruft
-- **THEN** gibt es keine Anwesenheits-Spalte
-
----
-
-### Requirement: Navigation „Termine" ersetzt „Trainings"
-
-Der Nav-Eintrag „Trainings" SHALL durch „Termine" ersetzt werden.
-Die alten Routes `/trainings` und `/trainings/:id` SHALL auf `/termine` redirecten.
-
-#### Scenario: Alter Trainings-Link wird weitergeleitet
-- **WHEN** ein User `/trainings` aufruft
-- **THEN** wird er zu `/termine` weitergeleitet (HTTP 301 oder client-seitiger Redirect)
-
-#### Scenario: Nav zeigt „Termine" für alle Rollen
-- **WHEN** ein User eingeloggt ist
-- **THEN** ist „Termine" in der Navigation sichtbar (für alle Rollen gleich wie vorher „Trainings")
+#### Scenario: Focus kombiniert mit Filter
+- **WHEN** ein User `/termine?team=2&types=heim&focus=game-17` öffnet
+- **THEN** werden Filter angewendet UND auf den fokussierten Termin gescrollt (sofern er nicht durch den Filter ausgeblendet würde; in dem Fall werden die einschränkenden Filter, die genau diesen Termin verbergen würden, ignoriert)

@@ -1,25 +1,38 @@
-# version-display Specification
+## ADDED Requirements
 
-## Purpose
-TBD - created by archiving change version-anzeige-sidebar. Update Purpose after archive.
-## Requirements
-### Requirement: App-Version im Sidebar-Footer anzeigen
+### Requirement: Versions-Button öffnet Changelog-Modal
 
-Die App SHALL die aktuell laufende Server-Version (buildHash) im Sidebar-Footer unterhalb des Abmelden-Buttons anzeigen. Die Anzeige SHALL durch eine horizontale Trennlinie (gleicher Stil wie die bestehende Trennlinie über E-Mail und Abmelden) vom Rest des Footers abgesetzt sein. Im DEV-Modus (kein SSE) SHALL nichts angezeigt werden.
+Die Versionsanzeige im Sidebar-Footer SHALL ein klickbarer Button sein. Klick darauf öffnet das `ChangelogModal`.
 
-#### Scenario: Version erscheint nach SSE-Verbindung
+#### Scenario: Klick auf Versions-Button öffnet Modal
+- **WHEN** ein eingeloggter Nutzer auf den Versions-Button (`v abc1234`) in der Sidebar klickt
+- **THEN** öffnet sich das `ChangelogModal`
 
-- **WHEN** der Nutzer eingeloggt ist und die SSE-Verbindung das erste `__version:`-Event empfangen hat
-- **THEN** zeigt der Sidebar-Footer unterhalb des Abmelden-Buttons eine Trennlinie und darunter den Text `v <hash>` an
-- **THEN** ist der Text im gleichen muted-Stil wie die E-Mail-Adresse darüber (`text-brand-black/40 text-xs`)
+#### Scenario: Modal schließbar per ✕ und Escape
+- **WHEN** das `ChangelogModal` offen ist
+- **THEN** kann es per ✕-Button oder Escape-Taste geschlossen werden
 
-#### Scenario: Version im DEV-Modus ausgeblendet
+### Requirement: ChangelogModal zeigt Versionshistorie
 
-- **WHEN** die App im DEV-Modus läuft (`import.meta.env.DEV === true`)
-- **THEN** wird keine Version und keine zusätzliche Trennlinie angezeigt
+Das `ChangelogModal` SHALL `CHANGELOG.md` fetchen, parsen und als Datum-Gruppen mit Badges darstellen.
 
-#### Scenario: Version noch nicht empfangen
+#### Scenario: Datum-Gruppen werden angezeigt
+- **WHEN** das Modal geöffnet wird
+- **THEN** zeigt es Einträge gruppiert nach Datum (neueste zuerst)
+- **THEN** jeder Eintrag hat ein farbiges `[feat]`- oder `[fix]`-Badge, einen Scope-Text und eine Beschreibung
 
-- **WHEN** die SSE-Verbindung noch nicht das erste `__version:`-Event empfangen hat
-- **THEN** wird keine Version angezeigt (kein Platzhalter, keine Lücke)
+#### Scenario: Ladeindikator während Fetch
+- **WHEN** das Modal geöffnet wird und `CHANGELOG.md` noch lädt
+- **THEN** wird ein Lade-Indikator angezeigt
 
+#### Scenario: Fehler beim Laden
+- **WHEN** `CHANGELOG.md` nicht geladen werden kann
+- **THEN** zeigt das Modal eine Fehlermeldung
+
+### Requirement: Update-Banner öffnet Changelog-Modal
+
+Der Update-Banner SHALL bei Klick auf „Details" das `ChangelogModal` öffnen statt Inline-Text anzuzeigen.
+
+#### Scenario: Details-Button öffnet Modal
+- **WHEN** der Update-Banner sichtbar ist und der Nutzer auf „Details" klickt
+- **THEN** öffnet sich das `ChangelogModal`

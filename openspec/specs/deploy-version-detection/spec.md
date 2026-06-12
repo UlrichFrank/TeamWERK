@@ -1,76 +1,42 @@
-# deploy-version-detection Specification
-
-## Purpose
-TBD - created by archiving change auto-reload-on-deploy. Update Purpose after archive.
-## Requirements
-### Requirement: Build-Hash wird zur Compile-Zeit eingebettet
-
-Das Build-System SHALL den Git Short-SHA (`git rev-parse --short HEAD`) zur Compile-Zeit via `-ldflags` in die Go-Binary einbetten. Als Fallback-Wert SHALL `"dev"` verwendet werden, wenn kein Git-Kontext vorhanden ist.
-
-#### Scenario: Produktions-Build enthält Git-SHA
-
-- **WHEN** `make build` oder `make deploy` ausgeführt wird
-- **THEN** ist der Build-Hash der aktuelle Git Short-SHA (z.B. `"a3f1b2c"`)
-
-#### Scenario: Dev-Modus verwendet Fallback-Hash
-
-- **WHEN** `go run ./cmd/teamwerk` ohne ldflags gestartet wird
-- **THEN** ist der Build-Hash `"dev"`
+## MODIFIED Requirements
 
 ### Requirement: SSE-Versionscheck erkennt neuen Deployment-Stand
 
-Das Frontend SHALL beim Verbindungsaufbau und bei jedem SSE-Reconnect die empfangene Versionsinformation mit der zuerst bekannten Version vergleichen. Bei Abweichung SHALL der Update-Banner angezeigt werden. Der Hook SHALL neben `updateAvailable` auch die aktuell bekannte `version` (erster empfangener Hash, oder `null` vor dem ersten Event) zurückgeben. Die SSE-Verbindung SHALL nach Verbindungsabbruch automatisch reconnecten; der Hook SHALL `EventSource.close()` NICHT im `onerror`-Handler aufrufen.
+Das Frontend SHALL beim Verbindungsaufbau und bei jedem SSE-Reconnect die empfangene Versionsinformation mit der zuerst bekannten Version vergleichen. Bei Abweichung SHALL der Update-Banner angezeigt werden. Der Hook SHALL neben `updateAvailable` auch die aktuell bekannte `version` (erster empfangener Hash, oder `null` vor dem ersten Event) zurückgeben. Die SSE-Verbindung SHALL nach Verbindungsabbruch automatisch reconnecten; der Hook SHALL `EventSource.close()` NICHT im `onerror`-Handler aufrufen. Der Hook liefert KEIN `updateDescription` mehr — der `changes.json`-Fetch entfällt.
 
 #### Scenario: Erste Verbindung speichert Baseline-Version
-
 - **WHEN** der SSE-Client zum ersten Mal verbindet und ein `__version:`-Event empfängt
 - **THEN** wird dieser Hash als bekannte Version gespeichert
 - **THEN** gibt der Hook `{ updateAvailable: false, version: "<hash>" }` zurück
 
 #### Scenario: SSE-Reconnect nach Server-Neustart zeigt Banner
-
 - **WHEN** die SSE-Verbindung nach einem Server-Neustart (deploy) neu aufgebaut wird
 - **WHEN** der neue Server einen anderen Hash als die gespeicherte Version sendet
 - **THEN** gibt der Hook `{ updateAvailable: true, version: "<alter-hash>" }` zurück
 - **THEN** wird der Update-Banner angezeigt
 
 #### Scenario: Reconnect ohne Versionsänderung zeigt keinen Banner
-
 - **WHEN** die SSE-Verbindung kurzzeitig unterbrochen und wieder hergestellt wird
 - **WHEN** der Server denselben Hash sendet wie die gespeicherte Version
 - **THEN** gibt der Hook `{ updateAvailable: false, version: "<hash>" }` zurück
 - **THEN** bleibt der Update-Banner ausgeblendet
 
 #### Scenario: Dev-Modus unterdrückt den Banner
-
 - **WHEN** die App im Dev-Modus läuft (`import.meta.env.DEV === true`)
 - **THEN** gibt der Hook `{ updateAvailable: false, version: null }` zurück
 - **THEN** wird der Update-Banner unabhängig von Versionsänderungen nicht angezeigt
 
-### Requirement: Update-Banner zeigt nicht-aufdringliche Reload-Aufforderung
+## ADDED Requirements
 
-Das System SHALL einen Update-Banner am unteren Bildschirmrand anzeigen, sobald eine neue Version erkannt wird. Der Banner SHALL über einen Button zum sofortigen Reload und einen Dismiss-Button verfügen.
+### Requirement: CHANGELOG.md wird bei Build aus git log generiert
 
-#### Scenario: Banner erscheint bei erkannter Versionsänderung
+`make build` SHALL `web/public/CHANGELOG.md` aus der vollständigen `git log`-Historie erzeugen. Nur `feat`- und `fix`-Conventional-Commits werden einbezogen. Einträge werden nach Commit-Datum gruppiert (neuestes Datum zuerst). `changes.json` entfällt.
 
-- **WHEN** `useVersionCheck` eine Versionsabweichung feststellt
-- **THEN** erscheint am unteren Rand ein Banner mit dem Text „Neue Version verfügbar"
-- **THEN** enthält der Banner einen „Jetzt neu laden"-Button
-- **THEN** enthält der Banner einen Schließen-Button (✕)
+#### Scenario: CHANGELOG.md enthält alle feat/fix-Commits
+- **WHEN** `make build` ausgeführt wird
+- **THEN** enthält `web/public/CHANGELOG.md` alle `feat`- und `fix`-Commits aus der git-Historie, gruppiert nach Datum im Format `## DD.MM.YYYY`
+- **THEN** jeder Eintrag hat die Form `- [feat] scope: Beschreibung` oder `- [fix] scope: Beschreibung`
 
-#### Scenario: Klick auf Reload-Button lädt die Seite neu
-
-- **WHEN** der Nutzer auf „Jetzt neu laden" klickt
-- **THEN** wird `window.location.reload()` ausgeführt
-
-#### Scenario: Dismiss-Button schließt den Banner
-
-- **WHEN** der Nutzer auf ✕ klickt
-- **THEN** verschwindet der Banner
-- **THEN** wird die Seite NICHT neu geladen
-
-#### Scenario: Banner ist auf Mobile sichtbar und bedienbar
-
-- **WHEN** der Nutzer die App auf einem Mobilgerät nutzt (< 640px)
-- **THEN** ist der Banner vollständig sichtbar und die Buttons haben mindestens 44px Touch-Target
-
+#### Scenario: changes.json wird nicht mehr generiert
+- **WHEN** `make build` ausgeführt wird
+- **THEN** wird `web/public/changes.json` NICHT erzeugt
