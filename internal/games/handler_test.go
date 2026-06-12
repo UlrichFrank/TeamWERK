@@ -146,8 +146,8 @@ func TestDeleteGame_CascadesAndRollsBackFulfilledHours(t *testing.T) {
 
 	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameID), token, nil)
 	res.Body.Close()
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 (with regen_summary), got %d", res.StatusCode)
 	}
 
 	// Game itself is gone.
@@ -194,8 +194,8 @@ func TestDeleteGame_NoDutiesNoCrash(t *testing.T) {
 
 	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameID), token, nil)
 	res.Body.Close()
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 (with regen_summary), got %d", res.StatusCode)
 	}
 	if got := countRows(t, db, "games", "id=?", gameID); got != 0 {
 		t.Errorf("game not deleted: count=%d", got)
@@ -243,6 +243,104 @@ func countRows(t *testing.T, db *sql.DB, table, where string, args ...any) int {
 		t.Fatalf("countRows %s: %v", q, err)
 	}
 	return n
+}
+
+// TestCreateGame_AutoRegenSkipsAdjacentDay covers the central auto-regen contract:
+// creating two heim games on consecutive days must trigger adjacent-day skip logic,
+// and is_custom=1 slots must survive the regen untouched.
+func TestCreateGame_AutoRegenSkipsAdjacentDay(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	// Override the fixture's default age_class to one the rules table accepts.
+	if _, err := db.Exec(`UPDATE teams SET age_class=? WHERE id=?`, "A-Jugend", teamID); err != nil {
+		t.Fatalf("set age_class: %v", err)
+	}
+
+	// Age-class rule needed for effectiveEventDuration on heim games.
+	if _, err := db.Exec(
+		`INSERT INTO age_class_game_rules (age_class, half_duration_minutes, break_minutes) VALUES (?, ?, ?)`,
+		"A-Jugend", 30, 15); err != nil {
+		t.Fatalf("seed age_class_game_rules: %v", err)
+	}
+
+	// Duty type with adjacent_day_behavior=skip.
+	res, err := db.Exec(`
+		INSERT INTO duty_types (name, hours_value, adjacent_day_behavior)
+		VALUES (?, ?, ?)`, "Aufbau", 2.0, "skip")
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := res.LastInsertId()
+
+	// Heim template with one item: -60min from start, 1 slot.
+	res, err = db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?, ?, ?)`,
+		"Heim", "heim", 75)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := res.LastInsertId()
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)`, templateID, dutyTypeID, "start", -60, 1, 0); err != nil {
+		t.Fatalf("seed template item: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	createBody := func(date string) map[string]any {
+		return map[string]any{
+			"date": date, "time": "14:00",
+			"opponent": "FC Test", "team_ids": []int{teamID},
+			"event_type": "heim", "season_id": seasonID,
+		}
+	}
+
+	// Game A — no neighbors → template slot is created at 13:00.
+	resA := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-13"))
+	resA.Body.Close()
+	if resA.StatusCode != http.StatusCreated {
+		t.Fatalf("create game A: expected 201, got %d", resA.StatusCode)
+	}
+	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=0", "2026-06-13"); got != 1 {
+		t.Fatalf("after create A: expected 1 auto-slot on 06-13, got %d", got)
+	}
+
+	// Manual slot on game A (is_custom=1) — must survive any future regen.
+	var gameAID int
+	db.QueryRow(`SELECT id FROM games WHERE date=?`, "2026-06-13").Scan(&gameAID)
+	if _, err := db.Exec(`
+		INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id,
+		  slots_total, team_id, season_id, game_id, is_custom)
+		VALUES (?, ?, ?, ?, 1, ?, ?, ?, 1)`,
+		"Manuell", "2026-06-13", "12:00", dutyTypeID, teamID, seasonID, gameAID); err != nil {
+		t.Fatalf("seed custom slot: %v", err)
+	}
+
+	// Game B on the adjacent day — runAutoRegen for {06-12, 06-13, 06-14}
+	// must skip the template slot on 06-13 (adjacent rule) AND on 06-14, while leaving
+	// the is_custom=1 slot on 06-13 intact.
+	resB := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-14"))
+	resB.Body.Close()
+	if resB.StatusCode != http.StatusCreated {
+		t.Fatalf("create game B: expected 201, got %d", resB.StatusCode)
+	}
+
+	// Day 13 keeps its Aufbau (no Heim on day 12 → adjacent doesn't fire).
+	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=0", "2026-06-13"); got != 1 {
+		t.Errorf("after create B: expected 1 auto-slot on 06-13 (no prev-day heim), got %d", got)
+	}
+	// Day 14's Aufbau is skipped: adjacent rule fires because Heim on day 13.
+	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=0", "2026-06-14"); got != 0 {
+		t.Errorf("after create B: expected 0 auto-slots on 06-14 (adjacent skip), got %d", got)
+	}
+	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=1", "2026-06-13"); got != 1 {
+		t.Errorf("is_custom=1 slot on 06-13 must survive regen, got %d", got)
+	}
 }
 
 // TestCreateGame_UnauthorizedForbidden verifies that a user without club function cannot create a game.
