@@ -134,8 +134,8 @@ func (m *Mailer) textToHTML(text string) string {
 	return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:Arial,Helvetica,sans-serif;background:#FDE400;margin:0;padding:24px">
-<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.12)">
+<body style="font-family:Arial,Helvetica,sans-serif;background:#ffffff;margin:0;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#F9FAFB;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.12)">
   <div style="background:#FDE400;height:4px"></div>
   <div style="padding:20px 24px;border-bottom:1px solid #E5E7EB">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
@@ -148,7 +148,7 @@ func (m *Mailer) textToHTML(text string) string {
       </td>
     </tr></table>
   </div>
-  <div style="padding:28px 24px;color:#111827;font-size:15px;line-height:1.7">
+  <div style="padding:28px 24px;background:#F9FAFB;color:#111827;font-size:15px;line-height:1.7">
 ` + body + `
   </div>
   <div style="padding:16px 24px;background:#F9FAFB;border-top:1px solid #E5E7EB;font-size:12px;color:#6B7280">
