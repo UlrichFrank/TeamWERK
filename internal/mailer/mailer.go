@@ -1,16 +1,22 @@
 package mailer
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"html"
+	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/config"
 )
+
+var urlRe = regexp.MustCompile(`https?://\S+`)
 
 type Mailer struct {
 	cfg      config.SMTPConfig
@@ -25,28 +31,92 @@ func New(cfg config.SMTPConfig) *Mailer {
 	return &Mailer{cfg: cfg, fromAddr: fromAddr}
 }
 
-func (m *Mailer) Send(to, subject, body string) error {
+func (m *Mailer) Send(to, subject, textBody string) error {
 	auth := smtp.PlainAuth("", m.cfg.User, m.cfg.Password, m.cfg.Host)
 
 	b := make([]byte, 12)
 	rand.Read(b)
 	msgID := fmt.Sprintf("<%x@%s>", b, m.cfg.Host)
+	boundary := fmt.Sprintf("=_%x_boundary", b)
 
-	// RFC 2047 encode non-ASCII subject (required for UTF-8 content like em dashes)
 	encodedSubject := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?="
 
-	msg := strings.Join([]string{
-		"From: " + m.cfg.From,
-		"To: " + to,
-		"Subject: " + encodedSubject,
-		"Date: " + time.Now().Format(time.RFC1123Z),
-		"Message-ID: " + msgID,
-		"MIME-Version: 1.0",
-		"Content-Type: text/plain; charset=utf-8",
-		"Content-Transfer-Encoding: 8bit",
-		"",
-		body,
-	}, "\r\n")
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "From: %s\r\n", m.cfg.From)
+	fmt.Fprintf(&buf, "To: %s\r\n", to)
+	fmt.Fprintf(&buf, "Subject: %s\r\n", encodedSubject)
+	fmt.Fprintf(&buf, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(&buf, "Message-ID: %s\r\n", msgID)
+	fmt.Fprintf(&buf, "MIME-Version: 1.0\r\n")
+	fmt.Fprintf(&buf, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary)
+
+	// text/plain part
+	fmt.Fprintf(&buf, "--%s\r\n", boundary)
+	buf.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	qpw := quotedprintable.NewWriter(&buf)
+	qpw.Write([]byte(textBody)) //nolint:errcheck
+	qpw.Close()
+
+	// text/html part
+	fmt.Fprintf(&buf, "\r\n--%s\r\n", boundary)
+	buf.WriteString("Content-Type: text/html; charset=utf-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	qpw = quotedprintable.NewWriter(&buf)
+	qpw.Write([]byte(textToHTML(textBody))) //nolint:errcheck
+	qpw.Close()
+
+	fmt.Fprintf(&buf, "\r\n--%s--\r\n", boundary)
+
 	addr := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
-	return smtp.SendMail(addr, auth, m.fromAddr, []string{to}, []byte(msg))
+	return smtp.SendMail(addr, auth, m.fromAddr, []string{to}, buf.Bytes())
+}
+
+// textToHTML converts a plain-text email body to a minimal branded HTML version.
+// URLs become clickable links; double newlines become paragraphs.
+func textToHTML(text string) string {
+	// Linkify URLs before HTML-escaping so we can insert raw <a> tags.
+	locs := urlRe.FindAllStringIndex(text, -1)
+	var content strings.Builder
+	prev := 0
+	for _, loc := range locs {
+		content.WriteString(html.EscapeString(text[prev:loc[0]]))
+		u := text[loc[0]:loc[1]]
+		fmt.Fprintf(&content,
+			`<a href="%s" style="color:#181310;font-weight:600;word-break:break-all">%s</a>`,
+			html.EscapeString(u), html.EscapeString(u),
+		)
+		prev = loc[1]
+	}
+	content.WriteString(html.EscapeString(text[prev:]))
+
+	// Build paragraphs from double-newline-separated blocks.
+	var pTags []string
+	for _, block := range strings.Split(content.String(), "\n\n") {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			continue
+		}
+		pTags = append(pTags, "<p>"+strings.ReplaceAll(block, "\n", "<br>")+"</p>")
+	}
+
+	body := strings.Join(pTags, "\n")
+	return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:Arial,Helvetica,sans-serif;background:#f4f4f4;margin:0;padding:20px">
+<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+  <div style="background:#181310;padding:20px 24px">
+    <span style="color:#FDE400;font-weight:700;font-size:22px;letter-spacing:-.5px">TeamWERK</span>
+    <span style="color:#ffffff;font-size:13px;margin-left:10px;opacity:.8">Team Stuttgart</span>
+  </div>
+  <div style="padding:28px 24px;color:#111827;font-size:15px;line-height:1.7">
+` + body + `
+  </div>
+  <div style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
+    Diese E-Mail wurde von TeamWERK automatisch versandt.
+  </div>
+</div>
+</body>
+</html>`
 }

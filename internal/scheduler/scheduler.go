@@ -474,7 +474,7 @@ func buildReminderMail(name, date string, slots []openSlot) string {
 		fmt.Fprintf(&sb, "\n    Noch offene Plätze: %d\n\n", sl.slotsOpen)
 	}
 
-	sb.WriteString("Jetzt eintragen: https://intern.team-stuttgart.org/duty-board\n\n")
+	sb.WriteString("Jetzt eintragen: https://internal.team-stuttgart.org/duty-board\n\n")
 	sb.WriteString("Viele Grüße\nDein TeamWERK\n")
 	return sb.String()
 }

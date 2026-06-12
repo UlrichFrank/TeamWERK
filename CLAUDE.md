@@ -10,7 +10,7 @@ Guidance for Claude Code working in this repository.
 
 ## Überblick
 
-TeamWERK (TeamWERK — Where Engagement Really Klicks) ist die interne Verwaltungsplattform für Team Stuttgart (Handball). Sie läuft unter `https://intern.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
+TeamWERK (TeamWERK — Where Engagement Really Klicks) ist die interne Verwaltungsplattform für Team Stuttgart (Handball). Sie läuft unter `https://internal.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
 
 **Stack:** Go 1.23 + Chi v5 · SQLite (WAL) · React 18 + Tailwind v3 · Vite · JWT-Auth
 
@@ -538,7 +538,7 @@ Immer als Goroutine aufrufen (`go ...`) — der Aufruf darf den HTTP-Response ni
 ## VPS-Status
 
 VPS ist in Betrieb. SSH-Alias: `vServer` (in `.env`). Direkt erreichbar unter `https://217.160.118.39`.
-Domain `intern.team-stuttgart.org` und Certbot-Zertifikat noch ausstehend.
+Domain `internal.team-stuttgart.org` und Certbot-Zertifikat noch ausstehend.
 
 Nützliche Remote-Befehle:
 ```bash
