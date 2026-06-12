@@ -1,5 +1,8 @@
 BINARY     := teamwerk
 BUILD_DIR  := bin
+# Prefer the system Go at /usr/local/go if present (matches go.mod toolchain).
+# Falls back to whatever 'go' is on PATH.
+GO         := $(or $(wildcard /usr/local/go/bin/go),go)
 REMOTE     := $(shell grep '^REMOTE=' .env 2>/dev/null | cut -d= -f2)
 REMOTE_DIR := $(shell grep '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2)
 DB_PATH        := /var/lib/teamwerk/teamwerk.db
@@ -26,14 +29,14 @@ env: ## .env aus .env.example erstellen
 	fi
 
 init: ## Abhängigkeiten installieren (go mod tidy, pnpm install)
-	go mod tidy
+	$(GO) mod tidy
 	cd web && pnpm install
 
 dev: ## Backend (mit air Auto-Reload) + Vite Dev-Server lokal starten
 	@echo "Starting backend on :8080 (with auto-reload) and frontend dev server..."
 	@if command -v air > /dev/null 2>&1; then air & \
-	elif [ -x "$$(go env GOPATH)/bin/air" ]; then $$(go env GOPATH)/bin/air & \
-	else echo "air not found, using go run (no auto-reload)"; go run ./cmd/teamwerk & fi
+	elif [ -x "$$($$(GO) env GOPATH)/bin/air" ]; then $$($$(GO) env GOPATH)/bin/air & \
+	else echo "air not found, using go run (no auto-reload)"; $(GO) run ./cmd/teamwerk & fi
 	@sleep 1
 	@cd web && pnpm dev
 
@@ -47,7 +50,7 @@ build: ## Frontend + Backend für Linux/amd64 bauen
 	  | grep -E "\|(feat|fix)(\([^)]*\))?:" \
 	  | python3 scripts/gen-changelog.py > web/public/CHANGELOG.md
 	cd web && pnpm build
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X 'main.buildHash=$(shell git rev-parse --short HEAD)'" -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
+	GOOS=linux GOARCH=amd64 $(GO) build -ldflags "-X 'main.buildHash=$(shell git rev-parse --short HEAD)'" -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
 
 setup-vps: ## VPS einmalig einrichten (Nginx, Certbot, systemd)
 	rsync -az deploy/ $(REMOTE):/tmp/teamwerk-deploy/
@@ -73,10 +76,10 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
 	@git rev-parse --short HEAD > .deployed-hash
 
 migrate-up: ## Migrationen lokal anwenden
-	go run ./cmd/teamwerk migrate up
+	$(GO) run ./cmd/teamwerk migrate up
 
 migrate-down: ## Letzte Migration lokal rückgängig machen
-	go run ./cmd/teamwerk migrate down
+	$(GO) run ./cmd/teamwerk migrate down
 
 migrate-remote-up: ## Ausstehende Migrationen auf VPS anwenden
 	ssh $(REMOTE) "$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH)"
@@ -93,7 +96,7 @@ reset-migration-version-remote: ## Migrationsversion auf VPS auf Baseline (v1) z
 	@echo "VPS-DB auf Migration v1 (Baseline) gesetzt."
 
 create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
-	go run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)
+	$(GO) run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)
 
 create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
 	ssh $(REMOTE) "/usr/local/bin/teamwerk create-admin --db $(DB_PATH) --email=$(EMAIL) --password=$(PASSWORD) --name='$(NAME)'"
@@ -137,7 +140,7 @@ restore-local: ## Backup (DB + Bilder) lokal einspielen
 pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal einspielen
 
 test: ## Alle Go-Tests mit Race-Detector ausführen
-	go test -race ./...
+	$(GO) test -race ./...
 
 lint: ## Statische Codeanalyse mit golangci-lint
 	@if ! command -v golangci-lint > /dev/null 2>&1; then \
