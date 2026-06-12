@@ -72,8 +72,23 @@ func (m *Mailer) Send(to, subject, textBody string) error {
 	return smtp.SendMail(addr, auth, m.fromAddr, []string{to}, buf.Bytes())
 }
 
+// actionButtonLabel returns a CTA label if the URL is a known action link, otherwise "".
+func actionButtonLabel(u string) string {
+	switch {
+	case strings.Contains(u, "/register"):
+		return "Konto erstellen"
+	case strings.Contains(u, "/reset-password"):
+		return "Passwort zurücksetzen"
+	case strings.Contains(u, "/profile/email/confirm"):
+		return "E-Mail-Adresse bestätigen"
+	default:
+		return ""
+	}
+}
+
 // textToHTML converts a plain-text email body to a minimal branded HTML version.
-// URLs become clickable links; double newlines become paragraphs.
+// Action URLs (register, reset-password, email confirm) become CTA buttons;
+// other URLs become inline links; double newlines become paragraphs.
 func textToHTML(text string) string {
 	// Linkify URLs before HTML-escaping so we can insert raw <a> tags.
 	locs := urlRe.FindAllStringIndex(text, -1)
@@ -82,22 +97,35 @@ func textToHTML(text string) string {
 	for _, loc := range locs {
 		content.WriteString(html.EscapeString(text[prev:loc[0]]))
 		u := text[loc[0]:loc[1]]
-		fmt.Fprintf(&content,
-			`<a href="%s" style="color:#181310;font-weight:600;word-break:break-all">%s</a>`,
-			html.EscapeString(u), html.EscapeString(u),
-		)
+		uEsc := html.EscapeString(u)
+		if label := actionButtonLabel(u); label != "" {
+			fmt.Fprintf(&content,
+				`<p style="text-align:center;margin:24px 0"><a href="%s" style="display:inline-block;background:#FDE400;color:#181310;font-weight:700;padding:12px 28px;border-radius:6px;text-decoration:none;font-size:15px">%s</a></p>`,
+				uEsc, label,
+			)
+		} else {
+			fmt.Fprintf(&content,
+				`<a href="%s" style="color:#181310;font-weight:600;word-break:break-all">%s</a>`,
+				uEsc, uEsc,
+			)
+		}
 		prev = loc[1]
 	}
 	content.WriteString(html.EscapeString(text[prev:]))
 
 	// Build paragraphs from double-newline-separated blocks.
+	// Blocks that already start with an HTML block tag are emitted as-is.
 	var pTags []string
 	for _, block := range strings.Split(content.String(), "\n\n") {
 		block = strings.TrimSpace(block)
 		if block == "" {
 			continue
 		}
-		pTags = append(pTags, "<p>"+strings.ReplaceAll(block, "\n", "<br>")+"</p>")
+		if strings.HasPrefix(block, "<p") || strings.HasPrefix(block, "<div") {
+			pTags = append(pTags, block)
+		} else {
+			pTags = append(pTags, "<p>"+strings.ReplaceAll(block, "\n", "<br>")+"</p>")
+		}
 	}
 
 	body := strings.Join(pTags, "\n")
