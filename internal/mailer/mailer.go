@@ -49,6 +49,8 @@ func (m *Mailer) Send(to, subject, textBody string) error {
 	fmt.Fprintf(&buf, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	fmt.Fprintf(&buf, "Message-ID: %s\r\n", msgID)
 	fmt.Fprintf(&buf, "MIME-Version: 1.0\r\n")
+	fmt.Fprintf(&buf, "Precedence: transactional\r\n")
+	fmt.Fprintf(&buf, "X-Mailer: TeamWERK\r\n")
 	fmt.Fprintf(&buf, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary)
 
 	// text/plain part
