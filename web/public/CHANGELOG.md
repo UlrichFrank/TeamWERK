@@ -1,4 +1,7 @@
 ## 12.06.2026
+- [fix] mailer: HTML-Part ergänzen und Spam-Einstufung reduzieren
+- [fix] teams: Kurznamen für alle Rollen konsistent über GET /api/teams/names
+- [fix] games: RegenSummaryCard gegen null-Arrays absichern
 - [fix] games: TestDeleteGame durch echten Grenzfall-Regen-Test ersetzen
 - [fix] termine: Zurück-Button nutzt Browser-History statt hardcoded URL
 - [feat] scheduler: Reminder-Links auf konkreten Termin
