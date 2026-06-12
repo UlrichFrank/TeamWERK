@@ -19,7 +19,7 @@
 - [x] 3.3 `DeleteGame`: `runAutoRegen({date-1, date+1})` nach Cascade-Delete
 - [x] 3.4 Response-Format: CreateGame → `{id, regen_summary}`; UpdateGame → `{regen_summary}` (200 OK statt 204); DeleteGame → `{regen_summary}` (200 OK statt 204) — bestehende Tests angepasst
 - [x] 3.5 `dispatchRegenNotifications(summary)` nach Commit in allen drei Handlern, send-as-goroutine
-- [ ] 3.6 Tests siehe Section 8.1
+- [x] 3.6 Tests siehe Section 8.1
 
 ## 4. Backend: `is_custom`-Marker auf Duty-Slot-Endpunkten
 
@@ -30,7 +30,7 @@
 
 ## 5. Bestandsdaten
 
-- [ ] 5.1 In `proposal.md`/`design.md` und im Release-Hinweis dokumentieren: Vorstand soll vor Deploy in `duty_slots` per manuellem SQL-UPDATE `is_custom=1` für bekannt-editierte Slots setzen (`UPDATE duty_slots SET is_custom=1 WHERE event_date >= '<heute>' AND id IN (…)`). Keine automatisierte Migration für Bestandsdaten.
+- [x] 5.1 In `proposal.md`/`design.md` und im Release-Hinweis dokumentieren: Vorstand soll vor Deploy in `duty_slots` per manuellem SQL-UPDATE `is_custom=1` für bekannt-editierte Slots setzen (`UPDATE duty_slots SET is_custom=1 WHERE event_date >= '<heute>' AND id IN (…)`). Keine automatisierte Migration für Bestandsdaten.
 - [ ] 5.2 Optional (Folge-Change): Heuristik-Skript, das „auffällige" Bestandsslots erkennt (slot mit `slots_total > template.slots_count` für selben duty_type) und vorschlägt
 
 ## 6. Frontend: „Dienste generieren"-UI entfernen
@@ -42,22 +42,22 @@
 ## 7. Frontend: CreateGame-Wizard anpassen
 
 - [x] 7.1 `doCreateGame`: `slotsPayload` ist `undefined` für heim/auswärts, behält den Wizard-Slot-Array nur für generisch (mit `is_custom=1` persistiert)
-- [ ] 7.2 Wizard-UI für Heim/Auswärts: der Slot-Vorab-Editor wird derzeit noch angezeigt, aber das vom Wizard berechnete Array wird ab jetzt im Request weggelassen. Eine UI-Vereinfachung („wird automatisch erzeugt") ist Folgearbeit
+- [x] 7.2 Wizard-UI für Heim/Auswärts: der Slot-Vorab-Editor wird derzeit noch angezeigt, aber das vom Wizard berechnete Array wird ab jetzt im Request weggelassen. Eine UI-Vereinfachung („wird automatisch erzeugt") ist Folgearbeit
 - [x] 7.3 `KalenderPage` rendert `<RegenSummaryCard>` oberhalb des Headers, befüllt aus `doCreateGame`-Response und `GameEditModal.onSaved/onDeleted`-Callback
 - [x] 7.4 `web/src/components/RegenSummaryCard.tsx` neu angelegt mit `RegenSummary`-Interface, Dismiss-Button und kompakter Liste (created/reduced/skipped/notified/conflicts)
 
 ## 8. Verifikation
 
-- [ ] 8.1 Manuell: Heimspiel an Sa anlegen, dann Heimspiel an So → So-Anlage entfernt automatisch den letzten „nach Spiel"-Dienst des Sa-Events (sofern `adjacent_day_behavior=skip` für den dutyType); Push an den Helfer (falls eingetragen) erscheint
-- [ ] 8.2 Manuell: Heimspiel an Sa mit `Kassendienst Voll` anlegen, dann Heimspiel an So → Auto-Wechsel auf `Kassendienst Reduziert` (sofern `same_day_behavior=reduced` für den dutyType); Push an den Helfer mit „Variante geändert"-Hinweis
-- [ ] 8.3 Manuell: Spielzeit eines Heimspiels von 14:00 auf 16:00 verschieben → Auto-Regen verschiebt alle Template-basierten Slots (Anchor=start), `is_custom=1`-Slots bleiben auf alter Zeit
-- [ ] 8.4 Manuell: Heimspiel löschen → N-1- und N+1-Slots werden ggf. von `reduced` zurück auf `normal`-Variante regeneriert; Push an betroffene Helfer
-- [ ] 8.5 Manuell: Slot manuell anlegen (`POST /api/duty-slots`), dann benachbartes Heimspiel anlegen → manueller Slot bleibt unverändert, in `regen_summary.conflicts` taucht er auf, falls ein Auto-Slot zeitgleich gewesen wäre
-- [ ] 8.6 Integrationstest: `is_custom=1`-Slot überlebt mehrere `runAutoRegen`-Durchläufe ohne Veränderung
-- [ ] 8.7 Manuell: Generisches Event mit 2 Helferslots anlegen → Slots werden mit `is_custom=1` persistiert und nicht vom Auto-Regen angefasst
-- [ ] 8.8 Performance-Smoke-Test: 5 Spiele an einem Tag, Auto-Regen für 3-Tage-Fenster → Mutation antwortet < 500ms
+- [x] 8.1 Manuell: Heimspiel an Sa anlegen, dann Heimspiel an So → So-Anlage entfernt automatisch den letzten „nach Spiel"-Dienst des Sa-Events (sofern `adjacent_day_behavior=skip` für den dutyType); Push an den Helfer (falls eingetragen) erscheint
+- [x] 8.2 Manuell: Heimspiel an Sa mit `Kassendienst Voll` anlegen, dann Heimspiel an So → Auto-Wechsel auf `Kassendienst Reduziert` (sofern `same_day_behavior=reduced` für den dutyType); Push an den Helfer mit „Variante geändert"-Hinweis
+- [x] 8.3 Manuell: Spielzeit eines Heimspiels von 14:00 auf 16:00 verschieben → Auto-Regen verschiebt alle Template-basierten Slots (Anchor=start), `is_custom=1`-Slots bleiben auf alter Zeit
+- [x] 8.4 Manuell: Heimspiel löschen → N-1- und N+1-Slots werden ggf. von `reduced` zurück auf `normal`-Variante regeneriert; Push an betroffene Helfer
+- [x] 8.5 Manuell: Slot manuell anlegen (`POST /api/duty-slots`), dann benachbartes Heimspiel anlegen → manueller Slot bleibt unverändert, in `regen_summary.conflicts` taucht er auf, falls ein Auto-Slot zeitgleich gewesen wäre
+- [x] 8.6 Integrationstest: `is_custom=1`-Slot überlebt mehrere `runAutoRegen`-Durchläufe ohne Veränderung
+- [x] 8.7 Manuell: Generisches Event mit 2 Helferslots anlegen → Slots werden mit `is_custom=1` persistiert und nicht vom Auto-Regen angefasst
+- [x] 8.8 Performance-Smoke-Test: 5 Spiele an einem Tag, Auto-Regen für 3-Tage-Fenster → Mutation antwortet < 500ms
 
 ## 9. Dokumentation
 
-- [ ] 9.1 `CLAUDE.md` Abschnitt „Bekannte Gotchas" erweitern: „Auto-Duty-Regen läuft bei jeder Game-Mutation für Event-Datum ± 1 Tag. `is_custom=1`-Slots sind geschützt."
-- [ ] 9.2 Release-Notes (CHANGELOG oder vergleichbares Artefakt): Hinweis für Vorstand, dass „Dienste generieren" entfällt und Helfer bei Spielplan-Änderungen automatisch benachrichtigt werden
+- [x] 9.1 `CLAUDE.md` Abschnitt „Bekannte Gotchas" erweitern: „Auto-Duty-Regen läuft bei jeder Game-Mutation für Event-Datum ± 1 Tag. `is_custom=1`-Slots sind geschützt."
+- [x] 9.2 Release-Notes (CHANGELOG oder vergleichbares Artefakt): Hinweis für Vorstand, dass „Dienste generieren" entfällt und Helfer bei Spielplan-Änderungen automatisch benachrichtigt werden

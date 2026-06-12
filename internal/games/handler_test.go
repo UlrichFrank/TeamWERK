@@ -22,6 +22,7 @@ func testServer(t *testing.T, h *games.Handler) *httptest.Server {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
 			r.Post("/api/admin/kalender", h.CreateGame)
+			r.Put("/api/admin/kalender/{id}", h.UpdateGame)
 			r.Delete("/api/kalender/{id}", h.DeleteGame)
 		})
 	})
@@ -362,5 +363,328 @@ func TestCreateGame_UnauthorizedForbidden(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+// TestCreateGame_ResponseIncludesRegenSummary verifies that CreateGame response
+// includes a regen_summary object after auto-regen completes.
+func TestCreateGame_ResponseIncludesRegenSummary(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	if _, err := db.Exec(`UPDATE teams SET age_class=? WHERE id=?`, "A-Jugend", teamID); err != nil {
+		t.Fatalf("set age_class: %v", err)
+	}
+
+	if _, err := db.Exec(
+		`INSERT INTO age_class_game_rules (age_class, half_duration_minutes, break_minutes) VALUES (?, ?, ?)`,
+		"A-Jugend", 30, 15); err != nil {
+		t.Fatalf("seed age_class_game_rules: %v", err)
+	}
+
+	dutyRes, err := db.Exec(`
+		INSERT INTO duty_types (name, hours_value)
+		VALUES (?, ?)`, "Aufbau", 2.0)
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := dutyRes.LastInsertId()
+
+	templateRes, err := db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?, ?, ?)`,
+		"Heim", "heim", 75)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := templateRes.LastInsertId()
+
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)`, templateID, dutyTypeID, "start", -60, 1, 0); err != nil {
+		t.Fatalf("seed template item: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	body := map[string]any{
+		"date":       "2026-06-13",
+		"time":       "14:00",
+		"opponent":   "FC Test",
+		"team_ids":   []int{teamID},
+		"event_type": "heim",
+		"season_id":  seasonID,
+	}
+
+	res := testutil.Post(t, srv, "/api/admin/kalender", token, body)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create game: expected 201, got %d", res.StatusCode)
+	}
+
+	var response map[string]any
+	json.NewDecoder(res.Body).Decode(&response)
+	res.Body.Close()
+
+	// Response should have an id and a regen_summary.
+	if _, ok := response["id"]; !ok {
+		t.Errorf("response missing 'id'")
+	}
+	if _, ok := response["regen_summary"]; !ok {
+		t.Errorf("response missing 'regen_summary'")
+	}
+}
+
+// TestUpdateGame_TimeChangeRegenSlots verifies that updating a game's time
+// triggers auto-regen and shifts template-based slots to the new time.
+func TestUpdateGame_TimeChangeRegenSlots(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	if _, err := db.Exec(`UPDATE teams SET age_class=? WHERE id=?`, "A-Jugend", teamID); err != nil {
+		t.Fatalf("set age_class: %v", err)
+	}
+
+	if _, err := db.Exec(
+		`INSERT INTO age_class_game_rules (age_class, half_duration_minutes, break_minutes) VALUES (?, ?, ?)`,
+		"A-Jugend", 30, 15); err != nil {
+		t.Fatalf("seed age_class_game_rules: %v", err)
+	}
+
+	res, err := db.Exec(`
+		INSERT INTO duty_types (name, hours_value)
+		VALUES (?, ?)`, "Aufbau", 2.0)
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := res.LastInsertId()
+
+	res, err = db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?, ?, ?)`,
+		"Heim", "heim", 75)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := res.LastInsertId()
+
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)`, templateID, dutyTypeID, "start", -60, 1, 0); err != nil {
+		t.Fatalf("seed template item: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-13")
+
+	// Update game time from default to 16:00.
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	updateBody := map[string]any{
+		"date": "2026-06-13", "time": "16:00",
+		"opponent": "FC Test Updated", "team_ids": []int{teamID},
+		"event_type": "heim", "season_id": seasonID,
+	}
+
+	updateRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/admin/kalender/%d", gameID), token, updateBody)
+	updateRes.Body.Close()
+	if updateRes.StatusCode != http.StatusOK {
+		t.Fatalf("update game: expected 200, got %d", updateRes.StatusCode)
+	}
+
+	// Slot should now be at 15:00 (16:00 - 60 min).
+	var slotTime string
+	err = db.QueryRow(`SELECT event_time FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID).Scan(&slotTime)
+	if err != nil || slotTime != "15:00" {
+		t.Errorf("expected slot at 15:00, got %s (err=%v)", slotTime, err)
+	}
+}
+
+// TestDeleteGame_RegenerateBoundaryDays verifies that deleting a game
+// triggers auto-regen for adjacent days.
+func TestDeleteGame_RegenerateBoundaryDays(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	if _, err := db.Exec(`UPDATE teams SET age_class=? WHERE id=?`, "A-Jugend", teamID); err != nil {
+		t.Fatalf("set age_class: %v", err)
+	}
+
+	if _, err := db.Exec(
+		`INSERT INTO age_class_game_rules (age_class, half_duration_minutes, break_minutes) VALUES (?, ?, ?)`,
+		"A-Jugend", 30, 15); err != nil {
+		t.Fatalf("seed age_class_game_rules: %v", err)
+	}
+
+	dutyRes, err := db.Exec(`
+		INSERT INTO duty_types (name, hours_value)
+		VALUES (?, ?)`, "Aufbau", 2.0)
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := dutyRes.LastInsertId()
+
+	templateRes, err := db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?, ?, ?)`,
+		"Heim", "heim", 75)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := templateRes.LastInsertId()
+
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)`, templateID, dutyTypeID, "start", -60, 1, 0); err != nil {
+		t.Fatalf("seed template item: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	createBody := func(date string) map[string]any {
+		return map[string]any{
+			"date": date, "time": "14:00",
+			"opponent": "FC Test", "team_ids": []int{teamID},
+			"event_type": "heim", "season_id": seasonID,
+		}
+	}
+
+	// Create game on day 14.
+	resB := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-14"))
+	resB.Body.Close()
+	var gameBID int
+	db.QueryRow(`SELECT id FROM games WHERE date=?`, "2026-06-14").Scan(&gameBID)
+
+	// Game B should create a slot.
+	var count14Before int
+	db.QueryRow(`SELECT COUNT(*) FROM duty_slots WHERE event_date=? AND is_custom=0`, "2026-06-14").Scan(&count14Before)
+	if count14Before != 1 {
+		t.Errorf("expected 1 slot on day 14 after create, got %d", count14Before)
+	}
+
+	// Delete game B.
+	deleteRes := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameBID), token, nil)
+	deleteRes.Body.Close()
+	if deleteRes.StatusCode != http.StatusOK {
+		t.Fatalf("delete game: expected 200, got %d", deleteRes.StatusCode)
+	}
+
+	// Day 14 should have no auto-slots after delete.
+	var count14After int
+	db.QueryRow(`SELECT COUNT(*) FROM duty_slots WHERE event_date=? AND is_custom=0`, "2026-06-14").Scan(&count14After)
+	if count14After != 0 {
+		t.Errorf("expected 0 slots on day 14 after delete, got %d", count14After)
+	}
+}
+
+// TestCreateGame_CustomSlotNotAffectedByRegen verifies that manually created
+// slots (is_custom=1) are not deleted or modified by auto-regen.
+func TestCreateGame_CustomSlotNotAffectedByRegen(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	if _, err := db.Exec(`UPDATE teams SET age_class=? WHERE id=?`, "A-Jugend", teamID); err != nil {
+		t.Fatalf("set age_class: %v", err)
+	}
+
+	if _, err := db.Exec(
+		`INSERT INTO age_class_game_rules (age_class, half_duration_minutes, break_minutes) VALUES (?, ?, ?)`,
+		"A-Jugend", 30, 15); err != nil {
+		t.Fatalf("seed age_class_game_rules: %v", err)
+	}
+
+	res, err := db.Exec(`
+		INSERT INTO duty_types (name, hours_value)
+		VALUES (?, ?)`, "Aufbau", 2.0)
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := res.LastInsertId()
+
+	res, err = db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?, ?, ?)`,
+		"Heim", "heim", 75)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := res.LastInsertId()
+
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)`, templateID, dutyTypeID, "start", -60, 1, 0); err != nil {
+		t.Fatalf("seed template item: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-13")
+
+	// Create a custom slot (is_custom=1).
+	if _, err := db.Exec(`
+		INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id,
+		  slots_total, team_id, season_id, game_id, is_custom)
+		VALUES (?, ?, ?, ?, 1, ?, ?, ?, 1)`,
+		"Manueller Dienst", "2026-06-13", "12:00", dutyTypeID, teamID, seasonID, gameID); err != nil {
+		t.Fatalf("seed custom slot: %v", err)
+	}
+
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	// Update the game (triggers auto-regen).
+	updateBody := map[string]any{
+		"date": "2026-06-13", "time": "14:00",
+		"opponent": "FC Test", "team_ids": []int{teamID},
+		"event_type": "heim", "season_id": seasonID,
+	}
+	updateRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/admin/kalender/%d", gameID), token, updateBody)
+	updateRes.Body.Close()
+
+	// Custom slot should still exist with its original time.
+	var customSlotTime string
+	err = db.QueryRow(`SELECT event_time FROM duty_slots WHERE is_custom=1 AND game_id=?`, gameID).Scan(&customSlotTime)
+	if err != nil || customSlotTime != "12:00" {
+		t.Errorf("custom slot should be unchanged at 12:00, got %s (err=%v)", customSlotTime, err)
+	}
+}
+
+// TestCreateGame_GenericEventCanBeCreated verifies that generic events
+// can be created without a template.
+func TestCreateGame_GenericEventCanBeCreated(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	// Create generic event.
+	createBody := map[string]any{
+		"date":       "2026-06-13",
+		"time":       "10:00",
+		"opponent":   "Training",
+		"team_ids":   []int{teamID},
+		"event_type": "generisch",
+		"season_id":  seasonID,
+	}
+
+	createRes := testutil.Post(t, srv, "/api/admin/kalender", token, createBody)
+	createRes.Body.Close()
+	if createRes.StatusCode != http.StatusCreated {
+		t.Fatalf("create generic event: expected 201, got %d", createRes.StatusCode)
+	}
+
+	// Generic event should be created without template-derived slots.
+	var count int
+	db.QueryRow(`SELECT COUNT(*) FROM games WHERE event_type=? AND date=?`,
+		"generisch", "2026-06-13").Scan(&count)
+	if count != 1 {
+		t.Errorf("expected 1 generic event, got %d", count)
 	}
 }
