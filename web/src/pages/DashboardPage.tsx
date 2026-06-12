@@ -122,26 +122,35 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
     return <p className="text-sm text-brand-text-muted py-1">Keine kommenden Termine.</p>
   }
   return (
-    <ul className="space-y-2 mt-1">
-      {events.map(e => (
-        <li key={`${e.eventType}-${e.id}`}>
-          <Link
-            to={e.detailUrl}
-            className="flex items-center gap-3 py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
-          >
-            <span className="flex-shrink-0 text-brand-text-muted">
-              {e.eventType === 'training'
-                ? <Dumbbell className="w-4 h-4" />
-                : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-brand-text truncate">{e.title}</p>
-              <p className="text-xs text-brand-text-muted">{e.teamName} · {e.time}</p>
-            </div>
-            <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
-          </Link>
-        </li>
-      ))}
+    <ul className="space-y-1 mt-1">
+      {events.map(e => {
+        const d = new Date(e.date.slice(0, 10) + 'T12:00:00')
+        const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '')
+        const dayMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+        return (
+          <li key={`${e.eventType}-${e.id}`}>
+            <Link
+              to={e.detailUrl}
+              className="flex items-center gap-3 py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
+            >
+              <div className="flex-shrink-0 w-10 text-center">
+                <p className="text-xs font-semibold text-brand-text-muted leading-tight">{weekday}</p>
+                <p className="text-xs text-brand-text-subtle leading-tight">{dayMonth}</p>
+              </div>
+              <span className="flex-shrink-0 text-brand-text-muted">
+                {e.eventType === 'training'
+                  ? <Dumbbell className="w-4 h-4" />
+                  : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-brand-text truncate">{e.title}</p>
+                <p className="text-xs text-brand-text-muted">{e.teamName} · {e.time}</p>
+              </div>
+              <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
+            </Link>
+          </li>
+        )
+      })}
     </ul>
   )
 }
