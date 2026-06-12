@@ -154,8 +154,7 @@ func CreateGame(t *testing.T, database *sql.DB, seasonID, teamID int, date strin
 // CreateDutyType inserts a duty type and returns its ID.
 func CreateDutyType(t *testing.T, database *sql.DB, name string, hoursValue float64) int {
 	t.Helper()
-	res, err := database.Exec(
-		`INSERT INTO duty_types (name, hours_value) VALUES (?, ?)`, name, hoursValue)
+	res, err := database.Exec(`INSERT INTO duty_types (name, hours_value) VALUES (?, ?)`, name, hoursValue)
 	if err != nil {
 		t.Fatalf("CreateDutyType: %v", err)
 	}
@@ -163,8 +162,8 @@ func CreateDutyType(t *testing.T, database *sql.DB, name string, hoursValue floa
 	return int(id)
 }
 
-// CreateDutySlot inserts a duty slot and returns its ID.
-// Pass gameID=0 to omit the game_id (NULL).
+// CreateDutySlot inserts a duty slot (slots_total=2, slots_filled=0) and returns its ID.
+// Pass gameID=0 to omit the game FK (NULL).
 func CreateDutySlot(t *testing.T, database *sql.DB, dutyTypeID, seasonID, teamID, gameID int, date string) int {
 	t.Helper()
 	var gameArg any
@@ -186,7 +185,7 @@ func CreateDutySlot(t *testing.T, database *sql.DB, dutyTypeID, seasonID, teamID
 // Pass a past time for expiresAt to create an expired token.
 func CreateInvitationToken(t *testing.T, database *sql.DB, email, role string, expiresAt time.Time) string {
 	t.Helper()
-	plain, hash, err := authGenToken()
+	plain, hash, err := auth.GenerateOpaqueToken()
 	if err != nil {
 		t.Fatalf("CreateInvitationToken generate: %v", err)
 	}
@@ -201,7 +200,7 @@ func CreateInvitationToken(t *testing.T, database *sql.DB, email, role string, e
 // CreatePasswordResetToken inserts a password-reset token and returns the plain-text token.
 func CreatePasswordResetToken(t *testing.T, database *sql.DB, userID int, expiresAt time.Time) string {
 	t.Helper()
-	plain, hash, err := authGenToken()
+	plain, hash, err := auth.GenerateOpaqueToken()
 	if err != nil {
 		t.Fatalf("CreatePasswordResetToken generate: %v", err)
 	}
@@ -216,7 +215,7 @@ func CreatePasswordResetToken(t *testing.T, database *sql.DB, userID int, expire
 // CreateRefreshToken inserts a hashed refresh token for the user and returns the plain token.
 func CreateRefreshToken(t *testing.T, database *sql.DB, userID int) string {
 	t.Helper()
-	plain, hash, err := authGenToken()
+	plain, hash, err := auth.GenerateOpaqueToken()
 	if err != nil {
 		t.Fatalf("CreateRefreshToken generate: %v", err)
 	}
@@ -236,8 +235,4 @@ func CreatePlayerMembership(t *testing.T, database *sql.DB, memberID, teamID, se
 		memberID, teamID, seasonID); err != nil {
 		t.Fatalf("CreatePlayerMembership: %v", err)
 	}
-}
-
-func authGenToken() (string, string, error) {
-	return auth.GenerateOpaqueToken()
 }
