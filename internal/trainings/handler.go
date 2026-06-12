@@ -463,7 +463,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	h.hub.Broadcast("trainings")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
-		"trainings", "Trainingsserie gelöscht", "Eine Trainingsserie wurde beendet", "/training")
+		"trainings", "Trainingsserie gelöscht", "Eine Trainingsserie wurde beendet", "/termine")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -497,7 +497,7 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 	h.hub.Broadcast("trainings")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
-		"trainings", "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/training")
+		"trainings", "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/termine")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -617,7 +617,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 	h.hub.Broadcast("trainings")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
-		"trainings", "Training geändert", "Eine Trainingseinheit wurde aktualisiert", "/training")
+		"trainings", "Training geändert", "Eine Trainingseinheit wurde aktualisiert", fmt.Sprintf("/termine?focus=training-%d", sessionID))
 	w.WriteHeader(http.StatusNoContent)
 }
 
