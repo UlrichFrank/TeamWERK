@@ -21,14 +21,15 @@ var urlRe = regexp.MustCompile(`https?://\S+`)
 type Mailer struct {
 	cfg      config.SMTPConfig
 	fromAddr string // bare email extracted from cfg.From
+	baseURL  string
 }
 
-func New(cfg config.SMTPConfig) *Mailer {
+func New(cfg config.SMTPConfig, baseURL string) *Mailer {
 	fromAddr := cfg.User
 	if addr, err := mail.ParseAddress(cfg.From); err == nil {
 		fromAddr = addr.Address
 	}
-	return &Mailer{cfg: cfg, fromAddr: fromAddr}
+	return &Mailer{cfg: cfg, fromAddr: fromAddr, baseURL: baseURL}
 }
 
 func (m *Mailer) Send(to, subject, textBody string) error {
@@ -63,7 +64,7 @@ func (m *Mailer) Send(to, subject, textBody string) error {
 	buf.WriteString("Content-Type: text/html; charset=utf-8\r\n")
 	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
 	qpw = quotedprintable.NewWriter(&buf)
-	qpw.Write([]byte(textToHTML(textBody))) //nolint:errcheck
+	qpw.Write([]byte(m.textToHTML(textBody))) //nolint:errcheck
 	qpw.Close()
 
 	fmt.Fprintf(&buf, "\r\n--%s--\r\n", boundary)
@@ -89,7 +90,7 @@ func actionButtonLabel(u string) string {
 // textToHTML converts a plain-text email body to a minimal branded HTML version.
 // Action URLs (register, reset-password, email confirm) become CTA buttons;
 // other URLs become inline links; double newlines become paragraphs.
-func textToHTML(text string) string {
+func (m *Mailer) textToHTML(text string) string {
 	// Linkify URLs before HTML-escaping so we can insert raw <a> tags.
 	locs := urlRe.FindAllStringIndex(text, -1)
 	var content strings.Builder
@@ -129,14 +130,16 @@ func textToHTML(text string) string {
 	}
 
 	body := strings.Join(pTags, "\n")
+	logoURL := m.baseURL + "/icons/icon-192.png"
 	return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="font-family:Arial,Helvetica,sans-serif;background:#f4f4f4;margin:0;padding:20px">
 <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
-  <div style="background:#181310;padding:20px 24px">
-    <span style="color:#FDE400;font-weight:700;font-size:22px;letter-spacing:-.5px">TeamWERK</span>
-    <span style="color:#ffffff;font-size:13px;margin-left:10px;opacity:.8">Team Stuttgart</span>
+  <div style="background:#181310;padding:20px 24px;text-align:center">
+    <img src="` + logoURL + `" alt="Team Stuttgart" width="64" height="64" style="display:block;margin:0 auto 10px;border-radius:8px">
+    <span style="color:#FDE400;font-weight:700;font-size:20px;display:block;letter-spacing:-.5px">TeamWERK</span>
+    <span style="color:#ffffff;font-size:12px;display:block;opacity:.7;margin-top:2px">Team Stuttgart</span>
   </div>
   <div style="padding:28px 24px;color:#111827;font-size:15px;line-height:1.7">
 ` + body + `

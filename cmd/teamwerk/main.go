@@ -89,7 +89,7 @@ func serve() {
 	}
 	defer database.Close()
 
-	m := mailer.New(cfg.SMTP)
+	m := mailer.New(cfg.SMTP, cfg.BaseURL)
 	hubInstance := hub.NewHub()
 	hubH := hub.NewHandler(hubInstance, buildHash)
 	authH := auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL)
@@ -537,7 +537,7 @@ func runScheduler() {
 		log.Fatalf("scheduler: open db: %v", err)
 	}
 	defer database.Close()
-	scheduler.New(database, cfg, mailer.New(cfg.SMTP)).Run()
+	scheduler.New(database, cfg, mailer.New(cfg.SMTP, cfg.BaseURL)).Run()
 }
 
 func runMigrateForce() {
