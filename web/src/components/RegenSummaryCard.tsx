@@ -14,8 +14,8 @@ interface Props {
 }
 
 function isEmpty(s: RegenSummary): boolean {
-  return s.created.length === 0 && s.reduced.length === 0 &&
-    s.skipped.length === 0 && s.notified_users.length === 0 && s.conflicts.length === 0
+  return (s.created ?? []).length === 0 && (s.reduced ?? []).length === 0 &&
+    (s.skipped ?? []).length === 0 && (s.notified_users ?? []).length === 0 && (s.conflicts ?? []).length === 0
 }
 
 function formatDate(iso: string): string {
@@ -36,27 +36,27 @@ export default function RegenSummaryCard({ summary, onDismiss }: Props) {
       </button>
       <div className="font-semibold text-brand-text mb-2">Folgendes hat sich geändert</div>
       <ul className="space-y-1 text-brand-text">
-        {summary.created.map((c, i) => (
+        {(summary.created ?? []).map((c, i) => (
           <li key={`c-${i}`}>
             <span className="text-brand-text-muted">{formatDate(c.date)}:</span> {c.count}× „{c.duty_type}" neu angelegt
           </li>
         ))}
-        {summary.reduced.map((r, i) => (
+        {(summary.reduced ?? []).map((r, i) => (
           <li key={`r-${i}`}>
             <span className="text-brand-text-muted">{formatDate(r.date)}:</span> {r.count}× „{r.from}" → „{r.to}" (reduziert)
           </li>
         ))}
-        {summary.skipped.map((s, i) => (
+        {(summary.skipped ?? []).map((s, i) => (
           <li key={`s-${i}`}>
             <span className="text-brand-text-muted">{formatDate(s.date)}:</span> „{s.duty_type}" übersprungen
           </li>
         ))}
-        {summary.notified_users.length > 0 && (
+        {(summary.notified_users ?? []).length > 0 && (
           <li className="text-brand-text-muted italic">
             {summary.notified_users.length} {summary.notified_users.length === 1 ? 'Helfer wurde' : 'Helfer wurden'} benachrichtigt.
           </li>
         )}
-        {summary.conflicts.length > 0 && (
+        {(summary.conflicts ?? []).length > 0 && (
           <li className="text-brand-danger">
             {summary.conflicts.length} Konflikt{summary.conflicts.length === 1 ? '' : 'e'} mit manuell gepflegten Slots — bitte prüfen.
           </li>
