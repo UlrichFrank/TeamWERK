@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { Trash2, AlertTriangle } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -35,22 +35,6 @@ interface DutyType {
   id: number
   name: string
   audiences?: string[] | null
-}
-
-interface SlotPreview {
-  duty_type_id: number
-  duty_type_name: string
-  event_time: string
-  slots_count: number
-  role_desc: string
-  conflict?: boolean
-}
-
-interface Template {
-  id: number
-  name: string
-  template_type: string
-  duration_minutes: number
 }
 
 const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -88,18 +72,8 @@ export default function SpieltagDetailPage() {
   const [showDeleteGame, setShowDeleteGame] = useState(false)
   const [deletingGame, setDeletingGame] = useState(false)
 
-  const [showRegen, setShowRegen] = useState(false)
-  const [regenTemplates, setRegenTemplates] = useState<Template[]>([])
-  const [regenTemplateID, setRegenTemplateID] = useState<number | null>(null)
-  const [regenPreview, setRegenPreview] = useState<SlotPreview[]>([])
-  const [regenPreviewLoading, setRegenPreviewLoading] = useState(false)
-  const [regenSaving, setRegenSaving] = useState(false)
-  const [regenError, setRegenError] = useState<string | null>(null)
-  const [regenKeptSlots, setRegenKeptSlots] = useState<number | null>(null)
-
   useEscapeKey(
     showDeleteGame ? () => setShowDeleteGame(false) :
-    showRegen ? () => setShowRegen(false) :
     deleteSlotId !== null ? () => setDeleteSlotId(null) :
     editSlot ? () => setEditSlot(null) :
     showAddSlot ? () => setShowAddSlot(false) :
@@ -214,68 +188,6 @@ export default function SpieltagDetailPage() {
     }
   }
 
-  const handleOpenRegen = async () => {
-    if (!game) return
-    setRegenError(null)
-    setRegenPreview([])
-    setRegenKeptSlots(null)
-    const initialTemplateID = game.template_id ?? null
-    setRegenTemplateID(initialTemplateID)
-    try {
-      const r = await api.get('/duty-templates')
-      setRegenTemplates(r.data ?? [])
-    } catch {
-      setRegenTemplates([])
-    }
-    setShowRegen(true)
-    if (initialTemplateID && game) {
-      fetchRegenPreview(initialTemplateID, game.time)
-    }
-  }
-
-  const fetchRegenPreview = async (templateID: number, gameTime: string) => {
-    setRegenPreviewLoading(true)
-    setRegenError(null)
-    try {
-      const r = await api.get(`/duty-templates/${templateID}/preview?time=${gameTime}&game_id=${gameId}`)
-      setRegenPreview(r.data ?? [])
-    } catch {
-      setRegenPreview([])
-      setRegenError('Vorschau konnte nicht geladen werden.')
-    } finally {
-      setRegenPreviewLoading(false)
-    }
-  }
-
-  const handleRegenTemplateChange = (templateID: number | null) => {
-    setRegenTemplateID(templateID)
-    setRegenPreview([])
-    setRegenError(null)
-    if (templateID && game) {
-      fetchRegenPreview(templateID, game.time)
-    }
-  }
-
-  const handleRegen = async () => {
-    if (!regenTemplateID) {
-      setRegenError('Bitte ein Template auswählen.')
-      return
-    }
-    setRegenSaving(true)
-    setRegenError(null)
-    try {
-      const r = await api.post(`/kalender/${gameId}/regenerate`, { template_id: regenTemplateID })
-      await Promise.all([loadGame(), loadBoard()])
-      setRegenKeptSlots(r.data.kept_slots)
-      setShowRegen(false)
-    } catch (e: any) {
-      const msg = e?.response?.data || 'Regenerierung fehlgeschlagen.'
-      setRegenError(typeof msg === 'string' ? msg : 'Regenerierung fehlgeschlagen.')
-    } finally {
-      setRegenSaving(false)
-    }
-  }
-
   if (loading) return <div className="text-brand-text-muted text-sm">Laden…</div>
   if (notFound) return (
     <div className="text-center py-12">
@@ -313,12 +225,6 @@ export default function SpieltagDetailPage() {
           {canEdit && (
             <div className="flex gap-2 flex-shrink-0">
               <button
-                onClick={handleOpenRegen}
-                className="text-sm border border-brand-border rounded-md px-3 py-1.5 text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
-              >
-                ↺ Dienste neu generieren
-              </button>
-              <button
                 onClick={() => setShowDeleteGame(true)}
                 className="text-sm bg-brand-danger text-white rounded-md px-3 py-1.5 hover:bg-brand-danger/90 transition-colors flex items-center gap-1.5"
               >
@@ -327,11 +233,6 @@ export default function SpieltagDetailPage() {
             </div>
           )}
         </div>
-        {regenKeptSlots !== null && regenKeptSlots > 0 && (
-          <div className="mt-3 p-3 bg-brand-warning-light border border-brand-warning/40 rounded-lg text-sm text-brand-text">
-            Hinweis: {regenKeptSlots} belegte Dienst{regenKeptSlots !== 1 ? 'e' : ''} wurden nicht überschrieben.
-          </div>
-        )}
       </div>
 
       {/* Slots */}
@@ -473,86 +374,6 @@ export default function SpieltagDetailPage() {
               <button onClick={handleDeleteSlot} disabled={deleteSaving}
                 className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50">
                 {deleteSaving ? 'Löschen…' : 'Löschen'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Regenerate dialog */}
-      {showRegen && (
-        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold mb-1 text-brand-text">Dienste neu generieren</h3>
-            <p className="text-sm text-brand-text-muted mb-4">
-              Unbesetzte Dienste werden gelöscht und durch die Vorlage ersetzt.
-            </p>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Dienstplan-Vorlage *</label>
-              <select
-                value={regenTemplateID ?? ''}
-                onChange={e => handleRegenTemplateChange(e.target.value ? Number(e.target.value) : null)}
-                className={INPUT_WIZ}
-              >
-                <option value="">Auswählen…</option>
-                {regenTemplates.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.template_type}{t.template_type === 'generisch' ? `, ${t.duration_minutes} Min` : ''})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {regenPreviewLoading && (
-              <p className="text-sm text-brand-text-subtle mb-4">Vorschau wird geladen…</p>
-            )}
-
-            {!regenPreviewLoading && regenTemplateID && regenPreview.length === 0 && !regenError && (
-              <p className="text-sm text-brand-text-subtle mb-4 italic">Keine Dienste in dieser Vorlage.</p>
-            )}
-
-            {!regenPreviewLoading && regenPreview.length > 0 && (
-              <>
-                {regenPreview.some(s => s.conflict) && (
-                  <div className="mb-3 p-2.5 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-xs text-brand-danger flex items-start gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span>
-                      Gleicher Diensttyp zur selben Uhrzeit existiert bereits für ein anderes Spiel an diesem Tag.
-                      Bitte Optimierungsregeln prüfen.
-                    </span>
-                  </div>
-                )}
-                <div className="space-y-1 mb-4 max-h-48 overflow-y-auto border border-brand-border-subtle rounded-lg p-2 bg-brand-surface-card">
-                  {regenPreview.map((s, i) => (
-                    <div key={i} className={`flex items-center gap-2.5 px-1 py-1 text-sm rounded ${s.conflict ? 'bg-brand-danger-light' : ''}`}>
-                      <span className="font-mono font-semibold w-12 text-brand-text">{s.event_time}</span>
-                      <span className={`flex-1 ${s.conflict ? 'text-brand-danger' : 'text-brand-text'}`}>{s.duty_type_name}</span>
-                      {s.role_desc && <span className="text-xs text-brand-text-subtle">({s.role_desc})</span>}
-                      <span className="text-xs text-brand-text-subtle">{s.slots_count}×</span>
-                      {s.conflict && <span className="text-brand-danger text-xs font-medium flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" /> Konflikt</span>}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {regenError && (
-              <p className="text-sm text-brand-danger mb-3">{regenError}</p>
-            )}
-
-            <div className="p-3 bg-brand-warning-light border border-brand-warning/40 rounded-lg text-xs text-brand-text mb-4">
-              Bereits belegte Dienste werden nicht überschrieben.
-            </div>
-
-            <div className="flex gap-2">
-              <button onClick={() => setShowRegen(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
-              <button
-                onClick={handleRegen}
-                disabled={regenSaving || !regenTemplateID || regenPreviewLoading}
-                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
-              >
-                {regenSaving ? 'Generieren…' : 'Anwenden'}
               </button>
             </div>
           </div>

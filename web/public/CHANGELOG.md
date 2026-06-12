@@ -1,3 +1,12 @@
+## 12.06.2026
+- [fix] games: TestDeleteGame durch echten Grenzfall-Regen-Test ersetzen
+- [fix] termine: Zurück-Button nutzt Browser-History statt hardcoded URL
+- [feat] scheduler: Reminder-Links auf konkreten Termin
+- [feat] trainings: Push-Link auf konkretes Training
+- [feat] games: Push-Link auf konkretes Spiel
+- [feat] termine: URL-driven Filter und Focus-Param
+- [feat] dashboard: Datum in "Meine Termine" als eigene Spalte anzeigen
+
 ## 11.06.2026
 - [feat] kalender: Heute-Button zum Springen auf aktuellen Monat
 - [fix] trainings: Anwesenheitserfassung Datum SQL-seitig vergleichen

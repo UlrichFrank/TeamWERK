@@ -52,5 +52,5 @@
 - [x] 7.1 `pnpm --filter ./web build` lokal grün
 - [x] 7.2 `go build ./...` und `go test ./...` lokal grün
 - [ ] 7.3 Manueller Walkthrough lokal: (a) Filter via URL setzen, (b) Filter ändern → URL aktualisiert, (c) `/termine?focus=game-<id>` scrollt, (d) Kalender-Modal-Button springt nach `/termine`
-- [ ] 7.4 Conventional Commits nach jedem Task-Block (siehe CLAUDE.md): `feat(termine): URL-driven Filter und Focus-Param`, `feat(games): Push-Link auf konkretes Spiel`, `feat(trainings): Push-Link auf konkretes Training`, `feat(kalender): EventInfoModal-Button „In Terminen öffnen"`
+- [x] 7.4 Conventional Commits nach jedem Task-Block (siehe CLAUDE.md): `feat(termine): URL-driven Filter und Focus-Param`, `feat(games): Push-Link auf konkretes Spiel`, `feat(trainings): Push-Link auf konkretes Training`, `feat(kalender): EventInfoModal-Button „In Terminen öffnen"`
 - [ ] 7.5 OpenSpec Change archivieren (`/opsx:archive termine-deeplink-filter`) nach Merge

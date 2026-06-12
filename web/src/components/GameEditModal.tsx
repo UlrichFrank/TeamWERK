@@ -35,11 +35,13 @@ interface AvailableTeam {
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 
+import type { RegenSummary } from './RegenSummaryCard'
+
 interface Props {
   game: Game
   onClose: () => void
-  onSaved: () => void
-  onDeleted?: () => void
+  onSaved: (regenSummary?: RegenSummary) => void
+  onDeleted?: (regenSummary?: RegenSummary) => void
 }
 
 export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Props) {
@@ -77,8 +79,8 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setDeleting(true)
     setError(null)
     try {
-      await api.delete(`/kalender/${game.id}`)
-      onDeleted?.()
+      const r = await api.delete(`/kalender/${game.id}`)
+      onDeleted?.(r.data?.regen_summary)
     } catch {
       setError('Löschen fehlgeschlagen.')
       setConfirmDelete(false)
@@ -91,7 +93,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setSaving(true)
     setError(null)
     try {
-      await api.put(`/kalender/${game.id}`, {
+      const r = await api.put(`/kalender/${game.id}`, {
         date,
         time,
         end_time: isGeneric ? (endTime || null) : null,
@@ -101,7 +103,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         venue_id: venueId,
         team_ids: selectedTeamIds.length > 0 ? selectedTeamIds : undefined,
       })
-      onSaved()
+      onSaved(r.data?.regen_summary)
     } catch {
       setError('Speichern fehlgeschlagen.')
     } finally {
