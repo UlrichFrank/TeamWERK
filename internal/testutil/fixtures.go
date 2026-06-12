@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -147,4 +149,95 @@ func CreateGame(t *testing.T, database *sql.DB, seasonID, teamID int, date strin
 		t.Fatalf("CreateGame game_teams: %v", err)
 	}
 	return int(gameID)
+}
+
+// CreateDutyType inserts a duty type and returns its ID.
+func CreateDutyType(t *testing.T, database *sql.DB, name string, hoursValue float64) int {
+	t.Helper()
+	res, err := database.Exec(
+		`INSERT INTO duty_types (name, hours_value) VALUES (?, ?)`, name, hoursValue)
+	if err != nil {
+		t.Fatalf("CreateDutyType: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// CreateDutySlot inserts a duty slot and returns its ID.
+// Pass gameID=0 to omit the game_id (NULL).
+func CreateDutySlot(t *testing.T, database *sql.DB, dutyTypeID, seasonID, teamID, gameID int, date string) int {
+	t.Helper()
+	var gameArg any
+	if gameID > 0 {
+		gameArg = gameID
+	}
+	res, err := database.Exec(
+		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, slots_filled, team_id, season_id, game_id)
+		 VALUES (?, ?, ?, 2, 0, ?, ?, ?)`,
+		"Testdienst", date, dutyTypeID, teamID, seasonID, gameArg)
+	if err != nil {
+		t.Fatalf("CreateDutySlot: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// CreateInvitationToken inserts an invitation token and returns the plain-text token.
+// Pass a past time for expiresAt to create an expired token.
+func CreateInvitationToken(t *testing.T, database *sql.DB, email, role string, expiresAt time.Time) string {
+	t.Helper()
+	plain, hash, err := authGenToken()
+	if err != nil {
+		t.Fatalf("CreateInvitationToken generate: %v", err)
+	}
+	if _, err := database.Exec(
+		`INSERT INTO invitation_tokens (email, role, token, expires_at, first_name, last_name) VALUES (?, ?, ?, ?, ?, ?)`,
+		email, role, hash, expiresAt, "Test", "User"); err != nil {
+		t.Fatalf("CreateInvitationToken insert: %v", err)
+	}
+	return plain
+}
+
+// CreatePasswordResetToken inserts a password-reset token and returns the plain-text token.
+func CreatePasswordResetToken(t *testing.T, database *sql.DB, userID int, expiresAt time.Time) string {
+	t.Helper()
+	plain, hash, err := authGenToken()
+	if err != nil {
+		t.Fatalf("CreatePasswordResetToken generate: %v", err)
+	}
+	if _, err := database.Exec(
+		`INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)`,
+		userID, hash, expiresAt); err != nil {
+		t.Fatalf("CreatePasswordResetToken insert: %v", err)
+	}
+	return plain
+}
+
+// CreateRefreshToken inserts a hashed refresh token for the user and returns the plain token.
+func CreateRefreshToken(t *testing.T, database *sql.DB, userID int) string {
+	t.Helper()
+	plain, hash, err := authGenToken()
+	if err != nil {
+		t.Fatalf("CreateRefreshToken generate: %v", err)
+	}
+	if _, err := database.Exec(
+		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)`,
+		userID, hash, time.Now().Add(7*24*time.Hour)); err != nil {
+		t.Fatalf("CreateRefreshToken insert: %v", err)
+	}
+	return plain
+}
+
+// CreatePlayerMembership links a member to a team for the given season.
+func CreatePlayerMembership(t *testing.T, database *sql.DB, memberID, teamID, seasonID int) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT OR IGNORE INTO player_memberships (member_id, team_id, season_id) VALUES (?, ?, ?)`,
+		memberID, teamID, seasonID); err != nil {
+		t.Fatalf("CreatePlayerMembership: %v", err)
+	}
+}
+
+func authGenToken() (string, string, error) {
+	return auth.GenerateOpaqueToken()
 }
