@@ -665,32 +665,29 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		eventName += " vs. " + req.Opponent
 	}
 
-	for _, s := range req.Slots {
-		n := s.SlotsCount
-		if n <= 0 {
-			n = 1
-		}
-		if req.EventType == "generisch" {
-			_, err = tx.ExecContext(r.Context(),
-				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-				 VALUES (?,?,?,?,?,?,NULL,?,?)`,
-				eventName, req.Date, s.EventTime, s.DutyTypeID, "", n, req.SeasonID, gameID)
-			if err != nil {
+	// For generic events: persist user-supplied slots with is_custom=1 (no template).
+	// For heim/auswärts: req.Slots is intentionally ignored — runAutoRegen derives
+	// all slots from the resolved template + adjacency context below.
+	if req.EventType == "generisch" {
+		for _, s := range req.Slots {
+			n := s.SlotsCount
+			if n <= 0 {
+				n = 1
+			}
+			if _, err = tx.ExecContext(r.Context(),
+				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, is_custom)
+				 VALUES (?,?,?,?,?,?,NULL,?,?,1)`,
+				eventName, req.Date, s.EventTime, s.DutyTypeID, "", n, req.SeasonID, gameID); err != nil {
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-		} else {
-			for _, teamID := range req.TeamIDs {
-				_, err = tx.ExecContext(r.Context(),
-					`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-					 VALUES (?,?,?,?,?,?,?,?,?)`,
-					eventName, req.Date, s.EventTime, s.DutyTypeID, "", n, teamID, req.SeasonID, gameID)
-				if err != nil {
-					http.Error(w, "internal error", http.StatusInternalServerError)
-					return
-				}
-			}
 		}
+	}
+
+	summary, err := h.runAutoRegen(r.Context(), tx, dateWindow(req.Date), req.SeasonID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -713,10 +710,11 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 
 	h.hub.Broadcast("games")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(req.TeamIDs),
-		"games", "Neues Spiel", eventName+" am "+req.Date, "/kalender")
+		"games", "Neues Spiel", eventName+" am "+req.Date, fmt.Sprintf("/termine?focus=game-%d", gameID))
+	h.dispatchRegenNotifications(summary)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"id": gameID})
+	json.NewEncoder(w).Encode(map[string]any{"id": gameID, "regen_summary": summary})
 }
 
 func toAny(teamIDs []int) []any {
@@ -753,6 +751,19 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+
+	// Capture pre-update state so the regen window can include the old date if it changes.
+	var oldDate string
+	var oldSeasonID int
+	if err := tx.QueryRowContext(r.Context(),
+		`SELECT date, season_id FROM games WHERE id=?`, id).Scan(&oldDate, &oldSeasonID); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	var endTimeVal interface{}
 	if req.EndTime != nil && *req.EndTime != "" {
@@ -795,6 +806,13 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	regenDates := append(dateWindow(oldDate), dateWindow(req.Date)...)
+	summary, err := h.runAutoRegen(r.Context(), tx, regenDates, oldSeasonID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -804,8 +822,10 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	fmt.Sscan(id, &gameIDInt)
 	notify.Send(h.db, h.cfg,
 		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)),
-		"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", "/kalender")
-	w.WriteHeader(http.StatusNoContent)
+		"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
+	h.dispatchRegenNotifications(summary)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"regen_summary": summary})
 }
 
 // DELETE /api/admin/games/{id}
@@ -877,6 +897,15 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Regen adjacent days — the deleted date itself has no slots anymore.
+	window := dateWindow(eventDate)
+	neighborDates := []string{window[0], window[2]}
+	summary, err := h.runAutoRegen(r.Context(), tx, neighborDates, seasonID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	if err = tx.Commit(); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -896,9 +925,12 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 
 	// Team-wide event-cancellation notification in "games" category (unchanged audience).
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamIDs),
-		"games", "Spiel abgesagt", "Ein Spiel wurde abgesagt", "/kalender")
+		"games", "Spiel abgesagt", "Ein Spiel wurde abgesagt", "/termine")
 
-	w.WriteHeader(http.StatusNoContent)
+	h.dispatchRegenNotifications(summary)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"regen_summary": summary})
 }
 
 // dutyAssigneesForGame returns the user IDs of all duty_assignments for slots
@@ -1366,6 +1398,8 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/admin/games/regenerate-day
+// Thin wrapper around runAutoRegen. Frontend no longer triggers this; kept for
+// internal repair workflows (e.g. season-wide rebuild after template change).
 func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 	if date == "" {
@@ -1381,238 +1415,35 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 		h.db.QueryRowContext(r.Context(), `SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&seasonID)
 	}
 
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, time, end_time, opponent, is_home, event_type, template_id FROM games WHERE date=? AND season_id=? ORDER BY time`,
-		date, seasonID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	type dayGame struct {
-		ID         int
-		Time       string
-		EndTime    sql.NullString
-		Opponent   string
-		IsHome     bool
-		EventType  string
-		TemplateID sql.NullInt64
-	}
-	var dayGames []dayGame
-	for rows.Next() {
-		var g dayGame
-		var isHome int
-		rows.Scan(&g.ID, &g.Time, &g.EndTime, &g.Opponent, &isHome, &g.EventType, &g.TemplateID)
-		g.IsHome = isHome == 1
-		dayGames = append(dayGames, g)
-	}
-	rows.Close()
-
-	type gameResult struct {
-		GameID       int  `json:"game_id"`
-		SlotsCreated int  `json:"slots_created"`
-		KeptSlots    int  `json:"kept_slots"`
-		Skipped      bool `json:"skipped,omitempty"`
-	}
-	type conflictEntry struct {
-		DutyTypeID int    `json:"duty_type_id"`
-		EventTime  string `json:"event_time"`
-		GameIDs    []int  `json:"game_ids"`
-	}
-
-	results := []gameResult{}
-	if len(dayGames) == 0 {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"games": results, "conflicts": []conflictEntry{}})
-		return
-	}
-
-	allGameTimes, hasPrevDay, hasNextDay := h.loadSameDayContext(r.Context(), date, seasonID)
-
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
-
-	for _, g := range dayGames {
-		res := gameResult{GameID: g.ID}
-
-		teamRows, _ := h.db.QueryContext(r.Context(), `SELECT team_id FROM game_teams WHERE game_id=?`, g.ID)
-		var teamIDs []int
-		if teamRows != nil {
-			for teamRows.Next() {
-				var tid int
-				teamRows.Scan(&tid)
-				teamIDs = append(teamIDs, tid)
-			}
-			teamRows.Close()
-		}
-
-		var templateID int
-		if g.TemplateID.Valid {
-			templateID = int(g.TemplateID.Int64)
-		} else {
-			var ignoredDur int
-			templateID, ignoredDur, err = h.findTemplateForGame(r.Context(), g.IsHome)
-			_ = ignoredDur
-			if err != nil {
-				res.Skipped = true
-				results = append(results, res)
-				continue
-			}
-		}
-
-		firstTeamID := 0
-		if len(teamIDs) > 0 {
-			firstTeamID = teamIDs[0]
-		}
-		durationMins, durErr := h.effectiveEventDuration(r.Context(), g.EventType, templateID, firstTeamID)
-		if durErr != nil {
-			res.Skipped = true
-			results = append(results, res)
-			continue
-		}
-
-		items, err := h.loadTemplateItems(r.Context(), templateID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-
-		tx.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM duty_slots WHERE game_id=? AND slots_filled > 0`, g.ID).Scan(&res.KeptSlots)
-		tx.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE game_id=? AND slots_filled = 0`, g.ID)
-
-		eventName := g.Opponent
-		if g.EventType != "generisch" {
-			if g.IsHome {
-				eventName = "Heimspiel"
-			} else {
-				eventName = "Auswärtsspiel"
-			}
-			if g.Opponent != "" {
-				eventName += " vs. " + g.Opponent
-			}
-		}
-
-		for _, it := range items {
-			var eventTime string
-			if it.Anchor == "end" && g.EndTime.Valid {
-				eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
-			} else {
-				offset := it.OffsetMinutes
-				if it.Anchor == "end" {
-					offset += durationMins
-				}
-				eventTime = addMinutes(g.Time, offset)
-			}
-
-			isBeforeAllGames, isAfterAllGames, isBetweenGames := classifySlotPosition(eventTime, g.Time, allGameTimes)
-			dutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes, hasPrevDay, hasNextDay,
-				isBeforeAllGames, isAfterAllGames, isBetweenGames)
-			if dutyTypeID == -1 {
-				continue
-			}
-
-			n := it.SlotsCount
-			if n <= 0 {
-				n = 1
-			}
-			if g.EventType == "generisch" {
-				if _, err = tx.ExecContext(r.Context(),
-					`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-					 VALUES (?,?,?,?,?,?,NULL,?,?)`,
-					eventName, date, eventTime, dutyTypeID, "", n, seasonID, g.ID); err != nil {
-					http.Error(w, "internal error", http.StatusInternalServerError)
-					return
-				}
-				res.SlotsCreated++
-			} else {
-				for _, teamID := range teamIDs {
-					if _, err = tx.ExecContext(r.Context(),
-						`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id)
-						 VALUES (?,?,?,?,?,?,?,?,?)`,
-						eventName, date, eventTime, dutyTypeID, "", n, teamID, seasonID, g.ID); err != nil {
-						http.Error(w, "internal error", http.StatusInternalServerError)
-						return
-					}
-					res.SlotsCreated++
-				}
-			}
-		}
-		results = append(results, res)
+	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
-
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	// Detect conflicts: same duty_type_id + event_time across different game_ids
-	type slotKey struct {
-		DutyTypeID int
-		EventTime  string
-	}
-	slotMap := map[slotKey]map[int]struct{}{}
-	conflictRows, _ := h.db.QueryContext(r.Context(),
-		`SELECT duty_type_id, event_time, game_id FROM duty_slots
-		 WHERE event_date=? AND game_id IS NOT NULL`, date)
-	if conflictRows != nil {
-		for conflictRows.Next() {
-			var dtID, gID int
-			var et string
-			conflictRows.Scan(&dtID, &et, &gID)
-			key := slotKey{dtID, et}
-			if slotMap[key] == nil {
-				slotMap[key] = map[int]struct{}{}
-			}
-			slotMap[key][gID] = struct{}{}
-		}
-		conflictRows.Close()
-	}
-	conflicts := []conflictEntry{}
-	for key, gameSet := range slotMap {
-		if len(gameSet) > 1 {
-			gids := make([]int, 0, len(gameSet))
-			for gid := range gameSet {
-				gids = append(gids, gid)
-			}
-			conflicts = append(conflicts, conflictEntry{
-				DutyTypeID: key.DutyTypeID,
-				EventTime:  key.EventTime,
-				GameIDs:    gids,
-			})
-		}
-	}
-
+	h.dispatchRegenNotifications(summary)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"games": results, "conflicts": conflicts})
+	json.NewEncoder(w).Encode(summary)
 }
 
 // POST /api/admin/games/{id}/regenerate
+// Thin wrapper around runAutoRegen scoped to the game's date. Frontend no longer
+// triggers this; kept for internal repair workflows.
 func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	gameID := r.PathValue("id")
-
-	var req struct {
-		TemplateID *int `json:"template_id"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-
-	var game struct {
-		SeasonID   int
-		Date       string
-		Time       string
-		EndTime    sql.NullString
-		Opponent   string
-		IsHome     bool
-		EventType  string
-		TemplateID sql.NullInt64
-	}
+	var seasonID int
+	var date string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT season_id, date, time, end_time, opponent, is_home, event_type, template_id FROM games WHERE id=?`, gameID).
-		Scan(&game.SeasonID, &game.Date, &game.Time, &game.EndTime, &game.Opponent, &game.IsHome, &game.EventType, &game.TemplateID)
+		`SELECT season_id, date FROM games WHERE id=?`, gameID).Scan(&seasonID, &date)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1621,129 +1452,24 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	// Resolve template: body takes precedence over stored value
-	var resolvedTemplateID int
-	if req.TemplateID != nil {
-		resolvedTemplateID = *req.TemplateID
-	} else if game.TemplateID.Valid {
-		resolvedTemplateID = int(game.TemplateID.Int64)
-	} else {
-		http.Error(w, "kein Template angegeben und keines gespeichert", http.StatusBadRequest)
-		return
-	}
-
-	items, err := h.loadTemplateItems(r.Context(), resolvedTemplateID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	teamRows, err := h.db.QueryContext(r.Context(),
-		`SELECT team_id FROM game_teams WHERE game_id=?`, gameID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	defer teamRows.Close()
-
-	var teamIDs []int
-	for teamRows.Next() {
-		var tid int
-		teamRows.Scan(&tid)
-		teamIDs = append(teamIDs, tid)
-	}
-
-	firstTeamID := 0
-	if len(teamIDs) > 0 {
-		firstTeamID = teamIDs[0]
-	}
-	durationMins, err := h.effectiveEventDuration(r.Context(), game.EventType, resolvedTemplateID, firstTeamID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
-
-	allGameTimes, hasPrevDay, hasNextDay := h.loadSameDayContext(r.Context(), game.Date, game.SeasonID)
-
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
-
-	var keptSlots int
-	tx.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM duty_slots WHERE game_id=? AND slots_filled > 0`, gameID).Scan(&keptSlots)
-	tx.ExecContext(r.Context(),
-		`DELETE FROM duty_slots WHERE game_id=? AND slots_filled = 0`, gameID)
-
-	eventName := "Heimspiel"
-	if !game.IsHome {
-		eventName = "Auswärtsspiel"
+	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
-	if game.Opponent != "" {
-		eventName += " vs. " + game.Opponent
-	}
-
-	for _, it := range items {
-		var eventTime string
-		if it.Anchor == "end" && game.EndTime.Valid {
-			eventTime = addMinutes(game.EndTime.String, it.OffsetMinutes)
-		} else {
-			offset := it.OffsetMinutes
-			if it.Anchor == "end" {
-				offset += durationMins
-			}
-			eventTime = addMinutes(game.Time, offset)
-		}
-
-		isBeforeAllGames, isAfterAllGames, isBetweenGames := classifySlotPosition(eventTime, game.Time, allGameTimes)
-		dutyTypeID := applyBehavior(it, game.Time, eventTime, allGameTimes, hasPrevDay, hasNextDay,
-			isBeforeAllGames, isAfterAllGames, isBetweenGames)
-		if dutyTypeID == -1 {
-			continue
-		}
-
-		n := it.SlotsCount
-		if n <= 0 {
-			n = 1
-		}
-		slotAudiences := audiencesToDB(audiencesFromDB(it.Audiences))
-		if game.EventType == "generisch" {
-			_, err = tx.ExecContext(r.Context(),
-				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences)
-				 VALUES (?,?,?,?,?,?,NULL,?,?,?)`,
-				eventName, game.Date, eventTime, dutyTypeID, "", n, game.SeasonID, gameID, slotAudiences)
-			if err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
-				return
-			}
-		} else {
-			for _, teamID := range teamIDs {
-				_, err = tx.ExecContext(r.Context(),
-					`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences)
-					 VALUES (?,?,?,?,?,?,?,?,?,?)`,
-					eventName, game.Date, eventTime, dutyTypeID, "", n, teamID, game.SeasonID, gameID, slotAudiences)
-				if err != nil {
-					http.Error(w, "internal error", http.StatusInternalServerError)
-					return
-				}
-			}
-		}
-	}
-
-	// Update stored template_id if a different one was used
-	tx.ExecContext(r.Context(),
-		`UPDATE games SET template_id=? WHERE id=?`, resolvedTemplateID, gameID)
-
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.dispatchRegenNotifications(summary)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"kept_slots": keptSlots})
+	json.NewEncoder(w).Encode(summary)
 }
 
 // ── Game RSVP ────────────────────────────────────────────────────────────────
