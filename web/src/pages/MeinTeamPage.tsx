@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import PersonChip from '../components/PersonChip'
@@ -18,80 +18,107 @@ interface TeamRoster {
 interface MyTeam { id: number; name: string }
 
 
+type RosterTab = 'team' | 'trainer' | 'eltern'
+
+const TABS: { id: RosterTab; label: string }[] = [
+  { id: 'team', label: 'Team' },
+  { id: 'trainer', label: 'Trainer' },
+  { id: 'eltern', label: 'Eltern' },
+]
+
 function RosterSection({ roster }: { roster: TeamRoster }) {
+  const [activeTab, setActiveTab] = useState<RosterTab>('team')
+
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-4">
       <div className="px-5 py-4 border-b border-brand-border-subtle">
-        <h2 className="text-lg font-bold text-brand-text">{roster.team.name}</h2>
+        <h2 className="text-lg font-bold text-brand-text mb-3">{roster.team.name}</h2>
+        <div className="flex gap-1">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-brand-yellow text-brand-black'
+                  : 'text-brand-text-muted hover:text-brand-text'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Trainers */}
-      {roster.trainers.length > 0 && (
-        <div className="px-5 py-4 border-b border-brand-border-subtle">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-3">Trainer</h3>
-          <table className="w-full text-sm">
-            <tbody>
-              {roster.trainers.map((t, i) => (
-                <tr key={i} className="border-b border-brand-border-subtle last:border-0">
-                  <td className="py-2">
-                    <PersonChip userId={t.userId || undefined} name={t.name} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="px-5 py-4">
+        {activeTab === 'team' && (
+          roster.players.length === 0 ? (
+            <p className="text-sm text-brand-text-muted">— keine Einträge —</p>
+          ) : (
+            <div className="overflow-x-auto -mx-5 px-5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left">
+                    <th className="pb-2 pr-4 text-xs text-brand-text-muted font-medium">#</th>
+                    <th className="pb-2 text-xs text-brand-text-muted font-medium">Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roster.players.map((p, i) => (
+                    <tr key={i} className="border-t border-brand-border-subtle">
+                      <td className="py-2 pr-4 text-brand-text-muted w-8">
+                        {p.jerseyNumber != null ? p.jerseyNumber : '–'}
+                      </td>
+                      <td className="py-2">
+                        <PersonChip userId={p.userId || undefined} name={p.name} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
 
-      {/* Players */}
-      {roster.players.length > 0 && (
-        <div className="px-5 py-4 border-b border-brand-border-subtle">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-3">Spieler</h3>
-          <div className="overflow-x-auto -mx-5 px-5">
+        {activeTab === 'trainer' && (
+          roster.trainers.length === 0 ? (
+            <p className="text-sm text-brand-text-muted">— keine Einträge —</p>
+          ) : (
             <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left">
-                  <th className="pb-2 pr-4 text-xs text-brand-text-muted font-medium">#</th>
-                  <th className="pb-2 text-xs text-brand-text-muted font-medium">Name</th>
-                </tr>
-              </thead>
               <tbody>
-                {roster.players.map((p, i) => (
-                  <tr key={i} className="border-t border-brand-border-subtle">
-                    <td className="py-2 pr-4 text-brand-text-muted w-8">
-                      {p.jerseyNumber != null ? p.jerseyNumber : '–'}
-                    </td>
+                {roster.trainers.map((t, i) => (
+                  <tr key={i} className="border-b border-brand-border-subtle last:border-0">
                     <td className="py-2">
-                      <PersonChip userId={p.userId || undefined} name={p.name} />
+                      <PersonChip userId={t.userId || undefined} name={t.name} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
+          )
+        )}
 
-      {/* Parents */}
-      {roster.parents.length > 0 && (
-        <div className="px-5 py-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-3">Eltern</h3>
-          <table className="w-full text-sm">
-            <tbody>
-              {roster.parents.map((p, i) => (
-                <tr key={i} className="border-b border-brand-border-subtle last:border-0">
-                  <td className="py-2">
-                    <PersonChip userId={p.userId || undefined} name={p.name} />
-                    {p.children.length > 0 && (
-                      <p className="text-xs text-brand-text-muted mt-0.5">{p.children.join(', ')}</p>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        {activeTab === 'eltern' && (
+          roster.parents.length === 0 ? (
+            <p className="text-sm text-brand-text-muted">— keine Einträge —</p>
+          ) : (
+            <table className="w-full text-sm">
+              <tbody>
+                {roster.parents.map((p, i) => (
+                  <tr key={i} className="border-b border-brand-border-subtle last:border-0">
+                    <td className="py-2">
+                      <PersonChip userId={p.userId || undefined} name={p.name} />
+                      {p.children.length > 0 && (
+                        <p className="text-xs text-brand-text-muted mt-0.5">{p.children.join(', ')}</p>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        )}
+      </div>
     </div>
   )
 }

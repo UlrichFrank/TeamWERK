@@ -1,4 +1,12 @@
 ## 12.06.2026
+- [fix] mailer: Precedence- und X-Mailer-Header für bessere Zustellbarkeit
+- [fix] notify: mailer.New-Aufruf um baseURL-Parameter ergänzen
+- [fix] mailer: Exakte App-Kachel – border-top statt div, Tailwind shadow
+- [fix] mailer: Hintergrund weiß, Kachel grau (brand-surface-card)
+- [fix] mailer: Brand-Design – gelber Hintergrund, weiße Kachel wie in App
+- [fix] mailer: Logo links, Titel rechts; gleiches Format in allen E-Mails
+- [feat] mailer: Team-Stuttgart-Logo in E-Mail-Header einbinden
+- [fix] mailer: Action-Links als CTA-Button rendern statt nackte URL
 - [fix] mailer: HTML-Part ergänzen und Spam-Einstufung reduzieren
 - [fix] teams: Kurznamen für alle Rollen konsistent über GET /api/teams/names
 - [fix] games: RegenSummaryCard gegen null-Arrays absichern
