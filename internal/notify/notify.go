@@ -82,7 +82,7 @@ func sendCategoryEmail(db *sql.DB, cfg *appconfig.Config, userID int, title, bod
 	if url != "" {
 		fullBody = body + "\n\nDirektlink: " + cfg.BaseURL + url
 	}
-	m := mailer.New(cfg.SMTP)
+	m := mailer.New(cfg.SMTP, cfg.BaseURL)
 	if err := m.Send(email, title, fullBody); err != nil {
 		log.Printf("notifications: send mail to user %d: %v", userID, err)
 	}
