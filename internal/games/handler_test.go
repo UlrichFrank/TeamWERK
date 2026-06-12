@@ -502,9 +502,11 @@ func TestUpdateGame_TimeChangeRegenSlots(t *testing.T) {
 	}
 }
 
-// TestDeleteGame_RegenerateBoundaryDays verifies that deleting a game
-// triggers auto-regen for adjacent days.
-func TestDeleteGame_RegenerateBoundaryDays(t *testing.T) {
+// TestDeleteGame_NeighborDayRegen verifies that deleting a game triggers
+// auto-regen on adjacent days: a slot on the neighbor day that was skipped
+// due to adjacent_day_behavior=skip must reappear after the adjacent game
+// is deleted.
+func TestDeleteGame_NeighborDayRegen(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
@@ -519,8 +521,8 @@ func TestDeleteGame_RegenerateBoundaryDays(t *testing.T) {
 	}
 
 	dutyRes, err := db.Exec(`
-		INSERT INTO duty_types (name, hours_value)
-		VALUES (?, ?)`, "Aufbau", 2.0)
+		INSERT INTO duty_types (name, hours_value, adjacent_day_behavior)
+		VALUES (?, ?, ?)`, "Aufbau", 2.0, "skip")
 	if err != nil {
 		t.Fatalf("seed duty_type: %v", err)
 	}
@@ -553,31 +555,33 @@ func TestDeleteGame_RegenerateBoundaryDays(t *testing.T) {
 		}
 	}
 
-	// Create game on day 14.
+	// Game A on day 13 → gets a slot (no neighbors).
+	resA := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-13"))
+	resA.Body.Close()
+	var gameAID int
+	db.QueryRow(`SELECT id FROM games WHERE date=?`, "2026-06-13").Scan(&gameAID)
+
+	// Game B on day 14 → slot is SKIPPED (adjacent to game A on day 13).
 	resB := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-14"))
 	resB.Body.Close()
-	var gameBID int
-	db.QueryRow(`SELECT id FROM games WHERE date=?`, "2026-06-14").Scan(&gameBID)
-
-	// Game B should create a slot.
-	var count14Before int
-	db.QueryRow(`SELECT COUNT(*) FROM duty_slots WHERE event_date=? AND is_custom=0`, "2026-06-14").Scan(&count14Before)
-	if count14Before != 1 {
-		t.Errorf("expected 1 slot on day 14 after create, got %d", count14Before)
+	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=0", "2026-06-14"); got != 0 {
+		t.Fatalf("before delete: expected 0 auto-slots on day 14 (adjacent skip), got %d", got)
 	}
 
-	// Delete game B.
-	deleteRes := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameBID), token, nil)
+	// Delete game A → auto-regen on day 14 should fire and create the slot now.
+	deleteRes := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameAID), token, nil)
 	deleteRes.Body.Close()
 	if deleteRes.StatusCode != http.StatusOK {
-		t.Fatalf("delete game: expected 200, got %d", deleteRes.StatusCode)
+		t.Fatalf("delete game A: expected 200, got %d", deleteRes.StatusCode)
 	}
 
-	// Day 14 should have no auto-slots after delete.
-	var count14After int
-	db.QueryRow(`SELECT COUNT(*) FROM duty_slots WHERE event_date=? AND is_custom=0`, "2026-06-14").Scan(&count14After)
-	if count14After != 0 {
-		t.Errorf("expected 0 slots on day 14 after delete, got %d", count14After)
+	// Day 14 should now have an auto-slot (no prev-day game anymore).
+	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=0", "2026-06-14"); got != 1 {
+		t.Errorf("after delete A: expected 1 auto-slot on day 14 (adjacent skip lifted), got %d", got)
+	}
+	// Day 13 has no slots (game A deleted).
+	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=0", "2026-06-13"); got != 0 {
+		t.Errorf("after delete A: expected 0 auto-slots on day 13, got %d", got)
 	}
 }
 

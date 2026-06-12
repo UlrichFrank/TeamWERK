@@ -48,14 +48,14 @@
 
 ## 8. Verifikation
 
-- [x] 8.1 Manuell: Heimspiel an Sa anlegen, dann Heimspiel an So → So-Anlage entfernt automatisch den letzten „nach Spiel"-Dienst des Sa-Events (sofern `adjacent_day_behavior=skip` für den dutyType); Push an den Helfer (falls eingetragen) erscheint
-- [x] 8.2 Manuell: Heimspiel an Sa mit `Kassendienst Voll` anlegen, dann Heimspiel an So → Auto-Wechsel auf `Kassendienst Reduziert` (sofern `same_day_behavior=reduced` für den dutyType); Push an den Helfer mit „Variante geändert"-Hinweis
+- [ ] 8.1 Manuell: Heimspiel an Sa anlegen, dann Heimspiel an So → So-Anlage entfernt automatisch den letzten „nach Spiel"-Dienst des Sa-Events (sofern `adjacent_day_behavior=skip` für den dutyType); Push an den Helfer (falls eingetragen) erscheint
+- [ ] 8.2 Manuell: Heimspiel an Sa mit `Kassendienst Voll` anlegen, dann Heimspiel an So → Auto-Wechsel auf `Kassendienst Reduziert` (sofern `same_day_behavior=reduced` für den dutyType); Push an den Helfer mit „Variante geändert"-Hinweis
 - [x] 8.3 Manuell: Spielzeit eines Heimspiels von 14:00 auf 16:00 verschieben → Auto-Regen verschiebt alle Template-basierten Slots (Anchor=start), `is_custom=1`-Slots bleiben auf alter Zeit
-- [x] 8.4 Manuell: Heimspiel löschen → N-1- und N+1-Slots werden ggf. von `reduced` zurück auf `normal`-Variante regeneriert; Push an betroffene Helfer
-- [x] 8.5 Manuell: Slot manuell anlegen (`POST /api/duty-slots`), dann benachbartes Heimspiel anlegen → manueller Slot bleibt unverändert, in `regen_summary.conflicts` taucht er auf, falls ein Auto-Slot zeitgleich gewesen wäre
+- [ ] 8.4 Manuell: Heimspiel löschen → N-1- und N+1-Slots werden ggf. von `reduced` zurück auf `normal`-Variante regeneriert; Push an betroffene Helfer
+- [ ] 8.5 Manuell: Slot manuell anlegen (`POST /api/duty-slots`), dann benachbartes Heimspiel anlegen → manueller Slot bleibt unverändert, in `regen_summary.conflicts` taucht er auf, falls ein Auto-Slot zeitgleich gewesen wäre
 - [x] 8.6 Integrationstest: `is_custom=1`-Slot überlebt mehrere `runAutoRegen`-Durchläufe ohne Veränderung
-- [x] 8.7 Manuell: Generisches Event mit 2 Helferslots anlegen → Slots werden mit `is_custom=1` persistiert und nicht vom Auto-Regen angefasst
-- [x] 8.8 Performance-Smoke-Test: 5 Spiele an einem Tag, Auto-Regen für 3-Tage-Fenster → Mutation antwortet < 500ms
+- [ ] 8.7 Manuell: Generisches Event mit 2 Helferslots anlegen → Slots werden mit `is_custom=1` persistiert und nicht vom Auto-Regen angefasst
+- [ ] 8.8 Performance-Smoke-Test: 5 Spiele an einem Tag, Auto-Regen für 3-Tage-Fenster → Mutation antwortet < 500ms
 
 ## 9. Dokumentation
 

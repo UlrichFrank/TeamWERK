@@ -455,13 +455,6 @@ func capSummary(s *RegenSummary) {
 	}
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // ── tx-aware variants of existing helpers ────────────────────────────────────
 
 func (h *Handler) loadSameDayContextTx(ctx context.Context, tx *sql.Tx, gameDate string, seasonID int) (
