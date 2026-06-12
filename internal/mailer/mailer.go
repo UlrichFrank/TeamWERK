@@ -134,23 +134,24 @@ func (m *Mailer) textToHTML(text string) string {
 	return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:Arial,Helvetica,sans-serif;background:#f4f4f4;margin:0;padding:20px">
-<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
-  <div style="background:#181310;padding:16px 24px">
+<body style="font-family:Arial,Helvetica,sans-serif;background:#FDE400;margin:0;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.12)">
+  <div style="background:#FDE400;height:4px"></div>
+  <div style="padding:20px 24px;border-bottom:1px solid #E5E7EB">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
       <td width="52" style="vertical-align:middle">
         <img src="` + logoURL + `" alt="Team Stuttgart" width="44" height="44" style="display:block;border-radius:6px">
       </td>
       <td style="vertical-align:middle;padding-left:12px">
-        <span style="color:#FDE400;font-weight:700;font-size:20px;display:block;letter-spacing:-.5px">TeamWERK</span>
-        <span style="color:#ffffff;font-size:12px;display:block;opacity:.7;margin-top:1px">Team Stuttgart</span>
+        <span style="color:#181310;font-weight:700;font-size:20px;display:block;letter-spacing:-.5px">TeamWERK</span>
+        <span style="color:#6B7280;font-size:12px;display:block;margin-top:1px">Team Stuttgart</span>
       </td>
     </tr></table>
   </div>
   <div style="padding:28px 24px;color:#111827;font-size:15px;line-height:1.7">
 ` + body + `
   </div>
-  <div style="padding:16px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
+  <div style="padding:16px 24px;background:#F9FAFB;border-top:1px solid #E5E7EB;font-size:12px;color:#6B7280">
     Diese E-Mail wurde von TeamWERK automatisch versandt.
   </div>
 </div>
