@@ -531,6 +531,8 @@ go notifications.SendToUsers(h.db, h.cfg, []int{userID1, userID2}, "Titel", "Tex
 
 Immer als Goroutine aufrufen (`go ...`) — der Aufruf darf den HTTP-Response nicht blockieren. Der Frontend-Hook `usePushSubscription` (eingebunden in `AppShell.tsx`) registriert Subscriptions automatisch beim App-Start. Auf iOS nur aktiv wenn die PWA zum Homescreen hinzugefügt wurde (`display-mode: standalone`). Subscriptions werden in `push_subscriptions` gespeichert; ungültige Endpoints (HTTP 410) werden automatisch bereinigt. Für Scheduled Notifications (Reminder, Alerts) — neuer Job-Typ im `internal/scheduler/`-Package, idempotent via `notification_log`-Tabelle.
 
+**Auto-Duty-Regen:** Jede Änderung an einem Heim- oder Auswärtsspiel (`POST /api/admin/kalender`, `PUT /api/admin/kalender/{id}`, `DELETE /api/kalender/{id}`) triggert automatische Regeneration der Dienst-Slots für das Event-Datum ± 1 Tag. Diese Regen beachtet alle `same_day_behavior`- und `adjacent_day_behavior`-Regeln der Duty-Types. Slots mit `is_custom=1` (manuell angelegt oder editiert) werden geschont und nicht gelöscht oder verändert. Der Response enthält ein `regen_summary`-Objekt mit Informationen über erstellte, reduzierte, übersprungene Slots und benachrichtigte Helfer. Vor einem Deploy sollte der Vorstand manuell-editierte Bestandsslots mit `UPDATE duty_slots SET is_custom=1 WHERE id IN (...)` schützen, um unerwünschte Regeneration zu vermeiden.
+
 ---
 
 ## VPS-Status

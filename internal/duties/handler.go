@@ -270,8 +270,8 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		eventTime = req.EventTime
 	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences)
-		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences, is_custom)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,1)`,
 		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences))
 	h.hub.Broadcast("duties")
 	notify.Send(h.db, h.cfg, h.eligibleDutyUsers(req.TeamID),
@@ -296,7 +296,7 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 		eventTime = req.EventTime
 	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=?, audiences=? WHERE id=?`,
+		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=?, audiences=?, is_custom=1 WHERE id=?`,
 		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, audiencesToDB(req.Audiences), id)
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)

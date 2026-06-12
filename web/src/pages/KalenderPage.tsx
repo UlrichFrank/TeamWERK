@@ -13,6 +13,7 @@ import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
 import EventInfoModal from '../components/EventInfoModal'
 import VenuePicker, { Venue as VenueType } from '../components/VenuePicker'
+import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
 
 interface VenueRef {
   id: number
@@ -136,15 +137,7 @@ export default function KalenderPage() {
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
   const compact = useCompactHeader(950)
 
-  // Day-regen dialog
-  const [showDayRegen, setShowDayRegen] = useState(false)
-  const [dayRegenDate, setDayRegenDate] = useState('')
-  const [dayRegenLoading, setDayRegenLoading] = useState(false)
-  const [dayRegenResult, setDayRegenResult] = useState<{
-    games: Array<{ game_id: number; slots_created: number; kept_slots: number; skipped?: boolean }>
-    conflicts: Array<{ duty_type_id: number; event_time: string; game_ids: number[] }>
-  } | null>(null)
-  const [dayRegenError, setDayRegenError] = useState<string | null>(null)
+  const [regenSummary, setRegenSummary] = useState<RegenSummary | null>(null)
 
   // Wizard dialog
   const [showCreate, setShowCreate] = useState(false)
@@ -416,7 +409,17 @@ export default function KalenderPage() {
     setCreating(true)
     setCreateError(null)
     try {
-      await api.post('/kalender', {
+      // For heim/auswärts the backend derives slots from template + adjacency.
+      // For generisch the wizard's custom slots are persisted as-is (is_custom=1).
+      const slotsPayload = eventType === 'generisch'
+        ? slots.map(s => ({
+            duty_type_id: s.duty_type_id,
+            event_time: s.event_time,
+            slots_count: s.slots_count,
+            role_desc: s.role_desc,
+          }))
+        : undefined
+      const r = await api.post('/kalender', {
         date: selectedDate,
         time: selectedTime,
         end_time: eventType === 'generisch' ? selectedEndTime : undefined,
@@ -428,13 +431,11 @@ export default function KalenderPage() {
         venue_id: selectedVenueId,
         rsvp_opt_out: gameRsvpOptOut,
         rsvp_require_reason: gameRsvpRequireReason,
-        slots: slots.map(s => ({
-          duty_type_id: s.duty_type_id,
-          event_time: s.event_time,
-          slots_count: s.slots_count,
-          role_desc: s.role_desc,
-        })),
+        slots: slotsPayload,
       })
+      if (r.data?.regen_summary) {
+        setRegenSummary(r.data.regen_summary)
+      }
       await loadGames()
       closeDialog()
     } catch {
@@ -538,35 +539,6 @@ export default function KalenderPage() {
       next.has(i) ? next.delete(i) : next.add(i)
       return next
     })
-  }
-
-  const openDayRegen = (dateStr: string) => {
-    setDayRegenDate(dateStr)
-    setDayRegenResult(null)
-    setDayRegenError(null)
-    setShowDayRegen(true)
-  }
-
-  const closeDayRegen = () => {
-    setShowDayRegen(false)
-    setDayRegenDate('')
-    setDayRegenResult(null)
-    setDayRegenError(null)
-  }
-
-  const doRegenDay = async () => {
-    setDayRegenLoading(true)
-    setDayRegenError(null)
-    setDayRegenResult(null)
-    try {
-      const r = await api.post(`/kalender/regenerate-day?date=${dayRegenDate}`)
-      setDayRegenResult(r.data)
-      await loadGames()
-    } catch {
-      setDayRegenError('Generierung fehlgeschlagen. Ist eine aktive Saison vorhanden?')
-    } finally {
-      setDayRegenLoading(false)
-    }
   }
 
   const loadAbsenceChildren = async () => {
@@ -679,7 +651,6 @@ export default function KalenderPage() {
   }
 
   useEscapeKey(
-    showDayRegen ? () => setShowDayRegen(false) :
     showCreate ? closeDialog :
     editingGame ? () => setEditingGame(null) :
     editingTraining ? () => setEditingTraining(null) :
@@ -692,6 +663,9 @@ export default function KalenderPage() {
 
   return (
     <div>
+      {regenSummary && (
+        <RegenSummaryCard summary={regenSummary} onDismiss={() => setRegenSummary(null)} />
+      )}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
         <select
@@ -789,7 +763,6 @@ export default function KalenderPage() {
             const dayTrainings = trainingsByDate[dateStr] ?? []
             const dayAbsences = absencesForDay(dateStr)
             const isToday = dateStr === todayStr
-            const canRegen = canEdit && dayGames.length > 0
             return (
               <div key={day} className="relative @container group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
                 {dayAbsences.map(({ absence, isFirst, isLast }) => (
@@ -884,15 +857,6 @@ export default function KalenderPage() {
                     </div>
                   </button>
                 ))}
-                {canRegen && (
-                  <button
-                    onPointerDown={e => e.stopPropagation()}
-                    onClick={() => openDayRegen(dateStr)}
-                    className="w-full mt-0.5 text-center text-[10px] text-brand-blue hover:underline leading-tight py-0.5"
-                  >
-                    Dienste generieren
-                  </button>
-                )}
                 </div>
               </div>
             )
@@ -901,76 +865,6 @@ export default function KalenderPage() {
       </div>
       </div>
 
-
-      {/* Day Regeneration Dialog */}
-      {showDayRegen && (
-        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold mb-1 text-brand-text">Dienste generieren</h2>
-            <p className="text-sm text-brand-text-muted mb-4">{dayRegenDate}</p>
-
-            <div className="space-y-2 mb-4">
-              {(gamesByDate[dayRegenDate] ?? []).map(g => (
-                <div key={g.id} className="p-3 border border-brand-border-subtle rounded-lg bg-brand-surface-card text-sm">
-                  <div className="font-semibold text-brand-text">{g.time} — {g.teams.length > 1 ? 'Mehrere Teams' : g.teams[0]?.name}</div>
-                  <div className="text-brand-text-muted text-xs">
-                    {g.event_type === 'generisch' ? (g.opponent || '–') : `Team vs ${g.opponent || '–'}`} · {g.event_type}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {dayRegenResult && (
-              <div className="mb-4 space-y-2">
-                <div className="p-3 bg-brand-success-light border border-brand-success/30 rounded-lg text-sm">
-                  <div className="font-semibold text-brand-success mb-1">Generierung abgeschlossen</div>
-                  {dayRegenResult.games.map(gr => (
-                    <div key={gr.game_id} className="text-brand-success text-xs">
-                      {gr.skipped
-                        ? `Spiel #${gr.game_id}: kein Template — übersprungen`
-                        : `Spiel #${gr.game_id}: ${gr.slots_created} Dienste erstellt, ${gr.kept_slots} behalten`}
-                    </div>
-                  ))}
-                </div>
-                {dayRegenResult.conflicts.length > 0 && (
-                  <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm">
-                    <div className="font-semibold text-brand-danger mb-1">Konflikte erkannt</div>
-                    <p className="text-brand-danger text-xs mb-1">
-                      Gleicher Diensttyp zur gleichen Zeit bei mehreren Spielen — bitte Optimierungsregeln prüfen.
-                    </p>
-                    {dayRegenResult.conflicts.map((c, i) => (
-                      <div key={i} className="text-brand-danger text-xs">
-                        {c.event_time} · Diensttyp #{c.duty_type_id} bei Spielen {c.game_ids.join(', ')}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {dayRegenError && (
-              <div className="mb-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
-                {dayRegenError}
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-2">
-              <button onClick={closeDayRegen} className={BTN_SECONDARY}>
-                {dayRegenResult ? 'Schließen' : 'Abbrechen'}
-              </button>
-              {!dayRegenResult && (
-                <button
-                  onClick={doRegenDay}
-                  disabled={dayRegenLoading}
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
-                >
-                  {dayRegenLoading ? 'Generiere…' : 'Generieren'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Event Wizard Dialog */}
       {showCreate && (
@@ -1518,8 +1412,8 @@ export default function KalenderPage() {
         <GameEditModal
           game={editingGame}
           onClose={() => setEditingGame(null)}
-          onSaved={() => { loadGames(); setEditingGame(null) }}
-          onDeleted={() => { loadGames(); setEditingGame(null) }}
+          onSaved={s => { if (s) setRegenSummary(s); loadGames(); setEditingGame(null) }}
+          onDeleted={s => { if (s) setRegenSummary(s); loadGames(); setEditingGame(null) }}
         />
       )}
       {editingTraining && (
