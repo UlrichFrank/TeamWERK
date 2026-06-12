@@ -203,7 +203,7 @@ func (s *Scheduler) sendGameReminders() {
 			continue
 		}
 		notify.Send(s.db, s.cfg, uids, "games",
-			"Spielerinnerung", g.opponent+" — morgen um "+g.time+" Uhr", "/kalender")
+			"Spielerinnerung", g.opponent+" — morgen um "+g.time+" Uhr", fmt.Sprintf("/termine?focus=game-%d", g.id))
 		for _, uid := range uids {
 			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 				uid, "game_reminder", g.id)
@@ -267,7 +267,7 @@ func (s *Scheduler) sendTrainingReminders() {
 			continue
 		}
 		notify.Send(s.db, s.cfg, uids, "trainings",
-			"Trainingserinnerung", sess.title+" — morgen um "+sess.startTime+" Uhr", "/training")
+			"Trainingserinnerung", sess.title+" — morgen um "+sess.startTime+" Uhr", fmt.Sprintf("/termine?focus=training-%d", sess.id))
 		for _, uid := range uids {
 			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 				uid, "training_reminder", sess.id)
