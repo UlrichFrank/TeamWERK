@@ -216,7 +216,7 @@ export default function TermineDetailPage() {
     return (
       <div className="max-w-2xl space-y-4">
         <button
-          onClick={() => navigate('/termine')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-2"
         >
           <ChevronLeft className="w-4 h-4" /> Zurück zu Termine
@@ -310,7 +310,7 @@ export default function TermineDetailPage() {
   return (
     <div className="max-w-2xl space-y-4">
       <button
-        onClick={() => navigate('/termine')}
+        onClick={() => navigate(-1)}
         className="flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-2"
       >
         <ChevronLeft className="w-4 h-4" /> Zurück zu Termine
