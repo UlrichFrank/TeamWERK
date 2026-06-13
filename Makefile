@@ -154,5 +154,11 @@ lint: ## Statische Codeanalyse mit golangci-lint
 	fi
 	golangci-lint run ./...
 
+coverage: ## Testabdeckung messen: Coverage-Bericht auf stdout + HTML nach /tmp/teamwerk-coverage.html
+	$(GO) test -coverprofile=/tmp/teamwerk-coverage.out ./internal/...
+	@$(GO) tool cover -func=/tmp/teamwerk-coverage.out | grep -E "^github|total:"
+	$(GO) tool cover -html=/tmp/teamwerk-coverage.out -o /tmp/teamwerk-coverage.html
+	@echo "HTML-Report: /tmp/teamwerk-coverage.html"
+
 clean: ## Build-Artefakte löschen
 	rm -rf $(BUILD_DIR) cmd/teamwerk/web/dist
