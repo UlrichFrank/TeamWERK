@@ -100,6 +100,9 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 		r.Post("/api/duty-slots", h.CreateSlot)
 		r.Put("/api/duty-slots/{id}", h.UpdateSlot)
 		r.Delete("/api/duty-slots/{id}", h.DeleteSlot)
+		r.Get("/api/duty-slots/{id}/assignments", h.ListAssignments)
+		r.Post("/api/duty-assignments/{id}/fulfill", h.Fulfill)
+		r.Post("/api/duty-assignments/{id}/cash-substitute", h.CashSubstitute)
 	})
 }
 
@@ -829,5 +832,119 @@ func TestDeleteSlot_WithAssignments(t *testing.T) {
 	}
 	if got := countRows(t, db, "duty_assignments", "duty_slot_id=?", slotID); got != 0 {
 		t.Errorf("assignments not cascade-deleted: got %d rows", got)
+	}
+}
+
+// ── Fulfill / CashSubstitute / ListAssignments ────────────────────────────────
+
+// TC: Fulfill setzt status='fulfilled'; duty_accounts.ist bleibt unverändert.
+func TestFulfill_SetsStatusFulfilled(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dutyTypeID := createDutyType(t, db, "Aufbau", 2.0)
+	slotID := createDutySlot(t, db, dutyTypeID, seasonID, teamID, 0, "2026-07-01")
+	userID := testutil.CreateUser(t, db, "standard")
+	insertDutyAssignment(t, db, slotID, userID, "assigned")
+	var assignmentID int
+	db.QueryRow(`SELECT id FROM duty_assignments WHERE duty_slot_id=? AND user_id=?`, slotID, userID).Scan(&assignmentID)
+
+	// Seed duty_accounts so we can verify ist stays unchanged.
+	db.Exec(`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 10, 0)`, userID, seasonID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	trainerID := testutil.CreateUser(t, db, "admin")
+	token := testutil.Token(t, trainerID, "admin", nil)
+
+	res := testutil.Post(t, srv,
+		"/api/duty-assignments/"+itoa(assignmentID)+"/fulfill", token, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var status string
+	db.QueryRow(`SELECT status FROM duty_assignments WHERE id=?`, assignmentID).Scan(&status)
+	if status != "fulfilled" {
+		t.Errorf("expected status='fulfilled', got %q", status)
+	}
+	// Invariante: Fulfill aktualisiert duty_accounts.ist NICHT direkt.
+	var ist float64
+	db.QueryRow(`SELECT ist FROM duty_accounts WHERE user_id=? AND season_id=?`, userID, seasonID).Scan(&ist)
+	if ist != 0 {
+		t.Errorf("duty_accounts.ist must remain 0 after Fulfill (updated separately); got %v", ist)
+	}
+}
+
+// TC: CashSubstitute setzt status='cash_substitute' und cash_amount.
+func TestCashSubstitute_SetsStatusAndAmount(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dutyTypeID := createDutyType(t, db, "Kasse", 1.0)
+	slotID := createDutySlot(t, db, dutyTypeID, seasonID, teamID, 0, "2026-07-01")
+	userID := testutil.CreateUser(t, db, "standard")
+	insertDutyAssignment(t, db, slotID, userID, "assigned")
+	var assignmentID int
+	db.QueryRow(`SELECT id FROM duty_assignments WHERE duty_slot_id=? AND user_id=?`, slotID, userID).Scan(&assignmentID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	trainerID := testutil.CreateUser(t, db, "admin")
+	token := testutil.Token(t, trainerID, "admin", nil)
+
+	res := testutil.Post(t, srv,
+		"/api/duty-assignments/"+itoa(assignmentID)+"/cash-substitute", token,
+		map[string]float64{"amount": 15.0})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var status string
+	var cashAmount float64
+	db.QueryRow(`SELECT status, COALESCE(cash_amount,0) FROM duty_assignments WHERE id=?`, assignmentID).Scan(&status, &cashAmount)
+	if status != "cash_substitute" {
+		t.Errorf("expected status='cash_substitute', got %q", status)
+	}
+	if cashAmount != 15.0 {
+		t.Errorf("expected cash_amount=15.0, got %v", cashAmount)
+	}
+}
+
+// TC: ListAssignments gibt alle Zuweisungen eines Slots zurück.
+func TestListAssignments_ReturnsAll(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dutyTypeID := createDutyType(t, db, "Aufbau", 2.0)
+	slotID := createDutySlot(t, db, dutyTypeID, seasonID, teamID, 0, "2026-07-01")
+
+	userA := testutil.CreateUser(t, db, "standard")
+	userB := testutil.CreateUser(t, db, "standard")
+	insertDutyAssignment(t, db, slotID, userA, "assigned")
+	insertDutyAssignment(t, db, slotID, userB, "fulfilled")
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	trainerID := testutil.CreateUser(t, db, "admin")
+	token := testutil.Token(t, trainerID, "admin", nil)
+
+	res := testutil.Get(t, srv, "/api/duty-slots/"+itoa(slotID)+"/assignments", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var items []map[string]any
+	json.NewDecoder(res.Body).Decode(&items)
+	res.Body.Close()
+
+	if len(items) != 2 {
+		t.Errorf("expected 2 assignments, got %d", len(items))
+	}
+	for _, item := range items {
+		if item["user_name"] == nil || item["status"] == nil {
+			t.Errorf("assignment missing user_name or status: %v", item)
+		}
 	}
 }
