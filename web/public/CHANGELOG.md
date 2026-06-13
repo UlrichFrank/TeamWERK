@@ -1,4 +1,10 @@
+## 13.06.2026
+- [feat] members: CSV-Import-Modus "enrich" – nur leere Felder ergänzen
+
 ## 12.06.2026
+- [feat] team: Tab-Ansicht bei Teams
+- [fix] mailer: Logo via CID einbetten statt externer URL
+- [fix] mailer: Logo via CID einbetten statt externer URL
 - [fix] mailer: Precedence- und X-Mailer-Header für bessere Zustellbarkeit
 - [fix] notify: mailer.New-Aufruf um baseURL-Parameter ergänzen
 - [fix] mailer: Exakte App-Kachel – border-top statt div, Tailwind shadow
