@@ -1211,39 +1211,6 @@ func validateIBAN(s string) (bool, string) {
 	return true, ""
 }
 
-// classifyEmail returns "eigen", "eltern", or "kind-eigen".
-// Adults (≥18) → "eigen". Minors: first name in email local part → "kind-eigen", else → "eltern".
-func classifyEmail(email, firstName, dob string) string {
-	if email == "" {
-		return ""
-	}
-	isMinor := false
-	if dob != "" {
-		if t, err := time.Parse("2006-01-02", dob); err == nil {
-			isMinor = time.Since(t).Hours()/(24*365.25) < 18
-		}
-	}
-	if !isMinor {
-		return "eigen"
-	}
-	atIdx := strings.Index(email, "@")
-	if atIdx < 0 {
-		return "eltern"
-	}
-	filterAlpha := func(s string) string {
-		return strings.Map(func(r rune) rune {
-			if r >= 'a' && r <= 'z' {
-				return r
-			}
-			return -1
-		}, strings.ToLower(s))
-	}
-	if first := filterAlpha(firstName); first != "" && strings.Contains(filterAlpha(email[:atIdx]), first) {
-		return "kind-eigen"
-	}
-	return "eltern"
-}
-
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
@@ -1517,9 +1484,8 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			var newID int64
 			if !dryRun {
-				res, insErr := h.db.ExecContext(r.Context(),
+				_, insErr := h.db.ExecContext(r.Context(),
 					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
 					                      pass_number, jersey_number, position, status, gender, home_club,
 					                      street, zip, city, join_date, iban, account_holder, sepa_mandat,
@@ -1541,9 +1507,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 					report.Errors++
 					continue
 				}
-				newID, _ = res.LastInsertId()
 			}
-			h.applyLinkUpdates(r, int(newID), row, col, sql.NullInt64{}, dob, true, dryRun)
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "created", Name: displayName, DOB: dob, IBANWarning: ibanWarn,
 			})
@@ -1659,9 +1623,6 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		linkNotes := h.applyLinkUpdates(r, existingID, row, col, dbUserID, dob, false, dryRun)
-		changes = append(changes, linkNotes...)
-
 		if len(setClauses) > 0 && !dryRun {
 			setArgs = append(setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
@@ -1693,65 +1654,6 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	report.Total = report.Created + report.Updated + report.Unchanged + report.Errors + report.NotFound
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(report)
-}
-
-// applyLinkUpdates classifies Email and Email 2 columns and creates user/family-link associations.
-// Pass isNew=true for freshly inserted members to suppress notes.
-// Pass dryRun=true to skip all DB writes (preview mode).
-func (h *Handler) applyLinkUpdates(r *http.Request, memberID int, row []string, col func([]string, string) string, dbUserID sql.NullInt64, dob string, isNew bool, dryRun bool) []string {
-	var notes []string
-	firstName := col(row, "Vorname")
-
-	for _, emailCol := range []string{"Email", "Email 2"} {
-		email := col(row, emailCol)
-		if email == "" {
-			continue
-		}
-		switch classifyEmail(email, firstName, dob) {
-		case "eigen":
-			if dbUserID.Valid {
-				continue // already linked
-			}
-			var uid int
-			if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?)`, email).Scan(&uid); err == nil {
-				if !dryRun {
-					h.db.ExecContext(r.Context(), `UPDATE members SET user_id=? WHERE id=?`, uid, memberID)
-				}
-				if !isNew {
-					notes = append(notes, fmt.Sprintf("%s: → %q (User verknüpft)", emailCol, email))
-				}
-			} else if !isNew {
-				notes = append(notes, fmt.Sprintf("%s: %q (kein User-Account gefunden)", emailCol, email))
-			}
-
-		case "eltern":
-			var uid int
-			if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE lower(email)=lower(?)`, email).Scan(&uid); err != nil {
-				if !isNew {
-					notes = append(notes, fmt.Sprintf("%s: %q (kein User-Account gefunden)", emailCol, email))
-				}
-				continue
-			}
-			var exists int
-			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM family_links WHERE parent_user_id=? AND member_id=?`, uid, memberID).Scan(&exists)
-			if exists == 0 {
-				if !dryRun {
-					h.db.ExecContext(r.Context(),
-						`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`, uid, memberID)
-				}
-				if !isNew {
-					notes = append(notes, fmt.Sprintf("%s: → %q (Elternteil verknüpft)", emailCol, email))
-				}
-			}
-
-		case "kind-eigen":
-			if !isNew {
-				notes = append(notes, fmt.Sprintf("%s: %q (Kind-Email, kein automatischer Link)", emailCol, email))
-			}
-		}
-	}
-	return notes
 }
 
 // POST /api/admin/users/{id}/create-member
