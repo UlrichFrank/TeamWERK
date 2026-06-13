@@ -714,12 +714,12 @@ func (h *Handler) Accounts(w http.ResponseWriter, r *http.Request) {
 	var rows *sql.Rows
 	if claims.Role == "admin" {
 		rows, _ = h.db.QueryContext(r.Context(),
-			`SELECT da.user_id, u.name, da.season_id, da.soll, da.ist
+			`SELECT da.user_id, u.first_name || ' ' || u.last_name, da.season_id, da.soll, da.ist
 			 FROM duty_accounts da JOIN users u ON u.id = da.user_id
-			 ORDER BY u.name`)
+			 ORDER BY u.last_name, u.first_name`)
 	} else {
 		rows, _ = h.db.QueryContext(r.Context(),
-			`SELECT da.user_id, u.name, da.season_id, da.soll, da.ist
+			`SELECT da.user_id, u.first_name || ' ' || u.last_name, da.season_id, da.soll, da.ist
 			 FROM duty_accounts da JOIN users u ON u.id = da.user_id
 			 WHERE da.user_id=?`, claims.UserID)
 	}

@@ -3,6 +3,7 @@ package mailer
 import (
 	"bytes"
 	"crypto/rand"
+	_ "embed"
 	"encoding/base64"
 	"fmt"
 	"html"
@@ -16,11 +17,14 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/config"
 )
 
+//go:embed assets/icon-192.png
+var logoPNG []byte
+
 var urlRe = regexp.MustCompile(`https?://\S+`)
 
 type Mailer struct {
 	cfg      config.SMTPConfig
-	fromAddr string // bare email extracted from cfg.From
+	fromAddr string
 	baseURL  string
 }
 
@@ -38,7 +42,8 @@ func (m *Mailer) Send(to, subject, textBody string) error {
 	b := make([]byte, 12)
 	rand.Read(b)
 	msgID := fmt.Sprintf("<%x@%s>", b, m.cfg.Host)
-	boundary := fmt.Sprintf("=_%x_boundary", b)
+	relBoundary := fmt.Sprintf("=_%x_related", b)
+	altBoundary := fmt.Sprintf("=_%x_alt", b)
 
 	encodedSubject := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?="
 
@@ -51,10 +56,14 @@ func (m *Mailer) Send(to, subject, textBody string) error {
 	fmt.Fprintf(&buf, "MIME-Version: 1.0\r\n")
 	fmt.Fprintf(&buf, "Precedence: transactional\r\n")
 	fmt.Fprintf(&buf, "X-Mailer: TeamWERK\r\n")
-	fmt.Fprintf(&buf, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary)
+	fmt.Fprintf(&buf, "Content-Type: multipart/related; boundary=\"%s\"\r\n\r\n", relBoundary)
+
+	// multipart/alternative block
+	fmt.Fprintf(&buf, "--%s\r\n", relBoundary)
+	fmt.Fprintf(&buf, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", altBoundary)
 
 	// text/plain part
-	fmt.Fprintf(&buf, "--%s\r\n", boundary)
+	fmt.Fprintf(&buf, "--%s\r\n", altBoundary)
 	buf.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
 	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
 	qpw := quotedprintable.NewWriter(&buf)
@@ -62,14 +71,26 @@ func (m *Mailer) Send(to, subject, textBody string) error {
 	qpw.Close()
 
 	// text/html part
-	fmt.Fprintf(&buf, "\r\n--%s\r\n", boundary)
+	fmt.Fprintf(&buf, "\r\n--%s\r\n", altBoundary)
 	buf.WriteString("Content-Type: text/html; charset=utf-8\r\n")
 	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
 	qpw = quotedprintable.NewWriter(&buf)
 	qpw.Write([]byte(m.textToHTML(textBody))) //nolint:errcheck
 	qpw.Close()
+	fmt.Fprintf(&buf, "\r\n--%s--\r\n", altBoundary)
 
-	fmt.Fprintf(&buf, "\r\n--%s--\r\n", boundary)
+	// inline logo as CID attachment
+	fmt.Fprintf(&buf, "\r\n--%s\r\n", relBoundary)
+	buf.WriteString("Content-Type: image/png\r\n")
+	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+	buf.WriteString("Content-ID: <logo@teamwerk>\r\n")
+	buf.WriteString("Content-Disposition: inline; filename=\"icon-192.png\"\r\n\r\n")
+	enc := base64.NewEncoder(base64.StdEncoding, &buf)
+	enc.Write(logoPNG) //nolint:errcheck
+	enc.Close()
+	buf.WriteString("\r\n")
+
+	fmt.Fprintf(&buf, "\r\n--%s--\r\n", relBoundary)
 
 	addr := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
 	return smtp.SendMail(addr, auth, m.fromAddr, []string{to}, buf.Bytes())
@@ -90,10 +111,8 @@ func actionButtonLabel(u string) string {
 }
 
 // textToHTML converts a plain-text email body to a minimal branded HTML version.
-// Action URLs (register, reset-password, email confirm) become CTA buttons;
-// other URLs become inline links; double newlines become paragraphs.
+// Action URLs become CTA buttons; other URLs become inline links.
 func (m *Mailer) textToHTML(text string) string {
-	// Linkify URLs before HTML-escaping so we can insert raw <a> tags.
 	locs := urlRe.FindAllStringIndex(text, -1)
 	var content strings.Builder
 	prev := 0
@@ -116,8 +135,6 @@ func (m *Mailer) textToHTML(text string) string {
 	}
 	content.WriteString(html.EscapeString(text[prev:]))
 
-	// Build paragraphs from double-newline-separated blocks.
-	// Blocks that already start with an HTML block tag are emitted as-is.
 	var pTags []string
 	for _, block := range strings.Split(content.String(), "\n\n") {
 		block = strings.TrimSpace(block)
@@ -132,7 +149,6 @@ func (m *Mailer) textToHTML(text string) string {
 	}
 
 	body := strings.Join(pTags, "\n")
-	logoURL := m.baseURL + "/icons/icon-192.png"
 	return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -141,7 +157,7 @@ func (m *Mailer) textToHTML(text string) string {
   <div style="padding:20px 24px;border-bottom:1px solid #E5E7EB">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"><tr>
       <td width="52" style="vertical-align:middle">
-        <img src="` + logoURL + `" alt="Team Stuttgart" width="44" height="44" style="display:block;border-radius:6px">
+        <img src="cid:logo@teamwerk" alt="Team Stuttgart" width="44" height="44" style="display:block;border-radius:6px">
       </td>
       <td style="vertical-align:middle;padding-left:12px">
         <span style="color:#181310;font-weight:700;font-size:20px;display:block;letter-spacing:-.5px">TeamWERK</span>

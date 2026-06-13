@@ -584,3 +584,40 @@ refactor(members): Paginierung serverseitig, clientseitige filter() entfernt
 ### Wann committen
 
 Pro OpenSpec-Task ein Commit — nicht alle Tasks in einem Commit zusammenfassen. Nach dem letzten Task folgt ein abschließender Commit, der ggf. die OpenSpec-Proposal-Datei archiviert.
+
+---
+
+## Test-Standard
+
+### Regel: Jede neue Route bekommt Tests
+
+Jede neue HTTP-Route in einem OpenSpec-Change **muss** mindestens abdecken:
+- **Happy Path:** Erfolgsfall mit korrekten Vorbedingungen
+- **Fehlerfall:** Authorization (403/401) oder ungültige Eingabe (400/404/409)
+
+Tests prüfen **fachliche Invarianten** — was das System garantieren muss. Keine Dummy-Assertions nur zur Coverage-Erhöhung.
+
+### Pflicht in OpenSpec-Proposals
+
+Jeder Proposal der neue Routen oder geänderte Geschäftslogik enthält, **muss** einen Abschnitt enthalten:
+
+```markdown
+## Test-Anforderungen
+
+- Route `POST /api/xyz`: TestXyz_HappyPath (201), TestXyz_Forbidden (403)
+- Invariante: <was das System garantieren muss>
+```
+
+### Coverage-Tool
+
+```bash
+make coverage   # Coverage pro Package auf stdout + HTML nach /tmp/teamwerk-coverage.html
+```
+
+Coverage-Zahlen sind ein Indikator, kein Gate. Eine neue Route mit 2 sinnvollen Tests ist besser als 10 Dummy-Assertions.
+
+### Testinfrastruktur
+
+- **`internal/testutil/`** — alle Fixtures: `NewDB`, `NewServer`, `CreateUser`, `CreateMember`, `CreateSeason`, `CreateTeam`, `CreateGame`, `CreateKader`, `CreateDutyType`, `CreateDutySlot`, `CreateInvitationToken`, `CreatePasswordResetToken`, `CreateRefreshToken`
+- **Go-Version:** `/usr/local/go/bin/go` (1.25) — nicht `go` (Homebrew 1.26+, inkompatibel mit go.mod)
+- **player_memberships** ist eine View über `kader_members` — kein direktes INSERT möglich, stattdessen: `INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`
