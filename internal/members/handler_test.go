@@ -26,6 +26,8 @@ func newMembersServer(t *testing.T, database *sql.DB) *httptest.Server {
 		r.Post("/api/admin/members/{id}/proxy-account", h.CreateProxyAccount)
 		r.Get("/api/profile/me", h.GetProfile)
 		r.Put("/api/profile/me", h.UpdateProfile)
+		r.Get("/api/profile/kind/{memberId}", h.GetChildProfile)
+		r.Get("/api/members/{id}/parents", h.GetMemberParents)
 	})
 }
 
@@ -418,5 +420,46 @@ func TestUpdateProfile_PersistsChange(t *testing.T) {
 	database.QueryRow(`SELECT first_name FROM users WHERE id=?`, userID).Scan(&firstName)
 	if firstName != "Neuer" {
 		t.Errorf("expected first_name='Neuer', got %q", firstName)
+	}
+}
+
+// TC-SEC-M01: GetChildProfile returns correct parent name (u.name bug fix).
+func TestGetChildProfile_ReturnsParentName(t *testing.T) {
+	database := testutil.NewDB(t)
+	// Create a parent user (DB role is "standard"; JWT role is "elternteil" via token)
+	parentID := testutil.CreateUser(t, database, "standard")
+	// Create a member linked to the parent (userID=0 means no linked user)
+	memberID := testutil.CreateMember(t, database, 0)
+	// Insert a family link
+	if _, err := database.Exec(
+		`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`,
+		parentID, memberID); err != nil {
+		t.Fatalf("insert family_link: %v", err)
+	}
+	// Update parent's name for the assertion
+	database.Exec(`UPDATE users SET first_name='Anna', last_name='Müller' WHERE id=?`, parentID)
+
+	srv := newMembersServer(t, database)
+	token := testutil.Token(t, parentID, "elternteil", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/profile/kind/%d", memberID), token)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		Parents []struct {
+			Name string `json:"name"`
+		} `json:"parents"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Parents) == 0 {
+		t.Fatal("parents array is empty — u.name bug may be present")
+	}
+	if body.Parents[0].Name != "Anna Müller" {
+		t.Errorf("expected 'Anna Müller', got %q", body.Parents[0].Name)
 	}
 }

@@ -593,11 +593,27 @@ func (h *Handler) Unclaim(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "already fulfilled", http.StatusConflict)
 		return
 	}
-	h.db.ExecContext(r.Context(),
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(r.Context(),
 		`DELETE FROM duty_assignments WHERE duty_slot_id=? AND user_id=?`,
-		slotID, claims.UserID)
-	h.db.ExecContext(r.Context(),
-		`UPDATE duty_slots SET slots_filled = slots_filled - 1 WHERE id=?`, slotID)
+		slotID, claims.UserID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(),
+		`UPDATE duty_slots SET slots_filled = slots_filled - 1 WHERE id=?`, slotID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -633,22 +649,29 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var total, filled int
-	err := h.db.QueryRowContext(r.Context(),
-		`SELECT slots_total, slots_filled FROM duty_slots WHERE id=?`, slotID).
-		Scan(&total, &filled)
-	if err != nil || filled >= total {
+	// Atomically increment slots_filled only if capacity remains. This prevents
+	// concurrent over-claim without a transaction (SQLite serializes writes).
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE duty_slots SET slots_filled = slots_filled + 1
+		 WHERE id = ? AND slots_filled < slots_total`, slotID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
 		http.Error(w, "slot full or not found", http.StatusConflict)
 		return
 	}
 	_, err = h.db.ExecContext(r.Context(),
 		`INSERT INTO duty_assignments (duty_slot_id, user_id) VALUES (?,?)`, slotID, targetUserID)
 	if err != nil {
+		// Rollback the counter increment if assignment insert fails (e.g. duplicate).
+		h.db.ExecContext(r.Context(),
+			`UPDATE duty_slots SET slots_filled = slots_filled - 1 WHERE id=?`, slotID)
 		http.Error(w, "already claimed", http.StatusConflict)
 		return
 	}
-	h.db.ExecContext(r.Context(),
-		`UPDATE duty_slots SET slots_filled = slots_filled + 1 WHERE id=?`, slotID)
 	// Ensure a duty_accounts row exists for the target user in the active season
 	h.db.ExecContext(r.Context(),
 		`INSERT OR IGNORE INTO duty_accounts (user_id, season_id, soll, ist)

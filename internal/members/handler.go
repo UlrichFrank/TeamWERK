@@ -1168,7 +1168,7 @@ func normalizeDate(s string) string {
 		if err != nil {
 			return s
 		}
-		if y >= 30 {
+		if y >= 68 {
 			year = "19" + year
 		} else {
 			year = "20" + year
@@ -1919,7 +1919,7 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	pRows, _ := h.db.QueryContext(r.Context(),
-		`SELECT u.id, u.name, u.email FROM users u JOIN family_links fl ON fl.parent_user_id=u.id WHERE fl.member_id=?`,
+		`SELECT u.id, u.first_name || ' ' || u.last_name, u.email FROM users u JOIN family_links fl ON fl.parent_user_id=u.id WHERE fl.member_id=?`,
 		memberID)
 	parents := []parentEntry{}
 	if pRows != nil {

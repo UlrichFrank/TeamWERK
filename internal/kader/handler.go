@@ -226,54 +226,84 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	execTx := func(query string, args ...any) error {
+		_, err := tx.ExecContext(r.Context(), query, args...)
+		return err
+	}
+
 	for _, memberID := range req.MembersAdd {
-		tx.ExecContext(r.Context(),
-			`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?,?)`, id, memberID)
+		if err := execTx(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?,?)`, id, memberID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	for _, memberID := range req.MembersRemove {
-		tx.ExecContext(r.Context(),
-			`DELETE FROM kader_members WHERE kader_id=? AND member_id=?`, id, memberID)
+		if err := execTx(`DELETE FROM kader_members WHERE kader_id=? AND member_id=?`, id, memberID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	for _, memberID := range req.TrainersAdd {
-		tx.ExecContext(r.Context(),
-			`INSERT OR IGNORE INTO kader_trainers (kader_id, member_id) VALUES (?,?)`, id, memberID)
+		if err := execTx(`INSERT OR IGNORE INTO kader_trainers (kader_id, member_id) VALUES (?,?)`, id, memberID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	for _, memberID := range req.TrainersRemove {
-		tx.ExecContext(r.Context(),
-			`DELETE FROM kader_trainers WHERE kader_id=? AND member_id=?`, id, memberID)
+		if err := execTx(`DELETE FROM kader_trainers WHERE kader_id=? AND member_id=?`, id, memberID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	for _, memberID := range req.ExtendedMembersAdd {
-		tx.ExecContext(r.Context(),
-			`INSERT OR IGNORE INTO kader_extended_members (kader_id, member_id) VALUES (?,?)`, id, memberID)
+		if err := execTx(`INSERT OR IGNORE INTO kader_extended_members (kader_id, member_id) VALUES (?,?)`, id, memberID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	for _, memberID := range req.ExtendedMembersRemove {
-		tx.ExecContext(r.Context(),
-			`DELETE FROM kader_extended_members WHERE kader_id=? AND member_id=?`, id, memberID)
+		if err := execTx(`DELETE FROM kader_extended_members WHERE kader_id=? AND member_id=?`, id, memberID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if req.DedicatedBirthYear != nil {
-		tx.ExecContext(r.Context(),
-			`UPDATE kader SET dedicated_birth_year=?, updated_at=? WHERE id=?`,
-			*req.DedicatedBirthYear, time.Now(), id)
+		if err := execTx(`UPDATE kader SET dedicated_birth_year=?, updated_at=? WHERE id=?`,
+			*req.DedicatedBirthYear, time.Now(), id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	} else if req.SetDedicatedBirthYear {
-		// explicit null — reset to mixed mode
-		tx.ExecContext(r.Context(),
-			`UPDATE kader SET dedicated_birth_year=NULL, updated_at=? WHERE id=?`,
-			time.Now(), id)
+		if err := execTx(`UPDATE kader SET dedicated_birth_year=NULL, updated_at=? WHERE id=?`,
+			time.Now(), id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if req.AgeClass != nil && *req.AgeClass != "" {
 		var gender string
 		var teamNumber int
-		tx.QueryRowContext(r.Context(), `SELECT gender, team_number FROM kader WHERE id=?`, id).Scan(&gender, &teamNumber)
+		if err := tx.QueryRowContext(r.Context(), `SELECT gender, team_number FROM kader WHERE id=?`, id).
+			Scan(&gender, &teamNumber); err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "kader not found", http.StatusNotFound)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
 		newTeamID, err := ensureTeam(r.Context(), tx, *req.AgeClass, gender, teamNumber)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		tx.ExecContext(r.Context(),
-			`UPDATE kader SET age_class=?, team_id=?, updated_at=? WHERE id=?`,
-			*req.AgeClass, newTeamID, time.Now(), id)
+		if err := execTx(`UPDATE kader SET age_class=?, team_id=?, updated_at=? WHERE id=?`,
+			*req.AgeClass, newTeamID, time.Now(), id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

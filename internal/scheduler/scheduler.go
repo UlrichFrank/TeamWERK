@@ -135,15 +135,13 @@ func (s *Scheduler) sendDutyReminders() {
 		if len(pushUsers) == 0 {
 			continue
 		}
-		// Idempotency via notification_log
-		var logExists int
-		s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type='duty_reminder' AND ref_id=?`,
-			uid, hashDate(targetDate)).Scan(&logExists)
-		if logExists == 0 {
+		// Idempotency via notification_log: INSERT first, then check RowsAffected.
+		// This prevents double-send when two cron instances run concurrently.
+		res, _ := s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+			uid, "duty_reminder", hashDate(targetDate))
+		if n, _ := res.RowsAffected(); n == 1 {
 			go push.SendToUsers(s.db, s.cfg, []int{uid},
 				"Offene Dienste", "Am "+formatDate(targetDate)+" gibt es noch offene Dienste", "/dienste")
-			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
-				uid, "duty_reminder", hashDate(targetDate))
 			pushSent++
 		}
 	}

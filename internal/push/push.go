@@ -73,7 +73,10 @@ func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, 
 			continue
 		}
 		resp.Body.Close()
-		if resp.StatusCode == http.StatusGone {
+		// Web Push Spec §7: remove subscriptions on permanent failure codes.
+		switch resp.StatusCode {
+		case http.StatusGone, http.StatusNotFound,
+			http.StatusUnauthorized, http.StatusBadRequest:
 			db.Exec(`DELETE FROM push_subscriptions WHERE id = ?`, s.id)
 		}
 	}

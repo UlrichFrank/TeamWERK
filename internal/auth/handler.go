@@ -30,6 +30,10 @@ func NewHandler(db *sql.DB, cfg *appconfig.Config, jwtSecret string, m *mailer.M
 	return &Handler{db: db, cfg: cfg, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL}
 }
 
+// dummyHash is a pre-computed bcrypt hash used in the login ErrNoRows branch to
+// perform a constant-time dummy comparison, preventing timing-based email enumeration.
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("teamwerk-dummy-password-for-timing"), bcrypt.DefaultCost)
+
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
@@ -45,6 +49,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, password, role FROM users WHERE LOWER(email) = LOWER(?) AND can_login = 1`, req.Email,
 	).Scan(&id, &hash, &role)
 	if err == sql.ErrNoRows {
+		bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password)) //nolint:errcheck
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	} else if err != nil {
@@ -113,16 +118,48 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE token_hash = ?`, tokenHash)
-
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
-	accessToken, _ := IssueAccessToken(h.jwtSecret, id, email, role, clubFunctions, isParent)
-	plain, newHash, _ := GenerateOpaqueToken()
+	accessToken, err := IssueAccessToken(h.jwtSecret, id, email, role, clubFunctions, isParent)
+	if err != nil {
+		log.Printf("Refresh: IssueAccessToken error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	plain, newHash, err := GenerateOpaqueToken()
+	if err != nil {
+		log.Printf("Refresh: GenerateOpaqueToken error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	newExpiry := RefreshTokenExpiry()
-	h.db.ExecContext(r.Context(),
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		log.Printf("Refresh: BeginTx error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE token_hash = ?`, tokenHash); err != nil {
+		log.Printf("Refresh: DELETE error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(),
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?,?,?)`,
 		id, newHash, newExpiry,
-	)
+	); err != nil {
+		log.Printf("Refresh: INSERT error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("Refresh: Commit error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    plain,
@@ -370,7 +407,12 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Register: bcrypt error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	res, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO users (email, first_name, last_name, password, role, team_id) VALUES (?,?,?,?,?,?)`,
 		email, firstName, lastName, string(hash), role, teamID,

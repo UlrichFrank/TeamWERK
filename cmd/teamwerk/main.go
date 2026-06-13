@@ -130,13 +130,16 @@ func serve() {
 	r.Post("/api/auth/reset-password", authH.ResetPassword)
 	r.Get("/api/profile/email/confirm", authH.ConfirmEmailChange)
 
+	// SSE endpoints — authenticated via HttpOnly refresh-token cookie (EventSource cannot send headers)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.CookieMiddleware(database))
+		r.Get("/api/events", hubH.Events)
+		r.Get("/api/chat/events", chatH.ChatEvents)
+	})
+
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(cfg.JWTSecret))
-
-		// SSE live updates
-		r.Get("/api/events", hubH.Events)
-		r.Get("/api/chat/events", chatH.ChatEvents)
 
 		// Chat
 		r.Get("/api/chat/users", chatH.Users)

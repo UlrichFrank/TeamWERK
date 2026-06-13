@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -946,5 +947,65 @@ func TestListAssignments_ReturnsAll(t *testing.T) {
 		if item["user_name"] == nil || item["status"] == nil {
 			t.Errorf("assignment missing user_name or status: %v", item)
 		}
+	}
+}
+
+// TC-SEC-D01: Concurrent claim of last slot — exactly one succeeds, no overclaim.
+func TestClaimDutySlot_NoConcurrentOverclaim(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26") // CreateSeason activates the season
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dutyTypeID := createDutyType(t, db, "Kassierer", 2.0)
+
+	// Slot with slots_total=1 — only one claim can succeed.
+	res, _ := db.Exec(
+		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, slots_filled, team_id, season_id)
+		 VALUES ('Concurrency Test', '2026-06-20', ?, 1, 0, ?, ?)`,
+		dutyTypeID, teamID, seasonID)
+	slotID, _ := res.LastInsertId()
+
+	user1 := testutil.CreateUser(t, db, "standard")
+	user2 := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token1 := testutil.Token(t, user1, "spieler", nil)
+	token2 := testutil.Token(t, user2, "spieler", nil)
+
+	var wg sync.WaitGroup
+	statuses := make([]int, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		r := testutil.Post(t, srv, "/api/duty-board/"+itoa(int(slotID))+"/claim", token1, nil)
+		r.Body.Close()
+		statuses[0] = r.StatusCode
+	}()
+	go func() {
+		defer wg.Done()
+		r := testutil.Post(t, srv, "/api/duty-board/"+itoa(int(slotID))+"/claim", token2, nil)
+		r.Body.Close()
+		statuses[1] = r.StatusCode
+	}()
+	wg.Wait()
+
+	successes := 0
+	for _, s := range statuses {
+		if s == http.StatusNoContent {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Errorf("expected exactly 1 successful claim, got %d (statuses: %v)", successes, statuses)
+	}
+
+	filled := slotsFilled(t, db, int(slotID))
+	if filled != 1 {
+		t.Errorf("slots_filled should be 1 after one claim, got %d (no overclaim)", filled)
+	}
+
+	assignments := countRows(t, db, "duty_assignments", "duty_slot_id=?", slotID)
+	if assignments != 1 {
+		t.Errorf("expected 1 assignment row, got %d", assignments)
 	}
 }

@@ -91,7 +91,7 @@ export default function MembersPage() {
   )
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'vorstand'
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
 

@@ -1,15 +1,18 @@
 import { useEffect, useRef } from 'react'
-import { getAccessToken } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 
 export function useLiveUpdates(onEvent: (eventType: string) => void) {
   const onEventRef = useRef(onEvent)
   useEffect(() => { onEventRef.current = onEvent })
 
-  useEffect(() => {
-    const token = getAccessToken()
-    if (!token) return
+  const { user } = useAuth()
 
-    const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`)
+  // Reconnects whenever `user` changes (login/logout/impersonation).
+  // SSE authenticates via the HttpOnly refresh-token cookie — no token in URL.
+  useEffect(() => {
+    if (!user) return
+
+    const es = new EventSource('/api/events')
 
     es.onmessage = (e) => {
       if (e.data && !e.data.startsWith('__version:')) onEventRef.current(e.data)
@@ -20,5 +23,5 @@ export function useLiveUpdates(onEvent: (eventType: string) => void) {
     }
 
     return () => es.close()
-  }, [])
+  }, [user])
 }

@@ -61,23 +61,28 @@ Der Server SHALL einen SSE-Endpoint `GET /api/events` bereitstellen. Der Endpoin
 - **WHEN** 30 Sekunden keine Mutation stattgefunden hat
 - **THEN** sendet der Server einen SSE-Kommentar (`: ping`) um die Verbindung offen zu halten
 
-### Requirement: Auth via JWT-Query-Parameter am SSE-Endpoint
+### Requirement: Auth via Cookie am SSE-Endpoint
 
-Da `EventSource` keine Custom-Header unterstützt, SHALL die Auth-Middleware auch einen `?token=<jwt>`-Query-Parameter akzeptieren. Der SSE-Endpoint SHALL im authenticated-Block registriert sein.
+Da `EventSource` keine Custom-Header unterstützt, SHALL der SSE-Endpunkt `GET /api/events` über das HttpOnly-Refresh-Token-Cookie authentifiziert werden. Die Nutzung eines `?token=<jwt>`-Query-Parameters MUST entfernt werden, da Access Tokens in URL-Query-Parametern in Server-Logs, Browser-Verlauf und Proxy-Logs erscheinen. Das Backend MUST den Cookie-basierten Auth-Pfad in der Middleware für den SSE-Endpunkt unterstützen.
 
-#### Scenario: Verbindungsaufbau mit gültigem Token
+#### Scenario: Verbindungsaufbau mit gültigem Cookie
 
-- **WHEN** ein eingeloggter Nutzer `GET /api/events?token=<valid-jwt>` aufruft
+- **WHEN** ein eingeloggter Nutzer `GET /api/events` mit einem gültigen HttpOnly-Refresh-Token-Cookie aufruft
 - **THEN** wird die Verbindung akzeptiert und offen gehalten
 
 #### Scenario: Verbindungsaufbau ohne Token schlägt fehl
 
-- **WHEN** ein nicht-authentifizierter Request den SSE-Endpoint aufruft
+- **WHEN** ein nicht-authentifizierter Request den SSE-Endpoint aufruft (kein Cookie, kein Bearer Token)
 - **THEN** antwortet der Server mit HTTP 401
+
+#### Scenario: Access Token NICHT im Query-Parameter
+
+- **WHEN** ein Client `GET /api/events?token=<jwt>` aufruft (altes Verhalten)
+- **THEN** wird der `?token`-Query-Parameter NICHT als Authentifizierungsmittel akzeptiert
 
 ### Requirement: Frontend ersetzt manuellen Reload durch EventSource
 
-Alle relevanten Pages SHALL eine `useLiveUpdates`-Verbindung zum SSE-Endpoint aufbauen und bei einem passenden `message`-Event die Daten still neu laden (ohne sichtbaren Ladespinner).
+Alle relevanten Pages SHALL eine `useLiveUpdates`-Verbindung zum SSE-Endpoint aufbauen und bei einem passenden `message`-Event die Daten still neu laden (ohne sichtbaren Ladespinner). Die SSE-Verbindung MUSS nach einem Access-Token-Refresh automatisch neu aufgebaut werden, um Reconnect-Schleifen mit abgelaufenen Tokens zu vermeiden.
 
 | Seite | Abonnierte Events |
 |---|---|
@@ -113,6 +118,12 @@ Alle relevanten Pages SHALL eine `useLiveUpdates`-Verbindung zum SSE-Endpoint au
 
 - **WHEN** ein `members`-Event eintrifft und die aktuelle Seite nur auf `duties`-Events abonniert ist
 - **THEN** lädt die Seite NICHT neu
+
+#### Scenario: EventSource wird nach Token-Refresh neu aufgebaut
+
+- **WHEN** der Access Token durch den 401-Interceptor erneuert wurde
+- **THEN** baut `useLiveUpdates` eine neue EventSource-Verbindung auf
+- **THEN** gibt es keine Reconnect-Schleife mit dem abgelaufenen Token
 
 #### Scenario: Dashboard aktualisiert sich nach Spielplan-Änderung
 
