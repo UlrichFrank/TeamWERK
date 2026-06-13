@@ -544,6 +544,71 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"items": result, "total": total})
 }
 
+// GET /api/users/picker — returns users visible to the caller for folder permission assignment.
+// Admin/Vorstand: all users. Others: users reachable via user_accessible_teams (active season).
+func (h *Handler) UsersPicker(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+
+	type pickerUser struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+		rows, err = h.db.QueryContext(r.Context(),
+			`SELECT id, first_name || ' ' || last_name FROM users ORDER BY first_name, last_name`)
+	} else {
+		rows, err = h.db.QueryContext(r.Context(), `
+			SELECT DISTINCT u.id, u.first_name || ' ' || u.last_name AS name
+			  FROM user_accessible_teams uat
+			  JOIN seasons s ON s.id = uat.season_id AND s.is_active = 1
+			  JOIN kader k ON k.team_id = uat.team_id AND k.season_id = s.id
+			  JOIN kader_trainers kt ON kt.kader_id = k.id
+			  JOIN members mt ON mt.id = kt.member_id
+			  JOIN users u ON u.id = mt.user_id
+			 WHERE uat.user_id = ?
+			UNION
+			SELECT DISTINCT u.id, u.first_name || ' ' || u.last_name
+			  FROM user_accessible_teams uat
+			  JOIN seasons s ON s.id = uat.season_id AND s.is_active = 1
+			  JOIN kader k ON k.team_id = uat.team_id AND k.season_id = s.id
+			  JOIN kader_members km ON km.kader_id = k.id
+			  JOIN members mp ON mp.id = km.member_id
+			  JOIN users u ON u.id = mp.user_id
+			 WHERE uat.user_id = ?
+			UNION
+			SELECT DISTINCT u.id, u.first_name || ' ' || u.last_name
+			  FROM user_accessible_teams uat
+			  JOIN seasons s ON s.id = uat.season_id AND s.is_active = 1
+			  JOIN kader k ON k.team_id = uat.team_id AND k.season_id = s.id
+			  JOIN kader_members km ON km.kader_id = k.id
+			  JOIN family_links fl ON fl.member_id = km.member_id
+			  JOIN users u ON u.id = fl.parent_user_id
+			 WHERE uat.user_id = ?
+			ORDER BY 2`,
+			claims.UserID, claims.UserID, claims.UserID)
+	}
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	result := []pickerUser{}
+	for rows.Next() {
+		var u pickerUser
+		if err := rows.Scan(&u.ID, &u.Name); err != nil {
+			continue
+		}
+		result = append(result, u)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // POST /api/admin/impersonate/{userId}
 func (h *Handler) Impersonate(w http.ResponseWriter, r *http.Request) {
 	caller := ClaimsFromCtx(r.Context())

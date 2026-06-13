@@ -225,6 +225,8 @@ func serve() {
 			r.Get("/api/profile/notification-preferences", notifH.GetNotificationPreferences)
 			r.Put("/api/profile/notification-preferences", notifH.UpdateNotificationPreferences)
 
+		r.Get("/api/users/picker", authH.UsersPicker)
+
 		// Dokumente
 		r.Get("/api/folders", filesH.ListRootFolders)
 		r.Post("/api/folders", filesH.CreateFolder)
