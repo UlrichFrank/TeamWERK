@@ -42,6 +42,7 @@ interface Permission {
   id: number
   principal_type: string
   principal_ref: string
+  display_name?: string
   can_read: boolean
   can_write: boolean
 }
@@ -213,7 +214,7 @@ const PRINCIPAL_TYPE_LABELS: Record<string, string> = {
   everyone: 'Alle Nutzer',
   role: 'Rolle',
   club_function: 'Vereinsfunktion',
-  user: 'Person (User-ID)',
+  user: 'Person',
 }
 
 function PermissionsModal({ folderId, canWrite, onClose }: {
@@ -229,6 +230,8 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
   const [newWrite, setNewWrite] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [pickerUsers, setPickerUsers] = useState<{ id: number; name: string }[]>([])
+  const [pickerLoaded, setPickerLoaded] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -241,6 +244,18 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
   }, [folderId])
 
   useEffect(() => { load() }, [load])
+
+  async function loadPickerUsers() {
+    if (pickerLoaded) return
+    try {
+      const { data } = await api.get<{ id: number; name: string }[]>('/users/picker')
+      setPickerUsers(data)
+    } catch {
+      // ignore — picker stays empty
+    } finally {
+      setPickerLoaded(true)
+    }
+  }
 
   async function addPerm(e: React.FormEvent) {
     e.preventDefault()
@@ -273,7 +288,8 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
 
   function permLabel(p: Permission): string {
     if (p.principal_type === 'everyone') return 'Alle Nutzer'
-    return `${PRINCIPAL_TYPE_LABELS[p.principal_type] ?? p.principal_type}: ${p.principal_ref}`
+    const ref = p.principal_type === 'user' ? (p.display_name ?? p.principal_ref) : p.principal_ref
+    return `${PRINCIPAL_TYPE_LABELS[p.principal_type] ?? p.principal_type}: ${ref}`
   }
 
   return (
@@ -314,7 +330,12 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
             <p className="text-xs font-medium text-brand-text-muted uppercase tracking-wide">Berechtigung hinzufügen</p>
             <select
               value={newType}
-              onChange={e => { setNewType(e.target.value); setNewRef('') }}
+              onChange={e => {
+                const t = e.target.value
+                setNewType(t)
+                setNewRef('')
+                if (t === 'user') loadPickerUsers()
+              }}
               className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
             >
               {Object.entries(PRINCIPAL_TYPE_LABELS).map(([v, l]) => (
@@ -343,12 +364,16 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
               </select>
             )}
             {newType === 'user' && (
-              <input
+              <select
                 value={newRef}
                 onChange={e => setNewRef(e.target.value)}
-                placeholder="User-ID"
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-              />
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              >
+                <option value="">Person wählen…</option>
+                {pickerUsers.map(u => (
+                  <option key={u.id} value={String(u.id)}>{u.name}</option>
+                ))}
+              </select>
             )}
 
             <div className="flex gap-4 text-sm">

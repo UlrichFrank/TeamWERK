@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -53,8 +54,39 @@ func folderPath(db *sql.DB, folderID int) ([]int, error) {
 	return path, nil
 }
 
+// fetchFamilyContext returns the user IDs and club functions of members linked to
+// userID via family_links. Used to grant Elternteil users their children's access.
+func fetchFamilyContext(db *sql.DB, userID int) (linkedUserIDs []int, linkedFunctions []string) {
+	rows, err := db.Query(`
+		SELECT COALESCE(m.user_id, 0), COALESCE(mcf.function, '')
+		  FROM family_links fl
+		  JOIN members m ON m.id = fl.member_id
+		  LEFT JOIN member_club_functions mcf ON mcf.member_id = m.id
+		 WHERE fl.parent_user_id = ?`, userID)
+	if err != nil {
+		return nil, nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uid int
+		var fn string
+		if err := rows.Scan(&uid, &fn); err != nil {
+			continue
+		}
+		if uid != 0 && !slices.Contains(linkedUserIDs, uid) {
+			linkedUserIDs = append(linkedUserIDs, uid)
+		}
+		if fn != "" && !slices.Contains(linkedFunctions, fn) {
+			linkedFunctions = append(linkedFunctions, fn)
+		}
+	}
+	return linkedUserIDs, linkedFunctions
+}
+
 // resolveAccess returns the effective read/write access for the caller on folderID.
-// It unions permissions from the folder and all its ancestors (additive inheritance).
+// Nearest-ancestor-wins: the closest folder in the hierarchy with explicit permissions
+// is authoritative; ancestors beyond that point are ignored.
+// Elternteil users also inherit the club_function and user-ID rights of their children.
 func resolveAccess(db *sql.DB, claims *auth.Claims, folderID int) (canRead, canWrite bool, err error) {
 	if claims.Role == "admin" {
 		return true, true, nil
@@ -65,56 +97,61 @@ func resolveAccess(db *sql.DB, claims *auth.Claims, folderID int) (canRead, canW
 		return false, false, err
 	}
 
-	placeholders := make([]string, len(path))
-	args := make([]any, len(path))
-	for i, id := range path {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-
-	rows, err := db.Query(
-		`SELECT principal_type, principal_ref, can_read, can_write
-		   FROM folder_permissions
-		  WHERE folder_id IN (`+strings.Join(placeholders, ",")+`)`,
-		args...,
-	)
-	if err != nil {
-		return false, false, err
-	}
-	defer rows.Close()
-
+	linkedUserIDs, linkedFunctions := fetchFamilyContext(db, claims.UserID)
 	userIDStr := strconv.Itoa(claims.UserID)
 
-	for rows.Next() {
-		var pt, pr sql.NullString
-		var cr, cw int
-		if err := rows.Scan(&pt, &pr, &cr, &cw); err != nil {
-			continue
+	for _, id := range path {
+		rows, err := db.Query(
+			`SELECT principal_type, principal_ref, can_read, can_write
+			   FROM folder_permissions WHERE folder_id = ?`, id)
+		if err != nil {
+			return false, false, err
 		}
-		matches := false
-		switch pt.String {
-		case "everyone":
-			matches = true
-		case "role":
-			matches = pr.Valid && pr.String == claims.Role
-		case "club_function":
-			matches = pr.Valid && claims.HasFunction(pr.String)
-		case "user":
-			matches = pr.Valid && pr.String == userIDStr
-		}
-		if matches {
-			if cr == 1 {
-				canRead = true
+
+		var hasAny bool
+		var cr, cw bool
+
+		for rows.Next() {
+			hasAny = true
+			var pt, pr sql.NullString
+			var r, w int
+			if scanErr := rows.Scan(&pt, &pr, &r, &w); scanErr != nil {
+				continue
 			}
-			if cw == 1 {
-				canWrite = true
+			matches := false
+			switch pt.String {
+			case "everyone":
+				matches = true
+			case "role":
+				matches = pr.Valid && pr.String == claims.Role
+			case "club_function":
+				matches = pr.Valid && (claims.HasFunction(pr.String) || slices.Contains(linkedFunctions, pr.String))
+			case "user":
+				if pr.Valid && pr.String == userIDStr {
+					matches = true
+				} else if pr.Valid {
+					if uid, parseErr := strconv.Atoi(pr.String); parseErr == nil {
+						matches = slices.Contains(linkedUserIDs, uid)
+					}
+				}
+			}
+			if matches {
+				if r == 1 {
+					cr = true
+				}
+				if w == 1 {
+					cw = true
+				}
 			}
 		}
-		if canRead && canWrite {
-			break
+		rows.Close()
+
+		if hasAny {
+			return cr, cw, nil
 		}
 	}
-	return canRead, canWrite, rows.Err()
+
+	return false, false, nil
 }
 
 // checkAntiEscalation returns true if the caller is allowed to grant the requested rights.
@@ -373,6 +410,7 @@ type permResponse struct {
 	ID            int    `json:"id"`
 	PrincipalType string `json:"principal_type"`
 	PrincipalRef  string `json:"principal_ref"`
+	DisplayName   string `json:"display_name,omitempty"`
 	CanRead       bool   `json:"can_read"`
 	CanWrite      bool   `json:"can_write"`
 }
@@ -413,6 +451,16 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 		}
 		p.CanRead = cr == 1
 		p.CanWrite = cw == 1
+		if p.PrincipalType == "user" && p.PrincipalRef != "" {
+			var name string
+			err := h.db.QueryRowContext(r.Context(),
+				`SELECT first_name || ' ' || last_name FROM users WHERE id = ?`, p.PrincipalRef).Scan(&name)
+			if err == nil {
+				p.DisplayName = name
+			} else {
+				p.DisplayName = p.PrincipalRef
+			}
+		}
 		result = append(result, p)
 	}
 	w.Header().Set("Content-Type", "application/json")
