@@ -24,6 +24,8 @@ func newMembersServer(t *testing.T, database *sql.DB) *httptest.Server {
 		r.Post("/api/admin/family-links", h.CreateFamilyLink)
 		r.Delete("/api/admin/family-links", h.DeleteFamilyLink)
 		r.Post("/api/admin/members/{id}/proxy-account", h.CreateProxyAccount)
+		r.Get("/api/profile/me", h.GetProfile)
+		r.Put("/api/profile/me", h.UpdateProfile)
 	})
 }
 
@@ -374,5 +376,47 @@ func TestProxyAccount_AlreadyHasAccount(t *testing.T) {
 
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", res.StatusCode)
+	}
+}
+
+// ── GetProfile / UpdateProfile ────────────────────────────────────────────────
+
+// TC: GET /api/profile/me liefert eigene Daten zurück (HTTP 200).
+func TestGetProfile_ReturnsOwnData(t *testing.T) {
+	database := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, database, "standard")
+	database.Exec(`UPDATE users SET first_name='Klara', last_name='Mustermann' WHERE id=?`, userID)
+	srv := newMembersServer(t, database)
+
+	res := testutil.Get(t, srv, "/api/profile/me", testutil.Token(t, userID, "standard", nil))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	if body == nil {
+		t.Error("expected non-nil profile response")
+	}
+}
+
+// TC: PUT /api/profile/me ändert first_name in DB.
+func TestUpdateProfile_PersistsChange(t *testing.T) {
+	database := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, database, "standard")
+	srv := newMembersServer(t, database)
+
+	res := testutil.Do(t, srv, http.MethodPut, "/api/profile/me",
+		testutil.Token(t, userID, "standard", nil),
+		map[string]string{"first_name": "Neuer", "last_name": "Name"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var firstName string
+	database.QueryRow(`SELECT first_name FROM users WHERE id=?`, userID).Scan(&firstName)
+	if firstName != "Neuer" {
+		t.Errorf("expected first_name='Neuer', got %q", firstName)
 	}
 }
