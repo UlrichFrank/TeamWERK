@@ -248,3 +248,65 @@ func TestPreview_MultiChild_Union(t *testing.T) {
 		t.Fatalf("expected 1 deduped event, got %d: %v", len(events), events)
 	}
 }
+
+// TC-AB-EXT01: Fremdes Mitglied (kein Familienlink) → 403.
+func TestCreateAbsence_UnauthorizedMember(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "2025/26")
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	unlinkedMember := testutil.CreateMember(t, db, 0) // no family_links to parentUser
+
+	srv := newAbsenceServer(t, db)
+	body, _ := json.Marshal(map[string]any{
+		"member_ids": []int{unlinkedMember},
+		"type":       "vacation",
+		"start_date": "2026-07-01",
+		"end_date":   "2026-07-14",
+	})
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/absences", bytes.NewReader(body))
+	req.Header.Set("Authorization", parentToken(t, parentUserID))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 for unlinked member, got %d", res.StatusCode)
+	}
+	if countAbsences(t, db, unlinkedMember) != 0 {
+		t.Error("no absence should be created for unauthorized member")
+	}
+}
+
+// TC-AB-EXT02: Preview mit leerem Zeitraum (keine Events) gibt [] zurück.
+func TestPreview_Empty(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "2025/26")
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	childMember := testutil.CreateMember(t, db, 0)
+	linkFamily(t, db, parentUserID, childMember)
+
+	srv := newAbsenceServer(t, db)
+	url := fmt.Sprintf("%s/api/absences/preview?member_ids=%d&from=2026-08-01&to=2026-08-31",
+		srv.URL, childMember)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("Authorization", parentToken(t, parentUserID))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var events []map[string]any
+	json.NewDecoder(res.Body).Decode(&events)
+	if len(events) != 0 {
+		t.Errorf("expected 0 events for empty range, got %d", len(events))
+	}
+}

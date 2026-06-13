@@ -692,3 +692,107 @@ func TestCreateGame_GenericEventCanBeCreated(t *testing.T) {
 		t.Errorf("expected 1 generic event, got %d", count)
 	}
 }
+
+// ── TC-G-EXT: ListTeamsForUser ────────────────────────────────────────────────
+
+func teamsServer(t *testing.T, h *games.Handler) *httptest.Server {
+	return testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/teams", h.ListTeamsForUser)
+	})
+}
+
+// TC-G-EXT01: Trainer sees only teams they manage via kader_trainers.
+func TestListTeamsForUser_TrainerSeesOwnTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	testutil.CreateTeam(t, db, "Team B") // not linked to trainer
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := teamsServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Get(t, srv, "/api/teams", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var teams []map[string]any
+	json.NewDecoder(res.Body).Decode(&teams)
+	res.Body.Close()
+
+	if len(teams) != 1 {
+		t.Errorf("trainer: expected 1 team, got %d", len(teams))
+	}
+	if len(teams) > 0 {
+		if int(teams[0]["id"].(float64)) != teamA {
+			t.Errorf("expected team A (id=%d), got id=%.0f", teamA, teams[0]["id"])
+		}
+	}
+}
+
+// TC-G-EXT02: Admin sees all teams with an active kader.
+func TestListTeamsForUser_AdminSeesAll(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.CreateKader(t, db, teamB, seasonID)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := teamsServer(t, h)
+
+	res := testutil.Get(t, srv, "/api/teams", testutil.Token(t, adminID, "admin", nil))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var teams []map[string]any
+	json.NewDecoder(res.Body).Decode(&teams)
+	res.Body.Close()
+
+	if len(teams) < 2 {
+		t.Errorf("admin: expected ≥2 teams, got %d", len(teams))
+	}
+}
+
+// TC-G-EXT03: Spieler (non-trainer) sees only teams they are a member of.
+func TestListTeamsForUser_SpielerSeesOwnTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.CreateKader(t, db, teamB, seasonID)
+
+	spielerUserID := testutil.CreateUser(t, db, "standard")
+	spielerMemberID := testutil.CreateMember(t, db, spielerUserID)
+	// Add spieler to team A via kader_members (player_memberships is a view).
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderA, spielerMemberID)
+
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := teamsServer(t, h)
+
+	token := testutil.Token(t, spielerUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/teams", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var teams []map[string]any
+	json.NewDecoder(res.Body).Decode(&teams)
+	res.Body.Close()
+
+	if len(teams) != 1 {
+		t.Errorf("spieler: expected 1 team, got %d", len(teams))
+	}
+	if len(teams) > 0 {
+		if int(teams[0]["id"].(float64)) != teamA {
+			t.Errorf("expected team A (id=%d), got id=%.0f", teamA, teams[0]["id"])
+		}
+	}
+}

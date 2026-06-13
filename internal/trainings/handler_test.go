@@ -288,3 +288,94 @@ func TestSaveAttendances_PlayerForbidden(t *testing.T) {
 		t.Errorf("expected 403, got %d", res.StatusCode)
 	}
 }
+
+// TC-T-EXT01: GetAttendances returns saved attendance records.
+func TestGetAttendances_ReadsBack(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2025-10-10")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	memberID := testutil.CreateMember(t, db, adminUserID)
+
+	// Link member to team via kader (player_memberships is a view over kader_members).
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	// Save attendance: present=true.
+	saveRes := testutil.Post(t, srv,
+		fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token,
+		[]map[string]any{{"member_id": memberID, "present": true}})
+	saveRes.Body.Close()
+	if saveRes.StatusCode != http.StatusNoContent {
+		t.Fatalf("save attendances: expected 204, got %d", saveRes.StatusCode)
+	}
+
+	// Read back.
+	getRes := testutil.Get(t, srv,
+		fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token)
+	if getRes.StatusCode != http.StatusOK {
+		t.Fatalf("get attendances: expected 200, got %d", getRes.StatusCode)
+	}
+	var items []struct {
+		MemberID int   `json:"member_id"`
+		Present  *bool `json:"present"` // nullable pointer
+	}
+	json.NewDecoder(getRes.Body).Decode(&items)
+	getRes.Body.Close()
+
+	var found bool
+	for _, a := range items {
+		if a.MemberID == memberID && a.Present != nil && *a.Present {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected attendance for member %d with present=true (got %d items)", memberID, len(items))
+	}
+}
+
+// TC-T-EXT02: Elternteil antwortet für verknüpftes Kind.
+func TestRespond_ParentForChild(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-06-01")
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	// Issue a token with role=elternteil and isParent=true.
+	tok, err := auth.IssueAccessToken(testutil.TestJWTSecret, parentUserID, "parent@test.local", "elternteil", nil, true)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	token := "Bearer " + tok
+
+	res := testutil.Post(t, srv,
+		fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "confirmed", "member_id": childMemberID})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var status string
+	err = db.QueryRow(`SELECT status FROM training_responses WHERE training_id=? AND member_id=?`,
+		sessionID, childMemberID).Scan(&status)
+	if err != nil {
+		t.Fatalf("no response record found: %v", err)
+	}
+	if status != "confirmed" {
+		t.Errorf("expected status 'confirmed', got %q", status)
+	}
+}

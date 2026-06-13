@@ -384,3 +384,110 @@ func itoa(n int) string {
 	}
 	return string(buf[i:])
 }
+
+// directConvExists checks whether a direct conversation exists between two users.
+func directConvExists(t *testing.T, db *sql.DB, userA, userB int) bool {
+	t.Helper()
+	var n int
+	if err := db.QueryRow(`
+		SELECT COUNT(*) FROM conversations c
+		JOIN conversation_members m1 ON m1.conversation_id = c.id AND m1.user_id = ?
+		JOIN conversation_members m2 ON m2.conversation_id = c.id AND m2.user_id = ?
+		WHERE c.type = 'direct'`, userA, userB).Scan(&n); err != nil {
+		t.Fatalf("directConvExists: %v", err)
+	}
+	return n > 0
+}
+
+// TC-CH-EXT01: Ein Mitglied verlässt eine Gruppe → left_at gesetzt, System-Nachricht.
+func TestLeave_MemberLeavesGroup(t *testing.T) {
+	db := testutil.NewDB(t)
+	owner := testutil.CreateUser(t, db, "standard")
+	memberA := testutil.CreateUser(t, db, "standard")
+	convID := createGroupConv(t, db, "Gruppe", owner, memberA)
+
+	_, routes := newChatServer(t, db)
+	srv := testutil.NewServer(t, routes)
+
+	res := testutil.Do(t, srv, http.MethodDelete,
+		"/api/chat/conversations/"+itoa(convID)+"/members/me",
+		testutil.Token(t, memberA, "standard", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if !memberLeftAt(t, db, convID, memberA).Valid {
+		t.Error("expected left_at set for leaving member")
+	}
+	if !systemMessageExists(t, db, convID, memberA, "hat die Gruppe verlassen") {
+		t.Error("expected 'hat die Gruppe verlassen' system message")
+	}
+}
+
+// TC-CH-EXT02: Direkt-Conversation kann nicht verlassen werden → 400.
+func TestLeave_DirectConversationRejected(t *testing.T) {
+	db := testutil.NewDB(t)
+	userA := testutil.CreateUser(t, db, "standard")
+	userB := testutil.CreateUser(t, db, "standard")
+
+	// Create a direct conversation manually.
+	res, err := db.Exec(`INSERT INTO conversations (type, created_by) VALUES ('direct', ?)`, userA)
+	if err != nil {
+		t.Fatalf("insert direct conv: %v", err)
+	}
+	convID64, _ := res.LastInsertId()
+	convID := int(convID64)
+	db.Exec(`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`, convID, userA)
+	db.Exec(`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`, convID, userB)
+
+	_, routes := newChatServer(t, db)
+	srv := testutil.NewServer(t, routes)
+
+	leaveRes := testutil.Do(t, srv, http.MethodDelete,
+		"/api/chat/conversations/"+itoa(convID)+"/members/me",
+		testutil.Token(t, userA, "standard", nil), nil)
+	defer leaveRes.Body.Close()
+
+	if leaveRes.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for leaving direct conversation, got %d", leaveRes.StatusCode)
+	}
+}
+
+// TC-CH-EXT03: CreateDirect bei bestehender Conversation gibt die vorhandene zurück.
+func TestCreateDirect_DuplicateReturnsExisting(t *testing.T) {
+	db := testutil.NewDB(t)
+	// admin bypasses canContactUser check
+	userA := testutil.CreateUser(t, db, "admin")
+	userB := testutil.CreateUser(t, db, "standard")
+
+	_, routes := newChatServer(t, db)
+	srv := testutil.NewServer(t, routes)
+	token := testutil.Token(t, userA, "admin", nil)
+
+	// First create.
+	r1 := testutil.Post(t, srv, "/api/chat/conversations", token,
+		map[string]any{"type": "direct", "userId": userB})
+	r1.Body.Close()
+	if r1.StatusCode != http.StatusCreated && r1.StatusCode != http.StatusOK {
+		t.Fatalf("first create: expected 200/201, got %d", r1.StatusCode)
+	}
+
+	// Second create with same partner — must not duplicate.
+	r2 := testutil.Post(t, srv, "/api/chat/conversations", token,
+		map[string]any{"type": "direct", "userId": userB})
+	r2.Body.Close()
+	if r2.StatusCode != http.StatusCreated && r2.StatusCode != http.StatusOK {
+		t.Fatalf("second create: expected 200/201, got %d", r2.StatusCode)
+	}
+
+	var count int
+	db.QueryRow(`
+		SELECT COUNT(*) FROM conversations c
+		JOIN conversation_members m1 ON m1.conversation_id = c.id AND m1.user_id = ?
+		JOIN conversation_members m2 ON m2.conversation_id = c.id AND m2.user_id = ?
+		WHERE c.type = 'direct'`, userA, userB).Scan(&count)
+	if count != 1 {
+		t.Errorf("expected exactly 1 direct conversation, got %d", count)
+	}
+}
