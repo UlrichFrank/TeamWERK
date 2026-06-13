@@ -22,7 +22,7 @@ interface Member {
 
 interface ImportRow {
   line: number
-  status: 'created' | 'updated' | 'unchanged' | 'error'
+  status: 'created' | 'updated' | 'unchanged' | 'error' | 'not_found'
   name: string
   dob?: string
   changes?: string[]
@@ -36,6 +36,7 @@ interface ImportReport {
   updated: number
   unchanged: number
   errors: number
+  not_found?: number
   rows: ImportRow[]
 }
 
@@ -52,6 +53,7 @@ const rowStatusIcon = (s: ImportRow['status']) => {
   if (s === 'created') return '+'
   if (s === 'updated') return '~'
   if (s === 'unchanged') return '='
+  if (s === 'not_found') return '—'
   return '✗'
 }
 
@@ -59,6 +61,7 @@ const rowStatusColor = (s: ImportRow['status']) => {
   if (s === 'created') return 'text-brand-success'
   if (s === 'updated') return 'text-brand-blue'
   if (s === 'unchanged') return 'text-brand-text-subtle'
+  if (s === 'not_found') return 'text-brand-text-muted'
   return 'text-brand-danger'
 }
 
@@ -132,7 +135,7 @@ export default function MembersPage() {
 
   const [showImport, setShowImport] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
-  const [importMode, setImportMode] = useState<'append' | 'update'>('append')
+  const [importMode, setImportMode] = useState<'append' | 'update' | 'enrich'>('append')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportReport | null>(null)
   const [previewResult, setPreviewResult] = useState<ImportReport | null>(null)
@@ -158,7 +161,8 @@ export default function MembersPage() {
     try {
       const fd = new FormData()
       fd.append('file', importFile)
-      fd.append('mode', 'preview')
+      fd.append('mode', importMode)
+      fd.append('preview', '1')
       const res = await api.post<ImportReport>('/members/import', fd)
       setPreviewResult(res.data)
       setExpandedRows(new Set())
@@ -426,6 +430,13 @@ export default function MembersPage() {
                         <p className="text-xs text-brand-text-subtle">Bestehende Mitglieder werden mit nicht-leeren CSV-Werten aktualisiert. Felder werden nie geleert.</p>
                       </div>
                     </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input type="radio" name="importMode" value="enrich" checked={importMode === 'enrich'} onChange={() => setImportMode('enrich')} className="mt-0.5 accent-brand-yellow" />
+                      <div>
+                        <span className="text-sm font-medium text-brand-text">Nur leere Felder ergänzen</span>
+                        <p className="text-xs text-brand-text-subtle">Keine neuen Mitglieder, keine Überschreibung. Nur leere DB-Felder werden aus der CSV befüllt.</p>
+                      </div>
+                    </label>
                   </div>
                 </div>
 
@@ -453,6 +464,7 @@ export default function MembersPage() {
                     {previewResult.created > 0 && <span className="text-brand-success font-medium">+ {previewResult.created} neu</span>}
                     {previewResult.updated > 0 && <span className="text-brand-blue font-medium">~ {previewResult.updated} Änderungen</span>}
                     {previewResult.unchanged > 0 && <span className="text-brand-text-subtle">= {previewResult.unchanged} unverändert</span>}
+                    {(previewResult.not_found ?? 0) > 0 && <span className="text-brand-text-muted font-medium">— {previewResult.not_found} nicht gefunden</span>}
                     {previewResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {previewResult.errors} Fehler</span>}
                     {previewResult.rows.some(r => r.iban_warning) && (
                       <span className="text-amber-600 font-medium flex items-center gap-1">
@@ -525,6 +537,7 @@ export default function MembersPage() {
                     {importResult.created > 0 && <span className="text-brand-success font-medium">+ {importResult.created} neu</span>}
                     {importResult.updated > 0 && <span className="text-brand-blue font-medium">~ {importResult.updated} aktualisiert</span>}
                     {importResult.unchanged > 0 && <span className="text-brand-text-subtle">= {importResult.unchanged} unverändert</span>}
+                    {(importResult.not_found ?? 0) > 0 && <span className="text-brand-text-muted font-medium">— {importResult.not_found} nicht gefunden</span>}
                     {importResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {importResult.errors} Fehler</span>}
                   </div>
                 </div>
