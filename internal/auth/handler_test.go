@@ -35,6 +35,10 @@ func newAuthServer(t *testing.T, database *sql.DB) *httptest.Server {
 		r.Use(auth.RequireRole("admin", "standard"))
 		r.Put("/api/admin/users/{id}/role", h.UpdateUserRole)
 		r.Delete("/api/admin/users/{id}", h.DeleteUser)
+		r.Post("/api/profile/password", h.ChangePassword)
+		r.Post("/api/membership-requests/{id}/approve", h.ApproveMembershipRequest)
+		r.Post("/api/membership-requests/{id}/reject", h.RejectMembershipRequest)
+		r.Get("/api/admin/users", h.ListUsers)
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -447,5 +451,183 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(buf[i:])
+}
+
+// ── ChangePassword ────────────────────────────────────────────────────────────
+
+// TC: Korrektes altes Passwort → 204, Passwort geändert, alle refresh_tokens gelöscht.
+func TestChangePassword_Valid(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard") // password = "test"
+	testutil.CreateRefreshToken(t, db, userID)        // active session that must be wiped
+
+	srv := newAuthServer(t, db)
+	token := testutil.Token(t, userID, "standard", nil)
+
+	res := testutil.Post(t, srv, "/api/profile/password", token,
+		map[string]string{"current_password": "test", "new_password": "neuesPasswort99"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if refreshTokenCount(t, db, userID) != 0 {
+		t.Error("all refresh_tokens must be deleted after password change")
+	}
+}
+
+// TC: Falsches altes Passwort → 403.
+func TestChangePassword_WrongCurrentPassword(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+	token := testutil.Token(t, userID, "standard", nil)
+
+	res := testutil.Post(t, srv, "/api/profile/password", token,
+		map[string]string{"current_password": "falsch", "new_password": "neu"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+// ── ApproveMembershipRequest / RejectMembershipRequest ───────────────────────
+
+func createMembershipRequest(t *testing.T, db *sql.DB, firstName, email string) int {
+	t.Helper()
+	res, err := db.Exec(
+		`INSERT INTO membership_requests (first_name, last_name, email, status) VALUES (?, ?, ?, 'pending')`,
+		firstName, "Test", email)
+	if err != nil {
+		t.Fatalf("createMembershipRequest: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// TC: Genehmigung erstellt invitation_tokens-Eintrag und setzt status=approved.
+func TestApproveMembershipRequest_CreatesInvitationToken(t *testing.T) {
+	db := testutil.NewDB(t)
+	requestID := createMembershipRequest(t, db, "Max", "max@test.local")
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv,
+		"/api/membership-requests/"+itoa(requestID)+"/approve",
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var status string
+	db.QueryRow(`SELECT status FROM membership_requests WHERE id=?`, requestID).Scan(&status)
+	if status != "approved" {
+		t.Errorf("expected status='approved', got %q", status)
+	}
+	var tokenCount int
+	db.QueryRow(`SELECT COUNT(*) FROM invitation_tokens WHERE email='max@test.local' AND used_at IS NULL`).Scan(&tokenCount)
+	if tokenCount != 1 {
+		t.Errorf("expected 1 invitation_token, got %d", tokenCount)
+	}
+}
+
+// TC: Genehmigung eines nicht-pending-Antrags → 404.
+func TestApproveMembershipRequest_NotPending(t *testing.T) {
+	db := testutil.NewDB(t)
+	requestID := createMembershipRequest(t, db, "Anna", "anna@test.local")
+	db.Exec(`UPDATE membership_requests SET status='rejected' WHERE id=?`, requestID)
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv,
+		"/api/membership-requests/"+itoa(requestID)+"/approve",
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for non-pending request, got %d", res.StatusCode)
+	}
+}
+
+// TC: Ablehnung setzt status=rejected.
+func TestRejectMembershipRequest_SetsStatus(t *testing.T) {
+	db := testutil.NewDB(t)
+	requestID := createMembershipRequest(t, db, "Leo", "leo@test.local")
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv,
+		"/api/membership-requests/"+itoa(requestID)+"/reject",
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var status string
+	db.QueryRow(`SELECT status FROM membership_requests WHERE id=?`, requestID).Scan(&status)
+	if status != "rejected" {
+		t.Errorf("expected status='rejected', got %q", status)
+	}
+}
+
+// ── ListUsers ─────────────────────────────────────────────────────────────────
+
+// TC: Paginierung: 12 User, limit=5 offset=5 → 5 items, total=12.
+func TestListUsers_Pagination(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	for i := 0; i < 11; i++ {
+		testutil.CreateUser(t, db, "standard")
+	}
+	srv := newAuthServer(t, db)
+
+	res := testutil.Get(t, srv, "/api/admin/users?limit=5&offset=5",
+		testutil.Token(t, adminID, "admin", nil))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	if len(body.Items) != 5 {
+		t.Errorf("expected 5 items (page 2 of 12), got %d", len(body.Items))
+	}
+	if body.Total != 12 { // 11 standard + 1 admin
+		t.Errorf("expected total=12, got %d", body.Total)
+	}
+}
+
+// TC: Suche nach Nachnamen filtert Ergebnisse.
+func TestListUsers_SearchByName(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	// Update one user's last_name to something searchable.
+	targetID := testutil.CreateUser(t, db, "standard")
+	db.Exec(`UPDATE users SET last_name='Müller' WHERE id=?`, targetID)
+	testutil.CreateUser(t, db, "standard") // unrelated
+	srv := newAuthServer(t, db)
+
+	res := testutil.Get(t, srv, "/api/admin/users?search=Müller",
+		testutil.Token(t, adminID, "admin", nil))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	if body.Total != 1 {
+		t.Errorf("expected total=1 for search=Müller, got %d", body.Total)
+	}
 }
 
