@@ -355,3 +355,122 @@ func TestMemberSuggestions_BracketDisabled(t *testing.T) {
 		t.Errorf("expected out-of-bracket member (id=%d) in unfiltered suggestions (filter disabled)", outID)
 	}
 }
+
+// ── TC-K06/K07: CopyFromSeason ────────────────────────────────────────────────
+
+// TC-K06: CopyFromSeason mit member_source=same-age-previous übernimmt Mitglieder.
+func TestCopyFromSeason_SameAgePrevious(t *testing.T) {
+	db := testutil.NewDB(t)
+
+	// Quell-Saison 2024/25 mit A-Jugend-Kader und Mitgliedern im Bracket.
+	fromSeasonID := testutil.CreateSeason(t, db, "2024/25")
+	// Override season dates so seasonStartYear=2024.
+	db.Exec(`UPDATE seasons SET start_date='2024-09-01', end_date='2025-06-30' WHERE id=?`, fromSeasonID)
+	teamID := testutil.CreateTeam(t, db, "A-Jugend")
+	db.Exec(`UPDATE teams SET age_class='A-Jugend', gender='mixed' WHERE id=?`, teamID)
+
+	srcKaderRes, _ := db.Exec(
+		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		fromSeasonID, "A-Jugend", "mixed", teamID, 1)
+	srcKaderID64, _ := srcKaderRes.LastInsertId()
+	srcKaderID := int(srcKaderID64)
+
+	// Mitglieder Jg. 2006–2007 (in A-Jugend 2024/25 bracket) in Quell-Kader.
+	m2006, _ := db.Exec(`INSERT INTO members (first_name, last_name, status, date_of_birth) VALUES (?,?,?,?)`,
+		"Alt", "M2006", "aktiv", "2006-05-01")
+	m2007, _ := db.Exec(`INSERT INTO members (first_name, last_name, status, date_of_birth) VALUES (?,?,?,?)`,
+		"Alt", "M2007", "aktiv", "2007-03-15")
+	id2006, _ := m2006.LastInsertId()
+	id2007, _ := m2007.LastInsertId()
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, srcKaderID, id2006)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, srcKaderID, id2007)
+
+	// Ziel-Saison 2025/26.
+	toSeasonRes, _ := db.Exec(
+		`INSERT INTO seasons (name, start_date, end_date, is_active) VALUES (?, ?, ?, 0)`,
+		"2025/26", "2025-09-01", "2026-06-30")
+	toSeasonID64, _ := toSeasonRes.LastInsertId()
+	toSeasonID := int(toSeasonID64)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		h := kader.NewHandler(db, hub.NewHub())
+		r.Post("/api/admin/kader/copy-from-season", h.CopyFromSeason)
+	})
+
+	res := testutil.Post(t, srv, "/api/admin/kader/copy-from-season",
+		testutil.Token(t, adminID, "admin", nil),
+		map[string]any{
+			"from_season_id": fromSeasonID,
+			"to_season_id":   toSeasonID,
+			"assignments": []map[string]any{
+				{"age_class": "A-Jugend", "gender": "mixed", "member_source": "same-age-previous"},
+			},
+		})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	var newKaderID int
+	db.QueryRow(`SELECT id FROM kader WHERE season_id=? AND age_class='A-Jugend'`, toSeasonID).Scan(&newKaderID)
+	if newKaderID == 0 {
+		t.Fatal("new kader not created in target season")
+	}
+	var memberCount int
+	db.QueryRow(`SELECT COUNT(*) FROM kader_members WHERE kader_id=?`, newKaderID).Scan(&memberCount)
+	if memberCount == 0 {
+		t.Errorf("expected members copied to new kader, got 0")
+	}
+}
+
+// TC-K07: CopyFromSeason mit member_source="" legt Kader ohne Mitglieder an.
+func TestCopyFromSeason_EmptyMemberSource(t *testing.T) {
+	db := testutil.NewDB(t)
+
+	fromSeasonID := testutil.CreateSeason(t, db, "2024/25")
+	db.Exec(`UPDATE seasons SET start_date='2024-09-01', end_date='2025-06-30' WHERE id=?`, fromSeasonID)
+	teamID := testutil.CreateTeam(t, db, "B-Jugend")
+	db.Exec(`UPDATE teams SET age_class='B-Jugend', gender='mixed' WHERE id=?`, teamID)
+
+	db.Exec(`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		fromSeasonID, "B-Jugend", "mixed", teamID, 1)
+
+	toSeasonRes, _ := db.Exec(
+		`INSERT INTO seasons (name, start_date, end_date, is_active) VALUES (?, ?, ?, 0)`,
+		"2025/26", "2025-09-01", "2026-06-30")
+	toSeasonID64, _ := toSeasonRes.LastInsertId()
+	toSeasonID := int(toSeasonID64)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		h := kader.NewHandler(db, hub.NewHub())
+		r.Post("/api/admin/kader/copy-from-season", h.CopyFromSeason)
+	})
+
+	res := testutil.Post(t, srv, "/api/admin/kader/copy-from-season",
+		testutil.Token(t, adminID, "admin", nil),
+		map[string]any{
+			"from_season_id": fromSeasonID,
+			"to_season_id":   toSeasonID,
+			"assignments": []map[string]any{
+				{"age_class": "B-Jugend", "gender": "mixed", "member_source": ""},
+			},
+		})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+	var newKaderID int
+	db.QueryRow(`SELECT id FROM kader WHERE season_id=? AND age_class='B-Jugend'`, toSeasonID).Scan(&newKaderID)
+	if newKaderID == 0 {
+		t.Fatal("new kader not created")
+	}
+	var memberCount int
+	db.QueryRow(`SELECT COUNT(*) FROM kader_members WHERE kader_id=?`, newKaderID).Scan(&memberCount)
+	if memberCount != 0 {
+		t.Errorf("expected 0 members for empty member_source, got %d", memberCount)
+	}
+}
