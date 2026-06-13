@@ -1247,7 +1247,7 @@ func classifyEmail(email, firstName, dob string) string {
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
-	Status      string   `json:"status"` // created | updated | unchanged | error
+	Status      string   `json:"status"` // created | updated | unchanged | error | not_found
 	Name        string   `json:"name"`
 	DOB         string   `json:"dob,omitempty"`
 	Changes     []string `json:"changes,omitempty"`
@@ -1262,6 +1262,7 @@ type ImportReport struct {
 	Updated   int         `json:"updated"`
 	Unchanged int         `json:"unchanged"`
 	Errors    int         `json:"errors"`
+	NotFound  int         `json:"not_found"`
 	Rows      []ImportRow `json:"rows"`
 }
 
@@ -1277,11 +1278,14 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	mode := r.FormValue("mode") // "append", "update", or "preview"
-	if mode != "append" && mode != "update" && mode != "preview" {
+	mode := r.FormValue("mode") // "append", "update", "enrich", or legacy "preview"
+	if mode != "append" && mode != "update" && mode != "enrich" && mode != "preview" {
 		mode = "append"
 	}
-	dryRun := mode == "preview"
+	dryRun := mode == "preview" || r.FormValue("preview") == "1"
+	if mode == "preview" {
+		mode = "update" // legacy: preview mode uses update semantics
+	}
 
 	raw, err := io.ReadAll(file)
 	if err != nil {
@@ -1433,6 +1437,24 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Enrich mode without DOB: check for ambiguous name matches before proceeding.
+		if mode == "enrich" && dob == "" {
+			var cnt int
+			h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`,
+				firstName, lastName).Scan(&cnt)
+			if cnt >= 2 {
+				report.Rows = append(report.Rows, ImportRow{
+					Line:    lineNum,
+					Status:  "error",
+					Name:    displayName,
+					Message: fmt.Sprintf("Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt", cnt),
+				})
+				report.Errors++
+				continue
+			}
+		}
+
 		// DB lookup by name (+ dob as tiebreaker when present)
 		query := `SELECT id, member_number, COALESCE(date_of_birth,''),
 		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
@@ -1467,6 +1489,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat, &dbBeitragsfrei)
 
 		if scanErr == sql.ErrNoRows {
+			if mode == "enrich" {
+				report.Rows = append(report.Rows, ImportRow{
+					Line:   lineNum,
+					Status: "not_found",
+					Name:   displayName,
+					DOB:    dob,
+				})
+				report.NotFound++
+				continue
+			}
 			// New member — insert
 			csvStatusRaw := col(row, "Status")
 			csvBeitragsfrei := strings.EqualFold(strings.TrimSpace(csvStatusRaw), "beitragsfrei")
@@ -1536,7 +1568,8 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// mode == "update" or "preview": apply non-empty changed fields
+		// mode == "update", "enrich", or legacy preview: apply non-empty changed fields
+		enrichOnly := mode == "enrich"
 		var setClauses []string
 		var setArgs []interface{}
 		var changes []string
@@ -1545,6 +1578,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			if csvVal == "" || csvVal == dbVal {
 				return
 			}
+			if enrichOnly && dbVal != "" {
+				return // enrich: never overwrite existing values
+			}
 			setClauses = append(setClauses, column+"=?")
 			setArgs = append(setArgs, csvVal)
 			changes = append(changes, fmt.Sprintf("%s: %q → %q", label, dbVal, csvVal))
@@ -1552,6 +1588,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		addNullableChange := func(csvVal string, dbVal sql.NullString, label, column string) {
 			if csvVal == "" || csvVal == dbVal.String {
 				return
+			}
+			if enrichOnly && dbVal.Valid && dbVal.String != "" {
+				return // enrich: never overwrite existing values
 			}
 			setClauses = append(setClauses, column+"=?")
 			setArgs = append(setArgs, csvVal)
@@ -1571,7 +1610,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			if dbJerseyNum.Valid {
 				dbJerseyStr = fmt.Sprintf("%d", dbJerseyNum.Int64)
 			}
-			if jerseyRaw != dbJerseyStr {
+			if jerseyRaw != dbJerseyStr && (!enrichOnly || !dbJerseyNum.Valid) {
 				n, _ := parseOptionalInt(jerseyRaw)
 				setClauses = append(setClauses, "jersey_number=?")
 				setArgs = append(setArgs, n)
@@ -1587,7 +1626,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		addChange(joinDate, dbJoinDate, "Mitglied seit", "join_date")
 		addChange(col(row, "Kontoinhaber"), dbAccountHolder, "Kontoinhaber", "account_holder")
 
-		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" {
+		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly {
 			sepaVal := normalizeSepa(sepaRaw)
 			if sepaVal != dbSepaMandat {
 				setClauses = append(setClauses, "sepa_mandat=?")
@@ -1597,7 +1636,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// beitragsfrei aus CSV-Status ableiten
-		if csvStatusRaw2 := col(row, "Status"); csvStatusRaw2 != "" {
+		if csvStatusRaw2 := col(row, "Status"); csvStatusRaw2 != "" && !enrichOnly {
 			csvBeitragsfrei2 := boolToInt(strings.EqualFold(strings.TrimSpace(csvStatusRaw2), "beitragsfrei"))
 			if csvBeitragsfrei2 != dbBeitragsfrei {
 				setClauses = append(setClauses, "beitragsfrei=?")
@@ -1606,16 +1645,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// IBAN with MOD-97 validation
+		// IBAN with MOD-97 validation; in enrich mode only fill if DB field is empty.
 		var ibanWarn string
 		if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" {
 			if ok, msg := validateIBAN(raw); ok {
-				if raw != dbIBAN {
+				if raw != dbIBAN && (!enrichOnly || dbIBAN == "") {
 					setClauses = append(setClauses, "iban=?")
 					setArgs = append(setArgs, raw)
 					changes = append(changes, fmt.Sprintf("IBAN: %q → %q", dbIBAN, raw))
 				}
-			} else {
+			} else if !enrichOnly || dbIBAN == "" {
 				ibanWarn = "IBAN nicht gespeichert: " + msg
 			}
 		}
@@ -1651,7 +1690,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	report.Total = report.Created + report.Updated + report.Unchanged + report.Errors
+	report.Total = report.Created + report.Updated + report.Unchanged + report.Errors + report.NotFound
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(report)
 }

@@ -23,7 +23,10 @@ func testServer(t *testing.T, h *trainings.Handler) *httptest.Server {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("trainer", "sportliche_leitung"))
 			r.Post("/api/training-series", h.CreateSeries)
+			r.Delete("/api/training-series/{id}", h.DeleteSeries)
 			r.Post("/api/training-sessions/{id}/attendances", h.SaveAttendances)
+			r.Post("/api/training-sessions", h.CreateSession)
+			r.Put("/api/training-sessions/{id}", h.UpdateSession)
 		})
 	})
 }
@@ -286,5 +289,204 @@ func TestSaveAttendances_PlayerForbidden(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+// TC-T-EXT01: GetAttendances returns saved attendance records.
+func TestGetAttendances_ReadsBack(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2025-10-10")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	memberID := testutil.CreateMember(t, db, adminUserID)
+
+	// Link member to team via kader (player_memberships is a view over kader_members).
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	// Save attendance: present=true.
+	saveRes := testutil.Post(t, srv,
+		fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token,
+		[]map[string]any{{"member_id": memberID, "present": true}})
+	saveRes.Body.Close()
+	if saveRes.StatusCode != http.StatusNoContent {
+		t.Fatalf("save attendances: expected 204, got %d", saveRes.StatusCode)
+	}
+
+	// Read back.
+	getRes := testutil.Get(t, srv,
+		fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token)
+	if getRes.StatusCode != http.StatusOK {
+		t.Fatalf("get attendances: expected 200, got %d", getRes.StatusCode)
+	}
+	var items []struct {
+		MemberID int   `json:"member_id"`
+		Present  *bool `json:"present"` // nullable pointer
+	}
+	json.NewDecoder(getRes.Body).Decode(&items)
+	getRes.Body.Close()
+
+	var found bool
+	for _, a := range items {
+		if a.MemberID == memberID && a.Present != nil && *a.Present {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected attendance for member %d with present=true (got %d items)", memberID, len(items))
+	}
+}
+
+// TC-T-EXT02: Elternteil antwortet für verknüpftes Kind.
+func TestRespond_ParentForChild(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-06-01")
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	// Issue a token with role=elternteil and isParent=true.
+	tok, err := auth.IssueAccessToken(testutil.TestJWTSecret, parentUserID, "parent@test.local", "elternteil", nil, true)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	token := "Bearer " + tok
+
+	res := testutil.Post(t, srv,
+		fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "confirmed", "member_id": childMemberID})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var status string
+	err = db.QueryRow(`SELECT status FROM training_responses WHERE training_id=? AND member_id=?`,
+		sessionID, childMemberID).Scan(&status)
+	if err != nil {
+		t.Fatalf("no response record found: %v", err)
+	}
+	if status != "confirmed" {
+		t.Errorf("expected status 'confirmed', got %q", status)
+	}
+}
+
+// ── CreateSession / UpdateSession / DeleteSeries ──────────────────────────────
+
+// TC: Admin legt Einzelsitzung an → 201, Session in DB.
+func TestCreateSession_AdminOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	adminUserID := testutil.CreateUser(t, db, "admin")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	body := map[string]any{
+		"team_id":    teamID,
+		"season_id":  seasonID,
+		"title":      "Zusatztraining",
+		"date":       "2026-08-05",
+		"start_time": "18:00",
+		"end_time":   "20:00",
+	}
+	res := testutil.Post(t, srv, "/api/training-sessions", token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+	var count int
+	db.QueryRow(`SELECT COUNT(*) FROM training_sessions WHERE team_id=? AND date='2026-08-05'`, teamID).Scan(&count)
+	if count != 1 {
+		t.Errorf("expected 1 session in DB, got %d", count)
+	}
+}
+
+// TC: UpdateSession ändert start_time in DB.
+func TestUpdateSession_ChangesTime(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-08-05")
+	adminUserID := testutil.CreateUser(t, db, "admin")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	body := map[string]any{
+		"team_id":    teamID,
+		"season_id":  seasonID,
+		"title":      "Geändertes Training",
+		"date":       "2026-08-05",
+		"start_time": "19:00",
+		"end_time":   "21:00",
+	}
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/training-sessions/%d", sessionID), token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var startTime string
+	db.QueryRow(`SELECT start_time FROM training_sessions WHERE id=?`, sessionID).Scan(&startTime)
+	if startTime != "19:00" {
+		t.Errorf("expected start_time='19:00', got %q", startTime)
+	}
+}
+
+// TC: DeleteSeries mit scope=all löscht Serie + Sessions + Responses kaskadierend.
+func TestDeleteSeries_CascadesSessionsAndResponses(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	seriesID := testutil.CreateTrainingSeries(t, db, teamID, seasonID, adminUserID)
+
+	// Drei Sessions zur Serie verknüpfen.
+	for _, date := range []string{"2026-09-01", "2026-09-08", "2026-09-15"} {
+		db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, title, series_id)
+		         VALUES (?, ?, ?, '18:00', '20:00', 'Test', ?)`,
+			teamID, seasonID, date, seriesID)
+	}
+	var sessionCount int
+	db.QueryRow(`SELECT COUNT(*) FROM training_sessions WHERE series_id=?`, seriesID).Scan(&sessionCount)
+	if sessionCount != 3 {
+		t.Fatalf("setup: expected 3 sessions, got %d", sessionCount)
+	}
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Do(t, srv, http.MethodDelete,
+		fmt.Sprintf("/api/training-series/%d?scope=all", seriesID), token, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var seriesRemaining, sessionsRemaining int
+	db.QueryRow(`SELECT COUNT(*) FROM training_series WHERE id=?`, seriesID).Scan(&seriesRemaining)
+	db.QueryRow(`SELECT COUNT(*) FROM training_sessions WHERE series_id=?`, seriesID).Scan(&sessionsRemaining)
+	if seriesRemaining != 0 {
+		t.Error("training_series should be deleted")
+	}
+	if sessionsRemaining != 0 {
+		t.Errorf("all training_sessions should be deleted, got %d remaining", sessionsRemaining)
 	}
 }
