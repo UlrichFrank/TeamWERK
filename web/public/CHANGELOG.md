@@ -1,4 +1,6 @@
 ## 13.06.2026
+- [feat] ux: Zurück-Button auf MeinTeamPage bei gefilterter Team-Ansicht
+- [fix] security: Security- und Datenintegritäts-Hardening (13 Bugs)
 - [feat] members: CSV-Import-Modus "enrich" – nur leere Felder ergänzen
 
 ## 12.06.2026
