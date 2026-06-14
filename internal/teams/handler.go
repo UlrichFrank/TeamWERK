@@ -37,10 +37,11 @@ type ParentEntry struct {
 }
 
 type RosterResponse struct {
-	Team     Team          `json:"team"`
-	Trainers []TrainerEntry `json:"trainers"`
-	Players  []PlayerEntry  `json:"players"`
-	Parents  []ParentEntry  `json:"parents"`
+	Team            Team           `json:"team"`
+	Trainers        []TrainerEntry `json:"trainers"`
+	Players         []PlayerEntry  `json:"players"`
+	Parents         []ParentEntry  `json:"parents"`
+	ExtendedPlayers []PlayerEntry  `json:"extended_players"`
 }
 
 // GET /api/teams/:id/roster
@@ -77,10 +78,11 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := RosterResponse{
-		Team:     team,
-		Trainers: []TrainerEntry{},
-		Players:  []PlayerEntry{},
-		Parents:  []ParentEntry{},
+		Team:            team,
+		Trainers:        []TrainerEntry{},
+		Players:         []PlayerEntry{},
+		Parents:         []ParentEntry{},
+		ExtendedPlayers: []PlayerEntry{},
 	}
 
 	// Active season ID
@@ -126,6 +128,30 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 				p.JerseyNumber = &n
 			}
 			resp.Players = append(resp.Players, p)
+		}
+	}
+
+	// Extended players: kader_extended_members → members → users
+	extRows, err := h.db.QueryContext(ctx, `
+		SELECT DISTINCT COALESCE(u.id, 0), m.first_name || ' ' || m.last_name,
+		       m.jersey_number
+		FROM kader_extended_members kem
+		JOIN kader k ON k.id = kem.kader_id
+		JOIN members m ON m.id = kem.member_id
+		LEFT JOIN users u ON u.id = m.user_id
+		WHERE k.team_id = ? AND k.season_id = ?
+		ORDER BY m.first_name, m.last_name`, teamID, seasonID)
+	if err == nil {
+		defer extRows.Close()
+		for extRows.Next() {
+			var p PlayerEntry
+			var jerseyNum sql.NullInt64
+			extRows.Scan(&p.UserID, &p.Name, &jerseyNum)
+			if jerseyNum.Valid {
+				n := int(jerseyNum.Int64)
+				p.JerseyNumber = &n
+			}
+			resp.ExtendedPlayers = append(resp.ExtendedPlayers, p)
 		}
 	}
 

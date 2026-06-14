@@ -14,6 +14,7 @@ interface TeamRoster {
   trainers: TrainerEntry[]
   players: PlayerEntry[]
   parents: ParentEntry[]
+  extended_players: PlayerEntry[]
 }
 
 interface MyTeam { id: number; name: string }
@@ -53,32 +54,57 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
 
       <div className="px-5 py-4">
         {activeTab === 'team' && (
-          roster.players.length === 0 ? (
-            <p className="text-sm text-brand-text-muted">— keine Einträge —</p>
-          ) : (
-            <div className="overflow-x-auto -mx-5 px-5">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left">
-                    <th className="pb-2 pr-4 text-xs text-brand-text-muted font-medium">#</th>
-                    <th className="pb-2 text-xs text-brand-text-muted font-medium">Name</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roster.players.map((p, i) => (
-                    <tr key={i} className="border-t border-brand-border-subtle">
-                      <td className="py-2 pr-4 text-brand-text-muted w-8">
-                        {p.jerseyNumber != null ? p.jerseyNumber : '–'}
-                      </td>
-                      <td className="py-2">
-                        <PersonChip userId={p.userId || undefined} name={p.name} />
-                      </td>
+          <>
+            {roster.players.length === 0 ? (
+              <p className="text-sm text-brand-text-muted">— keine Einträge —</p>
+            ) : (
+              <div className="overflow-x-auto -mx-5 px-5">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left">
+                      <th className="pb-2 pr-4 text-xs text-brand-text-muted font-medium">#</th>
+                      <th className="pb-2 text-xs text-brand-text-muted font-medium">Name</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+                  </thead>
+                  <tbody>
+                    {roster.players.map((p, i) => (
+                      <tr key={i} className="border-t border-brand-border-subtle">
+                        <td className="py-2 pr-4 text-brand-text-muted w-8">
+                          {p.jerseyNumber != null ? p.jerseyNumber : '–'}
+                        </td>
+                        <td className="py-2">
+                          <PersonChip userId={p.userId || undefined} name={p.name} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {roster.extended_players?.length > 0 && (
+              <div className="mt-5">
+                <p className="text-xs font-semibold text-brand-text-muted uppercase tracking-wide mb-2">
+                  Erweiterter Kader
+                </p>
+                <div className="overflow-x-auto -mx-5 px-5">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {roster.extended_players.map((p, i) => (
+                        <tr key={i} className="border-t border-brand-border-subtle">
+                          <td className="py-2 pr-4 text-brand-text-muted w-8">
+                            {p.jerseyNumber != null ? p.jerseyNumber : '–'}
+                          </td>
+                          <td className="py-2">
+                            <PersonChip userId={p.userId || undefined} name={p.name} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {activeTab === 'trainer' && (

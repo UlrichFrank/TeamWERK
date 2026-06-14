@@ -1575,13 +1575,18 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		conds = append(conds, `gt.team_id IN (
 			SELECT DISTINCT tm.team_id FROM team_memberships tm
 			JOIN members m ON m.id = tm.member_id
-			WHERE m.user_id = ?)`)
-		teamArgs = append(teamArgs, claims.UserID)
+			WHERE m.user_id = ?
+			UNION
+			SELECT DISTINCT k.team_id FROM kader_extended_members kem
+			JOIN kader k ON k.id = kem.kader_id
+			JOIN members m2 ON m2.id = kem.member_id
+			WHERE m2.user_id = ?)`)
+		teamArgs = append(teamArgs, claims.UserID, claims.UserID)
 		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
 	}
 
-	// Args order: memberID (my_rsvp subquery), memberID (my_rsvp_locked subquery), teamArgs, from, to
-	args := append([]any{memberID, memberID}, teamArgs...)
+	// Args order: memberID (my_rsvp), memberID (my_rsvp_locked), memberID (in_regular_kader), teamArgs, from, to
+	args := append([]any{memberID, memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 
 	query := fmt.Sprintf(`
@@ -1603,6 +1608,10 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
 		       g.rsvp_opt_out, g.rsvp_require_reason,
+		       EXISTS(SELECT 1 FROM game_teams gt_r
+		              JOIN kader k_r ON k_r.team_id = gt_r.team_id AND k_r.season_id = g.season_id
+		              JOIN kader_members km_r ON km_r.kader_id = k_r.id AND km_r.member_id = ?
+		              WHERE gt_r.game_id = g.id),
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
@@ -1621,7 +1630,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 	result := []gameListItem{}
 	for rows.Next() {
 		var g gameListItem
-		var isHome int
+		var isHome, inRegularKader int
 		var myRSVP sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var teamNames, teamIDsCSV sql.NullString
@@ -1629,7 +1638,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
 			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
-			&g.RsvpOptOut, &g.RsvpRequireReason,
+			&g.RsvpOptOut, &g.RsvpRequireReason, &inRegularKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -1647,7 +1656,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		}
 		if myRSVP.Valid {
 			g.MyRSVP = &myRSVP.String
-		} else if g.RsvpOptOut == 1 {
+		} else if g.RsvpOptOut == 1 && inRegularKader == 1 {
 			confirmed := "confirmed"
 			g.MyRSVP = &confirmed
 		}

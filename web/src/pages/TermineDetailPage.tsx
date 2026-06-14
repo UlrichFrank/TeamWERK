@@ -397,14 +397,11 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
               </tr>
             </thead>
             <tbody>
-              {rows.map(row => (
+              {rows.filter(r => !r.is_extended).map(row => (
                 <Fragment key={row.member_id}>
                   <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
                     <td className="px-4 py-3 text-sm text-brand-text font-medium">
                       <span>{row.member_name}</span>
-                      {row.is_extended && (
-                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Erw.</span>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="relative group flex items-center gap-1">
@@ -461,6 +458,64 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
                   )}
                 </Fragment>
               ))}
+              {rows.some(r => r.is_extended) && (
+                <>
+                  <tr className="border-t-2 border-brand-border bg-brand-surface-card">
+                    <td colSpan={2 + (lineupMap !== undefined ? 1 : 0) + (showAttendanceCol ? 1 : 0)}
+                        className="px-4 py-2 text-xs font-semibold text-brand-text-muted uppercase tracking-wide">
+                      Erweiterter Kader
+                    </td>
+                  </tr>
+                  {rows.filter(r => r.is_extended).map(row => (
+                    <Fragment key={row.member_id}>
+                      <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
+                        <td className="px-4 py-3 text-sm text-brand-text font-medium">
+                          <span>{row.member_name}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="relative group flex items-center gap-1">
+                            <RsvpIcon status={row.rsvp_status} />
+                          </div>
+                        </td>
+                        {lineupMap !== undefined && (
+                          <td className="px-4 py-3 text-center">
+                            {onToggleLineup ? (
+                              <input
+                                type="checkbox"
+                                checked={lineupMap[row.member_id] ?? false}
+                                onChange={e => onToggleLineup(row.member_id, e.target.checked)}
+                                className="w-4 h-4 rounded border-brand-border"
+                              />
+                            ) : (
+                              lineupMap[row.member_id]
+                                ? <Check className="w-4 h-4 text-green-600 mx-auto" />
+                                : <span className="text-brand-text-muted text-sm">–</span>
+                            )}
+                          </td>
+                        )}
+                        {showAttendanceCol && (
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={attendanceMap[row.member_id] ?? false}
+                              onChange={isTrainer ? e => onToggleAttendance(row.member_id, e.target.checked) : undefined}
+                              readOnly={!isTrainer}
+                              className={`w-4 h-4 rounded border-brand-border ${isTrainer ? '' : 'cursor-default opacity-60'}`}
+                            />
+                          </td>
+                        )}
+                      </tr>
+                      {showReasonId === row.member_id && row.reason && (
+                        <tr className="bg-brand-surface-card">
+                          <td colSpan={2 + (lineupMap !== undefined ? 1 : 0) + (showAttendanceCol ? 1 : 0)} className="px-4 pb-2 text-xs text-brand-text-muted italic">
+                            {row.reason}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </>
+              )}
             </tbody>
           </table>
           {attendanceError && (

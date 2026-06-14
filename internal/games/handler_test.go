@@ -18,6 +18,7 @@ import (
 func testServer(t *testing.T, h *games.Handler) *httptest.Server {
 	return testutil.NewServer(t, func(r chi.Router) {
 		r.Get("/api/kalender", h.ListGames)
+		r.Get("/api/games/my", h.ListMyGames)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
@@ -840,5 +841,109 @@ func TestCreateDutyTemplate_TrainerForbidden(t *testing.T) {
 
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403 for trainer creating template, got %d", res.StatusCode)
+	}
+}
+
+// TestListMyGames_ExtendedKaderSiehtSpiel verifies that a player only in the extended kader
+// of a team sees that team's games in /api/games/my.
+func TestListMyGames_ExtendedKaderSiehtSpiel(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+
+	extUserID := testutil.CreateUser(t, db, "standard")
+	extMemberID := testutil.CreateMember(t, db, extUserID)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID)
+
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, extUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/games/my", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var gameList []map[string]any
+	json.NewDecoder(res.Body).Decode(&gameList)
+	res.Body.Close()
+
+	if len(gameList) != 1 {
+		t.Errorf("extended kader member: expected 1 game, got %d", len(gameList))
+	}
+}
+
+// TestListMyGames_ExtendedKaderKeinAutoConfirm verifies that opt-out auto-confirm does NOT
+// apply to members who are only in the extended kader of a team.
+func TestListMyGames_ExtendedKaderKeinAutoConfirm(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+	db.Exec(`UPDATE games SET rsvp_opt_out=1 WHERE id=?`, gameID)
+
+	extUserID := testutil.CreateUser(t, db, "standard")
+	extMemberID := testutil.CreateMember(t, db, extUserID)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID)
+
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, extUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/games/my", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var gameList []map[string]any
+	json.NewDecoder(res.Body).Decode(&gameList)
+	res.Body.Close()
+
+	if len(gameList) != 1 {
+		t.Fatalf("expected 1 game, got %d", len(gameList))
+	}
+	if gameList[0]["my_rsvp"] != nil {
+		t.Errorf("extended kader: expected my_rsvp=null for opt-out game, got %v", gameList[0]["my_rsvp"])
+	}
+}
+
+// TestListMyGames_RegularKaderAutoConfirmBleibt verifies that opt-out auto-confirm still
+// applies to members in the regular kader.
+func TestListMyGames_RegularKaderAutoConfirmBleibt(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+	db.Exec(`UPDATE games SET rsvp_opt_out=1 WHERE id=?`, gameID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/games/my", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var gameList []map[string]any
+	json.NewDecoder(res.Body).Decode(&gameList)
+	res.Body.Close()
+
+	if len(gameList) != 1 {
+		t.Fatalf("expected 1 game, got %d", len(gameList))
+	}
+	if gameList[0]["my_rsvp"] != "confirmed" {
+		t.Errorf("regular kader: expected my_rsvp=confirmed for opt-out game, got %v", gameList[0]["my_rsvp"])
 	}
 }
