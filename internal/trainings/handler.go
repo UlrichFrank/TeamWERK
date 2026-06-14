@@ -688,7 +688,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	var teamSQL string
 	var teamArgs []any
-	if claims.Role == "admin" {
+	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
 		teamSQL = "1=1"
 	} else {
 		var conds []string

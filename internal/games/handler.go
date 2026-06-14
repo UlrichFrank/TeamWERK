@@ -584,7 +584,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFromCtx(r.Context())
-	if claims != nil && claims.HasFunction("trainer") {
+	if claims != nil && claims.HasFunction("trainer") && !claims.HasFunction("sportliche_leitung") {
 		placeholders := strings.Repeat("?,", len(req.TeamIDs))
 		placeholders = placeholders[:len(placeholders)-1]
 		args := append([]any{claims.UserID}, toAny(req.TeamIDs)...)
