@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html"
+	"log"
 	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
@@ -26,17 +27,22 @@ type Mailer struct {
 	cfg      config.SMTPConfig
 	fromAddr string
 	baseURL  string
+	disabled bool
 }
 
-func New(cfg config.SMTPConfig, baseURL string) *Mailer {
+func New(cfg config.SMTPConfig, baseURL string, disabled bool) *Mailer {
 	fromAddr := cfg.User
 	if addr, err := mail.ParseAddress(cfg.From); err == nil {
 		fromAddr = addr.Address
 	}
-	return &Mailer{cfg: cfg, fromAddr: fromAddr, baseURL: baseURL}
+	return &Mailer{cfg: cfg, fromAddr: fromAddr, baseURL: baseURL, disabled: disabled}
 }
 
 func (m *Mailer) Send(to, subject, textBody string) error {
+	if m.disabled {
+		log.Printf("[mailer] disabled — an: %s, Betreff: %s", to, subject)
+		return nil
+	}
 	auth := smtp.PlainAuth("", m.cfg.User, m.cfg.Password, m.cfg.Host)
 
 	b := make([]byte, 12)

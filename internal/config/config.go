@@ -17,6 +17,7 @@ type Config struct {
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDEmail      string
+	MailerDisabled  bool
 }
 
 type SMTPConfig struct {
@@ -46,6 +47,7 @@ func Load() (*Config, error) {
 		VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
 		VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
 		VAPIDEmail:      getEnv("VAPID_EMAIL", "vorstand@team-stuttgart.org"),
+		MailerDisabled:  os.Getenv("MAILER_DISABLED") == "true",
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
