@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { X, User, CreditCard, ChevronDown, AlertTriangle, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
@@ -107,7 +107,7 @@ export default function MembersPage() {
   }, [clubFunctionFilter, unlinkedUserFilter, hasDraftFilter])
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
-  const isAdmin = user?.role === 'admin' || user?.role === 'vorstand'
+  const isAdmin = user?.role === 'admin' || hasFunction(user, 'vorstand')
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
 

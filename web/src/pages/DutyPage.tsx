@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 
@@ -31,7 +31,7 @@ function formatDate(iso: string): string {
 
 export default function DutyPage() {
   const { user } = useAuth()
-  const isAdminOrTrainer = user?.role === 'admin' || user?.role === 'trainer'
+  const isAdminOrTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
 
   const [groups, setGroups] = useState<BoardGroup[]>([])
   const [showPast, setShowPast] = useState(false)

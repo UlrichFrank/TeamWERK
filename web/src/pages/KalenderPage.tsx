@@ -116,8 +116,8 @@ const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-s
 
 function canSeeTeamAbsences(user: ReturnType<typeof useAuth>['user']): boolean {
   if (!user) return false
-  return user.role === 'admin' || user.role === 'trainer' ||
-    hasFunction(user, 'sportvorstand') || hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')
+  return user.role === 'admin' || hasFunction(user, 'trainer') ||
+    hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')
 }
 
 export default function KalenderPage() {
@@ -680,7 +680,7 @@ export default function KalenderPage() {
   )
 
   const canEdit = Boolean(user && (user.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')))
-  const canCreateAbsence = Boolean(user && (user.role === 'spieler' || user.role === 'elternteil' || hasFunction(user, 'spieler') || user.isParent))
+  const canCreateAbsence = Boolean(user && (hasFunction(user, 'spieler') || user.isParent))
 
   return (
     <div>
