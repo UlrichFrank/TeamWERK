@@ -73,6 +73,7 @@ interface Absence {
   end_date: string
   note: string
   created_by: number
+  is_own: boolean
 }
 
 interface SlotPreview {
@@ -113,6 +114,12 @@ function padDate(year: number, month: number, day: number): string {
 const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
+function canSeeTeamAbsences(user: ReturnType<typeof useAuth>['user']): boolean {
+  if (!user) return false
+  return user.role === 'admin' || user.role === 'trainer' ||
+    hasFunction(user, 'sportvorstand') || hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')
+}
+
 export default function KalenderPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -136,6 +143,9 @@ export default function KalenderPage() {
   const [allTeamNames, setAllTeamNames] = useState<TeamForName[]>([])
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
+  const [showTeamAbsences, setShowTeamAbsences] = useState<boolean>(
+    () => sessionStorage.getItem('kalender_show_team_absences') === 'true'
+  )
   const compact = useCompactHeader(950)
 
   const [regenSummary, setRegenSummary] = useState<RegenSummary | null>(null)
@@ -208,12 +218,19 @@ export default function KalenderPage() {
     }
   }
 
-  const loadAbsences = async () => {
+  const loadAbsences = async (overrideShowTeam?: boolean, overrideTeamId?: number | null) => {
     try {
       const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
       const lastDay = new Date(year, month + 1, 0).getDate()
       const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      const r = await api.get(`/absences/calendar?from=${from}&to=${to}`)
+      const show = overrideShowTeam !== undefined ? overrideShowTeam : showTeamAbsences
+      const tid = overrideTeamId !== undefined ? overrideTeamId : filterTeamId
+      let url = `/absences/calendar?from=${from}&to=${to}`
+      if (show && canSeeTeamAbsences(user)) {
+        url += '&show_team=true'
+        if (tid !== null) url += `&team_id=${tid}`
+      }
+      const r = await api.get(url)
       setAbsences(Array.isArray(r.data) ? r.data : [])
     } catch {
       setAbsences([])
@@ -250,7 +267,8 @@ export default function KalenderPage() {
     loadInitialData()
   }, [])
 
-  useEffect(() => { loadTrainings(); loadAbsences() }, [year, month])
+  useEffect(() => { loadTrainings(); loadAbsences() }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadAbsences() }, [filterTeamId, showTeamAbsences]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select the only child once children have loaded — keeps the parent
   // with exactly one linked kid from being forced through a useless selector.
@@ -703,6 +721,26 @@ export default function KalenderPage() {
             </button>
           ))}
         </div>
+        {canSeeTeamAbsences(user) && (
+          <button
+            onClick={() => {
+              const next = !showTeamAbsences
+              setShowTeamAbsences(next)
+              sessionStorage.setItem('kalender_show_team_absences', String(next))
+              loadAbsences(next, filterTeamId)
+            }}
+            aria-label="Mannschaftsabwesenheiten"
+            title="Mannschaftsabwesenheiten"
+            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
+              showTeamAbsences
+                ? 'bg-brand-blue text-white border-brand-blue'
+                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            }`}
+          >
+            <CalendarDays className="w-3.5 h-3.5" />
+            {!compact && <span>Abwesenheiten</span>}
+          </button>
+        )}
         {(canEdit || canCreateAbsence) && (
           <button
             onClick={() => {
@@ -772,7 +810,11 @@ export default function KalenderPage() {
                   <div
                     key={`abs-${absence.id}`}
                     className={`absolute top-[4px] left-[4px] right-[4px] h-5 border cursor-pointer z-20 ${
-                      absence.type === 'injury' ? 'bg-red-400/20 border-red-400/60' : 'bg-brand-yellow/20 border-brand-yellow/60'
+                      !absence.is_own
+                        ? 'bg-brand-blue/20 border-brand-blue/60'
+                        : absence.type === 'injury'
+                          ? 'bg-red-400/20 border-red-400/60'
+                          : 'bg-brand-yellow/20 border-brand-yellow/60'
                     } ${isFirst && isLast ? 'rounded-full' : isFirst ? 'rounded-l-full' : isLast ? 'rounded-r-full' : ''}`}
                     title={`${absence.member_name}: ${absence.type === 'vacation' ? 'Urlaub' : 'Verletzung'} ${absence.start_date}–${absence.end_date}`}
                     onPointerDown={e => e.stopPropagation()}

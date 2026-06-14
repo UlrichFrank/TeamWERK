@@ -35,6 +35,7 @@ type absence struct {
 	Note       string `json:"note"`
 	CreatedAt  string `json:"created_at"`
 	CreatedBy  int    `json:"created_by"`
+	IsOwn      bool   `json:"is_own"`
 }
 
 type previewEvent struct {
@@ -490,7 +491,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// GET /api/absences/calendar?from=&to=
+// GET /api/absences/calendar?from=&to=[&show_team=true][&team_id=X]
 func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	from := r.URL.Query().Get("from")
@@ -499,7 +500,10 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "from and to required", http.StatusBadRequest)
 		return
 	}
+	showTeam := r.URL.Query().Get("show_team") == "true"
+	teamIDStr := r.URL.Query().Get("team_id")
 
+	// Own + children absences
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT a.id, a.member_id, m.first_name || ' ' || m.last_name,
 		       a.type, a.start_date, a.end_date, a.note, a.created_by,
@@ -509,13 +513,10 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 		FROM member_absences a
 		JOIN members m ON m.id = a.member_id
 		WHERE a.start_date <= ? AND a.end_date >= ?
-		  AND (
-		    a.member_id IN (
-		      SELECT id FROM members WHERE user_id = ?
-		      UNION
-		      SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
-		    )
-		    OR m.absences_public = 1
+		  AND a.member_id IN (
+		    SELECT id FROM members WHERE user_id = ?
+		    UNION
+		    SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
 		  )
 		ORDER BY a.start_date`, claims.UserID, claims.UserID, claims.UserID, to, from, claims.UserID, claims.UserID)
 	if err != nil {
@@ -526,6 +527,7 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	result := []absence{}
+	ownIDs := map[int]struct{}{}
 	for rows.Next() {
 		var a absence
 		var canEdit int
@@ -533,8 +535,75 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 		a.CanEdit = canEdit != 0 || claims.Role == "admin"
 		a.StartDate = a.StartDate[:10]
 		a.EndDate = a.EndDate[:10]
+		a.IsOwn = true
+		ownIDs[a.ID] = struct{}{}
 		result = append(result, a)
 	}
+
+	// Team absences — only for authorized roles
+	canSeeTeam := showTeam && (claims.Role == "admin" || claims.Role == "trainer" ||
+		claims.HasFunction("sportvorstand") || claims.HasFunction("vorstand") || claims.IsTrainerLike())
+	if canSeeTeam {
+		var teamRows *sql.Rows
+		var teamErr error
+		if teamIDStr != "" {
+			teamRows, teamErr = h.db.QueryContext(r.Context(), `
+				SELECT a.id, a.member_id, m.first_name || ' ' || m.last_name,
+				       a.type, a.start_date, a.end_date, a.note, a.created_by
+				FROM member_absences a
+				JOIN members m ON m.id = a.member_id
+				WHERE a.start_date <= ? AND a.end_date >= ?
+				  AND m.absences_public = 1
+				  AND a.member_id IN (
+				    SELECT tm.member_id FROM team_memberships tm
+				    JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
+				    WHERE tm.team_id IN (SELECT team_id FROM user_accessible_teams WHERE user_id = ?)
+				      AND tm.team_id = ?
+				  )
+				  AND a.member_id NOT IN (
+				    SELECT id FROM members WHERE user_id = ?
+				    UNION
+				    SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
+				  )
+				ORDER BY a.start_date`, to, from, claims.UserID, teamIDStr, claims.UserID, claims.UserID)
+		} else {
+			teamRows, teamErr = h.db.QueryContext(r.Context(), `
+				SELECT a.id, a.member_id, m.first_name || ' ' || m.last_name,
+				       a.type, a.start_date, a.end_date, a.note, a.created_by
+				FROM member_absences a
+				JOIN members m ON m.id = a.member_id
+				WHERE a.start_date <= ? AND a.end_date >= ?
+				  AND m.absences_public = 1
+				  AND a.member_id IN (
+				    SELECT tm.member_id FROM team_memberships tm
+				    JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
+				    WHERE tm.team_id IN (SELECT team_id FROM user_accessible_teams WHERE user_id = ?)
+				  )
+				  AND a.member_id NOT IN (
+				    SELECT id FROM members WHERE user_id = ?
+				    UNION
+				    SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
+				  )
+				ORDER BY a.start_date`, to, from, claims.UserID, claims.UserID, claims.UserID)
+		}
+		if teamErr != nil {
+			fmt.Fprintf(os.Stderr, "absences calendar team: %v\n", teamErr)
+		} else {
+			defer teamRows.Close()
+			for teamRows.Next() {
+				var a absence
+				teamRows.Scan(&a.ID, &a.MemberID, &a.MemberName, &a.Type, &a.StartDate, &a.EndDate, &a.Note, &a.CreatedBy)
+				if _, alreadyOwn := ownIDs[a.ID]; alreadyOwn {
+					continue
+				}
+				a.StartDate = a.StartDate[:10]
+				a.EndDate = a.EndDate[:10]
+				a.IsOwn = false
+				result = append(result, a)
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }

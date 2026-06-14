@@ -71,6 +71,8 @@ type Member struct {
 
 	HasPendingProfilDraft bool `json:"has_pending_profil_draft,omitempty"`
 	HasPendingBankDraft   bool `json:"has_pending_bank_draft,omitempty"`
+
+	AbsencesPublic int `json:"absences_public"`
 }
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
