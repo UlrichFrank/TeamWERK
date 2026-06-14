@@ -357,8 +357,8 @@ func TestRespond_ParentForChild(t *testing.T) {
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	srv := testServer(t, h)
 
-	// Issue a token with role=elternteil and isParent=true.
-	tok, err := auth.IssueAccessToken(testutil.TestJWTSecret, parentUserID, "parent@test.local", "elternteil", nil, true)
+	// Eltern haben role="standard" und isParent=true (kein eigenes elternteil-Role/Function-Slot).
+	tok, err := auth.IssueAccessToken(testutil.TestJWTSecret, parentUserID, "parent@test.local", "standard", nil, true)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
