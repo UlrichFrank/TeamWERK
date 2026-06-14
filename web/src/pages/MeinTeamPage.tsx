@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -152,7 +151,6 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
 
 export default function MeinTeamPage() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const focusTeamId = searchParams.get('team') ? Number(searchParams.get('team')) : null
 
   const [myTeams, setMyTeams] = useState<MyTeam[]>([])
@@ -200,14 +198,6 @@ export default function MeinTeamPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      {focusTeamId != null && (
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-4"
-        >
-          <ChevronLeft className="w-4 h-4" /> Zurück
-        </button>
-      )}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-brand-text">Mein Team</h1>
         {myTeams.length > 1 && (

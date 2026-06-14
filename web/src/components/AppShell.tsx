@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
+import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import ChangelogModal from './ChangelogModal'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -71,6 +71,7 @@ export default function AppShell() {
   const isMobile = useMediaQuery('(max-width: 639px)')
   usePushSubscription()
   const { version, updateAvailable } = useVersionCheck()
+  const [canGoBack, setCanGoBack] = useState(() => (window.history.state?.idx ?? 0) > 0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
@@ -106,6 +107,10 @@ export default function AppShell() {
       loadChatUnread()
     }
   })
+
+  useEffect(() => {
+    setCanGoBack((window.history.state?.idx ?? 0) > 0)
+  }, [location])
 
   const handleLogout = async () => {
     await logout()
@@ -240,6 +245,16 @@ export default function AppShell() {
           >
             <Menu className="w-6 h-6" />
           </button>
+          {canGoBack && (
+            <button
+              onClick={() => navigate(-1)}
+              aria-label="Zurück"
+              className="text-brand-black/60 hover:text-brand-black transition-colors flex items-center gap-0.5"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              <span className="text-sm">Zurück</span>
+            </button>
+          )}
           <span className="font-bold text-lg">TeamWERK</span>
         </header>
 
@@ -282,6 +297,16 @@ export default function AppShell() {
 
         {/* Main content */}
         <main className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow">
+          {canGoBack && (
+            <div className="hidden sm:block -mt-2 mb-3">
+              <button
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" /> Zurück
+              </button>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>
