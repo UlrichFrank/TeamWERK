@@ -4,15 +4,20 @@ import { api, setAccessToken } from '../lib/api'
 
 interface User { id: number; email: string; role: string; clubFunctions: string[]; isParent: boolean }
 interface Impersonating { userId: number; name: string }
+type MapsProvider = 'auto' | 'google' | 'apple'
 interface AuthCtx {
   user: User | null
   loading: boolean
   impersonating: Impersonating | null
+  mapsProvider: MapsProvider
+  setMapsProvider: (p: MapsProvider) => void
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   startImpersonation: (userId: number, name: string) => Promise<void>
   stopImpersonation: () => Promise<void>
 }
+
+export type { MapsProvider }
 
 export function hasFunction(user: User | null, f: string): boolean {
   return user?.clubFunctions?.includes(f) ?? false
@@ -37,6 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [impersonating, setImpersonating] = useState<Impersonating | null>(null)
   const [showWarning, setShowWarning] = useState(false)
   const [countdown, setCountdown] = useState(COUNTDOWN_SECS)
+  const [mapsProvider, setMapsProvider] = useState<MapsProvider>('auto')
+
+  async function loadMapsProvider() {
+    try {
+      const res = await api.get('/profile/me')
+      const p = res.data.maps_provider
+      if (p === 'google' || p === 'apple' || p === 'auto') setMapsProvider(p)
+    } catch {
+      // keep default 'auto'
+    }
+  }
 
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const logoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -79,10 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(token)
         const payload = JSON.parse(atob(token.split('.')[1]))
         setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
+        loadMapsProvider()
       })
       .catch(() => setUser(null))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start idle timer only when logged in; clean up on logout or unmount
   useEffect(() => {
@@ -107,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(token)
     const payload = JSON.parse(atob(token.split('.')[1]))
     setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
+    loadMapsProvider()
   }
 
   async function startImpersonation(userId: number, name: string) {
@@ -116,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const payload = JSON.parse(atob(token.split('.')[1]))
     setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
     setImpersonating({ userId, name })
+    loadMapsProvider()
   }
 
   async function stopImpersonation() {
@@ -125,10 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const payload = JSON.parse(atob(token.split('.')[1]))
     setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
     setImpersonating(null)
+    loadMapsProvider()
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, impersonating, login, logout, startImpersonation, stopImpersonation }}>
+    <AuthContext.Provider value={{ user, loading, impersonating, mapsProvider, setMapsProvider, login, logout, startImpersonation, stopImpersonation }}>
       {children}
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

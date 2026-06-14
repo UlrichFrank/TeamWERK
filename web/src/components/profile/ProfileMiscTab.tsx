@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import Toggle from '../Toggle'
+import { useAuth, MapsProvider } from '../../contexts/AuthContext'
 
 type Category = 'games' | 'trainings' | 'duties' | 'carpooling'
 
@@ -26,6 +27,7 @@ const categoryLabels: Record<Category, string> = {
 }
 
 export default function ProfileMiscTab() {
+  const { mapsProvider: ctxMapsProvider, setMapsProvider: setCtxMapsProvider } = useAuth()
   const [prefs, setPrefs] = useState<Prefs>(defaults)
   const [changed, setChanged] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -33,6 +35,10 @@ export default function ProfileMiscTab() {
   const [error, setError] = useState('')
   const [absencesPublic, setAbsencesPublic] = useState(false)
   const [absenceSaving, setAbsenceSaving] = useState(false)
+  const [mapsProvider, setMapsProvider] = useState<MapsProvider>(ctxMapsProvider)
+  const [mapsSaving, setMapsSaving] = useState(false)
+  const [mapsSaved, setMapsSaved] = useState(false)
+  const [mapsError, setMapsError] = useState('')
 
   useEffect(() => {
     api.get('/profile/me').then(r => {
@@ -70,6 +76,24 @@ export default function ProfileMiscTab() {
   const toggleEmail = (cat: Category) => {
     setPrefs(p => ({ ...p, [cat]: { ...p[cat], email: !p[cat].email } }))
     setChanged(true)
+  }
+
+  const handleMapsProviderChange = async (p: MapsProvider) => {
+    setMapsProvider(p)
+    setMapsSaving(true)
+    setMapsError('')
+    setMapsSaved(false)
+    try {
+      await api.put('/profile/me', { maps_provider: p })
+      setCtxMapsProvider(p)
+      setMapsSaved(true)
+      setTimeout(() => setMapsSaved(false), 2000)
+    } catch {
+      setMapsError('Speichern fehlgeschlagen')
+      setMapsProvider(ctxMapsProvider)
+    } finally {
+      setMapsSaving(false)
+    }
   }
 
   const handleSave = async (e: FormEvent) => {
@@ -129,6 +153,33 @@ export default function ProfileMiscTab() {
               onToggle={absenceSaving ? () => {} : toggleAbsenceVisibility}
               label="Abwesenheiten für Trainer sichtbar"
             />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <div className="p-6 pb-2">
+          <h2 className="font-semibold text-brand-text-muted mb-1">Kartendienst</h2>
+          <p className="text-xs text-brand-text-subtle mb-3">Welche Karten-App beim Klick auf einen Ort geöffnet werden soll.</p>
+        </div>
+        <div className="divide-y divide-brand-border-subtle">
+          <div className="flex items-center justify-between px-6 py-3 gap-4">
+            <label htmlFor="maps-provider" className="text-sm font-medium text-brand-text shrink-0">Karten-App</label>
+            <div className="flex items-center gap-3">
+              <select
+                id="maps-provider"
+                value={mapsProvider}
+                disabled={mapsSaving}
+                onChange={e => handleMapsProviderChange(e.target.value as MapsProvider)}
+                className="border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow disabled:opacity-50"
+              >
+                <option value="auto">Automatisch (Gerät erkennen)</option>
+                <option value="google">Google Maps</option>
+                <option value="apple">Apple Maps</option>
+              </select>
+              {mapsSaved && <span className="text-sm text-brand-text-muted">Gespeichert</span>}
+              {mapsError && <span className="text-sm text-brand-danger">{mapsError}</span>}
+            </div>
           </div>
         </div>
       </div>

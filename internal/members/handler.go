@@ -819,6 +819,7 @@ type ProfileResponse struct {
 	Phones           []UserPhone     `json:"phones"`
 	Visibility       UserVisibility  `json:"visibility"`
 	DutyReminderDays *int            `json:"duty_reminder_days"`
+	MapsProvider     string          `json:"maps_provider"`
 }
 
 // GET /api/profile/me — returns the logged-in user's linked member profile(s) + contact data
@@ -873,12 +874,13 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Contact data: address, photo_url, phones, visibility, reminder preference
+	// Contact data: address, photo_url, phones, visibility, reminder preference, maps provider
 	var street, zip, city, photoPath sql.NullString
 	var reminderDays sql.NullInt64
+	var mapsProvider string
 	h.db.QueryRowContext(r.Context(),
-		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,''), duty_reminder_days FROM users WHERE id=?`,
-		claims.UserID).Scan(&street, &zip, &city, &photoPath, &reminderDays)
+		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,''), duty_reminder_days, maps_provider FROM users WHERE id=?`,
+		claims.UserID).Scan(&street, &zip, &city, &photoPath, &reminderDays, &mapsProvider)
 	resp.Street = street.String
 	resp.Zip = zip.String
 	resp.City = city.String
@@ -889,6 +891,10 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		v := int(reminderDays.Int64)
 		resp.DutyReminderDays = &v
 	}
+	if mapsProvider == "" {
+		mapsProvider = "auto"
+	}
+	resp.MapsProvider = mapsProvider
 
 	phoneRows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, label, number, sort_order FROM user_phones WHERE user_id=? ORDER BY sort_order, id`,
@@ -918,21 +924,34 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// PUT /api/profile/me — update profile fields (name + address)
+// PUT /api/profile/me — update profile fields (name + address + maps provider)
 func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Street    string `json:"street"`
-		Zip       string `json:"zip"`
-		City      string `json:"city"`
+		FirstName    string `json:"first_name"`
+		LastName     string `json:"last_name"`
+		Street       string `json:"street"`
+		Zip          string `json:"zip"`
+		City         string `json:"city"`
+		MapsProvider string `json:"maps_provider"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	if req.MapsProvider != "" {
+		switch req.MapsProvider {
+		case "auto", "google", "apple":
+		default:
+			http.Error(w, "maps_provider must be auto, google, or apple", http.StatusBadRequest)
+			return
+		}
+	}
+	mapsProvider := req.MapsProvider
+	if mapsProvider == "" {
+		mapsProvider = "auto"
+	}
 	if _, err := h.db.ExecContext(r.Context(),
-		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, updated_at=? WHERE id=?`,
+		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, maps_provider=?, updated_at=? WHERE id=?`,
 		req.FirstName, req.LastName,
-		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), time.Now(), claims.UserID,
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), mapsProvider, time.Now(), claims.UserID,
 	); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

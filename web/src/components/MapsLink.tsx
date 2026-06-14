@@ -1,4 +1,5 @@
 import { MapPin } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 interface Venue {
   name: string
@@ -12,11 +13,20 @@ interface MapsLinkProps {
   className?: string
 }
 
+function resolveUrl(query: string, provider: 'auto' | 'google' | 'apple'): string {
+  const useApple =
+    provider === 'apple' ||
+    (provider === 'auto' && /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent))
+  const base = useApple ? 'https://maps.apple.com/' : 'https://maps.google.com/'
+  return `${base}?q=${query}`
+}
+
 export default function MapsLink({ venue, className = '' }: MapsLinkProps) {
+  const { mapsProvider } = useAuth()
   if (!venue) return null
 
   const query = encodeURIComponent(`${venue.street} ${venue.postal_code} ${venue.city}`)
-  const url = `https://maps.google.com/?q=${query}`
+  const url = resolveUrl(query, mapsProvider)
 
   return (
     <a
