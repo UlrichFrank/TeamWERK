@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
@@ -44,7 +44,7 @@ export default function SpieltagDetailPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const canEdit = user?.role === 'admin' || user?.role === 'vorstand' || user?.role === 'trainer'
+  const canEdit = user?.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
 
   const [game, setGame] = useState<GameDetail | null>(null)
   const [slots, setSlots] = useState<SlotDetail[]>([])

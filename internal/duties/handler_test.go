@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
@@ -104,6 +105,11 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 		r.Get("/api/duty-slots/{id}/assignments", h.ListAssignments)
 		r.Post("/api/duty-assignments/{id}/fulfill", h.Fulfill)
 		r.Post("/api/duty-assignments/{id}/cash-substitute", h.CashSubstitute)
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
+			r.Get("/api/duty-types", h.ListTypes)
+		})
 	})
 }
 
@@ -1007,5 +1013,41 @@ func TestClaimDutySlot_NoConcurrentOverclaim(t *testing.T) {
 	assignments := countRows(t, db, "duty_assignments", "duty_slot_id=?", slotID)
 	if assignments != 1 {
 		t.Errorf("expected 1 assignment row, got %d", assignments)
+	}
+}
+
+// TestListDutyTypes_TrainerCanRead verifies that a user with club_function=trainer
+// can read duty types (GET /api/duty-types returns 200).
+func TestListDutyTypes_TrainerCanRead(t *testing.T) {
+	db := testutil.NewDB(t)
+	createDutyType(t, db, "Aufbau", 2.0)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "spieler", []string{"trainer"})
+	res := testutil.Get(t, srv, "/api/duty-types", token)
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for trainer, got %d", res.StatusCode)
+	}
+}
+
+// TestListDutyTypes_SpielerForbidden verifies that a plain spieler without
+// trainer club function cannot read duty types (GET /api/duty-types returns 403).
+func TestListDutyTypes_SpielerForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "spieler", nil)
+	res := testutil.Get(t, srv, "/api/duty-types", token)
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 for spieler without function, got %d", res.StatusCode)
 	}
 }

@@ -24,6 +24,14 @@ func testServer(t *testing.T, h *games.Handler) *httptest.Server {
 			r.Post("/api/admin/kalender", h.CreateGame)
 			r.Put("/api/admin/kalender/{id}", h.UpdateGame)
 			r.Delete("/api/kalender/{id}", h.DeleteGame)
+			r.Get("/api/duty-templates", h.ListTemplates)
+			r.Get("/api/duty-templates/{id}", h.GetTemplateByID)
+			r.Get("/api/duty-templates/{id}/preview", h.PreviewSlots)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand"))
+			r.Post("/api/duty-templates", h.CreateTemplate)
 		})
 	})
 }
@@ -794,5 +802,43 @@ func TestListTeamsForUser_SpielerSeesOwnTeam(t *testing.T) {
 		if int(teams[0]["id"].(float64)) != teamA {
 			t.Errorf("expected team A (id=%d), got id=%.0f", teamA, teams[0]["id"])
 		}
+	}
+}
+
+// TestListDutyTemplates_TrainerCanRead verifies that a user with club_function=trainer
+// can list duty templates (GET /api/duty-templates returns 200).
+func TestListDutyTemplates_TrainerCanRead(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "spieler", []string{"trainer"})
+	res := testutil.Get(t, srv, "/api/duty-templates", token)
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for trainer, got %d", res.StatusCode)
+	}
+}
+
+// TestCreateDutyTemplate_TrainerForbidden verifies that a trainer cannot create
+// duty templates (POST /api/duty-templates returns 403).
+func TestCreateDutyTemplate_TrainerForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "spieler", []string{"trainer"})
+	res := testutil.Post(t, srv, "/api/duty-templates", token, map[string]any{
+		"name":             "Test-Vorlage",
+		"template_type":    "heim",
+		"duration_minutes": 90,
+	})
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 for trainer creating template, got %d", res.StatusCode)
 	}
 }
