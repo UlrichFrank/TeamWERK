@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -247,8 +247,7 @@ export default function MemberDetailPage() {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Link to="/mitglieder" className="text-sm text-brand-text-muted hover:text-brand-text">← Mitglieder</Link>
+      <div className="mb-6">
         <h1 className="text-2xl font-bold">{isNew ? 'Mitglied anlegen' : 'Mitglied bearbeiten'}</h1>
       </div>
 

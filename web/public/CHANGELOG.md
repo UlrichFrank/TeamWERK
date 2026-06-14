@@ -1,4 +1,14 @@
 ## 14.06.2026
+- [fix] carpooling: Mitfahrgelegenheiten-Bugfixes und Team-Filter
+- [feat] mailer: MAILER_DISABLED-Flag zum Deaktivieren des E-Mail-Versands
+- [fix] trainings: sportliche_leitung kann Termine für alle Mannschaften anlegen und sehen
+- [feat] absences: Mannschaftsabwesenheiten im Kalender für Trainer
+- [feat] ui: globaler Zurück-Button in AppShell
+- [feat] members: Kartendienst-Präferenz im Profil einstellbar
+- [feat] dashboard: erweiterter Kader einheitlich als Badge kennzeichnen
+- [feat] dashboard: erweiterter Kader im Dashboard kennzeichnen
+- [fix] trainings: rsvp_opt_out gilt nicht für erweiterten Kader
+- [fix] trainings: erweiterter Kader in Trainings-Anwesenheitsliste korrekt ausweisen
 - [feat] trainings: erweiterter Kader sieht Trainings, Anwesenheitsliste und Benachrichtigungen
 - [feat] members: Anwärter-Status für neue Spieler ohne Vereinsmitgliedschaft
 - [feat] kader: erweiterter Kader sichtbar auf MeinTeamPage und in Spielliste

@@ -101,7 +101,7 @@ export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, on
     setDeleteError('')
     try {
       await api.delete(`/members/${memberId}/sepa-mandat`)
-      onFormChange({ sepa_mandat_url: undefined })
+      onFormChange({ sepa_mandat_url: undefined, sepa_mandat: false, sepa_mandat_date: '' })
     } catch {
       setDeleteError('Löschen fehlgeschlagen.')
     } finally {

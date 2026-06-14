@@ -356,7 +356,8 @@ func (h *Handler) DeleteSepaMandat(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(h.uploadDir, path.String))
 	}
 
-	h.db.ExecContext(r.Context(), `UPDATE members SET sepa_mandat_path=NULL WHERE id=?`, memberID)
+	h.db.ExecContext(r.Context(),
+		`UPDATE members SET sepa_mandat_path=NULL, sepa_mandat=0, sepa_mandat_date=NULL WHERE id=?`, memberID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
