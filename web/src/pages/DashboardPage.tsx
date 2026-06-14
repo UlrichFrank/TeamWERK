@@ -87,6 +87,14 @@ function statusLabel(status: string) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+function ExtendedBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-semibold text-brand-blue border border-brand-blue/30 whitespace-nowrap flex-shrink-0">
+      Erw. Kader
+    </span>
+  )
+}
+
 function Accordion({
   id, title, icon: Icon, isOpen, onToggle, children,
 }: {
@@ -144,9 +152,12 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
                   : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-brand-text truncate">{e.title}</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-sm font-medium text-brand-text truncate">{e.title}</p>
+                  {e.isExtended && <ExtendedBadge />}
+                </div>
                 <p className="text-xs text-brand-text-muted">
-                  {e.teamName}{e.isExtended ? ' (Erw. Kader)' : ''} · {e.time}
+                  {e.teamName} · {e.time}
                 </p>
               </div>
               <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
@@ -258,11 +269,7 @@ function MeinTeamSection() {
           >
             <span className="flex items-center gap-2 text-sm font-medium text-brand-text">
               {t.name}
-              {t.isExtended && (
-                <span className="text-xs font-medium text-brand-text-muted border border-brand-border rounded px-1.5 py-0.5">
-                  Erw. Kader
-                </span>
-              )}
+              {t.isExtended && <ExtendedBadge />}
             </span>
             <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
           </Link>
