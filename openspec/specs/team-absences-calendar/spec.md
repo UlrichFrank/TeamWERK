@@ -1,14 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Trainer können Team-Abwesenheiten im Kalender einblenden
-Nutzer mit Rolle `trainer`, `admin` oder Club-Funktion `sportvorstand`/`vorstand` SHALL im Kalender einen Toggle sehen, der Team-Abwesenheiten ein- oder ausblendet. Der Toggle-State wird in `sessionStorage` gespeichert und ist nach Seitenneustart standardmäßig AUS.
+Nutzer mit System-Rolle `admin` oder einer der Vereinsfunktionen `trainer`, `sportliche_leitung`, `vorstand` SHALL im Kalender einen Toggle sehen, der Team-Abwesenheiten ein- oder ausblendet. Der Toggle-State wird in `sessionStorage` gespeichert und ist nach Seitenneustart standardmäßig AUS.
 
 #### Scenario: Toggle für Trainer sichtbar
-- **WHEN** ein Nutzer mit Rolle `trainer` den Kalender öffnet
+- **WHEN** ein Nutzer mit Vereinsfunktion `trainer` den Kalender öffnet
 - **THEN** ist ein Toggle „Mannschaftsabwesenheiten" sichtbar
 
-#### Scenario: Toggle für Spieler nicht sichtbar
-- **WHEN** ein Nutzer mit Rolle `spieler` oder `elternteil` den Kalender öffnet
+#### Scenario: Toggle für reinen Spieler/Eltern nicht sichtbar
+- **WHEN** ein Nutzer mit Vereinsfunktion `spieler` (ohne Trainer-/Vorstandsfunktion) oder ein reiner Eltern-User (`isParent=true`, keine Funktion) den Kalender öffnet
 - **THEN** ist kein Toggle „Mannschaftsabwesenheiten" vorhanden
 
 #### Scenario: Default ist AUS
