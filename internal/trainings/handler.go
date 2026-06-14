@@ -1043,6 +1043,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 type attendanceItem struct {
 	MemberID   int     `json:"member_id"`
 	MemberName string  `json:"member_name"`
+	IsExtended bool    `json:"is_extended"`
 	RSVPStatus *string `json:"rsvp_status"`
 	Reason     *string `json:"reason"`
 	Present    *bool   `json:"present"`
@@ -1086,17 +1087,37 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, m.first_name || ' ' || m.last_name,
-		       tr.status, tr.reason, ta.present
-		FROM members m
-		LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
-		LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
-		WHERE (
-			EXISTS (SELECT 1 FROM player_memberships pm WHERE pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?)
-			OR EXISTS (SELECT 1 FROM kader_extended_members kem JOIN kader k ON k.id = kem.kader_id WHERE kem.member_id = m.id AND k.team_id = ? AND k.season_id = ?)
+		SELECT member_id, member_name, is_extended, rsvp_status, reason, present
+		FROM (
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       0 AS is_extended,
+			       tr.status AS rsvp_status,
+			       tr.reason AS reason,
+			       ta.present AS present
+			FROM members m
+			JOIN player_memberships pm ON pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?
+			LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
+			LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
+
+			UNION
+
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       1 AS is_extended,
+			       tr.status AS rsvp_status,
+			       tr.reason AS reason,
+			       ta.present AS present
+			FROM members m
+			JOIN kader_extended_members kem ON kem.member_id = m.id
+			JOIN kader k ON k.id = kem.kader_id AND k.team_id = ? AND k.season_id = ?
+			LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
+			LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
+			WHERE NOT EXISTS (
+				SELECT 1 FROM player_memberships pm WHERE pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?
+			)
 		)
-		GROUP BY m.id
-		ORDER BY m.last_name, m.first_name`, sessionID, sessionID, teamID, seasonID, teamID, seasonID)
+		ORDER BY member_name`, teamID, seasonID, sessionID, sessionID, teamID, seasonID, sessionID, sessionID, teamID, seasonID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "GetAttendances: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -1107,9 +1128,11 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	result := []attendanceItem{}
 	for rows.Next() {
 		var item attendanceItem
+		var isExtended int
 		var rsvp, reason sql.NullString
 		var present sql.NullInt64
-		rows.Scan(&item.MemberID, &item.MemberName, &rsvp, &reason, &present)
+		rows.Scan(&item.MemberID, &item.MemberName, &isExtended, &rsvp, &reason, &present)
+		item.IsExtended = isExtended == 1
 		if rsvp.Valid {
 			item.RSVPStatus = &rsvp.String
 		} else if rsvpOptOut == 1 {

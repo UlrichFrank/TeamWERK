@@ -566,6 +566,63 @@ func TestGetAttendances_ExtendedKaderPlayerAppears(t *testing.T) {
 	}
 }
 
+// TestGetAttendances_IsExtended verifies that is_extended is set correctly:
+// primary kader → false, extended-only → true, overlap → appears once with false.
+func TestGetAttendances_IsExtended(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	primaryMemberID := testutil.CreateMember(t, db, 0)
+	extOnlyMemberID := testutil.CreateMember(t, db, 0)
+	bothMemberID := testutil.CreateMember(t, db, 0)
+
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	// primary kader members
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, primaryMemberID)
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, bothMemberID)
+	// extended kader members
+	testutil.AddExtendedKaderMember(t, db, kaderID, extOnlyMemberID)
+	testutil.AddExtendedKaderMember(t, db, kaderID, bothMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var items []struct {
+		MemberID   int  `json:"member_id"`
+		IsExtended bool `json:"is_extended"`
+	}
+	json.NewDecoder(res.Body).Decode(&items)
+	res.Body.Close()
+
+	byID := map[int]bool{}
+	countByID := map[int]int{}
+	for _, item := range items {
+		byID[item.MemberID] = item.IsExtended
+		countByID[item.MemberID]++
+	}
+
+	if byID[primaryMemberID] != false {
+		t.Errorf("primary kader member should have is_extended=false")
+	}
+	if byID[extOnlyMemberID] != true {
+		t.Errorf("extended-only member should have is_extended=true")
+	}
+	if byID[bothMemberID] != false {
+		t.Errorf("member in both kadere should have is_extended=false (primary wins)")
+	}
+	if countByID[bothMemberID] != 1 {
+		t.Errorf("member in both kadere should appear exactly once, got %d", countByID[bothMemberID])
+	}
+}
+
 // TestListSessions_NoKaderPlayerSeesNothing verifies that a player without any kader
 // membership cannot see any training sessions.
 func TestListSessions_NoKaderPlayerSeesNothing(t *testing.T) {

@@ -78,6 +78,7 @@ interface GameDetail {
 interface AttendanceItem {
   member_id: number
   member_name: string
+  is_extended?: boolean
   rsvp_status: string | null
   reason: string | null
   present: boolean | null
@@ -208,6 +209,7 @@ export default function TermineDetailPage() {
     const tableRows: TableRow[] = attendances.map(a => ({
       member_id: a.member_id,
       member_name: a.member_name,
+      is_extended: a.is_extended,
       rsvp_status: a.rsvp_status,
       reason: a.reason,
       present: a.present,
