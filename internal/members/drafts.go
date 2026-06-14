@@ -54,7 +54,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
 		       m.photo_visible, m.photo_path,
-		       COALESCE(m.phones_visible,0), COALESCE(m.address_visible,0), COALESCE(m.email_visible,0)
+		       COALESCE(m.phones_visible,0), COALESCE(m.address_visible,0), COALESCE(m.email_visible,0),
+		       COALESCE(m.absences_public,0)
 		FROM members m
 		WHERE m.id=?`, memberID)
 
@@ -71,6 +72,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		&street, &zip, &city, &joinDate, &iban, &accountHolder,
 		&photoVisible, &photoPath,
 		&phonesVisible, &addressVisible, &emailVisible,
+		&m.AbsencesPublic,
 	)
 	if err != nil {
 		return nil, err

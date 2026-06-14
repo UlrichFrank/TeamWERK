@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Calendar, Check, ChevronLeft, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
+import { useParams } from 'react-router-dom'
+import { AlertTriangle, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -96,7 +96,6 @@ interface TableRow {
 
 export default function TermineDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>()
-  const navigate = useNavigate()
   const { user } = useAuth()
   const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
 
@@ -217,13 +216,6 @@ export default function TermineDetailPage() {
 
     return (
       <div className="max-w-2xl space-y-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-2"
-        >
-          <ChevronLeft className="w-4 h-4" /> Zurück zu Termine
-        </button>
-
         <div className={`bg-brand-surface-card rounded-xl shadow border-t-4 p-6 ${session.status === 'cancelled' ? 'border-brand-border' : 'border-brand-yellow'}`}>
           <div className="flex items-start gap-3">
             <Dumbbell className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
@@ -311,13 +303,6 @@ export default function TermineDetailPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-2"
-      >
-        <ChevronLeft className="w-4 h-4" /> Zurück zu Termine
-      </button>
-
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <div className="flex items-start gap-3">
           <Icon className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
