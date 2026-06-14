@@ -1,4 +1,7 @@
 ## 14.06.2026
+- [feat] trainings: erweiterter Kader sieht Trainings, Anwesenheitsliste und Benachrichtigungen
+- [feat] members: Anwärter-Status für neue Spieler ohne Vereinsmitgliedschaft
+- [feat] kader: erweiterter Kader sichtbar auf MeinTeamPage und in Spielliste
 - [fix] duties: Trainer-Lesezugriff auf Dienst-Typen und Templates
 - [feat] members,auth: Verknüpfungsstatus-Filter und Beitrittsantrag-Deeplink
 
