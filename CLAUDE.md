@@ -129,15 +129,31 @@ claims := auth.ClaimsFromCtx(r.Context())
 Access Token: 15 min, HS256, im Frontend im Memory.  
 Refresh Token: 7 Tage, opaque (SHA256-Hash in DB), als HttpOnly-Cookie.
 
-### Rollen
+### Rollen und Vereinsfunktionen
 
-| Rolle | Bedeutung |
+TeamWERK kennt zwei orthogonale Berechtigungs-Dimensionen.
+
+**System-Rolle** (`users.role`, CHECK auf zwei Werte). Wird im JWT-Claim `role` mitgeführt und via `auth.RequireRole(...)` gegated.
+
+| System-Rolle | Bedeutung |
 |-------|-----------|
-| `admin` | Vollzugriff |
-| `vorstand` | Vereinskonfig |
-| `trainer` | Eigenes Team: Mitglieder sehen, Slots verwalten, Anfragen bearbeiten |
-| `elternteil` | Nur eigene Kinder (via `family_links`), Dienstbörse, Konto |
-| `spieler` | Eigenes Profil, Dienstbörse, Konto |
+| `admin` | Vollzugriff; umgeht alle `RequireClubFunction`-Checks |
+| `standard` | Default; Zugriff ergibt sich aus Vereinsfunktionen und Ownership |
+
+**Vereinsfunktion** (`member_club_functions.function`). Pro Member 0–n Funktionen möglich. Im JWT-Claim `club_functions: string[]`; geprüft via `auth.RequireClubFunction(...)` bzw. `claims.HasFunction(...)`.
+
+| Vereinsfunktion | Bedeutung |
+|---|---|
+| `spieler` | Aktiver Spieler; Dienstbörse, Konto, eigenes Profil |
+| `trainer` | Team-Coach; verwaltet Slots, Anfragen, Kader |
+| `sportliche_leitung` | Trainer-äquivalente Rechte teamübergreifend |
+| `vorstand` | Vereinsverwaltung (Mitglieder, Saisons, Teams, Nutzer) |
+| `vorstand_beisitzer` | Unterstützer des Vorstands (eingeschränktere Rechte) |
+| `kassierer` | Finanzdaten (SEPA, Beiträge) |
+
+**Eltern** sind **keine** Vereinsfunktion. Eltern werden über `family_links` (parent_user_id → member_id) modelliert und im JWT als `is_parent: true` mitgeführt. Code-Checks gehen über `claims.IsParent`, niemals über `HasFunction("elternteil")`.
+
+**Nicht existent:** `sportvorstand` ist keine valide Vereinsfunktion. Falls fachlich gewünscht, kombiniere `vorstand` + `sportliche_leitung`.
 
 ### Datenbankzugriff
 
