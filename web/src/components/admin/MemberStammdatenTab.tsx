@@ -53,7 +53,7 @@ const GENDER_OPTIONS = [
 ]
 
 
-const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'honorar', 'ausgetreten']
+const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'honorar', 'anwaerter', 'ausgetreten']
 const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']
 
 export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {

@@ -21,6 +21,7 @@ interface Member {
   name: string
   birth_year: number
   gender: string
+  status?: string
 }
 
 interface Kader {
@@ -544,11 +545,16 @@ export default function AdminKaderPage() {
                     <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
                       {(k.members ?? []).map(m => (
                         <li key={m.id} className="flex items-center justify-between py-2 gap-2">
-                          <span className="text-sm text-brand-text">
+                          <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
                             {m.name}{' '}
                             <span className="text-brand-text-muted text-xs">
                               ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
                             </span>
+                            {m.status === 'anwaerter' && (
+                              <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-green/10 text-brand-green">
+                                Anwärter
+                              </span>
+                            )}
                           </span>
                           <button
                             onClick={() => handleRemoveMember(k.id, m.id)}
@@ -580,11 +586,16 @@ export default function AdminKaderPage() {
                     <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
                       {(k.extended_members ?? []).map(m => (
                         <li key={m.id} className="flex items-center justify-between py-2 gap-2">
-                          <span className="text-sm text-brand-text">
+                          <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
                             {m.name}{' '}
                             <span className="text-brand-text-muted text-xs">
                               ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
                             </span>
+                            {m.status === 'anwaerter' && (
+                              <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-green/10 text-brand-green">
+                                Anwärter
+                              </span>
+                            )}
                           </span>
                           <button
                             onClick={() => handleRemoveExtendedMember(k.id, m.id)}

@@ -603,6 +603,14 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	valid := map[string]bool{
+		"aktiv": true, "verletzt": true, "pausiert": true,
+		"ausgetreten": true, "passiv": true, "honorar": true, "anwaerter": true,
+	}
+	if !valid[req.Status] {
+		http.Error(w, "invalid status", http.StatusBadRequest)
+		return
+	}
 	h.db.ExecContext(r.Context(), `UPDATE members SET status=?, updated_at=? WHERE id=?`, req.Status, time.Now(), id)
 	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
@@ -1324,7 +1332,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	normalizeStatus := func(s string) string {
 		switch s {
-		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar":
+		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter":
 			return s
 		case "gekündigt", "Vereinswechsel":
 			return "ausgetreten"

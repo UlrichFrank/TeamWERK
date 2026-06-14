@@ -46,7 +46,18 @@ const statusBadgeStyles = (status: string) => {
   if (status === 'aktiv') return 'bg-brand-black text-white'
   if (status === 'verletzt') return 'bg-brand-yellow text-brand-black'
   if (status === 'honorar') return 'bg-brand-blue/10 text-brand-blue'
+  if (status === 'anwaerter') return 'bg-brand-green/10 text-brand-green'
   return 'bg-brand-border-subtle text-brand-text-muted'
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  aktiv: 'Aktiv',
+  verletzt: 'Verletzt',
+  pausiert: 'Pausiert',
+  passiv: 'Passiv',
+  honorar: 'Honorar',
+  anwaerter: 'Anwärter',
+  ausgetreten: 'Ausgetreten',
 }
 
 const rowStatusIcon = (s: ImportRow['status']) => {
@@ -338,13 +349,13 @@ export default function MembersPage() {
                   {/* Status badge inline on mobile */}
                   <div className="sm:hidden mt-0.5">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeStyles(m.status)}`}>
-                      {m.status}
+                      {STATUS_LABEL[m.status] ?? m.status}
                     </span>
                   </div>
                 </td>
                 <td className="hidden sm:table-cell px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeStyles(m.status)}`}>
-                    {m.status}
+                    {STATUS_LABEL[m.status] ?? m.status}
                   </span>
                 </td>
                 <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{m.position || '–'}</td>

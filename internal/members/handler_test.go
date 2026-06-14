@@ -31,6 +31,15 @@ func newMembersServer(t *testing.T, database *sql.DB) *httptest.Server {
 	})
 }
 
+func newStatusServer(t *testing.T, database *sql.DB) *httptest.Server {
+	t.Helper()
+	h := members.NewHandler(database, hub.NewHub())
+	return testutil.NewServer(t, func(r chi.Router) {
+		r.Post("/api/admin/members", h.Create)
+		r.Put("/api/admin/members/{id}/status", h.UpdateStatus)
+	})
+}
+
 // addKaderMember inserts a member into a kader directly (player_memberships is a view).
 func addKaderMember(t *testing.T, database *sql.DB, kaderID, memberID int) {
 	t.Helper()
@@ -531,5 +540,67 @@ func TestList_HasDraftFilter(t *testing.T) {
 	json.Unmarshal(lr.Items[0], &item)
 	if item.ID != memberWithDraft {
 		t.Errorf("expected member %d with draft, got %d", memberWithDraft, item.ID)
+	}
+}
+
+// ── TC-M: Anwärter-Status ─────────────────────────────────────────────────────
+
+func TestMemberStatus_Anwaerter_Update(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	memberID := testutil.CreateMember(t, database, 0)
+
+	srv := newStatusServer(t, database)
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/admin/members/%d/status", memberID), tok,
+		map[string]string{"status": "anwaerter"})
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var got string
+	database.QueryRow(`SELECT status FROM members WHERE id=?`, memberID).Scan(&got)
+	if got != "anwaerter" {
+		t.Errorf("expected status=anwaerter, got %q", got)
+	}
+}
+
+func TestMemberStatus_Invalid(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	memberID := testutil.CreateMember(t, database, 0)
+
+	srv := newStatusServer(t, database)
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/admin/members/%d/status", memberID), tok,
+		map[string]string{"status": "unbekannt"})
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.StatusCode)
+	}
+}
+
+func TestMemberStatus_Anwaerter_Create(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+
+	srv := newStatusServer(t, database)
+	res := testutil.Post(t, srv, "/api/admin/members", tok,
+		map[string]string{"first_name": "Tom", "last_name": "Probe"})
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+	var body struct{ ID int `json:"id"` }
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	// promote to anwaerter
+	res2 := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/admin/members/%d/status", body.ID), tok,
+		map[string]string{"status": "anwaerter"})
+	if res2.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 on status update, got %d", res2.StatusCode)
 	}
 }

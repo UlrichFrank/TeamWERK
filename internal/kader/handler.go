@@ -70,6 +70,7 @@ type memberRow struct {
 	BirthYear int     `json:"birth_year"`
 	Gender    string  `json:"gender"`
 	Positions *string `json:"positions"`
+	Status    string  `json:"status"`
 }
 
 type trainerRow struct {
@@ -618,7 +619,8 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 		        m.first_name || ' ' || m.last_name,
 		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
 		        m.gender,
-		        m.position
+		        m.position,
+		        m.status
 		 FROM kader_members km
 		 JOIN members m ON m.id=km.member_id
 		 WHERE km.kader_id=?
@@ -631,7 +633,7 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 	result := []memberRow{}
 	for rows.Next() {
 		var m memberRow
-		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions)
+		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
 		result = append(result, m)
 	}
 	return result, nil
@@ -643,7 +645,8 @@ func (h *Handler) loadExtendedMembers(ctx context.Context, kaderID int) ([]membe
 		        m.first_name || ' ' || m.last_name,
 		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
 		        m.gender,
-		        m.position
+		        m.position,
+		        m.status
 		 FROM kader_extended_members kem
 		 JOIN members m ON m.id=kem.member_id
 		 WHERE kem.kader_id=?
@@ -656,7 +659,7 @@ func (h *Handler) loadExtendedMembers(ctx context.Context, kaderID int) ([]membe
 	result := []memberRow{}
 	for rows.Next() {
 		var m memberRow
-		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions)
+		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
 		result = append(result, m)
 	}
 	return result, nil
