@@ -41,7 +41,13 @@ func (h *Handler) teamMembersAndParents(teamID int) []int {
 		 JOIN members m ON m.id = fl.member_id
 		 JOIN player_memberships pm ON pm.member_id = m.id
 		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
-		 WHERE pm.team_id = ?`, teamID, teamID)
+		 WHERE pm.team_id = ?
+		 UNION
+		 SELECT DISTINCT m.user_id FROM members m
+		 JOIN kader_extended_members kem ON kem.member_id = m.id
+		 JOIN kader k ON k.id = kem.kader_id
+		 JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
+		 WHERE k.team_id = ? AND m.user_id IS NOT NULL`, teamID, teamID, teamID)
 	if err != nil {
 		return nil
 	}
@@ -698,8 +704,13 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			conds = append(conds, "ts.team_id IN (SELECT DISTINCT tm.team_id FROM player_memberships tm JOIN members m ON m.id = tm.member_id JOIN family_links fl ON fl.member_id = m.id WHERE fl.parent_user_id = ?)")
 			teamArgs = append(teamArgs, claims.UserID)
 		}
-		conds = append(conds, "ts.team_id IN (SELECT DISTINCT tm.team_id FROM player_memberships tm JOIN members m ON m.id = tm.member_id WHERE m.user_id = ?)")
-		teamArgs = append(teamArgs, claims.UserID)
+		conds = append(conds, `ts.team_id IN (
+				SELECT DISTINCT tm.team_id FROM player_memberships tm JOIN members m ON m.id = tm.member_id WHERE m.user_id = ?
+				UNION
+				SELECT DISTINCT k.team_id FROM kader_extended_members kem
+				JOIN kader k ON k.id = kem.kader_id
+				JOIN members m2 ON m2.id = kem.member_id WHERE m2.user_id = ?)`)
+		teamArgs = append(teamArgs, claims.UserID, claims.UserID)
 		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
 	}
 
@@ -1078,11 +1089,14 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		SELECT m.id, m.first_name || ' ' || m.last_name,
 		       tr.status, tr.reason, ta.present
 		FROM members m
-		JOIN player_memberships tm ON tm.member_id = m.id AND tm.team_id = ? AND tm.season_id = ?
 		LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 		LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
+		WHERE (
+			EXISTS (SELECT 1 FROM player_memberships pm WHERE pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?)
+			OR EXISTS (SELECT 1 FROM kader_extended_members kem JOIN kader k ON k.id = kem.kader_id WHERE kem.member_id = m.id AND k.team_id = ? AND k.season_id = ?)
+		)
 		GROUP BY m.id
-		ORDER BY m.last_name, m.first_name`, teamID, seasonID, sessionID, sessionID)
+		ORDER BY m.last_name, m.first_name`, sessionID, sessionID, teamID, seasonID, teamID, seasonID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "GetAttendances: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

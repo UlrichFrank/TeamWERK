@@ -236,3 +236,13 @@ func CreatePlayerMembership(t *testing.T, database *sql.DB, memberID, teamID, se
 		t.Fatalf("CreatePlayerMembership: %v", err)
 	}
 }
+
+// AddExtendedKaderMember adds a member to the extended kader (kader_extended_members).
+func AddExtendedKaderMember(t *testing.T, database *sql.DB, kaderID, memberID int) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT OR IGNORE INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`,
+		kaderID, memberID); err != nil {
+		t.Fatalf("AddExtendedKaderMember: %v", err)
+	}
+}

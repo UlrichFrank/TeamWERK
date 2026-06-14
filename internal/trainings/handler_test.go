@@ -490,3 +490,107 @@ func TestDeleteSeries_CascadesSessionsAndResponses(t *testing.T) {
 		t.Errorf("all training_sessions should be deleted, got %d remaining", sessionsRemaining)
 	}
 }
+
+// TestListSessions_ExtendedKaderPlayerSeesTeam verifies that a player in the extended kader
+// can see training sessions of their team.
+func TestListSessions_ExtendedKaderPlayerSeesTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	otherTeamID := testutil.CreateTeam(t, db, "Team B")
+
+	playerUserID := testutil.CreateUser(t, db, "standard")
+	playerMemberID := testutil.CreateMember(t, db, playerUserID)
+
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	testutil.AddExtendedKaderMember(t, db, kaderID, playerMemberID)
+
+	testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
+	testutil.CreateTrainingSession(t, db, otherTeamID, seasonID, "2026-09-10")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, playerUserID, "standard", nil)
+
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-09-01&to=2026-09-30", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var sessions []map[string]any
+	json.NewDecoder(res.Body).Decode(&sessions)
+	res.Body.Close()
+
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session for extended kader player, got %d", len(sessions))
+	}
+	if int(sessions[0]["team_id"].(float64)) != teamID {
+		t.Errorf("expected team_id %d, got %v", teamID, sessions[0]["team_id"])
+	}
+}
+
+// TestGetAttendances_ExtendedKaderPlayerAppears verifies that a player in the extended kader
+// appears in the attendance list.
+func TestGetAttendances_ExtendedKaderPlayerAppears(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	extPlayerUserID := testutil.CreateUser(t, db, "standard")
+	extPlayerMemberID := testutil.CreateMember(t, db, extPlayerUserID)
+
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	testutil.AddExtendedKaderMember(t, db, kaderID, extPlayerMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var items []map[string]any
+	json.NewDecoder(res.Body).Decode(&items)
+	res.Body.Close()
+
+	found := false
+	for _, item := range items {
+		if int(item["member_id"].(float64)) == extPlayerMemberID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected extended kader member %d in attendance list (got %d items)", extPlayerMemberID, len(items))
+	}
+}
+
+// TestListSessions_NoKaderPlayerSeesNothing verifies that a player without any kader
+// membership cannot see any training sessions.
+func TestListSessions_NoKaderPlayerSeesNothing(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+
+	playerUserID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, playerUserID)
+
+	testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, playerUserID, "standard", nil)
+
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-09-01&to=2026-09-30", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var sessions []map[string]any
+	json.NewDecoder(res.Body).Decode(&sessions)
+	res.Body.Close()
+
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 sessions for player without kader, got %d", len(sessions))
+	}
+}
