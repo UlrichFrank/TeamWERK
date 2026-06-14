@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
-import { Trash2, Car, Users, X, Check, UserPlus } from 'lucide-react'
+import { Trash2, Car, Users, X, Check, UserPlus, Home, Plane, Calendar, UserCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
 import NumberSpinner from '../components/NumberSpinner'
 import PersonChip from '../components/PersonChip'
+import { getEventColors } from '../lib/eventColors'
+import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { useCompactHeader } from '../hooks/useCompactHeader'
 
 interface CarpoolEntry {
   id: number
@@ -35,7 +39,15 @@ interface PaarungEntry {
 }
 
 interface GameCarpoolData {
-  game: { id: number; date: string; opponent: string; team: string; eventType: string }
+  game: {
+    id: number
+    date: string
+    time: string
+    opponent: string
+    team: string
+    teamIds: number[]
+    eventType: string
+  }
   biete: CarpoolEntry[]
   suche: CarpoolEntry[]
   paarungen: PaarungEntry[]
@@ -45,8 +57,6 @@ interface ListResponse {
   games: GameCarpoolData[]
   vehicleSeats?: number | null
 }
-
-type EventTab = 'auswärts' | 'heim' | 'generisch'
 
 function formatDate(iso: string) {
   if (iso.length >= 10) {
@@ -374,9 +384,10 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
   const confirmedPaarungen = (data.paarungen ?? []).filter(p => p.status === 'confirmed')
 
   const entryCardProps = { paarungen: data.paarungen, myBieteIds, mySucheIds, onDelete, onRequest, onConfirm, onReject }
+  const colors = getEventColors(data.game.eventType)
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+    <div className={`rounded-xl shadow border-t-4 overflow-hidden ${colors.card.bg} ${colors.card.border}`}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -490,26 +501,63 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
   )
 }
 
-const TAB_LABELS: Record<EventTab, string> = {
-  'auswärts': 'Auswärtsspiele',
-  'heim': 'Heimspiele',
-  'generisch': 'Events',
-}
-
 interface MyTeam { id: number; name: string }
+
+const EVENT_TYPES = ['heim', 'auswärts', 'generisch'] as const
+type EventTypeFilter = typeof EVENT_TYPES[number]
+const ALL_TYPES = new Set<string>(EVENT_TYPES)
+
+function parseFilters(sp: URLSearchParams) {
+  const team = parseInt(sp.get('team') ?? '') || null
+  const typesRaw = sp.get('types')
+  const types = typesRaw
+    ? (() => {
+        const parsed = new Set(typesRaw.split(',').filter(t => ALL_TYPES.has(t)))
+        return parsed.size > 0 ? parsed : new Set(ALL_TYPES)
+      })()
+    : new Set<string>(ALL_TYPES)
+  const mine = sp.get('mine') === '1'
+  return { team, types, mine }
+}
 
 export default function MitfahrgelegenheitenPage() {
   const { user } = useAuth()
   const [response, setResponse] = useState<ListResponse>({ games: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<EventTab>('auswärts')
   const [modal, setModal] = useState<{ gameId: number; typ: 'biete' | 'suche' } | null>(null)
-  const [viewMine, setViewMine] = useState(false)
   const [myTeams, setMyTeams] = useState<MyTeam[]>([])
-  const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
+  const [allTeams, setAllTeams] = useState<TeamForName[]>([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { team: filterTeamId, types: filterTypes, mine: viewMine } = parseFilters(searchParams)
+  const compact = useCompactHeader(950)
+  const teamShortNames = useMemo(() => buildTeamShortNames(allTeams), [allTeams])
 
   void user // used to re-render when auth changes
+
+  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean }) => {
+    const next = new URLSearchParams(searchParams)
+    if ('team' in patch) {
+      if (patch.team === null) next.delete('team')
+      else next.set('team', String(patch.team))
+    }
+    if ('types' in patch && patch.types) {
+      const isDefault = patch.types.size === ALL_TYPES.size && [...ALL_TYPES].every(t => patch.types!.has(t))
+      if (isDefault) next.delete('types')
+      else next.set('types', [...patch.types].join(','))
+    }
+    if ('mine' in patch) {
+      if (patch.mine) next.set('mine', '1')
+      else next.delete('mine')
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  const toggleType = (type: EventTypeFilter) => {
+    const next = new Set(filterTypes)
+    next.has(type) ? next.delete(type) : next.add(type)
+    updateFilter({ types: next })
+  }
 
   const load = (silent = false, teamId?: number | null) => {
     if (!silent) setLoading(true)
@@ -524,11 +572,17 @@ export default function MitfahrgelegenheitenPage() {
   }
 
   useEffect(() => {
-    load()
     api.get('/teams/my').then(res => {
       setMyTeams(Array.isArray(res.data) ? res.data : [])
     }).catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    api.get('/teams').then(res => {
+      const list = Array.isArray(res.data) ? res.data : (res.data?.teams ?? [])
+      setAllTeams(list)
+    }).catch(() => {})
+  }, [])
+  useEffect(() => {
+    load()
+  }, [filterTeamId]) // eslint-disable-line react-hooks/exhaustive-deps
   useLiveUpdates((event) => { if (event === 'mitfahrgelegenheiten') load(true) })
 
   const handleDelete = async (id: number) => {
@@ -572,31 +626,48 @@ export default function MitfahrgelegenheitenPage() {
     }
   }
 
-  const filteredGames = viewMine
-    ? response.games.filter(d =>
-        [...(d.biete ?? []), ...(d.suche ?? [])].some(e => e.isOwn) ||
-        (d.paarungen ?? []).some(p => p.bieteIsOwn || p.sucheIsOwn)
-      )
-    : response.games
-  const tabGames = filteredGames.filter(d => d.game.eventType === activeTab)
-  const countForTab = (tab: EventTab) => filteredGames.filter(d => d.game.eventType === tab).length
+  const teamKey = (d: GameCarpoolData): string => {
+    const ids = d.game.teamIds ?? []
+    if (ids.length === 0) return d.game.team ?? ''
+    const shorts = ids
+      .map(id => teamShortNames.get(id))
+      .filter((s): s is string => !!s)
+      .sort()
+    if (shorts.length === 0) return d.game.team ?? ''
+    return shorts.join(',')
+  }
 
-  const tabs: EventTab[] = ['auswärts', 'heim', 'generisch']
+  const sortKey = (d: GameCarpoolData): string => {
+    const date = (d.game.date ?? '').slice(0, 10)
+    const time = d.game.time ?? '00:00'
+    return `${date}T${time}|${teamKey(d)}`
+  }
+
+  const mineMatches = (d: GameCarpoolData): boolean =>
+    [...(d.biete ?? []), ...(d.suche ?? [])].some(e => e.isOwn) ||
+    (d.paarungen ?? []).some(p => p.bieteIsOwn || p.sucheIsOwn)
+
+  const visibleGames = response.games
+    .filter(d => filterTypes.has(d.game.eventType))
+    .filter(d => !viewMine || mineMatches(d))
+    .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
+
+  const TYPE_PILLS: [EventTypeFilter, string, React.ReactNode][] = [
+    ['heim',      'Heim',      <Home className="w-3.5 h-3.5" />],
+    ['auswärts',  'Auswärts',  <Plane className="w-3.5 h-3.5" />],
+    ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
+  ]
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-        <h1 className="text-2xl font-bold text-brand-text">Mitfahrgelegenheiten</h1>
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <h1 className="text-2xl font-bold text-brand-text shrink-0">Mitfahrgelegenheiten</h1>
+        <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
           {myTeams.length > 1 && (
             <select
               value={filterTeamId ?? ''}
-              onChange={e => {
-                const val = e.target.value === '' ? null : Number(e.target.value)
-                setFilterTeamId(val)
-                load(false, val)
-              }}
-              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
+              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-0 shrink"
             >
               <option value="">Alle Teams</option>
               {myTeams.map(t => (
@@ -604,20 +675,33 @@ export default function MitfahrgelegenheitenPage() {
               ))}
             </select>
           )}
-          <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
+          {TYPE_PILLS.map(([type, label, icon]) => (
             <button
-              onClick={() => setViewMine(false)}
-              className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+              key={type}
+              onClick={() => toggleType(type)}
+              aria-label={label}
+              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
+                filterTypes.has(type)
+                  ? getEventColors(type).filter
+                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+              }`}
             >
-              Team
+              {icon}
+              {!compact && <span>{label}</span>}
             </button>
-            <button
-              onClick={() => setViewMine(true)}
-              className={`px-3 py-1.5 border-l border-brand-border-subtle ${viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-            >
-              Meine
-            </button>
-          </div>
+          ))}
+          <button
+            onClick={() => updateFilter({ mine: !viewMine })}
+            aria-label="Meine"
+            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
+              viewMine
+                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            {!compact && <span>Meine</span>}
+          </button>
         </div>
       </div>
 
@@ -632,50 +716,29 @@ export default function MitfahrgelegenheitenPage() {
       )}
 
       {!loading && !error && (
-        <>
-          <div className="flex gap-1 mb-6 border-b border-brand-border-subtle">
-            {tabs.map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-brand-yellow text-brand-text'
-                    : 'border-transparent text-brand-text-muted hover:text-brand-text'
-                }`}
-              >
-                {TAB_LABELS[tab]}
-                {countForTab(tab) > 0 && (
-                  <span className="ml-1.5 text-xs text-brand-text-subtle">({countForTab(tab)})</span>
-                )}
-              </button>
+        visibleGames.length === 0 ? (
+          <p className="text-sm text-brand-text-muted">
+            {viewMine
+              ? 'Du bist bei keinem Spiel eingetragen.'
+              : filterTypes.size === 0
+              ? 'Keine Event-Typen ausgewählt.'
+              : 'Keine Spiele deines Teams geplant.'}
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {visibleGames.map(d => (
+              <GameCard
+                key={d.game.id}
+                data={d}
+                onDelete={handleDelete}
+                onOpenForm={(gameId, typ) => setModal({ gameId, typ })}
+                onRequest={handleRequest}
+                onConfirm={handleConfirm}
+                onReject={handleReject}
+              />
             ))}
           </div>
-
-          {tabGames.length === 0 ? (
-            <p className="text-sm text-brand-text-muted">
-              {viewMine
-                ? 'Du bist bei keinem Spiel eingetragen.'
-                : activeTab === 'auswärts' ? 'Keine Auswärtsspiele deines Teams geplant.'
-                : activeTab === 'heim' ? 'Keine Heimspiele deines Teams geplant.'
-                : 'Keine Events deines Teams geplant.'}
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {tabGames.map(d => (
-                <GameCard
-                  key={d.game.id}
-                  data={d}
-                  onDelete={handleDelete}
-                  onOpenForm={(gameId, typ) => setModal({ gameId, typ })}
-                  onRequest={handleRequest}
-                  onConfirm={handleConfirm}
-                  onReject={handleReject}
-                />
-              ))}
-            </div>
-          )}
-        </>
+        )
       )}
 
       {modal && (() => {
