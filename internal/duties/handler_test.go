@@ -1035,6 +1035,27 @@ func TestListDutyTypes_TrainerCanRead(t *testing.T) {
 	}
 }
 
+// CHECK-Constraint auf duty_types.target_role nach Migration 042: 'admin' ist als
+// target_role nicht mehr erlaubt (System-Admins sind keine Duty-Zielgruppe).
+// Erlaubt sind die Vereinsfunktionen plus 'elternteil'.
+func TestDutyType_TargetRole_RejectsAdmin(t *testing.T) {
+	db := testutil.NewDB(t)
+
+	_, err := db.Exec(`INSERT INTO duty_types (name, hours_value, target_role) VALUES (?, ?, 'admin')`,
+		"Spinnerei", 1.0)
+	if err == nil {
+		t.Fatal("expected CHECK constraint failure for target_role='admin', got nil")
+	}
+
+	// 'elternteil' und Vereinsfunktionen müssen akzeptiert werden.
+	for _, target := range []string{"spieler", "elternteil", "trainer", "vorstand", "sportliche_leitung", "vorstand_beisitzer", "kassierer"} {
+		if _, err := db.Exec(`INSERT INTO duty_types (name, hours_value, target_role) VALUES (?, ?, ?)`,
+			"DT-"+target, 1.0, target); err != nil {
+			t.Errorf("target_role=%q should be accepted, got: %v", target, err)
+		}
+	}
+}
+
 // TestListDutyTypes_SpielerForbidden verifies that a plain spieler without
 // trainer club function cannot read duty types (GET /api/duty-types returns 403).
 func TestListDutyTypes_SpielerForbidden(t *testing.T) {
