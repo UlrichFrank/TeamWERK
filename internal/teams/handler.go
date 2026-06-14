@@ -15,8 +15,9 @@ type Handler struct{ db *sql.DB }
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
 type Team struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	IsExtended bool   `json:"isExtended"`
 }
 
 type TrainerEntry struct {
@@ -196,18 +197,48 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// GET /api/teams — returns teams the user has access to in the active season
+// GET /api/teams/my — returns teams the user has access to in the active season,
+// with isExtended=true when access comes exclusively via kader_extended_members.
 func (h *Handler) ListMyTeams(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := auth.ClaimsFromCtx(ctx)
+	userID := claims.UserID
 
+	// Stammkader, Trainer, Eltern → isExtended=false
+	// Erweiterter Kader (ohne Stammzugang) → isExtended=true
+	// UNION deduplicates: if a team appears in both selects, is_extended=0 wins.
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT DISTINCT t.id, t.name
+		SELECT t.id, t.name, 0 AS is_extended
 		FROM user_accessible_teams uat
 		JOIN teams t ON t.id = uat.team_id
 		JOIN seasons s ON s.id = uat.season_id
 		WHERE uat.user_id = ? AND s.is_active = 1
-		ORDER BY t.name`, claims.UserID)
+		  AND (
+		    EXISTS (SELECT 1 FROM kader_members km JOIN kader k ON k.id = km.kader_id
+		            JOIN members m ON m.id = km.member_id
+		            WHERE m.user_id = ? AND k.team_id = t.id AND k.season_id = s.id)
+		    OR EXISTS (SELECT 1 FROM kader_trainers kt JOIN kader k ON k.id = kt.kader_id
+		              JOIN members m ON m.id = kt.member_id
+		              WHERE m.user_id = ? AND k.team_id = t.id AND k.season_id = s.id)
+		    OR EXISTS (SELECT 1 FROM family_links fl JOIN kader_members km2 ON km2.member_id = fl.member_id
+		              JOIN kader k ON k.id = km2.kader_id
+		              WHERE fl.parent_user_id = ? AND k.team_id = t.id AND k.season_id = s.id)
+		  )
+		UNION
+		SELECT t.id, t.name, 1 AS is_extended
+		FROM kader_extended_members kem
+		JOIN kader k ON k.id = kem.kader_id
+		JOIN teams t ON t.id = k.team_id
+		JOIN seasons s ON s.id = k.season_id
+		JOIN members m ON m.id = kem.member_id
+		WHERE m.user_id = ? AND s.is_active = 1
+		  AND NOT EXISTS (
+		    SELECT 1 FROM kader_members km JOIN kader k2 ON k2.id = km.kader_id
+		    JOIN members m2 ON m2.id = km.member_id
+		    WHERE m2.user_id = ? AND k2.team_id = t.id AND k2.season_id = s.id
+		  )
+		ORDER BY t.name`,
+		userID, userID, userID, userID, userID, userID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -217,7 +248,9 @@ func (h *Handler) ListMyTeams(w http.ResponseWriter, r *http.Request) {
 	teams := []Team{}
 	for rows.Next() {
 		var t Team
-		rows.Scan(&t.ID, &t.Name)
+		var isExtended int
+		rows.Scan(&t.ID, &t.Name, &isExtended)
+		t.IsExtended = isExtended == 1
 		teams = append(teams, t)
 	}
 

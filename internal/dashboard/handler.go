@@ -24,14 +24,15 @@ type Season struct {
 }
 
 type NextEvent struct {
-	ID        int    `json:"id"`
-	EventType string `json:"eventType"` // "training" | "spiel"
-	Date      string `json:"date"`
-	Time      string `json:"time"`
-	Title     string `json:"title"`
-	TeamName  string `json:"teamName"`
-	DetailURL string `json:"detailUrl"`
-	IsHome    *bool  `json:"isHome"` // nil for training, true/false for games
+	ID         int    `json:"id"`
+	EventType  string `json:"eventType"` // "training" | "spiel"
+	Date       string `json:"date"`
+	Time       string `json:"time"`
+	Title      string `json:"title"`
+	TeamName   string `json:"teamName"`
+	DetailURL  string `json:"detailUrl"`
+	IsHome     *bool  `json:"isHome"` // nil for training, true/false for games
+	IsExtended bool   `json:"isExtended"`
 }
 
 type DiensteSlot struct {
@@ -129,11 +130,28 @@ func (h *Handler) teamQueryForUser() string {
 
 // queryNextEvents returns all events on the next day that has at least one event.
 // Combines training_sessions and games for the user's teams.
+// isExtended is true when the user's access to the event team is via kader_extended_members only.
 func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []NextEvent {
 	teamSubquery := h.teamQueryForUser()
 
 	rows, err := h.db.QueryContext(r.Context(), fmt.Sprintf(`
-		WITH upcoming AS (
+		WITH extended_teams AS (
+			SELECT k.team_id
+			FROM kader_extended_members kem
+			JOIN kader k ON k.id = kem.kader_id
+			JOIN members m ON m.id = kem.member_id
+			JOIN seasons s ON s.id = k.season_id
+			WHERE m.user_id = ? AND s.is_active = 1
+		),
+		primary_teams AS (
+			SELECT k.team_id
+			FROM kader_members km
+			JOIN kader k ON k.id = km.kader_id
+			JOIN members m ON m.id = km.member_id
+			JOIN seasons s ON s.id = k.season_id
+			WHERE m.user_id = ? AND s.is_active = 1
+		),
+		upcoming AS (
 			SELECT ts.id AS event_id,
 			       'training' AS event_type,
 			       ts.date,
@@ -141,7 +159,8 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       CASE WHEN ts.title != '' THEN ts.title ELSE 'Training' END AS title,
 			       COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS team_name,
 			       '/termine/training/' || ts.id AS detail_url,
-			       NULL AS is_home
+			       NULL AS is_home,
+			       CASE WHEN ts.team_id IN (SELECT team_id FROM extended_teams) THEN 1 ELSE 0 END AS is_extended
 			FROM training_sessions ts
 			JOIN teams t ON t.id = ts.team_id
 			WHERE ts.team_id IN (%s)
@@ -156,7 +175,16 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       CASE WHEN g.event_type = 'generisch' THEN g.opponent ELSE 'vs. ' || g.opponent END,
 			       MIN(COALESCE(`+appdb.TeamDisplayName("t")+`, t.name)),
 			       '/termine/spiel/' || g.id,
-			       g.is_home
+			       g.is_home,
+			       CASE WHEN EXISTS (
+			           SELECT 1 FROM game_teams gt2
+			           WHERE gt2.game_id = g.id
+			             AND gt2.team_id IN (SELECT team_id FROM extended_teams)
+			       ) AND NOT EXISTS (
+			           SELECT 1 FROM game_teams gt3
+			           WHERE gt3.game_id = g.id
+			             AND gt3.team_id IN (SELECT team_id FROM primary_teams)
+			       ) THEN 1 ELSE 0 END
 			FROM games g
 			JOIN game_teams gt ON g.id = gt.game_id
 			JOIN teams t ON t.id = gt.team_id
@@ -166,11 +194,11 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			GROUP BY g.id
 		),
 		min_date AS (SELECT MIN(date) AS d FROM upcoming)
-		SELECT event_id, event_type, date, time, title, team_name, detail_url, is_home
+		SELECT event_id, event_type, date, time, title, team_name, detail_url, is_home, is_extended
 		FROM upcoming
 		WHERE date = (SELECT d FROM min_date)
 		ORDER BY time ASC`, teamSubquery, teamSubquery),
-		userID, seasonID, seasonID, userID, seasonID, seasonID,
+		userID, userID, userID, seasonID, seasonID, userID, seasonID, seasonID,
 	)
 	if err != nil {
 		return []NextEvent{}
@@ -181,11 +209,13 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 	for rows.Next() {
 		var e NextEvent
 		var isHome sql.NullInt64
-		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL, &isHome)
+		var isExtended int
+		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL, &isHome, &isExtended)
 		if isHome.Valid {
 			v := isHome.Int64 == 1
 			e.IsHome = &v
 		}
+		e.IsExtended = isExtended == 1
 		events = append(events, e)
 	}
 	return events

@@ -93,6 +93,72 @@ func TestGetRoster_ExtendedPlayerCanAccessRoster(t *testing.T) {
 	}
 }
 
+// TestListMyTeams_IsExtended verifies that a user only in kader_extended_members gets isExtended=true.
+func TestListMyTeams_IsExtended(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Damen 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	h := teams.NewHandler(db)
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/teams", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var teamList []map[string]any
+	json.NewDecoder(res.Body).Decode(&teamList)
+	res.Body.Close()
+
+	if len(teamList) != 1 {
+		t.Fatalf("expected 1 team, got %d", len(teamList))
+	}
+	if teamList[0]["isExtended"] != true {
+		t.Errorf("expected isExtended=true for extended kader member, got %v", teamList[0]["isExtended"])
+	}
+}
+
+// TestListMyTeams_IsNotExtended verifies that a primary kader member gets isExtended=false.
+func TestListMyTeams_IsNotExtended(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	h := teams.NewHandler(db)
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/teams", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var teamList []map[string]any
+	json.NewDecoder(res.Body).Decode(&teamList)
+	res.Body.Close()
+
+	if len(teamList) != 1 {
+		t.Fatalf("expected 1 team, got %d", len(teamList))
+	}
+	if teamList[0]["isExtended"] != false {
+		t.Errorf("expected isExtended=false for primary kader member, got %v", teamList[0]["isExtended"])
+	}
+}
+
 // TestGetRoster_NoExtendedPlayers verifies that extended_players is an empty array when none exist.
 func TestGetRoster_NoExtendedPlayers(t *testing.T) {
 	db := testutil.NewDB(t)

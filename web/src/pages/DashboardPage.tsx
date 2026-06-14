@@ -22,6 +22,7 @@ interface NextEvent {
   teamName: string
   detailUrl: string
   isHome: boolean | null
+  isExtended: boolean
 }
 
 interface DiensteSlot {
@@ -144,7 +145,9 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-brand-text truncate">{e.title}</p>
-                <p className="text-xs text-brand-text-muted">{e.teamName} · {e.time}</p>
+                <p className="text-xs text-brand-text-muted">
+                  {e.teamName}{e.isExtended ? ' (Erw. Kader)' : ''} · {e.time}
+                </p>
               </div>
               <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
             </Link>
@@ -235,7 +238,7 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
 }
 
 function MeinTeamSection() {
-  const [teams, setTeams] = useState<{ id: number; name: string }[]>([])
+  const [teams, setTeams] = useState<{ id: number; name: string; isExtended: boolean }[]>([])
 
   useEffect(() => {
     api.get('/teams/my').then(r => setTeams(r.data ?? [])).catch(() => {})
@@ -253,8 +256,15 @@ function MeinTeamSection() {
             to={`/mein-team?team=${t.id}`}
             className="flex items-center justify-between py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
           >
-            <span className="text-sm font-medium text-brand-text">{t.name}</span>
-            <ArrowRight className="w-4 h-4 text-brand-text-subtle" />
+            <span className="flex items-center gap-2 text-sm font-medium text-brand-text">
+              {t.name}
+              {t.isExtended && (
+                <span className="text-xs font-medium text-brand-text-muted border border-brand-border rounded px-1.5 py-0.5">
+                  Erw. Kader
+                </span>
+              )}
+            </span>
+            <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
           </Link>
         </li>
       ))}
