@@ -1,4 +1,5 @@
 ## 14.06.2026
+- [fix] duties: Trainer-Lesezugriff auf Dienst-Typen und Templates
 - [feat] members,auth: Verknüpfungsstatus-Filter und Beitrittsantrag-Deeplink
 
 ## 13.06.2026
