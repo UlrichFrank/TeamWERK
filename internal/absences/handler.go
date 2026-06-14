@@ -541,8 +541,8 @@ func (h *Handler) Calendar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Team absences — only for authorized roles
-	canSeeTeam := showTeam && (claims.Role == "admin" || claims.Role == "trainer" ||
-		claims.HasFunction("sportvorstand") || claims.HasFunction("vorstand") || claims.IsTrainerLike())
+	canSeeTeam := showTeam && (claims.Role == "admin" ||
+		claims.HasFunction("vorstand") || claims.IsTrainerLike())
 	if canSeeTeam {
 		var teamRows *sql.Rows
 		var teamErr error
