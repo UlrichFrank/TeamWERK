@@ -106,7 +106,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if restricted {
 		if teamFilter > 0 {
 			query = `
-				SELECT DISTINCT g.id, g.date, g.opponent, t.name, g.event_type
+				SELECT g.id, g.date, g.opponent,
+				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
@@ -116,11 +117,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 				    WHERE user_id = ? AND season_id = ?
 				  )
 				  AND gt.team_id = ?
+				GROUP BY g.id
 				ORDER BY g.date ASC`
 			args = []any{userID, seasonID, teamFilter}
 		} else {
 			query = `
-				SELECT DISTINCT g.id, g.date, g.opponent, t.name, g.event_type
+				SELECT g.id, g.date, g.opponent,
+				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
@@ -129,27 +132,32 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 				    SELECT team_id FROM user_accessible_teams
 				    WHERE user_id = ? AND season_id = ?
 				  )
+				GROUP BY g.id
 				ORDER BY g.date ASC`
 			args = []any{userID, seasonID}
 		}
 	} else {
 		if teamFilter > 0 {
 			query = `
-				SELECT DISTINCT g.id, g.date, g.opponent, t.name, g.event_type
+				SELECT g.id, g.date, g.opponent,
+				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
 				WHERE DATE(g.date) >= DATE('now')
 				  AND gt.team_id = ?
+				GROUP BY g.id
 				ORDER BY g.date ASC`
 			args = []any{teamFilter}
 		} else {
 			query = `
-				SELECT DISTINCT g.id, g.date, g.opponent, t.name, g.event_type
+				SELECT g.id, g.date, g.opponent,
+				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
 				WHERE DATE(g.date) >= DATE('now')
+				GROUP BY g.id
 				ORDER BY g.date ASC`
 		}
 	}
@@ -339,10 +347,23 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		_, err = h.db.ExecContext(r.Context(),
-			`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'suche', ?, ?, ?)`,
-			body.GameID, userID, *body.Plaetze, body.Treffpunkt, body.Notiz)
-		isNewEntry = true
+		var existingID int
+		scanErr := h.db.QueryRowContext(r.Context(),
+			`SELECT id FROM mitfahrgelegenheiten WHERE game_id = ? AND user_id = ? AND typ = 'suche'`,
+			body.GameID, userID).Scan(&existingID)
+		if scanErr == sql.ErrNoRows {
+			_, err = h.db.ExecContext(r.Context(),
+				`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'suche', ?, ?, ?)`,
+				body.GameID, userID, *body.Plaetze, body.Treffpunkt, body.Notiz)
+			isNewEntry = true
+		} else if scanErr == nil {
+			_, err = h.db.ExecContext(r.Context(),
+				`UPDATE mitfahrgelegenheiten SET plaetze = ?, treffpunkt = ?, notiz = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+				*body.Plaetze, body.Treffpunkt, body.Notiz, existingID)
+		} else {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)

@@ -210,20 +210,42 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
 interface FormModalProps {
   gameId: number
   initialTyp?: 'biete' | 'suche'
+  initialBiete?: CarpoolEntry | null
+  initialSuche?: CarpoolEntry | null
   vehicleSeats?: number | null
   onClose: () => void
   onSaved: () => void
 }
 
-function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormModalProps) {
-  const [typ, setTyp] = useState<'biete' | 'suche'>(initialTyp ?? 'biete')
-  const [plaetze, setPlaetze] = useState(() =>
-    initialTyp === 'biete' ? String(vehicleSeats ?? 1) : '1'
-  )
-  const [treffpunkt, setTreffpunkt] = useState('')
-  const [notiz, setNotiz] = useState('')
+function fieldsFromEntry(entry: CarpoolEntry | null | undefined, fallbackPlaetze: string) {
+  return {
+    plaetze: entry?.plaetze != null ? String(entry.plaetze) : fallbackPlaetze,
+    treffpunkt: entry?.treffpunkt ?? '',
+    notiz: entry?.notiz ?? '',
+  }
+}
+
+function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeats, onClose, onSaved }: FormModalProps) {
+  const startTyp = initialTyp ?? 'biete'
+  const startEntry = startTyp === 'biete' ? initialBiete : initialSuche
+  const startFields = fieldsFromEntry(startEntry, startTyp === 'biete' ? String(vehicleSeats ?? 1) : '1')
+
+  const [typ, setTyp] = useState<'biete' | 'suche'>(startTyp)
+  const [plaetze, setPlaetze] = useState(startFields.plaetze)
+  const [treffpunkt, setTreffpunkt] = useState(startFields.treffpunkt)
+  const [notiz, setNotiz] = useState(startFields.notiz)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const switchTyp = (next: 'biete' | 'suche') => {
+    const entry = next === 'biete' ? initialBiete : initialSuche
+    const fallback = next === 'biete' ? String(vehicleSeats ?? 1) : '1'
+    const fields = fieldsFromEntry(entry, fallback)
+    setTyp(next)
+    setPlaetze(fields.plaetze)
+    setTreffpunkt(fields.treffpunkt)
+    setNotiz(fields.notiz)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -263,14 +285,14 @@ function FormModal({ gameId, initialTyp, vehicleSeats, onClose, onSaved }: FormM
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => { setTyp('biete'); if (vehicleSeats) setPlaetze(String(vehicleSeats)) }}
+              onClick={() => switchTyp('biete')}
               className={`flex-1 py-2.5 sm:py-2 text-sm font-medium rounded-md border transition-colors ${typ === 'biete' ? 'bg-brand-yellow text-brand-black border-brand-yellow' : 'border-brand-border text-brand-text-muted hover:border-brand-text'}`}
             >
               Ich biete Mitfahrt
             </button>
             <button
               type="button"
-              onClick={() => setTyp('suche')}
+              onClick={() => switchTyp('suche')}
               className={`flex-1 py-2.5 sm:py-2 text-sm font-medium rounded-md border transition-colors ${typ === 'suche' ? 'bg-brand-yellow text-brand-black border-brand-yellow' : 'border-brand-border text-brand-text-muted hover:border-brand-text'}`}
             >
               Ich suche Mitfahrt
@@ -474,6 +496,8 @@ const TAB_LABELS: Record<EventTab, string> = {
   'generisch': 'Events',
 }
 
+interface MyTeam { id: number; name: string }
+
 export default function MitfahrgelegenheitenPage() {
   const { user } = useAuth()
   const [response, setResponse] = useState<ListResponse>({ games: [] })
@@ -482,12 +506,16 @@ export default function MitfahrgelegenheitenPage() {
   const [activeTab, setActiveTab] = useState<EventTab>('auswärts')
   const [modal, setModal] = useState<{ gameId: number; typ: 'biete' | 'suche' } | null>(null)
   const [viewMine, setViewMine] = useState(false)
+  const [myTeams, setMyTeams] = useState<MyTeam[]>([])
+  const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
 
   void user // used to re-render when auth changes
 
-  const load = (silent = false) => {
+  const load = (silent = false, teamId?: number | null) => {
     if (!silent) setLoading(true)
-    api.get('/mitfahrgelegenheiten')
+    const tid = teamId !== undefined ? teamId : filterTeamId
+    const url = tid != null ? `/mitfahrgelegenheiten?team_id=${tid}` : '/mitfahrgelegenheiten'
+    api.get(url)
       .then(res => {
         setResponse({ games: res.data?.games ?? [], vehicleSeats: res.data?.vehicleSeats })
         setLoading(false)
@@ -495,7 +523,12 @@ export default function MitfahrgelegenheitenPage() {
       .catch(() => { setError('Fehler beim Laden.'); setLoading(false) })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    api.get('/teams/my').then(res => {
+      setMyTeams(Array.isArray(res.data) ? res.data : [])
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useLiveUpdates((event) => { if (event === 'mitfahrgelegenheiten') load(true) })
 
   const handleDelete = async (id: number) => {
@@ -554,19 +587,37 @@ export default function MitfahrgelegenheitenPage() {
     <div>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-brand-text">Mitfahrgelegenheiten</h1>
-        <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
-          <button
-            onClick={() => setViewMine(false)}
-            className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-          >
-            Team
-          </button>
-          <button
-            onClick={() => setViewMine(true)}
-            className={`px-3 py-1.5 border-l border-brand-border-subtle ${viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-          >
-            Meine
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {myTeams.length > 1 && (
+            <select
+              value={filterTeamId ?? ''}
+              onChange={e => {
+                const val = e.target.value === '' ? null : Number(e.target.value)
+                setFilterTeamId(val)
+                load(false, val)
+              }}
+              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            >
+              <option value="">Alle Teams</option>
+              {myTeams.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
+          <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
+            <button
+              onClick={() => setViewMine(false)}
+              className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+            >
+              Team
+            </button>
+            <button
+              onClick={() => setViewMine(true)}
+              className={`px-3 py-1.5 border-l border-brand-border-subtle ${viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
+            >
+              Meine
+            </button>
+          </div>
         </div>
       </div>
 
@@ -627,15 +678,22 @@ export default function MitfahrgelegenheitenPage() {
         </>
       )}
 
-      {modal && (
-        <FormModal
-          gameId={modal.gameId}
-          initialTyp={modal.typ}
-          vehicleSeats={response.vehicleSeats}
-          onClose={() => setModal(null)}
-          onSaved={load}
-        />
-      )}
+      {modal && (() => {
+        const gameData = response.games.find(g => g.game.id === modal.gameId)
+        const ownBiete = gameData?.biete.find(e => e.isOwn) ?? null
+        const ownSuche = gameData?.suche.find(e => e.isOwn) ?? null
+        return (
+          <FormModal
+            gameId={modal.gameId}
+            initialTyp={modal.typ}
+            initialBiete={ownBiete}
+            initialSuche={ownSuche}
+            vehicleSeats={response.vehicleSeats}
+            onClose={() => setModal(null)}
+            onSaved={load}
+          />
+        )
+      })()}
     </div>
   )
 }
