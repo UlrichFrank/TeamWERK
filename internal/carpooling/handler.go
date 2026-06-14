@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -27,8 +29,10 @@ func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
 type GameEntry struct {
 	ID        int    `json:"id"`
 	Date      string `json:"date"`
+	Time      string `json:"time"`
 	Opponent  string `json:"opponent"`
 	Team      string `json:"team"`
+	TeamIDs   []int  `json:"teamIds"`
 	EventType string `json:"eventType"`
 }
 
@@ -103,11 +107,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		query string
 		args  []any
 	)
+	const selectCols = `SELECT g.id, g.date, COALESCE(g.time, '') AS time, g.opponent,
+				       GROUP_CONCAT(t.name, ', ') AS team_names,
+				       GROUP_CONCAT(t.id) AS team_ids,
+				       g.event_type`
 	if restricted {
 		if teamFilter > 0 {
-			query = `
-				SELECT g.id, g.date, g.opponent,
-				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
+			query = selectCols + `
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
@@ -118,12 +124,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 				  )
 				  AND gt.team_id = ?
 				GROUP BY g.id
-				ORDER BY g.date ASC`
+				ORDER BY g.date ASC, g.time ASC`
 			args = []any{userID, seasonID, teamFilter}
 		} else {
-			query = `
-				SELECT g.id, g.date, g.opponent,
-				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
+			query = selectCols + `
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
@@ -133,32 +137,28 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 				    WHERE user_id = ? AND season_id = ?
 				  )
 				GROUP BY g.id
-				ORDER BY g.date ASC`
+				ORDER BY g.date ASC, g.time ASC`
 			args = []any{userID, seasonID}
 		}
 	} else {
 		if teamFilter > 0 {
-			query = `
-				SELECT g.id, g.date, g.opponent,
-				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
+			query = selectCols + `
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
 				WHERE DATE(g.date) >= DATE('now')
 				  AND gt.team_id = ?
 				GROUP BY g.id
-				ORDER BY g.date ASC`
+				ORDER BY g.date ASC, g.time ASC`
 			args = []any{teamFilter}
 		} else {
-			query = `
-				SELECT g.id, g.date, g.opponent,
-				       GROUP_CONCAT(t.name, ', ') AS team_names, g.event_type
+			query = selectCols + `
 				FROM games g
 				JOIN game_teams gt ON g.id = gt.game_id
 				JOIN teams t ON t.id = gt.team_id
 				WHERE DATE(g.date) >= DATE('now')
 				GROUP BY g.id
-				ORDER BY g.date ASC`
+				ORDER BY g.date ASC, g.time ASC`
 		}
 	}
 
@@ -172,7 +172,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	var games []GameEntry
 	for rows.Next() {
 		var g GameEntry
-		rows.Scan(&g.ID, &g.Date, &g.Opponent, &g.Team, &g.EventType)
+		var teamIDsCSV sql.NullString
+		rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.Team, &teamIDsCSV, &g.EventType)
+		g.TeamIDs = parseTeamIDs(teamIDsCSV)
 		games = append(games, g)
 	}
 
@@ -193,6 +195,23 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ListResponse{Games: gamesList, VehicleSeats: vehicleSeats})
+}
+
+// parseTeamIDs converts a comma-separated string of team IDs (from GROUP_CONCAT)
+// into a sorted []int. Returns an empty slice if csv is NULL or unparseable.
+func parseTeamIDs(csv sql.NullString) []int {
+	if !csv.Valid || csv.String == "" {
+		return []int{}
+	}
+	parts := strings.Split(csv.String, ",")
+	ids := make([]int, 0, len(parts))
+	for _, p := range parts {
+		if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
+			ids = append(ids, n)
+		}
+	}
+	sort.Ints(ids)
+	return ids
 }
 
 func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]CarpoolEntry, []CarpoolEntry) {
