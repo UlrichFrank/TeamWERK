@@ -1,6 +1,12 @@
+## 14.06.2026
+- [feat] members,auth: Verknüpfungsstatus-Filter und Beitrittsantrag-Deeplink
+
 ## 13.06.2026
 - [feat] ux: Zurück-Button auf MeinTeamPage bei gefilterter Team-Ansicht
 - [fix] security: Security- und Datenintegritäts-Hardening (13 Bugs)
+- [feat] files: PermissionsModal zeigt Nutzernamen statt User-ID
+- [feat] auth: GET /api/users/picker — team-scoped Nutzerliste
+- [fix] files: resolveAccess nearest-ancestor-wins + family context
 - [feat] members: CSV-Import-Modus "enrich" – nur leere Felder ergänzen
 
 ## 12.06.2026
