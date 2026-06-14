@@ -9,9 +9,22 @@ import { useChatEvents } from '../hooks/useChatEvents'
 import { useVersionCheck } from '../hooks/useVersionCheck'
 import { api } from '../lib/api'
 
+// NavItem.roles / NavItem.excludeRoles sind polymorph: jeder String wird sowohl gegen die
+// System-Rolle (`users.role`, also 'admin'|'standard') als auch gegen die Vereinsfunktionen
+// des Users (`spieler`, `trainer`, `vorstand`, `vorstand_beisitzer`, `kassierer`,
+// `sportliche_leitung`) gematcht. Da diese beiden Wertebereiche disjunkt sind, ist die
+// Polymorphie kollisionsfrei. Leeres `roles`-Array bedeutet „alle authentifizierten Nutzer".
+// Match-Logik in `matchesRequirement` unten.
 interface NavModule {
   label: string
   items: { to: string; label: string; roles: string[]; excludeRoles?: string[]; end?: boolean }[]
+}
+
+type AuthUser = NonNullable<ReturnType<typeof useAuth>['user']>
+
+// Prüft, ob ein Requirement-Token (System-Rolle ODER Vereinsfunktion) auf den User passt.
+function matchesRequirement(user: AuthUser, token: string): boolean {
+  return user.role === token || hasFunction(user, token)
 }
 
 const navModules: NavModule[] = [
@@ -144,8 +157,8 @@ export default function AppShell() {
         {navModules.map(mod => {
           const visibleItems = mod.items.filter(item => {
             if (!user) return false
-            if (item.excludeRoles?.some(r => user.role === r || hasFunction(user, r))) return false
-            return item.roles.length === 0 || item.roles.some(r => user.role === r || hasFunction(user, r))
+            if (item.excludeRoles?.some(r => matchesRequirement(user, r))) return false
+            return item.roles.length === 0 || item.roles.some(r => matchesRequirement(user, r))
           })
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))
