@@ -19,7 +19,7 @@ import (
 func newAuthServer(t *testing.T, database *sql.DB) *httptest.Server {
 	t.Helper()
 	cfg := testutil.TestConfig()
-	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost")
+	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
 	h := auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost")
 
 	r := chi.NewRouter()
@@ -386,6 +386,37 @@ func TestUpdateUserRole_AdminOnly(t *testing.T) {
 	defer res3.Body.Close()
 	if res3.StatusCode != http.StatusBadRequest {
 		t.Errorf("invalid role: expected 400, got %d", res3.StatusCode)
+	}
+}
+
+// UpdateUserRole akzeptiert nur die System-Rollen 'admin' und 'standard'.
+// Alle ehemaligen Rollen-Werte (trainer, vorstand, spieler, elternteil, sportliche_leitung)
+// sind heute Vereinsfunktionen und MÜSSEN als Rollen-Wert abgelehnt werden.
+func TestUpdateUserRole_RejectsLegacyRole(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	targetID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	for _, legacy := range []string{"trainer", "vorstand", "spieler", "elternteil", "sportliche_leitung"} {
+		res := testutil.Do(t, srv, http.MethodPut,
+			"/api/admin/users/"+itoa(targetID)+"/role",
+			token,
+			map[string]string{"role": legacy})
+		if res.StatusCode != http.StatusBadRequest {
+			t.Errorf("legacy role %q: expected 400, got %d", legacy, res.StatusCode)
+		}
+		res.Body.Close()
+	}
+
+	// users.role bleibt unverändert.
+	var current string
+	if err := db.QueryRow(`SELECT role FROM users WHERE id = ?`, targetID).Scan(&current); err != nil {
+		t.Fatalf("read role: %v", err)
+	}
+	if current != "standard" {
+		t.Errorf("users.role should remain 'standard', got %q", current)
 	}
 }
 
