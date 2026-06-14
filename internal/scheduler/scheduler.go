@@ -371,18 +371,19 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
 				JOIN members m ON m.user_id = u.id
+				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'spieler'
 				JOIN player_memberships tm ON tm.member_id = m.id
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
-				WHERE u.role = 'spieler'
-				  AND tm.team_id = ?
+				WHERE tm.team_id = ?
 				  AND ` + notAssigned
 			args = []any{sl.teamID.Int64, sl.id}
 		} else {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
-				WHERE u.role = 'spieler'
-				  AND ` + notAssigned
+				JOIN members m ON m.user_id = u.id
+				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'spieler'
+				WHERE ` + notAssigned
 			args = []any{sl.id}
 		}
 
@@ -393,18 +394,20 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				FROM users u
 				JOIN family_links fl ON fl.parent_user_id = u.id
 				JOIN members m ON m.id = fl.member_id
+				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'spieler'
 				JOIN player_memberships tm ON tm.member_id = m.id
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
-				WHERE u.role = 'elternteil'
-				  AND tm.team_id = ?
+				WHERE tm.team_id = ?
 				  AND ` + notAssigned
 			args = []any{sl.teamID.Int64, sl.id}
 		} else {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
-				WHERE u.role = 'elternteil'
-				  AND ` + notAssigned
+				JOIN family_links fl ON fl.parent_user_id = u.id
+				JOIN members m ON m.id = fl.member_id
+				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'spieler'
+				WHERE ` + notAssigned
 			args = []any{sl.id}
 		}
 
@@ -431,11 +434,14 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 		}
 
 	default:
+		// Andere target_role-Werte (vorstand, sportliche_leitung, vorstand_beisitzer, kassierer)
+		// werden über die Vereinsfunktion aufgelöst.
 		query = `
 			SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 			FROM users u
-			WHERE u.role = ?
-			  AND ` + notAssigned
+			JOIN members m ON m.user_id = u.id
+			JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = ?
+			WHERE ` + notAssigned
 		args = []any{sl.targetRole, sl.id}
 	}
 
