@@ -26,8 +26,10 @@ func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
 	return &Handler{db: db, cfg: cfg, hub: h}
 }
 
-// eligibleDutyUsers returns user IDs that are eligible for a duty slot (spieler + elternteil + trainer)
-// optionally filtered to a specific team.
+// eligibleDutyUsers returns user IDs that could be relevant recipients for a duty slot notification:
+// members with club function spieler or trainer, plus parents of members with the spieler function.
+// Optionally filtered to a specific team (player/trainer/parent must be connected to that team's
+// active-season kader).
 func (h *Handler) eligibleDutyUsers(teamID *int) []int {
 	var (
 		rows *sql.Rows
@@ -37,17 +39,21 @@ func (h *Handler) eligibleDutyUsers(teamID *int) []int {
 		rows, err = h.db.Query(
 			`SELECT DISTINCT u.id FROM users u
 			 LEFT JOIN members m ON m.user_id = u.id
+			 LEFT JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function IN ('spieler','trainer')
 			 LEFT JOIN player_memberships pm ON pm.member_id = m.id
-			 LEFT JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
 			 LEFT JOIN family_links fl ON fl.parent_user_id = u.id
 			 LEFT JOIN members cm ON cm.id = fl.member_id
+			 LEFT JOIN member_club_functions cmcf ON cmcf.member_id = cm.id AND cmcf.function = 'spieler'
 			 LEFT JOIN player_memberships cpm ON cpm.member_id = cm.id
-			 LEFT JOIN seasons cs ON cs.id = cpm.season_id AND cs.is_active = 1
-			 WHERE u.role IN ('spieler','elternteil','trainer')
+			 WHERE (mcf.member_id IS NOT NULL OR cmcf.member_id IS NOT NULL)
 			   AND (pm.team_id = ? OR cpm.team_id = ?)`, *teamID, *teamID)
 	} else {
 		rows, err = h.db.Query(
-			`SELECT id FROM users WHERE role IN ('spieler','elternteil','trainer')`)
+			`SELECT DISTINCT u.id FROM users u
+			 LEFT JOIN members m ON m.user_id = u.id
+			 LEFT JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function IN ('spieler','trainer')
+			 LEFT JOIN family_links fl ON fl.parent_user_id = u.id
+			 WHERE mcf.member_id IS NOT NULL OR fl.parent_user_id IS NOT NULL`)
 	}
 	if err != nil {
 		return nil
