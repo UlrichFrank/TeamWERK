@@ -623,6 +623,53 @@ func TestGetAttendances_IsExtended(t *testing.T) {
 	}
 }
 
+// TestGetAttendances_OptOut_NotAppliedToExtended verifies that rsvp_opt_out auto-confirm
+// applies only to primary kader members, never to extended kader members.
+func TestGetAttendances_OptOut_NotAppliedToExtended(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
+	db.Exec(`UPDATE training_sessions SET rsvp_opt_out = 1 WHERE id = ?`, sessionID)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	primaryMemberID := testutil.CreateMember(t, db, 0)
+	extMemberID := testutil.CreateMember(t, db, 0)
+
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, primaryMemberID)
+	testutil.AddExtendedKaderMember(t, db, kaderID, extMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var items []struct {
+		MemberID   int     `json:"member_id"`
+		IsExtended bool    `json:"is_extended"`
+		RSVPStatus *string `json:"rsvp_status"`
+	}
+	json.NewDecoder(res.Body).Decode(&items)
+	res.Body.Close()
+
+	byID := map[int]*string{}
+	for _, item := range items {
+		rsvp := item.RSVPStatus
+		byID[item.MemberID] = rsvp
+	}
+
+	if rsvp := byID[primaryMemberID]; rsvp == nil || *rsvp != "confirmed" {
+		t.Errorf("primary kader member should be auto-confirmed via rsvp_opt_out, got %v", rsvp)
+	}
+	if rsvp := byID[extMemberID]; rsvp != nil {
+		t.Errorf("extended kader member should NOT be auto-confirmed, got %v", *rsvp)
+	}
+}
+
 // TestListSessions_NoKaderPlayerSeesNothing verifies that a player without any kader
 // membership cannot see any training sessions.
 func TestListSessions_NoKaderPlayerSeesNothing(t *testing.T) {

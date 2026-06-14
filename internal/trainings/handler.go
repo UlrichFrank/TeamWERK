@@ -1135,7 +1135,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		item.IsExtended = isExtended == 1
 		if rsvp.Valid {
 			item.RSVPStatus = &rsvp.String
-		} else if rsvpOptOut == 1 {
+		} else if rsvpOptOut == 1 && !item.IsExtended {
 			confirmed := "confirmed"
 			item.RSVPStatus = &confirmed
 		}
