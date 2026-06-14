@@ -463,3 +463,73 @@ func TestGetChildProfile_ReturnsParentName(t *testing.T) {
 		t.Errorf("expected 'Anna Müller', got %q", body.Parents[0].Name)
 	}
 }
+
+// ── TC-M-F01: ?unlinked_user=1 — nur Mitglieder ohne user_id und ohne family_links ──
+
+func TestList_UnlinkedUserFilter(t *testing.T) {
+	database := testutil.NewDB(t)
+	adminUserID := testutil.CreateUser(t, database, "admin")
+	tok := testutil.Token(t, adminUserID, "admin", nil)
+
+	// Mitglied mit direkt verknüpftem User
+	linkedUserID := testutil.CreateUser(t, database, "standard")
+	testutil.CreateMember(t, database, linkedUserID)
+
+	// Mitglied ohne direkten User, aber mit family_link-Elternteil
+	parentUserID := testutil.CreateUser(t, database, "standard")
+	parentMemberID := testutil.CreateMember(t, database, 0)
+	database.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`, parentUserID, parentMemberID)
+
+	// Mitglied ohne jede Verknüpfung
+	unlinkedMemberID := testutil.CreateMember(t, database, 0)
+
+	srv := newMembersServer(t, database)
+	res := testutil.Get(t, srv, "/api/members?unlinked_user=1", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	lr := decodeList(t, res)
+	if lr.Total != 1 {
+		t.Errorf("expected total=1 (only unlinked member), got %d", lr.Total)
+	}
+	if len(lr.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(lr.Items))
+	}
+	var item struct{ ID int `json:"id"` }
+	json.Unmarshal(lr.Items[0], &item)
+	if item.ID != unlinkedMemberID {
+		t.Errorf("expected unlinked member %d, got %d", unlinkedMemberID, item.ID)
+	}
+}
+
+// ── TC-M-F02: ?has_draft=1 — nur Mitglieder mit offenem Änderungsantrag ─────────
+
+func TestList_HasDraftFilter(t *testing.T) {
+	database := testutil.NewDB(t)
+	adminUserID := testutil.CreateUser(t, database, "admin")
+	tok := testutil.Token(t, adminUserID, "admin", nil)
+
+	memberWithDraft := testutil.CreateMember(t, database, 0)
+	memberWithoutDraft := testutil.CreateMember(t, database, 0)
+	database.Exec(`INSERT INTO member_change_drafts (member_id, field_name, old_value, new_value) VALUES (?,?,?,?)`,
+		memberWithDraft, "profil", "{}", "{\"first_name\":\"Neu\"}")
+	_ = memberWithoutDraft
+
+	srv := newMembersServer(t, database)
+	res := testutil.Get(t, srv, "/api/members?has_draft=1", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	lr := decodeList(t, res)
+	if lr.Total != 1 {
+		t.Errorf("expected total=1 (only member with draft), got %d", lr.Total)
+	}
+	if len(lr.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(lr.Items))
+	}
+	var item struct{ ID int `json:"id"` }
+	json.Unmarshal(lr.Items[0], &item)
+	if item.ID != memberWithDraft {
+		t.Errorf("expected member %d with draft, got %d", memberWithDraft, item.ID)
+	}
+}

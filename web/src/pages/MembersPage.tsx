@@ -85,10 +85,15 @@ export default function MembersPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [clubFunctionFilter, setClubFunctionFilter] = useState('')
-  const extraParams = useMemo<Record<string, string>>(
-    () => clubFunctionFilter ? { club_function: clubFunctionFilter } : ({} as Record<string, string>), // backend param name unchanged
-    [clubFunctionFilter]
-  )
+  const [unlinkedUserFilter, setUnlinkedUserFilter] = useState(false)
+  const [hasDraftFilter, setHasDraftFilter] = useState(false)
+  const extraParams = useMemo<Record<string, string>>(() => {
+    const p: Record<string, string> = {}
+    if (clubFunctionFilter) p.club_function = clubFunctionFilter
+    if (unlinkedUserFilter) p.unlinked_user = '1'
+    if (hasDraftFilter) p.has_draft = '1'
+    return p
+  }, [clubFunctionFilter, unlinkedUserFilter, hasDraftFilter])
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
   const isAdmin = user?.role === 'admin' || user?.role === 'vorstand'
@@ -242,6 +247,28 @@ export default function MembersPage() {
                 <option key={val} value={val}>{label}</option>
               ))}
             </select>
+            {isAdmin && (
+              <div className="flex flex-wrap gap-3 items-center">
+                <label className="flex items-center gap-1.5 text-xs text-brand-text cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={unlinkedUserFilter}
+                    onChange={e => setUnlinkedUserFilter(e.target.checked)}
+                    className="rounded border-brand-border accent-brand-yellow"
+                  />
+                  Ohne App-Account
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-brand-text cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasDraftFilter}
+                    onChange={e => setHasDraftFilter(e.target.checked)}
+                    className="rounded border-brand-border accent-brand-yellow"
+                  />
+                  Mit Änderungsantrag
+                </label>
+              </div>
+            )}
             {isAdmin && (
               <div ref={actionsMenuRef} className="relative">
                 <div className="flex">

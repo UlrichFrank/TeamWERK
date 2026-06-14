@@ -148,6 +148,16 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	wideSearch := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") ||
 		(claims.HasFunction("trainer") && clubFuncFilter == "trainer")
 
+	// Wide-only filters (not meaningful for team-scoped searches)
+	if wideSearch {
+		if r.URL.Query().Get("unlinked_user") == "1" {
+			whereExtra += ` AND m.user_id IS NULL AND NOT EXISTS (SELECT 1 FROM family_links WHERE member_id = m.id)`
+		}
+		if r.URL.Query().Get("has_draft") == "1" {
+			whereExtra += ` AND EXISTS (SELECT 1 FROM member_change_drafts WHERE member_id = m.id)`
+		}
+	}
+
 	if wideSearch {
 		countQuery := `SELECT COUNT(*) FROM members m WHERE status != 'ausgetreten'` + whereExtra
 		args := buildListArgs(nil, clubFuncFilter, search, nil, nil)

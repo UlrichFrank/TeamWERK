@@ -24,6 +24,7 @@ interface User {
   member_id?: number | null
   last_login_at?: string | null
   proxy?: boolean
+  has_family_link?: boolean
 }
 interface Invitation {
   id: number
@@ -58,7 +59,12 @@ function relativeTime(iso: string): string {
 
 export default function AdminUsersPage() {
   const { user: self, startImpersonation } = useAuth()
-  const { items: users, setSearch, total, currentPage, totalPages, goToPage, refresh: refreshUsers } = usePagination<User>('/users')
+  const [unlinkedFilter, setUnlinkedFilter] = useState(false)
+  const { items: users, setSearch, total, currentPage, totalPages, goToPage, refresh: refreshUsers } = usePagination<User>(
+    '/users',
+    20,
+    unlinkedFilter ? { unlinked: '1' } : {}
+  )
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [requests, setRequests] = useState<MembershipRequest[]>([])
   const [filterText, setFilterText] = useState('')
@@ -369,6 +375,15 @@ export default function AdminUsersPage() {
               onChange={e => { setFilterText(e.target.value); setSearch(e.target.value) }}
               className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-32 sm:w-auto"
             />
+            <label className="flex items-center gap-1.5 text-xs text-brand-text cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={unlinkedFilter}
+                onChange={e => setUnlinkedFilter(e.target.checked)}
+                className="rounded border-brand-border accent-brand-yellow"
+              />
+              Ohne Mitgliedsverknüpfung
+            </label>
             <div ref={dropdownRef} className="relative">
               <div className="flex">
                 <button
@@ -795,7 +810,7 @@ export default function AdminUsersPage() {
                         label: 'Aktivieren',
                         onClick: () => { setActivateModal({ userId: u.id, name: `${u.first_name} ${u.last_name}`.trim() }); setActivateEmail('') },
                       }] : []),
-                      ...(!u.proxy && !u.member_id && !createdMemberUserIds.has(u.id) ? [{
+                      ...(!u.proxy && !u.member_id && !u.has_family_link && !createdMemberUserIds.has(u.id) ? [{
                         label: createMemberLoading.has(u.id) ? 'Wird angelegt…' : 'Mitglied anlegen',
                         onClick: () => handleCreateMember(u),
                       }] : []),

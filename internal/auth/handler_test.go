@@ -30,6 +30,7 @@ func newAuthServer(t *testing.T, database *sql.DB) *httptest.Server {
 	r.Post("/api/auth/register", h.Register)
 	r.Post("/api/auth/forgot-password", h.ForgotPassword)
 	r.Post("/api/auth/reset-password", h.ResetPassword)
+	r.Post("/api/auth/request-membership", h.RequestMembership)
 	// Protected routes — require auth + role
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(testutil.TestJWTSecret))
@@ -748,6 +749,117 @@ func TestListUsers_SearchByName(t *testing.T) {
 
 	if body.Total != 1 {
 		t.Errorf("expected total=1 for search=Müller, got %d", body.Total)
+	}
+}
+
+// TC: has_family_link — Eltern-User mit family_links-Eintrag hat has_family_link=true.
+func TestListUsers_HasFamilyLink(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	parentID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`, parentID, memberID)
+	srv := newAuthServer(t, db)
+
+	res := testutil.Get(t, srv, "/api/admin/users", testutil.Token(t, adminID, "admin", nil))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		Items []map[string]any `json:"items"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	for _, u := range body.Items {
+		id := int(u["id"].(float64))
+		if id == parentID {
+			if u["has_family_link"] != true {
+				t.Errorf("parent user should have has_family_link=true, got %v", u["has_family_link"])
+			}
+		} else {
+			if u["has_family_link"] == true {
+				t.Errorf("user %d should have has_family_link=false, got true", id)
+			}
+		}
+	}
+}
+
+// TC: ?unlinked=1 — liefert nur User ohne direktes Mitglied und ohne family_link.
+func TestListUsers_UnlinkedFilter(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+
+	// User with direct member link
+	linkedUserID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, linkedUserID)
+
+	// User with only family_link (parent)
+	parentID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`, parentID, childMemberID)
+	_ = memberID
+
+	// Fully unlinked user
+	unlinkedID := testutil.CreateUser(t, db, "standard")
+
+	srv := newAuthServer(t, db)
+
+	res := testutil.Get(t, srv, "/api/admin/users?unlinked=1", testutil.Token(t, adminID, "admin", nil))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	for _, u := range body.Items {
+		id := int(u["id"].(float64))
+		if id == linkedUserID {
+			t.Errorf("linked user should not appear in unlinked filter")
+		}
+		if id == parentID {
+			t.Errorf("parent user should not appear in unlinked filter")
+		}
+	}
+	found := false
+	for _, u := range body.Items {
+		if int(u["id"].(float64)) == unlinkedID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("unlinked user %d not found in results", unlinkedID)
+	}
+	_ = adminID // admin itself is also unlinked — just verify unlinkedID is present
+}
+
+// TC: RequestMembership — neuer Antrag wird gespeichert und erhält eine ID.
+func TestRequestMembership_InsertsRecord(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/auth/request-membership", "", map[string]string{
+		"first_name": "Max",
+		"last_name":  "Muster",
+		"email":      "max.muster@test.local",
+	})
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	var id int
+	var email string
+	err := db.QueryRow(`SELECT id, email FROM membership_requests WHERE email='max.muster@test.local'`).Scan(&id, &email)
+	if err != nil {
+		t.Fatalf("membership_request not found: %v", err)
+	}
+	if id <= 0 {
+		t.Errorf("expected positive ID, got %d", id)
 	}
 }
 

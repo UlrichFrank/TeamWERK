@@ -204,13 +204,15 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 	if req.Comment != "" {
 		commentVal = req.Comment
 	}
-	if _, err := h.db.ExecContext(r.Context(),
+	res, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO membership_requests (first_name, last_name, email, comment) VALUES (?,?,?,?)`,
 		req.FirstName, req.LastName, req.Email, commentVal,
-	); err != nil {
+	)
+	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	newID, _ := res.LastInsertId()
 	w.WriteHeader(http.StatusCreated)
 	go func() {
 		rows, err := h.db.Query(`SELECT id FROM users WHERE role = 'admin'`)
@@ -227,7 +229,7 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 		notify.Send(h.db, h.cfg, adminIDs, "membership",
 			"Neue Beitrittsanfrage",
 			req.FirstName+" "+req.LastName+" möchte Mitglied werden",
-			"/admin/mitgliedschaft")
+			fmt.Sprintf("/admin/mitgliedschaft?id=%d", newID))
 	}()
 }
 
@@ -511,6 +513,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 // GET /api/admin/users
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
+	unlinked := r.URL.Query().Get("unlinked") == "1"
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
 		fmt.Sscanf(l, "%d", &limit)
@@ -520,58 +523,56 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(o, "%d", &offset)
 	}
 
-	searchFilter := ""
+	var conditions []string
+	var filterArgs []any
 	if search != "" {
-		searchFilter = ` WHERE u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?`
+		conditions = append(conditions, "(u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)")
+		s := "%" + search + "%"
+		filterArgs = append(filterArgs, s, s, s)
+	}
+	if unlinked {
+		conditions = append(conditions, "m.id IS NULL AND fl.parent_user_id IS NULL")
+	}
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	countQuery := `SELECT COUNT(*) FROM users u` + searchFilter
+	const joins = ` FROM users u LEFT JOIN members m ON m.user_id = u.id LEFT JOIN (SELECT DISTINCT parent_user_id FROM family_links) fl ON fl.parent_user_id = u.id`
+
 	var total int
-	if search != "" {
-		err := h.db.QueryRowContext(r.Context(), countQuery, "%"+search+"%", "%"+search+"%", "%"+search+"%").Scan(&total)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		err := h.db.QueryRowContext(r.Context(), countQuery).Scan(&total)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
+	countArgs := append(filterArgs, []any{}...)
+	if err := h.db.QueryRowContext(r.Context(), `SELECT COUNT(*)`+joins+whereClause, countArgs...).Scan(&total); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 
-	query := `SELECT u.id, u.first_name, u.last_name, COALESCE(u.email,''), u.role, m.id, u.last_login_at, u.can_login
-		FROM users u LEFT JOIN members m ON m.user_id = u.id` + searchFilter + ` ORDER BY u.last_name, u.first_name LIMIT ? OFFSET ?`
-	var rows *sql.Rows
-	var err error
-	if search != "" {
-		rows, err = h.db.QueryContext(r.Context(), query, "%"+search+"%", "%"+search+"%", "%"+search+"%", limit, offset)
-	} else {
-		rows, err = h.db.QueryContext(r.Context(), query, limit, offset)
-	}
+	query := `SELECT u.id, u.first_name, u.last_name, COALESCE(u.email,''), u.role, m.id, u.last_login_at, u.can_login, (fl.parent_user_id IS NOT NULL)` + joins + whereClause + ` ORDER BY u.last_name, u.first_name LIMIT ? OFFSET ?`
+	queryArgs := append(filterArgs, limit, offset)
+	rows, err := h.db.QueryContext(r.Context(), query, queryArgs...)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 	type user struct {
-		ID          int     `json:"id"`
-		FirstName   string  `json:"first_name"`
-		LastName    string  `json:"last_name"`
-		Email       string  `json:"email"`
-		Role        string  `json:"role"`
-		MemberID    *int    `json:"member_id"`
-		LastLoginAt *string `json:"last_login_at"`
-		Proxy       bool    `json:"proxy"`
+		ID            int     `json:"id"`
+		FirstName     string  `json:"first_name"`
+		LastName      string  `json:"last_name"`
+		Email         string  `json:"email"`
+		Role          string  `json:"role"`
+		MemberID      *int    `json:"member_id"`
+		LastLoginAt   *string `json:"last_login_at"`
+		Proxy         bool    `json:"proxy"`
+		HasFamilyLink bool    `json:"has_family_link"`
 	}
 	result := []user{}
 	for rows.Next() {
 		var u user
 		var memberID sql.NullInt64
 		var lastLoginAt sql.NullString
-		var canLogin int
-		rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Role, &memberID, &lastLoginAt, &canLogin)
+		var canLogin, hasFamilyLink int
+		rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.Role, &memberID, &lastLoginAt, &canLogin, &hasFamilyLink)
 		if memberID.Valid {
 			id := int(memberID.Int64)
 			u.MemberID = &id
@@ -580,6 +581,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 			u.LastLoginAt = &lastLoginAt.String
 		}
 		u.Proxy = canLogin == 0
+		u.HasFamilyLink = hasFamilyLink == 1
 		result = append(result, u)
 	}
 	w.Header().Set("Content-Type", "application/json")
