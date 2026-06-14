@@ -192,7 +192,6 @@ export default function SpieltagDetailPage() {
   if (notFound) return (
     <div className="text-center py-12">
       <p className="text-brand-text-muted mb-4">Spiel nicht gefunden.</p>
-      <Link to="/spielplan" className="text-brand-text hover:underline text-sm">← Zurück zum Spielplan</Link>
     </div>
   )
   if (!game) return null
