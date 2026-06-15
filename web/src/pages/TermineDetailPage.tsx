@@ -62,6 +62,8 @@ interface SessionDetail {
   maybe_count: number
   my_rsvp: string | null
   responses: RSVPEntry[]
+  rsvp_opt_out?: number
+  rsvp_require_reason?: number
 }
 
 interface GameDetail {
@@ -73,6 +75,26 @@ interface GameDetail {
   is_home: boolean
   season_id: number
   venue?: VenueRef | null
+  rsvp_opt_out?: number
+  rsvp_require_reason?: number
+}
+
+function RsvpConfigBadges({ optOut, requireReason }: { optOut?: number; requireReason?: number }) {
+  if (optOut !== 1 && requireReason !== 1) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {optOut === 1 && (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-info/10 text-brand-info border border-brand-info/30">
+          Opt-Out aktiv
+        </span>
+      )}
+      {requireReason === 1 && (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-yellow/20 text-brand-text border border-brand-yellow/40">
+          Begründung bei Absage Pflicht
+        </span>
+      )}
+    </div>
+  )
 }
 
 interface AttendanceItem {
@@ -245,6 +267,7 @@ export default function TermineDetailPage() {
               {session.note && (
                 <p className="mt-3 text-sm text-brand-text bg-white border border-brand-border-subtle rounded-lg p-3">{session.note}</p>
               )}
+              <RsvpConfigBadges optOut={session.rsvp_opt_out} requireReason={session.rsvp_require_reason} />
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                   <Check className="w-3 h-3" /> {session.confirmed_count}
@@ -314,6 +337,7 @@ export default function TermineDetailPage() {
               {g.time} Uhr
             </div>
             <MapsLink venue={g.venue} className="mt-1.5" />
+            <RsvpConfigBadges optOut={g.rsvp_opt_out} requireReason={g.rsvp_require_reason} />
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 <Check className="w-3 h-3" /> {confirmedCount}
