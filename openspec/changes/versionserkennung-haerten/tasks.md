@@ -27,9 +27,9 @@
 
 ## 4. Konsumenten auf useVersion umstellen
 
-- [ ] 4.1 `web/src/components/AppShell.tsx`: `useVersionCheck()` durch `useVersion()` ersetzen.
-- [ ] 4.2 `web/src/App.tsx` (`AppUpdateBanner`): `useVersionCheck()` durch `useVersion()` ersetzen.
-- [ ] 4.3 Commit: `refactor(version): AppShell und Banner konsumieren useVersion-Context`
+- [x] 4.1 `web/src/components/AppShell.tsx`: `useVersionCheck()` durch `useVersion()` ersetzen.
+- [x] 4.2 `web/src/App.tsx` (`AppUpdateBanner`): `useVersionCheck()` durch `useVersion()` ersetzen.
+- [x] 4.3 Commit: `refactor(version): AppShell und Banner konsumieren useVersion-Context`
 
 ## 5. Reload-Flow härten
 

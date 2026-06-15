@@ -3,8 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { AuthProvider, useAuth, hasFunction } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
-import { VersionProvider } from './contexts/VersionContext'
-import { useVersionCheck } from './hooks/useVersionCheck'
+import { VersionProvider, useVersion } from './contexts/VersionContext'
 import { UpdateBanner } from './components/UpdateBanner'
 import { reloadWithSwActivation } from './lib/reload'
 import LoginPage from './pages/LoginPage'
@@ -55,7 +54,7 @@ function RoleRoute({ roles, children }: { roles: string[]; children: React.React
 }
 
 function AppUpdateBanner() {
-  const { updateAvailable: sseUpdateAvailable } = useVersionCheck()
+  const { updateAvailable: sseUpdateAvailable } = useVersion()
   const [swUpdateAvailable, setSwUpdateAvailable] = useState(false)
   const [dismissed, setDismissed] = useState(false)
 
