@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Home, Plane, Calendar, UserCheck, History } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { useCompactHeader } from '../hooks/useCompactHeader'
+import { getEventColors } from '../lib/eventColors'
+import { buildTeamShortNames } from '../lib/teamName'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 
 interface BoardGroup {
   game_id: number | null
+  team_id: number | null
   date: string | null
   event_time: string | null
   opponent: string | null
@@ -14,6 +20,16 @@ interface BoardGroup {
   label: string | null
   past: boolean
   slots: BoardSlot[]
+}
+
+interface Team {
+  id: number
+  name: string
+  age_class: string
+  gender: string
+  team_number: number
+  group_count: number
+  is_active: boolean
 }
 
 export interface ProxyChild {
@@ -29,14 +45,62 @@ function formatDate(iso: string): string {
   return `${WEEKDAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`
 }
 
+const ALL_TYPES = new Set(['heim', 'auswärts', 'generisch'])
+
+function parseFilters(sp: URLSearchParams) {
+  const team = parseInt(sp.get('team') ?? '') || null
+  const typesRaw = sp.get('types')
+  const types = typesRaw
+    ? (() => {
+        const parsed = new Set(typesRaw.split(',').filter(t => ALL_TYPES.has(t)))
+        return parsed.size > 0 ? parsed : new Set(ALL_TYPES)
+      })()
+    : new Set(ALL_TYPES)
+  const mine = sp.get('mine') === '1'
+  const past = sp.get('past') === '1'
+  return { team, types, mine, past }
+}
+
 export default function DutyPage() {
   const { user } = useAuth()
   const isAdminOrTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast } = parseFilters(searchParams)
+
   const [groups, setGroups] = useState<BoardGroup[]>([])
-  const [showPast, setShowPast] = useState(false)
-  const [viewMine, setViewMine] = useState(false)
+  const [teams, setTeams] = useState<Team[]>([])
+  const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
   const [proxyChildren, setProxyChildren] = useState<ProxyChild[]>([])
+  const compact = useCompactHeader(950)
+
+  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean }) => {
+    const next = new URLSearchParams(searchParams)
+    if ('team' in patch) {
+      if (patch.team === null) next.delete('team')
+      else next.set('team', String(patch.team))
+    }
+    if ('types' in patch && patch.types) {
+      const isDefault = patch.types.size === ALL_TYPES.size && [...ALL_TYPES].every(t => patch.types!.has(t))
+      if (isDefault) next.delete('types')
+      else next.set('types', [...patch.types].join(','))
+    }
+    if ('mine' in patch) {
+      if (patch.mine) next.set('mine', '1')
+      else next.delete('mine')
+    }
+    if ('past' in patch) {
+      if (patch.past) next.set('past', '1')
+      else next.delete('past')
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  const toggleType = (type: string) => {
+    const next = new Set(filterTypes)
+    next.has(type) ? next.delete(type) : next.add(type)
+    updateFilter({ types: next })
+  }
 
   const load = () => {
     const url = viewMine ? '/duty-board?view=mine' : '/duty-board'
@@ -47,83 +111,139 @@ export default function DutyPage() {
   useLiveUpdates((event) => { if (event === 'duties') load() })
 
   useEffect(() => {
+    api.get('/teams')
+      .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
+      .catch(() => {})
     api.get('/family/proxy-accounts')
       .then(r => setProxyChildren(r.data ?? []))
       .catch(() => setProxyChildren([]))
   }, [])
 
-  const visible = groups.filter(g => showPast || !g.past)
+  const visibleGroups = groups.filter(g => {
+    if (!showPast && g.past) return false
+    const eventType = g.event_type ?? 'generisch'
+    if (!filterTypes.has(eventType)) return false
+    if (filterTeamId !== null && g.team_id !== filterTeamId) return false
+    return true
+  })
+
+  const noTypesActive = filterTypes.size === 0
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h1 className="text-2xl font-bold">Dienste</h1>
-        <div className="flex items-center gap-3 flex-wrap">
-          {isAdminOrTrainer && (
-            <div className="flex rounded-lg border border-brand-border-subtle overflow-hidden text-xs">
-              <button
-                onClick={() => setViewMine(false)}
-                className={`px-3 py-1.5 ${!viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-              >
-                Alle Dienste
-              </button>
-              <button
-                onClick={() => setViewMine(true)}
-                className={`px-3 py-1.5 border-l border-brand-border-subtle ${viewMine ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-text-muted hover:bg-brand-border-subtle'}`}
-              >
-                Meine Dienste
-              </button>
-            </div>
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <h1 className="text-2xl font-bold text-brand-text shrink-0">Dienste</h1>
+        <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+          {teams.length > 1 && (
+            <select
+              value={filterTeamId ?? ''}
+              onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
+              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+            >
+              <option value="">Teams</option>
+              {teams.map(t => (
+                <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? t.name}</option>
+              ))}
+            </select>
           )}
+          {([
+            ['heim',      'Heim',      <Home className="w-3.5 h-3.5" />],
+            ['auswärts',  'Auswärts',  <Plane className="w-3.5 h-3.5" />],
+            ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
+          ] as [string, string, React.ReactNode][]).map(([type, label, icon]) => (
+            <button
+              key={type}
+              onClick={() => toggleType(type)}
+              aria-label={label}
+              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
+                filterTypes.has(type)
+                  ? getEventColors(type).filter
+                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+              }`}
+            >
+              {icon}
+              {!compact && <span>{label}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setShowPast(p => !p)}
-            className="text-xs text-brand-text-muted hover:text-brand-blue transition-colors"
+            onClick={() => updateFilter({ mine: !viewMine })}
+            aria-label="Meine"
+            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
+              viewMine
+                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            }`}
           >
-            {showPast ? 'Vergangene ausblenden' : 'Vergangene einblenden'}
+            <UserCheck className="w-3.5 h-3.5" />
+            {!compact && <span>Meine</span>}
+          </button>
+          <button
+            onClick={() => updateFilter({ past: !showPast })}
+            aria-label="Vergangene anzeigen"
+            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
+              showPast
+                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            {!compact && <span>Vergangene</span>}
           </button>
         </div>
       </div>
 
-      {visible.length === 0 && (
+      {visibleGroups.length === 0 && (
         <p className="text-brand-text-muted">
-          {groups.length === 0
-            ? 'Keine Dienste für deine Mannschaften.'
-            : 'Keine aktuellen Dienste. Vergangene können oben eingeblendet werden.'}
+          {noTypesActive
+            ? 'Kein Event-Typ ausgewählt — bitte mindestens eine Pill aktivieren.'
+            : groups.length === 0
+              ? 'Keine Dienste für deine Mannschaften.'
+              : viewMine
+                ? 'Du hast keine Dienste übernommen.'
+                : 'Keine Dienste passen zum aktuellen Filter.'}
         </p>
       )}
 
       <div className="space-y-4">
-        {visible.map((g, i) => (
-          <div
-            key={i}
-            className={`bg-brand-surface-card rounded-xl shadow border-t-4 overflow-hidden ${g.past ? 'border-brand-border opacity-70' : 'border-brand-yellow'}`}
-          >
-            <div className="px-4 py-3 bg-brand-surface-card border-b border-brand-border-subtle flex items-center justify-between">
-              <div>
-                {g.game_id ? (
-                  <span className="font-semibold text-sm text-brand-text">
-                    {g.date ? formatDate(g.date) : ''}
-                    {g.event_time ? ` · ${g.event_time} Uhr` : ''}
-                    {g.opponent ? ` · ${g.event_type === 'generisch' ? g.opponent : `Team vs ${g.opponent}`}` : ''}
-                  </span>
-                ) : (
-                  <span className="font-semibold text-sm text-brand-text">
-                    {g.date ? formatDate(g.date) : ''}{g.label ? ` · ${g.label}` : ''}
-                  </span>
-                )}
+        {visibleGroups.map((g, i) => {
+          const colors = getEventColors(g.event_type ?? 'generisch')
+          const cardClass = g.past
+            ? 'bg-brand-surface-card border-brand-border opacity-60'
+            : `${colors.card.bg} ${colors.card.border}`
+          return (
+            <div
+              key={i}
+              className={`rounded-xl shadow border-t-4 overflow-hidden ${cardClass}`}
+            >
+              <div className="px-4 py-3 border-b border-brand-border-subtle flex items-center justify-between">
+                <div>
+                  {g.game_id ? (
+                    <span className="font-semibold text-sm text-brand-text">
+                      {g.date ? formatDate(g.date) : ''}
+                      {g.event_time ? ` · ${g.event_time} Uhr` : ''}
+                      {g.opponent ? ` · ${g.event_type === 'generisch' ? g.opponent : `Team vs ${g.opponent}`}` : ''}
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-sm text-brand-text">
+                      {g.date ? formatDate(g.date) : ''}{g.label ? ` · ${g.label}` : ''}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-brand-text-muted font-medium">{g.team_name}</span>
               </div>
-              <span className="text-xs text-brand-text-muted font-medium">{g.team_name}</span>
-            </div>
 
-            <DutySlotList
-              slots={g.slots}
-              isPast={g.past}
-              canEdit={isAdminOrTrainer}
-              onReload={load}
-              proxyChildren={proxyChildren}
-            />
-          </div>
-        ))}
+              <DutySlotList
+                slots={g.slots}
+                isPast={g.past}
+                canEdit={isAdminOrTrainer}
+                onReload={load}
+                proxyChildren={proxyChildren}
+              />
+            </div>
+          )
+        })}
       </div>
     </div>
   )
