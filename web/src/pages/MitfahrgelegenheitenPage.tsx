@@ -501,8 +501,6 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
   )
 }
 
-interface MyTeam { id: number; name: string }
-
 const EVENT_TYPES = ['heim', 'auswärts', 'generisch'] as const
 type EventTypeFilter = typeof EVENT_TYPES[number]
 const ALL_TYPES = new Set<string>(EVENT_TYPES)
@@ -526,7 +524,6 @@ export default function MitfahrgelegenheitenPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<{ gameId: number; typ: 'biete' | 'suche' } | null>(null)
-  const [myTeams, setMyTeams] = useState<MyTeam[]>([])
   const [allTeams, setAllTeams] = useState<TeamForName[]>([])
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, mine: viewMine } = parseFilters(searchParams)
@@ -572,9 +569,6 @@ export default function MitfahrgelegenheitenPage() {
   }
 
   useEffect(() => {
-    api.get('/teams/my').then(res => {
-      setMyTeams(Array.isArray(res.data) ? res.data : [])
-    }).catch(() => {})
     api.get('/teams').then(res => {
       const list = Array.isArray(res.data) ? res.data : (res.data?.teams ?? [])
       setAllTeams(list)
@@ -661,17 +655,17 @@ export default function MitfahrgelegenheitenPage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text shrink-0">Mitfahrgelegenheiten</h1>
+        <h1 className="text-2xl font-bold text-brand-text shrink-0">Mitfahrten</h1>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
-          {myTeams.length > 1 && (
+          {allTeams.length > 1 && (
             <select
               value={filterTeamId ?? ''}
               onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-0 shrink"
+              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
             >
-              <option value="">Alle Teams</option>
-              {myTeams.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+              <option value="">Teams</option>
+              {allTeams.map(t => (
+                <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? `Team ${t.id}`}</option>
               ))}
             </select>
           )}
