@@ -43,6 +43,8 @@ interface Training {
   season_id: number
   note: string
   cancel_reason?: string
+  rsvp_opt_out?: number
+  rsvp_require_reason?: number
 }
 
 interface Game {
@@ -61,6 +63,8 @@ interface Game {
   declined_count: number
   maybe_count: number
   venue?: VenueRef | null
+  rsvp_opt_out?: number
+  rsvp_require_reason?: number
 }
 
 interface Absence {
