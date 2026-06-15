@@ -449,6 +449,122 @@ func TestUpdateSession_ChangesTime(t *testing.T) {
 	}
 }
 
+// TestUpdateSession_RsvpFlagsPersisted verifies that PUT /api/training-sessions/{id}
+// with rsvp_opt_out and rsvp_require_reason writes both values to DB.
+func TestUpdateSession_RsvpFlagsPersisted(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-08-05")
+	adminUserID := testutil.CreateUser(t, db, "admin")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	body := map[string]any{
+		"team_id":             teamID,
+		"season_id":           seasonID,
+		"title":               "Test",
+		"date":                "2026-08-05",
+		"start_time":          "18:00",
+		"end_time":            "20:00",
+		"rsvp_opt_out":        1,
+		"rsvp_require_reason": 0,
+	}
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/training-sessions/%d", sessionID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var optOut, reqReason int
+	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
+		Scan(&optOut, &reqReason); err != nil {
+		t.Fatalf("query rsvp flags: %v", err)
+	}
+	if optOut != 1 || reqReason != 0 {
+		t.Errorf("expected (1,0), got (%d,%d)", optOut, reqReason)
+	}
+}
+
+// TestUpdateSession_RsvpFlagsPartialUpdate verifies that PUT without the rsvp_* fields
+// leaves the existing DB values untouched.
+func TestUpdateSession_RsvpFlagsPartialUpdate(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-08-05")
+
+	if _, err := db.Exec(`UPDATE training_sessions SET rsvp_opt_out=1, rsvp_require_reason=0 WHERE id=?`, sessionID); err != nil {
+		t.Fatalf("seed rsvp flags: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	body := map[string]any{
+		"team_id":    teamID,
+		"season_id":  seasonID,
+		"title":      "Test",
+		"date":       "2026-08-05",
+		"start_time": "19:00",
+		"end_time":   "21:00",
+	}
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/training-sessions/%d", sessionID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var optOut, reqReason int
+	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
+		Scan(&optOut, &reqReason); err != nil {
+		t.Fatalf("query rsvp flags: %v", err)
+	}
+	if optOut != 1 || reqReason != 0 {
+		t.Errorf("partial update must preserve flags; expected (1,0), got (%d,%d)", optOut, reqReason)
+	}
+}
+
+// TestUpdateSession_RsvpFlags_PlayerForbidden verifies that a Spieler cannot
+// reach UpdateSession at all — the endpoint is gated by trainer/sportliche_leitung.
+func TestUpdateSession_RsvpFlags_PlayerForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-08-05")
+
+	spielerID := testutil.CreateUser(t, db, "standard")
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, spielerID, "standard", []string{"spieler"})
+
+	body := map[string]any{
+		"rsvp_opt_out":        1,
+		"rsvp_require_reason": 0,
+	}
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/training-sessions/%d", sessionID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+
+	var optOut, reqReason int
+	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
+		Scan(&optOut, &reqReason); err != nil {
+		t.Fatalf("query rsvp flags: %v", err)
+	}
+	if optOut != 0 || reqReason != 1 {
+		t.Errorf("DB flags must be unchanged on 403; expected (0,1), got (%d,%d)", optOut, reqReason)
+	}
+}
+
 // TC: DeleteSeries mit scope=all löscht Serie + Sessions + Responses kaskadierend.
 func TestDeleteSeries_CascadesSessionsAndResponses(t *testing.T) {
 	db := testutil.NewDB(t)

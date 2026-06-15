@@ -329,8 +329,8 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		Note              string `json:"note"`
 		Scope             string `json:"scope"`     // "all" or "this_and_following"
 		FromDate          string `json:"from_date"` // required when scope="this_and_following"
-		RsvpOptOut        int    `json:"rsvp_opt_out"`
-		RsvpRequireReason int    `json:"rsvp_require_reason"`
+		RsvpOptOut        *int   `json:"rsvp_opt_out,omitempty"`
+		RsvpRequireReason *int   `json:"rsvp_require_reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -341,9 +341,10 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var teamID, seasonID int
+	var teamID, seasonID, curOptOut, curReqReason int
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id FROM training_series WHERE id = ?`, seriesID).Scan(&teamID, &seasonID)
+		`SELECT team_id, season_id, rsvp_opt_out, rsvp_require_reason FROM training_series WHERE id = ?`, seriesID).
+		Scan(&teamID, &seasonID, &curOptOut, &curReqReason)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -356,6 +357,16 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
+	}
+
+	// Partial-Update: fehlende RSVP-Felder behalten den aktuellen DB-Wert.
+	rsvpOptOut := curOptOut
+	if req.RsvpOptOut != nil {
+		rsvpOptOut = *req.RsvpOptOut
+	}
+	rsvpRequireReason := curReqReason
+	if req.RsvpRequireReason != nil {
+		rsvpRequireReason = *req.RsvpRequireReason
 	}
 
 	until, err := time.Parse("2006-01-02", req.ValidUntil)
@@ -377,7 +388,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = tx.ExecContext(r.Context(),
 		`UPDATE training_series SET name=?, venue_id=?, day_of_week=?, start_time=?, end_time=?, valid_from=?, valid_until=?, note=?, rsvp_opt_out=?, rsvp_require_reason=? WHERE id=?`,
-		req.Name, venueIDVal, req.DayOfWeek, req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, req.RsvpOptOut, req.RsvpRequireReason, seriesID)
+		req.Name, venueIDVal, req.DayOfWeek, req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, rsvpOptOut, rsvpRequireReason, seriesID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -408,7 +419,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dates := generateSessionDates(genFrom, until, req.DayOfWeek)
-	if err := insertSessions(r.Context(), tx, seriesID, teamID, seasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpOptOut, req.RsvpRequireReason, dates); err != nil {
+	if err := insertSessions(r.Context(), tx, seriesID, teamID, seasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, rsvpOptOut, rsvpRequireReason, dates); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -589,14 +600,16 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title        string `json:"title"`
-		Date         string `json:"date"`
-		StartTime    string `json:"start_time"`
-		EndTime      string `json:"end_time"`
-		VenueID      *int   `json:"venue_id"`
-		Note         string `json:"note"`
-		Status       string `json:"status"`
-		CancelReason string `json:"cancel_reason"`
+		Title             string `json:"title"`
+		Date              string `json:"date"`
+		StartTime         string `json:"start_time"`
+		EndTime           string `json:"end_time"`
+		VenueID           *int   `json:"venue_id"`
+		Note              string `json:"note"`
+		Status            string `json:"status"`
+		CancelReason      string `json:"cancel_reason"`
+		RsvpOptOut        *int   `json:"rsvp_opt_out,omitempty"`
+		RsvpRequireReason *int   `json:"rsvp_require_reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -620,6 +633,25 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+	// Partial-Update: rsvp_opt_out / rsvp_require_reason nur setzen, wenn im Request enthalten.
+	if req.RsvpOptOut != nil || req.RsvpRequireReason != nil {
+		setParts := []string{}
+		setArgs := []interface{}{}
+		if req.RsvpOptOut != nil {
+			setParts = append(setParts, "rsvp_opt_out=?")
+			setArgs = append(setArgs, *req.RsvpOptOut)
+		}
+		if req.RsvpRequireReason != nil {
+			setParts = append(setParts, "rsvp_require_reason=?")
+			setArgs = append(setArgs, *req.RsvpRequireReason)
+		}
+		setArgs = append(setArgs, sessionID)
+		if _, err = h.db.ExecContext(r.Context(),
+			`UPDATE training_sessions SET `+strings.Join(setParts, ", ")+` WHERE id=?`, setArgs...); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 	h.hub.Broadcast("trainings")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
