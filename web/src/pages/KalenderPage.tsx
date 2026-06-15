@@ -853,18 +853,24 @@ export default function KalenderPage() {
                         : g.event_type === 'auswärts'
                         ? <Plane className="w-3 h-3 text-brand-text-muted shrink-0" />
                         : <Calendar className="w-3 h-3 text-brand-text-muted shrink-0" />}
-                      <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text">
+                      <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text flex-1">
                         {g.teams.length > 1 ? 'Mehrere' : (shortNames.get(g.teams[0]?.id) ?? '?')}
                       </span>
+                      {g.slot_count > 0 && (
+                        <div className={`hidden @tile-sm:block w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
+                      )}
                     </div>
                     <div className="hidden @tile-md:block truncate text-brand-text-muted leading-tight">
                       {g.opponent || '–'}
                     </div>
                     <div className="flex items-center gap-1 text-brand-text-subtle leading-tight">
                       <span>{g.time}</span>
-                      {g.slot_count > 0 && (
-                        <div className={`hidden @tile-sm:inline-flex w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
-                      )}
+                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-green-600">
+                        <Check className="w-2.5 h-2.5" />{g.confirmed_count}
+                      </span>
+                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
+                        <X className="w-2.5 h-2.5" />{g.declined_count}
+                      </span>
                     </div>
                   </button>
                 ))}
