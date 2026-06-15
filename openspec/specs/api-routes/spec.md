@@ -20,11 +20,11 @@
 
 ### Requirement: Keine /admin-Präfix-Routen
 
-Die API SHALL keine Routen unter `/api/admin/` mehr exponieren. Alle bisherigen `/api/admin/*`-Routen MÜSSEN unter ihrem kanonischen Ressource-Pfad `/api/{ressource}` erreichbar sein. Zugriffskontrolle erfolgt ausschließlich über Middleware-Gruppen.
+Die API SHALL keine Routen unter `/api/` mehr exponieren. Alle bisherigen `/api/*`-Routen MÜSSEN unter ihrem kanonischen Ressource-Pfad `/api/{ressource}` erreichbar sein. Zugriffskontrolle erfolgt ausschließlich über Middleware-Gruppen.
 
 #### Scenario: Vorstand ruft Vereinskonfiguration ab
 - **WHEN** ein User mit Vereinsfunktion `vorstand` `GET /api/club` aufruft
-- **THEN** liefert der Endpoint die Vereinskonfiguration zurück (bisher: `GET /api/admin/club`)
+- **THEN** liefert der Endpoint die Vereinskonfiguration zurück (bisher: `GET /api/club`)
 
 #### Scenario: Unautorisierter Zugriff auf privilegierte Route
 - **WHEN** ein User ohne ausreichende Berechtigung eine privilegierte Route aufruft (z.B. `GET /api/club`)

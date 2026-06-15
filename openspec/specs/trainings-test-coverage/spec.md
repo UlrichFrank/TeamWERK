@@ -81,30 +81,30 @@
 
 ### Requirement: ListGames gibt Spielplan für den angefragten Zeitraum zurück
 
-`GET /api/kalender` SHALL alle Spiele für das angefragte Team und den angefragten Zeitraum zurückgeben.
+`GET /api/games` SHALL alle Spiele für das angefragte Team und den angefragten Zeitraum zurückgeben.
 
 #### Scenario: Spiele im Zeitraum werden zurückgegeben
 
-- **WHEN** `GET /api/kalender?from=2026-01-01&to=2026-01-31` aufgerufen wird
+- **WHEN** `GET /api/games?from=2026-01-01&to=2026-01-31` aufgerufen wird
 - **THEN** enthält die Antwort alle Spiele im Januar 2026
 
 #### Scenario: Leere Liste wenn keine Spiele vorhanden
 
-- **WHEN** `GET /api/kalender?from=2030-01-01&to=2030-01-31` aufgerufen wird und keine Spiele existieren
+- **WHEN** `GET /api/games?from=2030-01-01&to=2030-01-31` aufgerufen wird und keine Spiele existieren
 - **THEN** antwortet der Server mit HTTP 200 und einem leeren Array
 
 ---
 
 ### Requirement: CreateGame legt ein neues Spiel an (Admin only)
 
-`POST /api/admin/kalender` SHALL ein neues Spiel anlegen. Nur Admins DÜRFEN diesen Endpunkt aufrufen.
+`POST /api/games` SHALL ein neues Spiel anlegen. Nur Admins DÜRFEN diesen Endpunkt aufrufen.
 
 #### Scenario: Admin legt Heimspiel an
 
-- **WHEN** ein Admin `POST /api/admin/kalender` mit gültigen Feldern (`team_id`, `opponent`, `date`, `is_home: true`) aufruft
+- **WHEN** ein Admin `POST /api/games` mit gültigen Feldern (`team_id`, `opponent`, `date`, `is_home: true`) aufruft
 - **THEN** wird das Spiel angelegt und mit HTTP 201 zurückgegeben
 
 #### Scenario: Trainer darf kein Spiel anlegen
 
-- **WHEN** ein Trainer `POST /api/admin/kalender` aufruft
+- **WHEN** ein Trainer `POST /api/games` aufruft
 - **THEN** antwortet der Server mit HTTP 403

@@ -137,7 +137,7 @@ export default function TermineDetailPage() {
         .finally(() => { if (!silent) setLoading(false) })
     } else {
       Promise.all([
-        api.get(`/kalender/${id}`),
+        api.get(`/games/${id}`),
         api.get(`/games/${id}/participants`),
       ])
         .then(([gameRes, participantsRes]) => {

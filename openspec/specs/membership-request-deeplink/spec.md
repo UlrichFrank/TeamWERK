@@ -2,13 +2,13 @@
 
 ### Requirement: Push-Notification verlinkt direkt auf den Beitrittsantrag
 Wenn eine neue Beitrittsanfrage eingeht, SHALL die Push-Notification-URL die ID des neu erstellten Antrags enthalten.
-Format: `/admin/mitgliedschaft?id={id}`
+Format: `/anfragen?id={id}`
 
 Das Backend MUSS nach dem INSERT die `LastInsertId()` auslesen und in der Notification-URL verwenden.
 
 #### Scenario: Neue Anfrage erzeugt Notification mit korrekter ID
 - **WHEN** `POST /api/auth/request-membership` erfolgreich ausgeführt wird
-- **THEN** erhalten alle Admin-User eine Push-Notification mit URL `/admin/mitgliedschaft?id={newId}`
+- **THEN** erhalten alle Admin-User eine Push-Notification mit URL `/anfragen?id={newId}`
 
 #### Scenario: ID im URL entspricht dem neu erstellten Datensatz
 - **WHEN** eine Push-Notification mit `?id=42` empfangen wird

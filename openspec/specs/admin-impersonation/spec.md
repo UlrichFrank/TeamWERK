@@ -8,16 +8,16 @@ Ein eingeloggter Admin SHALL in der Nutzerverwaltung einen beliebigen Standard-U
 
 #### Scenario: Impersonation starten
 - **WHEN** Admin klickt "Testen als" bei einem Standard-User in der Nutzerverwaltung
-- **THEN** sendet das Frontend `POST /api/admin/impersonate/{userId}`
+- **THEN** sendet das Frontend `POST /api/impersonate/{userId}`
 - **THEN** gibt das Backend ein gültiges JWT mit role, club_functions und is_parent des Ziel-Users zurück
 - **THEN** aktualisiert das Frontend den AuthContext mit dem neuen Token und dem impersonating-State
 
 #### Scenario: Impersonation eines Admins wird abgelehnt
-- **WHEN** Admin sendet `POST /api/admin/impersonate/{userId}` für einen User mit role=admin
+- **WHEN** Admin sendet `POST /api/impersonate/{userId}` für einen User mit role=admin
 - **THEN** antwortet das Backend mit HTTP 400
 
 #### Scenario: Selbst-Impersonation wird abgelehnt
-- **WHEN** Admin sendet `POST /api/admin/impersonate/{userId}` mit der eigenen userId
+- **WHEN** Admin sendet `POST /api/impersonate/{userId}` mit der eigenen userId
 - **THEN** antwortet das Backend mit HTTP 400
 
 ### Requirement: Impersonation-Banner ist sichtbar

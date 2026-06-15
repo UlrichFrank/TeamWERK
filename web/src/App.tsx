@@ -108,14 +108,11 @@ export default function App() {
               <Route path="dokumente/:folderId" element={<DocumentsPage />} />
               <Route path="dienste" element={<DutyPage />} />
               <Route path="mitfahrgelegenheiten" element={<MitfahrgelegenheitenPage />} />
-              <Route path="anfragen" element={<Navigate to="/admin/nutzer" replace />} />
-              <Route path="admin/einstellungen" element={<RoleRoute roles={['admin','vorstand']}><AdminSettingsPage /></RoleRoute>} />
-              <Route path="admin/verein" element={<Navigate to="/admin/einstellungen?tab=verein" replace />} />
-              <Route path="admin/saisons" element={<Navigate to="/admin/einstellungen?tab=saisons" replace />} />
-              <Route path="admin/altersklassen" element={<Navigate to="/admin/einstellungen?tab=altersklassen" replace />} />
-              <Route path="admin/kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
-              <Route path="admin/nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
-              <Route path="admin/diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
+              <Route path="anfragen" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
+              <Route path="einstellungen" element={<RoleRoute roles={['admin','vorstand']}><AdminSettingsPage /></RoleRoute>} />
+              <Route path="kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
+              <Route path="nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
+              <Route path="diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
               <Route path="kalender" element={<KalenderPage />} />
               <Route path="kalender/:gameId" element={<SpieltagDetailPage />} />
               <Route path="termine" element={<TerminePage />} />
@@ -124,9 +121,9 @@ export default function App() {
               <Route path="chat" element={<ChatPage />} />
               <Route path="trainings" element={<Navigate to="/termine" replace />} />
               <Route path="trainings/:id" element={<Navigate to="/termine" replace />} />
-              <Route path="admin/dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
-              <Route path="admin/dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
-              <Route path="admin/veranstaltungsorte" element={<RoleRoute roles={['admin','vorstand']}><AdminVenuesPage /></RoleRoute>} />
+              <Route path="dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
+              <Route path="dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
+              <Route path="veranstaltungsorte" element={<RoleRoute roles={['admin','vorstand']}><AdminVenuesPage /></RoleRoute>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

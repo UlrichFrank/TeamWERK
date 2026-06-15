@@ -30,9 +30,9 @@ Das System SHALL Mitgliedschaftsanträge nur im Status `pending` genehmigen oder
 Das System SHALL Admin-Nutzerlistung mit server-seitiger Paginierung und Suche bereitstellen.
 
 #### Scenario: Paginierung
-- **WHEN** Admin GET /api/admin/users?limit=5&offset=5 bei 12 Nutzern
+- **WHEN** Admin GET /api/users?limit=5&offset=5 bei 12 Nutzern
 - **THEN** 5 Einträge, total=12
 
 #### Scenario: Suche nach Name
-- **WHEN** Admin GET /api/admin/users?search=müller
+- **WHEN** Admin GET /api/users?search=müller
 - **THEN** Nur Nutzer mit „müller" in first_name, last_name oder email

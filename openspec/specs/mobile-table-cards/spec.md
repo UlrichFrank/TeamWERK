@@ -91,7 +91,7 @@ Alle Buttons und interaktiven Elemente in Cards und Dropdowns SHALL eine Mindest
 - **THEN** haben alle Buttons und Dropdown-Einträge mindestens 44px Höhe
 
 ### Requirement: Serverseitige Paginierung für große Listen
-`GET /api/members` und `GET /api/admin/users` SHALL Query-Parameter `search`, `limit` und `offset` akzeptieren. Die Response MUSS das Format `{ items: T[], total: int }` haben. Der Default-Wert für `limit` ist 50.
+`GET /api/members` und `GET /api/users` SHALL Query-Parameter `search`, `limit` und `offset` akzeptieren. Die Response MUSS das Format `{ items: T[], total: int }` haben. Der Default-Wert für `limit` ist 50.
 
 #### Scenario: Erste Seite laden
 - **WHEN** MembersPage geladen wird

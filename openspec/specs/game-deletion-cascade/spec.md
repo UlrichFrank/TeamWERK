@@ -22,7 +22,7 @@ Wenn ein Spiel oder Sonstiger Termin gelöscht wird, MÜSSEN alle verknüpften `
 
 #### Scenario: Frontend sendet keinen delete_slots-Query mehr
 - **WHEN** das Frontend `GameEditModal` oder `SpieltagDetailPage` den Löschen-Endpoint aufruft
-- **THEN** ist die URL `/api/kalender/{id}` ohne Query-Parameter
+- **THEN** ist die URL `/api/games/{id}` ohne Query-Parameter
 - **AND** das Backend liefert weiterhin 204 für valide Aufrufe — auch wenn ein Alt-Client noch `?delete_slots=true` mitschickt
 
 ### Requirement: Keine "Dienste behalten"-Option beim Löschen

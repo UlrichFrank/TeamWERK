@@ -8,33 +8,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/teamstuttgart/teamwerk/internal/auth"
-	"github.com/teamstuttgart/teamwerk/internal/games"
-	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
+	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
 )
 
-func testServer(t *testing.T, h *games.Handler) *httptest.Server {
-	return testutil.NewServer(t, func(r chi.Router) {
-		r.Get("/api/kalender", h.ListGames)
-		r.Get("/api/games/my", h.ListMyGames)
-
-		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
-			r.Post("/api/admin/kalender", h.CreateGame)
-			r.Put("/api/admin/kalender/{id}", h.UpdateGame)
-			r.Delete("/api/kalender/{id}", h.DeleteGame)
-			r.Get("/api/duty-templates", h.ListTemplates)
-			r.Get("/api/duty-templates/{id}", h.GetTemplateByID)
-			r.Get("/api/duty-templates/{id}/preview", h.PreviewSlots)
-		})
-
-		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireClubFunction("vorstand"))
-			r.Post("/api/duty-templates", h.CreateTemplate)
-		})
-	})
+// testServer mounts the production router. Pass the test DB; the handler
+// argument is kept for backwards compatibility with existing call sites and
+// can be nil — only the DB is used.
+func testServer(t *testing.T, db *sql.DB) *httptest.Server {
+	t.Helper()
+	return prodserver.New(t, db)
 }
 
 // TestListGames_ReturnsGamesInRange verifies that games in the active season are returned.
@@ -45,11 +28,10 @@ func TestListGames_ReturnsGamesInRange(t *testing.T) {
 	testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, adminUserID, "admin", nil)
-	res := testutil.Get(t, srv, fmt.Sprintf("/api/kalender?season_id=%d", seasonID), token)
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
@@ -69,11 +51,10 @@ func TestListGames_EmptyRange(t *testing.T) {
 	testutil.CreateSeason(t, db, "2025/26")
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, adminUserID, "admin", nil)
-	res := testutil.Get(t, srv, "/api/kalender", token)
+	res := testutil.Get(t, srv, "/api/games", token)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
@@ -87,6 +68,60 @@ func TestListGames_EmptyRange(t *testing.T) {
 	}
 }
 
+// TestGetGame_HappyPath verifies GET /api/games/{id} returns the game.
+func TestGetGame_HappyPath(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d", gameID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+}
+
+// TestGetGame_NotFound verifies GET /api/games/{id} on missing game returns 404.
+func TestGetGame_NotFound(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "2025/26")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, "/api/games/9999", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.StatusCode)
+	}
+}
+
+// TestUpdateGame_Forbidden verifies non-vorstand/trainer cannot update games.
+func TestUpdateGame_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+
+	spielerID := testutil.CreateUser(t, db, "standard")
+	srv := testServer(t, db)
+	token := testutil.Token(t, spielerID, "standard", []string{"spieler"})
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/games/%d", gameID), token,
+		map[string]any{"opponent": "Hacker"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+}
+
 // TestCreateGame_AdminOK verifies that an admin can create a game.
 func TestCreateGame_AdminOK(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -94,8 +129,7 @@ func TestCreateGame_AdminOK(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Team A")
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, adminUserID, "admin", nil)
 	body := map[string]any{
@@ -106,7 +140,7 @@ func TestCreateGame_AdminOK(t *testing.T) {
 		"event_type": "heim",
 		"season_id":  seasonID,
 	}
-	res := testutil.Post(t, srv, "/api/admin/kalender", token, body)
+	res := testutil.Post(t, srv, "/api/games", token, body)
 	res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
 		t.Errorf("expected 201, got %d", res.StatusCode)
@@ -150,11 +184,10 @@ func TestDeleteGame_CascadesAndRollsBackFulfilledHours(t *testing.T) {
 		t.Fatalf("seed duty_accounts: %v", err)
 	}
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminID, "admin", []string{"vorstand"})
 
-	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameID), token, nil)
+	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/games/%d", gameID), token, nil)
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 (with regen_summary), got %d", res.StatusCode)
@@ -198,11 +231,10 @@ func TestDeleteGame_NoDutiesNoCrash(t *testing.T) {
 
 	adminID := testutil.CreateUser(t, db, "admin")
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminID, "admin", []string{"vorstand"})
 
-	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameID), token, nil)
+	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/games/%d", gameID), token, nil)
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 (with regen_summary), got %d", res.StatusCode)
@@ -298,8 +330,7 @@ func TestCreateGame_AutoRegenSkipsAdjacentDay(t *testing.T) {
 	}
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
 
 	createBody := func(date string) map[string]any {
@@ -311,7 +342,7 @@ func TestCreateGame_AutoRegenSkipsAdjacentDay(t *testing.T) {
 	}
 
 	// Game A — no neighbors → template slot is created at 13:00.
-	resA := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-13"))
+	resA := testutil.Post(t, srv, "/api/games", token, createBody("2026-06-13"))
 	resA.Body.Close()
 	if resA.StatusCode != http.StatusCreated {
 		t.Fatalf("create game A: expected 201, got %d", resA.StatusCode)
@@ -334,7 +365,7 @@ func TestCreateGame_AutoRegenSkipsAdjacentDay(t *testing.T) {
 	// Game B on the adjacent day — runAutoRegen for {06-12, 06-13, 06-14}
 	// must skip the template slot on 06-13 (adjacent rule) AND on 06-14, while leaving
 	// the is_custom=1 slot on 06-13 intact.
-	resB := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-14"))
+	resB := testutil.Post(t, srv, "/api/games", token, createBody("2026-06-14"))
 	resB.Body.Close()
 	if resB.StatusCode != http.StatusCreated {
 		t.Fatalf("create game B: expected 201, got %d", resB.StatusCode)
@@ -359,8 +390,7 @@ func TestCreateGame_UnauthorizedForbidden(t *testing.T) {
 	testutil.CreateSeason(t, db, "2025/26")
 
 	userID := testutil.CreateUser(t, db, "standard")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, userID, "standard", nil)
 	body := map[string]any{
@@ -368,7 +398,7 @@ func TestCreateGame_UnauthorizedForbidden(t *testing.T) {
 		"opponent": "FC Test", "team_ids": []int{1},
 		"event_type": "heim",
 	}
-	res := testutil.Post(t, srv, "/api/admin/kalender", token, body)
+	res := testutil.Post(t, srv, "/api/games", token, body)
 	res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", res.StatusCode)
@@ -414,8 +444,7 @@ func TestCreateGame_ResponseIncludesRegenSummary(t *testing.T) {
 	}
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
 
 	body := map[string]any{
@@ -427,7 +456,7 @@ func TestCreateGame_ResponseIncludesRegenSummary(t *testing.T) {
 		"season_id":  seasonID,
 	}
 
-	res := testutil.Post(t, srv, "/api/admin/kalender", token, body)
+	res := testutil.Post(t, srv, "/api/games", token, body)
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("create game: expected 201, got %d", res.StatusCode)
 	}
@@ -487,8 +516,7 @@ func TestUpdateGame_TimeChangeRegenSlots(t *testing.T) {
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-13")
 
 	// Update game time from default to 16:00.
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
 
 	updateBody := map[string]any{
@@ -497,7 +525,7 @@ func TestUpdateGame_TimeChangeRegenSlots(t *testing.T) {
 		"event_type": "heim", "season_id": seasonID,
 	}
 
-	updateRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/admin/kalender/%d", gameID), token, updateBody)
+	updateRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, updateBody)
 	updateRes.Body.Close()
 	if updateRes.StatusCode != http.StatusOK {
 		t.Fatalf("update game: expected 200, got %d", updateRes.StatusCode)
@@ -552,8 +580,7 @@ func TestDeleteGame_NeighborDayRegen(t *testing.T) {
 	}
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
 
 	createBody := func(date string) map[string]any {
@@ -565,20 +592,20 @@ func TestDeleteGame_NeighborDayRegen(t *testing.T) {
 	}
 
 	// Game A on day 13 → gets a slot (no neighbors).
-	resA := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-13"))
+	resA := testutil.Post(t, srv, "/api/games", token, createBody("2026-06-13"))
 	resA.Body.Close()
 	var gameAID int
 	db.QueryRow(`SELECT id FROM games WHERE date=?`, "2026-06-13").Scan(&gameAID)
 
 	// Game B on day 14 → slot is SKIPPED (adjacent to game A on day 13).
-	resB := testutil.Post(t, srv, "/api/admin/kalender", token, createBody("2026-06-14"))
+	resB := testutil.Post(t, srv, "/api/games", token, createBody("2026-06-14"))
 	resB.Body.Close()
 	if got := countRows(t, db, "duty_slots", "event_date=? AND is_custom=0", "2026-06-14"); got != 0 {
 		t.Fatalf("before delete: expected 0 auto-slots on day 14 (adjacent skip), got %d", got)
 	}
 
 	// Delete game A → auto-regen on day 14 should fire and create the slot now.
-	deleteRes := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/kalender/%d", gameAID), token, nil)
+	deleteRes := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/games/%d", gameAID), token, nil)
 	deleteRes.Body.Close()
 	if deleteRes.StatusCode != http.StatusOK {
 		t.Fatalf("delete game A: expected 200, got %d", deleteRes.StatusCode)
@@ -644,8 +671,7 @@ func TestCreateGame_CustomSlotNotAffectedByRegen(t *testing.T) {
 		t.Fatalf("seed custom slot: %v", err)
 	}
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
 
 	// Update the game (triggers auto-regen).
@@ -654,7 +680,7 @@ func TestCreateGame_CustomSlotNotAffectedByRegen(t *testing.T) {
 		"opponent": "FC Test", "team_ids": []int{teamID},
 		"event_type": "heim", "season_id": seasonID,
 	}
-	updateRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/admin/kalender/%d", gameID), token, updateBody)
+	updateRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, updateBody)
 	updateRes.Body.Close()
 
 	// Custom slot should still exist with its original time.
@@ -673,8 +699,7 @@ func TestCreateGame_GenericEventCanBeCreated(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Team A")
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
 
 	// Create generic event.
@@ -687,7 +712,7 @@ func TestCreateGame_GenericEventCanBeCreated(t *testing.T) {
 		"season_id":  seasonID,
 	}
 
-	createRes := testutil.Post(t, srv, "/api/admin/kalender", token, createBody)
+	createRes := testutil.Post(t, srv, "/api/games", token, createBody)
 	createRes.Body.Close()
 	if createRes.StatusCode != http.StatusCreated {
 		t.Fatalf("create generic event: expected 201, got %d", createRes.StatusCode)
@@ -704,10 +729,9 @@ func TestCreateGame_GenericEventCanBeCreated(t *testing.T) {
 
 // ── TC-G-EXT: ListTeamsForUser ────────────────────────────────────────────────
 
-func teamsServer(t *testing.T, h *games.Handler) *httptest.Server {
-	return testutil.NewServer(t, func(r chi.Router) {
-		r.Get("/api/teams", h.ListTeamsForUser)
-	})
+func teamsServer(t *testing.T, db *sql.DB) *httptest.Server {
+	t.Helper()
+	return prodserver.New(t, db)
 }
 
 // TC-G-EXT01: Trainer sees only teams they manage via kader_trainers.
@@ -722,8 +746,7 @@ func TestListTeamsForUser_TrainerSeesOwnTeam(t *testing.T) {
 	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
 	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := teamsServer(t, h)
+	srv := teamsServer(t, db)
 
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
 	res := testutil.Get(t, srv, "/api/teams", token)
@@ -754,8 +777,7 @@ func TestListTeamsForUser_AdminSeesAll(t *testing.T) {
 	testutil.CreateKader(t, db, teamB, seasonID)
 
 	adminID := testutil.CreateUser(t, db, "admin")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := teamsServer(t, h)
+	srv := teamsServer(t, db)
 
 	res := testutil.Get(t, srv, "/api/teams", testutil.Token(t, adminID, "admin", nil))
 	if res.StatusCode != http.StatusOK {
@@ -784,8 +806,7 @@ func TestListTeamsForUser_SpielerSeesOwnTeam(t *testing.T) {
 	// Add spieler to team A via kader_members (player_memberships is a view).
 	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderA, spielerMemberID)
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := teamsServer(t, h)
+	srv := teamsServer(t, db)
 
 	token := testutil.Token(t, spielerUserID, "standard", nil)
 	res := testutil.Get(t, srv, "/api/teams", token)
@@ -811,8 +832,7 @@ func TestListTeamsForUser_SpielerSeesOwnTeam(t *testing.T) {
 func TestListDutyTemplates_TrainerCanRead(t *testing.T) {
 	db := testutil.NewDB(t)
 	userID := testutil.CreateUser(t, db, "standard")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, userID, "spieler", []string{"trainer"})
 	res := testutil.Get(t, srv, "/api/duty-templates", token)
@@ -828,8 +848,7 @@ func TestListDutyTemplates_TrainerCanRead(t *testing.T) {
 func TestCreateDutyTemplate_TrainerForbidden(t *testing.T) {
 	db := testutil.NewDB(t)
 	userID := testutil.CreateUser(t, db, "standard")
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, userID, "spieler", []string{"trainer"})
 	res := testutil.Post(t, srv, "/api/duty-templates", token, map[string]any{
@@ -858,8 +877,7 @@ func TestListMyGames_ExtendedKaderSiehtSpiel(t *testing.T) {
 	extMemberID := testutil.CreateMember(t, db, extUserID)
 	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID)
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, extUserID, "standard", nil)
 	res := testutil.Get(t, srv, "/api/games/my", token)
@@ -891,8 +909,7 @@ func TestListMyGames_ExtendedKaderKeinAutoConfirm(t *testing.T) {
 	extMemberID := testutil.CreateMember(t, db, extUserID)
 	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID)
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, extUserID, "standard", nil)
 	res := testutil.Get(t, srv, "/api/games/my", token)
@@ -927,8 +944,7 @@ func TestListMyGames_RegularKaderAutoConfirmBleibt(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, userID)
 	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
 
-	h := games.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
+	srv := testServer(t, db)
 
 	token := testutil.Token(t, userID, "standard", nil)
 	res := testutil.Get(t, srv, "/api/games/my", token)

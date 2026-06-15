@@ -31,30 +31,30 @@ Spiele (Heim, Auswärts, Generisch) SHALL optional mit einem Venue verknüpft we
 
 ### Requirement: Schreibzugriff für admin, vorstand und trainer
 
-`POST`, `PUT` und `DELETE` auf `/api/admin/games/*` SHALL für die Rollen admin, vorstand und trainer zugänglich sein.
+`POST`, `PUT` und `DELETE` auf `/api/games/*` SHALL für die Rollen admin, vorstand und trainer zugänglich sein.
 
 #### Scenario: Vorstand legt Event an
-- **WHEN** ein User mit Rolle vorstand `POST /api/admin/games` aufruft
+- **WHEN** ein User mit Rolle vorstand `POST /api/games` aufruft
 - **THEN** antwortet der Server mit HTTP 201
 
 #### Scenario: Spieler kann kein Event anlegen
-- **WHEN** ein User mit Rolle spieler oder elternteil `POST /api/admin/games` aufruft
+- **WHEN** ein User mit Rolle spieler oder elternteil `POST /api/games` aufruft
 - **THEN** antwortet der Server mit HTTP 403
 
 ---
 
-### Requirement: PUT /api/admin/games/{id} erreichbar für trainer und vorstand
+### Requirement: PUT /api/games/{id} erreichbar für trainer und vorstand
 
-`PUT /api/admin/games/{id}` SHALL für die Rollen admin, trainer und vorstand zugänglich sein. Dies ermöglicht dem `GameEditModal` im Kalender das direkte Bearbeiten von Spieltagen durch Trainer.
+`PUT /api/games/{id}` SHALL für die Rollen admin, trainer und vorstand zugänglich sein. Dies ermöglicht dem `GameEditModal` im Kalender das direkte Bearbeiten von Spieltagen durch Trainer.
 
 #### Scenario: Trainer bearbeitet Spieltag via PUT
 
-- **WHEN** ein User mit Rolle trainer `PUT /api/admin/games/{id}` mit gültigen Feldern aufruft
+- **WHEN** ein User mit Rolle trainer `PUT /api/games/{id}` mit gültigen Feldern aufruft
 - **THEN** antwortet der Server mit HTTP 200 und den aktualisierten Spieltag-Daten
 
 #### Scenario: Spieler kann Spieltag nicht bearbeiten
 
-- **WHEN** ein User mit Rolle spieler `PUT /api/admin/games/{id}` aufruft
+- **WHEN** ein User mit Rolle spieler `PUT /api/games/{id}` aufruft
 - **THEN** antwortet der Server mit HTTP 403
 
 ---
@@ -64,12 +64,12 @@ Spiele (Heim, Auswärts, Generisch) SHALL optional mit einem Venue verknüpft we
 Ein Event SHALL einer oder mehreren Mannschaften zugeordnet sein, abgebildet über die Junction-Tabelle `game_teams`.
 
 #### Scenario: Event mit mehreren Teams anlegen
-- **WHEN** `POST /api/admin/games` mit `team_ids: [1, 2, 3]` aufgerufen wird
+- **WHEN** `POST /api/games` mit `team_ids: [1, 2, 3]` aufgerufen wird
 - **THEN** werden in `game_teams` drei Einträge angelegt
 - **THEN** wird für jede Mannschaft ein identischer Satz Duty-Slots generiert
 
 #### Scenario: Event ohne Team abgelehnt
-- **WHEN** `POST /api/admin/games` ohne `team_ids` oder mit leerem Array aufgerufen wird
+- **WHEN** `POST /api/games` ohne `team_ids` oder mit leerem Array aufgerufen wird
 - **THEN** antwortet der Server mit HTTP 400
 
 ---
@@ -79,11 +79,11 @@ Ein Event SHALL einer oder mehreren Mannschaften zugeordnet sein, abgebildet üb
 Jedes Event SHALL einen `event_type` haben: `heim`, `auswärts` oder `generisch`.
 
 #### Scenario: Standard-Typ bei fehlendem Feld
-- **WHEN** `POST /api/admin/games` ohne `event_type` aufgerufen wird
+- **WHEN** `POST /api/games` ohne `event_type` aufgerufen wird
 - **THEN** wird `event_type = 'heim'` gesetzt
 
 #### Scenario: Ungültiger Typ abgelehnt
-- **WHEN** `POST /api/admin/games` mit einem ungültigen `event_type` aufgerufen wird
+- **WHEN** `POST /api/games` mit einem ungültigen `event_type` aufgerufen wird
 - **THEN** antwortet der Server mit HTTP 400
 
 ---
@@ -139,20 +139,20 @@ Events (heim, auswärts, generisch) SHALL optional ein `end_date` haben, das ein
 - **THEN** wird es wie bisher als eintägiges Event behandelt
 
 #### Scenario: Mehrtägiges Event anlegen
-- **WHEN** `POST /api/kalender` mit `end_date` aufgerufen wird und `end_date >= date`
+- **WHEN** `POST /api/games` mit `end_date` aufgerufen wird und `end_date >= date`
 - **THEN** wird das Event mit `end_date` gespeichert und HTTP 201 zurückgegeben
 
 #### Scenario: end_date vor date wird abgelehnt
-- **WHEN** `POST /api/kalender` oder `PUT /api/kalender/{id}` mit `end_date < date` aufgerufen wird
+- **WHEN** `POST /api/games` oder `PUT /api/games/{id}` mit `end_date < date` aufgerufen wird
 - **THEN** antwortet der Server mit HTTP 400
 
 #### Scenario: end_date in GET-Response enthalten
-- **WHEN** `GET /api/kalender` oder `GET /api/kalender/{id}` aufgerufen wird
+- **WHEN** `GET /api/games` oder `GET /api/games/{id}` aufgerufen wird
 - **THEN** enthält jedes Event mit gesetztem `end_date` das Feld `end_date` in der Response (ISO-Datum-String)
 - **THEN** Events ohne `end_date` liefern `end_date: null`
 
 #### Scenario: Mehrtägiges Event bearbeiten
-- **WHEN** `PUT /api/kalender/{id}` mit neuem `end_date` aufgerufen wird
+- **WHEN** `PUT /api/games/{id}` mit neuem `end_date` aufgerufen wird
 - **THEN** wird `end_date` aktualisiert
-- **WHEN** `PUT /api/kalender/{id}` mit `end_date: null` aufgerufen wird
+- **WHEN** `PUT /api/games/{id}` mit `end_date: null` aufgerufen wird
 - **THEN** wird `end_date` auf NULL gesetzt (Event wird wieder eintägig)

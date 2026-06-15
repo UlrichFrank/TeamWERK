@@ -79,7 +79,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setDeleting(true)
     setError(null)
     try {
-      const r = await api.delete(`/kalender/${game.id}`)
+      const r = await api.delete(`/games/${game.id}`)
       onDeleted?.(r.data?.regen_summary)
     } catch {
       setError('Löschen fehlgeschlagen.')
@@ -93,7 +93,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setSaving(true)
     setError(null)
     try {
-      const r = await api.put(`/kalender/${game.id}`, {
+      const r = await api.put(`/games/${game.id}`, {
         date,
         time,
         end_time: isGeneric ? (endTime || null) : null,

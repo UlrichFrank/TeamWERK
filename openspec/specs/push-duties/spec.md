@@ -17,7 +17,7 @@ Das System SHALL berechtigten Nutzern eine Push Notification senden, wenn neue D
 
 ### Requirement: Notification an Dienst-Zugewiesene bei Event-Löschung
 
-Beim Löschen eines Spiels oder generischen Ereignisses (`DELETE /api/kalender/{id}`) SHALL das System alle Nutzer benachrichtigen, die einen `duty_assignment` für einen Slot des betroffenen Events hatten — unabhängig vom Assignment-Status (`pending` oder `fulfilled`). Die Benachrichtigung erfolgt über die `notifications.Send`-Fassade in der Kategorie `duties`, sodass Push- und Email-Präferenzen pro Nutzer respektiert werden.
+Beim Löschen eines Spiels oder generischen Ereignisses (`DELETE /api/games/{id}`) SHALL das System alle Nutzer benachrichtigen, die einen `duty_assignment` für einen Slot des betroffenen Events hatten — unabhängig vom Assignment-Status (`pending` oder `fulfilled`). Die Benachrichtigung erfolgt über die `notifications.Send`-Fassade in der Kategorie `duties`, sodass Push- und Email-Präferenzen pro Nutzer respektiert werden.
 
 #### Scenario: Spiel mit zugewiesenen Diensten wird gelöscht
 

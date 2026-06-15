@@ -15,7 +15,7 @@ Das System SHALL bei jedem erfolgreichen Login den Zeitpunkt in `users.last_logi
 - **THEN** setzt das System `last_login_at` auf den aktuellen Zeitpunkt
 
 ### Requirement: Letzter Login wird in der Nutzerverwaltung angezeigt
-Das System SHALL `last_login_at` im `GET /api/admin/users`-Response mitliefern, und das Frontend SHALL diesen Wert in der Nutzertabelle anzeigen.
+Das System SHALL `last_login_at` im `GET /api/users`-Response mitliefern, und das Frontend SHALL diesen Wert in der Nutzertabelle anzeigen.
 
 #### Scenario: Nutzer hat sich bereits eingeloggt
 - **WHEN** ein Admin die Nutzerverwaltung aufruft

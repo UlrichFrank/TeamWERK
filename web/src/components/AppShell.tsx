@@ -55,13 +55,13 @@ const navModules: NavModule[] = [
   {
     label: 'Verwaltung',
     items: [
-      { to: '/admin/nutzer', label: 'Nutzerverwaltung', roles: ['admin', 'vorstand'] },
+      { to: '/nutzer', label: 'Nutzerverwaltung', roles: ['admin', 'vorstand'] },
       { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand'] },
-      { to: '/admin/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer', 'sportliche_leitung'] },
-      { to: '/admin/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
-      { to: '/admin/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
-      { to: '/admin/veranstaltungsorte', label: 'Veranstaltungsorte', roles: ['admin', 'vorstand'] },
-      { to: '/admin/einstellungen', label: 'Einstellungen', roles: ['admin', 'vorstand'] },
+      { to: '/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer', 'sportliche_leitung'] },
+      { to: '/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
+      { to: '/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
+      { to: '/veranstaltungsorte', label: 'Veranstaltungsorte', roles: ['admin', 'vorstand'] },
+      { to: '/einstellungen', label: 'Einstellungen', roles: ['admin', 'vorstand'] },
     ],
   },
 ]

@@ -8,43 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
-	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
+	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func newAuthServer(t *testing.T, database *sql.DB) *httptest.Server {
 	t.Helper()
-	cfg := testutil.TestConfig()
-	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
-	h := auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost")
-
-	r := chi.NewRouter()
-	// Public routes — no auth middleware
-	r.Post("/api/auth/login", h.Login)
-	r.Post("/api/auth/refresh", h.Refresh)
-	r.Post("/api/auth/logout", h.Logout)
-	r.Post("/api/auth/register", h.Register)
-	r.Post("/api/auth/forgot-password", h.ForgotPassword)
-	r.Post("/api/auth/reset-password", h.ResetPassword)
-	r.Post("/api/auth/request-membership", h.RequestMembership)
-	// Protected routes — require auth + role
-	r.Group(func(r chi.Router) {
-		r.Use(auth.Middleware(testutil.TestJWTSecret))
-		r.Use(auth.RequireRole("admin", "standard"))
-		r.Put("/api/admin/users/{id}/role", h.UpdateUserRole)
-		r.Delete("/api/admin/users/{id}", h.DeleteUser)
-		r.Post("/api/profile/password", h.ChangePassword)
-		r.Post("/api/membership-requests/{id}/approve", h.ApproveMembershipRequest)
-		r.Post("/api/membership-requests/{id}/reject", h.RejectMembershipRequest)
-		r.Get("/api/admin/users", h.ListUsers)
-	})
-	srv := httptest.NewServer(r)
-	t.Cleanup(srv.Close)
-	return srv
+	return prodserver.New(t, database)
 }
 
 func refreshTokenCount(t *testing.T, db *sql.DB, userID int) int {
@@ -360,7 +332,7 @@ func TestUpdateUserRole_AdminOnly(t *testing.T) {
 
 	// Admin vergibt "admin" → 204.
 	res := testutil.Do(t, srv, http.MethodPut,
-		"/api/admin/users/"+itoa(targetID)+"/role",
+		"/api/users/"+itoa(targetID)+"/role",
 		testutil.Token(t, adminID, "admin", nil),
 		map[string]string{"role": "admin"})
 	defer res.Body.Close()
@@ -370,7 +342,7 @@ func TestUpdateUserRole_AdminOnly(t *testing.T) {
 
 	// Nicht-Admin vergibt "admin" → 403.
 	res2 := testutil.Do(t, srv, http.MethodPut,
-		"/api/admin/users/"+itoa(targetID)+"/role",
+		"/api/users/"+itoa(targetID)+"/role",
 		testutil.Token(t, otherID, "standard", nil),
 		map[string]string{"role": "admin"})
 	defer res2.Body.Close()
@@ -380,7 +352,7 @@ func TestUpdateUserRole_AdminOnly(t *testing.T) {
 
 	// Ungültige Rolle → 400.
 	res3 := testutil.Do(t, srv, http.MethodPut,
-		"/api/admin/users/"+itoa(targetID)+"/role",
+		"/api/users/"+itoa(targetID)+"/role",
 		testutil.Token(t, adminID, "admin", nil),
 		map[string]string{"role": "trainer"})
 	defer res3.Body.Close()
@@ -401,7 +373,7 @@ func TestUpdateUserRole_RejectsLegacyRole(t *testing.T) {
 
 	for _, legacy := range []string{"trainer", "vorstand", "spieler", "elternteil", "sportliche_leitung"} {
 		res := testutil.Do(t, srv, http.MethodPut,
-			"/api/admin/users/"+itoa(targetID)+"/role",
+			"/api/users/"+itoa(targetID)+"/role",
 			token,
 			map[string]string{"role": legacy})
 		if res.StatusCode != http.StatusBadRequest {
@@ -427,7 +399,7 @@ func TestDeleteUser_SelfForbidden(t *testing.T) {
 	srv := newAuthServer(t, db)
 
 	res := testutil.Do(t, srv, http.MethodDelete,
-		"/api/admin/users/"+itoa(adminID),
+		"/api/users/"+itoa(adminID),
 		testutil.Token(t, adminID, "admin", nil), nil)
 	defer res.Body.Close()
 
@@ -447,7 +419,7 @@ func TestDeleteUser_Cascade(t *testing.T) {
 
 	srv := newAuthServer(t, db)
 	res := testutil.Do(t, srv, http.MethodDelete,
-		"/api/admin/users/"+itoa(targetID),
+		"/api/users/"+itoa(targetID),
 		testutil.Token(t, adminID, "admin", nil), nil)
 	defer res.Body.Close()
 
@@ -617,7 +589,7 @@ func TestListUsers_Pagination(t *testing.T) {
 	}
 	srv := newAuthServer(t, db)
 
-	res := testutil.Get(t, srv, "/api/admin/users?limit=5&offset=5",
+	res := testutil.Get(t, srv, "/api/users?limit=5&offset=5",
 		testutil.Token(t, adminID, "admin", nil))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
@@ -766,7 +738,7 @@ func TestListUsers_SearchByName(t *testing.T) {
 	testutil.CreateUser(t, db, "standard") // unrelated
 	srv := newAuthServer(t, db)
 
-	res := testutil.Get(t, srv, "/api/admin/users?search=Müller",
+	res := testutil.Get(t, srv, "/api/users?search=Müller",
 		testutil.Token(t, adminID, "admin", nil))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
@@ -792,7 +764,7 @@ func TestListUsers_HasFamilyLink(t *testing.T) {
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`, parentID, memberID)
 	srv := newAuthServer(t, db)
 
-	res := testutil.Get(t, srv, "/api/admin/users", testutil.Token(t, adminID, "admin", nil))
+	res := testutil.Get(t, srv, "/api/users", testutil.Token(t, adminID, "admin", nil))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
@@ -836,7 +808,7 @@ func TestListUsers_UnlinkedFilter(t *testing.T) {
 
 	srv := newAuthServer(t, db)
 
-	res := testutil.Get(t, srv, "/api/admin/users?unlinked=1", testutil.Token(t, adminID, "admin", nil))
+	res := testutil.Get(t, srv, "/api/users?unlinked=1", testutil.Token(t, adminID, "admin", nil))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}

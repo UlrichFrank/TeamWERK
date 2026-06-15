@@ -250,7 +250,7 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 		notify.Send(h.db, h.cfg, adminIDs, "membership",
 			"Neue Beitrittsanfrage",
 			req.FirstName+" "+req.LastName+" möchte Mitglied werden",
-			fmt.Sprintf("/admin/mitgliedschaft?id=%d", newID))
+			fmt.Sprintf("/anfragen?id=%d", newID))
 	}()
 }
 
@@ -531,7 +531,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/admin/users
+// GET /api/users
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	unlinked := r.URL.Query().Get("unlinked") == "1"

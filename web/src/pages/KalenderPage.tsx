@@ -195,7 +195,7 @@ export default function KalenderPage() {
 
   const loadGames = async () => {
     try {
-      const r = await api.get('/kalender')
+      const r = await api.get('/games')
       const data = r.data
       const payload = Array.isArray(data) ? data : (data?.games ?? [])
       setGames(payload)
@@ -440,7 +440,7 @@ export default function KalenderPage() {
             role_desc: s.role_desc,
           }))
         : undefined
-      const r = await api.post('/kalender', {
+      const r = await api.post('/games', {
         date: selectedDate,
         time: selectedTime,
         end_time: eventType === 'generisch' ? selectedEndTime : undefined,

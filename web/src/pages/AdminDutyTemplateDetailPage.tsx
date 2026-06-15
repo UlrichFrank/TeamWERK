@@ -99,7 +99,7 @@ export default function AdminDutyTemplateDetailPage() {
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-2 text-sm text-brand-text-muted mb-4">
-        <Link to="/admin/dienstplan-vorlagen" className="hover:underline">Dienstplan-Vorlagen</Link>
+        <Link to="/dienstplan-vorlagen" className="hover:underline">Dienstplan-Vorlagen</Link>
         <span>/</span>
         <span className="text-brand-text">{template.name}</span>
       </div>
