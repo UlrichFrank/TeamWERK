@@ -93,7 +93,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  expiry,
-		Path:     "/api/auth",
+		Path:     "/",
 	})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"access_token": accessToken})
@@ -167,7 +167,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  newExpiry,
-		Path:     "/api/auth",
+		Path:     "/",
 	})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"access_token": accessToken})
@@ -184,7 +184,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 		MaxAge:   -1,
-		Path:     "/api/auth",
+		Path:     "/",
 	})
 	w.WriteHeader(http.StatusNoContent)
 }
