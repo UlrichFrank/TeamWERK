@@ -1071,3 +1071,199 @@ func TestUpdateGame_RsvpFlags_PlayerForbidden(t *testing.T) {
 		t.Errorf("DB flags must be unchanged on 403; expected defaults (0,1), got (%d,%d)", optOut, reqReason)
 	}
 }
+
+// optOutFixture creates a season+team+game+kader with N kader members. All
+// helpers below need that bedrock setup.
+func optOutFixture(t *testing.T, db *sql.DB, kaderSize int, optOut bool) (seasonID, teamID, kaderID, gameID int, memberIDs []int) {
+	t.Helper()
+	seasonID = testutil.CreateSeason(t, db, "2025/26")
+	if _, err := db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID); err != nil {
+		t.Fatalf("activate season: %v", err)
+	}
+	teamID = testutil.CreateTeam(t, db, "Herren")
+	kaderID = testutil.CreateKader(t, db, teamID, seasonID)
+	gameID = testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+	if optOut {
+		if _, err := db.Exec(`UPDATE games SET rsvp_opt_out=1 WHERE id=?`, gameID); err != nil {
+			t.Fatalf("set rsvp_opt_out: %v", err)
+		}
+	}
+	memberIDs = make([]int, kaderSize)
+	for i := 0; i < kaderSize; i++ {
+		uid := testutil.CreateUser(t, db, "standard")
+		mid := testutil.CreateMember(t, db, uid)
+		if _, err := db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, mid); err != nil {
+			t.Fatalf("kader_members insert: %v", err)
+		}
+		memberIDs[i] = mid
+	}
+	return
+}
+
+// TestListGames_OptOutCountsKaderImplicit verifies that ListGames adds implicit
+// confirms for regular kader members when rsvp_opt_out=1.
+func TestListGames_OptOutCountsKaderImplicit(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, _, _, _, _ := optOutFixture(t, db, 3, true)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var games []map[string]any
+	json.NewDecoder(res.Body).Decode(&games)
+	if len(games) != 1 {
+		t.Fatalf("expected 1 game, got %d", len(games))
+	}
+	if c, ok := games[0]["confirmed_count"].(float64); !ok || int(c) != 3 {
+		t.Errorf("expected confirmed_count=3 (3 kader members, opt-out), got %v", games[0]["confirmed_count"])
+	}
+}
+
+// TestListGames_OptOutWithDeclinedNotCounted verifies that an explicit declined
+// is removed from the implicit confirm pool and shows up in declined_count.
+func TestListGames_OptOutWithDeclinedNotCounted(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, _, _, gameID, memberIDs := optOutFixture(t, db, 3, true)
+	// Member 0 explicitly declines.
+	declinerUID := 0
+	db.QueryRow(`SELECT user_id FROM members WHERE id=?`, memberIDs[0]).Scan(&declinerUID)
+	if _, err := db.Exec(
+		`INSERT INTO game_responses (game_id, member_id, responded_by, status) VALUES (?,?,?,?)`,
+		gameID, memberIDs[0], declinerUID, "declined"); err != nil {
+		t.Fatalf("seed response: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
+	defer res.Body.Close()
+	var games []map[string]any
+	json.NewDecoder(res.Body).Decode(&games)
+	if c, _ := games[0]["confirmed_count"].(float64); int(c) != 2 {
+		t.Errorf("expected confirmed_count=2 (3 kader minus 1 declined), got %v", games[0]["confirmed_count"])
+	}
+	if d, _ := games[0]["declined_count"].(float64); int(d) != 1 {
+		t.Errorf("expected declined_count=1, got %v", games[0]["declined_count"])
+	}
+}
+
+// TestGetParticipants_OptOutMarksKaderConfirmed verifies that GetParticipants
+// returns rsvp_status='confirmed' for kader members without a response when opt-out.
+func TestGetParticipants_OptOutMarksKaderConfirmed(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, _, gameID, _ := optOutFixture(t, db, 2, true)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", gameID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var participants []map[string]any
+	json.NewDecoder(res.Body).Decode(&participants)
+	if len(participants) != 2 {
+		t.Fatalf("expected 2 participants, got %d", len(participants))
+	}
+	for _, p := range participants {
+		if p["rsvp_status"] != "confirmed" {
+			t.Errorf("opt-out kader member should have rsvp_status=confirmed, got %v", p["rsvp_status"])
+		}
+	}
+}
+
+// TestGetParticipants_OptOutExtendedRemainsNull verifies that extended kader
+// members do not get implicit confirm on opt-out.
+func TestGetParticipants_OptOutExtendedRemainsNull(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, kaderID, gameID, _ := optOutFixture(t, db, 0, true)
+
+	// Only extended members in this fixture.
+	extUserID := testutil.CreateUser(t, db, "standard")
+	extMemberID := testutil.CreateMember(t, db, extUserID)
+	if _, err := db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID); err != nil {
+		t.Fatalf("extended insert: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", gameID), token)
+	defer res.Body.Close()
+	var participants []map[string]any
+	json.NewDecoder(res.Body).Decode(&participants)
+	if len(participants) != 1 {
+		t.Fatalf("expected 1 extended participant, got %d", len(participants))
+	}
+	if participants[0]["rsvp_status"] != nil {
+		t.Errorf("extended member must keep rsvp_status=null even at opt-out, got %v", participants[0]["rsvp_status"])
+	}
+	if participants[0]["is_extended"] != true {
+		t.Errorf("expected is_extended=true, got %v", participants[0]["is_extended"])
+	}
+}
+
+// TestGetParticipants_NoOptOutBehavesAsBefore verifies that without opt-out
+// no implicit-confirm logic kicks in.
+func TestGetParticipants_NoOptOutBehavesAsBefore(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, _, gameID, _ := optOutFixture(t, db, 2, false)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", gameID), token)
+	defer res.Body.Close()
+	var participants []map[string]any
+	json.NewDecoder(res.Body).Decode(&participants)
+	if len(participants) != 2 {
+		t.Fatalf("expected 2 participants, got %d", len(participants))
+	}
+	for _, p := range participants {
+		if p["rsvp_status"] != nil {
+			t.Errorf("non-opt-out: rsvp_status must be null when no response, got %v", p["rsvp_status"])
+		}
+	}
+}
+
+// TestGetGame_ReturnsCounts verifies that the game detail endpoint exposes
+// confirmed_count / declined_count / maybe_count, opt-out-aware.
+func TestGetGame_ReturnsCounts(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, _, gameID, _ := optOutFixture(t, db, 4, true)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d", gameID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	game, _ := body["game"].(map[string]any)
+	if c, _ := game["confirmed_count"].(float64); int(c) != 4 {
+		t.Errorf("expected confirmed_count=4 (4 kader, opt-out), got %v", game["confirmed_count"])
+	}
+	if _, ok := game["declined_count"]; !ok {
+		t.Errorf("response must include declined_count field")
+	}
+	if _, ok := game["maybe_count"]; !ok {
+		t.Errorf("response must include maybe_count field")
+	}
+}
+

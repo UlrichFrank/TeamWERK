@@ -321,10 +321,22 @@ func (h *Handler) loadSameDayContext(ctx context.Context, gameDate string, seaso
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
 
+	// confirmed_count berücksichtigt rsvp_opt_out: reguläre Kader-Mitglieder ohne
+	// Response-Eintrag werden als "confirmed" gezählt. declined und maybe bleiben
+	// rein explizit — Opt-Out kennt keine implizite Absage.
 	const base = `
 		SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type,
 		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0),
-		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0),
+		       CASE WHEN g.rsvp_opt_out = 1
+		            THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
+		                   SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
+		                   JOIN kader k4 ON k4.team_id = gt4.team_id AND k4.season_id = g.season_id
+		                   JOIN kader_members km ON km.kader_id = k4.id
+		                   WHERE gt4.game_id = g.id
+		                   AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = km.member_id)
+		                 )
+		            ELSE COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0)
+		       END,
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
 		       g.rsvp_opt_out, g.rsvp_require_reason,
@@ -461,6 +473,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		TemplateID        *int      `json:"template_id"`
 		RsvpOptOut        int       `json:"rsvp_opt_out"`
 		RsvpRequireReason int       `json:"rsvp_require_reason"`
+		ConfirmedCount    int       `json:"confirmed_count"`
+		DeclinedCount     int       `json:"declined_count"`
+		MaybeCount        int       `json:"maybe_count"`
 		Venue             *venueRef `json:"venue,omitempty"`
 		Teams             []struct {
 			ID   int    `json:"id"`
@@ -474,10 +489,23 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	err := h.db.QueryRowContext(r.Context(),
 		`SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id,
 		        g.rsvp_opt_out, g.rsvp_require_reason,
+		        CASE WHEN g.rsvp_opt_out = 1
+		             THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
+		                    SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
+		                    JOIN kader k4 ON k4.team_id = gt4.team_id AND k4.season_id = g.season_id
+		                    JOIN kader_members km ON km.kader_id = k4.id
+		                    WHERE gt4.game_id = g.id
+		                    AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = km.member_id)
+		                  )
+		             ELSE COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0)
+		        END,
+		        COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
+		        COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
 		        v.id, v.name, v.street, v.city, v.postal_code, v.note
 		 FROM games g LEFT JOIN venues v ON v.id = g.venue_id WHERE g.id=?`, id).
 		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull,
 			&g.RsvpOptOut, &g.RsvpRequireReason,
+			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if templateIDNull.Valid {
 		v := int(templateIDNull.Int64)
@@ -1625,11 +1653,11 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       (SELECT GROUP_CONCAT(gt3.team_id) FROM game_teams gt3 WHERE gt3.game_id = g.id),
 		       CASE WHEN g.rsvp_opt_out = 1
 		            THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
-		                   SELECT COUNT(*) FROM game_teams gt4
-		                   JOIN team_memberships tm ON tm.team_id = gt4.team_id
-		                   JOIN members m ON m.id = tm.member_id
-		                   WHERE gt4.game_id = g.id AND tm.season_id = g.season_id
-		                   AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = m.id)
+		                   SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
+		                   JOIN kader k4 ON k4.team_id = gt4.team_id AND k4.season_id = g.season_id
+		                   JOIN kader_members km ON km.kader_id = k4.id
+		                   WHERE gt4.game_id = g.id
+		                   AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = km.member_id)
 		                 )
 		            ELSE COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0)
 		       END,
@@ -1894,13 +1922,18 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Bei rsvp_opt_out=1 gilt ein regulärer Kader-Spieler ohne Response-Eintrag
+	// implizit als "confirmed". Extended-Mitglieder sind davon ausgenommen — sie
+	// müssen explizit zusagen.
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT member_id, member_name, is_extended, rsvp_status, in_lineup
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       0 AS is_extended,
-			       gr.status AS rsvp_status,
+			       COALESCE(gr.status,
+			                CASE WHEN (SELECT rsvp_opt_out FROM games WHERE id = ?) = 1
+			                     THEN 'confirmed' ELSE NULL END) AS rsvp_status,
 			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup
 			FROM members m
 			JOIN kader_members km ON km.member_id = m.id
@@ -1923,7 +1956,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			JOIN game_teams gt ON gt.game_id = ? AND gt.team_id = k.team_id
 		)
 		ORDER BY member_name`,
-		gameID, gameID, gameID, gameID,
+		gameID, gameID, gameID, gameID, gameID,
 		gameID, gameID, gameID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "GetParticipants: %v\n", err)
