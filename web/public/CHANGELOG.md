@@ -1,4 +1,6 @@
 ## 15.06.2026
+- [fix] auth: Legacy Path=/api/auth-Cookie räumen
+- [fix] auth: Refresh-Token-Cookie auf Path=/ setzen
 - [fix] version: Dismiss bezieht sich auf konkrete Version
 - [fix] pwa: Reload wartet auf neuen SW und leert ggf. api-cache
 - [fix] version: Hook reagiert auf user, DEV zeigt v dev, ?token entfernt
