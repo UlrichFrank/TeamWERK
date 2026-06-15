@@ -81,9 +81,8 @@ type ListResponse struct {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	userID := claims.UserID
-	role := claims.Role
 
-	restricted := role != "admin" && role != "vorstand"
+	restricted := claims.Role != "admin" && !claims.HasFunction("vorstand")
 
 	var seasonID int
 	if restricted {
