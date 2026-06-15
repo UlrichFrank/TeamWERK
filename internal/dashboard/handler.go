@@ -371,18 +371,21 @@ func (h *Handler) queryCarpoolingConfirmed(r *http.Request, userID int, seasonID
 	for i, g := range games {
 		pRows, err := h.db.QueryContext(r.Context(), `
 			SELECT p.id,
-			       CASE WHEN mb.user_id = ? THEN us.first_name || ' ' || us.last_name
-			                                ELSE ub.first_name || ' ' || ub.last_name END
+			       CASE WHEN mb.user_id = ? OR EXISTS(SELECT 1 FROM family_links fl JOIN members m ON m.id = fl.member_id WHERE fl.parent_user_id = ? AND m.user_id = mb.user_id)
+			            THEN us.first_name || ' ' || us.last_name
+			            ELSE ub.first_name || ' ' || ub.last_name END
 			FROM mitfahrt_paarungen p
 			JOIN mitfahrgelegenheiten mb ON mb.id = p.biete_id
 			JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
 			JOIN users ub ON ub.id = mb.user_id
 			JOIN users us ON us.id = ms.user_id
 			WHERE p.status = 'confirmed'
-			  AND (mb.user_id = ? OR ms.user_id = ?)
+			  AND (mb.user_id = ? OR ms.user_id = ?
+			       OR mb.user_id IN (SELECT m.user_id FROM family_links fl JOIN members m ON m.id = fl.member_id WHERE fl.parent_user_id = ?)
+			       OR ms.user_id IN (SELECT m.user_id FROM family_links fl JOIN members m ON m.id = fl.member_id WHERE fl.parent_user_id = ?))
 			  AND mb.game_id = ?
 			ORDER BY p.updated_at DESC`,
-			userID, userID, userID, g.GameID)
+			userID, userID, userID, userID, userID, userID, g.GameID)
 		if err != nil {
 			continue
 		}

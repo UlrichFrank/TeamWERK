@@ -1,6 +1,7 @@
 package carpooling
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -71,9 +72,15 @@ type CarpoolResponse struct {
 	Paarungen []PaarungEntry `json:"paarungen"`
 }
 
+type ChildUser struct {
+	UserID int    `json:"userId"`
+	Name   string `json:"name"`
+}
+
 type ListResponse struct {
 	Games        []CarpoolResponse `json:"games"`
 	VehicleSeats *int              `json:"vehicleSeats"`
+	Children     []ChildUser       `json:"children"`
 }
 
 // GET /api/mitfahrgelegenheiten
@@ -177,10 +184,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		games = append(games, g)
 	}
 
+	children := h.childUsers(r.Context(), userID)
+	childIDSet := makeChildIDSet(children)
+
 	gamesList := make([]CarpoolResponse, 0, len(games))
 	for _, g := range games {
-		biete, suche := h.queryEntries(r, g.ID, userID)
-		paarungen := h.queryPaarungen(r, g.ID, userID)
+		biete, suche := h.queryEntries(r, g.ID, userID, childIDSet)
+		paarungen := h.queryPaarungen(r, g.ID, userID, childIDSet)
 		gamesList = append(gamesList, CarpoolResponse{
 			Game:      g,
 			Biete:     biete,
@@ -193,7 +203,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	h.db.QueryRowContext(r.Context(), `SELECT seats FROM vehicle_info WHERE user_id = ?`, userID).Scan(&vehicleSeats)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ListResponse{Games: gamesList, VehicleSeats: vehicleSeats})
+	json.NewEncoder(w).Encode(ListResponse{Games: gamesList, VehicleSeats: vehicleSeats, Children: children})
 }
 
 // parseTeamIDs converts a comma-separated string of team IDs (from GROUP_CONCAT)
@@ -213,7 +223,7 @@ func parseTeamIDs(csv sql.NullString) []int {
 	return ids
 }
 
-func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]CarpoolEntry, []CarpoolEntry) {
+func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int, childIDSet map[int]bool) ([]CarpoolEntry, []CarpoolEntry) {
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT m.id, u.first_name || ' ' || u.last_name, m.typ, m.plaetze, COALESCE(m.treffpunkt,''), COALESCE(m.notiz,''), m.user_id,
 		       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != '' THEN '/api/uploads/' || u.photo_path END
@@ -243,7 +253,7 @@ func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]Ca
 			e.PhotoURL = &photoURL.String
 		}
 		e.UserID = ownerID
-		e.IsOwn = ownerID == currentUserID
+		e.IsOwn = ownerID == currentUserID || childIDSet[ownerID]
 		if typ == "biete" {
 			biete = append(biete, e)
 		} else {
@@ -259,7 +269,7 @@ func (h *Handler) queryEntries(r *http.Request, gameID, currentUserID int) ([]Ca
 	return biete, suche
 }
 
-func (h *Handler) queryPaarungen(r *http.Request, gameID, currentUserID int) []PaarungEntry {
+func (h *Handler) queryPaarungen(r *http.Request, gameID, currentUserID int, childIDSet map[int]bool) []PaarungEntry {
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT p.id, p.biete_id, p.suche_id,
 		       ub.first_name || ' ' || ub.last_name,
@@ -295,8 +305,8 @@ func (h *Handler) queryPaarungen(r *http.Request, gameID, currentUserID int) []P
 			&bietePhotoURL, &suchePhotoURL)
 		p.BieteUserID = bieteUserID
 		p.SucheUserID = sucheUserID
-		p.BieteIsOwn = bieteUserID == currentUserID
-		p.SucheIsOwn = sucheUserID == currentUserID
+		p.BieteIsOwn = bieteUserID == currentUserID || childIDSet[bieteUserID]
+		p.SucheIsOwn = sucheUserID == currentUserID || childIDSet[sucheUserID]
 		if bietePhotoURL.Valid && bietePhotoURL.String != "" {
 			p.BietePhotoURL = &bietePhotoURL.String
 		}
@@ -319,6 +329,7 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		GameID     int    `json:"gameId"`
 		Typ        string `json:"typ"`
+		ForUserID  *int   `json:"forUserId,omitempty"`
 		Plaetze    *int   `json:"plaetze"`
 		Treffpunkt string `json:"treffpunkt"`
 		Notiz      string `json:"notiz"`
@@ -338,6 +349,13 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	if body.Typ == "suche" && (body.Plaetze == nil || *body.Plaetze < 1) {
 		http.Error(w, "plaetze >= 1 required for suche", http.StatusBadRequest)
 		return
+	}
+	if body.ForUserID != nil && *body.ForUserID != userID {
+		if !h.isChildOf(r.Context(), userID, *body.ForUserID) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		userID = *body.ForUserID
 	}
 
 	var err error
@@ -422,21 +440,28 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ownership check before opening a transaction to avoid SQLite in-memory
+	// connection-pool issues where a second connection would see an empty DB.
+	var typ string
+	var gameID int
+	var ownerID int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT typ, game_id, user_id FROM mitfahrgelegenheiten WHERE id = ?`, id).
+		Scan(&typ, &gameID, &ownerID); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if ownerID != userID && !h.isChildOf(r.Context(), userID, ownerID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
-
-	var typ string
-	var gameID int
-	if err := tx.QueryRowContext(r.Context(),
-		`SELECT typ, game_id FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID).
-		Scan(&typ, &gameID); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
 
 	actorName := h.userName(userID)
 
@@ -462,14 +487,14 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := tx.ExecContext(r.Context(),
-		`DELETE FROM mitfahrgelegenheiten WHERE id = ? AND user_id = ?`, id, userID)
+		`DELETE FROM mitfahrgelegenheiten WHERE id = ?`, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
@@ -600,4 +625,49 @@ func (h *Handler) userName(userID int) string {
 		return lastName
 	}
 	return firstName + " " + lastName
+}
+
+// childUsers returns all child users linked to parentUserID via family_links.
+func (h *Handler) childUsers(ctx context.Context, parentUserID int) []ChildUser {
+	rows, err := h.db.QueryContext(ctx, `
+		SELECT u.id, u.first_name || ' ' || u.last_name
+		FROM family_links fl
+		JOIN members m ON m.id = fl.member_id
+		JOIN users u ON u.id = m.user_id
+		WHERE fl.parent_user_id = ? AND m.user_id IS NOT NULL
+		ORDER BY u.first_name, u.last_name`, parentUserID)
+	if err != nil {
+		return []ChildUser{}
+	}
+	defer rows.Close()
+	var result []ChildUser
+	for rows.Next() {
+		var c ChildUser
+		rows.Scan(&c.UserID, &c.Name)
+		result = append(result, c)
+	}
+	if result == nil {
+		return []ChildUser{}
+	}
+	return result
+}
+
+// isChildOf returns true if targetUserID is a child of parentUserID via family_links.
+func (h *Handler) isChildOf(ctx context.Context, parentUserID, targetUserID int) bool {
+	var count int
+	h.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM family_links fl
+		JOIN members m ON m.id = fl.member_id
+		WHERE fl.parent_user_id = ? AND m.user_id = ?`,
+		parentUserID, targetUserID).Scan(&count)
+	return count > 0
+}
+
+// makeChildIDSet builds a fast lookup map from a slice of ChildUser.
+func makeChildIDSet(children []ChildUser) map[int]bool {
+	set := make(map[int]bool, len(children))
+	for _, c := range children {
+		set[c.UserID] = true
+	}
+	return set
 }

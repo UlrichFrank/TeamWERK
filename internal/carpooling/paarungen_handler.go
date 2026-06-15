@@ -62,14 +62,14 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Current user must be either bieter or sucher
+	// Current user must be bieter, sucher, or parent of either
 	var initiertVon string
 	var oppositeUserID int
-	switch userID {
-	case bieteUserID:
+	switch {
+	case userID == bieteUserID || h.isChildOf(r.Context(), userID, bieteUserID):
 		initiertVon = "biete"
 		oppositeUserID = sucheUserID
-	case sucheUserID:
+	case userID == sucheUserID || h.isChildOf(r.Context(), userID, sucheUserID):
 		initiertVon = "suche"
 		oppositeUserID = bieteUserID
 	default:
@@ -179,18 +179,18 @@ func (h *Handler) ConfirmPairing(w http.ResponseWriter, r *http.Request) {
 		`SELECT user_id, plaetze FROM mitfahrgelegenheiten WHERE id = ?`, sucheID).
 		Scan(&sucheUserID, &suchePlaetze)
 
-	// Only the opposite party can confirm
+	// Only the opposite party (or their parent) can confirm
 	var initiatorUserID int
 	switch initiertVon {
 	case "suche":
 		initiatorUserID = sucheUserID
-		if userID != bieteUserID {
+		if userID != bieteUserID && !h.isChildOf(r.Context(), userID, bieteUserID) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 	case "biete":
 		initiatorUserID = bieteUserID
-		if userID != sucheUserID {
+		if userID != sucheUserID && !h.isChildOf(r.Context(), userID, sucheUserID) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -269,7 +269,9 @@ func (h *Handler) RejectPairing(w http.ResponseWriter, r *http.Request) {
 	h.db.QueryRowContext(r.Context(),
 		`SELECT user_id FROM mitfahrgelegenheiten WHERE id = ?`, sucheID).Scan(&sucheUserID)
 
-	if userID != bieteUserID && userID != sucheUserID {
+	if userID != bieteUserID && userID != sucheUserID &&
+		!h.isChildOf(r.Context(), userID, bieteUserID) &&
+		!h.isChildOf(r.Context(), userID, sucheUserID) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

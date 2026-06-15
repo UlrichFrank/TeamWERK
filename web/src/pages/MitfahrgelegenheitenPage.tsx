@@ -53,9 +53,15 @@ interface GameCarpoolData {
   paarungen: PaarungEntry[]
 }
 
+interface ChildUser {
+  userId: number
+  name: string
+}
+
 interface ListResponse {
   games: GameCarpoolData[]
   vehicleSeats?: number | null
+  children: ChildUser[]
 }
 
 function formatDate(iso: string) {
@@ -223,6 +229,7 @@ interface FormModalProps {
   initialBiete?: CarpoolEntry | null
   initialSuche?: CarpoolEntry | null
   vehicleSeats?: number | null
+  children?: ChildUser[]
   onClose: () => void
   onSaved: () => void
 }
@@ -235,12 +242,13 @@ function fieldsFromEntry(entry: CarpoolEntry | null | undefined, fallbackPlaetze
   }
 }
 
-function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeats, onClose, onSaved }: FormModalProps) {
+function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeats, children, onClose, onSaved }: FormModalProps) {
   const startTyp = initialTyp ?? 'biete'
   const startEntry = startTyp === 'biete' ? initialBiete : initialSuche
   const startFields = fieldsFromEntry(startEntry, startTyp === 'biete' ? String(vehicleSeats ?? 1) : '1')
 
   const [typ, setTyp] = useState<'biete' | 'suche'>(startTyp)
+  const [forUserId, setForUserId] = useState<number | null>(null)
   const [plaetze, setPlaetze] = useState(startFields.plaetze)
   const [treffpunkt, setTreffpunkt] = useState(startFields.treffpunkt)
   const [notiz, setNotiz] = useState(startFields.notiz)
@@ -269,6 +277,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
       await api.post('/mitfahrgelegenheiten', {
         gameId,
         typ,
+        ...(forUserId !== null ? { forUserId } : {}),
         plaetze: typ === 'suche' ? (parseInt(plaetze) || 1) : (plaetze ? parseInt(plaetze) : null),
         treffpunkt,
         notiz,
@@ -308,6 +317,22 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
               Ich suche Mitfahrt
             </button>
           </div>
+
+          {children && children.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-brand-text mb-1">Für wen?</label>
+              <select
+                value={forUserId ?? ''}
+                onChange={e => setForUserId(e.target.value === '' ? null : Number(e.target.value))}
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              >
+                <option value="">Ich selbst</option>
+                {children.map(c => (
+                  <option key={c.userId} value={c.userId}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">
@@ -524,7 +549,7 @@ function parseFilters(sp: URLSearchParams) {
 
 export default function MitfahrgelegenheitenPage() {
   const { user } = useAuth()
-  const [response, setResponse] = useState<ListResponse>({ games: [] })
+  const [response, setResponse] = useState<ListResponse>({ games: [], children: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<{ gameId: number; typ: 'biete' | 'suche' } | null>(null)
@@ -566,7 +591,7 @@ export default function MitfahrgelegenheitenPage() {
     const url = tid != null ? `/mitfahrgelegenheiten?team_id=${tid}` : '/mitfahrgelegenheiten'
     api.get(url)
       .then(res => {
-        setResponse({ games: res.data?.games ?? [], vehicleSeats: res.data?.vehicleSeats })
+        setResponse({ games: res.data?.games ?? [], vehicleSeats: res.data?.vehicleSeats, children: res.data?.children ?? [] })
         setLoading(false)
       })
       .catch(() => { setError('Fehler beim Laden.'); setLoading(false) })
@@ -641,9 +666,11 @@ export default function MitfahrgelegenheitenPage() {
     return `${date}T${time}|${teamKey(d)}`
   }
 
+  const childIdSet = useMemo(() => new Set((response.children ?? []).map(c => c.userId)), [response.children])
+
   const mineMatches = (d: GameCarpoolData): boolean =>
-    [...(d.biete ?? []), ...(d.suche ?? [])].some(e => e.isOwn) ||
-    (d.paarungen ?? []).some(p => p.bieteIsOwn || p.sucheIsOwn)
+    [...(d.biete ?? []), ...(d.suche ?? [])].some(e => e.isOwn || childIdSet.has(e.userId)) ||
+    (d.paarungen ?? []).some(p => p.bieteIsOwn || p.sucheIsOwn || childIdSet.has(p.bieteUserId) || childIdSet.has(p.sucheUserId))
 
   const visibleGames = response.games
     .filter(d => filterTypes.has(d.game.eventType))
@@ -750,6 +777,7 @@ export default function MitfahrgelegenheitenPage() {
             initialBiete={ownBiete}
             initialSuche={ownSuche}
             vehicleSeats={response.vehicleSeats}
+            children={response.children}
             onClose={() => setModal(null)}
             onSaved={load}
           />
