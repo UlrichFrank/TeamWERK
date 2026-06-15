@@ -9,11 +9,11 @@
 
 ## 2. VersionContext einführen
 
-- [ ] 2.1 `web/src/contexts/VersionContext.tsx` anlegen:
+- [x] 2.1 `web/src/contexts/VersionContext.tsx` anlegen:
   - `VersionProvider` umschließt die App, ruft intern einmal `useVersionCheck()` auf.
   - `useVersion(): { version: string | null, updateAvailable: boolean }` als public API.
-- [ ] 2.2 `web/src/App.tsx`: `<VersionProvider>` zwischen `<AuthProvider>` und `<BrowserRouter>` einhängen.
-- [ ] 2.3 Commit: `feat(version): VersionContext zentralisiert SSE-Versionserkennung`
+- [x] 2.2 `web/src/App.tsx`: `<VersionProvider>` zwischen `<AuthProvider>` und `<BrowserRouter>` einhängen.
+- [x] 2.3 Commit: `feat(version): VersionContext zentralisiert SSE-Versionserkennung`
 
 ## 3. useVersionCheck härten
 

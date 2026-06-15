@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { AuthProvider, useAuth, hasFunction } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
+import { VersionProvider } from './contexts/VersionContext'
 import { useVersionCheck } from './hooks/useVersionCheck'
 import { UpdateBanner } from './components/UpdateBanner'
 import { reloadWithSwActivation } from './lib/reload'
@@ -73,8 +74,9 @@ function AppUpdateBanner() {
 export default function App() {
   return (
     <AuthProvider>
-      <PersonContactProvider>
-        <BrowserRouter>
+      <VersionProvider>
+        <PersonContactProvider>
+          <BrowserRouter>
           <AppUpdateBanner />
           <Routes>
             {/* Public */}
@@ -119,7 +121,8 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
-      </PersonContactProvider>
+        </PersonContactProvider>
+      </VersionProvider>
     </AuthProvider>
   )
 }
