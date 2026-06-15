@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import PasswordInput from '../forms/PasswordInput'
 
 interface Props {
   onClose: () => void
@@ -62,34 +63,31 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Aktuelles Passwort</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={pwCurrent}
-                onChange={(e) => setPwCurrent(e.target.value)}
+                onChange={setPwCurrent}
+                autoComplete="current-password"
                 required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Neues Passwort</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={pwNew}
-                onChange={(e) => setPwNew(e.target.value)}
+                onChange={setPwNew}
+                autoComplete="new-password"
                 required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Wiederholen</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={pwConfirm}
-                onChange={(e) => setPwConfirm(e.target.value)}
+                onChange={setPwConfirm}
+                autoComplete="new-password"
                 required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
               />
             </div>
 
