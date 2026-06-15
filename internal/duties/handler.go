@@ -349,7 +349,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	args := []any{userID} // first ? is for the da LEFT JOIN
 	var whereParts string
 
-	if claims.Role == "admin" {
+	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		whereParts = `WHERE ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
 	} else {
 		whereParts = `WHERE (
@@ -461,6 +461,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	}
 	type boardGroup struct {
 		GameID    *int        `json:"game_id"`
+		TeamID    *int        `json:"team_id,omitempty"`
 		Date      string      `json:"date,omitempty"`
 		EventTime string      `json:"event_time,omitempty"`
 		Opponent  string      `json:"opponent,omitempty"`
@@ -492,6 +493,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 
 		if _, ok := groupMap[key]; !ok {
 			g := &boardGroup{TeamName: teamName, Slots: []boardSlot{}, Past: isPastInt == 1}
+			if teamID > 0 {
+				tid := teamID
+				g.TeamID = &tid
+			}
 			if gameID.Valid {
 				id := int(gameID.Int64)
 				g.GameID = &id
@@ -501,6 +506,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 				g.EventType = eventType
 			} else {
 				g.Date = eventDate
+				g.EventType = "generisch"
 				if eventName != "" {
 					g.Label = eventName
 				} else {

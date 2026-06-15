@@ -413,6 +413,123 @@ func TestBoard_AdminSeesAll(t *testing.T) {
 	}
 }
 
+// TestBoard_VorstandSeesAllTeams verifies that a user with the Vereinsfunktion
+// 'vorstand' (system role 'standard') sees all duty slots of all teams in the
+// active season — same scope as an admin, even when not a member of any team.
+func TestBoard_VorstandSeesAllTeams(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	teamC := testutil.CreateTeam(t, db, "Team C")
+	dtID := createDutyType(t, db, "Kasse", 1.0)
+
+	createDutySlot(t, db, dtID, seasonID, teamA, 0, "2026-06-14")
+	createDutySlot(t, db, dtID, seasonID, teamB, 0, "2026-06-15")
+	createDutySlot(t, db, dtID, seasonID, teamC, 0, "2026-06-16")
+
+	// Vorstand user: standard role, no player_memberships, but has the
+	// vorstand club function via member_club_functions.
+	vorstandUserID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, vorstandUserID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'vorstand')`, memberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, vorstandUserID, "standard", []string{"vorstand"})
+	res := testutil.Get(t, srv, "/api/duty-board", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var groups []map[string]any
+	json.NewDecoder(res.Body).Decode(&groups)
+	res.Body.Close()
+
+	total := 0
+	for _, g := range groups {
+		if slots, ok := g["slots"].([]any); ok {
+			total += len(slots)
+		}
+	}
+	if total != 3 {
+		t.Errorf("vorstand: expected 3 slots across all teams, got %d", total)
+	}
+}
+
+// TestBoard_GroupContainsTeamID verifies that every team-specific group in the
+// duty-board response carries a numeric team_id field — required by the
+// frontend team filter.
+func TestBoard_GroupContainsTeamID(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Kasse", 1.0)
+	createDutySlot(t, db, dtID, seasonID, teamA, 0, "2026-06-14")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/duty-board", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var groups []map[string]any
+	json.NewDecoder(res.Body).Decode(&groups)
+	res.Body.Close()
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	tid, ok := groups[0]["team_id"].(float64)
+	if !ok {
+		t.Fatalf("expected numeric team_id in group, got %T (%v)", groups[0]["team_id"], groups[0]["team_id"])
+	}
+	if int(tid) != teamA {
+		t.Errorf("expected team_id=%d, got %d", teamA, int(tid))
+	}
+}
+
+// TestBoard_GameIDNullGroupHasGenericEventType verifies that game-less duty
+// groups (e.g. Vereinsfest aufbau) carry event_type="generisch" in the response
+// so the frontend "Sonstiges" pill can include them.
+func TestBoard_GameIDNullGroupHasGenericEventType(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Vereinsfest", 4.0)
+	// gameID=0 → game_id NULL, i.e. game-loser Vereinsdienst.
+	createDutySlot(t, db, dtID, seasonID, teamA, 0, "2026-06-14")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/duty-board", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var groups []map[string]any
+	json.NewDecoder(res.Body).Decode(&groups)
+	res.Body.Close()
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	if groups[0]["game_id"] != nil {
+		t.Errorf("expected game_id=nil, got %v", groups[0]["game_id"])
+	}
+	if et, _ := groups[0]["event_type"].(string); et != "generisch" {
+		t.Errorf("expected event_type=\"generisch\", got %q", et)
+	}
+}
+
 // ── TC-D10 ────────────────────────────────────────────────────────────────────
 
 // TestBoard_UserSeesOwnTeam verifies that a normal user only sees duty slots
