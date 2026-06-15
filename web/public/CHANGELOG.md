@@ -1,5 +1,15 @@
+## 16.06.2026
+- [feat] carpooling: Elternzugang für Mitfahrgelegenheiten
+
 ## 15.06.2026
-- [feat] api: /admin/*-UI-Routen und /api/kalender entfernt — alles auf /api/games und flache UI-Pfade
+- [feat] kalender: Spiel-Kacheln zeigen RSVP-Zähler und Dienst-Punkt in Teamname-Zeile
+- [fix] games: RSVP-Zähllogik in allen Endpoints konsistent
+- [feat] termine: Badges für aktive RSVP-Konfiguration in der Detailansicht
+- [feat] trainings: RSVP-Konfiguration nachträglich bearbeitbar
+- [feat] games: GameEditModal zeigt RSVP-Konfiguration
+- [feat] trainings: RSVP-Konfiguration für Session und Series bearbeitbar
+- [feat] games: RSVP-Konfiguration nachträglich änderbar
+- [feat] forms: PasswordInput-Komponente mit User-typed-Erkennung
 - [fix] auth: Legacy Path=/api/auth-Cookie räumen
 - [fix] auth: Refresh-Token-Cookie auf Path=/ setzen
 - [fix] version: Dismiss bezieht sich auf konkrete Version
