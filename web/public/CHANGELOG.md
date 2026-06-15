@@ -1,4 +1,5 @@
 ## 15.06.2026
+- [fix] icon: Icons für Dienste und Mitfahrgelegenheiten
 - [fix] carpooling: Team-Dropdown nutzt /api/teams für Admin/Vorstand
 - [fix] carpooling: Vorstand-Bypass via HasFunction statt System-Rolle
 - [feat] duties: Dienstbörse mit Pill-Filtern, Team-Dropdown und Farbcodierung
