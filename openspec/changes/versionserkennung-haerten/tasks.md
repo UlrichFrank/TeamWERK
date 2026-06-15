@@ -33,11 +33,11 @@
 
 ## 5. Reload-Flow härten
 
-- [ ] 5.1 In `web/src/lib/reload.ts` `reloadWithSwActivation` umbauen:
+- [x] 5.1 In `web/src/lib/reload.ts` `reloadWithSwActivation` umbauen:
   - Wenn `reg.waiting` direkt da → bisheriger Pfad.
   - Sonst: `await reg.update()`, dann bis ~5 s auf `reg.waiting` pollen (z. B. via `setInterval` 250 ms + Promise).
   - Wenn nach Timeout immer noch kein `waiting`: `await caches.delete('api-cache')`, dann `location.reload()`.
-- [ ] 5.2 Commit: `fix(pwa): Reload wartet auf neuen SW und leert ggf. api-cache`
+- [x] 5.2 Commit: `fix(pwa): Reload wartet auf neuen SW und leert ggf. api-cache`
 
 ## 6. Banner-Dismiss versionsbezogen
 
