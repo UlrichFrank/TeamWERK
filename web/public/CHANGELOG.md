@@ -1,4 +1,10 @@
 ## 14.06.2026
+- [feat] carpooling: team_ids und time in Mitfahrgelegenheiten-Response
+- [fix] web: Legacy-Role-Checks durch hasFunction ersetzt
+- [fix] absences: Phantom-Vereinsfunktion sportvorstand und trainer-Role-Check entfernt
+- [fix] scheduler: Reminder-Empfänger über Vereinsfunktion und family_links
+- [fix] duties: eligibleDutyUsers über member_club_functions statt users.role
+- [fix] members: SEPA-Dokument-Löschen setzt Mandat-Flag zurück
 - [fix] carpooling: Mitfahrgelegenheiten-Bugfixes und Team-Filter
 - [feat] mailer: MAILER_DISABLED-Flag zum Deaktivieren des E-Mail-Versands
 - [fix] trainings: sportliche_leitung kann Termine für alle Mannschaften anlegen und sehen
