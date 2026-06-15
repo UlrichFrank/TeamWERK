@@ -41,11 +41,12 @@
 
 ## 6. Banner-Dismiss versionsbezogen
 
-- [ ] 6.1 In `AppUpdateBanner` (`web/src/App.tsx`):
+- [x] 6.1 In `AppUpdateBanner` (`web/src/App.tsx`):
   - `dismissed: boolean` → `dismissedVersion: string | null`.
   - Banner sichtbar wenn `(sseUpdateAvailable || swUpdateAvailable) && dismissedVersion !== version`.
   - Beim Dismiss: aktuelle `version` als `dismissedVersion` speichern.
-- [ ] 6.2 Commit: `fix(version): Dismiss bezieht sich auf konkrete Version`
+  - Erweiterung: `useVersionCheck` exposed zusätzlich `latestVersion` (zuletzt vom Server gesehener Hash) — Banner-Dismiss matcht darauf statt auf der App-eigenen `version`, sodass ein zweiter Deploy den Banner zuverlässig wieder zeigt.
+- [x] 6.2 Commit: `fix(version): Dismiss bezieht sich auf konkrete Version`
 
 ## 7. Verifikation & Dokumentation
 

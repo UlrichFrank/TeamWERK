@@ -53,19 +53,31 @@ function RoleRoute({ roles, children }: { roles: string[]; children: React.React
   return <>{children}</>
 }
 
+// Sentinel für SW-Updates ohne bekannten Hash (z.B. wenn nur useRegisterSW
+// triggert, ohne dass SSE eine neue Version gemeldet hat).
+const SW_BANNER_SENTINEL = '__sw__'
+
 function AppUpdateBanner() {
-  const { updateAvailable: sseUpdateAvailable } = useVersion()
+  const { updateAvailable: sseUpdateAvailable, latestVersion } = useVersion()
   const [swUpdateAvailable, setSwUpdateAvailable] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null)
 
   useRegisterSW({ onNeedRefresh() { setSwUpdateAvailable(true) } })
 
-  if (!(sseUpdateAvailable || swUpdateAvailable) || dismissed) return null
+  const shouldShow = sseUpdateAvailable || swUpdateAvailable
+  if (!shouldShow) return null
+
+  // currentBanneredVersion: der Hash, der diesen Banner triggert. Bevorzugt
+  // der vom Server zuletzt gemeldete; Sentinel wenn nur SW-Pfad aktiv.
+  const currentBanneredVersion = sseUpdateAvailable
+    ? (latestVersion ?? SW_BANNER_SENTINEL)
+    : SW_BANNER_SENTINEL
+  if (dismissedVersion === currentBanneredVersion) return null
 
   return (
     <UpdateBanner
       onReload={reloadWithSwActivation}
-      onDismiss={() => setDismissed(true)}
+      onDismiss={() => setDismissedVersion(currentBanneredVersion)}
     />
   )
 }

@@ -3,6 +3,7 @@ import { useVersionCheck } from '../hooks/useVersionCheck'
 
 interface VersionCtx {
   version: string | null
+  latestVersion: string | null
   updateAvailable: boolean
 }
 
