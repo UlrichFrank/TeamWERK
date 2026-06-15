@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import PasswordInput from '../components/forms/PasswordInput'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -60,12 +61,11 @@ export default function LoginPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-brand-black mb-1">Passwort</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={setPassword}
+                  autoComplete="current-password"
                   required
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <button
