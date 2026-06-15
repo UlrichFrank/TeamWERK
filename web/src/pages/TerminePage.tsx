@@ -316,9 +316,9 @@ export default function TerminePage() {
           <select
             value={filterTeamId ?? ''}
             onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-0 shrink"
+            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
           >
-            <option value="">Alle Teams</option>
+            <option value="">Teams</option>
             {teams.map(t => (
               <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? t.name}</option>
             ))}
