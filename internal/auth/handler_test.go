@@ -894,3 +894,100 @@ func TestRequestMembership_InsertsRecord(t *testing.T) {
 	}
 }
 
+// hasLegacyClearCookie prüft, ob eine Antwort ein Set-Cookie emittiert, das
+// das vor f967335 unter Path=/api/auth gesetzte refresh_token-Cookie löscht.
+func hasLegacyClearCookie(cookies []*http.Cookie) bool {
+	for _, c := range cookies {
+		if c.Name == "refresh_token" && c.Path == "/api/auth" && c.MaxAge == -1 {
+			return true
+		}
+	}
+	return false
+}
+
+// TC-A20: Login muss das alte Path=/api/auth-Cookie löschen, sonst überleben
+// nach Deploy von f967335 beide Cookies parallel und der pfadspezifischere
+// (alte) wird bei jedem Refresh zuerst gelesen → Dauer-401.
+func TestLogin_ClearsLegacyPathCookie(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/auth/login",
+		"", map[string]string{"email": emailSuffix(t, db, userID), "password": "test"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	if !hasLegacyClearCookie(res.Cookies()) {
+		t.Error("expected Set-Cookie refresh_token Path=/api/auth MaxAge=-1")
+	}
+}
+
+// TC-A21: Refresh muss das Legacy-Cookie auch bei 401 entfernen, sonst sendet
+// der Browser bei jedem Folge-Refresh wieder denselben ungültigen Wert und
+// der User bleibt in einer Endlosschleife.
+func TestRefresh_InvalidCookie_StillClearsLegacy(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newAuthServer(t, db)
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "stale"})
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", res.StatusCode)
+	}
+	if !hasLegacyClearCookie(res.Cookies()) {
+		t.Error("401 response must still clear legacy Path=/api/auth cookie")
+	}
+}
+
+// TC-A22: Auch erfolgreiches Refresh emittiert das Legacy-Cleanup.
+func TestRefresh_ValidCookie_ClearsLegacy(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	plain := testutil.CreateRefreshToken(t, db, userID)
+	srv := newAuthServer(t, db)
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: plain})
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	if !hasLegacyClearCookie(res.Cookies()) {
+		t.Error("successful refresh must also clear legacy Path=/api/auth cookie")
+	}
+}
+
+// TC-A23: Logout entfernt sowohl neues (Path=/) als auch Legacy-Cookie.
+func TestLogout_ClearsLegacyPathCookie(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	plain := testutil.CreateRefreshToken(t, db, userID)
+	srv := newAuthServer(t, db)
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: plain})
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+	defer res.Body.Close()
+
+	if !hasLegacyClearCookie(res.Cookies()) {
+		t.Error("logout must emit Set-Cookie to clear Path=/api/auth")
+	}
+}
+
