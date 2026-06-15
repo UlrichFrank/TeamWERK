@@ -17,13 +17,13 @@
 
 ## 3. useVersionCheck härten
 
-- [ ] 3.1 In `web/src/hooks/useVersionCheck.ts`:
+- [x] 3.1 In `web/src/hooks/useVersionCheck.ts`:
   - Effect-Dependency `[user]` (analog zu `useLiveUpdates`).
   - `?token=…`-Query entfernen (war wirkungslos, CookieMiddleware nutzt das Cookie).
   - Im DEV-Modus: `version = 'dev'` setzen, keine SSE öffnen, `updateAvailable` bleibt `false`.
   - Kein eigenes `es.close()` im `onerror` — EventSource auto-reconnectet.
-- [ ] 3.2 Sicherstellen, dass der Hook beim Logout (`user === null`) die SSE schließt und `version` auf `null` zurücksetzt.
-- [ ] 3.3 Commit: `fix(version): Hook reagiert auf user, DEV zeigt v dev, ?token entfernt`
+- [x] 3.2 Sicherstellen, dass der Hook beim Logout (`user === null`) die SSE schließt und `version` auf `null` zurücksetzt.
+- [x] 3.3 Commit: `fix(version): Hook reagiert auf user, DEV zeigt v dev, ?token entfernt`
 
 ## 4. Konsumenten auf useVersion umstellen
 
