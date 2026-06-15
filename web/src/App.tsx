@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { AuthProvider, useAuth, hasFunction } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
-import { useVersionCheck } from './hooks/useVersionCheck'
+import { VersionProvider, useVersion } from './contexts/VersionContext'
 import { UpdateBanner } from './components/UpdateBanner'
 import { reloadWithSwActivation } from './lib/reload'
 import LoginPage from './pages/LoginPage'
@@ -53,19 +53,31 @@ function RoleRoute({ roles, children }: { roles: string[]; children: React.React
   return <>{children}</>
 }
 
+// Sentinel für SW-Updates ohne bekannten Hash (z.B. wenn nur useRegisterSW
+// triggert, ohne dass SSE eine neue Version gemeldet hat).
+const SW_BANNER_SENTINEL = '__sw__'
+
 function AppUpdateBanner() {
-  const { updateAvailable: sseUpdateAvailable } = useVersionCheck()
+  const { updateAvailable: sseUpdateAvailable, latestVersion } = useVersion()
   const [swUpdateAvailable, setSwUpdateAvailable] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null)
 
   useRegisterSW({ onNeedRefresh() { setSwUpdateAvailable(true) } })
 
-  if (!(sseUpdateAvailable || swUpdateAvailable) || dismissed) return null
+  const shouldShow = sseUpdateAvailable || swUpdateAvailable
+  if (!shouldShow) return null
+
+  // currentBanneredVersion: der Hash, der diesen Banner triggert. Bevorzugt
+  // der vom Server zuletzt gemeldete; Sentinel wenn nur SW-Pfad aktiv.
+  const currentBanneredVersion = sseUpdateAvailable
+    ? (latestVersion ?? SW_BANNER_SENTINEL)
+    : SW_BANNER_SENTINEL
+  if (dismissedVersion === currentBanneredVersion) return null
 
   return (
     <UpdateBanner
       onReload={reloadWithSwActivation}
-      onDismiss={() => setDismissed(true)}
+      onDismiss={() => setDismissedVersion(currentBanneredVersion)}
     />
   )
 }
@@ -73,8 +85,9 @@ function AppUpdateBanner() {
 export default function App() {
   return (
     <AuthProvider>
-      <PersonContactProvider>
-        <BrowserRouter>
+      <VersionProvider>
+        <PersonContactProvider>
+          <BrowserRouter>
           <AppUpdateBanner />
           <Routes>
             {/* Public */}
@@ -119,7 +132,8 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
-      </PersonContactProvider>
+        </PersonContactProvider>
+      </VersionProvider>
     </AuthProvider>
   )
 }
