@@ -1,3 +1,9 @@
+## 15.06.2026
+- [fix] carpooling: Team-Dropdown nutzt /api/teams für Admin/Vorstand
+- [fix] carpooling: Vorstand-Bypass via HasFunction statt System-Rolle
+- [feat] duties: Dienstbörse mit Pill-Filtern, Team-Dropdown und Farbcodierung
+- [feat] duties: Vorstand-Bypass und team_id/event_type in /duty-board
+
 ## 14.06.2026
 - [feat] carpooling: team_ids und time in Mitfahrgelegenheiten-Response
 - [fix] web: Legacy-Role-Checks durch hasFunction ersetzt

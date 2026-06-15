@@ -385,14 +385,18 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
 
   const entryCardProps = { paarungen: data.paarungen, myBieteIds, mySucheIds, onDelete, onRequest, onConfirm, onReject }
   const colors = getEventColors(data.game.eventType)
+  const Icon = data.game.eventType === 'heim' ? Home : data.game.eventType === 'auswärts' ? Plane : Calendar
 
   return (
     <div className={`rounded-xl shadow border-t-4 overflow-hidden ${colors.card.bg} ${colors.card.border}`}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-xs text-brand-text-muted">{formatDate(data.game.date)}</p>
-            <h2 className="text-sm font-semibold text-brand-text">{gameTitle(data.game)}</h2>
+          <div className="flex items-start gap-3 min-w-0">
+            <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${colors.card.icon}`} />
+            <div>
+              <p className="text-xs text-brand-text-muted">{formatDate(data.game.date)}</p>
+              <h2 className="text-sm font-semibold text-brand-text">{gameTitle(data.game)}</h2>
+            </div>
           </div>
           {!hasOwn && (
             <div className="flex gap-2 flex-shrink-0">

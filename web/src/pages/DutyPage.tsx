@@ -212,13 +212,18 @@ export default function DutyPage() {
           const cardClass = g.past
             ? 'bg-brand-surface-card border-brand-border opacity-60'
             : `${colors.card.bg} ${colors.card.border}`
+          const EventIcon = g.event_type === 'heim' ? Home : g.event_type === 'auswärts' ? Plane : Calendar
           return (
             <div
               key={i}
               className={`rounded-xl shadow border-t-4 overflow-hidden ${cardClass}`}
             >
               <div className="px-4 py-3 border-b border-brand-border-subtle flex items-center justify-between">
-                <div>
+                <div className="flex items-center gap-3">
+                  {g.game_id && (
+                    <EventIcon className={`w-5 h-5 shrink-0 ${g.past ? 'text-brand-text-muted' : colors.card.icon}`} />
+                  )}
+                  <div>
                   {g.game_id ? (
                     <span className="font-semibold text-sm text-brand-text">
                       {g.date ? formatDate(g.date) : ''}
@@ -230,6 +235,7 @@ export default function DutyPage() {
                       {g.date ? formatDate(g.date) : ''}{g.label ? ` · ${g.label}` : ''}
                     </span>
                   )}
+                  </div>
                 </div>
                 <span className="text-xs text-brand-text-muted font-medium">{g.team_name}</span>
               </div>
