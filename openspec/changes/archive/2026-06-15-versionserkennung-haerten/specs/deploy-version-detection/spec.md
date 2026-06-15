@@ -42,19 +42,6 @@ Das Frontend SHALL beim Verbindungsaufbau und bei jedem SSE-Reconnect die empfan
 
 ## ADDED Requirements
 
-### Requirement: CHANGELOG.md wird bei Build aus git log generiert
-
-`make build` SHALL `web/public/CHANGELOG.md` aus der vollständigen `git log`-Historie erzeugen. Nur `feat`- und `fix`-Conventional-Commits werden einbezogen. Einträge werden nach Commit-Datum gruppiert (neuestes Datum zuerst). `changes.json` entfällt.
-
-#### Scenario: CHANGELOG.md enthält alle feat/fix-Commits
-- **WHEN** `make build` ausgeführt wird
-- **THEN** enthält `web/public/CHANGELOG.md` alle `feat`- und `fix`-Commits aus der git-Historie, gruppiert nach Datum im Format `## DD.MM.YYYY`
-- **THEN** jeder Eintrag hat die Form `- [feat] scope: Beschreibung` oder `- [fix] scope: Beschreibung`
-
-#### Scenario: changes.json wird nicht mehr generiert
-- **WHEN** `make build` ausgeführt wird
-- **THEN** wird `web/public/changes.json` NICHT erzeugt
-
 ### Requirement: VersionContext zentralisiert die Versionsabfrage
 
 Es SHALL einen `VersionProvider` geben, der die App-weit einzige SSE-Versionsabfrage hält. UI-Komponenten SHALL ausschließlich über den Hook `useVersion()` auf `version` und `updateAvailable` zugreifen. Der direkte Aufruf von `useVersionCheck()` aus mehreren Komponenten parallel SHALL NICHT mehr stattfinden — die parallelen SSE-Verbindungen, die daraus heute resultieren, entfallen.

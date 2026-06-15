@@ -151,7 +151,7 @@ export default function MemberDetailPage() {
     if (authLoading) return
     let cancelled = false
     if (isAdmin) {
-      api.get('/users').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
+      api.get('/users?limit=1000').then(r => { if (!cancelled) setUsers(r.data.items ?? []) })
       api.get('/invitations').then(r => { if (!cancelled) setInvitations(r.data ?? []) })
     }
     if (!isNew && id) {

@@ -93,13 +93,33 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  expiry,
-		Path:     "/api/auth",
+		Path:     "/",
 	})
+	clearLegacyRefreshCookie(w)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"access_token": accessToken})
 }
 
+// clearLegacyRefreshCookie löscht das vor f967335 unter Path=/api/auth gesetzte
+// refresh_token-Cookie. Sonst sendet der Browser bei Folge-Requests beide
+// Cookies — Go's r.Cookie liest das pfadspezifischere (alte, ungültige) zuerst
+// und gibt 401 zurück.
+func clearLegacyRefreshCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:   "refresh_token",
+		Value:  "",
+		Path:   "/api/auth",
+		MaxAge: -1,
+	})
+}
+
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+	// Vor f967335 lag das Cookie unter Path=/api/auth. Browser sendet das
+	// pfadspezifischere alte zuerst, Go's r.Cookie liest nur das erste, und
+	// ein bereits rotierter Wert führt zu 401. Hier räumen, damit auch der
+	// 401-Pfad das Legacy-Cookie aus dem Browser entfernt.
+	clearLegacyRefreshCookie(w)
+
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -167,7 +187,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  newExpiry,
-		Path:     "/api/auth",
+		Path:     "/",
 	})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"access_token": accessToken})
@@ -178,13 +198,14 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		h.db.ExecContext(r.Context(),
 			`DELETE FROM refresh_tokens WHERE token_hash = ?`, HashToken(cookie.Value))
 	}
+	clearLegacyRefreshCookie(w)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
 		HttpOnly: true,
 		Secure:   true,
 		MaxAge:   -1,
-		Path:     "/api/auth",
+		Path:     "/",
 	})
 	w.WriteHeader(http.StatusNoContent)
 }

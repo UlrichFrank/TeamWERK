@@ -1,4 +1,11 @@
 ## 15.06.2026
+- [fix] auth: Legacy Path=/api/auth-Cookie räumen
+- [fix] auth: Refresh-Token-Cookie auf Path=/ setzen
+- [fix] version: Dismiss bezieht sich auf konkrete Version
+- [fix] pwa: Reload wartet auf neuen SW und leert ggf. api-cache
+- [fix] version: Hook reagiert auf user, DEV zeigt v dev, ?token entfernt
+- [feat] version: VersionContext zentralisiert SSE-Versionserkennung
+- [fix] pwa: SSE-Endpoints aus NetworkFirst-Caching ausnehmen
 - [fix] icon: Icons für Dienste und Mitfahrgelegenheiten
 - [fix] carpooling: Team-Dropdown nutzt /api/teams für Admin/Vorstand
 - [fix] carpooling: Vorstand-Bypass via HasFunction statt System-Rolle

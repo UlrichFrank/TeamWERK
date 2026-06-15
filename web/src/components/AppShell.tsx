@@ -6,7 +6,7 @@ import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { useChatEvents } from '../hooks/useChatEvents'
-import { useVersionCheck } from '../hooks/useVersionCheck'
+import { useVersion } from '../contexts/VersionContext'
 import { api } from '../lib/api'
 
 // NavItem.roles / NavItem.excludeRoles sind polymorph: jeder String wird sowohl gegen die
@@ -83,7 +83,7 @@ export default function AppShell() {
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
   usePushSubscription()
-  const { version, updateAvailable } = useVersionCheck()
+  const { version, updateAvailable } = useVersion()
   const [canGoBack, setCanGoBack] = useState(() => (window.history.state?.idx ?? 0) > 0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)

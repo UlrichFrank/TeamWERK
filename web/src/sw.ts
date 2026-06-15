@@ -32,6 +32,14 @@ registerRoute(
   new NetworkOnly()
 )
 
+// SSE endpoints: NetworkOnly. text/event-stream is long-lived; NetworkFirst's clone-for-cache
+// and timeout-fallback semantics break Reconnect and can serve stale __version: frames.
+// These rules must come BEFORE the /api/* NetworkFirst rule below (first match wins).
+registerRoute(
+  ({ url }) => url.pathname === '/api/events' || url.pathname === '/api/chat/events',
+  new NetworkOnly()
+)
+
 // Other API routes: network-first
 registerRoute(
   ({ url }) => url.pathname.startsWith('/api/'),
