@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import PasswordInput from '../components/forms/PasswordInput'
 
 export default function ResetPasswordPage() {
   const [params] = useSearchParams()
@@ -29,10 +30,13 @@ export default function ResetPasswordPage() {
               {error}
             </p>
           )}
-          <input
-            type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
+          <PasswordInput
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            required
+            minLength={8}
             placeholder="Neues Passwort"
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
           />
           <button type="submit" className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
             Passwort speichern

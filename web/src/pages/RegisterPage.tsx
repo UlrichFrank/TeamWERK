@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
+import PasswordInput from '../components/forms/PasswordInput'
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
@@ -95,7 +96,13 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">Passwort</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} className={INPUT} />
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+              required
+              minLength={8}
+            />
           </div>
           <button
             type="submit"
