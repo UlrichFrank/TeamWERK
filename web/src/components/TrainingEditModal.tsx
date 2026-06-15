@@ -18,6 +18,8 @@ interface Training {
   series_id?: number
   team_id: number
   season_id: number
+  rsvp_opt_out?: number
+  rsvp_require_reason?: number
 }
 
 interface Series {
@@ -52,6 +54,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   const [startTime, setStartTime] = useState(session.start_time)
   const [endTime, setEndTime] = useState(session.end_time)
   const [venueId, setVenueId] = useState<number | null>(session.venue?.id ?? null)
+  const [rsvpOptOut, setRsvpOptOut] = useState<boolean>(session.rsvp_opt_out === 1)
+  const [rsvpRequireReason, setRsvpRequireReason] = useState<boolean>(session.rsvp_require_reason === 1)
   const [scope, setScope] = useState<Scope>('this_one')
   const [series, setSeries] = useState<Series | null>(null)
   const [saving, setSaving] = useState(false)
@@ -71,6 +75,18 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
     }
   }, [session.series_id, session.team_id])
 
+  // When scope swaps between session and series, pre-populate the RSVP checkboxes
+  // with the matching source so the user sees the current value for the chosen scope.
+  useEffect(() => {
+    if (scope === 'this_one') {
+      setRsvpOptOut(session.rsvp_opt_out === 1)
+      setRsvpRequireReason(session.rsvp_require_reason === 1)
+    } else if (series) {
+      setRsvpOptOut(series.rsvp_opt_out === 1)
+      setRsvpRequireReason(series.rsvp_require_reason === 1)
+    }
+  }, [scope, series, session.rsvp_opt_out, session.rsvp_require_reason])
+
   const handleSave = async () => {
     setSaving(true)
     setError(null)
@@ -85,6 +101,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           note: session.note,
           status: session.status,
           cancel_reason: session.cancel_reason ?? '',
+          rsvp_opt_out: rsvpOptOut ? 1 : 0,
+          rsvp_require_reason: rsvpRequireReason ? 1 : 0,
         })
       } else if (series) {
         await api.put(`/training-series/${series.id}`, {
@@ -96,8 +114,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           valid_from: series.valid_from.slice(0, 10),
           valid_until: series.valid_until.slice(0, 10),
           note: series.note,
-          rsvp_opt_out: series.rsvp_opt_out,
-          rsvp_require_reason: series.rsvp_require_reason,
+          rsvp_opt_out: rsvpOptOut ? 1 : 0,
+          rsvp_require_reason: rsvpRequireReason ? 1 : 0,
           scope: scope === 'this_and_following' ? 'this_and_following' : 'all',
           from_date: scope === 'this_and_following' ? session.date.slice(0, 10) : undefined,
         })
@@ -195,18 +213,27 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
             <VenuePicker value={venueId} onChange={setVenueId} />
           </div>
-          {series && (
-            <div className="space-y-2 pt-1">
-              <label className="flex items-center gap-2 cursor-default">
-                <input type="checkbox" checked={series.rsvp_opt_out === 1} disabled className="w-4 h-4 accent-brand-yellow" />
-                <span className="text-sm text-brand-text-muted">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-default">
-                <input type="checkbox" checked={series.rsvp_require_reason === 1} disabled className="w-4 h-4 accent-brand-yellow" />
-                <span className="text-sm text-brand-text-muted">Begründung bei Absage erforderlich</span>
-              </label>
-            </div>
-          )}
+          <div className="space-y-2 pt-1 border-t border-brand-border-subtle pt-2">
+            <p className="text-sm font-medium text-brand-text-muted">RSVP-Einstellungen</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rsvpOptOut}
+                onChange={e => setRsvpOptOut(e.target.checked)}
+                className="w-4 h-4 accent-brand-yellow"
+              />
+              <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rsvpRequireReason}
+                onChange={e => setRsvpRequireReason(e.target.checked)}
+                className="w-4 h-4 accent-brand-yellow"
+              />
+              <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
+            </label>
+          </div>
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
               {error}
