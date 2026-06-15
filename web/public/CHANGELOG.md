@@ -1,4 +1,5 @@
 ## 15.06.2026
+- [feat] api: /admin/*-UI-Routen und /api/kalender entfernt — alles auf /api/games und flache UI-Pfade
 - [fix] auth: Legacy Path=/api/auth-Cookie räumen
 - [fix] auth: Refresh-Token-Cookie auf Path=/ setzen
 - [fix] version: Dismiss bezieht sich auf konkrete Version

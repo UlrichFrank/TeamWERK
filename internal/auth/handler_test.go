@@ -10,12 +10,13 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
+	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func newAuthServer(t *testing.T, database *sql.DB) *httptest.Server {
 	t.Helper()
-	return testutil.NewProductionServer(t, database)
+	return prodserver.New(t, database)
 }
 
 func refreshTokenCount(t *testing.T, db *sql.DB, userID int) int {

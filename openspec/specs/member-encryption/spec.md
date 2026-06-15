@@ -72,7 +72,7 @@ When a member changes their login password, the system SHALL re-derive the old a
 When the Vorstand group passphrase is rotated, the browser SHALL re-wrap every member's DEK under the new Vorstand key without the server ever seeing either key.
 
 #### Scenario: Successful rotation
-- **WHEN** a Vorstand member submits a rotation request via `PUT /api/admin/rotate-encryption`
+- **WHEN** a Vorstand member submits a rotation request via `PUT /api/rotate-encryption`
 - **THEN** the request body contains the new salt, new key-check value, and an array of `{ member_id, dek_enc_vorstand }` for all members; the server replaces all affected rows atomically
 
 #### Scenario: Rotation is atomic

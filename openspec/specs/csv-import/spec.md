@@ -4,7 +4,7 @@
 TBD - created by archiving change csv-import-nutzereinladungen. Update Purpose after archive.
 ## Requirements
 ### Requirement: Admin kann CSV mit E-Mail-Adressen importieren
-Das System SHALL einen `POST /api/admin/invitations/import-csv`-Endpoint bereitstellen, der eine CSV-Datei entgegennimmt, die Spalten `Email` und `Email 2` liest, alle unique E-Mail-Adressen dedupliziert und für jede neue Adresse einen `invitation_token` anlegt, ohne eine E-Mail zu versenden. Nur Nutzer mit Rolle `admin` dürfen diesen Endpoint aufrufen.
+Das System SHALL einen `POST /api/invitations/import-csv`-Endpoint bereitstellen, der eine CSV-Datei entgegennimmt, die Spalten `Email` und `Email 2` liest, alle unique E-Mail-Adressen dedupliziert und für jede neue Adresse einen `invitation_token` anlegt, ohne eine E-Mail zu versenden. Nur Nutzer mit Rolle `admin` dürfen diesen Endpoint aufrufen.
 
 #### Scenario: Erfolgreicher Import
 - **WHEN** Admin lädt eine gültige CSV-Datei hoch
@@ -40,7 +40,7 @@ Das Frontend SHALL den bisherigen „+ Einladung"-Button durch einen „CSV impo
 - **THEN** zeigt das Modal eine Fehlermeldung mit dem Fehlertext an
 
 ### Requirement: Einladungs-E-Mail on demand versenden
-Das System SHALL einen `POST /api/admin/invitations/{id}/send`-Endpoint bereitstellen, der für eine bestehende Einladung die Einladungs-E-Mail versendet.
+Das System SHALL einen `POST /api/invitations/{id}/send`-Endpoint bereitstellen, der für eine bestehende Einladung die Einladungs-E-Mail versendet.
 
 #### Scenario: E-Mail erfolgreich versendet
 - **WHEN** Admin klickt „Einladung senden" im ActionMenu einer Einladungs-Zeile

@@ -1,4 +1,8 @@
-package testutil
+// Package prodserver provides a test HTTP server backed by the production
+// router (app.BuildRouter). It lives in a subpackage so that packages
+// referenced from the production wiring (e.g. internal/files, internal/auth)
+// can still import internal/testutil without creating an import cycle.
+package prodserver
 
 import (
 	"database/sql"
@@ -21,26 +25,25 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
+	"github.com/teamstuttgart/teamwerk/internal/testutil"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 	"github.com/teamstuttgart/teamwerk/internal/venues"
 )
 
-// NewProductionServer starts a test HTTP server backed by the same router
-// definition used in production (app.BuildRouter). All routes, middleware
-// groups, and authorization checks are wired exactly as in main.go.
+// New starts a test HTTP server backed by the same router definition used
+// in production (app.BuildRouter). All routes, middleware groups, and
+// authorization checks are wired exactly as in main.go.
 //
-// Use this for tests that need to verify routing or middleware behavior,
-// or when handlers should be reachable via their production paths.
 // The server is closed automatically when the test ends.
-func NewProductionServer(t *testing.T, database *sql.DB) *httptest.Server {
+func New(t *testing.T, database *sql.DB) *httptest.Server {
 	t.Helper()
-	cfg := TestConfig()
+	cfg := testutil.TestConfig()
 	hubInstance := hub.NewHub()
 	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
 
 	handlers := &app.Handlers{
-		Auth:         auth.NewHandler(database, cfg, TestJWTSecret, m, "http://localhost"),
+		Auth:         auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost"),
 		Config:       appconfig.NewHandler(database, hubInstance),
 		Members:      members.NewHandler(database, hubInstance),
 		WelcomeEmail: members.NewWelcomeEmailHandler(database, m),
@@ -48,8 +51,8 @@ func NewProductionServer(t *testing.T, database *sql.DB) *httptest.Server {
 		Dashboard:    dashboard.NewHandler(database),
 		Games:        games.NewHandler(database, cfg, hubInstance),
 		Kader:        kader.NewHandler(database, hubInstance),
-		Upload:       upload.NewHandler(database, t.TempDir(), TestJWTSecret),
-		Files:        files.NewHandler(database, t.TempDir(), TestJWTSecret),
+		Upload:       upload.NewHandler(database, t.TempDir(), testutil.TestJWTSecret),
+		Files:        files.NewHandler(database, t.TempDir(), testutil.TestJWTSecret),
 		Carpool:      carpooling.NewHandler(database, cfg, hubInstance),
 		Chat:         chat.NewHandler(database, hubInstance, cfg),
 		Notif:        notifications.NewHandler(database, cfg),
@@ -58,7 +61,7 @@ func NewProductionServer(t *testing.T, database *sql.DB) *httptest.Server {
 		Teams:        teams.NewHandler(database),
 		Venues:       venues.NewHandler(database, hubInstance),
 		Hub:          hub.NewHandler(hubInstance, "test"),
-		JWTSecret:    TestJWTSecret,
+		JWTSecret:    testutil.TestJWTSecret,
 		Database:     database,
 		BaseURL:      "",
 	}

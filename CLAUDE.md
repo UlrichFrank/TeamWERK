@@ -245,8 +245,8 @@ GET  /api/files/{id}/download
 
 ### Authenticated (alle eingeloggt)
 ```
-GET  /api/kalender
-GET  /api/kalender/{id}
+GET  /api/games
+GET  /api/games/{id}
 GET  /api/teams                          ← rollenabhängig gefiltert (vorstand/admin → alle; andere → Kader-View)
 GET  /api/teams/my
 GET  /api/teams/{id}/roster
@@ -317,10 +317,10 @@ POST /api/venues
 POST /api/venues/import
 DELETE /api/venues
 PUT/DELETE /api/venues/{id}
-POST /api/kalender
-PUT/DELETE /api/kalender/{id}
-POST /api/kalender/{id}/regenerate
-POST /api/kalender/regenerate-day
+POST /api/games
+PUT/DELETE /api/games/{id}
+POST /api/games/{id}/regenerate
+POST /api/games/regenerate-day
 POST /api/members/{id}/change-drafts/{draftId}/accept
 DELETE /api/members/{id}/change-drafts/{draftId}
 GET  /api/age-class-rules
@@ -505,7 +505,7 @@ Alle tabellenbasierten Seiten zeigen auf Mobile (`< 640px`) ein Card-Layout stat
 
 ### Paginierte Listen
 
-`GET /api/members` und `GET /api/admin/users` unterstützen Paginierung:
+`GET /api/members` und `GET /api/users` unterstützen Paginierung:
 
 ```
 GET /api/members?search=&limit=50&offset=0
@@ -547,7 +547,7 @@ go notifications.SendToUsers(h.db, h.cfg, []int{userID1, userID2}, "Titel", "Tex
 
 Immer als Goroutine aufrufen (`go ...`) — der Aufruf darf den HTTP-Response nicht blockieren. Der Frontend-Hook `usePushSubscription` (eingebunden in `AppShell.tsx`) registriert Subscriptions automatisch beim App-Start. Auf iOS nur aktiv wenn die PWA zum Homescreen hinzugefügt wurde (`display-mode: standalone`). Subscriptions werden in `push_subscriptions` gespeichert; ungültige Endpoints (HTTP 410) werden automatisch bereinigt. Für Scheduled Notifications (Reminder, Alerts) — neuer Job-Typ im `internal/scheduler/`-Package, idempotent via `notification_log`-Tabelle.
 
-**Auto-Duty-Regen:** Jede Änderung an einem Heim- oder Auswärtsspiel (`POST /api/admin/kalender`, `PUT /api/admin/kalender/{id}`, `DELETE /api/kalender/{id}`) triggert automatische Regeneration der Dienst-Slots für das Event-Datum ± 1 Tag. Diese Regen beachtet alle `same_day_behavior`- und `adjacent_day_behavior`-Regeln der Duty-Types. Slots mit `is_custom=1` (manuell angelegt oder editiert) werden geschont und nicht gelöscht oder verändert. Der Response enthält ein `regen_summary`-Objekt mit Informationen über erstellte, reduzierte, übersprungene Slots und benachrichtigte Helfer. Vor einem Deploy sollte der Vorstand manuell-editierte Bestandsslots mit `UPDATE duty_slots SET is_custom=1 WHERE id IN (...)` schützen, um unerwünschte Regeneration zu vermeiden.
+**Auto-Duty-Regen:** Jede Änderung an einem Heim- oder Auswärtsspiel (`POST /api/games`, `PUT /api/games/{id}`, `DELETE /api/games/{id}`) triggert automatische Regeneration der Dienst-Slots für das Event-Datum ± 1 Tag. Diese Regen beachtet alle `same_day_behavior`- und `adjacent_day_behavior`-Regeln der Duty-Types. Slots mit `is_custom=1` (manuell angelegt oder editiert) werden geschont und nicht gelöscht oder verändert. Der Response enthält ein `regen_summary`-Objekt mit Informationen über erstellte, reduzierte, übersprungene Slots und benachrichtigte Helfer. Vor einem Deploy sollte der Vorstand manuell-editierte Bestandsslots mit `UPDATE duty_slots SET is_custom=1 WHERE id IN (...)` schützen, um unerwünschte Regeneration zu vermeiden.
 
 ---
 

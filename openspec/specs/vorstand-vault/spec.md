@@ -34,8 +34,8 @@ The vault key in `sessionStorage` SHALL expire after 30 minutes of inactivity an
 Before any sensitive data can be written, the Vorstand SHALL perform a one-time setup to establish the group passphrase. The setup stores a salt and a key-check value on the server; the passphrase itself is never stored.
 
 #### Scenario: Setup generates salt and key-check value
-- **WHEN** a Vorstand member completes the setup form at `/admin/tresor-einrichten`
-- **THEN** the browser generates a random 32-byte salt, derives the key via PBKDF2, encrypts the string "ok" with AES-GCM, and posts `{ vorstand_kdf_salt, vorstand_key_check }` to `PUT /api/admin/encryption-config`
+- **WHEN** a Vorstand member completes the setup form at `/tresor-einrichten`
+- **THEN** the browser generates a random 32-byte salt, derives the key via PBKDF2, encrypts the string "ok" with AES-GCM, and posts `{ vorstand_kdf_salt, vorstand_key_check }` to `PUT /api/encryption-config`
 
 #### Scenario: Setup can only run once
 - **WHEN** a salt and key-check value already exist in the database
@@ -52,7 +52,7 @@ The Vorstand SHALL be able to rotate the group passphrase. Rotation re-wraps all
 
 #### Scenario: Rotation re-wraps all DEKs
 - **WHEN** the new passphrase is confirmed and rotation is submitted
-- **THEN** the browser derives the new key, fetches all `{ member_id, dek_enc_vorstand }` records, re-wraps each DEK, and posts the batch plus new salt and key-check value to `PUT /api/admin/rotate-encryption`
+- **THEN** the browser derives the new key, fetches all `{ member_id, dek_enc_vorstand }` records, re-wraps each DEK, and posts the batch plus new salt and key-check value to `PUT /api/rotate-encryption`
 
 #### Scenario: New key replaces old key in session
 - **WHEN** rotation completes successfully
@@ -64,7 +64,7 @@ The Vorstand SHALL be able to rotate the group passphrase. Rotation re-wraps all
 After vault setup, the Vorstand SHALL be able to migrate existing plaintext sensitive data from the old database columns into the encrypted `member_sensitive` table via a browser-driven migration workflow.
 
 #### Scenario: Migration workflow encrypts and posts per member
-- **WHEN** a Vorstand member runs the migration at `/admin/tresor-migration`
+- **WHEN** a Vorstand member runs the migration at `/tresor-migration`
 - **THEN** the browser fetches members with legacy plaintext fields still present, encrypts each locally, posts to `PUT /api/members/{id}/sensitive`, and shows a progress counter
 
 #### Scenario: Migration is idempotent

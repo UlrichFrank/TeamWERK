@@ -56,10 +56,10 @@ func TestAutoAssign_BracketFilter(t *testing.T) {
 	token := testutil.Token(t, adminID, "admin", nil)
 
 	srv := testutil.NewServer(t, func(r chi.Router) {
-		r.Post("/api/admin/kader/auto-assign", h.AutoAssign)
+		r.Post("/api/kader/auto-assign", h.AutoAssign)
 	})
 
-	resp := testutil.Post(t, srv, "/api/admin/kader/auto-assign", token,
+	resp := testutil.Post(t, srv, "/api/kader/auto-assign", token,
 		map[string]any{"kader_ids": []int{kaderID}})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -120,10 +120,10 @@ func TestAutoAssign_ExcludesAusgetreten(t *testing.T) {
 	token := testutil.Token(t, adminID, "admin", nil)
 
 	srv := testutil.NewServer(t, func(r chi.Router) {
-		r.Post("/api/admin/kader/auto-assign", h.AutoAssign)
+		r.Post("/api/kader/auto-assign", h.AutoAssign)
 	})
 
-	resp := testutil.Post(t, srv, "/api/admin/kader/auto-assign", token,
+	resp := testutil.Post(t, srv, "/api/kader/auto-assign", token,
 		map[string]any{"kader_ids": []int{kaderID}})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -183,10 +183,10 @@ func TestAutoAssign_DedicatedBirthYear(t *testing.T) {
 	token := testutil.Token(t, adminID, "admin", nil)
 
 	srv := testutil.NewServer(t, func(r chi.Router) {
-		r.Post("/api/admin/kader/auto-assign", h.AutoAssign)
+		r.Post("/api/kader/auto-assign", h.AutoAssign)
 	})
 
-	resp := testutil.Post(t, srv, "/api/admin/kader/auto-assign", token,
+	resp := testutil.Post(t, srv, "/api/kader/auto-assign", token,
 		map[string]any{"kader_ids": []int{kaderID}})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -246,10 +246,10 @@ func TestMemberSuggestions_BracketActive(t *testing.T) {
 	token := testutil.Token(t, adminID, "admin", nil)
 
 	srv := testutil.NewServer(t, func(r chi.Router) {
-		r.Get("/api/admin/kader/{id}/member-suggestions", h.MemberSuggestions)
+		r.Get("/api/kader/{id}/member-suggestions", h.MemberSuggestions)
 	})
 
-	path := fmt.Sprintf("/api/admin/kader/%d/member-suggestions", kaderID)
+	path := fmt.Sprintf("/api/kader/%d/member-suggestions", kaderID)
 	resp := testutil.Get(t, srv, path, token)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -319,10 +319,10 @@ func TestMemberSuggestions_BracketDisabled(t *testing.T) {
 	token := testutil.Token(t, adminID, "admin", nil)
 
 	srv := testutil.NewServer(t, func(r chi.Router) {
-		r.Get("/api/admin/kader/{id}/member-suggestions", h.MemberSuggestions)
+		r.Get("/api/kader/{id}/member-suggestions", h.MemberSuggestions)
 	})
 
-	path := fmt.Sprintf("/api/admin/kader/%d/member-suggestions?filter_age_bracket=false", kaderID)
+	path := fmt.Sprintf("/api/kader/%d/member-suggestions?filter_age_bracket=false", kaderID)
 	resp := testutil.Get(t, srv, path, token)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -395,10 +395,10 @@ func TestCopyFromSeason_SameAgePrevious(t *testing.T) {
 	adminID := testutil.CreateUser(t, db, "admin")
 	srv := testutil.NewServer(t, func(r chi.Router) {
 		h := kader.NewHandler(db, hub.NewHub())
-		r.Post("/api/admin/kader/copy-from-season", h.CopyFromSeason)
+		r.Post("/api/kader/copy-from-season", h.CopyFromSeason)
 	})
 
-	res := testutil.Post(t, srv, "/api/admin/kader/copy-from-season",
+	res := testutil.Post(t, srv, "/api/kader/copy-from-season",
 		testutil.Token(t, adminID, "admin", nil),
 		map[string]any{
 			"from_season_id": fromSeasonID,
@@ -446,10 +446,10 @@ func TestCopyFromSeason_EmptyMemberSource(t *testing.T) {
 	adminID := testutil.CreateUser(t, db, "admin")
 	srv := testutil.NewServer(t, func(r chi.Router) {
 		h := kader.NewHandler(db, hub.NewHub())
-		r.Post("/api/admin/kader/copy-from-season", h.CopyFromSeason)
+		r.Post("/api/kader/copy-from-season", h.CopyFromSeason)
 	})
 
-	res := testutil.Post(t, srv, "/api/admin/kader/copy-from-season",
+	res := testutil.Post(t, srv, "/api/kader/copy-from-season",
 		testutil.Token(t, adminID, "admin", nil),
 		map[string]any{
 			"from_season_id": fromSeasonID,

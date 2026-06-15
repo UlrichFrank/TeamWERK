@@ -2,7 +2,7 @@
 Admins SHALL Veranstaltungsorte mit Name, Straße, Stadt, PLZ, Land (Default: DE) und optionaler Notiz anlegen können.
 
 #### Scenario: Erfolgreiche Anlage
-- **WHEN** Admin sendet POST /api/admin/venues mit name, street, city, postal_code
+- **WHEN** Admin sendet POST /api/venues mit name, street, city, postal_code
 - **THEN** Venue wird gespeichert und mit id, allen Feldern und created_at zurückgegeben
 
 #### Scenario: Pflichtfelder fehlen
@@ -15,11 +15,11 @@ Admins SHALL Veranstaltungsorte mit Name, Straße, Stadt, PLZ, Land (Default: DE
 Admins SHALL alle Felder eines bestehenden Venues aktualisieren können.
 
 #### Scenario: Erfolgreiche Aktualisierung
-- **WHEN** Admin sendet PUT /api/admin/venues/{id} mit geänderten Feldern
+- **WHEN** Admin sendet PUT /api/venues/{id} mit geänderten Feldern
 - **THEN** Venue wird aktualisiert und zurückgegeben
 
 #### Scenario: Venue nicht gefunden
-- **WHEN** Admin sendet PUT /api/admin/venues/{id} mit unbekannter id
+- **WHEN** Admin sendet PUT /api/venues/{id} mit unbekannter id
 - **THEN** Server antwortet mit 404 Not Found
 
 ---
@@ -28,7 +28,7 @@ Admins SHALL alle Felder eines bestehenden Venues aktualisieren können.
 Admins SHALL Venues löschen können. Referenzierende Events verlieren dabei ihren Ort (venue_id → NULL).
 
 #### Scenario: Erfolgreiches Löschen
-- **WHEN** Admin sendet DELETE /api/admin/venues/{id}
+- **WHEN** Admin sendet DELETE /api/venues/{id}
 - **THEN** Venue wird gelöscht; venue_id in referenzierenden games/training_series/training_sessions wird NULL
 
 ---
@@ -37,7 +37,7 @@ Admins SHALL Venues löschen können. Referenzierende Events verlieren dabei ihr
 Admins und Trainer SHALL alle Venues abrufen können.
 
 #### Scenario: Liste abrufen
-- **WHEN** GET /api/admin/venues aufgerufen wird
+- **WHEN** GET /api/venues aufgerufen wird
 - **THEN** Alle Venues werden als Array zurückgegeben (name, street, city, postal_code, country, note, is_home_venue)
 
 ---

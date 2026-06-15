@@ -4,7 +4,7 @@
 Das System SHALL beim Saisonwechsel eine Kader-Struktur aus der Vorsaison in die neue Saison kopieren können. Mit `member_source=same-age-previous` werden die Mitglieder der gleichen Altersklasse übernommen.
 
 #### Scenario: Kader kopieren mit same-age-previous
-- **WHEN** POST /api/admin/kader/copy-from-season mit from_season_id, to_season_id und assignments [{age_class, gender, member_source: "same-age-previous"}]
+- **WHEN** POST /api/kader/copy-from-season mit from_season_id, to_season_id und assignments [{age_class, gender, member_source: "same-age-previous"}]
 - **THEN** HTTP 200, neuer Kader in Ziel-Saison angelegt, Mitglieder der gleichen Altersklasse aus Quell-Saison übernommen
 
 #### Scenario: Kader kopieren ohne Mitglieder

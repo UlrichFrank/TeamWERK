@@ -82,7 +82,7 @@ export default function SpieltagDetailPage() {
 
   const loadGame = async () => {
     try {
-      const r = await api.get(`/kalender/${gameId}`)
+      const r = await api.get(`/games/${gameId}`)
       setGame(r.data.game)
       setSlots(r.data.slots ?? [])
     } catch (e: any) {
@@ -181,7 +181,7 @@ export default function SpieltagDetailPage() {
     if (!gameId) return
     setDeletingGame(true)
     try {
-      await api.delete(`/kalender/${gameId}`)
+      await api.delete(`/games/${gameId}`)
       navigate(game ? `/kalender?date=${game.date.slice(0, 10)}` : '/kalender')
     } finally {
       setDeletingGame(false)

@@ -20,30 +20,30 @@ Das System SHALL eine Tabelle `kader_extended_members` bereitstellen, die Gelege
 
 ### Requirement: Admin kann erweiterte Kader-Mitglieder hinzufügen und entfernen
 
-Das System SHALL `PUT /api/admin/kader/{id}` um die Felder `extended_members_add` und `extended_members_remove` erweitern, analog zu `members_add` / `members_remove`.
+Das System SHALL `PUT /api/kader/{id}` um die Felder `extended_members_add` und `extended_members_remove` erweitern, analog zu `members_add` / `members_remove`.
 
 #### Scenario: Mitglied zum erweiterten Kader hinzufügen
 
-- **WHEN** ein Trainer/Admin `PUT /api/admin/kader/{id}` mit `extended_members_add: [memberId]` sendet
-- **THEN** wird das Mitglied in `kader_extended_members` eingetragen und erscheint in der Antwort von `GET /api/admin/kader/{id}` unter `extended_members`
+- **WHEN** ein Trainer/Admin `PUT /api/kader/{id}` mit `extended_members_add: [memberId]` sendet
+- **THEN** wird das Mitglied in `kader_extended_members` eingetragen und erscheint in der Antwort von `GET /api/kader/{id}` unter `extended_members`
 
 #### Scenario: Mitglied aus erweitertem Kader entfernen
 
-- **WHEN** ein Trainer/Admin `PUT /api/admin/kader/{id}` mit `extended_members_remove: [memberId]` sendet
+- **WHEN** ein Trainer/Admin `PUT /api/kader/{id}` mit `extended_members_remove: [memberId]` sendet
 - **THEN** wird das Mitglied aus `kader_extended_members` entfernt
 
 ### Requirement: Kader-Antwort enthält extended_members
 
-Das System SHALL `GET /api/admin/kader` und `GET /api/admin/kader/{id}` um das Feld `extended_members` (Array mit id, name, birth_year, gender) erweitern.
+Das System SHALL `GET /api/kader` und `GET /api/kader/{id}` um das Feld `extended_members` (Array mit id, name, birth_year, gender) erweitern.
 
 #### Scenario: Kader-Detailantwort enthält erweiterte Mitglieder
 
 - **WHEN** ein Kader erweiterte Mitglieder hat
-- **THEN** enthält die Antwort von `GET /api/admin/kader/{id}` das Feld `extended_members` mit den zugehörigen Mitgliedern
+- **THEN** enthält die Antwort von `GET /api/kader/{id}` das Feld `extended_members` mit den zugehörigen Mitgliedern
 
 ### Requirement: Admin-UI zeigt Abschnitt „Erweiterter Kader"
 
-Das System SHALL auf `/admin/kader` je Mannschafts-Card einen dritten Abschnitt „Erweiterter Kader" anzeigen, unterhalb des Mitglieder-Abschnitts, mit gleichem Muster: Suchfeld + Liste + Entfernen-Button.
+Das System SHALL auf `/kader` je Mannschafts-Card einen dritten Abschnitt „Erweiterter Kader" anzeigen, unterhalb des Mitglieder-Abschnitts, mit gleichem Muster: Suchfeld + Liste + Entfernen-Button.
 
 #### Scenario: Erweitertes Mitglied erscheint in der Kader-Card
 

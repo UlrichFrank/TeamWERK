@@ -4,7 +4,7 @@
 TBD - created by archiving change venues-csv-import. Update Purpose after archive.
 ## Requirements
 ### Requirement: Admin kann CSV-Datei mit Veranstaltungsorten importieren
-Das System SHALL einen Endpoint `POST /api/admin/venues/import` bereitstellen, der eine CSV-Datei (multipart/form-data, Feld `file`) akzeptiert und die enthaltenen Hallen per Upsert in die `venues`-Tabelle schreibt. Nur Nutzer mit Rolle `admin` dürfen diesen Endpoint aufrufen.
+Das System SHALL einen Endpoint `POST /api/venues/import` bereitstellen, der eine CSV-Datei (multipart/form-data, Feld `file`) akzeptiert und die enthaltenen Hallen per Upsert in die `venues`-Tabelle schreibt. Nur Nutzer mit Rolle `admin` dürfen diesen Endpoint aufrufen.
 
 #### Scenario: Erfolgreicher Import
 - **WHEN** ein Admin eine gültige BWHV-CSV-Datei hochlädt
@@ -38,7 +38,7 @@ Das System SHALL einen Endpoint `POST /api/admin/venues/import` bereitstellen, d
 Das System SHALL den "+ Neuer Ort"-Button durch einen Split-Button ersetzen. Die linke Hälfte öffnet das bestehende Neu-Modal, die rechte Hälfte öffnet ein Dropdown mit dem Eintrag "Import CSV".
 
 #### Scenario: Split-Button zeigt beide Aktionen
-- **WHEN** ein Admin die Seite `/admin/veranstaltungsorte` öffnet
+- **WHEN** ein Admin die Seite `/veranstaltungsorte` öffnet
 - **THEN** sieht er einen zweigeteilten Button: links "+ Neuer Ort", rechts ein ChevronDown
 
 #### Scenario: Dropdown öffnet sich per Klick auf ChevronDown

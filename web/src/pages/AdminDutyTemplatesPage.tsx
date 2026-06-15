@@ -402,7 +402,7 @@ export default function AdminDutyTemplatesPage() {
                   <tr key={t.id} className="hover:bg-brand-table-select transition-colors">
                     <td className="px-4 py-3">
                       <Link
-                        to={`/admin/dienstplan-vorlagen/${t.id}`}
+                        to={`/dienstplan-vorlagen/${t.id}`}
                         className="font-medium text-brand-text hover:text-brand-blue hover:underline"
                       >
                         {t.name}
