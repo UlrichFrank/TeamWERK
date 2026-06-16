@@ -391,6 +391,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !audienceBypass {
+		// The 'eltern' audience match is team-scoped: a parent only matches
+		// when their linked child plays (player_memberships) in the slot's
+		// team — or, for game-less slots, in any team participating in the
+		// slot's game.
 		whereParts += ` AND (
 		     COALESCE(ds.audiences, dt.audiences) IS NULL
 		     OR (
@@ -398,7 +402,18 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		             (EXISTS (
 		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 		                 WHERE je.value = 'eltern'
-		             ) AND EXISTS (SELECT 1 FROM family_links fl_a WHERE fl_a.parent_user_id = ?))
+		             ) AND EXISTS (
+		                 SELECT 1 FROM family_links fl_a
+		                 JOIN player_memberships pm_a ON pm_a.member_id = fl_a.member_id
+		                 JOIN seasons sa ON sa.id = pm_a.season_id AND sa.is_active = 1
+		                 WHERE fl_a.parent_user_id = ?
+		                 AND (
+		                     pm_a.team_id = ds.team_id
+		                     OR (ds.team_id IS NULL AND ds.game_id IS NOT NULL AND pm_a.team_id IN (
+		                         SELECT gt_a.team_id FROM game_teams gt_a WHERE gt_a.game_id = ds.game_id
+		                     ))
+		                 )
+		             ))
 		             OR EXISTS (
 		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 		                 JOIN member_club_functions mcf_a ON mcf_a.function = je.value

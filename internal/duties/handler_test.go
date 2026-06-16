@@ -583,7 +583,7 @@ func TestBoard_UserSeesOwnTeam(t *testing.T) {
 // ── TC-D11 ────────────────────────────────────────────────────────────────────
 
 // TestBoard_AudienceElternVisible verifies that a slot with audiences=["eltern"]
-// is visible to a user who has a family_links entry (i.e. is a parent).
+// is visible to a user whose linked child plays in the slot's team.
 func TestBoard_AudienceElternVisible(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -595,13 +595,10 @@ func TestBoard_AudienceElternVisible(t *testing.T) {
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	childMemberID := testutil.CreateMember(t, db, 0)
-	// Parent has a family_links entry → can see eltern-audience slots.
+	// Parent has a family_links entry AND the child is in the slot's team.
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`,
 		parentUserID, childMemberID)
-
-	// Also add the parent's member to teamID so the slot is visible in the board.
-	parentMemberID := testutil.CreateMember(t, db, parentUserID)
-	addPlayerMembership(t, db, parentMemberID, teamID, seasonID)
+	addPlayerMembership(t, db, childMemberID, teamID, seasonID)
 
 	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	srv := testServer(t, h)
@@ -666,6 +663,46 @@ func TestBoard_AudienceElternHidden(t *testing.T) {
 	}
 	if total != 0 {
 		t.Errorf("expected 0 eltern slots for user without family_links, got %d", total)
+	}
+}
+
+// TestBoard_AudienceElternTeamScoped verifies that a parent does NOT match
+// the 'eltern' audience on slots of a team where their child does not play —
+// even if the parent themselves is visible on the board through another
+// channel (here: as trainer of the slot's team).
+func TestBoard_AudienceElternTeamScoped(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	dtID := createDutyType(t, db, "Elterndienst", 1.0)
+	slotA := createDutySlot(t, db, dtID, seasonID, teamA, 0, "2026-06-14")
+	db.Exec(`UPDATE duty_slots SET audiences='["eltern"]' WHERE id=?`, slotA)
+
+	// Parent is trainer of team A (so the slot is visible via team source)
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	parentMemberID := testutil.CreateMember(t, db, parentUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, parentMemberID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'trainer')`, parentMemberID)
+
+	// Parent's child plays in team B, not in team A
+	childMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+	addPlayerMembership(t, db, childMemberID, teamB, seasonID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	// Default (audience filter active): trainer audience does NOT match ['eltern'],
+	// and the eltern audience does NOT match because the child plays in team B not A.
+	token := testutil.Token(t, parentUserID, "standard", []string{"trainer"})
+	if n := boardSlotCount(t, srv, "", token); n != 0 {
+		t.Errorf("eltern slot should be hidden when child does not play in slot's team, got %d", n)
+	}
+	// audience=all reveals the slot via the team source
+	if n := boardSlotCount(t, srv, "?audience=all", token); n != 1 {
+		t.Errorf("with audience=all the slot should be visible via trainer team source, got %d", n)
 	}
 }
 

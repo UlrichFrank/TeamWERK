@@ -26,7 +26,7 @@ Die Audience-Filterung auf Slot-Ebene (`audiences`-JSON-Array mit `eltern`/Verei
 
 Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden Elemente enthält:
 - eine der Vereinsfunktionen des Nutzers (`mcf.function`)
-- den Wert `'eltern'`, falls der Nutzer mindestens einen `family_links`-Eintrag als `parent_user_id` hat
+- den Wert `'eltern'`, falls der Nutzer mindestens ein verknüpftes Kind (`family_links`) hat, das **im Team des Slots** spielt (`player_memberships.team_id = ds.team_id`); bei game-losen Slots reicht es, wenn das Kind in einem der teilnehmenden Teams des Spiels spielt.
 
 #### Scenario: View open duties
 - **WHEN** any authenticated user opens the duty board
@@ -73,6 +73,12 @@ Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden
 #### Scenario: Spieler kann Audience-Filter nicht deaktivieren
 - **WHEN** ein Spieler ohne privilegierte Funktion `GET /api/duty-board?audience=all` aufruft
 - **THEN** wird der Query-Parameter ignoriert und der Audience-Filter bleibt aktiv (nur Slots mit Match zur Spieler-Audience oder NULL)
+
+#### Scenario: Eltern-Audience ist team-gescoped
+- **WHEN** ein Trainer (gleichzeitig Elternteil eines Kindes in Team B) `GET /api/duty-board` ohne `?audience=all` aufruft, und Team A hat einen Slot mit `audiences=["eltern"]`
+- **THEN** ist der Slot **nicht** in der Antwort enthalten — der Eltern-Match greift nur, wenn ein Kind im Slot-Team spielt
+- **WHEN** der gleiche Nutzer `GET /api/duty-board?audience=all` aufruft
+- **THEN** ist der Slot in der Antwort sichtbar (über die Trainer-Team-Quelle, Audience-Filter deaktiviert)
 
 #### Scenario: Admin sieht immer alle Audiences
 - **WHEN** ein Admin `GET /api/duty-board` (ohne Query-Param) aufruft
