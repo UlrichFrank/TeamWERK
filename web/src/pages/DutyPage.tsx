@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, UserCheck, History } from 'lucide-react'
+import { Home, Plane, Calendar, UserCheck, History, Filter } from 'lucide-react'
 import { api } from '../lib/api'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth, hasFunction, hasAnyFunction } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 import { getEventColors } from '../lib/eventColors'
@@ -46,6 +46,7 @@ function formatDate(iso: string): string {
 }
 
 const ALL_TYPES = new Set(['heim', 'auswärts', 'generisch'])
+const AUDIENCE_FILTER_FUNCTIONS = ['vorstand', 'vorstand_beisitzer', 'trainer', 'sportliche_leitung']
 
 function parseFilters(sp: URLSearchParams) {
   const team = parseInt(sp.get('team') ?? '') || null
@@ -58,7 +59,8 @@ function parseFilters(sp: URLSearchParams) {
     : new Set(ALL_TYPES)
   const mine = sp.get('mine') === '1'
   const past = sp.get('past') === '1'
-  return { team, types, mine, past }
+  const audienceAll = sp.get('audience') === 'all'
+  return { team, types, mine, past, audienceAll }
 }
 
 export default function DutyPage() {
@@ -66,7 +68,8 @@ export default function DutyPage() {
   const isAdminOrTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast } = parseFilters(searchParams)
+  const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll } = parseFilters(searchParams)
+  const showAudiencePill = hasAnyFunction(user, AUDIENCE_FILTER_FUNCTIONS)
 
   const [groups, setGroups] = useState<BoardGroup[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -74,7 +77,7 @@ export default function DutyPage() {
   const [proxyChildren, setProxyChildren] = useState<ProxyChild[]>([])
   const compact = useCompactHeader(950)
 
-  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean }) => {
+  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean }) => {
     const next = new URLSearchParams(searchParams)
     if ('team' in patch) {
       if (patch.team === null) next.delete('team')
@@ -93,6 +96,10 @@ export default function DutyPage() {
       if (patch.past) next.set('past', '1')
       else next.delete('past')
     }
+    if ('audienceAll' in patch) {
+      if (patch.audienceAll) next.set('audience', 'all')
+      else next.delete('audience')
+    }
     setSearchParams(next, { replace: true })
   }
 
@@ -103,11 +110,15 @@ export default function DutyPage() {
   }
 
   const load = () => {
-    const url = viewMine ? '/duty-board?view=mine' : '/duty-board'
+    const params = new URLSearchParams()
+    if (viewMine) params.set('view', 'mine')
+    if (audienceAll) params.set('audience', 'all')
+    const qs = params.toString()
+    const url = qs ? `/duty-board?${qs}` : '/duty-board'
     api.get(url).then(r => setGroups(r.data ?? []))
   }
 
-  useEffect(() => { load() }, [viewMine])
+  useEffect(() => { load() }, [viewMine, audienceAll])
   useLiveUpdates((event) => { if (event === 'duties') load() })
 
   useEffect(() => {
@@ -191,6 +202,21 @@ export default function DutyPage() {
             <History className="w-3.5 h-3.5" />
             {!compact && <span>Vergangene</span>}
           </button>
+          {showAudiencePill && (
+            <button
+              onClick={() => updateFilter({ audienceAll: !audienceAll })}
+              aria-label="Nur meine Audience"
+              title={audienceAll ? 'Alle Audiences sichtbar — klicken für Filter auf meine Audience' : 'Nur meine Audience — klicken für alle Audiences'}
+              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
+                !audienceAll
+                  ? 'bg-brand-yellow text-brand-black border-brand-yellow'
+                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              {!compact && <span>Nur Audience</span>}
+            </button>
+          )}
         </div>
       </div>
 
