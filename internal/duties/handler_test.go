@@ -671,47 +671,217 @@ func TestBoard_AudienceElternHidden(t *testing.T) {
 
 // ── TC-D13 ────────────────────────────────────────────────────────────────────
 
-// TestBoard_TrainerBypassesAudience verifies that a user with the club
-// function 'trainer' in member_club_functions bypasses the audience filter
-// and can see eltern-restricted slots.
-func TestBoard_TrainerBypassesAudience(t *testing.T) {
-	db := testutil.NewDB(t)
-	seasonID := testutil.CreateSeason(t, db, "2025/26")
-	teamID := testutil.CreateTeam(t, db, "Team A")
-	dtID := createDutyType(t, db, "Elterndienst", 1.0)
-	slotID := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
-
-	db.Exec(`UPDATE duty_slots SET audiences='["eltern"]' WHERE id=?`, slotID)
-
-	// Trainer user: has member_club_functions.function = 'trainer'.
-	trainerUserID := testutil.CreateUser(t, db, "standard")
-	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
-	addPlayerMembership(t, db, trainerMemberID, teamID, seasonID)
-
-	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'trainer')`,
-		trainerMemberID)
-
-	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
-
-	token := testutil.Token(t, trainerUserID, "spieler", nil)
-	res := testutil.Get(t, srv, "/api/duty-board", token)
+// boardSlotCount runs GET /api/duty-board with the given query string and token
+// and returns the total number of slot entries in the response.
+func boardSlotCount(t *testing.T, srv *httptest.Server, query, token string) int {
+	t.Helper()
+	res := testutil.Get(t, srv, "/api/duty-board"+query, token)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-
 	var groups []map[string]any
 	json.NewDecoder(res.Body).Decode(&groups)
 	res.Body.Close()
-
 	total := 0
 	for _, g := range groups {
 		if slots, ok := g["slots"].([]any); ok {
 			total += len(slots)
 		}
 	}
-	if total != 1 {
-		t.Errorf("trainer should bypass audience filter and see 1 slot, got %d", total)
+	return total
+}
+
+// TestDutyBoard_TrainerSeesOwnTeam verifies that a trainer linked to a team
+// via kader_trainers (but not as a player) sees that team's duty slots.
+func TestDutyBoard_TrainerSeesOwnTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Hallendienst", 2.0)
+	createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	// audience=all so the audience filter does not hide the slot
+	if n := boardSlotCount(t, srv, "?audience=all", token); n != 1 {
+		t.Errorf("trainer should see 1 slot of own team, got %d", n)
+	}
+}
+
+// TestDutyBoard_TrainerDoesNotSeeOtherTeams verifies that a trainer does not
+// see slots of teams they neither train nor play in.
+func TestDutyBoard_TrainerDoesNotSeeOtherTeams(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	dtID := createDutyType(t, db, "Hallendienst", 2.0)
+	createDutySlot(t, db, dtID, seasonID, teamA, 0, "2026-06-14")
+	createDutySlot(t, db, dtID, seasonID, teamB, 0, "2026-06-14")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	if n := boardSlotCount(t, srv, "?audience=all", token); n != 1 {
+		t.Errorf("trainer should see only Team A slot (1), got %d", n)
+	}
+}
+
+// TestDutyBoard_TrainerAudienceFilterDefault verifies that without
+// ?audience=all, a trainer only sees slots whose audience matches their
+// function (or is NULL), and NOT slots restricted to other audiences.
+func TestDutyBoard_TrainerAudienceFilterDefault(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Dienst", 1.0)
+	matchSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	otherSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	nullSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	db.Exec(`UPDATE duty_slots SET audiences='["trainer"]' WHERE id=?`, matchSlot)
+	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, otherSlot)
+	// nullSlot keeps audiences=NULL
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'trainer')`, trainerMemberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	// No ?audience param → filter active, trainer sees matchSlot + nullSlot but not otherSlot
+	if n := boardSlotCount(t, srv, "", token); n != 2 {
+		t.Errorf("trainer should see 2 slots (audience=trainer + NULL), got %d", n)
+	}
+	_ = nullSlot
+}
+
+// TestDutyBoard_TrainerAudienceAll verifies that ?audience=all reveals all
+// slots of the trainer's teams regardless of audience.
+func TestDutyBoard_TrainerAudienceAll(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Dienst", 1.0)
+	a := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	b := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	db.Exec(`UPDATE duty_slots SET audiences='["trainer"]' WHERE id=?`, a)
+	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, b)
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	if n := boardSlotCount(t, srv, "?audience=all", token); n != 2 {
+		t.Errorf("trainer with audience=all should see 2 slots, got %d", n)
+	}
+}
+
+// TestDutyBoard_VorstandAudienceFilterDefault verifies that a vorstand
+// (Vereinsfunktion vorstand) sees only audience-matching slots by default
+// and all slots with ?audience=all.
+func TestDutyBoard_VorstandAudienceFilterDefault(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Dienst", 1.0)
+	matchSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	otherSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	db.Exec(`UPDATE duty_slots SET audiences='["vorstand"]' WHERE id=?`, matchSlot)
+	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, otherSlot)
+
+	vorstandUserID := testutil.CreateUser(t, db, "standard")
+	vorstandMemberID := testutil.CreateMember(t, db, vorstandUserID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'vorstand')`, vorstandMemberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, vorstandUserID, "standard", []string{"vorstand"})
+
+	if n := boardSlotCount(t, srv, "", token); n != 1 {
+		t.Errorf("vorstand default should see 1 audience-matching slot, got %d", n)
+	}
+	if n := boardSlotCount(t, srv, "?audience=all", token); n != 2 {
+		t.Errorf("vorstand with audience=all should see 2 slots, got %d", n)
+	}
+}
+
+// TestDutyBoard_SpielerAudienceAllIgnored verifies that a non-privileged
+// player cannot disable the audience filter via ?audience=all.
+func TestDutyBoard_SpielerAudienceAllIgnored(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Dienst", 1.0)
+	matchSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	hiddenSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, matchSlot)
+	db.Exec(`UPDATE duty_slots SET audiences='["vorstand"]' WHERE id=?`, hiddenSlot)
+
+	playerUserID := testutil.CreateUser(t, db, "standard")
+	playerMemberID := testutil.CreateMember(t, db, playerUserID)
+	addPlayerMembership(t, db, playerMemberID, teamID, seasonID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'spieler')`, playerMemberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, playerUserID, "standard", []string{"spieler"})
+	if n := boardSlotCount(t, srv, "?audience=all", token); n != 1 {
+		t.Errorf("player should see only audience-matching slot even with audience=all, got %d", n)
+	}
+}
+
+// TestDutyBoard_AdminAudienceBypass verifies that admin role always sees
+// every slot regardless of audience and query param.
+func TestDutyBoard_AdminAudienceBypass(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Dienst", 1.0)
+	a := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	b := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, a)
+	db.Exec(`UPDATE duty_slots SET audiences='["eltern"]' WHERE id=?`, b)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	if n := boardSlotCount(t, srv, "", token); n != 2 {
+		t.Errorf("admin should see all slots without param, got %d", n)
+	}
+	if n := boardSlotCount(t, srv, "?audience=all", token); n != 2 {
+		t.Errorf("admin should see all slots with audience=all, got %d", n)
 	}
 }
 
