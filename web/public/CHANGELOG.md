@@ -1,4 +1,11 @@
 ## 16.06.2026
+- [feat] ui: Event-Typ-Filter als Dropdown mit Checkboxen auf Mobile
+- [fix] duties: Eltern-Audience-Match nur wenn Kind im Slot-Team spielt
+- [feat] duties: Audience-Filter-Pille auf Dienste-Seite für Trainer und Vorstand
+- [feat] duties: Trainer-Sicht und umschaltbarer Audience-Filter auf Dienstbörse
+- [feat] teams: einheitliche Team-Darstellung über Kurz-/Langform-Display-Felder
+- [feat] chat: mehrzeilige Nachrichten mit WhatsApp-Steuerung
+- [fix] duties: Mobile-Action-Menü bei leeren Optionen ausblenden
 - [feat] carpooling: Elternzugang für Mitfahrgelegenheiten
 
 ## 15.06.2026
