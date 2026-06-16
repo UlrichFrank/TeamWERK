@@ -61,6 +61,8 @@ interface Game {
   is_home: boolean
   season_id: number
   team_names: string
+  team_display_short_csv?: string
+  team_display_long_csv?: string
   team_ids: number[]
   confirmed_count: number
   declined_count: number
@@ -489,9 +491,9 @@ export default function TerminePage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-brand-text">{fmtDate(g.date)}</span>
                         <span className="text-brand-text-muted text-sm">{g.time} Uhr</span>
-                        {g.team_names && (
+                        {(g.team_display_short_csv || g.team_names) && (
                           <span className="text-brand-text-subtle text-xs">
-                            {g.team_ids && g.team_ids.length > 1 ? 'Mehrere Teams' : g.team_names}
+                            {g.team_display_short_csv || g.team_names}
                           </span>
                         )}
                       </div>

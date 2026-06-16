@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
-import { buildTeamShortNames, TeamForName } from '../lib/teamName'
+import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -54,7 +54,7 @@ interface Game {
   end_time?: string | null
   end_date?: string | null
   opponent: string
-  teams: Array<{ id: number; name: string }>
+  teams: Array<{ id: number; name: string; display_short?: string; display_long?: string }>
   event_type: string
   slot_count: number
   filled_count: number
@@ -839,12 +839,21 @@ export default function KalenderPage() {
                     </button>
                   )}
                 </div>
-                {dayGames.map(g => (
+                {dayGames.map(g => {
+                  const teamsForRender = g.teams.map(t => ({
+                    id: t.id,
+                    name: t.name,
+                    display_short: t.display_short ?? shortNames.get(t.id),
+                    display_long: t.display_long ?? t.name,
+                  }))
+                  const tileLabel = formatTeamList(teamsForRender, 'kalender')
+                  const tooltipLabel = g.teams.length > 1 ? 'Mehrere Teams' : tileLabel
+                  return (
                   <button
                     key={g.id}
                     onPointerDown={e => e.stopPropagation()}
-                    onClick={() => setInfoItem({ type: 'game', game: { ...g, teams: g.teams.map(t => ({ id: t.id, name: shortNames.get(t.id) ?? t.name })) } })}
-                    title={`${g.teams.length > 1 ? 'Mehrere Teams' : (shortNames.get(g.teams[0]?.id) ?? g.teams[0]?.name ?? '?')} · ${g.opponent || '–'} · ${g.time}`}
+                    onClick={() => setInfoItem({ type: 'game', game: { ...g, teams: teamsForRender.map(t => ({ id: t.id, name: t.display_short ?? t.name })) } })}
+                    title={`${tooltipLabel} · ${g.opponent || '–'} · ${g.time}`}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${getEventColors(g.event_type).pill}`}
                   >
                     <div className="flex items-center gap-1 mb-0.5">
@@ -854,7 +863,7 @@ export default function KalenderPage() {
                         ? <Plane className="w-3 h-3 text-brand-text-muted shrink-0" />
                         : <Calendar className="w-3 h-3 text-brand-text-muted shrink-0" />}
                       <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text flex-1">
-                        {g.teams.length > 1 ? 'Mehrere' : (shortNames.get(g.teams[0]?.id) ?? '?')}
+                        {tileLabel || '?'}
                       </span>
                       {g.slot_count > 0 && (
                         <div className={`hidden @tile-sm:block w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
@@ -873,7 +882,8 @@ export default function KalenderPage() {
                       </span>
                     </div>
                   </button>
-                ))}
+                  )
+                })}
                 {dayTrainings.map(t => (
                   <button
                     key={`t-${t.id}`}

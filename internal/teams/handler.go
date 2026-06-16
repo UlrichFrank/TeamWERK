@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 )
 
 type Handler struct{ db *sql.DB }
@@ -15,9 +16,11 @@ type Handler struct{ db *sql.DB }
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
 type Team struct {
-	ID         int    `json:"id"`
-	Name       string `json:"name"`
-	IsExtended bool   `json:"isExtended"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	DisplayShort string `json:"display_short"`
+	DisplayLong  string `json:"display_long"`
+	IsExtended   bool   `json:"isExtended"`
 }
 
 type TrainerEntry struct {
@@ -70,10 +73,14 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get team name
+	// Get team name + display variants
 	var team Team
 	team.ID = teamID
-	if err := h.db.QueryRowContext(ctx, `SELECT name FROM teams WHERE id = ?`, teamID).Scan(&team.Name); err != nil {
+	if err := h.db.QueryRowContext(ctx,
+		`SELECT t.name,
+		        COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) AS display_short,
+		        COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS display_long
+		 FROM teams t WHERE t.id = ?`, teamID).Scan(&team.Name, &team.DisplayShort, &team.DisplayLong); err != nil {
 		http.Error(w, "team not found", http.StatusNotFound)
 		return
 	}

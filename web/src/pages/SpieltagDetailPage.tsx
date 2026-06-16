@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { formatTeamList } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
@@ -16,7 +17,8 @@ interface GameDetail {
   opponent: string
   event_type?: string
   team_id: number
-  team_name: string
+  teams?: Array<{ id: number; name: string; display_short?: string; display_long?: string }>
+  team_display_long_csv?: string
   season_id: number
   template_id?: number | null
 }
@@ -122,7 +124,7 @@ export default function SpieltagDetailPage() {
         event_time: addEventTime || null,
         duty_type_id: addDutyTypeId,
         slots_total: addSlotsTotal,
-        team_id: game.team_id,
+        team_id: game.teams?.[0]?.id ?? game.team_id,
         season_id: game.season_id,
         game_id: game.id,
         audiences: addAudiences.length > 0 ? addAudiences : null,
@@ -214,7 +216,7 @@ export default function SpieltagDetailPage() {
             <h1 className="text-2xl font-bold text-brand-text">
               {game.event_type === 'generisch' ? (game.opponent || '(kein Name)') : `Team vs ${game.opponent || '(kein Gegner)'}`}
             </h1>
-            <p className="text-brand-text-muted mt-1">{game.team_name}</p>
+            <p className="text-brand-text-muted mt-1">{game.team_display_long_csv || (game.teams ? formatTeamList(game.teams, 'long') : '')}</p>
             <p className="text-brand-text-muted text-sm mt-1">
               {dateFormatted} · {game.event_type === 'generisch' && game.end_time
                 ? `${game.time}–${game.end_time} Uhr`

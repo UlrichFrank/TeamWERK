@@ -12,6 +12,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 )
@@ -365,8 +366,10 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type team struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
+		ID           int    `json:"id"`
+		Name         string `json:"name"`
+		DisplayShort string `json:"display_short"`
+		DisplayLong  string `json:"display_long"`
 	}
 	type venueRef struct {
 		ID         int    `json:"id"`
@@ -377,23 +380,25 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		Note       string `json:"note"`
 	}
 	type game struct {
-		ID                int       `json:"id"`
-		Date              string    `json:"date"`
-		Time              string    `json:"time"`
-		EndTime           *string   `json:"end_time,omitempty"`
-		EndDate           *string   `json:"end_date"`
-		Opponent          string    `json:"opponent"`
-		EventType         string    `json:"event_type"`
-		Teams             []team    `json:"teams"`
-		SlotCount         int       `json:"slot_count"`
-		FilledCount       int       `json:"filled_count"`
-		TotalCount        int       `json:"total_count"`
-		ConfirmedCount    int       `json:"confirmed_count"`
-		DeclinedCount     int       `json:"declined_count"`
-		MaybeCount        int       `json:"maybe_count"`
-		RsvpOptOut        int       `json:"rsvp_opt_out"`
-		RsvpRequireReason int       `json:"rsvp_require_reason"`
-		Venue             *venueRef `json:"venue,omitempty"`
+		ID                   int       `json:"id"`
+		Date                 string    `json:"date"`
+		Time                 string    `json:"time"`
+		EndTime              *string   `json:"end_time,omitempty"`
+		EndDate              *string   `json:"end_date"`
+		Opponent             string    `json:"opponent"`
+		EventType            string    `json:"event_type"`
+		Teams                []team    `json:"teams"`
+		TeamDisplayShortCSV  string    `json:"team_display_short_csv"`
+		TeamDisplayLongCSV   string    `json:"team_display_long_csv"`
+		SlotCount            int       `json:"slot_count"`
+		FilledCount          int       `json:"filled_count"`
+		TotalCount           int       `json:"total_count"`
+		ConfirmedCount       int       `json:"confirmed_count"`
+		DeclinedCount        int       `json:"declined_count"`
+		MaybeCount           int       `json:"maybe_count"`
+		RsvpOptOut           int       `json:"rsvp_opt_out"`
+		RsvpRequireReason    int       `json:"rsvp_require_reason"`
+		Venue                *venueRef `json:"venue,omitempty"`
 	}
 
 	var games []*game
@@ -427,17 +432,29 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 
 	for _, g := range games {
 		teamRows, _ := h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name FROM teams t
+			`SELECT t.id, t.name,
+			        COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) AS display_short,
+			        COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS display_long
+			 FROM teams t
 			 JOIN game_teams gt ON gt.team_id = t.id
-			 WHERE gt.game_id = ?`, g.ID)
+			 WHERE gt.game_id = ?
+			 ORDER BY display_short`, g.ID)
 		if teamRows != nil {
 			for teamRows.Next() {
 				var t team
-				teamRows.Scan(&t.ID, &t.Name)
+				teamRows.Scan(&t.ID, &t.Name, &t.DisplayShort, &t.DisplayLong)
 				g.Teams = append(g.Teams, t)
 			}
 			teamRows.Close()
 		}
+		shorts := make([]string, len(g.Teams))
+		longs := make([]string, len(g.Teams))
+		for i, t := range g.Teams {
+			shorts[i] = t.DisplayShort
+			longs[i] = t.DisplayLong
+		}
+		g.TeamDisplayShortCSV = strings.Join(shorts, ", ")
+		g.TeamDisplayLongCSV = strings.Join(longs, ", ")
 	}
 
 	result := make([]game, len(games))
@@ -478,9 +495,13 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		MaybeCount        int       `json:"maybe_count"`
 		Venue             *venueRef `json:"venue,omitempty"`
 		Teams             []struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
+			ID           int    `json:"id"`
+			Name         string `json:"name"`
+			DisplayShort string `json:"display_short"`
+			DisplayLong  string `json:"display_long"`
 		} `json:"teams"`
+		TeamDisplayShortCSV string `json:"team_display_short_csv"`
+		TeamDisplayLongCSV  string `json:"team_display_long_csv"`
 	}
 	var templateIDNull sql.NullInt64
 	var endTimeNull, endDateNull sql.NullString
@@ -533,20 +554,34 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	teamRows, _ := h.db.QueryContext(r.Context(),
-		`SELECT t.id, t.name FROM teams t
+		`SELECT t.id, t.name,
+		        COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) AS display_short,
+		        COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS display_long
+		 FROM teams t
 		 JOIN game_teams gt ON gt.team_id = t.id
-		 WHERE gt.game_id = ?`, id)
+		 WHERE gt.game_id = ?
+		 ORDER BY display_short`, id)
 	if teamRows != nil {
 		for teamRows.Next() {
 			var t struct {
-				ID   int    `json:"id"`
-				Name string `json:"name"`
+				ID           int    `json:"id"`
+				Name         string `json:"name"`
+				DisplayShort string `json:"display_short"`
+				DisplayLong  string `json:"display_long"`
 			}
-			teamRows.Scan(&t.ID, &t.Name)
+			teamRows.Scan(&t.ID, &t.Name, &t.DisplayShort, &t.DisplayLong)
 			g.Teams = append(g.Teams, t)
 		}
 		teamRows.Close()
 	}
+	shorts := make([]string, len(g.Teams))
+	longs := make([]string, len(g.Teams))
+	for i, t := range g.Teams {
+		shorts[i] = t.DisplayShort
+		longs[i] = t.DisplayLong
+	}
+	g.TeamDisplayShortCSV = strings.Join(shorts, ", ")
+	g.TeamDisplayLongCSV = strings.Join(longs, ", ")
 
 	rows, _ := h.db.QueryContext(r.Context(),
 		`SELECT ds.id, dt.name, COALESCE(ds.event_time,''), COALESCE(ds.role_desc,''),
@@ -1548,24 +1583,26 @@ type gameVenueRef struct {
 }
 
 type gameListItem struct {
-	ID                int             `json:"id"`
-	Date              string          `json:"date"`
-	Time              string          `json:"time"`
-	Opponent          string          `json:"opponent"`
-	EventType         string          `json:"event_type"`
-	IsHome            bool            `json:"is_home"`
-	SeasonID          int             `json:"season_id"`
-	TeamNames         string          `json:"team_names"`
-	TeamIDs           []int           `json:"team_ids"`
-	ConfirmedCount    int             `json:"confirmed_count"`
-	DeclinedCount     int             `json:"declined_count"`
-	MaybeCount        int             `json:"maybe_count"`
-	MyRSVP            *string         `json:"my_rsvp"`
-	MyRSVPLocked      bool            `json:"my_rsvp_locked"`
-	ChildrenRSVP      []childRSVP     `json:"children_rsvp,omitempty"`
-	RsvpOptOut        int             `json:"rsvp_opt_out"`
-	RsvpRequireReason int             `json:"rsvp_require_reason"`
-	Venue             *gameVenueRef   `json:"venue,omitempty"`
+	ID                  int             `json:"id"`
+	Date                string          `json:"date"`
+	Time                string          `json:"time"`
+	Opponent            string          `json:"opponent"`
+	EventType           string          `json:"event_type"`
+	IsHome              bool            `json:"is_home"`
+	SeasonID            int             `json:"season_id"`
+	TeamNames           string          `json:"team_names"`
+	TeamIDs             []int           `json:"team_ids"`
+	TeamDisplayShortCSV string          `json:"team_display_short_csv"`
+	TeamDisplayLongCSV  string          `json:"team_display_long_csv"`
+	ConfirmedCount      int             `json:"confirmed_count"`
+	DeclinedCount       int             `json:"declined_count"`
+	MaybeCount          int             `json:"maybe_count"`
+	MyRSVP              *string         `json:"my_rsvp"`
+	MyRSVPLocked        bool            `json:"my_rsvp_locked"`
+	ChildrenRSVP        []childRSVP     `json:"children_rsvp,omitempty"`
+	RsvpOptOut          int             `json:"rsvp_opt_out"`
+	RsvpRequireReason   int             `json:"rsvp_require_reason"`
+	Venue               *gameVenueRef   `json:"venue,omitempty"`
 }
 
 // memberIDForUser returns the member_id for a user, or 0 if not found.
@@ -1651,6 +1688,14 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		SELECT DISTINCT g.id, g.date, g.time, g.opponent, g.event_type, g.is_home, g.season_id,
 		       (SELECT GROUP_CONCAT(t.name, ', ') FROM game_teams gt2 JOIN teams t ON t.id = gt2.team_id WHERE gt2.game_id = g.id),
 		       (SELECT GROUP_CONCAT(gt3.team_id) FROM game_teams gt3 WHERE gt3.game_id = g.id),
+		       (SELECT GROUP_CONCAT(s, ', ') FROM (
+		            SELECT COALESCE(`+appdb.TeamDisplayShort("t_s")+`, t_s.name) AS s
+		            FROM game_teams gt_s JOIN teams t_s ON t_s.id = gt_s.team_id
+		            WHERE gt_s.game_id = g.id ORDER BY s)),
+		       (SELECT GROUP_CONCAT(l, ', ') FROM (
+		            SELECT COALESCE(`+appdb.TeamDisplayName("t_l")+`, t_l.name) AS l
+		            FROM game_teams gt_l JOIN teams t_l ON t_l.id = gt_l.team_id
+		            WHERE gt_l.game_id = g.id ORDER BY l)),
 		       CASE WHEN g.rsvp_opt_out = 1
 		            THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
 		                   SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
@@ -1691,11 +1736,11 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var isHome, inRegularKader int
 		var myRSVP sql.NullString
 		var myRSVPLocked sql.NullInt64
-		var teamNames, teamIDsCSV sql.NullString
+		var teamNames, teamIDsCSV, teamShortCSV, teamLongCSV sql.NullString
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
-			&teamNames, &teamIDsCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
+			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
 			&g.RsvpOptOut, &g.RsvpRequireReason, &inRegularKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
@@ -1704,6 +1749,8 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		}
 		g.IsHome = isHome == 1
 		g.TeamNames = teamNames.String
+		g.TeamDisplayShortCSV = teamShortCSV.String
+		g.TeamDisplayLongCSV = teamLongCSV.String
 		g.TeamIDs = []int{}
 		if teamIDsCSV.Valid {
 			for _, s := range strings.Split(teamIDsCSV.String, ",") {

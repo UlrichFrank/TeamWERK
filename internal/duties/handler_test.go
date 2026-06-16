@@ -1189,3 +1189,51 @@ func TestListDutyTypes_SpielerForbidden(t *testing.T) {
 		t.Fatalf("expected 403 for spieler without function, got %d", res.StatusCode)
 	}
 }
+
+// TestBoard_TeamNameUsesShortForm verifies that the duty-board group header
+// uses the team short form ("mA1") rather than the long form ("B-Jugend 1 männlich").
+func TestBoard_TeamNameUsesShortForm(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	res, err := db.Exec(`INSERT INTO teams (name, age_class, gender) VALUES (?, ?, ?)`,
+		"Team B1", "B-Jugend", "m")
+	if err != nil {
+		t.Fatalf("insert team: %v", err)
+	}
+	teamID64, _ := res.LastInsertId()
+	teamID := int(teamID64)
+	kaderRes, err := db.Exec(
+		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, "B-Jugend", "m", teamID, 1)
+	if err != nil {
+		t.Fatalf("insert kader: %v", err)
+	}
+	kaderID64, _ := kaderRes.LastInsertId()
+
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-04-10")
+	createDutySlot(t, db, dtID, seasonID, teamID, gameID, "2026-04-10")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, int(kaderID64), memberID)
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "spieler", []string{"spieler"})
+	resp := testutil.Get(t, srv, "/api/duty-board", token)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var groups []map[string]any
+	json.NewDecoder(resp.Body).Decode(&groups)
+	if len(groups) == 0 {
+		t.Fatalf("expected at least one group")
+	}
+	got, _ := groups[0]["team_name"].(string)
+	if got != "mB" {
+		t.Errorf("expected team_name 'mB' (single team in B-Jugend männlich), got %q", got)
+	}
+}

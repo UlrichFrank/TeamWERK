@@ -148,3 +148,69 @@ func TestDashboard_MeineTermine_IsNotExtended(t *testing.T) {
 		t.Errorf("expected isExtended=false for primary kader training event, got %v", events[0]["isExtended"])
 	}
 }
+
+// TestDashboard_Doppelheimspiel_ListsBothTeams is a regression test for the MIN→GROUP_CONCAT fix:
+// previously, a game referencing two teams of the same age_class+gender showed only one team's
+// name in the dashboard. Now both teams must appear, comma-separated, in the teamName field.
+func TestDashboard_Doppelheimspiel_ListsBothTeams(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+
+	// Zwei B-Jugend-m-Teams, beide im Kader des Users
+	t1Res, _ := db.Exec(`INSERT INTO teams (name, age_class, gender) VALUES (?, ?, ?)`, "TS B1", "B-Jugend", "m")
+	t1ID64, _ := t1Res.LastInsertId()
+	t1ID := int(t1ID64)
+	t2Res, _ := db.Exec(`INSERT INTO teams (name, age_class, gender) VALUES (?, ?, ?)`, "TS B2", "B-Jugend", "m")
+	t2ID64, _ := t2Res.LastInsertId()
+	t2ID := int(t2ID64)
+
+	k1Res, _ := db.Exec(`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, "B-Jugend", "m", t1ID, 1)
+	k1ID, _ := k1Res.LastInsertId()
+	k2Res, _ := db.Exec(`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, "B-Jugend", "m", t2ID, 2)
+	k2ID, _ := k2Res.LastInsertId()
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k1ID, memberID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k2ID, memberID)
+
+	// Doppelheimspiel morgen
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, t1ID, tomorrow)
+	db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, t2ID)
+
+	h := dashboard.NewHandler(db)
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	var events []map[string]any
+	json.Unmarshal(body["meineTermine"], &events)
+	if len(events) == 0 {
+		t.Fatal("expected the Doppelheimspiel to appear in meineTermine")
+	}
+	var gameEvent map[string]any
+	for _, e := range events {
+		if e["eventType"] == "spiel" {
+			gameEvent = e
+			break
+		}
+	}
+	if gameEvent == nil {
+		t.Fatalf("expected a spiel event, got: %v", events)
+	}
+	teamName, _ := gameEvent["teamName"].(string)
+	if teamName != "mB1, mB2" {
+		t.Errorf("expected teamName 'mB1, mB2' (both teams short-form, sorted), got %q", teamName)
+	}
+}

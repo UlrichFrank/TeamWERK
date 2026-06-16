@@ -426,7 +426,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(g.event_type, ''),
 		    COALESCE(g.time, ''),
 		    COALESCE(ds.team_id, 0),
-		    COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, ''),
+		    COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''),
 		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END,
 		    COALESCE(ds.audiences, dt.audiences),
 		    COALESCE(ds.event_name, '')

@@ -1267,3 +1267,165 @@ func TestGetGame_ReturnsCounts(t *testing.T) {
 	}
 }
 
+
+// helper: insert a team with custom age_class+gender (avoids "Erwachsene"/"mixed" fixture default)
+func mkTeamCustom(t *testing.T, db *sql.DB, name, ageClass, gender string) int {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO teams (name, age_class, gender) VALUES (?, ?, ?)`, name, ageClass, gender)
+	if err != nil {
+		t.Fatalf("mkTeamCustom: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+func mkKaderCustom(t *testing.T, db *sql.DB, seasonID, teamID int, ageClass, gender string, teamNumber int) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, ageClass, gender, teamID, teamNumber)
+	if err != nil {
+		t.Fatalf("mkKaderCustom: %v", err)
+	}
+}
+
+// TestListGames_DoppelheimspielDisplayCSV verifies that a game with two teams of the same
+// age_class+gender exposes team_display_short_csv and team_display_long_csv with both teams sorted.
+func TestListGames_DoppelheimspielDisplayCSV(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	t1 := mkTeamCustom(t, db, "TS B1", "B-Jugend", "m")
+	t2 := mkTeamCustom(t, db, "TS B2", "B-Jugend", "m")
+	mkKaderCustom(t, db, seasonID, t1, "B-Jugend", "m", 1)
+	mkKaderCustom(t, db, seasonID, t2, "B-Jugend", "m", 2)
+
+	gameID := testutil.CreateGame(t, db, seasonID, t1, "2026-02-15")
+	db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, t2)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var games []map[string]any
+	json.NewDecoder(res.Body).Decode(&games)
+	if len(games) != 1 {
+		t.Fatalf("expected 1 game, got %d", len(games))
+	}
+	g := games[0]
+	if shortCSV, _ := g["team_display_short_csv"].(string); shortCSV != "mB1, mB2" {
+		t.Errorf("expected team_display_short_csv 'mB1, mB2', got %q", shortCSV)
+	}
+	if longCSV, _ := g["team_display_long_csv"].(string); longCSV != "B-Jugend 1 männlich, B-Jugend 2 männlich" {
+		t.Errorf("expected team_display_long_csv 'B-Jugend 1 männlich, B-Jugend 2 männlich', got %q", longCSV)
+	}
+	teams, _ := g["teams"].([]any)
+	if len(teams) != 2 {
+		t.Fatalf("expected 2 teams, got %d", len(teams))
+	}
+	for _, tm := range teams {
+		m := tm.(map[string]any)
+		if _, ok := m["display_short"]; !ok {
+			t.Errorf("team item missing display_short field")
+		}
+		if _, ok := m["display_long"]; !ok {
+			t.Errorf("team item missing display_long field")
+		}
+	}
+}
+
+// TestGetGame_DisplayFields verifies GET /api/games/{id} returns display_short/long per team
+// and the aggregate CSV fields.
+func TestGetGame_DisplayFields(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := mkTeamCustom(t, db, "Team A", "A-Jugend", "m")
+	mkKaderCustom(t, db, seasonID, teamID, "A-Jugend", "m", 1)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-03-10")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d", gameID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	game, _ := body["game"].(map[string]any)
+
+	if csv, _ := game["team_display_short_csv"].(string); csv != "mA" {
+		t.Errorf("expected team_display_short_csv 'mA', got %q", csv)
+	}
+	if csv, _ := game["team_display_long_csv"].(string); csv != "A-Jugend männlich" {
+		t.Errorf("expected team_display_long_csv 'A-Jugend männlich', got %q", csv)
+	}
+	teams, _ := game["teams"].([]any)
+	if len(teams) != 1 {
+		t.Fatalf("expected 1 team, got %d", len(teams))
+	}
+	tm := teams[0].(map[string]any)
+	if s, _ := tm["display_short"].(string); s != "mA" {
+		t.Errorf("expected display_short 'mA', got %q", s)
+	}
+	if l, _ := tm["display_long"].(string); l != "A-Jugend männlich" {
+		t.Errorf("expected display_long 'A-Jugend männlich', got %q", l)
+	}
+}
+
+// TestListMyGames_DisplayCSV verifies team_display_short_csv/long_csv are populated for /api/games/my.
+func TestListMyGames_DisplayCSV(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	t1 := mkTeamCustom(t, db, "TS B1", "B-Jugend", "m")
+	t2 := mkTeamCustom(t, db, "TS B2", "B-Jugend", "m")
+	k1 := mkKaderCustomReturn(t, db, seasonID, t1, "B-Jugend", "m", 1)
+	mkKaderCustom(t, db, seasonID, t2, "B-Jugend", "m", 2)
+
+	gameID := testutil.CreateGame(t, db, seasonID, t1, "2026-02-20")
+	db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, t2)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k1, memberID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", nil)
+
+	res := testutil.Get(t, srv, "/api/games/my", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var gameList []map[string]any
+	json.NewDecoder(res.Body).Decode(&gameList)
+	if len(gameList) != 1 {
+		t.Fatalf("expected 1 game, got %d", len(gameList))
+	}
+	g := gameList[0]
+	if shortCSV, _ := g["team_display_short_csv"].(string); shortCSV != "mB1, mB2" {
+		t.Errorf("expected team_display_short_csv 'mB1, mB2', got %q", shortCSV)
+	}
+	if longCSV, _ := g["team_display_long_csv"].(string); longCSV != "B-Jugend 1 männlich, B-Jugend 2 männlich" {
+		t.Errorf("expected team_display_long_csv 'B-Jugend 1 männlich, B-Jugend 2 männlich', got %q", longCSV)
+	}
+}
+
+// helper: insert kader and return ID
+func mkKaderCustomReturn(t *testing.T, db *sql.DB, seasonID, teamID int, ageClass, gender string, teamNumber int) int {
+	t.Helper()
+	res, err := db.Exec(
+		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, ageClass, gender, teamID, teamNumber)
+	if err != nil {
+		t.Fatalf("mkKaderCustomReturn: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}

@@ -157,7 +157,7 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       ts.date,
 			       ts.start_time AS time,
 			       CASE WHEN ts.title != '' THEN ts.title ELSE 'Training' END AS title,
-			       COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS team_name,
+			       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) AS team_name,
 			       '/termine/training/' || ts.id AS detail_url,
 			       NULL AS is_home,
 			       CASE WHEN ts.team_id IN (SELECT team_id FROM extended_teams) THEN 1 ELSE 0 END AS is_extended
@@ -173,7 +173,10 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       g.date,
 			       g.time,
 			       CASE WHEN g.event_type = 'generisch' THEN g.opponent ELSE 'vs. ' || g.opponent END,
-			       MIN(COALESCE(`+appdb.TeamDisplayName("t")+`, t.name)),
+			       (SELECT GROUP_CONCAT(s, ', ') FROM (
+			            SELECT COALESCE(`+appdb.TeamDisplayShort("t_s")+`, t_s.name) AS s
+			            FROM game_teams gt_s JOIN teams t_s ON t_s.id = gt_s.team_id
+			            WHERE gt_s.game_id = g.id ORDER BY s)),
 			       '/termine/spiel/' || g.id,
 			       g.is_home,
 			       CASE WHEN EXISTS (

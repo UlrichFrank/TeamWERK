@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList, Trash2, BriefcaseMedical } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { formatTeamList } from '../lib/teamName'
 import MapsLink from './MapsLink'
 import { api } from '../lib/api'
 
@@ -21,7 +22,7 @@ interface Game {
   end_date?: string | null
   opponent: string
   event_type: string
-  teams?: Array<{ id: number; name: string }>
+  teams?: Array<{ id: number; name: string; display_short?: string; display_long?: string }>
   confirmed_count: number
   declined_count: number
   maybe_count: number
@@ -207,7 +208,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
             {game.teams && game.teams.length > 0 && (
               <div className="flex justify-between">
                 <span className="text-brand-text-muted">{game.teams.length === 1 ? 'Team' : 'Teams'}</span>
-                <span className="font-medium text-brand-text">{game.teams.map(t => t.name).join(', ')}</span>
+                <span className="font-medium text-brand-text">{formatTeamList(game.teams, 'short')}</span>
               </div>
             )}
             {game.venue && (

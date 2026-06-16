@@ -9,7 +9,7 @@ interface PlayerEntry { userId: number; name: string; jerseyNumber: number | nul
 interface ParentEntry { userId: number; name: string; children: string[] }
 
 interface TeamRoster {
-  team: { id: number; name: string }
+  team: { id: number; name: string; display_short?: string; display_long?: string }
   trainers: TrainerEntry[]
   players: PlayerEntry[]
   parents: ParentEntry[]
@@ -33,7 +33,7 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-4">
       <div className="px-5 py-4 border-b border-brand-border-subtle">
-        <h2 className="text-lg font-bold text-brand-text mb-3">{roster.team.name}</h2>
+        <h2 className="text-lg font-bold text-brand-text mb-3">{roster.team.display_long || roster.team.name}</h2>
         <div className="flex gap-1">
           {TABS.map(tab => (
             <button
