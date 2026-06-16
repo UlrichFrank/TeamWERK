@@ -86,7 +86,15 @@ export default function ChatPage() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }, [msgInput])
+
   const isMobile = window.innerWidth < 640
   const [mobileShowChat, setMobileShowChat] = useState(false)
 
@@ -559,16 +567,21 @@ export default function ChatPage() {
                 </div>
               )}
 
-              <div className="px-4 py-3 border-t border-brand-border-subtle flex gap-2">
-                <input
+              <div className="px-4 py-3 border-t border-brand-border-subtle flex gap-2 items-end">
+                <textarea
                   ref={inputRef}
-                  type="text"
                   value={msgInput}
                   onChange={e => setMsgInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      sendMessage()
+                    }
+                  }}
                   placeholder="Nachricht schreiben…"
                   maxLength={2000}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  rows={1}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none overflow-y-auto leading-5"
                 />
                 <button
                   onClick={sendMessage}
@@ -884,7 +897,7 @@ function MessageBubble({
               <p className="truncate">{(msg.replyToBody ?? '').slice(0, 60)}</p>
             </div>
           )}
-          {msg.body}
+          <span className="whitespace-pre-wrap break-words">{msg.body}</span>
         </div>
 
         {/* Reaction chips */}
