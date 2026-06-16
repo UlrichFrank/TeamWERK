@@ -7,6 +7,7 @@ import { api } from '../lib/api'
 import NumberSpinner from '../components/NumberSpinner'
 import PersonChip from '../components/PersonChip'
 import { getEventColors } from '../lib/eventColors'
+import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
@@ -677,7 +678,7 @@ export default function MitfahrgelegenheitenPage() {
     .filter(d => !viewMine || mineMatches(d))
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
 
-  const TYPE_PILLS: [EventTypeFilter, string, React.ReactNode][] = [
+  const TYPE_PILLS: EventTypeFilterEntry[] = [
     ['heim',      'Heim',      <Home className="w-3.5 h-3.5" />],
     ['auswärts',  'Auswärts',  <Plane className="w-3.5 h-3.5" />],
     ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
@@ -700,21 +701,14 @@ export default function MitfahrgelegenheitenPage() {
               ))}
             </select>
           )}
-          {TYPE_PILLS.map(([type, label, icon]) => (
-            <button
-              key={type}
-              onClick={() => toggleType(type)}
-              aria-label={label}
-              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
-                filterTypes.has(type)
-                  ? getEventColors(type).filter
-                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
-              }`}
-            >
-              {icon}
-              {!compact && <span>{label}</span>}
-            </button>
-          ))}
+          <EventTypeFilter
+            types={TYPE_PILLS}
+            active={filterTypes}
+            onToggle={t => toggleType(t as EventTypeFilter)}
+            compact={compact}
+            ariaLabel="Mitfahrten-Typ-Filter"
+          />
+
           <button
             onClick={() => updateFilter({ mine: !viewMine })}
             aria-label="Meine"

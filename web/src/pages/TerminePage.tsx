@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History } from 'lucide-react'
+import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import { getEventColors } from '../lib/eventColors'
@@ -154,6 +155,12 @@ export default function TerminePage() {
   const [pendingRSVP, setPendingRSVP] = useState<{ kind: 'training' | 'game'; id: number; status: 'declined' | 'maybe'; memberId?: number } | null>(null)
   const [modalReason, setModalReason] = useState('')
   const compact = useCompactHeader(950)
+  const TERMINE_TYPES: EventTypeFilterEntry[] = [
+    ['heim',      'Heim',       <Home className="w-3.5 h-3.5" />],
+    ['auswärts',  'Auswärts',   <Plane className="w-3.5 h-3.5" />],
+    ['generisch', 'Sonstiges',  <Calendar className="w-3.5 h-3.5" />],
+    ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
+  ]
 
   const updateFilter = (patch: { team?: number | null; types?: Set<string>; past?: boolean }) => {
     const next = new URLSearchParams(searchParams)
@@ -325,26 +332,13 @@ export default function TerminePage() {
               <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? t.name}</option>
             ))}
           </select>
-          {([
-            ['heim',      'Heim',       <Home className="w-3.5 h-3.5" />],
-            ['auswärts',  'Auswärts',   <Plane className="w-3.5 h-3.5" />],
-            ['generisch', 'Sonstiges',  <Calendar className="w-3.5 h-3.5" />],
-            ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
-          ] as [string, string, React.ReactNode][]).map(([type, label, icon]) => (
-            <button
-              key={type}
-              onClick={() => toggleType(type)}
-              aria-label={label}
-              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
-                filterTypes.has(type)
-                  ? getEventColors(type).filter
-                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
-              }`}
-            >
-              {icon}
-              {!compact && <span>{label}</span>}
-            </button>
-          ))}
+          <EventTypeFilter
+            types={TERMINE_TYPES}
+            active={filterTypes}
+            onToggle={toggleType}
+            compact={compact}
+            ariaLabel="Termin-Typ-Filter"
+          />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button

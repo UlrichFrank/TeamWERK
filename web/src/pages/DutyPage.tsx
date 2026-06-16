@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, UserCheck, History, Filter } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth, hasFunction, hasAnyFunction } from '../contexts/AuthContext'
+import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 import { getEventColors } from '../lib/eventColors'
@@ -76,6 +77,11 @@ export default function DutyPage() {
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
   const [proxyChildren, setProxyChildren] = useState<ProxyChild[]>([])
   const compact = useCompactHeader(950)
+  const DUTY_TYPES: EventTypeFilterEntry[] = [
+    ['heim',      'Heim',      <Home className="w-3.5 h-3.5" />],
+    ['auswärts',  'Auswärts',  <Plane className="w-3.5 h-3.5" />],
+    ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
+  ]
 
   const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean }) => {
     const next = new URLSearchParams(searchParams)
@@ -157,25 +163,13 @@ export default function DutyPage() {
               ))}
             </select>
           )}
-          {([
-            ['heim',      'Heim',      <Home className="w-3.5 h-3.5" />],
-            ['auswärts',  'Auswärts',  <Plane className="w-3.5 h-3.5" />],
-            ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
-          ] as [string, string, React.ReactNode][]).map(([type, label, icon]) => (
-            <button
-              key={type}
-              onClick={() => toggleType(type)}
-              aria-label={label}
-              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
-                filterTypes.has(type)
-                  ? getEventColors(type).filter
-                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
-              }`}
-            >
-              {icon}
-              {!compact && <span>{label}</span>}
-            </button>
-          ))}
+          <EventTypeFilter
+            types={DUTY_TYPES}
+            active={filterTypes}
+            onToggle={toggleType}
+            compact={compact}
+            ariaLabel="Dienst-Typ-Filter"
+          />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
