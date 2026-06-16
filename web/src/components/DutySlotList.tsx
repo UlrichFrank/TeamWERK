@@ -156,12 +156,15 @@ onSlotDeleted?.(slotId)
                   </div>
                   {/* Mobile ActionMenu */}
                   <div className="sm:hidden">
-                    <ActionMenu actions={[
-                      ...(!s.claimed_by_me && s.vacancies > 0 && !isPast ? [{ label: 'Eintragen', onClick: () => claim(s.id) }] : []),
-                      ...(s.claimed_by_me && !isPast ? [{ label: 'Austragen', onClick: () => unclaim(s.id), variant: 'danger' as const }] : []),
-                      ...(canEdit && onEdit ? [{ label: 'Bearbeiten', onClick: () => onEdit(s.id) }] : []),
-                      ...(canEdit ? [{ label: 'Löschen', onClick: () => handleDeleteClick(s), variant: 'danger' as const }] : []),
-                    ]} />
+                    {(() => {
+                      const actions = [
+                        ...(!s.claimed_by_me && s.vacancies > 0 && !isPast ? [{ label: 'Eintragen', onClick: () => claim(s.id) }] : []),
+                        ...(s.claimed_by_me && !isPast ? [{ label: 'Austragen', onClick: () => unclaim(s.id), variant: 'danger' as const }] : []),
+                        ...(canEdit && onEdit ? [{ label: 'Bearbeiten', onClick: () => onEdit(s.id) }] : []),
+                        ...(canEdit ? [{ label: 'Löschen', onClick: () => handleDeleteClick(s), variant: 'danger' as const }] : []),
+                      ]
+                      return actions.length > 0 ? <ActionMenu actions={actions} /> : null
+                    })()}
                   </div>
                 </td>
               </tr>
