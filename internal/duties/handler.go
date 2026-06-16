@@ -335,16 +335,13 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	userID := claims.UserID
 
-	// Determine if user bypasses audience filter (admin, or has privileged Vereinsfunktion)
-	audienceBypass := claims.Role == "admin"
-	if !audienceBypass {
-		var cnt int
-		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM member_club_functions mcf
-			 JOIN members m ON m.id = mcf.member_id
-			 WHERE m.user_id = ? AND mcf.function IN ('vorstand','vorstand_beisitzer','trainer')`, userID).Scan(&cnt)
-		audienceBypass = cnt > 0
-	}
+	// Audience filter rules:
+	//   - System role admin: always bypass (sees all audiences).
+	//   - Privileged functions (vorstand, vorstand_beisitzer, trainer, sportliche_leitung):
+	//     audience filter is active by default, but ?audience=all disables it.
+	//   - Everyone else: audience filter always active; ?audience=all is ignored.
+	isPrivileged := claims.HasAnyFunction("vorstand", "vorstand_beisitzer", "trainer", "sportliche_leitung")
+	audienceBypass := claims.Role == "admin" || (isPrivileged && r.URL.Query().Get("audience") == "all")
 
 	args := []any{userID} // first ? is for the da LEFT JOIN
 	var whereParts string
@@ -352,6 +349,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		whereParts = `WHERE ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
 	} else {
+		// Team source = teams the user plays in (or a family member plays in)
+		// OR teams the user trains in (via trainer_memberships).
 		whereParts = `WHERE (
 		     ds.team_id IN (
 		         SELECT DISTINCT tm.team_id
@@ -362,6 +361,11 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		             UNION
 		             SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
 		         )
+		         UNION
+		         SELECT DISTINCT trm.team_id
+		         FROM trainer_memberships trm
+		         JOIN seasons strn ON strn.id = trm.season_id AND strn.is_active = 1
+		         WHERE trm.member_id IN (SELECT id FROM members WHERE user_id = ?)
 		     )
 		     OR (ds.team_id IS NULL AND ds.game_id IN (
 		         SELECT gt.game_id FROM game_teams gt
@@ -374,11 +378,16 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		                 UNION
 		                 SELECT fl2.member_id FROM family_links fl2 WHERE fl2.parent_user_id = ?
 		             )
+		             UNION
+		             SELECT DISTINCT trm2.team_id
+		             FROM trainer_memberships trm2
+		             JOIN seasons strn2 ON strn2.id = trm2.season_id AND strn2.is_active = 1
+		             WHERE trm2.member_id IN (SELECT id FROM members WHERE user_id = ?)
 		         )
 		     ))
 		 )
 		 AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
-		args = append(args, userID, userID, userID, userID)
+		args = append(args, userID, userID, userID, userID, userID, userID)
 	}
 
 	if !audienceBypass {

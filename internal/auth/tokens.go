@@ -28,6 +28,15 @@ func (c *Claims) HasFunction(f string) bool {
 	return slices.Contains(c.ClubFunctions, f)
 }
 
+func (c *Claims) HasAnyFunction(fns ...string) bool {
+	for _, f := range fns {
+		if slices.Contains(c.ClubFunctions, f) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Claims) IsTrainerLike() bool {
 	return c.HasFunction("trainer") || c.HasFunction("sportliche_leitung")
 }
