@@ -11,6 +11,8 @@ export default {
           gray: '#E5E7EB',
           blue: '#3E4A98',
           'blue-dark': '#2e3a7a',
+          'blue-light': '#ECF1FF',
+          'blue-light-hover': '#DAE3FB',
           green: '#6EB42E',
           'green-dark': '#5a9324',
           error: '#EF4444',
