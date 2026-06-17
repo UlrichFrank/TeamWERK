@@ -65,7 +65,7 @@ func HasEmailEnabled(db *sql.DB, userID int, category string) bool {
 // GetAllPreferences returns all notification preferences for a user as a map.
 // Categories without a row get their defaults (push=true, email=false).
 func GetAllPreferences(db *sql.DB, userID int) map[string]map[string]bool {
-	categories := []string{"games", "trainings", "duties", "duty_reminders", "carpooling", "membership"}
+	categories := []string{"games", "trainings", "duties", "duty_reminders", "carpooling", "membership", "chat"}
 	result := make(map[string]map[string]bool, len(categories))
 	for _, c := range categories {
 		result[c] = map[string]bool{"push": true, "email": false}

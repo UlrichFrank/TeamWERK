@@ -619,7 +619,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		h.hub.BroadcastToUser(uid, event)
 	}
 
-	go push.SendToUsers(h.db, h.cfg, h.activeMembers(r, convID, claims.UserID),
+	go push.SendToUsers(h.db, h.cfg, push.FilterByPushPref(h.db, h.activeMembers(r, convID, claims.UserID), "chat"),
 		h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
 
 	w.Header().Set("Content-Type", "application/json")
@@ -941,7 +941,7 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 			pushIDs = append(pushIDs, uid)
 		}
 	}
-	go push.SendToUsers(h.db, h.cfg, pushIDs, h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
+	go push.SendToUsers(h.db, h.cfg, push.FilterByPushPref(h.db, pushIDs, "chat"), h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
 
 	w.WriteHeader(http.StatusCreated)
 }
