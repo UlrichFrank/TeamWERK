@@ -61,9 +61,10 @@ func (h *Handler) teamMembersAndParents(teamID int) []int {
 	return ids
 }
 
-// hasTeamAccess returns true if the user is admin, sportliche_leitung, or a kader trainer of teamID.
+// hasTeamAccess returns true if the user is admin, vorstand, sportliche_leitung,
+// or a kader trainer of teamID.
 func (h *Handler) hasTeamAccess(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
-	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
+	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") {
 		return true, nil
 	}
 	var count int
@@ -720,7 +721,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	var teamSQL string
 	var teamArgs []any
-	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
+	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") {
 		teamSQL = "1=1"
 	} else {
 		var conds []string

@@ -103,6 +103,35 @@ func TestListSessions_AdminSeesAll(t *testing.T) {
 	}
 }
 
+// TestListSessions_VorstandSeesAll verifies that a user with only the vorstand
+// club function (no trainer membership) sees sessions from all teams.
+func TestListSessions_VorstandSeesAll(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	testutil.CreateTrainingSession(t, db, teamA, seasonID, "2026-03-10")
+	testutil.CreateTrainingSession(t, db, teamB, seasonID, "2026-03-10")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-03-01&to=2026-03-31", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var sessions []map[string]any
+	json.NewDecoder(res.Body).Decode(&sessions)
+	res.Body.Close()
+
+	if len(sessions) != 2 {
+		t.Errorf("expected 2 sessions, got %d", len(sessions))
+	}
+}
+
 // TestListSessions_Unauthenticated verifies that requests without a token are rejected.
 func TestListSessions_Unauthenticated(t *testing.T) {
 	_, srv := newHandler(t)
