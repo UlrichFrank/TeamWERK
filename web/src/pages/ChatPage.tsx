@@ -85,6 +85,7 @@ export default function ChatPage() {
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [mobileOverlay, setMobileOverlay] = useState<{ message: Message; isOwn: boolean } | null>(null)
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -232,7 +233,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!contextMenu && !emojiPickerMsgId) return
     const close = () => { setContextMenu(null); setEmojiPickerMsgId(null) }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setContextMenu(null); setEmojiPickerMsgId(null) } }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setContextMenu(null); setEmojiPickerMsgId(null); setMobileOverlay(null) } }
     document.addEventListener('mousedown', close)
     document.addEventListener('touchstart', close)
     document.addEventListener('keydown', onKey)
@@ -302,16 +303,21 @@ export default function ChatPage() {
   const handleContextMenu = (e: React.MouseEvent, msg: Message) => {
     if (msg.deletedAt) return
     e.preventDefault()
+    if (isMobile) return
     const sel = window.getSelection()
     const selectedText = sel && sel.toString().trim() ? sel.toString() : undefined
     setContextMenu({ x: e.clientX, y: e.clientY, message: msg, selectedText })
   }
 
-  const handleLongPress = (msg: Message, x: number, y: number) => {
+  const handleLongPress = (msg: Message, _x: number, _y: number) => {
     if (msg.deletedAt) return
-    const sel = window.getSelection()
-    const selectedText = sel && sel.toString().trim() ? sel.toString() : undefined
-    setContextMenu({ x, y, message: msg, selectedText })
+    if (isMobile) {
+      setMobileOverlay({ message: msg, isOwn: msg.senderId === user?.id })
+    } else {
+      const sel = window.getSelection()
+      const selectedText = sel && sel.toString().trim() ? sel.toString() : undefined
+      setContextMenu({ x: _x, y: _y, message: msg, selectedText })
+    }
   }
 
   const leaveGroup = async () => {
@@ -726,6 +732,19 @@ export default function ChatPage() {
         </div>
       )}
 
+      {mobileOverlay && (
+        <MobileMessageActionOverlay
+          overlay={mobileOverlay}
+          onClose={() => setMobileOverlay(null)}
+          onReply={msg => { startReply(msg); setMobileOverlay(null) }}
+          onEdit={msg => { startEdit(msg); setMobileOverlay(null) }}
+          onDelete={msg => { deleteMsg(msg); setMobileOverlay(null) }}
+          onToggleReaction={(msgId, emoji) => { toggleReaction(msgId, emoji); setMobileOverlay(null) }}
+          canDeleteMsg={canDelete}
+          userId={user?.id}
+        />
+      )}
+
       {showNewModal && (
         <NewConversationModal onClose={() => setShowNewModal(false)} onCreated={(conv) => {
           setShowNewModal(false)
@@ -993,6 +1012,92 @@ function MessageBubble({
           </span>
           {msg.editedAt && (
             <span className="text-xs text-brand-text-subtle">(bearbeitet)</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Mobile Message Action Overlay ---
+function MobileMessageActionOverlay({
+  overlay,
+  onClose,
+  onReply,
+  onEdit,
+  onDelete,
+  onToggleReaction,
+  canDeleteMsg,
+  userId,
+}: {
+  overlay: { message: Message; isOwn: boolean }
+  onClose: () => void
+  onReply: (msg: Message) => void
+  onEdit: (msg: Message) => void
+  onDelete: (msg: Message) => void
+  onToggleReaction: (msgId: number, emoji: string) => void
+  canDeleteMsg: (msg: Message) => boolean
+  userId: number | undefined
+}) {
+  const { message: msg, isOwn } = overlay
+
+  const copyText = () => {
+    const sel = window.getSelection()
+    const text = sel && sel.toString().trim() ? sel.toString() : msg.body
+    navigator.clipboard.writeText(text).catch(() => {})
+    onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6 bg-black/50 backdrop-blur-sm"
+      onTouchStart={onClose}
+    >
+      <div
+        className="flex flex-col gap-3 w-full max-w-sm"
+        onTouchStart={e => e.stopPropagation()}
+      >
+        {/* Emoji row */}
+        <div className="flex justify-center gap-0.5 bg-white rounded-full px-3 py-2 shadow-xl self-center">
+          {REACTION_EMOJIS.map(emoji => (
+            <button key={emoji} className="text-xl p-1.5" onClick={() => onToggleReaction(msg.id, emoji)}>
+              {emoji}
+            </button>
+          ))}
+        </div>
+
+        {/* Message bubble — select-text für OS-Textselektion */}
+        <div className={`rounded-xl px-3 py-2.5 text-sm select-text shadow-xl ${isOwn ? 'bg-brand-yellow text-brand-black self-end' : 'bg-white border border-brand-border text-brand-text self-start'}`}>
+          {msg.replyToId && (
+            <div className={`mb-1.5 pl-2 border-l-2 ${isOwn ? 'border-brand-black/40' : 'border-brand-yellow'} text-xs opacity-80`}>
+              <p className="font-semibold">{msg.replyToSenderName}</p>
+              <p className="truncate">{(msg.replyToBody ?? '').slice(0, 60)}</p>
+            </div>
+          )}
+          <span className="whitespace-pre-wrap break-words">{renderWithLinks(msg.body, isOwn)}</span>
+        </div>
+
+        {/* Action buttons */}
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden">
+          <button onClick={() => onReply(msg)} className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-text border-b border-brand-border-subtle">
+            <CornerUpLeft className="w-4 h-4 text-brand-text-muted shrink-0" />
+            Antworten
+          </button>
+          <button onClick={copyText} className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-text border-b border-brand-border-subtle">
+            <Copy className="w-4 h-4 text-brand-text-muted shrink-0" />
+            Kopieren
+          </button>
+          {msg.senderId === userId && (
+            <button onClick={() => onEdit(msg)} className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-text border-b border-brand-border-subtle">
+              <Pencil className="w-4 h-4 text-brand-text-muted shrink-0" />
+              Bearbeiten
+            </button>
+          )}
+          {canDeleteMsg(msg) && (
+            <button onClick={() => onDelete(msg)} className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-danger">
+              <Trash2 className="w-4 h-4 shrink-0" />
+              Löschen
+            </button>
           )}
         </div>
       </div>
