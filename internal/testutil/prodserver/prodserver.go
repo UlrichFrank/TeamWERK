@@ -31,18 +31,12 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/venues"
 )
 
-// New starts a test HTTP server backed by the same router definition used
-// in production (app.BuildRouter). All routes, middleware groups, and
-// authorization checks are wired exactly as in main.go.
-//
-// The server is closed automatically when the test ends.
-func New(t *testing.T, database *sql.DB) *httptest.Server {
+func buildHandlers(t *testing.T, database *sql.DB) *app.Handlers {
 	t.Helper()
 	cfg := testutil.TestConfig()
 	hubInstance := hub.NewHub()
 	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
-
-	handlers := &app.Handlers{
+	return &app.Handlers{
 		Auth:         auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost"),
 		Config:       appconfig.NewHandler(database, hubInstance),
 		Members:      members.NewHandler(database, hubInstance),
@@ -65,8 +59,23 @@ func New(t *testing.T, database *sql.DB) *httptest.Server {
 		Database:     database,
 		BaseURL:      "",
 	}
+}
 
-	srv := httptest.NewServer(app.BuildRouter(handlers, nil))
+// BuildRouter returns the full production HTTP handler for use in tests that
+// need direct access to the chi router (e.g. chi.Walk for drift checks).
+func BuildRouter(t *testing.T, database *sql.DB) http.Handler {
+	t.Helper()
+	return app.BuildRouter(buildHandlers(t, database), nil)
+}
+
+// New starts a test HTTP server backed by the same router definition used
+// in production (app.BuildRouter). All routes, middleware groups, and
+// authorization checks are wired exactly as in main.go.
+//
+// The server is closed automatically when the test ends.
+func New(t *testing.T, database *sql.DB) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(BuildRouter(t, database))
 	t.Cleanup(srv.Close)
 	return srv
 }

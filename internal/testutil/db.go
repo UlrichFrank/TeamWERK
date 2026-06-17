@@ -16,6 +16,9 @@ func NewDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("testutil.NewDB open: %v", err)
 	}
+	// SQLite in-memory databases are per-connection. Force a single connection
+	// so all goroutines (including HTTP handlers in tests) share the migrated schema.
+	database.SetMaxOpenConns(1)
 	if err := db.Migrate(database, db.MigrationsFS); err != nil {
 		database.Close()
 		t.Fatalf("testutil.NewDB migrate: %v", err)
