@@ -17,7 +17,7 @@ interface AuthCtx {
   stopImpersonation: () => Promise<void>
 }
 
-export type { MapsProvider }
+export type { MapsProvider, User, AuthCtx }
 
 export function hasFunction(user: User | null, f: string): boolean {
   return user?.clubFunctions?.includes(f) ?? false
@@ -32,7 +32,7 @@ const LOGOUT_MS = 30 * 60 * 1000
 const COUNTDOWN_SECS = 5 * 60
 const IDLE_EVENTS = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'] as const
 
-const AuthContext = createContext<AuthCtx | null>(null)
+export const AuthContext = createContext<AuthCtx | null>(null)
 
 function fmtCountdown(s: number): string {
   const m = Math.floor(s / 60)

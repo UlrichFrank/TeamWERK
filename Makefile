@@ -144,8 +144,9 @@ restore-local: ## Backup (DB + Bilder) lokal einspielen
 
 pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal einspielen
 
-test: ## Alle Go-Tests mit Race-Detector ausführen
+test: ## Backend (race) + Frontend (vitest) Tests ausführen
 	$(GO) test -race ./...
+	cd web && pnpm test:run
 
 lint: ## Statische Codeanalyse mit golangci-lint
 	@if ! command -v golangci-lint > /dev/null 2>&1; then \
