@@ -149,6 +149,100 @@ func TestDashboard_MeineTermine_IsNotExtended(t *testing.T) {
 	}
 }
 
+// TestDashboard_MeineDienste_AudienceFiltersOpenSlots verifies that a trainer
+// does not see player-only audience slots in the "Meine Dienste" widget. The
+// game is on the trainer's team and has both a trainer-audience and a
+// spieler-audience open slot — only the trainer-audience slot must count.
+func TestDashboard_MeineDienste_AudienceFiltersOpenSlots(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Damen 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	// Trainer user with member_club_functions=trainer, attached to the team's kader as trainer.
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'trainer')`, memberID)
+	db.Exec(`INSERT INTO kader_trainers (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, tomorrow)
+
+	dtSpieler := testutil.CreateDutyType(t, db, "Kampfgericht", 1.0)
+	dtTrainer := testutil.CreateDutyType(t, db, "Coachen", 1.0)
+	spielerSlot := testutil.CreateDutySlot(t, db, dtSpieler, seasonID, teamID, gameID, tomorrow)
+	trainerSlot := testutil.CreateDutySlot(t, db, dtTrainer, seasonID, teamID, gameID, tomorrow)
+	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, spielerSlot)
+	db.Exec(`UPDATE duty_slots SET audiences='["trainer"]' WHERE id=?`, trainerSlot)
+
+	h := dashboard.NewHandler(db)
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"trainer"})
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	var md map[string]any
+	json.Unmarshal(body["meineDienste"], &md)
+	if md["nextGame"] == nil {
+		t.Fatalf("expected nextGame to be present for trainer with trainer-audience slot, got nil")
+	}
+	// CreateDutySlot creates 2 total / 0 filled — so 2 open slots per slot.
+	// Only the trainer-audience slot should count → 2, not 4.
+	if got, _ := md["openSlotsCount"].(float64); got != 2 {
+		t.Errorf("expected openSlotsCount=2 (only trainer-audience slot), got %v", got)
+	}
+}
+
+// TestDashboard_MeineDienste_AudienceHidesGameWithoutMatchingSlots verifies that
+// a trainer whose team has an upcoming game with only player-audience duty slots
+// does NOT see that game as nextGame on their dashboard.
+func TestDashboard_MeineDienste_AudienceHidesGameWithoutMatchingSlots(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Damen 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'trainer')`, memberID)
+	db.Exec(`INSERT INTO kader_trainers (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, tomorrow)
+
+	dtSpieler := testutil.CreateDutyType(t, db, "Kampfgericht", 1.0)
+	spielerSlot := testutil.CreateDutySlot(t, db, dtSpieler, seasonID, teamID, gameID, tomorrow)
+	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, spielerSlot)
+
+	h := dashboard.NewHandler(db)
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"trainer"})
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	var md map[string]any
+	json.Unmarshal(body["meineDienste"], &md)
+	if md["nextGame"] != nil {
+		t.Errorf("expected nextGame=nil when only spieler-audience slots exist for trainer, got %v", md["nextGame"])
+	}
+}
+
 // TestDashboard_Doppelheimspiel_ListsBothTeams is a regression test for the MIN→GROUP_CONCAT fix:
 // previously, a game referencing two teams of the same age_class+gender showed only one team's
 // name in the dashboard. Now both teams must appear, comma-separated, in the teamName field.

@@ -224,8 +224,45 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 	return events
 }
 
+// audienceMatchClauseSQL filters duty_slots to those whose audience matches the
+// current user. Mirrors the duty board's filter (handler.go in internal/duties).
+// Requires `ds` and `dt` to be in scope. Takes two positional parameters:
+// userID (for the 'eltern' family-link match) and userID (for the
+// member_club_functions match).
+const audienceMatchClauseSQL = `(
+	COALESCE(ds.audiences, dt.audiences) IS NULL
+	OR (
+		json_valid(COALESCE(ds.audiences, dt.audiences)) AND (
+			(EXISTS (
+				SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
+				WHERE je.value = 'eltern'
+			) AND EXISTS (
+				SELECT 1 FROM family_links fl_a
+				JOIN player_memberships pm_a ON pm_a.member_id = fl_a.member_id
+				JOIN seasons sa ON sa.id = pm_a.season_id AND sa.is_active = 1
+				WHERE fl_a.parent_user_id = ?
+				AND (
+					pm_a.team_id = ds.team_id
+					OR (ds.team_id IS NULL AND ds.game_id IS NOT NULL AND pm_a.team_id IN (
+						SELECT gt_a.team_id FROM game_teams gt_a WHERE gt_a.game_id = ds.game_id
+					))
+				)
+			))
+			OR EXISTS (
+				SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
+				JOIN member_club_functions mcf_a ON mcf_a.function = je.value
+				JOIN members m_a ON m_a.id = mcf_a.member_id
+				WHERE m_a.user_id = ?
+			)
+		)
+	)
+)`
+
 // queryMeineDienste finds the next game with duty slots and returns user's own
-// assignments (or open slot count) plus the season duty account.
+// assignments (or open slot count) plus the season duty account. Both the
+// next-game lookup and the open-slot count are restricted to slots whose
+// audience matches the user — a trainer must not see player-only slots on
+// their dashboard, even when those slots belong to one of their teams.
 func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, seasonID int, seasonName string) *MeineDienste {
 	result := &MeineDienste{
 		MySlots:     []DiensteSlot{},
@@ -241,11 +278,16 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 		WHERE gt.team_id IN (%s)
 		  AND g.season_id = ?
 		  AND DATE(g.date) >= DATE('now')
-		  AND EXISTS (SELECT 1 FROM duty_slots ds WHERE ds.game_id = g.id AND ds.season_id = ?)
+		  AND EXISTS (
+		      SELECT 1 FROM duty_slots ds
+		      JOIN duty_types dt ON dt.id = ds.duty_type_id
+		      WHERE ds.game_id = g.id AND ds.season_id = ?
+		        AND `+audienceMatchClauseSQL+`
+		  )
 		GROUP BY g.id
 		ORDER BY g.date ASC, g.time ASC
 		LIMIT 1`, teamSubquery),
-		userID, seasonID, seasonID, seasonID,
+		userID, seasonID, seasonID, seasonID, userID, userID,
 	).Scan(&game.ID, &game.Date, &game.Opponent)
 	if err != nil {
 		return result
@@ -273,10 +315,13 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 
 	if len(result.MySlots) == 0 {
 		h.db.QueryRowContext(r.Context(), `
-			SELECT COALESCE(SUM(slots_total - slots_filled), 0)
-			FROM duty_slots
-			WHERE game_id = ? AND season_id = ? AND slots_filled < slots_total`,
-			game.ID, seasonID,
+			SELECT COALESCE(SUM(ds.slots_total - ds.slots_filled), 0)
+			FROM duty_slots ds
+			JOIN duty_types dt ON dt.id = ds.duty_type_id
+			WHERE ds.game_id = ? AND ds.season_id = ?
+			  AND ds.slots_filled < ds.slots_total
+			  AND `+audienceMatchClauseSQL,
+			game.ID, seasonID, userID, userID,
 		).Scan(&result.OpenSlotsCount)
 	}
 
