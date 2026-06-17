@@ -300,8 +300,6 @@ PUT/DELETE /api/training-series/{id}
 POST /api/training-sessions
 PUT/DELETE /api/training-sessions/{id}
 POST /api/training-sessions/{id}/attendances
-POST /api/duty-slots
-PUT/DELETE /api/duty-slots/{id}
 POST /api/duty-assignments/{id}/fulfill
 POST /api/duty-assignments/{id}/cash-substitute
 GET  /api/membership-requests
@@ -321,6 +319,8 @@ POST /api/games
 PUT/DELETE /api/games/{id}
 POST /api/games/{id}/regenerate
 POST /api/games/regenerate-day
+POST /api/duty-slots
+PUT/DELETE /api/duty-slots/{id}
 POST /api/members/{id}/change-drafts/{draftId}/accept
 DELETE /api/members/{id}/change-drafts/{draftId}
 GET  /api/age-class-rules
