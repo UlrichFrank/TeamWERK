@@ -502,6 +502,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		} `json:"teams"`
 		TeamDisplayShortCSV string `json:"team_display_short_csv"`
 		TeamDisplayLongCSV  string `json:"team_display_long_csv"`
+		CanEdit             bool   `json:"can_edit"`
 	}
 	var templateIDNull sql.NullInt64
 	var endTimeNull, endDateNull sql.NullString
@@ -582,6 +583,21 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	}
 	g.TeamDisplayShortCSV = strings.Join(shorts, ", ")
 	g.TeamDisplayLongCSV = strings.Join(longs, ", ")
+
+	claims := auth.ClaimsFromCtx(r.Context())
+	switch {
+	case claims.Role == "admin", claims.HasFunction("vorstand"), claims.HasFunction("sportliche_leitung"):
+		g.CanEdit = true
+	case claims.HasFunction("trainer"):
+		var trains int
+		h.db.QueryRowContext(r.Context(), `
+			SELECT COUNT(*) FROM trainer_memberships trm
+			JOIN seasons s ON s.id = trm.season_id AND s.is_active = 1
+			JOIN members m ON m.id = trm.member_id AND m.user_id = ?
+			JOIN game_teams gt ON gt.team_id = trm.team_id AND gt.game_id = ?`,
+			claims.UserID, id).Scan(&trains)
+		g.CanEdit = trains > 0
+	}
 
 	rows, _ := h.db.QueryContext(r.Context(),
 		`SELECT ds.id, dt.name, COALESCE(ds.event_time,''), COALESCE(ds.role_desc,''),
