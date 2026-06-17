@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import ChangelogModal from './ChangelogModal'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
@@ -7,6 +8,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { useChatEvents } from '../hooks/useChatEvents'
 import { useVersion } from '../contexts/VersionContext'
+import { reloadWithSwActivation } from '../lib/reload'
 import { api } from '../lib/api'
 
 // NavItem.roles / NavItem.excludeRoles sind polymorph: jeder String wird sowohl gegen die
@@ -83,7 +85,10 @@ export default function AppShell() {
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
   usePushSubscription()
-  const { version, updateAvailable } = useVersion()
+  const { version, updateAvailable: sseUpdateAvailable } = useVersion()
+  const [swUpdateAvailable, setSwUpdateAvailable] = useState(false)
+  useRegisterSW({ onNeedRefresh() { setSwUpdateAvailable(true) } })
+  const showUpdateBanner = sseUpdateAvailable || swUpdateAvailable
   const [canGoBack, setCanGoBack] = useState(() => (window.history.state?.idx ?? 0) > 0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
@@ -272,7 +277,7 @@ export default function AppShell() {
         </header>
 
         {/* Update banner */}
-        {updateAvailable && (
+        {showUpdateBanner && (
           <div className="bg-brand-yellow text-brand-black text-sm font-medium shrink-0">
             <div className="px-4 py-2 flex items-center gap-2">
               <RefreshCw className="w-4 h-4 shrink-0" />
@@ -284,7 +289,7 @@ export default function AppShell() {
                 Details
               </button>
               <button
-                onClick={() => window.location.reload()}
+                onClick={reloadWithSwActivation}
                 className="bg-brand-black text-brand-yellow rounded px-2 py-0.5 text-xs font-semibold hover:bg-brand-black/80 transition-colors"
               >
                 Jetzt laden
