@@ -68,6 +68,44 @@ func TestListGames_EmptyRange(t *testing.T) {
 	}
 }
 
+// TestListGames_TrainerSeesOnlyOwnTeamGames verifies that a user with only the
+// trainer function sees games of teams they coach (via kader_trainers) and
+// nothing else. Mirrors the Florian-Steinle-mB2/mC2 scenario.
+func TestListGames_TrainerSeesOnlyOwnTeamGames(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	ownTeamID := testutil.CreateTeam(t, db, "mB2")
+	otherTeamID := testutil.CreateTeam(t, db, "mC2")
+	ownGameID := testutil.CreateGame(t, db, seasonID, ownTeamID, "2026-06-29")
+	testutil.CreateGame(t, db, seasonID, otherTeamID, "2026-06-29")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	ownKaderID := testutil.CreateKader(t, db, ownTeamID, seasonID)
+	if _, err := db.Exec(
+		`INSERT INTO kader_trainers (kader_id, member_id) VALUES (?, ?)`,
+		ownKaderID, trainerMemberID); err != nil {
+		t.Fatalf("insert kader_trainers: %v", err)
+	}
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var games []map[string]any
+	json.NewDecoder(res.Body).Decode(&games)
+	res.Body.Close()
+
+	if len(games) != 1 {
+		t.Fatalf("expected 1 game, got %d", len(games))
+	}
+	if int(games[0]["id"].(float64)) != ownGameID {
+		t.Errorf("expected only own-team game id=%d, got id=%v", ownGameID, games[0]["id"])
+	}
+}
+
 // TestGetGame_HappyPath verifies GET /api/games/{id} returns the game.
 func TestGetGame_HappyPath(t *testing.T) {
 	db := testutil.NewDB(t)

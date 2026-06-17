@@ -321,6 +321,38 @@ func (h *Handler) loadSameDayContext(ctx context.Context, gameDate string, seaso
 // GET /api/games
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
+	claims := auth.ClaimsFromCtx(r.Context())
+
+	// Sichtbarkeit:
+	//   - admin / vorstand / sportliche_leitung: alle Spiele
+	//   - trainer (ohne sportliche_leitung): nur Spiele eigener Teams (via kader_trainers)
+	//   - alle übrigen: nur Spiele, in denen der Nutzer selbst oder ein Kind
+	//     im Team-Kader steht (team_memberships + family_links)
+	fullAccess := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung")
+	var accessFilter string
+	var accessArgs []any
+	if !fullAccess {
+		if claims.HasFunction("trainer") {
+			accessFilter = ` AND EXISTS (
+				SELECT 1 FROM game_teams gt
+				JOIN kader k ON k.team_id = gt.team_id AND k.season_id = g.season_id
+				JOIN kader_trainers kt ON kt.kader_id = k.id
+				JOIN members m ON m.id = kt.member_id
+				WHERE gt.game_id = g.id AND m.user_id = ?
+			)`
+			accessArgs = append(accessArgs, claims.UserID)
+		} else {
+			accessFilter = ` AND EXISTS (
+				SELECT 1 FROM game_teams gt
+				JOIN team_memberships tm ON tm.team_id = gt.team_id AND tm.season_id = g.season_id
+				WHERE gt.game_id = g.id AND (
+				  EXISTS(SELECT 1 FROM members m WHERE m.id = tm.member_id AND m.user_id = ?)
+				  OR EXISTS(SELECT 1 FROM family_links fl WHERE fl.member_id = tm.member_id AND fl.parent_user_id = ?)
+				)
+			)`
+			accessArgs = append(accessArgs, claims.UserID, claims.UserID)
+		}
+	}
 
 	// confirmed_count berücksichtigt rsvp_opt_out: reguläre Kader-Mitglieder ohne
 	// Response-Eintrag werden als "confirmed" gezählt. declined und maybe bleiben
@@ -352,12 +384,14 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		err  error
 	)
 	if seasonID != "" {
-		rows, err = h.db.QueryContext(r.Context(), base+` WHERE g.season_id=?`+suffix, seasonID)
+		args := append([]any{seasonID}, accessArgs...)
+		rows, err = h.db.QueryContext(r.Context(), base+` WHERE g.season_id=?`+accessFilter+suffix, args...)
 	} else {
 		// Show active-season games plus any future games from other seasons
 		// (prevents games from stranding when seasons are switched).
 		rows, err = h.db.QueryContext(r.Context(),
-			base+` WHERE g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) OR DATE(g.date) >= DATE('now','-1 day')`+suffix)
+			base+` WHERE (g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) OR DATE(g.date) >= DATE('now','-1 day'))`+accessFilter+suffix,
+			accessArgs...)
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
