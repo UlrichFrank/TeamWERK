@@ -1041,6 +1041,12 @@ function MobileMessageActionOverlay({
 }) {
   const { message: msg, isOwn } = overlay
 
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
   const copyText = () => {
     const sel = window.getSelection()
     const text = sel && sel.toString().trim() ? sel.toString() : msg.body
@@ -1054,11 +1060,11 @@ function MobileMessageActionOverlay({
       onTouchStart={onClose}
     >
       <div
-        className="flex flex-col gap-3 w-full max-w-sm"
+        className="flex flex-col gap-3 w-auto min-w-[220px] max-w-[280px] max-h-[calc(100vh-3rem)] overflow-y-auto"
         onTouchStart={e => e.stopPropagation()}
       >
         {/* Emoji row */}
-        <div className="flex justify-center gap-0.5 bg-white rounded-full px-3 py-2 shadow-xl self-center">
+        <div className="flex justify-center gap-0.5 bg-white rounded-full px-3 py-2 shadow-xl self-center select-none">
           {REACTION_EMOJIS.map(emoji => (
             <button key={emoji} className="text-xl p-1.5" onClick={() => onToggleReaction(msg.id, emoji)}>
               {emoji}
@@ -1078,7 +1084,7 @@ function MobileMessageActionOverlay({
         </div>
 
         {/* Action buttons */}
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden">
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden select-none">
           <button onClick={() => onReply(msg)} className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-text border-b border-brand-border-subtle">
             <CornerUpLeft className="w-4 h-4 text-brand-text-muted shrink-0" />
             Antworten
