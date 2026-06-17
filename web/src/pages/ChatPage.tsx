@@ -968,7 +968,7 @@ function MessageBubble({
       >
         {!isOwn && <span className="text-xs text-brand-text-muted mb-0.5">{msg.senderName}</span>}
 
-        <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm select-text ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
+        <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm select-none ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
           {/* Reply quote */}
           {msg.replyToId && (
             <div className={`mb-1.5 pl-2 border-l-2 ${isOwn ? 'border-brand-black/40' : 'border-brand-yellow'} text-xs opacity-80`}>
@@ -1041,11 +1041,6 @@ function MobileMessageActionOverlay({
 }) {
   const { message: msg, isOwn } = overlay
 
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [])
 
   const copyText = () => {
     const sel = window.getSelection()
@@ -1060,7 +1055,7 @@ function MobileMessageActionOverlay({
       onTouchStart={onClose}
     >
       <div
-        className="flex flex-col gap-3 w-auto min-w-[220px] max-w-[280px] max-h-[calc(100vh-3rem)] overflow-y-auto"
+        className="flex flex-col gap-3 w-full max-w-xs max-h-[calc(100vh-3rem)] overflow-y-auto overflow-x-hidden"
         onTouchStart={e => e.stopPropagation()}
       >
         {/* Emoji row */}
@@ -1084,7 +1079,7 @@ function MobileMessageActionOverlay({
         </div>
 
         {/* Action buttons */}
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden select-none">
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden select-none self-center max-w-[210px] w-full">
           <button onClick={() => onReply(msg)} className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-text border-b border-brand-border-subtle">
             <CornerUpLeft className="w-4 h-4 text-brand-text-muted shrink-0" />
             Antworten
