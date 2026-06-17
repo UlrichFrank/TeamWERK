@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Trash2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTeamList } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'

@@ -1,3 +1,7 @@
+## 17.06.2026
+- [fix] games: Spiele im Kalender rollenbasiert filtern
+- [feat] games: can_edit-Flag in GET /api/games/{id}
+
 ## 16.06.2026
 - [feat] ui: Event-Typ-Filter als Dropdown mit Checkboxen auf Mobile
 - [fix] duties: Eltern-Audience-Match nur wenn Kind im Slot-Team spielt
