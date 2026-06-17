@@ -1,4 +1,10 @@
 ## 17.06.2026
+- [fix] update: fix double banner
+- [fix] chat: Overlay-Breite, Textselektion und iOS-Click-Bug behoben
+- [feat] chat: Push-Benachrichtigungen für Nachrichten steuerbar im Profil
+- [fix] chat: Mobile Overlay – Scroll-Sperre, schmäleres Menü, keine Textselektion in Buttons
+- [fix] chat: WhatsApp-Style Mobile Action Overlay bei Long-Press
+- [fix] chat: Nachrichten-UX – Zeilenumbrüche, Textselektion, Links, Emoji-Regeln
 - [fix] dashboard: Meine Dienste filtert offene Slots nach Audience
 - [fix] trainings: Vorstand sieht alle Trainings im Kalender
 - [fix] duties: Vorstand darf Dienst-Slots anlegen, ändern, löschen
