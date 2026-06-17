@@ -44,7 +44,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 // alle anderen Strings (z.B. 'trainer', 'vorstand') gegen die Vereinsfunktionen des Users.
 // Die System-Rolle 'standard' wird nicht direkt benannt — sie ist der Default und ergibt
 // sich aus der Abwesenheit von 'admin'. Siehe docs/berechtigungen.md.
-function RoleRoute({ roles, children }: { roles: string[]; children: React.ReactNode }) {
+export function RoleRoute({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="flex items-center justify-center h-screen">Laden…</div>
   const allowed = user && roles.some(r => r === 'admin' ? user.role === 'admin' : hasFunction(user, r))

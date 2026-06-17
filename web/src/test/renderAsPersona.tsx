@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { AuthContext, type AuthCtx, type User } from '../contexts/AuthContext'
 import { type Persona, personaById } from './personas'
-import { setupApiMock } from './apiMock'
+import { setupApiMock, type MockEntry } from './apiMock'
 
 function personaToUser(p: Persona): User {
   return {
@@ -32,6 +32,8 @@ function makeCtx(user: User): AuthCtx {
 interface RenderOptions {
   route?: string
   initialEntries?: string[]
+  /** Extra API mock entries registered before the catch-all. */
+  mocks?: MockEntry[]
 }
 
 export function renderAsPersona(
@@ -39,10 +41,10 @@ export function renderAsPersona(
   personaId: string,
   options: RenderOptions = {},
 ): RenderResult {
-  setupApiMock()
+  const { route = '/', initialEntries, mocks } = options
+  setupApiMock(mocks)
   const persona = personaById(personaId)
   const ctx = makeCtx(personaToUser(persona))
-  const { route = '/', initialEntries } = options
 
   return render(
     <AuthContext.Provider value={ctx}>
@@ -56,8 +58,9 @@ export function renderAsPersona(
 export function renderAsPersonaNoRouter(
   ui: ReactNode,
   personaId: string,
+  options: Pick<RenderOptions, 'mocks'> = {},
 ): RenderResult {
-  setupApiMock()
+  setupApiMock(options.mocks)
   const persona = personaById(personaId)
   const ctx = makeCtx(personaToUser(persona))
 
