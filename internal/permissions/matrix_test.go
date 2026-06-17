@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
+	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
 )
 
 const (
@@ -410,7 +411,7 @@ func resolvePathParams(path string) string {
 
 func TestPermissionMatrix_Backend(t *testing.T) {
 	db := testutil.NewDB(t)
-	router := testutil.BuildRouter(t, db)
+	router := prodserver.BuildRouter(t, db)
 
 	// Drift-Check: alle registrierten Routen müssen in der Matrix stehen.
 	matrixKeys := make(map[string]bool, len(matrix))

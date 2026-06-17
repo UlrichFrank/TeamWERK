@@ -6,6 +6,7 @@ package prodserver
 
 import (
 	"database/sql"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
