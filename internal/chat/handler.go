@@ -1367,6 +1367,9 @@ func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 			msgID, claims.UserID, body.Emoji)
 	} else {
 		h.db.ExecContext(r.Context(),
+			`DELETE FROM message_reactions WHERE message_id=? AND user_id=?`,
+			msgID, claims.UserID)
+		h.db.ExecContext(r.Context(),
 			`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?,?,?)`,
 			msgID, claims.UserID, body.Emoji)
 	}
