@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
@@ -12,6 +12,7 @@ import { useCompactHeader } from '../hooks/useCompactHeader'
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
 import EventInfoModal from '../components/EventInfoModal'
+import SpieltagDetailModal from '../components/SpieltagDetailModal'
 import VenuePicker, { Venue as VenueType } from '../components/VenuePicker'
 import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
 
@@ -126,7 +127,6 @@ function canSeeTeamAbsences(user: ReturnType<typeof useAuth>['user']): boolean {
 
 export default function KalenderPage() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const now = new Date()
   const initDate = () => {
@@ -194,6 +194,7 @@ export default function KalenderPage() {
   // Inline edit modal
   const [editingTraining, setEditingTraining] = useState<Training | null>(null)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
+  const [detailGameId, setDetailGameId] = useState<number | null>(null)
   const [infoItem, setInfoItem] = useState<{ type: 'game' | 'training' | 'absence'; game?: Game; training?: Training; absence?: Absence } | null>(null)
 
 
@@ -742,7 +743,7 @@ export default function KalenderPage() {
             }`}
           >
             <CalendarDays className="w-3.5 h-3.5" />
-            {!compact && <span>Abwesenheiten</span>}
+            {!compact && <span>Abwesenheit</span>}
           </button>
         )}
         {(canEdit || canCreateAbsence) && (
@@ -1501,10 +1502,18 @@ export default function KalenderPage() {
             else if (infoItem.type === 'training' && infoItem.training) { setInfoItem(null); setEditingTraining(infoItem.training) }
           } : undefined}
           onDienste={infoItem.type === 'game' && infoItem.game
-            ? () => { setInfoItem(null); navigate(`/kalender/${infoItem.game!.id}`) }
+            ? () => { const id = infoItem.game!.id; setInfoItem(null); setDetailGameId(id) }
             : undefined}
           canEditAbsence={infoItem.type === 'absence' && !!infoItem.absence && infoItem.absence.can_edit}
           onAbsenceChanged={() => { loadAbsences(); setInfoItem(null) }}
+        />
+      )}
+      {detailGameId !== null && (
+        <SpieltagDetailModal
+          gameId={detailGameId}
+          onClose={() => setDetailGameId(null)}
+          onChanged={loadGames}
+          onDeleted={() => { loadGames(); setDetailGameId(null) }}
         />
       )}
     </div>

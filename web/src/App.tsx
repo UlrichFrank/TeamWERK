@@ -22,7 +22,6 @@ import AdminSettingsPage from './pages/AdminSettingsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
-import SpieltagDetailPage from './pages/SpieltagDetailPage'
 import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminKaderPage from './pages/AdminKaderPage'
@@ -114,7 +113,6 @@ export default function App() {
               <Route path="nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
               <Route path="kalender" element={<KalenderPage />} />
-              <Route path="kalender/:gameId" element={<SpieltagDetailPage />} />
               <Route path="termine" element={<TerminePage />} />
               <Route path="termine/:type/:id" element={<TermineDetailPage />} />
               <Route path="mein-team" element={<MeinTeamPage />} />
