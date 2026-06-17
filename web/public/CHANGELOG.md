@@ -1,4 +1,8 @@
 ## 17.06.2026
+- [fix] dashboard: Meine Dienste filtert offene Slots nach Audience
+- [fix] trainings: Vorstand sieht alle Trainings im Kalender
+- [fix] duties: Vorstand darf Dienst-Slots anlegen, ändern, löschen
+- [feat] modal: Spieltag Details nun als Modal
 - [fix] games: Spiele im Kalender rollenbasiert filtern
 - [feat] games: can_edit-Flag in GET /api/games/{id}
 

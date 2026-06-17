@@ -173,7 +173,7 @@ export default function ProfileMiscTab() {
                 onChange={e => handleMapsProviderChange(e.target.value as MapsProvider)}
                 className="border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow disabled:opacity-50"
               >
-                <option value="auto">Automatisch (Gerät erkennen)</option>
+                <option value="auto">Automatisch</option>
                 <option value="google">Google Maps</option>
                 <option value="apple">Apple Maps</option>
               </select>
