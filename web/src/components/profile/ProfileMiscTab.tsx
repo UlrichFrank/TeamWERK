@@ -3,7 +3,7 @@ import { api } from '../../lib/api'
 import Toggle from '../Toggle'
 import { useAuth, MapsProvider } from '../../contexts/AuthContext'
 
-type Category = 'games' | 'trainings' | 'duties' | 'carpooling'
+type Category = 'games' | 'trainings' | 'duties' | 'carpooling' | 'chat'
 
 interface Pref {
   push: boolean
@@ -17,6 +17,7 @@ const defaults: Prefs = {
   trainings: { push: true, email: false },
   duties: { push: true, email: false },
   carpooling: { push: true, email: false },
+  chat: { push: true, email: false },
 }
 
 const categoryLabels: Record<Category, string> = {
@@ -24,6 +25,7 @@ const categoryLabels: Record<Category, string> = {
   trainings: 'Trainings',
   duties: 'Dienste',
   carpooling: 'Fahrgemeinschaften',
+  chat: 'Nachrichten',
 }
 
 export default function ProfileMiscTab() {
