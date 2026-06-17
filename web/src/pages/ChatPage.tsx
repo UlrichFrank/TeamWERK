@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users,
-  Trash2, CornerUpLeft, Pencil, SmilePlus
+  Trash2, CornerUpLeft, Pencil, SmilePlus, Copy
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
@@ -62,6 +62,7 @@ interface ContextMenuState {
   x: number
   y: number
   message: Message
+  selectedText?: string
 }
 
 export default function ChatPage() {
@@ -87,6 +88,7 @@ export default function ChatPage() {
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const el = inputRef.current
@@ -213,6 +215,19 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Clamp context menu to viewport after render (runs before paint → no flicker)
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return
+    const el = contextMenuRef.current
+    const rect = el.getBoundingClientRect()
+    const margin = 8
+    const x = Math.max(margin, Math.min(contextMenu.x, window.innerWidth - rect.width - margin))
+    const y = Math.max(margin, Math.min(contextMenu.y, window.innerHeight - rect.height - margin))
+    if (x !== contextMenu.x || y !== contextMenu.y) {
+      setContextMenu(prev => prev ? { ...prev, x, y } : null)
+    }
+  }, [contextMenu])
+
   // Close context menu and emoji picker on outside click/tap or Escape
   useEffect(() => {
     if (!contextMenu && !emojiPickerMsgId) return
@@ -271,6 +286,11 @@ export default function ChatPage() {
     setMsgInput('')
   }
 
+  const copyMsgToClipboard = (msg: Message, selectedText?: string) => {
+    navigator.clipboard.writeText(selectedText ?? msg.body).catch(() => {})
+    setContextMenu(null)
+  }
+
   const deleteMsg = async (msg: Message) => {
     setContextMenu(null)
     try {
@@ -282,16 +302,16 @@ export default function ChatPage() {
   const handleContextMenu = (e: React.MouseEvent, msg: Message) => {
     if (msg.deletedAt) return
     e.preventDefault()
-    const x = Math.min(e.clientX, window.innerWidth - 170)
-    const y = Math.min(e.clientY, window.innerHeight - 120)
-    setContextMenu({ x, y, message: msg })
+    const sel = window.getSelection()
+    const selectedText = sel && sel.toString().trim() ? sel.toString() : undefined
+    setContextMenu({ x: e.clientX, y: e.clientY, message: msg, selectedText })
   }
 
   const handleLongPress = (msg: Message, x: number, y: number) => {
     if (msg.deletedAt) return
-    const cx = Math.min(x, window.innerWidth - 170)
-    const cy = Math.min(y, window.innerHeight - 120)
-    setContextMenu({ x: cx, y: cy, message: msg })
+    const sel = window.getSelection()
+    const selectedText = sel && sel.toString().trim() ? sel.toString() : undefined
+    setContextMenu({ x, y, message: msg, selectedText })
   }
 
   const leaveGroup = async () => {
@@ -573,14 +593,28 @@ export default function ChatPage() {
                   value={msgInput}
                   onChange={e => setMsgInput(e.target.value)}
                   onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                      e.preventDefault()
-                      sendMessage()
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      if (isMobile) return
+                      if (e.altKey || e.ctrlKey) {
+                        e.preventDefault()
+                        const ta = e.currentTarget
+                        const start = ta.selectionStart ?? msgInput.length
+                        const end = ta.selectionEnd ?? msgInput.length
+                        const newValue = msgInput.slice(0, start) + '\n' + msgInput.slice(end)
+                        setMsgInput(newValue)
+                        requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = start + 1 })
+                        return
+                      }
+                      if (!e.shiftKey) {
+                        e.preventDefault()
+                        sendMessage()
+                      }
                     }
                   }}
                   placeholder="Nachricht schreiben…"
                   maxLength={2000}
                   rows={1}
+                  enterKeyHint={isMobile ? 'enter' : 'send'}
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none overflow-y-auto leading-5"
                 />
                 <button
@@ -633,6 +667,7 @@ export default function ChatPage() {
       {/* Context Menu */}
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           className="fixed z-50 bg-white rounded-lg shadow-lg border border-brand-border py-1 min-w-[160px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onMouseDown={e => e.stopPropagation()}
@@ -662,6 +697,13 @@ export default function ChatPage() {
           >
             <CornerUpLeft className="w-4 h-4" />
             Antworten
+          </button>
+          <button
+            onClick={() => copyMsgToClipboard(contextMenu.message, contextMenu.selectedText)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors"
+          >
+            <Copy className="w-4 h-4" />
+            {contextMenu.selectedText ? 'Auswahl kopieren' : 'Kopieren'}
           </button>
           {contextMenu.message.senderId === user?.id && (
             <button
@@ -747,6 +789,24 @@ export default function ChatPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function renderWithLinks(body: string, isOwn: boolean) {
+  const parts = body.split(/(https?:\/\/[^\s]+)/g)
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`underline break-all ${isOwn ? 'opacity-75' : 'text-[#3E4A98]'}`}
+        onClick={e => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    ) : part
   )
 }
 
@@ -889,7 +949,7 @@ function MessageBubble({
       >
         {!isOwn && <span className="text-xs text-brand-text-muted mb-0.5">{msg.senderName}</span>}
 
-        <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
+        <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm select-text ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
           {/* Reply quote */}
           {msg.replyToId && (
             <div className={`mb-1.5 pl-2 border-l-2 ${isOwn ? 'border-brand-black/40' : 'border-brand-yellow'} text-xs opacity-80`}>
@@ -897,7 +957,7 @@ function MessageBubble({
               <p className="truncate">{(msg.replyToBody ?? '').slice(0, 60)}</p>
             </div>
           )}
-          <span className="whitespace-pre-wrap break-words">{msg.body}</span>
+          <span className="whitespace-pre-wrap break-words">{renderWithLinks(msg.body, isOwn)}</span>
         </div>
 
         {/* Reaction chips */}
@@ -917,9 +977,9 @@ function MessageBubble({
                   <span className="text-xs font-medium ml-0.5">{r.count}</span>
                 </button>
                 {/* Tooltip */}
-                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/reaction:block z-50">
-                  <div className="bg-brand-text text-white text-xs rounded px-2 py-1 whitespace-nowrap max-w-[180px] text-center">
-                    {r.userNames.join(', ')}
+                <div className={`pointer-events-none absolute bottom-full mb-1.5 hidden group-hover/reaction:block z-50 ${isOwn ? 'right-0' : 'left-0'}`}>
+                  <div className="bg-brand-text text-white text-xs rounded px-2 py-1.5 text-left min-w-max max-w-[200px]">
+                    {r.userNames.map(name => <div key={name}>{name}</div>)}
                   </div>
                 </div>
               </div>
