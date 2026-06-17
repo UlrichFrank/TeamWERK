@@ -10,6 +10,13 @@ import { renderAsPersona } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
+vi.mock('../../lib/usePagination', () => ({
+  usePagination: () => ({
+    items: [], total: 0, currentPage: 1, totalPages: 1,
+    loading: false, error: null,
+    setSearch: vi.fn(), goToPage: vi.fn(), refresh: vi.fn(),
+  }),
+}))
 
 const ALLOWED_IDS = ['admin', 'vorstand', 'vorstand_elternteil']
 
