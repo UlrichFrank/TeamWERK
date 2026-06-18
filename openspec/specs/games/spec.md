@@ -1,158 +1,84 @@
-### Requirement: Spiel anlegen
-Spiele (Heim, Auswärts, Generisch) SHALL optional mit einem Venue verknüpft werden können. Bei Heimspielen wird venue_id automatisch auf den Heimhallen-Venue vorausgefüllt, sofern einer als `is_home_venue=true` markiert ist.
+## ADDED Requirements
 
-#### Scenario: Heimspiel mit Heimhallen-Autofill
-- **WHEN** Nutzer öffnet Formular für neues Heimspiel
-- **THEN** venue_id wird automatisch auf den is_home_venue-Venue gesetzt; Nutzer kann überschreiben
+### Requirement: Auto-Regen für Drei-Tage-Fenster bei Game-Mutationen
 
-#### Scenario: Auswärtsspiel ohne Venue
-- **WHEN** Nutzer legt Auswärtsspiel ohne Venue-Auswahl an
-- **THEN** Spiel wird ohne venue_id gespeichert (null)
+Das System SHALL bei jeder Mutation eines Game-Events (Create, Update, Delete) implizit die Dienst-Slots im Drei-Tage-Fenster (Event-Datum ± 1 Tag) regenerieren. Die Regeneration SHALL die Helper `loadSameDayContext`, `classifySlotPosition` und `applyBehavior` aus dem `games`-Package verwenden und in derselben Transaction wie die Mutation laufen.
 
-#### Scenario: Venue in Response eingebettet
-- **WHEN** GET /api/games oder GET /api/games/{id} aufgerufen wird
-- **THEN** Response enthält venue-Objekt mit id, name, street, city, postal_code, note (oder null wenn kein Venue)
+#### Scenario: CreateGame triggert Auto-Regen für ±1-Tag-Fenster
 
----
+- **WHEN** `POST /api/admin/games` mit `event_type=heim` und `date=D` aufgerufen wird
+- **THEN** wird das Game persistiert
+- **AND** wird `runAutoRegen` für die Datum-Menge `{D-1, D, D+1}` aufgerufen
+- **AND** alle `is_custom=0`-Slots der drei Tage werden gemäß Template + Adjacency neu erzeugt
+- **AND** die Mutation-Response enthält `regen_summary` mit `created`, `reduced`, `skipped`, `notified_users`, `conflicts`
 
-### Requirement: Spielplan für alle eingeloggten User lesbar
+#### Scenario: UpdateGame mit Datums-Move triggert Auto-Regen für altes + neues Fenster
 
-`GET /api/games` und `GET /api/games/{id}` SHALL ohne Rollen-Einschränkung für alle authentifizierten User zugänglich sein.
+- **WHEN** `PUT /api/admin/games/{id}` mit geändertem `date` von D_alt auf D_neu aufgerufen wird
+- **THEN** wird `runAutoRegen` für die Set-Union `{D_alt-1, D_alt, D_alt+1, D_neu-1, D_neu, D_neu+1}` aufgerufen (Duplikate eliminiert)
+- **AND** die Response enthält `regen_summary`
 
-#### Scenario: Spieler ruft Spielplan ab
-- **WHEN** ein User mit Rolle spieler oder elternteil `GET /api/games` aufruft
-- **THEN** antwortet der Server mit HTTP 200 und der Spielplanliste
+#### Scenario: UpdateGame ohne datums-/zeit-/typ-relevante Änderung triggert dennoch Auto-Regen
 
-#### Scenario: Nav-Eintrag sichtbar
-- **WHEN** ein User eingeloggt ist
-- **THEN** ist der „Spielplan"-Menüeintrag in der Navigation sichtbar, unabhängig von der Rolle
+- **WHEN** `PUT /api/admin/games/{id}` nur `opponent` oder `venue_id` ändert
+- **THEN** wird `runAutoRegen` für `{D-1, D, D+1}` aufgerufen (Konservatismus — billig genug)
 
----
+#### Scenario: DeleteGame triggert Auto-Regen für Nachbartage
 
-### Requirement: Schreibzugriff für admin, vorstand und trainer
+- **WHEN** `DELETE /api/admin/games/{id}` ein Game am Datum D entfernt
+- **THEN** wird nach dem Cascade-Delete `runAutoRegen` für `{D-1, D+1}` aufgerufen (D selbst hat keine Slots mehr)
+- **AND** der `regen_summary` wird in die Response aufgenommen
 
-`POST`, `PUT` und `DELETE` auf `/api/games/*` SHALL für die Rollen admin, vorstand und trainer zugänglich sein.
+### Requirement: CreateGame-Request für Heim/Auswärts ohne `slots[]`
 
-#### Scenario: Vorstand legt Event an
-- **WHEN** ein User mit Rolle vorstand `POST /api/games` aufruft
-- **THEN** antwortet der Server mit HTTP 201
+Das System SHALL für `POST /api/admin/games` mit `event_type ∈ {heim, auswärts}` das Feld `slots[]` aus dem Request-Body ignorieren. Slots werden ausschließlich aus dem aufgelösten Template (`template_id` oder via `findTemplateForGame` ermittelt) generiert.
 
-#### Scenario: Spieler kann kein Event anlegen
-- **WHEN** ein User mit Rolle spieler oder elternteil `POST /api/games` aufruft
-- **THEN** antwortet der Server mit HTTP 403
+Für `event_type=generisch` bleibt `slots[]` erhalten und wird mit `is_custom=1` persistiert.
 
----
+#### Scenario: Heimspiel mit slots[] im Request — slots[] wird ignoriert
 
-### Requirement: PUT /api/games/{id} erreichbar für trainer und vorstand
+- **WHEN** `POST /api/admin/games` mit `event_type=heim` und nicht-leerem `slots[]`-Array aufgerufen wird
+- **THEN** ignoriert das Backend `slots[]` und erzeugt die Slots ausschließlich per Auto-Regen aus dem aufgelösten Template
+- **AND** die Response liefert HTTP 201 mit `id` und `regen_summary`
 
-`PUT /api/games/{id}` SHALL für die Rollen admin, trainer und vorstand zugänglich sein. Dies ermöglicht dem `GameEditModal` im Kalender das direkte Bearbeiten von Spieltagen durch Trainer.
+#### Scenario: Generisches Event persistiert slots[] mit `is_custom=1`
 
-#### Scenario: Trainer bearbeitet Spieltag via PUT
+- **WHEN** `POST /api/admin/games` mit `event_type=generisch` und `slots[]` aufgerufen wird
+- **THEN** werden alle Slots aus `slots[]` mit `is_custom=1` in `duty_slots` persistiert
+- **AND** Auto-Regen für `{D-1, D, D+1}` läuft anschließend, betrifft aber nur eventuelle template-basierte Slots benachbarter Spiele
 
-- **WHEN** ein User mit Rolle trainer `PUT /api/games/{id}` mit gültigen Feldern aufruft
-- **THEN** antwortet der Server mit HTTP 200 und den aktualisierten Spieltag-Daten
+### Requirement: `regen_summary` in Mutation-Response
 
-#### Scenario: Spieler kann Spieltag nicht bearbeiten
+Das System SHALL die Antwort von `POST /api/admin/games`, `PUT /api/admin/games/{id}` und `DELETE /api/admin/games/{id}` um ein `regen_summary`-Objekt erweitern. Die UI auf `/kalender` und `/kalender/{id}` SHALL nach erfolgreicher Mutation die Änderungen als Banner oder Card anzeigen.
 
-- **WHEN** ein User mit Rolle spieler `PUT /api/games/{id}` aufruft
-- **THEN** antwortet der Server mit HTTP 403
+Das Schema:
 
----
+```
+regen_summary: {
+  created: [{ date, duty_type, count }],
+  reduced: [{ date, from, to, count }],
+  skipped: [{ date, duty_type }],
+  notified_users: [user_id, ...],
+  conflicts: [{ date, duty_type, event_time, slot_ids }]
+}
+```
 
-### Requirement: Multi-Team-Zuordnung via `game_teams`
+Listen werden pro Kategorie auf 20 Einträge gekappt; bei Überschreitung erscheint im Frontend „… und N weitere Änderungen".
 
-Ein Event SHALL einer oder mehreren Mannschaften zugeordnet sein, abgebildet über die Junction-Tabelle `game_teams`.
+#### Scenario: Wizard zeigt Änderungsbericht nach Save
 
-#### Scenario: Event mit mehreren Teams anlegen
-- **WHEN** `POST /api/games` mit `team_ids: [1, 2, 3]` aufgerufen wird
-- **THEN** werden in `game_teams` drei Einträge angelegt
-- **THEN** wird für jede Mannschaft ein identischer Satz Duty-Slots generiert
+- **WHEN** ein Vorstand ein neues Heimspiel speichert und die Response `regen_summary.created` mit 3 Einträgen enthält
+- **THEN** zeigt die UI eine Card „Folgendes hat sich geändert" mit den drei Slot-Anlagen, ggf. „N Helfer wurden benachrichtigt"
 
-#### Scenario: Event ohne Team abgelehnt
-- **WHEN** `POST /api/games` ohne `team_ids` oder mit leerem Array aufgerufen wird
-- **THEN** antwortet der Server mit HTTP 400
+#### Scenario: Leeres regen_summary
 
----
+- **WHEN** das Auto-Regen-Fenster keine Slot-Änderungen ergibt (z.B. weil das Datum kein Template-relevantes Spiel hat)
+- **THEN** ist `regen_summary` mit leeren Arrays gefüllt und das Frontend zeigt keine Card
 
-### Requirement: `event_type`-Feld
+## REMOVED Requirements
 
-Jedes Event SHALL einen `event_type` haben: `heim`, `auswärts` oder `generisch`.
+### Requirement: Manueller „Dienste generieren"-Knopf auf der Kalenderseite
 
-#### Scenario: Standard-Typ bei fehlendem Feld
-- **WHEN** `POST /api/games` ohne `event_type` aufgerufen wird
-- **THEN** wird `event_type = 'heim'` gesetzt
+**Reason:** Die Logik läuft jetzt implizit bei jeder Game-Mutation. Der Knopf ist überflüssig und verwirrend („muss ich das jetzt noch klicken?").
 
-#### Scenario: Ungültiger Typ abgelehnt
-- **WHEN** `POST /api/games` mit einem ungültigen `event_type` aufgerufen wird
-- **THEN** antwortet der Server mit HTTP 400
-
----
-
-### Requirement: Spiel-Detail zeigt vollständige Kaderliste für alle authentifizierten User
-
-`GET /api/games/{id}/responses` SHALL nicht nur Spieler zurückgeben, die bereits geantwortet haben, sondern alle Kader-Mitglieder aller zugeordneten Teams für die aktive Saison. User ohne Antwort erscheinen mit `status: null`.
-
-#### Scenario: Spieler ruft Spiel-Detail ab
-
-- **WHEN** ein User mit Rolle `spieler` `GET /api/games/{id}/responses` aufruft
-- **THEN** antwortet der Server mit HTTP 200
-- **THEN** enthält die Antwort alle Kader-Mitglieder des Teams, auch solche ohne RSVP
-
-#### Scenario: Elternteil ruft Spiel-Detail ab
-
-- **WHEN** ein User mit `is_parent = true` `GET /api/games/{id}/responses` aufruft
-- **THEN** antwortet der Server mit HTTP 200
-- **THEN** enthält die Antwort alle Kader-Mitglieder des Teams
-
----
-
-### Requirement: Kommentar-Sichtbarkeit auf der Spiel-Detail-Seite
-
-`GET /api/games/{id}/responses` SHALL Kommentare (`reason`) rollenabhängig zurückgeben:
-- Trainer/Admin: alle Kommentare aller Spieler
-- Spieler: nur der eigene Kommentar
-- Elternteil: nur Kommentare der eigenen Kinder (via `family_links`)
-
-#### Scenario: Trainer sieht alle Kommentare
-
-- **WHEN** ein Trainer `GET /api/games/{id}/responses` aufruft
-- **THEN** enthält jeder Eintrag mit vorhandenem Kommentar das Feld `reason` befüllt
-
-#### Scenario: Spieler sieht nur eigenen Kommentar
-
-- **WHEN** ein Spieler `GET /api/games/{id}/responses` aufruft
-- **THEN** ist `reason` nur für den eigenen Eintrag befüllt; alle anderen haben `reason: null`
-
-#### Scenario: Elternteil sieht nur Kinder-Kommentare
-
-- **WHEN** ein Elternteil `GET /api/games/{id}/responses` aufruft
-- **THEN** ist `reason` nur für Einträge der eigenen Kinder befüllt
-
----
-
-### Requirement: Mehrtägige Events mit end_date
-
-Events (heim, auswärts, generisch) SHALL optional ein `end_date` haben, das ein Enddatum (inklusive) für das Event festlegt. Wenn `end_date` gesetzt ist und nach `date` liegt, erstreckt sich das Event über mehrere Tage.
-
-#### Scenario: Event ohne end_date (Standardfall)
-- **WHEN** ein Event ohne `end_date` angelegt wird
-- **THEN** wird es wie bisher als eintägiges Event behandelt
-
-#### Scenario: Mehrtägiges Event anlegen
-- **WHEN** `POST /api/games` mit `end_date` aufgerufen wird und `end_date >= date`
-- **THEN** wird das Event mit `end_date` gespeichert und HTTP 201 zurückgegeben
-
-#### Scenario: end_date vor date wird abgelehnt
-- **WHEN** `POST /api/games` oder `PUT /api/games/{id}` mit `end_date < date` aufgerufen wird
-- **THEN** antwortet der Server mit HTTP 400
-
-#### Scenario: end_date in GET-Response enthalten
-- **WHEN** `GET /api/games` oder `GET /api/games/{id}` aufgerufen wird
-- **THEN** enthält jedes Event mit gesetztem `end_date` das Feld `end_date` in der Response (ISO-Datum-String)
-- **THEN** Events ohne `end_date` liefern `end_date: null`
-
-#### Scenario: Mehrtägiges Event bearbeiten
-- **WHEN** `PUT /api/games/{id}` mit neuem `end_date` aufgerufen wird
-- **THEN** wird `end_date` aktualisiert
-- **WHEN** `PUT /api/games/{id}` mit `end_date: null` aufgerufen wird
-- **THEN** wird `end_date` auf NULL gesetzt (Event wird wieder eintägig)
+**Migration:** UI-Elemente werden aus `web/src/pages/KalenderPage.tsx` und `web/src/pages/SpieltagDetailPage.tsx` entfernt. Die Backend-HTTP-Endpunkte `POST /api/kalender/regenerate-day` und `POST /api/kalender/{id}/regenerate` bleiben als interne Wrapper um `runAutoRegen` erhalten, sind aber aus der Frontend-Nutzung entfernt. Ein späterer „Saison-Dienstplan optimieren"-Bulk-Workflow kann sie wieder aufgreifen (separater Change).

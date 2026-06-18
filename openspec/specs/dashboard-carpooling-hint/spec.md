@@ -1,46 +1,27 @@
+## MODIFIED Requirements
+
 ### Requirement: Personalisierten Fahrtgemeinschafts-Status anzeigen
 
-Das System SHALL in der Dashboard-Antwort (`GET /api/dashboard`) unter `carpoolingHint` einen Status zurückgeben, der folgende Informationen enthält:
+Das System SHALL in der Dashboard-Antwort (`GET /api/dashboard`) unter `carpoolingConfirmed` auch bestätigte Paarungen der Kinder des eingeloggten Nutzers anzeigen — zusätzlich zu den eigenen Paarungen.
 
-- Nächstes Auswärtsspiel (Spielgegner, Datum, game_id) — wie bisher
-- `bieteCount` / `sucheCount` — aggregierte Zähler aller Einträge für dieses Spiel — wie bisher
-- `myEntry`: ob und mit welchem `typ` der User selbst eingetragen ist (inkl. `id`), oder `null`
-- `paarungen`: Liste der aktuell `confirmed` Paarungen des Users, mit Name der Gegenseite
-- `openEntries`: Liste offener Einträge anderer Nutzer (ohne confirmed-Pairing), max. 5, mit `typ` und Name
-
-`recentEvents` wird nicht mehr zurückgegeben.
+`carpoolingConfirmed` enthält die nächsten max. 3 Auswärtsspiele, bei denen entweder der Nutzer selbst ODER eines seiner Kinder eine `confirmed`-Paarung hat. `partnerName` zeigt die Gegenseite aus Sicht des Nutzers/Kindes.
 
 #### Scenario: User mit bestätigter Paarung
 
-- **WHEN** der User eine Paarung mit `status='confirmed'` für das nächste Spiel hat
-- **THEN** enthält `paarungen` diese Paarung mit Name der Gegenseite
+- **WHEN** der User eine Paarung mit `status='confirmed'` für ein kommendes Auswärtsspiel hat
+- **THEN** enthält `carpoolingConfirmed` dieses Spiel mit der entsprechenden Paarung
 
-#### Scenario: Offene Einträge anderer sichtbar
+#### Scenario: Kind mit bestätigter Paarung
 
-- **WHEN** andere Nutzer für das nächste Spiel Einträge (biete oder suche) ohne `confirmed`-Pairing haben
-- **THEN** enthält `openEntries` bis zu 5 dieser Einträge mit `typ` und Name des Nutzers
+- **WHEN** ein Kind des eingeloggten Elternteils eine `confirmed`-Paarung für ein kommendes Auswärtsspiel hat
+- **THEN** erscheint diese Paarung ebenfalls in `carpoolingConfirmed` des Elternteils
 
-#### Scenario: Eintrag mit pending-Pairing gilt als offen
+#### Scenario: Kein Auswärtsspiel mit Paarung
 
-- **WHEN** ein Eintrag eines anderen Nutzers eine Paarung mit `status='pending'` hat (aber keine `confirmed`)
-- **THEN** erscheint dieser Eintrag in `openEntries`
+- **WHEN** weder der Nutzer noch ein Kind eine bestätigte Paarung für kommende Auswärtsspiele haben
+- **THEN** ist `carpoolingConfirmed` ein leeres Array
 
-#### Scenario: Mehr als 5 offene Einträge
+#### Scenario: Nutzer ohne Kinder — unverändert
 
-- **WHEN** mehr als 5 offene Einträge anderer Nutzer existieren
-- **THEN** liefert `openEntries` genau 5 Einträge; `bieteCount` und `sucheCount` spiegeln die tatsächliche Gesamtzahl aller Einträge wider
-
-#### Scenario: Eigener Eintrag nicht in openEntries
-
-- **WHEN** der User selbst einen offenen Eintrag hat
-- **THEN** erscheint dieser Eintrag NICHT in `openEntries` (nur in `myEntry`)
-
-#### Scenario: Kein Auswärtsspiel
-
-- **WHEN** kein kommendes Auswärtsspiel für das Team des Users existiert
-- **THEN** ist `carpoolingHint` null
-
-#### Scenario: User nicht eingetragen, keine offenen Einträge anderer
-
-- **WHEN** der User weder biete noch suche hat und keine anderen offenen Einträge existieren
-- **THEN** ist `myEntry` null, `paarungen` ist `[]`, `openEntries` ist `[]`
+- **WHEN** ein Nutzer ohne `family_links`-Einträge das Dashboard lädt
+- **THEN** enthält `carpoolingConfirmed` ausschließlich seine eigenen Paarungen (Verhalten wie bisher)

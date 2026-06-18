@@ -1,198 +1,166 @@
-# chat-konversationen Specification
+## ADDED Requirements
 
-## Purpose
-Direkte und Gruppen-Konversationen zwischen Vereinsmitgliedern mit Nachrichten, Reply, Edit und Soft-Delete.
-## Requirements
-### Requirement: Konversationsliste abrufen
+### Requirement: Teilnehmer einer Gruppen-Konversation einsehen
 
-Das System SHALL für jeden authentifizierten User eine Liste seiner Konversationen zurückgeben. Jede Konversation SHALL die Felder `id`, `type` (direct|group), `name`, `lastMessage` (body + sent_at), `unreadCount` und die Liste der Teilnehmer enthalten. Ausgetretene Mitglieder (left_at NOT NULL) werden NICHT in der aktiven Teilnehmerliste zurückgegeben.
+Das System SHALL jedem aktiven Mitglied einer Gruppen-Konversation erlauben, die vollständige Teilnehmerliste über ein UI-Element im Chat-Header einzusehen. Die Liste enthält pro aktiver Teilnahme: `id`, `name` und eine Kennzeichnung des Erstellers (`createdBy === user.id`). Bereits ausgetretene Mitglieder (`left_at IS NOT NULL`) erscheinen NICHT.
 
-#### Scenario: Spieler sieht nur eigene Konversationen
+#### Scenario: Mitglied öffnet Teilnehmerliste
 
-- **WHEN** ein Spieler `GET /api/chat/conversations` aufruft
-- **THEN** gibt der Server nur Konversationen zurück in denen der Spieler Mitglied ist (left_at IS NULL)
+- **WHEN** ein Gruppen-Mitglied auf das Teilnehmer-Icon im Chat-Header klickt
+- **THEN** öffnet sich ein Modal mit dem Titel „Teilnehmer" und listet alle aktiven Teilnehmer
+- **THEN** ist der Ersteller in der Liste als solcher gekennzeichnet
+- **THEN** sieht das Mitglied keinen Bearbeiten-Button, falls es nicht der Ersteller ist
 
-#### Scenario: Konversation mit ungelesenen Nachrichten
+#### Scenario: Ersteller öffnet Teilnehmerliste
 
-- **WHEN** in einer Konversation Nachrichten existieren die der User noch nicht gelesen hat
-- **THEN** enthält das Konversations-Objekt `unreadCount > 0`
+- **WHEN** der Ersteller einer Gruppe auf das Teilnehmer-Icon klickt
+- **THEN** öffnet sich das Modal im View-Modus mit zusätzlichem Bearbeiten-Button neben dem Schließen-`X`
 
-#### Scenario: Leere Konversationsliste
+### Requirement: Mitglied einer Gruppen-Konversation entfernen
 
-- **WHEN** ein User noch keine Konversation hat
-- **THEN** gibt der Server ein leeres Array zurück (HTTP 200)
+Das System SHALL dem Ersteller einer Gruppen-Konversation erlauben, andere Mitglieder per `DELETE /api/chat/conversations/{id}/members/{userId}` zu entfernen. Direct-Konversationen und Self-Removal SIND verboten. Das Entfernen erfolgt als Soft-Delete (`left_at` wird gesetzt) und erzeugt eine Systemnachricht „X wurde entfernt".
 
-### Requirement: Direct-Konversation erstellen oder öffnen
+#### Scenario: Ersteller entfernt Mitglied
 
-Das System SHALL beim Erstellen einer Direct-Konversation prüfen ob bereits eine Konversation zwischen den beiden Usern existiert — auch wenn A die Konversation bereits verlassen hat (A's `left_at IS NOT NULL`), solange B noch aktiv ist (B's `left_at IS NULL`). Falls eine solche Konversation gefunden wird, SHALL A per Re-join wiederhergestellt werden (A's `left_at = NULL`) und der bestehende Datensatz zurückgegeben werden. Ist keine Konversation vorhanden (beide hatten gelöscht, Conversation ist permanent entfernt), wird eine neue Konversation angelegt. In beiden Fällen (Re-join und Neu-Anlage) SHALL B ein SSE-Event `chat:new-message:{convId}` erhalten damit die Konversation in Bs Liste erscheint.
+- **WHEN** der Ersteller `DELETE /api/chat/conversations/{id}/members/{userId}` auf ein aktives Mitglied aufruft
+- **THEN** wird `conversation_members.left_at` für das Ziel-Mitglied gesetzt
+- **THEN** wird eine Systemnachricht „wurde entfernt" mit `sender_id = entferntes Mitglied` eingefügt
+- **THEN** antwortet der Server mit HTTP 204
+- **THEN** erhalten alle aktiven Mitglieder UND der entfernte User ein SSE-Event `chat:member-left:<conversationId>`
 
-#### Scenario: Erste Direct-Konversation zwischen zwei Usern
+#### Scenario: Nicht-Ersteller versucht zu entfernen
 
-- **WHEN** User A `POST /api/chat/conversations` mit `{ type: "direct", userId: B }` aufruft und keine frühere Konversation existiert
-- **THEN** wird eine neue Konversation angelegt und beide User als Mitglieder eingetragen
-- **THEN** gibt der Server HTTP 201 mit dem Konversations-Objekt zurück
-- **THEN** erhält B ein SSE-Event `chat:new-message:{convId}`
-
-#### Scenario: Bestehende Direct-Konversation erneut öffnen (beide aktiv)
-
-- **WHEN** User A `POST /api/chat/conversations` mit `{ type: "direct", userId: B }` aufruft und beide `left_at IS NULL` haben
-- **THEN** gibt der Server HTTP 200 mit der bestehenden Konversation zurück (kein Duplikat, kein SSE)
-
-#### Scenario: A hatte Konversation verlassen — Re-join statt Duplikat
-
-- **WHEN** User A `POST /api/chat/conversations` mit `{ type: "direct", userId: B }` aufruft, A hat `left_at IS NOT NULL` aber B ist noch aktiv (`left_at IS NULL`)
-- **THEN** wird A's `left_at = NULL` gesetzt (Re-join)
-- **THEN** gibt der Server HTTP 200 mit der bestehenden Konversation zurück (kein neuer Thread, kein Verlust der History)
-- **THEN** erhält B ein SSE-Event `chat:new-message:{convId}`
-
-#### Scenario: Beide hatten gelöscht — neuer Thread
-
-- **WHEN** User A `POST /api/chat/conversations` mit `{ type: "direct", userId: B }` aufruft und die frühere Konversation dauerhaft gelöscht wurde (beide hatten `left_at` gesetzt)
-- **THEN** wird eine neue Konversation angelegt und beide User als Mitglieder eingetragen
-- **THEN** gibt der Server HTTP 201 zurück
-- **THEN** erhält B ein SSE-Event `chat:new-message:{convId}`
-
-#### Scenario: Spieler kann nur User aus eigenem Team anschreiben
-
-- **WHEN** ein Spieler eine Direct-Konversation mit einem User aus einem anderen Team versucht
+- **WHEN** ein nicht-Ersteller-Mitglied `DELETE /api/chat/conversations/{id}/members/{userId}` aufruft
 - **THEN** antwortet der Server mit HTTP 403
 
-### Requirement: Gruppen-Konversation erstellen
+#### Scenario: Ersteller versucht sich selbst zu entfernen
 
-Das System SHALL die Erstellung von Gruppen-Konversationen mit einem frei wählbaren Namen und einer initialen Teilnehmerliste erlauben. Der erstellende User wird automatisch als Mitglied hinzugefügt. Die Sichtbarkeitsregel (wer kann in die Teilnehmerliste aufgenommen werden) entspricht der User-Picker-Filterung.
-
-#### Scenario: Trainer erstellt Gruppen-Chat
-
-- **WHEN** ein Trainer `POST /api/chat/conversations` mit `{ type: "group", name: "Taktik-Runde", memberIds: [2, 3, 4] }` aufruft
-- **THEN** wird eine Gruppen-Konversation angelegt mit dem Trainer und den genannten Usern als Mitglieder
-- **THEN** gibt der Server HTTP 201 zurück
-
-#### Scenario: Gruppe ohne Namen wird abgelehnt
-
-- **WHEN** ein User eine Gruppen-Konversation ohne `name`-Feld erstellt
+- **WHEN** der Ersteller `DELETE /api/chat/conversations/{id}/members/{userId}` mit `userId == claims.UserID` aufruft
 - **THEN** antwortet der Server mit HTTP 400
 
-### Requirement: Nachrichten einer Konversation abrufen
+#### Scenario: Versuch auf Direct-Konversation
 
-Das System SHALL die letzten 100 Nachrichten einer Konversation zurückgeben (absteigend nach `sent_at`, dann im Frontend umgekehrt anzeigen). Zu jeder Nachricht werden folgende Felder geliefert: `id`, `senderId`, `senderName`, `body` (leer wenn gelöscht), `sentAt`, `replyToId` (null wenn kein Reply), `replyToBody` (null oder „[Nachricht gelöscht]"), `replyToSenderName`, `editedAt` (null wenn nicht bearbeitet), `deletedAt` (null wenn nicht gelöscht), `isSystem` (true wenn System-Nachricht).
+- **WHEN** ein User versucht ein Mitglied aus einer Direct-Konversation zu entfernen
+- **THEN** antwortet der Server mit HTTP 400
 
-#### Scenario: Mitglied ruft Nachrichten ab
+### Requirement: Gruppen-Konversation umbenennen
 
-- **WHEN** ein Mitglied `GET /api/chat/conversations/{id}/messages` aufruft
-- **THEN** gibt der Server bis zu 100 Nachrichten zurück mit allen o.g. Feldern inklusive `isSystem`
+Das System SHALL dem Ersteller erlauben, den Namen einer Gruppen-Konversation per `PUT /api/chat/conversations/{id}` mit Body `{ name }` zu ändern. Der Name MUSS zwischen 1 und 100 Zeichen lang sein (nach Trim). Direct-Konversationen können nicht umbenannt werden. Die Änderung erzeugt eine Systemnachricht „hat die Gruppe in 'Y' umbenannt" und broadcastet `chat:conv-updated:<id>`.
 
-#### Scenario: Normale Nachricht ohne Reply
+#### Scenario: Ersteller benennt um
 
-- **WHEN** eine Nachricht ohne Reply abgerufen wird
-- **THEN** sind `replyToId`, `replyToBody`, `replyToSenderName`, `editedAt`, `deletedAt` alle null und `isSystem` ist false
+- **WHEN** der Ersteller `PUT /api/chat/conversations/{id}` mit `{ name: "Taktik" }` aufruft
+- **THEN** wird `conversations.name` auf den neuen Wert gesetzt
+- **THEN** wird eine Systemnachricht „hat die Gruppe in 'Taktik' umbenannt" mit `sender_id = Ersteller` eingefügt
+- **THEN** erhalten alle aktiven Mitglieder ein SSE-Event `chat:conv-updated:<conversationId>`
 
-#### Scenario: System-Nachricht in der Liste
+#### Scenario: Leerer Name wird abgelehnt
 
-- **WHEN** eine Nachricht mit `is_system = 1` abgerufen wird
-- **THEN** ist `isSystem: true` im Response-Objekt gesetzt
+- **WHEN** ein Ersteller `PUT /api/chat/conversations/{id}` mit leerem `name` aufruft
+- **THEN** antwortet der Server mit HTTP 400
+- **THEN** wird die DB nicht verändert
 
-#### Scenario: Nachricht mit Reply-Referenz
+#### Scenario: Nicht-Ersteller versucht umzubenennen
 
-- **WHEN** eine Nachricht mit `reply_to_id` abgerufen wird
-- **THEN** sind `replyToBody` und `replyToSenderName` mit den Werten der Ursprungsnachricht befüllt
-
-#### Scenario: Reply auf gelöschte Ursprungsnachricht
-
-- **WHEN** eine Nachricht mit `reply_to_id` abgerufen wird, die Ursprungsnachricht aber gelöscht ist
-- **THEN** ist `replyToBody = "[Nachricht gelöscht]"` und `replyToSenderName` bleibt erhalten
-
-#### Scenario: Gelöschte Nachricht in der Liste
-
-- **WHEN** eine Nachricht mit `deleted_at IS NOT NULL` abgerufen wird
-- **THEN** ist `body` ein leerer String und `deletedAt` enthält den Lösch-Timestamp
-
-#### Scenario: Nicht-Mitglied wird abgewiesen
-
-- **WHEN** ein User der nicht Mitglied der Konversation ist die Nachrichten abruft
+- **WHEN** ein Mitglied (nicht Ersteller) `PUT /api/chat/conversations/{id}` aufruft
 - **THEN** antwortet der Server mit HTTP 403
 
-### Requirement: Nachricht senden
+### Requirement: Verwaltung einer Gruppen-Konversation übergeben
 
-Das System SHALL das Senden einer Nachricht in einer Konversation erlauben. Der Request kann optional `replyToId` enthalten. Die referenzierte Nachricht MUSS zur selben Konversation gehören. Nach erfolgreichem Speichern SHALL der Server via SSE **alle** aktiven Mitglieder einschließlich des Senders selbst benachrichtigen (damit andere Geräte/Tabs des Senders die Nachricht erhalten) und Push Notifications an Mitglieder senden die gerade offline sind. Bei Direkt-Konversationen SHALL der Server vor dem SSE-Broadcast prüfen ob das andere Mitglied `left_at IS NOT NULL` hat — falls ja, SHALL `left_at = NULL` gesetzt werden (Auto-Re-join), damit das andere Mitglied das SSE erhält und die Konversation wieder in seiner Liste erscheint.
+Das System SHALL dem Ersteller erlauben, die Verwaltungsrechte per `POST /api/chat/conversations/{id}/transfer-ownership` mit Body `{ newOwnerId }` an ein anderes aktives Mitglied zu übergeben. Der Empfänger MUSS aktives Mitglied (`left_at IS NULL`) sein und DARF NICHT mit dem aktuellen Ersteller identisch sein. Nach Übergabe ist `conversations.created_by` der neue User.
 
-#### Scenario: Nachricht erfolgreich gesendet
+#### Scenario: Ersteller übergibt an aktives Mitglied
 
-- **WHEN** ein Mitglied `POST /api/chat/conversations/{id}/messages` mit `{ body: "Hallo!" }` aufruft
-- **THEN** wird die Nachricht gespeichert und HTTP 201 zurückgegeben
-- **THEN** erhalten alle aktiven Mitglieder (einschließlich Sender) ein SSE-Event `chat:new-message:<conversationId>`
+- **WHEN** der Ersteller `POST /api/chat/conversations/{id}/transfer-ownership` mit `{ newOwnerId: 42 }` aufruft und User 42 aktives Mitglied ist
+- **THEN** wird `conversations.created_by` auf 42 gesetzt
+- **THEN** wird eine Systemnachricht „hat die Verwaltung an {neuer Owner Name} übergeben" mit `sender_id = alter Ersteller` eingefügt
+- **THEN** erhalten alle aktiven Mitglieder ein SSE-Event `chat:conv-updated:<conversationId>`
 
-#### Scenario: Sender-Gerät B erhält Echtzeit-Update
+#### Scenario: Übergabe an Nicht-Mitglied
 
-- **WHEN** der Sender auf Gerät A eine Nachricht sendet und gleichzeitig auf Gerät B eingeloggt ist
-- **THEN** empfängt Gerät B das SSE-Event `chat:new-message:{convId}` und zeigt die neue Nachricht an
+- **WHEN** der Ersteller versucht an einen User zu übergeben der kein aktives Mitglied ist
+- **THEN** antwortet der Server mit HTTP 400
 
-#### Scenario: Nachricht mit Reply senden
+#### Scenario: Self-Übergabe
 
-- **WHEN** ein Mitglied `POST /api/chat/conversations/{id}/messages` mit gültigem `replyToId` aufruft
-- **THEN** wird `messages.reply_to_id` auf den angegebenen Wert gesetzt
+- **WHEN** der Ersteller `transfer-ownership` mit `newOwnerId == claims.UserID` aufruft
+- **THEN** antwortet der Server mit HTTP 400
 
-#### Scenario: Ungültige Reply-Referenz
+#### Scenario: Nicht-Ersteller versucht zu übergeben
 
-- **WHEN** `replyToId` auf eine Nachricht in einer anderen Konversation zeigt
-- **THEN** antwortet das Backend mit HTTP 400
-
-#### Scenario: Ausgetretenes Mitglied kann nicht senden
-
-- **WHEN** ein User der die Gruppe verlassen hat eine Nachricht sendet
+- **WHEN** ein Mitglied (nicht Ersteller) `transfer-ownership` aufruft
 - **THEN** antwortet der Server mit HTTP 403
 
-#### Scenario: Leere Nachricht wird abgelehnt
+### Requirement: Gruppen-Konversation für alle Mitglieder löschen
 
-- **WHEN** ein User eine Nachricht mit leerem `body` sendet
+Das System SHALL dem Ersteller erlauben, eine Gruppen-Konversation samt aller Nachrichten endgültig zu entfernen, per `DELETE /api/chat/conversations/{id}/everyone`. Diese Operation ist unwiderruflich und löscht die Datensätze hart (FK-Cascade auf `messages`, `message_reactions`, `message_reads`, `conversation_members`). Direct-Konversationen können hier nicht gelöscht werden.
+
+#### Scenario: Ersteller löscht Gruppe für alle
+
+- **WHEN** der Ersteller `DELETE /api/chat/conversations/{id}/everyone` aufruft
+- **THEN** wird die Zeile in `conversations` und per Cascade alle abhängigen Daten gelöscht
+- **THEN** erhalten alle vorherigen aktiven Mitglieder ein SSE-Event `chat:conv-deleted:<conversationId>`
+- **THEN** antwortet der Server mit HTTP 204
+
+#### Scenario: Nicht-Ersteller versucht für-alle-Löschung
+
+- **WHEN** ein Mitglied (nicht Ersteller) `DELETE /api/chat/conversations/{id}/everyone` aufruft
+- **THEN** antwortet der Server mit HTTP 403
+
+#### Scenario: Versuch auf Direct-Konversation
+
+- **WHEN** ein User `DELETE /api/chat/conversations/{id}/everyone` auf eine Direct-Konversation aufruft
 - **THEN** antwortet der Server mit HTTP 400
 
-#### Scenario: B schreibt in Direkt-Chat, A hatte gelöscht — Auto-Re-join
+### Requirement: Ersteller-Exit erfordert Übergabe oder Löschung
 
-- **WHEN** User B in einem Direkt-Chat eine Nachricht sendet und User A's `left_at IS NOT NULL`
-- **THEN** wird A's `left_at = NULL` gesetzt bevor der SSE-Broadcast erfolgt
-- **THEN** erhält A ein SSE-Event `chat:new-message:{convId}` und die Konversation erscheint wieder in A's Liste
+Das Frontend SHALL beim Klick des Erstellers auf „Gruppe verlassen" ein Auswahl-Modal anzeigen, in dem zwischen „Verwaltung übergeben an…" und „Gruppe für alle löschen" gewählt werden muss. Ein direkter Self-Leave-Pfad steht dem Ersteller im UI NICHT zur Verfügung. Diese Beschränkung ist UI-seitig; das Backend lehnt einen direkten `DELETE /members/me`-Aufruf des Erstellers NICHT serverseitig ab.
 
-### Requirement: Konversation als gelesen markieren
+#### Scenario: Ersteller-Wahl: Übergeben
 
-Das System SHALL es erlauben alle Nachrichten einer Konversation als gelesen zu markieren. Dies aktualisiert den `unreadCount` auf 0 für den aufrufenden User.
+- **WHEN** der Ersteller im Auswahl-Modal „Verwaltung übergeben an…" mit Mitglied B wählt und bestätigt
+- **THEN** ruft das Frontend nacheinander `POST /transfer-ownership` und `DELETE /members/me` auf
+- **THEN** ist die Gruppe nach beiden Calls verwaltbar von B und der alte Ersteller ist kein Mitglied mehr
 
-#### Scenario: Konversation öffnen markiert als gelesen
+#### Scenario: Ersteller-Wahl: Für alle löschen
 
-- **WHEN** ein User `POST /api/chat/conversations/{id}/read` aufruft
-- **THEN** werden alle Nachrichten der Konversation für diesen User als gelesen markiert
-- **THEN** gibt `GET /api/chat/conversations` für diese Konversation `unreadCount: 0` zurück
+- **WHEN** der Ersteller im Auswahl-Modal „Gruppe für alle löschen" wählt
+- **THEN** zeigt das Frontend einen zweiten Confirm-Step („Diese Aktion löscht alle Nachrichten endgültig.")
+- **WHEN** der Ersteller den Confirm-Step bestätigt
+- **THEN** ruft das Frontend `DELETE /chat/conversations/{id}/everyone` auf
 
-### Requirement: Gruppe verlassen
+### Requirement: Systemnachrichten-Konsistenz für Gruppen-Mutationen
 
-Das System SHALL es Mitgliedern erlauben eine Gruppen-Konversation zu verlassen. Direct-Konversationen können nicht verlassen werden. Nach dem Verlassen wird `left_at` gesetzt, der User erhält keine weiteren SSE-Events oder Push Notifications für diese Konversation.
+Das System SHALL für jede Mutations-Aktion an einer Gruppen-Konversation eine `is_system=1`-Nachricht in `messages` einfügen, damit alle Verlaufs-Aktionen für nachträgliche Mitglieder sichtbar bleiben.
 
-#### Scenario: Mitglied verlässt Gruppe
+| Aktion | Body | sender_id |
+|---|---|---|
+| `AddMember` | `wurde hinzugefügt` | hinzugefügter User |
+| `RemoveMember` | `wurde entfernt` | entfernter User |
+| `LeaveConversation` | `hat die Gruppe verlassen` | leaving User (bestehend) |
+| `UpdateConversation` (rename) | `hat die Gruppe in "Y" umbenannt` | Ersteller |
+| `TransferOwnership` | `hat die Verwaltung an {Name} übergeben` | alter Ersteller |
 
-- **WHEN** ein Mitglied `DELETE /api/chat/conversations/{id}/members/me` aufruft
-- **THEN** wird `left_at` auf die aktuelle Zeit gesetzt
-- **THEN** erscheint die Konversation nicht mehr in der Konversationsliste des Users
+#### Scenario: AddMember erzeugt Systemnachricht
 
-#### Scenario: Direct-Konversation kann nicht verlassen werden
+- **WHEN** der Ersteller `POST /chat/conversations/{id}/members` aufruft
+- **THEN** wird zusätzlich zum Member-Insert/Update eine Systemnachricht „wurde hinzugefügt" mit `sender_id = hinzugefügter User` eingefügt
 
-- **WHEN** ein User versucht eine Direct-Konversation zu verlassen
-- **THEN** antwortet der Server mit HTTP 400
+### Requirement: SSE-Events für Konversations-Updates
 
-### Requirement: Rollenbasierter User-Picker
+Das System SHALL für Mutations-Aktionen an einer Gruppen-Konversation jenseits der reinen Mitgliederliste die SSE-Events `chat:conv-updated:<id>` (für Rename und Transfer) bzw. `chat:conv-deleted:<id>` (für Löschen-für-alle) emittieren. Das Frontend SHALL bei `chat:conv-updated` die einzelne Konversation aus `GET /chat/conversations` neu laden und bei `chat:conv-deleted` die Konversation aus der Liste entfernen.
 
-Das System SHALL einen Endpoint bereitstellen der eine nach Suchbegriff gefilterte und rollenbasiert eingeschränkte User-Liste zurückgibt. Diese Liste wird beim Erstellen von Konversationen und beim Hinzufügen zu Gruppen genutzt.
+#### Scenario: Frontend reagiert auf Conv-Updated
 
-#### Scenario: Spieler sieht nur Teammitglieder
+- **WHEN** ein Client das SSE-Event `chat:conv-updated:<id>` empfängt während die Konversation in der Liste sichtbar ist
+- **THEN** lädt der Client die Konversation neu und zeigt den aktualisierten Namen, Ersteller und Mitgliederbestand
 
-- **WHEN** ein Spieler `GET /api/chat/users?q=Müller` aufruft
-- **THEN** gibt der Server nur User zurück die im selben Team wie der Spieler sind
+#### Scenario: Frontend reagiert auf Conv-Deleted bei aktiver Konversation
 
-#### Scenario: Trainer sieht User aller seiner Teams
+- **WHEN** ein Client das SSE-Event `chat:conv-deleted:<id>` empfängt und genau diese Konversation gerade aktiv geöffnet hat
+- **THEN** schließt der Client die Konversations-Ansicht, zeigt einen Toast „Die Gruppe wurde gelöscht" und entfernt die Konversation aus der Liste
 
-- **WHEN** ein Trainer `GET /api/chat/users?q=` aufruft
-- **THEN** gibt der Server alle User zurück die in Teams sind wo der Trainer Mitglied ist
+#### Scenario: Frontend reagiert auf Conv-Deleted bei inaktiver Konversation
 
-#### Scenario: Admin sieht alle User
-
-- **WHEN** ein Admin `GET /api/chat/users?q=` aufruft
-- **THEN** gibt der Server alle User des Systems zurück
-
+- **WHEN** ein Client das SSE-Event `chat:conv-deleted:<id>` empfängt und die Konversation nur in der Liste, aber nicht aktiv geöffnet hat
+- **THEN** entfernt der Client die Konversation aus der Liste ohne Toast

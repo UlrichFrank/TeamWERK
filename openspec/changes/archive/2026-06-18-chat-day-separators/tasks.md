@@ -54,19 +54,19 @@
 
 ## 6. Manuelle Verifikation
 
-- [ ] 6.1 Lokal `make dev` starten, in einen Chat mit Verlauf über mehrere Tage navigieren
-- [ ] 6.2 Separator über erster Nachricht, jeweils zwischen Tagen, nicht zwischen Nachrichten am gleichen Tag
-- [ ] 6.3 Label-Werte stichprobenartig prüfen: heutige Konv. → „Heute", gestrige → „Gestern", ältere → volles Datum mit Wochentag
-- [ ] 6.4 Tageswechsel über System-Message (z.B. „X hat die Gruppe verlassen") prüfen: Separator erscheint, wenn die System-Message an einem anderen Tag liegt
-- [ ] 6.5 Eine neue Nachricht senden — Separator vor heutigen Nachrichten zeigt weiter „Heute", keine Duplikate
-- [ ] 6.6 Visueller Check: Hairline ist dezent, lenkt nicht ab; Bubble-Timestamps zeigen weiterhin nur `HH:MM`
+- [x] 6.1 Lokal `make dev` starten, in einen Chat mit Verlauf über mehrere Tage navigieren
+- [x] 6.2 Separator über erster Nachricht, jeweils zwischen Tagen, nicht zwischen Nachrichten am gleichen Tag
+- [x] 6.3 Label-Werte stichprobenartig prüfen: heutige Konv. → „Heute", gestrige → „Gestern", ältere → volles Datum mit Wochentag
+- [x] 6.4 Tageswechsel über System-Message (z.B. „X hat die Gruppe verlassen") prüfen: Separator erscheint, wenn die System-Message an einem anderen Tag liegt
+- [x] 6.5 Eine neue Nachricht senden — Separator vor heutigen Nachrichten zeigt weiter „Heute", keine Duplikate
+- [x] 6.6 Visueller Check: Hairline ist dezent, lenkt nicht ab; Bubble-Timestamps zeigen weiterhin nur `HH:MM`
 
 ## 7. Commit & Archiv
 
-- [ ] 7.1 Pro Task-Block einen Commit nach Conventional-Commits-Format:
+- [x] 7.1 Pro Task-Block einen Commit nach Conventional-Commits-Format:
   - `chore(web): vitest setup`
   - `feat(chat): daySeparatorLabel und shouldRenderSeparator`
   - `test(chat): Tests für daySeparatorLabel + shouldRenderSeparator`
   - `feat(chat): DaySeparator-Komponente`
   - `feat(chat): Tageswechsel-Separatoren im Verlauf rendern`
-- [ ] 7.2 Abschlusscommit, der die OpenSpec-Proposal-Datei archiviert (`opsx:archive`)
+- [x] 7.2 Abschlusscommit, der die OpenSpec-Proposal-Datei archiviert (`opsx:archive`)

@@ -1,99 +1,35 @@
-### Requirement: Multi-valued club function per member
+## ADDED Requirements
 
-The system SHALL support assigning zero, one, or more club functions to a member record. Valid functions: `spieler`, `trainer`, `vorstand`, `vorstand_beisitzer`, `kassierer`, `sportliche_leitung`. Functions are stored in a junction table `member_club_functions(member_id, function)` and are independent of the user account's system role.
+### Requirement: Phantom club functions are rejected
 
-#### Scenario: Member assigned multiple functions
-- **WHEN** an admin assigns both `spieler` and `trainer` functions to a member
-- **THEN** both functions are stored and returned in subsequent reads of that member's profile
+The system SHALL reject any club function value not listed in the canonical set (`spieler`, `trainer`, `vorstand`, `vorstand_beisitzer`, `kassierer`, `sportliche_leitung`). In particular, the historically-referenced but never-defined function `sportvorstand` is invalid and MUST NOT be checked anywhere in code (backend `HasFunction`, frontend `hasFunction`).
 
-#### Scenario: Member with no function
-- **WHEN** a member record is created without specifying any club function
-- **THEN** the system stores an empty function set (no rows in `member_club_functions` for that member)
+#### Scenario: Database rejects sportvorstand insert
+- **WHEN** any code attempts `INSERT INTO member_club_functions (member_id, function) VALUES (?, 'sportvorstand')`
+- **THEN** the insert fails with a CHECK constraint error
 
-#### Scenario: Function removed
-- **WHEN** an admin removes a function from a member who holds multiple functions
-- **THEN** only the specified function is removed; remaining functions are unaffected
+#### Scenario: Backend never queries for sportvorstand
+- **WHEN** the codebase is grepped for `HasFunction("sportvorstand")` or equivalent string literal
+- **THEN** zero matches are found
 
-#### Scenario: Member list filtered by function
-- **WHEN** `GET /api/members?club_function=trainer` is called
-- **THEN** only members who have `trainer` in their function set are returned
-
-#### Scenario: kassierer function assignable
-- **WHEN** an admin assigns the `kassierer` function to a member
-- **THEN** the function is stored and returned in subsequent reads of that member's profile
-
-#### Scenario: sportliche_leitung function assignable
-- **WHEN** an admin assigns the `sportliche_leitung` function to a member
-- **THEN** the function is stored and returned in subsequent reads of that member's profile
+#### Scenario: Frontend never queries for sportvorstand
+- **WHEN** the frontend codebase is grepped for `hasFunction(user, 'sportvorstand')` or equivalent
+- **THEN** zero matches are found
 
 ---
 
-### Requirement: Club functions and parent status propagated in JWT
+### Requirement: Parent status is not a club function
 
-The system SHALL include the linked member's club functions and the user's parent status in the JWT Access Token at login and refresh time.
+The system SHALL keep parent status (`is_parent`) as a JWT claim that is derived at login time from the existence of `family_links` rows, and SHALL NOT model `elternteil` as a value in `member_club_functions.function`. Code that needs to check „is this user a parent" MUST read `claims.IsParent`, not call `claims.HasFunction("elternteil")`.
 
-#### Scenario: Login for member-linked user
-- **WHEN** a standard user with a linked member record logs in
-- **THEN** the JWT contains `club_functions` as an array of that member's current functions and `is_parent: false` (assuming no family_links)
-
-#### Scenario: Login for parent user
-- **WHEN** a standard user with one or more `family_links` entries but no linked member logs in
+#### Scenario: Parent user has empty club_functions and is_parent true
+- **WHEN** a user has `family_links` rows but no linked member with club functions
 - **THEN** the JWT contains `club_functions: []` and `is_parent: true`
 
-#### Scenario: Login for user with no member and no family_links
-- **WHEN** a standard user with neither a linked member nor family_links logs in
-- **THEN** the JWT contains `club_functions: []` and `is_parent: false`
+#### Scenario: elternteil is never stored as a club function
+- **WHEN** any code attempts `INSERT INTO member_club_functions (member_id, function) VALUES (?, 'elternteil')`
+- **THEN** the insert fails with a CHECK constraint error
 
-#### Scenario: Function change takes effect after next login
-- **WHEN** an admin changes a member's club functions
-- **THEN** the change is reflected in the JWT only after the affected user's next login or token refresh
-
----
-
-### Requirement: Duty obligation priority for members with multiple functions
-
-The system SHALL apply duty obligations based on the member's highest-priority function when multiple functions are present. Priority order: `trainer` > `spieler` > `elternteil` (parent status).
-
-#### Scenario: Trainer-Spieler owes trainer duty obligations
-- **WHEN** a member has both `spieler` and `trainer` functions and the system calculates their duty Soll
-- **THEN** the trainer duty targets apply and spieler targets are ignored for that user
-
-#### Scenario: Spieler without trainer function owes spieler duty obligations
-- **WHEN** a member has only the `spieler` function
-- **THEN** the spieler duty targets apply
-
-#### Scenario: Parent user with no member function owes elternteil obligations
-- **WHEN** a user has `is_parent: true` and `club_functions: []`
-- **THEN** the elternteil duty calculation (based on linked children's kader memberships) applies
-
----
-
-### Requirement: sportliche_leitung has trainer-equivalent route access
-
-The system SHALL grant users with the `sportliche_leitung` club function access to all routes gated by `RequireClubFunction("trainer")`, including Kader management, Spielplan, and Dienste.
-
-#### Scenario: sportliche_leitung accesses Kader route
-- **WHEN** a user with `sportliche_leitung` in their `club_functions` requests a trainer-gated route
-- **THEN** the system responds with 200 (not 403)
-
-#### Scenario: sportliche_leitung denied Mitglieder route
-- **WHEN** a user with only `sportliche_leitung` (no `trainer`) requests a Mitglieder-only route
-- **THEN** the system responds with 403
-
----
-
-### Requirement: sportliche_leitung sees all Kader teams without filter
-
-The system SHALL return all active Kader teams for users with `sportliche_leitung`, bypassing the per-trainer team restriction that applies to users with only the `trainer` function.
-
-#### Scenario: trainer sees only own teams
-- **WHEN** a user with `trainer` (and not `sportliche_leitung`) calls `GET /api/teams`
-- **THEN** only teams where that user is registered as a Kader trainer are returned
-
-#### Scenario: sportliche_leitung sees all teams
-- **WHEN** a user with `sportliche_leitung` calls `GET /api/teams`
-- **THEN** all active Kader teams are returned regardless of trainer assignment
-
-#### Scenario: sportliche_leitung game filter includes all teams
-- **WHEN** a user with `sportliche_leitung` requests the Spielplan calendar
-- **THEN** games from all teams are included (no team-based WHERE restriction)
+#### Scenario: Backend never checks HasFunction("elternteil")
+- **WHEN** the codebase is grepped for `HasFunction("elternteil")` or equivalent
+- **THEN** zero matches are found; parent gates use `claims.IsParent` instead
