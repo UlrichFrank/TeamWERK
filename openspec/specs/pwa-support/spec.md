@@ -43,12 +43,17 @@ Die App SHALL einen Service Worker registrieren. Reguläre API-Aufrufe (`/api/*`
 - **THEN** liefert der Service Worker die zuletzt gecachte Antwort (sofern vorhanden)
 
 ### Requirement: Service Worker mit Cache-First-Strategie für statische Assets
-Statische Assets (JS-Bundles, CSS, Schriften, Bilder) SHALL der Service Worker mit Cache-First-Strategie bedienen: zuerst Cache, bei Cache-Miss Netzwerk.
+Statische Assets (JS-Bundles, CSS, Schriften, Bilder unter `assets/` und `icons/`) SHALL der Service Worker via Workbox-Precache mit Cache-First-Strategie bedienen: zuerst Cache, bei Cache-Miss Netzwerk. HTML-Dateien — insbesondere `index.html` — SHALL **nicht** im Workbox-Precache enthalten sein; Navigationen werden über die separate `NetworkFirst`-Route (Cache `app-shell`) abgewickelt (siehe Capability `app-update-reliability`).
 
 #### Scenario: Statisches Asset aus Cache
 - **WHEN** der Nutzer die App lädt
-- **WHEN** das Asset bereits gecacht ist
+- **WHEN** das Asset bereits im Workbox-Precache ist
 - **THEN** wird es sofort aus dem Cache geladen ohne Netzwerkanfrage
+
+#### Scenario: index.html ist nicht im Precache
+- **WHEN** der Service Worker installiert
+- **THEN** enthält das Precache-Manifest keine `.html`-Dateien
+- **THEN** wird `index.html` ausschließlich über die `NetworkFirst`-Navigationsroute geliefert
 
 ### Requirement: Offline-Fallback-Seite
 Die App SHALL bei fehlendem Netzwerk und fehlendem Cache eine Offline-Fallback-Seite (`/offline.html`) anzeigen.
@@ -70,10 +75,10 @@ Die PWA-Icons SHALL aus dem vorhandenen TeamWERK-Logo-SVG generiert werden. Das 
 
 Der Service Worker SHALL erkannte Updates (neues Bundle nach `make deploy`) via `onNeedRefresh`-Callback an die App melden. Die App SHALL bei Erhalt dieses Callbacks denselben Update-Banner anzeigen wie bei SSE-basierter Versionserkennung. Der Reload-Flow SHALL beim Klick auf „Jetzt laden" sicherstellen, dass die App den neuen Stand sieht — auch wenn der neue Service Worker zum Klick-Zeitpunkt noch nicht im `waiting`-State ist:
 
-1. Wenn `registration.waiting` direkt verfügbar ist: `SKIP_WAITING` senden, auf `controllerchange` warten, dann `location.reload()` (bisheriges Verhalten).
+1. Wenn `registration.waiting` direkt verfügbar ist: `SKIP_WAITING` senden, auf `controllerchange` warten, dann `location.reload()`.
 2. Sonst: `registration.update()` aufrufen, bis ~5 s auf `registration.waiting` pollen.
 3. Wenn nach dem Poll ein `waiting`-SW da ist: weiter wie in (1).
-4. Wenn weiterhin keiner: `caches.delete('api-cache')` ausführen, dann `location.reload()`.
+4. Wenn weiterhin keiner: alle Caches mit Namen-Präfix `workbox-precache` löschen, `app-shell`-Cache löschen, `api-cache`-Cache löschen, dann `location.reload()`. Andere Caches (Google Fonts) bleiben unangetastet.
 
 #### Scenario: SW erkennt neues Bundle und zeigt Banner
 
@@ -102,14 +107,21 @@ Der Service Worker SHALL erkannte Updates (neues Bundle nach `make deploy`) via 
 
 - **WHEN** der Nutzer „Jetzt laden" klickt
 - **WHEN** auch nach 5 s `registration.waiting` weiterhin `null` ist
-- **THEN** löscht die App den `api-cache`-Cache via `caches.delete('api-cache')`
+- **THEN** löscht die App alle Caches mit Namen-Präfix `workbox-precache`
+- **THEN** löscht die App den `app-shell`-Cache
+- **THEN** löscht die App den `api-cache`-Cache
 - **THEN** ruft die App `location.reload()` auf
-- **THEN** sieht die Nutzerin keinen veralteten `index.html`-Precache mehr für API-Daten
+- **THEN** sieht der Nutzer weder einen veralteten Precache-Shell noch veraltete API-Daten
+
+#### Scenario: Fallback lässt Google-Fonts-Caches unberührt
+
+- **WHEN** der Fallback-Pfad ausgeführt wird
+- **THEN** wird der Cache `google-fonts-cache` NICHT gelöscht
+- **THEN** wird der Cache `google-fonts-static-cache` NICHT gelöscht
 
 #### Scenario: PWA Standalone erkennt Update beim App-Start
 
 - **WHEN** die installierte PWA nach einem Deployment neu gestartet wird
 - **WHEN** Netzwerkzugang besteht
-- **THEN** prüft der SW beim Start auf Updates
-- **THEN** erscheint bei verfügbarem Update der Banner beim nächsten Seitenbesuch
+- **THEN** liefert der Service Worker die neue `index.html` direkt aus der NetworkFirst-Route, ohne dass der Banner geklickt werden muss
 
