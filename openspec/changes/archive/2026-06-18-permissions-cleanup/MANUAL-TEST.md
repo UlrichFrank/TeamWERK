@@ -121,11 +121,26 @@ Seite `/termine` und Detail `/termine/:type/:id`:
       (manage_trainings fehlt). Bei **Spielen** richtet sich „Aufstellung
       verwalten" nach `game.can.manage_lineup` (kommt vom Server).
 
-### 4.6 Dienste-Board (`fulfill_duties` → A, T, SL; **nicht** reiner Vorstand)
-Seite `/dienste`:
-- [ ] **A, T, SL:** „Erfüllt"/„Bar-Ersatz"-Aktionen an Slots sichtbar.
-- [ ] **Reiner Vorstand:** diese Erfüllen-Aktionen **nicht** sichtbar.
-- [ ] **Spieler:** kann eigene Dienste übernehmen, aber keine Erfüllen-Aktionen.
+### 4.6 Dienste-Board (`/dienste`)
+Zwei getrennte Dinge nicht verwechseln:
+
+**Dienst übernehmen & erfüllen (alle eingeloggten Nutzer, inkl. Vorstand):**
+- [ ] **Alle (Spieler, Elternteil, Vorstand, Trainer, …):** an einem offenen Slot
+      „Eintragen" sichtbar; danach „Austragen". So bekommt z.B. ein **Vorstand**
+      seinen Kasse-/Einkauf-Dienst und erfüllt ihn — dieser Ablauf ist nicht
+      capability-gegated.
+
+**Slot-Verwaltung — Bearbeiten/Löschen (`manage_duties` → A, V, T, SL):**
+- [ ] **A, V, T, SL:** Löschen-Aktion (Papierkorb) an Slots sichtbar.
+- [ ] **Spieler / Elternteil / Beisitzer / Kassierer:** keine Löschen-Aktion.
+
+> **Regressionsfokus (behoben):** **Vorstand** sieht jetzt die Slot-Verwaltung
+> (vorher Designloch — Vorstand war ausgeschlossen, obwohl das Backend
+> `duty-slots`-Mutationen für Vorstand erlaubt). Bitte bestätigen.
+
+> Hinweis: Das administrative „Erfüllt-für-andere markieren"
+> (`/duty-assignments/{id}/fulfill`, Backend: Trainer + Sportliche Leitung) hat
+> derzeit **keine** eigene Schaltfläche im Frontend — daher hier nichts zu testen.
 
 ### 4.7 Dokumente (`manage_documents` → **nur Admin**)
 Seite `/dokumente`:
