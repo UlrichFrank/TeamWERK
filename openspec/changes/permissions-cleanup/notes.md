@@ -1,21 +1,26 @@
 # permissions-cleanup — Vor-Design-Notizen
 
 > **Status:** Vor-Design-Stand aus Explore-Session vom 2026-06-17 mit Ulrich.
+> Zahlen verifiziert am 2026-06-18 gegen aktuellen Code.
 > **Voraussetzung:** `permissions-baseline-tests` MUSS abgeschlossen sein, bevor
 > dieser Change gestartet wird. Die dort entstehenden Persona-Matrix-Tests sind
 > der Sicherungsanker für den Refactor.
+> **Aktueller Blocker:** `permissions-baseline-tests` ist bei 1/28 Tasks (Stand 2026-06-18).
 
 ## Ausgangslage (Ist-Zustand)
 
 Berechtigungs-Logik ist heute an drei Stellen verstreut, mit Drift zwischen
 identischen Predicates:
 
-1. **Router** (`internal/app/router.go`): 6 grobe Gates via
+1. **Router** (`internal/app/router.go`): 5 grobe Gates via
    `RequireRole` / `RequireClubFunction`.
-2. **Handler** (`internal/*/handler.go`): 62+ Inline-Checks
-   (`claims.Role == …`, `claims.HasFunction(…)`, Ownership-IDs, Team-Filter).
-3. **Frontend** (`web/src/{App,components,pages}`): ~57 Vorkommen — `RoleRoute`,
-   `navModules.roles`, lokale `const isXxx = …`-Konstruktionen in ~10 Pages.
+2. **Handler** (`internal/*/handler.go`): 71 Inline-Checks
+   (`claims.Role ==`: 28×, `claims.Role !=`: 8×, `claims.HasFunction(`: 34×,
+   `claims.HasAnyFunction(`: 1×) — plus 181× `claims.UserID` als Ownership-Checks.
+3. **Frontend** (`web/src/{App,components,pages}`): ~40 Vorkommen — `RoleRoute`
+   in `App.tsx` (10×), `hasFunction(`: 20×, `hasAnyFunction(`: 2×, lokale
+   `const isXxx = …` in Pages (8×). `navModules[i].items[j].roles` in
+   `AppShell.tsx` (nicht mehr als flaches `navModules.roles`).
 
 Dieselbe Persona-Definition (z.B. "isTrainer") existiert leicht verschieden in
 5 Pages, 8 Handlern und 2 Router-Gates. Das ist die Drift, die dieser Change
@@ -132,8 +137,9 @@ Zu klären, bevor `proposal.md` geschrieben wird:
 
 ## Verweise
 
-- Vorgänger-Change: `permissions-baseline-tests` (in Arbeit, 0/36 Tasks)
-- Verwandt: `cleanup-legacy-roles` (Phantom-Funktion `sportvorstand` entfernen)
+- Vorgänger-Change: `permissions-baseline-tests` (in Arbeit, 1/28 Tasks — Stand 2026-06-18)
+- Verwandt: `cleanup-legacy-roles` (Phantom-Funktion `sportvorstand` entfernen —
+  Change-Verzeichnis noch nicht angelegt; `sportvorstand` ist bereits nicht im Code)
 - Doku: `CLAUDE.md` — Abschnitt "Rollen und Vereinsfunktionen"
 - Auth-Helpers heute: `internal/auth/middleware.go`, `internal/auth/claims.go`
 - Frontend-Helpers heute: `web/src/contexts/AuthContext.tsx`

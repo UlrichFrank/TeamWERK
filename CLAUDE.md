@@ -182,7 +182,7 @@ h.mailer.Send(to, subject, body)  // net/smtp, SMTP-Config aus .env
 
 | Tabelle | Schlüsselfelder |
 |---------|----------------|
-| `users` | `id`, `email` UNIQUE, `name`, `password` (bcrypt), `role` CHECK('admin','trainer','elternteil','spieler'), `team_id` FK |
+| `users` | `id`, `email` UNIQUE, `name`, `password` (bcrypt), `role` CHECK('admin','standard'), `team_id` FK |
 | `refresh_tokens` | `user_id` FK, `token_hash` UNIQUE, `expires_at` |
 | `invitation_tokens` | `email`, `team_id`, `role`, `token` UNIQUE, `expires_at`, `used_at` |
 | `password_reset_tokens` | `user_id` FK, `token` UNIQUE, `expires_at`, `used_at` |
