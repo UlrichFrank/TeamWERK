@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ExternalLink, Trash2, AlertTriangle } from 'lucide-react'
 import { api } from '../../lib/api'
-import { useAuth, hasFunction } from '../../contexts/AuthContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface Member {
   dsgvo_verarbeitung?: boolean
@@ -48,7 +48,7 @@ export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, on
   const sepaDraft = drafts.find(d => d.field_name === 'sepa_mandat')
 
   const isAdmin = user?.role === 'admin'
-  const isVorstand = hasFunction(user, 'vorstand')
+  const isVorstand = user?.clubFunctions?.includes('vorstand') === true
   const canDeleteSepa = isAdmin || isVorstand || user?.isParent
 
   const MAX_SEPA_BYTES = 2 * 1024 * 1024

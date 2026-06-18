@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 type Handler struct {
@@ -276,13 +277,14 @@ type contentsResponse struct {
 // GET /api/folders/{id}/contents
 func (h *Handler) FolderContents(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
+	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	cr, cw, err := resolveAccess(h.db, claims, id)
+	cr, cw, err := policy.FolderAccess(h.db, p, id)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return

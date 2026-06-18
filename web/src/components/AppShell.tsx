@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import ChangelogModal from './ChangelogModal'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { useChatEvents } from '../hooks/useChatEvents'
@@ -11,59 +11,48 @@ import { useVersion } from '../contexts/VersionContext'
 import { reloadWithSwActivation } from '../lib/reload'
 import { api } from '../lib/api'
 
-// NavItem.roles / NavItem.excludeRoles sind polymorph: jeder String wird sowohl gegen die
-// System-Rolle (`users.role`, also 'admin'|'standard') als auch gegen die Vereinsfunktionen
-// des Users (`spieler`, `trainer`, `vorstand`, `vorstand_beisitzer`, `kassierer`,
-// `sportliche_leitung`) gematcht. Da diese beiden Wertebereiche disjunkt sind, ist die
-// Polymorphie kollisionsfrei. Leeres `roles`-Array bedeutet „alle authentifizierten Nutzer".
-// Match-Logik in `matchesRequirement` unten.
 interface NavModule {
   label: string
-  items: { to: string; label: string; roles: string[]; excludeRoles?: string[]; end?: boolean }[]
+  items: { to: string; label: string; end?: boolean }[]
 }
 
-type AuthUser = NonNullable<ReturnType<typeof useAuth>['user']>
-
-// Prüft, ob ein Requirement-Token (System-Rolle ODER Vereinsfunktion) auf den User passt.
-function matchesRequirement(user: AuthUser, token: string): boolean {
-  return user.role === token || hasFunction(user, token)
-}
-
+// Static layout descriptor — defines grouping, labels, and ordering.
+// Visibility is determined server-side via GET /api/me → nav routes.
 const navModules: NavModule[] = [
   {
     label: 'Nutzer',
     items: [
-      { to: '/', label: 'Dashboard', roles: [], end: true },
-      { to: '/profil', label: 'Mein Profil', roles: [], excludeRoles: ['admin'] },
+      { to: '/', label: 'Dashboard', end: true },
+      { to: '/profil', label: 'Mein Profil' },
     ],
   },
   {
     label: 'Spielbetrieb',
     items: [
-      { to: '/kalender', label: 'Kalender', roles: [] },
-      { to: '/termine', label: 'Termine', roles: [] },
+      { to: '/kalender', label: 'Kalender' },
+      { to: '/termine', label: 'Termine' },
     ],
   },
   {
     label: 'Verein',
     items: [
-      { to: '/mein-team', label: 'Mein Team', roles: [] },
-      { to: '/dokumente', label: 'Dokumente', roles: [] },
-      { to: '/dienste', label: 'Dienste', roles: [] },
-      { to: '/mitfahrgelegenheiten', label: 'Mitfahrten', roles: [] },
-      { to: '/chat', label: 'Nachrichten', roles: [] },
+      { to: '/mein-team', label: 'Mein Team' },
+      { to: '/dokumente', label: 'Dokumente' },
+      { to: '/dienste', label: 'Dienste' },
+      { to: '/mitfahrgelegenheiten', label: 'Mitfahrten' },
+      { to: '/chat', label: 'Nachrichten' },
     ],
   },
   {
     label: 'Verwaltung',
     items: [
-      { to: '/nutzer', label: 'Nutzerverwaltung', roles: ['admin', 'vorstand'] },
-      { to: '/mitglieder', label: 'Mitglieder', roles: ['admin', 'vorstand'] },
-      { to: '/kader', label: 'Kader', roles: ['admin', 'vorstand', 'trainer', 'sportliche_leitung'] },
-      { to: '/diensttypen', label: 'Diensttypen', roles: ['admin', 'vorstand'] },
-      { to: '/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen', roles: ['admin', 'vorstand'] },
-      { to: '/veranstaltungsorte', label: 'Veranstaltungsorte', roles: ['admin', 'vorstand'] },
-      { to: '/einstellungen', label: 'Einstellungen', roles: ['admin', 'vorstand'] },
+      { to: '/nutzer', label: 'Nutzerverwaltung' },
+      { to: '/mitglieder', label: 'Mitglieder' },
+      { to: '/kader', label: 'Kader' },
+      { to: '/diensttypen', label: 'Diensttypen' },
+      { to: '/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen' },
+      { to: '/veranstaltungsorte', label: 'Veranstaltungsorte' },
+      { to: '/einstellungen', label: 'Einstellungen' },
     ],
   },
 ]
@@ -94,6 +83,7 @@ export default function AppShell() {
   const [showChangelog, setShowChangelog] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
+  const [navRoutes, setNavRoutes] = useState<Set<string>>(new Set())
   const [chatUnread, setChatUnread] = useState(0)
 
   const loadChatUnread = useCallback(async () => {
@@ -116,6 +106,10 @@ export default function AppShell() {
         .slice()
         .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
       setNavChildren(kids)
+    }).catch(() => {})
+    api.get('/me').then(r => {
+      const routes: string[] = (r.data?.nav ?? []).map((n: { route: string }) => n.route)
+      setNavRoutes(new Set(routes))
     }).catch(() => {})
     loadChatUnread()
   }, [user?.id, loadChatUnread])
@@ -162,8 +156,9 @@ export default function AppShell() {
         {navModules.map(mod => {
           const visibleItems = mod.items.filter(item => {
             if (!user) return false
-            if (item.excludeRoles?.some(r => matchesRequirement(user, r))) return false
-            return item.roles.length === 0 || item.roles.some(r => matchesRequirement(user, r))
+            // While /api/me is loading, fall back to showing all items to avoid flash
+            if (navRoutes.size === 0) return true
+            return navRoutes.has(item.to)
           })
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))

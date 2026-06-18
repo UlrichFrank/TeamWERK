@@ -15,6 +15,7 @@ import (
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -1336,4 +1337,42 @@ func (h *Handler) LinkInvitationMember(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// principalFromClaims converts Claims to a policy.Principal.
+func principalFromClaims(c *Claims) *policy.Principal {
+	return &policy.Principal{
+		UserID:        c.UserID,
+		Role:          c.Role,
+		ClubFunctions: c.ClubFunctions,
+		IsParent:      c.IsParent,
+	}
+}
+
+// GET /api/me — returns the authenticated user's identity, capabilities, and nav items.
+func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	p := principalFromClaims(claims)
+
+	resp := struct {
+		User struct {
+			ID    int    `json:"id"`
+			Email string `json:"email"`
+			Role  string `json:"role"`
+		} `json:"user"`
+		Capabilities []string         `json:"capabilities"`
+		Nav          []policy.NavItem `json:"nav"`
+	}{}
+	resp.User.ID = claims.UserID
+	resp.User.Email = claims.Email
+	resp.User.Role = claims.Role
+	resp.Capabilities = policy.Capabilities(p)
+	resp.Nav = policy.NavFor(p)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }

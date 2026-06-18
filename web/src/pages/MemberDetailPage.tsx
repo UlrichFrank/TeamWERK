@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import MemberStammdatenTab from '../components/admin/MemberStammdatenTab'
 import MemberKontaktTab from '../components/admin/MemberKontaktTab'
@@ -53,7 +53,7 @@ export default function MemberDetailPage() {
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
   const isNew = id === 'neu'
-  const isAdmin = user?.role === 'admin' || hasFunction(user, 'vorstand')
+  const isAdmin = user?.role === 'admin' || user?.clubFunctions?.includes('vorstand') === true
 
   const [activeTab, setActiveTab] = useState<TabName>(() => {
     const saved = localStorage.getItem('memberDetailTab')

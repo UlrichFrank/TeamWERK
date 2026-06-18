@@ -118,6 +118,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Post("/api/members/{id}/change-request", h.Members.CreateChangeRequestHandler)
 		r.Get("/api/members/{id}/sepa-mandat/download-token", h.Upload.SepaDownloadToken)
 		r.Delete("/api/members/{id}/sepa-mandat", h.Upload.DeleteSepaMandat)
+		r.Get("/api/me", h.Auth.GetMe)
 		r.Get("/api/profile/me", h.Members.GetProfile)
 		r.Put("/api/profile/me", h.Members.UpdateProfile)
 		r.Get("/api/profile/vehicle", h.Members.GetVehicle)

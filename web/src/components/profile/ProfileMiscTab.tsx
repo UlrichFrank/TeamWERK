@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import Toggle from '../Toggle'
-import { useAuth, MapsProvider, hasFunction } from '../../contexts/AuthContext'
+import { useAuth, MapsProvider } from '../../contexts/AuthContext'
 
 type Category = 'games' | 'trainings' | 'duties' | 'carpooling' | 'chat'
 
@@ -30,7 +30,7 @@ const categoryLabels: Record<Category, string> = {
 
 export default function ProfileMiscTab() {
   const { user, mapsProvider: ctxMapsProvider, setMapsProvider: setCtxMapsProvider } = useAuth()
-  const isSpieler = hasFunction(user, 'spieler')
+  const isSpieler = user?.clubFunctions?.includes('spieler') === true
   const [prefs, setPrefs] = useState<Prefs>(defaults)
   const [changed, setChanged] = useState(false)
   const [saving, setSaving] = useState(false)

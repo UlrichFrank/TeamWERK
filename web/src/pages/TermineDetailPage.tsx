@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { AlertTriangle, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -77,6 +77,7 @@ interface GameDetail {
   venue?: VenueRef | null
   rsvp_opt_out?: number
   rsvp_require_reason?: number
+  can?: { edit: boolean; delete: boolean; manage_lineup: boolean }
 }
 
 function RsvpConfigBadges({ optOut, requireReason }: { optOut?: number; requireReason?: number }) {
@@ -119,7 +120,6 @@ interface TableRow {
 export default function TermineDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>()
   const { user } = useAuth()
-  const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
 
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [game, setGame] = useState<GameDetail | null>(null)
@@ -132,6 +132,8 @@ export default function TermineDetailPage() {
   const [showReasonId, setShowReasonId] = useState<number | null>(null)
 
   const isTraining = type === 'training'
+  const isTrainer = Boolean(game?.can?.manage_lineup
+    ?? (user?.role === 'admin' || user?.clubFunctions?.includes('trainer') || user?.clubFunctions?.includes('sportliche_leitung')))
   const date = isTraining ? session?.date : game?.date
   const today = new Date().toISOString().slice(0, 10)
   const isPast = date ? date.slice(0, 10) <= today : false

@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames } from '../lib/teamName'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
@@ -139,7 +139,7 @@ function RsvpButton({ label, icon, active, activeClass, disabled, onClick }: {
 export default function TerminePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const isTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
+  const isTrainer = user?.role === 'admin' || user?.clubFunctions?.includes('trainer') || user?.clubFunctions?.includes('sportliche_leitung')
   const isParent = user?.isParent === true
 
   const [searchParams, setSearchParams] = useSearchParams()

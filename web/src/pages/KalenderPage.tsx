@@ -4,7 +4,7 @@ import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, 
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -121,8 +121,8 @@ const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-s
 
 function canSeeTeamAbsences(user: ReturnType<typeof useAuth>['user']): boolean {
   if (!user) return false
-  return user.role === 'admin' || hasFunction(user, 'trainer') ||
-    hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')
+  return user.role === 'admin' || user.clubFunctions?.includes('trainer') ||
+    user.clubFunctions?.includes('vorstand') || user.clubFunctions?.includes('sportliche_leitung')
 }
 
 export default function KalenderPage() {
@@ -684,8 +684,8 @@ export default function KalenderPage() {
     null
   )
 
-  const canEdit = Boolean(user && (user.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'vorstand') || hasFunction(user, 'sportliche_leitung')))
-  const canCreateAbsence = Boolean(user && (hasFunction(user, 'spieler') || user.isParent))
+  const canEdit = Boolean(user && (user.role === 'admin' || user.clubFunctions?.includes('trainer') || user.clubFunctions?.includes('vorstand') || user.clubFunctions?.includes('sportliche_leitung')))
+  const canCreateAbsence = Boolean(user && (user.clubFunctions?.includes('spieler') || user.isParent))
 
   return (
     <div>
@@ -968,7 +968,7 @@ export default function KalenderPage() {
                       </div>
                     </button>
                   ))}
-                  {user && (user.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')) && (
+                  {user && (user.role === 'admin' || user.clubFunctions?.includes('trainer') || user.clubFunctions?.includes('sportliche_leitung')) && (
                     <>
                       <button
                         onClick={() => { setEventType('training'); setWizardStep(2) }}

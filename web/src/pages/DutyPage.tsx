@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, UserCheck, History, Filter } from 'lucide-react'
 import { api } from '../lib/api'
-import { useAuth, hasFunction, hasAnyFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -66,11 +66,11 @@ function parseFilters(sp: URLSearchParams) {
 
 export default function DutyPage() {
   const { user } = useAuth()
-  const isAdminOrTrainer = user?.role === 'admin' || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung')
+  const isAdminOrTrainer = Boolean(user?.role === 'admin' || user?.clubFunctions?.includes('trainer') || user?.clubFunctions?.includes('sportliche_leitung'))
 
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll } = parseFilters(searchParams)
-  const showAudiencePill = hasAnyFunction(user, AUDIENCE_FILTER_FUNCTIONS)
+  const showAudiencePill = AUDIENCE_FILTER_FUNCTIONS.some(f => user?.clubFunctions?.includes(f))
 
   const [groups, setGroups] = useState<BoardGroup[]>([])
   const [teams, setTeams] = useState<Team[]>([])

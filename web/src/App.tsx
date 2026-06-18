@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth, hasFunction } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
 import { VersionProvider } from './contexts/VersionContext'
 import LoginPage from './pages/LoginPage'
@@ -43,7 +43,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 export function RoleRoute({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="flex items-center justify-center h-screen">Laden…</div>
-  const allowed = user && roles.some(r => r === 'admin' ? user.role === 'admin' : hasFunction(user, r))
+  const allowed = user && roles.some(r => r === 'admin' ? user.role === 'admin' : user.clubFunctions?.includes(r))
   if (!allowed) return <Navigate to="/" replace />
   return <>{children}</>
 }

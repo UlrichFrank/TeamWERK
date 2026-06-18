@@ -179,6 +179,9 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/members/{id}/sepa-mandat/download-token", expected: exSepaOwner},
 	{method: "DELETE", path: "/api/members/{id}/sepa-mandat", expected: exSepaOwner},
 
+	// Me
+	{method: "GET", path: "/api/me", expected: exAuth},
+
 	// Profile
 	{method: "GET", path: "/api/profile/me", expected: exAuth},
 	{method: "PUT", path: "/api/profile/me", expected: exAuth},

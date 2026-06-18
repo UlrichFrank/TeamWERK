@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 type Handler struct {
@@ -82,12 +84,13 @@ type trainerRow struct {
 
 type kaderDetail struct {
 	kaderRow
-	BirthYears      []int        `json:"birth_years"`      // filtered: [dedicated] or [yr1, yr2]
-	BracketYears    []int        `json:"bracket_years"`    // always both bracket years [yr1, yr2]
-	Members         []memberRow  `json:"members"`
-	MemberCount     int          `json:"member_count"`
-	Trainers        []trainerRow `json:"trainers"`
-	ExtendedMembers []memberRow  `json:"extended_members"`
+	BirthYears      []int               `json:"birth_years"`      // filtered: [dedicated] or [yr1, yr2]
+	BracketYears    []int               `json:"bracket_years"`    // always both bracket years [yr1, yr2]
+	Members         []memberRow         `json:"members"`
+	MemberCount     int                 `json:"member_count"`
+	Trainers        []trainerRow        `json:"trainers"`
+	ExtendedMembers []memberRow         `json:"extended_members"`
+	Can             policy.CanFlags     `json:"can"`
 }
 
 func computeBirthYears(k kaderRow, seasonStartYear int) (birthYears []int, bracketYears []int) {
@@ -127,6 +130,10 @@ const kaderSelectSQL = `
 
 // GET /api/admin/kader?season_id=N
 func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
+	kaderCan := policy.CanFlags{Edit: policy.CanEditKader(p), Delete: policy.CanEditKader(p)}
+
 	seasonID := r.URL.Query().Get("season_id")
 	var query string
 	var args []any
@@ -164,6 +171,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 			MemberCount:     len(members),
 			Trainers:        trainers,
 			ExtendedMembers: extended,
+			Can:             kaderCan,
 		})
 	}
 
@@ -185,6 +193,8 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gclaims := auth.ClaimsFromCtx(r.Context())
+	gp := &policy.Principal{UserID: gclaims.UserID, Role: gclaims.Role, ClubFunctions: gclaims.ClubFunctions}
 	members, _ := h.loadMembers(r.Context(), k.ID)
 	trainers, _ := h.loadTrainers(r.Context(), k.ID)
 	extended, _ := h.loadExtendedMembers(r.Context(), k.ID)
@@ -198,6 +208,7 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 		MemberCount:     len(members),
 		Trainers:        trainers,
 		ExtendedMembers: extended,
+		Can:             policy.CanFlags{Edit: policy.CanEditKader(gp), Delete: policy.CanEditKader(gp)},
 	})
 }
 

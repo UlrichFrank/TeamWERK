@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { X, User, CreditCard, ChevronDown, AlertTriangle, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
@@ -18,6 +18,7 @@ interface Member {
   has_pending_bank_draft?: boolean
   user_id?: number
   user_photo_url?: string
+  can?: { edit: boolean; delete: boolean }
 }
 
 interface ImportRow {
@@ -107,7 +108,7 @@ export default function MembersPage() {
   }, [clubFunctionFilter, unlinkedUserFilter, hasDraftFilter])
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
-  const isAdmin = user?.role === 'admin' || hasFunction(user, 'vorstand')
+  const isAdmin = user?.role === 'admin' || user?.clubFunctions?.includes('vorstand') === true
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
 
@@ -340,7 +341,7 @@ export default function MembersPage() {
               <tr key={m.id} className="hover:bg-brand-table-select transition-colors cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
                 <td className="px-4 py-3 font-medium text-brand-text">
                   <PersonChip userId={m.user_id} name={`${m.last_name}, ${m.first_name}`} photoUrl={m.user_photo_url} />
-                  {isAdmin && (
+                  {m.can?.edit && (
                     <>
                       {m.has_pending_profil_draft && <User size={14} className="inline ml-2 text-brand-text-muted" aria-label="Persönliche Daten ausstehend" />}
                       {m.has_pending_bank_draft && <CreditCard size={14} className="inline ml-1 text-brand-text-muted" aria-label="Bankdaten ausstehend" />}
@@ -361,7 +362,7 @@ export default function MembersPage() {
                 <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{m.position || '–'}</td>
                 <td className="hidden lg:table-cell px-4 py-3 text-brand-text-muted">{m.club_functions?.includes('spieler') ? genderLabel(m.gender) : '–'}</td>
                 <td className="hidden xl:table-cell px-4 py-3 text-brand-text-muted">{m.pass_number || '–'}</td>
-                {isAdmin && (
+                {m.can?.delete && (
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                     <ActionMenu actions={[
                       { label: deletingIds.has(m.id) ? 'Löschen…' : 'Löschen', onClick: () => handleDelete(m), variant: 'danger' },

@@ -15,6 +15,7 @@ import (
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 type Handler struct {
@@ -322,36 +323,12 @@ func (h *Handler) loadSameDayContext(ctx context.Context, gameDate string, seaso
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
 	claims := auth.ClaimsFromCtx(r.Context())
+	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
 
-	// Sichtbarkeit:
-	//   - admin / vorstand / sportliche_leitung: alle Spiele
-	//   - trainer (ohne sportliche_leitung): nur Spiele eigener Teams (via kader_trainers)
-	//   - alle übrigen: nur Spiele, in denen der Nutzer selbst oder ein Kind
-	//     im Team-Kader steht (team_memberships + family_links)
-	fullAccess := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung")
-	var accessFilter string
-	var accessArgs []any
-	if !fullAccess {
-		if claims.HasFunction("trainer") {
-			accessFilter = ` AND EXISTS (
-				SELECT 1 FROM game_teams gt
-				JOIN kader k ON k.team_id = gt.team_id AND k.season_id = g.season_id
-				JOIN kader_trainers kt ON kt.kader_id = k.id
-				JOIN members m ON m.id = kt.member_id
-				WHERE gt.game_id = g.id AND m.user_id = ?
-			)`
-			accessArgs = append(accessArgs, claims.UserID)
-		} else {
-			accessFilter = ` AND EXISTS (
-				SELECT 1 FROM game_teams gt
-				JOIN team_memberships tm ON tm.team_id = gt.team_id AND tm.season_id = g.season_id
-				WHERE gt.game_id = g.id AND (
-				  EXISTS(SELECT 1 FROM members m WHERE m.id = tm.member_id AND m.user_id = ?)
-				  OR EXISTS(SELECT 1 FROM family_links fl WHERE fl.member_id = tm.member_id AND fl.parent_user_id = ?)
-				)
-			)`
-			accessArgs = append(accessArgs, claims.UserID, claims.UserID)
-		}
+	scopeWhere, scopeArgs := policy.ScopeGamesQuery(p)
+	andScope := ""
+	if scopeWhere != "1=1" {
+		andScope = " AND " + scopeWhere
 	}
 
 	// confirmed_count berücksichtigt rsvp_opt_out: reguläre Kader-Mitglieder ohne
@@ -384,14 +361,14 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		err  error
 	)
 	if seasonID != "" {
-		args := append([]any{seasonID}, accessArgs...)
-		rows, err = h.db.QueryContext(r.Context(), base+` WHERE g.season_id=?`+accessFilter+suffix, args...)
+		args := append([]any{seasonID}, scopeArgs...)
+		rows, err = h.db.QueryContext(r.Context(), base+` WHERE g.season_id=?`+andScope+suffix, args...)
 	} else {
 		// Show active-season games plus any future games from other seasons
 		// (prevents games from stranding when seasons are switched).
 		rows, err = h.db.QueryContext(r.Context(),
-			base+` WHERE (g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) OR DATE(g.date) >= DATE('now','-1 day'))`+accessFilter+suffix,
-			accessArgs...)
+			base+` WHERE (g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) OR DATE(g.date) >= DATE('now','-1 day'))`+andScope+suffix,
+			scopeArgs...)
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -414,25 +391,26 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		Note       string `json:"note"`
 	}
 	type game struct {
-		ID                   int       `json:"id"`
-		Date                 string    `json:"date"`
-		Time                 string    `json:"time"`
-		EndTime              *string   `json:"end_time,omitempty"`
-		EndDate              *string   `json:"end_date"`
-		Opponent             string    `json:"opponent"`
-		EventType            string    `json:"event_type"`
-		Teams                []team    `json:"teams"`
-		TeamDisplayShortCSV  string    `json:"team_display_short_csv"`
-		TeamDisplayLongCSV   string    `json:"team_display_long_csv"`
-		SlotCount            int       `json:"slot_count"`
-		FilledCount          int       `json:"filled_count"`
-		TotalCount           int       `json:"total_count"`
-		ConfirmedCount       int       `json:"confirmed_count"`
-		DeclinedCount        int       `json:"declined_count"`
-		MaybeCount           int       `json:"maybe_count"`
-		RsvpOptOut           int       `json:"rsvp_opt_out"`
-		RsvpRequireReason    int       `json:"rsvp_require_reason"`
-		Venue                *venueRef `json:"venue,omitempty"`
+		ID                   int                 `json:"id"`
+		Date                 string              `json:"date"`
+		Time                 string              `json:"time"`
+		EndTime              *string             `json:"end_time,omitempty"`
+		EndDate              *string             `json:"end_date"`
+		Opponent             string              `json:"opponent"`
+		EventType            string              `json:"event_type"`
+		Teams                []team              `json:"teams"`
+		TeamDisplayShortCSV  string              `json:"team_display_short_csv"`
+		TeamDisplayLongCSV   string              `json:"team_display_long_csv"`
+		SlotCount            int                 `json:"slot_count"`
+		FilledCount          int                 `json:"filled_count"`
+		TotalCount           int                 `json:"total_count"`
+		ConfirmedCount       int                 `json:"confirmed_count"`
+		DeclinedCount        int                 `json:"declined_count"`
+		MaybeCount           int                 `json:"maybe_count"`
+		RsvpOptOut           int                 `json:"rsvp_opt_out"`
+		RsvpRequireReason    int                 `json:"rsvp_require_reason"`
+		Venue                *venueRef           `json:"venue,omitempty"`
+		Can                  policy.GameCanFlags `json:"can"`
 	}
 
 	var games []*game
@@ -491,8 +469,10 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		g.TeamDisplayLongCSV = strings.Join(longs, ", ")
 	}
 
+	gameCan := policy.GameCan(p)
 	result := make([]game, len(games))
 	for i, g := range games {
+		g.Can = gameCan
 		result[i] = *g
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -534,9 +514,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 			DisplayShort string `json:"display_short"`
 			DisplayLong  string `json:"display_long"`
 		} `json:"teams"`
-		TeamDisplayShortCSV string `json:"team_display_short_csv"`
-		TeamDisplayLongCSV  string `json:"team_display_long_csv"`
-		CanEdit             bool   `json:"can_edit"`
+		TeamDisplayShortCSV string              `json:"team_display_short_csv"`
+		TeamDisplayLongCSV  string              `json:"team_display_long_csv"`
+		Can                 policy.GameCanFlags `json:"can"`
 	}
 	var templateIDNull sql.NullInt64
 	var endTimeNull, endDateNull sql.NullString
@@ -619,10 +599,11 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	g.TeamDisplayLongCSV = strings.Join(longs, ", ")
 
 	claims := auth.ClaimsFromCtx(r.Context())
-	switch {
-	case claims.Role == "admin", claims.HasFunction("vorstand"), claims.HasFunction("sportliche_leitung"):
-		g.CanEdit = true
-	case claims.HasFunction("trainer"):
+	gp := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
+	canEdit := false
+	if policy.CanViewAllGames(gp) {
+		canEdit = true
+	} else if policy.IsTrainerLike(gp) {
 		var trains int
 		h.db.QueryRowContext(r.Context(), `
 			SELECT COUNT(*) FROM trainer_memberships trm
@@ -630,8 +611,9 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 			JOIN members m ON m.id = trm.member_id AND m.user_id = ?
 			JOIN game_teams gt ON gt.team_id = trm.team_id AND gt.game_id = ?`,
 			claims.UserID, id).Scan(&trains)
-		g.CanEdit = trains > 0
+		canEdit = trains > 0
 	}
+	g.Can = policy.GameCanFlags{Edit: canEdit, Delete: canEdit, ManageLineup: canEdit}
 
 	rows, _ := h.db.QueryContext(r.Context(),
 		`SELECT ds.id, dt.name, COALESCE(ds.event_time,''), COALESCE(ds.role_desc,''),

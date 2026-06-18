@@ -10,12 +10,14 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 type Handler struct {
@@ -144,11 +146,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	const clubFuncSubquery = `COALESCE((SELECT GROUP_CONCAT(mcf.function, ',') FROM member_club_functions mcf WHERE mcf.member_id = m.id), '')`
 
-	// Trainers searching specifically for trainers see all trainers club-wide
-	// (not restricted to their team) — needed for kader trainer assignment.
-	// sportliche_leitung always gets wide search (spans all teams).
-	wideSearch := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") ||
-		(claims.HasFunction("trainer") && clubFuncFilter == "trainer")
+	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
+	scopeWhere, scopeNeedsUserID := policy.ScopeMembersQuery(p)
+	// Trainer searching specifically for trainers gets club-wide results for kader assignment.
+	trainerWide := slices.Contains(p.ClubFunctions, "trainer") && clubFuncFilter == "trainer"
+	wideSearch := scopeWhere == "1=1" || trainerWide
 
 	// Wide-only filters (not meaningful for team-scoped searches)
 	if wideSearch {
@@ -165,15 +167,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		args := buildListArgs(nil, clubFuncFilter, search, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	} else {
-		countQuery := `SELECT COUNT(DISTINCT m.id) FROM members m
-		 JOIN player_memberships tm ON tm.member_id = m.id
-		 WHERE tm.team_id IN (
-		   SELECT DISTINCT k.team_id FROM kader k
-		   JOIN kader_trainers kt ON kt.kader_id = k.id
-		   JOIN members tm2 ON tm2.id = kt.member_id
-		   WHERE tm2.user_id = ?
-		 ) AND m.status != 'ausgetreten'` + whereExtra
-		args := buildListArgs([]any{claims.UserID}, clubFuncFilter, search, nil, nil)
+		countQuery := `SELECT COUNT(*) FROM members m WHERE m.status != 'ausgetreten' AND ` + scopeWhere + whereExtra
+		var prefix []any
+		if scopeNeedsUserID {
+			prefix = []any{p.UserID}
+		}
+		args := buildListArgs(prefix, clubFuncFilter, search, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	}
 	if err != nil {
@@ -189,17 +188,14 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		args := buildListArgs(nil, clubFuncFilter, search, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	} else {
-		query := `SELECT DISTINCT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		query := `SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
-		 FROM members m
-		 JOIN player_memberships tm ON tm.member_id = m.id
-		 WHERE tm.team_id IN (
-		   SELECT DISTINCT k.team_id FROM kader k
-		   JOIN kader_trainers kt ON kt.kader_id = k.id
-		   JOIN members tm2 ON tm2.id = kt.member_id
-		   WHERE tm2.user_id = ?
-		 ) AND m.status != 'ausgetreten'` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
-		args := buildListArgs([]any{claims.UserID}, clubFuncFilter, search, &limit, &offset)
+		 FROM members m WHERE m.status != 'ausgetreten' AND ` + scopeWhere + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
+		var prefix []any
+		if scopeNeedsUserID {
+			prefix = []any{p.UserID}
+		}
+		args := buildListArgs(prefix, clubFuncFilter, search, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	}
 	if err != nil {
@@ -217,7 +213,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For admin/vorstand: mark members with pending draft types
-	if (claims.Role == "admin" || claims.HasFunction("vorstand")) && len(result) > 0 {
+	if policy.IsVorstandLike(p) && len(result) > 0 {
 		ids := make([]interface{}, len(result))
 		idxMap := make(map[int]int, len(result))
 		for i, m := range result {
@@ -259,8 +255,21 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	type memberItem struct {
+		Member
+		Can policy.CanFlags `json:"can"`
+	}
+	annotated := make([]memberItem, len(result))
+	for i, m := range result {
+		memberUserID := 0
+		if m.UserID != nil {
+			memberUserID = *m.UserID
+		}
+		annotated[i] = memberItem{Member: m, Can: policy.MemberCan(p, memberUserID)}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"items": result, "total": total})
+	json.NewEncoder(w).Encode(map[string]any{"items": annotated, "total": total})
 }
 
 // buildListArgs constructs the args slice for list queries in order:
@@ -489,8 +498,18 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	memberUserID := 0
+	if base.UserID != nil {
+		memberUserID = *base.UserID
+	}
+	p2 := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
+	resp := struct {
+		Member
+		Can policy.CanFlags `json:"can"`
+	}{Member: base, Can: policy.MemberCan(p2, memberUserID)}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(base)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // PUT /api/members/:id
@@ -570,8 +589,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
-		ibanVal := interface{}(nil)
+	pu := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
+	if policy.IsVorstandLike(pu) {
+		ibanVal := any(nil)
 		if req.IBAN != "" {
 			ibanVal = req.IBAN
 		}

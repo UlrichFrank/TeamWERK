@@ -19,13 +19,6 @@ interface AuthCtx {
 
 export type { MapsProvider, User, AuthCtx }
 
-export function hasFunction(user: User | null, f: string): boolean {
-  return user?.clubFunctions?.includes(f) ?? false
-}
-
-export function hasAnyFunction(user: User | null, fns: string[]): boolean {
-  return fns.some(f => hasFunction(user, f))
-}
 
 const WARN_MS = 25 * 60 * 1000
 const LOGOUT_MS = 30 * 60 * 1000

@@ -14,6 +14,7 @@ import (
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 type Handler struct {
@@ -231,6 +232,8 @@ func (h *Handler) DeleteType(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/duty-slots
 func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	rows, _ := h.db.QueryContext(r.Context(),
 		`SELECT ds.id, ds.event_name, ds.event_date, ds.slots_total, ds.slots_filled,
 		        dt.name, COALESCE(ds.role_desc,'')
@@ -238,18 +241,21 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 		 ORDER BY ds.event_date DESC`)
 	defer rows.Close()
 	type slot struct {
-		ID          int    `json:"id"`
-		EventName   string `json:"event_name"`
-		EventDate   string `json:"event_date"`
-		SlotsTotal  int    `json:"slots_total"`
-		SlotsFilled int    `json:"slots_filled"`
-		DutyType    string `json:"duty_type"`
-		RoleDesc    string `json:"role_desc,omitempty"`
+		ID          int                  `json:"id"`
+		EventName   string               `json:"event_name"`
+		EventDate   string               `json:"event_date"`
+		SlotsTotal  int                  `json:"slots_total"`
+		SlotsFilled int                  `json:"slots_filled"`
+		DutyType    string               `json:"duty_type"`
+		RoleDesc    string               `json:"role_desc,omitempty"`
+		Can         policy.DutyCanFlags  `json:"can"`
 	}
+	dutyCan := policy.DutyCan(p)
 	result := []slot{}
 	for rows.Next() {
 		var s slot
 		rows.Scan(&s.ID, &s.EventName, &s.EventDate, &s.SlotsTotal, &s.SlotsFilled, &s.DutyType, &s.RoleDesc)
+		s.Can = dutyCan
 		result = append(result, s)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -472,16 +478,20 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		Name     string  `json:"name"`
 		PhotoURL *string `json:"photo_url,omitempty"`
 	}
+	bp := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
+	boardDutyCan := policy.DutyCan(bp)
+
 	type boardSlot struct {
-		ID          int              `json:"id"`
-		DutyType    string           `json:"duty_type"`
-		EventTime   string           `json:"event_time,omitempty"`
-		SlotsTotal  int              `json:"slots_total"`
-		Vacancies   int              `json:"vacancies"`
-		ClaimedByMe bool             `json:"claimed_by_me"`
-		RoleDesc    string           `json:"role_desc,omitempty"`
-		Audiences   []string         `json:"audiences,omitempty"`
-		Assignees   []publicAssignee `json:"assignees"`
+		ID          int                 `json:"id"`
+		DutyType    string              `json:"duty_type"`
+		EventTime   string              `json:"event_time,omitempty"`
+		SlotsTotal  int                 `json:"slots_total"`
+		Vacancies   int                 `json:"vacancies"`
+		ClaimedByMe bool                `json:"claimed_by_me"`
+		RoleDesc    string              `json:"role_desc,omitempty"`
+		Audiences   []string            `json:"audiences,omitempty"`
+		Assignees   []publicAssignee    `json:"assignees"`
+		Can         policy.DutyCanFlags `json:"can"`
 	}
 	type boardGroup struct {
 		GameID    *int        `json:"game_id"`
@@ -554,6 +564,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			RoleDesc:    roleDesc,
 			Audiences:   audiencesFromDB(audiences),
 			Assignees:   []publicAssignee{},
+			Can:         boardDutyCan,
 		})
 	}
 

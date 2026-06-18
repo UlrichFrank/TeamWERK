@@ -8,7 +8,7 @@ import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 import { daySeparatorLabel, shouldRenderSeparator } from '../lib/chatDateFormat'
 import { DaySeparator } from '../components/DaySeparator'
-import { useAuth, hasFunction } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
 import ConversationParticipantsModal from '../components/ConversationParticipantsModal'
 import CreatorExitChoiceModal from '../components/CreatorExitChoiceModal'
@@ -103,7 +103,7 @@ export default function ChatPage() {
   const isMobile = window.innerWidth < 640
   const [mobileShowChat, setMobileShowChat] = useState(false)
 
-  const canBroadcast = user && (user.role === 'admin' || hasFunction(user, 'vorstand') || hasFunction(user, 'trainer') || hasFunction(user, 'sportliche_leitung'))
+  const canBroadcast = user && (user.role === 'admin' || user.clubFunctions?.includes('vorstand') || user.clubFunctions?.includes('trainer') || user.clubFunctions?.includes('sportliche_leitung'))
 
   const loadConversations = useCallback(async () => {
     try {
@@ -776,7 +776,7 @@ export default function ChatPage() {
         <BroadcastModal
           onClose={() => setShowBroadcastModal(false)}
           onSent={() => { setShowBroadcastModal(false); loadBroadcasts() }}
-          isAdmin={user?.role === 'admin' || hasFunction(user!, 'vorstand')}
+          isAdmin={user?.role === 'admin' || user?.clubFunctions?.includes('vorstand') === true}
         />
       )}
 
