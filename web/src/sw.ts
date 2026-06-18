@@ -8,6 +8,20 @@ declare let self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown[] }
 
 precacheAndRoute(self.__WB_MANIFEST)
 
+// Navigations: NetworkFirst so a fresh index.html (pointing at new asset
+// hashes) wins whenever the network answers within 3s. index.html is NOT in
+// the precache anymore; the 'app-shell' cache keeps the last good shell for
+// offline / slow-network cold starts. Must be registered FIRST (first match
+// wins) so it beats the /api/* and font routes below.
+registerRoute(
+  ({ request }) => request.mode === 'navigate',
+  new NetworkFirst({
+    cacheName: 'app-shell',
+    networkTimeoutSeconds: 3,
+    plugins: [new ExpirationPlugin({ maxEntries: 1, maxAgeSeconds: 60 * 60 * 24 * 30 })],
+  })
+)
+
 // Google Fonts CSS
 registerRoute(
   ({ url }) => url.origin === 'https://fonts.googleapis.com',

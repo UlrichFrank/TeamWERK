@@ -10,6 +10,12 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: 'autoUpdate',
+      injectManifest: {
+        // Keep index.html out of the precache — navigations are served via the
+        // NetworkFirst 'app-shell' route in sw.ts so a deploy is picked up on
+        // the next navigation instead of being pinned to the stale precache.
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+      },
       manifest: {
         name: 'TeamWERK',
         short_name: 'TeamWERK',
