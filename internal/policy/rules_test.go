@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/policy"
@@ -174,5 +175,72 @@ func TestCapabilities(t *testing.T) {
 	}
 	if !found {
 		t.Error("admin should have impersonate capability")
+	}
+}
+
+func hasCap(caps []string, want string) bool {
+	return slices.Contains(caps, want)
+}
+
+func TestCapabilities_TrainerLike(t *testing.T) {
+	// Trainer and sportliche_leitung get training/fulfill/broadcast, but NOT broadcast_all or manage_members.
+	for _, p := range []*policy.Principal{trainerP(), slP()} {
+		caps := policy.Capabilities(p)
+		if !hasCap(caps, policy.CapManageTrainings) {
+			t.Errorf("trainer-like %v should have manage_trainings", p.ClubFunctions)
+		}
+		if !hasCap(caps, policy.CapFulfillDuties) {
+			t.Errorf("trainer-like %v should have fulfill_duties", p.ClubFunctions)
+		}
+		if !hasCap(caps, policy.CapBroadcast) {
+			t.Errorf("trainer-like %v should have broadcast_messages", p.ClubFunctions)
+		}
+		if hasCap(caps, policy.CapBroadcastAll) {
+			t.Errorf("trainer-like %v should NOT have broadcast_all", p.ClubFunctions)
+		}
+		if hasCap(caps, policy.CapManageMembers) {
+			t.Errorf("trainer-like %v should NOT have manage_members", p.ClubFunctions)
+		}
+	}
+}
+
+func TestCapabilities_Vorstand(t *testing.T) {
+	caps := policy.Capabilities(vorstandP())
+	// Pure vorstand may broadcast (incl. broadcast_all) but is not trainer-like.
+	if !hasCap(caps, policy.CapBroadcast) {
+		t.Error("vorstand should have broadcast_messages")
+	}
+	if !hasCap(caps, policy.CapBroadcastAll) {
+		t.Error("vorstand should have broadcast_all")
+	}
+	if hasCap(caps, policy.CapManageTrainings) {
+		t.Error("pure vorstand should NOT have manage_trainings (trainer + sportliche_leitung only)")
+	}
+	if hasCap(caps, policy.CapFulfillDuties) {
+		t.Error("pure vorstand should NOT have fulfill_duties")
+	}
+	if hasCap(caps, policy.CapManageDocuments) {
+		t.Error("pure vorstand should NOT have manage_documents (admin only)")
+	}
+}
+
+func TestCapabilities_AdminOnly(t *testing.T) {
+	caps := policy.Capabilities(adminP())
+	for _, c := range []string{policy.CapManageDocuments, policy.CapModerateChat, policy.CapBroadcastAll, policy.CapManageTrainings} {
+		if !hasCap(caps, c) {
+			t.Errorf("admin should have %q", c)
+		}
+	}
+}
+
+func TestCapabilities_Spieler(t *testing.T) {
+	caps := policy.Capabilities(spielerP())
+	for _, c := range []string{
+		policy.CapManageTrainings, policy.CapFulfillDuties, policy.CapBroadcast,
+		policy.CapBroadcastAll, policy.CapManageDocuments, policy.CapModerateChat,
+	} {
+		if hasCap(caps, c) {
+			t.Errorf("spieler should NOT have %q", c)
+		}
 	}
 }
