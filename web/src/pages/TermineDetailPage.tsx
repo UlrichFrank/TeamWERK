@@ -119,7 +119,7 @@ interface TableRow {
 
 export default function TermineDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>()
-  const { user } = useAuth()
+  const { hasCapability } = useAuth()
 
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [game, setGame] = useState<GameDetail | null>(null)
@@ -132,8 +132,9 @@ export default function TermineDetailPage() {
   const [showReasonId, setShowReasonId] = useState<number | null>(null)
 
   const isTraining = type === 'training'
-  const isTrainer = Boolean(game?.can?.manage_lineup
-    ?? (user?.role === 'admin' || user?.clubFunctions?.includes('trainer') || user?.clubFunctions?.includes('sportliche_leitung')))
+  // Games carry an authoritative per-item can.manage_lineup; trainings have no per-item
+  // flag, so fall back to the manage_trainings capability (admin/trainer/sportliche_leitung).
+  const isTrainer = Boolean(game?.can?.manage_lineup ?? hasCapability('manage_trainings'))
   const date = isTraining ? session?.date : game?.date
   const today = new Date().toISOString().slice(0, 10)
   const isPast = date ? date.slice(0, 10) <= today : false

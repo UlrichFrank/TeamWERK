@@ -95,7 +95,7 @@ const CLUB_FUNCTION_LABELS: Record<string, string> = {
 
 export default function MembersPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { hasCapability } = useAuth()
   const [clubFunctionFilter, setClubFunctionFilter] = useState('')
   const [unlinkedUserFilter, setUnlinkedUserFilter] = useState(false)
   const [hasDraftFilter, setHasDraftFilter] = useState(false)
@@ -108,7 +108,7 @@ export default function MembersPage() {
   }, [clubFunctionFilter, unlinkedUserFilter, hasDraftFilter])
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
-  const isAdmin = user?.role === 'admin' || user?.clubFunctions?.includes('vorstand') === true
+  const isAdmin = hasCapability('manage_members')
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
 

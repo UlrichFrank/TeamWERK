@@ -51,9 +51,9 @@ type TabName = 'stammdaten' | 'kontakt' | 'datenschutz' | 'familie' | 'admin'
 export default function MemberDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user, loading: authLoading } = useAuth()
+  const { loading: authLoading, hasCapability } = useAuth()
   const isNew = id === 'neu'
-  const isAdmin = user?.role === 'admin' || user?.clubFunctions?.includes('vorstand') === true
+  const isAdmin = hasCapability('manage_members')
 
   const [activeTab, setActiveTab] = useState<TabName>(() => {
     const saved = localStorage.getItem('memberDetailTab')

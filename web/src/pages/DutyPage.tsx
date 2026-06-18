@@ -65,8 +65,8 @@ function parseFilters(sp: URLSearchParams) {
 }
 
 export default function DutyPage() {
-  const { user } = useAuth()
-  const isAdminOrTrainer = Boolean(user?.role === 'admin' || user?.clubFunctions?.includes('trainer') || user?.clubFunctions?.includes('sportliche_leitung'))
+  const { user, hasCapability } = useAuth()
+  const isAdminOrTrainer = hasCapability('fulfill_duties')
 
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll } = parseFilters(searchParams)

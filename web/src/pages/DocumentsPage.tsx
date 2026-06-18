@@ -521,7 +521,7 @@ function RenameModal({ type, id, currentName, onRenamed, onClose }: {
 export default function DocumentsPage() {
   const { folderId: folderIdParam } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { hasCapability } = useAuth()
 
   const currentFolderId = folderIdParam ? parseInt(folderIdParam) : null
 
@@ -622,7 +622,7 @@ export default function DocumentsPage() {
     }
   }
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = hasCapability('manage_documents')
   const canWrite = isAdmin || (contents?.can_write ?? false)
   const displayFolders = currentFolderId ? (contents?.folders ?? []) : rootFolders
   const displayFiles = currentFolderId ? (contents?.files ?? []) : []

@@ -68,7 +68,7 @@ interface ContextMenuState {
 }
 
 export default function ChatPage() {
-  const { user } = useAuth()
+  const { user, hasCapability } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [tab, setTab] = useState<Tab>('chats')
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -103,7 +103,7 @@ export default function ChatPage() {
   const isMobile = window.innerWidth < 640
   const [mobileShowChat, setMobileShowChat] = useState(false)
 
-  const canBroadcast = user && (user.role === 'admin' || user.clubFunctions?.includes('vorstand') || user.clubFunctions?.includes('trainer') || user.clubFunctions?.includes('sportliche_leitung'))
+  const canBroadcast = hasCapability('broadcast_messages')
 
   const loadConversations = useCallback(async () => {
     try {
@@ -374,7 +374,7 @@ export default function ChatPage() {
     + broadcasts.filter(b => !b.isRead && !b.isSent).length
 
   const canDelete = (msg: Message) =>
-    msg.senderId === user?.id || user?.role === 'admin'
+    msg.senderId === user?.id || hasCapability('moderate_chat')
 
   return (
     <div className="flex flex-col h-full">
@@ -776,7 +776,7 @@ export default function ChatPage() {
         <BroadcastModal
           onClose={() => setShowBroadcastModal(false)}
           onSent={() => { setShowBroadcastModal(false); loadBroadcasts() }}
-          isAdmin={user?.role === 'admin' || user?.clubFunctions?.includes('vorstand') === true}
+          isAdmin={hasCapability('broadcast_all')}
         />
       )}
 
