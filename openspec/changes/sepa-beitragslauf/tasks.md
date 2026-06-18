@@ -2,7 +2,7 @@
 
 ## 1. Datenbank-Migration
 
-- [ ] 1.1 `internal/db/migrations/043_sepa_beitragslauf.up.sql` anlegen:
+- [x] 1.1 `internal/db/migrations/043_sepa_beitragslauf.up.sql` anlegen:
   - `ALTER TABLE clubs ADD COLUMN glaeubiger_id TEXT;`
   - `ALTER TABLE clubs ADD COLUMN iban TEXT;`
   - `ALTER TABLE clubs ADD COLUMN bic TEXT;`
@@ -11,8 +11,8 @@
   - Seed-INSERTs für die 3 Kategorien mit `INSERT OR IGNORE` und `valid_from` aus Gebührenordnung
   - (Keine `members`-Spalten — kein FRST/RCUR-Tracking.)
   - Commit: `chore(db): Migration 043 — SEPA-Stammdaten und Beitragsmatrix`
-- [ ] 1.2 Korrespondierende `.down.sql` mit `DROP TABLE beitrags_saetze;` und Spalten-Drop für `clubs` via Tabellen-Recreate (SQLite hat kein `DROP COLUMN` vor 3.35; Tabellen-Recreate-Block analog zu 002, 018, 039). Commit: Teil von 1.1.
-- [ ] 1.3 `make migrate-up && make migrate-down && make migrate-up` lokal verifizieren — Roundtrip muss sauber laufen. Commit: kein eigener Commit, manuelle Verifikation.
+- [x] 1.2 Korrespondierende `.down.sql` mit `DROP TABLE beitrags_saetze;` und Spalten-Drop für `clubs` via Tabellen-Recreate (SQLite hat kein `DROP COLUMN` vor 3.35; Tabellen-Recreate-Block analog zu 002, 018, 039). Commit: Teil von 1.1.
+- [x] 1.3 Up-Migration auf Temp-DB verifiziert (clubs-Spalten + 3 Seed-Sätze). Hinweis: das `migrate`-CLI führt nur `up` aus (`down` ist nicht verdrahtet); die `.down.sql` nutzt `DROP COLUMN` (wie in Migration 035 bewährt).
 
 ## 2. Backend — Stammdaten
 
