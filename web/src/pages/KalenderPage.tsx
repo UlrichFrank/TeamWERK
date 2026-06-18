@@ -119,14 +119,14 @@ function padDate(year: number, month: number, day: number): string {
 const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
-function canSeeTeamAbsences(user: ReturnType<typeof useAuth>['user']): boolean {
-  if (!user) return false
-  return user.role === 'admin' || user.clubFunctions?.includes('trainer') ||
-    user.clubFunctions?.includes('vorstand') || user.clubFunctions?.includes('sportliche_leitung')
-}
-
 export default function KalenderPage() {
-  const { user } = useAuth()
+  const { user, hasCapability } = useAuth()
+  // Server-computed permissions (see policy.Capabilities). Event management = manage_games
+  // (admin/vorstand/trainer/sportliche_leitung); training creation = manage_trainings
+  // (admin/trainer/sportliche_leitung, no pure vorstand).
+  const canEdit = hasCapability('manage_games')
+  const canSeeTeamAbsences = canEdit
+  const canManageTrainings = hasCapability('manage_trainings')
   const [searchParams] = useSearchParams()
   const now = new Date()
   const initDate = () => {
@@ -231,7 +231,7 @@ export default function KalenderPage() {
       const show = overrideShowTeam !== undefined ? overrideShowTeam : showTeamAbsences
       const tid = overrideTeamId !== undefined ? overrideTeamId : filterTeamId
       let url = `/absences/calendar?from=${from}&to=${to}`
-      if (show && canSeeTeamAbsences(user)) {
+      if (show && canSeeTeamAbsences) {
         url += '&show_team=true'
         if (tid !== null) url += `&team_id=${tid}`
       }
@@ -684,7 +684,6 @@ export default function KalenderPage() {
     null
   )
 
-  const canEdit = Boolean(user && (user.role === 'admin' || user.clubFunctions?.includes('trainer') || user.clubFunctions?.includes('vorstand') || user.clubFunctions?.includes('sportliche_leitung')))
   const canCreateAbsence = Boolean(user && (user.clubFunctions?.includes('spieler') || user.isParent))
 
   return (
@@ -726,7 +725,7 @@ export default function KalenderPage() {
             </button>
           ))}
         </div>
-        {canSeeTeamAbsences(user) && (
+        {canSeeTeamAbsences && (
           <button
             onClick={() => {
               const next = !showTeamAbsences
@@ -968,7 +967,7 @@ export default function KalenderPage() {
                       </div>
                     </button>
                   ))}
-                  {user && (user.role === 'admin' || user.clubFunctions?.includes('trainer') || user.clubFunctions?.includes('sportliche_leitung')) && (
+                  {canManageTrainings && (
                     <>
                       <button
                         onClick={() => { setEventType('training'); setWizardStep(2) }}

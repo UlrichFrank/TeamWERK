@@ -11,6 +11,11 @@ interface AuthCtx {
   impersonating: Impersonating | null
   mapsProvider: MapsProvider
   setMapsProvider: (p: MapsProvider) => void
+  // Server-computed permissions from GET /api/me. Pages MUST derive feature/button
+  // visibility from `capabilities` (or per-item `can.*`), never from user.role/clubFunctions.
+  capabilities: string[]
+  hasCapability: (cap: string) => boolean
+  navRoutes: string[]
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   startImpersonation: (userId: number, name: string) => Promise<void>
@@ -40,6 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [showWarning, setShowWarning] = useState(false)
   const [countdown, setCountdown] = useState(COUNTDOWN_SECS)
   const [mapsProvider, setMapsProvider] = useState<MapsProvider>('auto')
+  const [capabilities, setCapabilities] = useState<string[]>([])
+  const [navRoutes, setNavRoutes] = useState<string[]>([])
 
   async function loadMapsProvider() {
     try {
@@ -115,6 +122,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Server-computed capabilities + nav routes. Recomputed whenever the user changes
+  // (login, refresh, impersonation), so role changes take effect after the next refresh.
+  useEffect(() => {
+    if (!user) {
+      setCapabilities([])
+      setNavRoutes([])
+      return
+    }
+    api.get('/me')
+      .then(r => {
+        setCapabilities(r.data?.capabilities ?? [])
+        setNavRoutes((r.data?.nav ?? []).map((n: { route: string }) => n.route))
+      })
+      .catch(() => {})
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function login(email: string, password: string) {
     const res = await axios.post('/api/auth/login', { email, password }, { withCredentials: true })
     const token: string = res.data.access_token
@@ -145,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, impersonating, mapsProvider, setMapsProvider, login, logout, startImpersonation, stopImpersonation }}>
+    <AuthContext.Provider value={{ user, loading, impersonating, mapsProvider, setMapsProvider, capabilities, hasCapability: (cap: string) => capabilities.includes(cap), navRoutes, login, logout, startImpersonation, stopImpersonation }}>
       {children}
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

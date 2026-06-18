@@ -69,7 +69,7 @@ function initOpenModules(): Record<string, boolean> {
 interface ChildEntry { id: number; first_name: string; last_name: string }
 
 export default function AppShell() {
-  const { user, logout, impersonating, stopImpersonation } = useAuth()
+  const { user, logout, impersonating, stopImpersonation, navRoutes: navRouteList } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
@@ -83,7 +83,7 @@ export default function AppShell() {
   const [showChangelog, setShowChangelog] = useState(false)
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
-  const [navRoutes, setNavRoutes] = useState<Set<string>>(new Set())
+  const navRoutes = new Set(navRouteList)
   const [chatUnread, setChatUnread] = useState(0)
 
   const loadChatUnread = useCallback(async () => {
@@ -106,10 +106,6 @@ export default function AppShell() {
         .slice()
         .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
       setNavChildren(kids)
-    }).catch(() => {})
-    api.get('/me').then(r => {
-      const routes: string[] = (r.data?.nav ?? []).map((n: { route: string }) => n.route)
-      setNavRoutes(new Set(routes))
     }).catch(() => {})
     loadChatUnread()
   }, [user?.id, loadChatUnread])

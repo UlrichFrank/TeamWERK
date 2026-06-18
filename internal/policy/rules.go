@@ -109,6 +109,32 @@ func CanFulfillAssignment(p *Principal) bool {
 	return p.Role == "admin" || p.hasAnyFunction("trainer", "sportliche_leitung")
 }
 
+// CanManageTrainings returns true if the caller may create/edit trainings.
+// Mirrors the POST /api/training-series gate (trainer + sportliche_leitung, plus admin).
+func CanManageTrainings(p *Principal) bool {
+	return IsTrainerLike(p)
+}
+
+// CanManageDocuments returns true if the caller may manage the document tree.
+func CanManageDocuments(p *Principal) bool {
+	return p.Role == "admin"
+}
+
+// CanBroadcast returns true if the caller may send broadcast messages.
+func CanBroadcast(p *Principal) bool {
+	return p.Role == "admin" || p.hasAnyFunction("vorstand", "trainer", "sportliche_leitung")
+}
+
+// CanBroadcastAll returns true if the caller may broadcast org-wide (admin-level broadcast features).
+func CanBroadcastAll(p *Principal) bool {
+	return IsVorstandLike(p)
+}
+
+// CanModerateChat returns true if the caller may delete other users' chat messages.
+func CanModerateChat(p *Principal) bool {
+	return p.Role == "admin"
+}
+
 // ScopeMembersQuery returns a SQL WHERE fragment that restricts a members query to the
 // set visible to the caller. needsUserIDArg=true means the caller must supply Principal.UserID
 // as the next query argument.
@@ -136,6 +162,12 @@ const (
 	CapManageClub      = "manage_club"
 	CapManageDutyTypes = "manage_duty_types"
 	CapImpersonate     = "impersonate"
+	CapManageTrainings = "manage_trainings"
+	CapFulfillDuties   = "fulfill_duties"
+	CapManageDocuments = "manage_documents"
+	CapBroadcast       = "broadcast_messages"
+	CapBroadcastAll    = "broadcast_all"
+	CapModerateChat    = "moderate_chat"
 )
 
 // Capabilities returns the list of capability strings for a given principal.
@@ -146,8 +178,22 @@ func Capabilities(p *Principal) []string {
 	} else if IsTrainerLike(p) {
 		caps = append(caps, CapManageGames, CapManageDuties, CapManageKader)
 	}
+	// Trainer-like personas (admin, trainer, sportliche_leitung) — excludes pure vorstand.
+	if CanManageTrainings(p) {
+		caps = append(caps, CapManageTrainings)
+	}
+	if CanFulfillAssignment(p) {
+		caps = append(caps, CapFulfillDuties)
+	}
+	// Messaging.
+	if CanBroadcast(p) {
+		caps = append(caps, CapBroadcast)
+	}
+	if CanBroadcastAll(p) {
+		caps = append(caps, CapBroadcastAll)
+	}
 	if p.Role == "admin" {
-		caps = append(caps, CapImpersonate)
+		caps = append(caps, CapImpersonate, CapManageDocuments, CapModerateChat)
 	}
 	return caps
 }

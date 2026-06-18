@@ -1,9 +1,11 @@
 /**
- * DutyPage inline gate: isAdminOrTrainer = admin || trainer || sportliche_leitung
+ * DutyPage Slot-Verwaltung: canManageDuties = manage_duties-Capability
+ * (admin || vorstand || trainer || sportliche_leitung).
  * Steuert den Löschen-Button (Trash2-Icon) auf Duty-Slots.
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ * Quelle: openspec/specs/me-capabilities/spec.md (Capability-Vokabular)
  *
- * Designloch (§10): vorstand sieht keine Slot-Mutations, obwohl vorstand sonst alles darf.
+ * Das frühere Designloch (vorstand sah keine Slot-Mutations) ist behoben:
+ * vorstand ist jetzt — wie im Backend-Gate der duty-slots-Routen — eingeschlossen.
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
@@ -37,16 +39,18 @@ const DUTY_BOARD_FIXTURE = [
   },
 ]
 
-// isAdminOrTrainer = admin || trainer || trainer_elternteil || sportliche_leitung || sportliche_leitung_elternteil
-const IS_ADMIN_OR_TRAINER_IDS = [
+// manage_duties = admin || vorstand || trainer || sportliche_leitung (inkl. Elternteil-Varianten)
+const CAN_MANAGE_DUTIES_IDS = [
   'admin',
+  'vorstand',
+  'vorstand_elternteil',
   'trainer',
   'trainer_elternteil',
   'sportliche_leitung',
   'sportliche_leitung_elternteil',
 ]
 
-describe('DutyPage — isAdminOrTrainer-Gate: Slot-Löschen-Button', () => {
+describe('DutyPage — manage_duties-Gate: Slot-Löschen-Button', () => {
   test.each(PERSONAS)('Persona $id', async (persona) => {
     renderAsPersona(<DutyPage />, persona.id, {
       mocks: [
@@ -61,15 +65,15 @@ describe('DutyPage — isAdminOrTrainer-Gate: Slot-Löschen-Button', () => {
 
     // "Slot löschen" aria-label ist nur gerendert wenn canEdit=true
     const deleteBtn = screen.queryByLabelText('Slot löschen')
-    if (IS_ADMIN_OR_TRAINER_IDS.includes(persona.id)) {
+    if (CAN_MANAGE_DUTIES_IDS.includes(persona.id)) {
       expect(
         deleteBtn,
-        `Persona ${persona.id} (isAdminOrTrainer): Löschen-Button muss vorhanden sein`,
+        `Persona ${persona.id} (manage_duties): Löschen-Button muss vorhanden sein`,
       ).not.toBeNull()
     } else {
       expect(
         deleteBtn,
-        `Persona ${persona.id} (kein isAdminOrTrainer): kein Löschen-Button erwartet`,
+        `Persona ${persona.id} (kein manage_duties): kein Löschen-Button erwartet`,
       ).toBeNull()
     }
   })

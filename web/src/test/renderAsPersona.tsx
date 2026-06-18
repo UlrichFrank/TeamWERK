@@ -27,13 +27,50 @@ function personaToUser(p: Persona): User {
   }
 }
 
-function makeCtx(user: User): AuthCtx {
+// Mirror of internal/policy.Capabilities — keep in sync with rules.go.
+function personaCapabilities(p: Persona): string[] {
+  const cf = p.clubFunctions
+  const isAdmin = p.role === 'admin'
+  const isVorstandLike = isAdmin || cf.includes('vorstand')
+  const isTrainerLike = isAdmin || cf.includes('trainer') || cf.includes('sportliche_leitung')
+  const caps: string[] = []
+  if (isVorstandLike) {
+    caps.push('manage_members', 'manage_games', 'manage_duties', 'manage_kader',
+      'manage_users', 'manage_seasons', 'manage_club', 'manage_duty_types')
+  } else if (isTrainerLike) {
+    caps.push('manage_games', 'manage_duties', 'manage_kader')
+  }
+  if (isTrainerLike) caps.push('manage_trainings', 'fulfill_duties')
+  if (isVorstandLike || cf.includes('trainer') || cf.includes('sportliche_leitung')) caps.push('broadcast_messages')
+  if (isVorstandLike) caps.push('broadcast_all')
+  if (isAdmin) caps.push('impersonate', 'manage_documents', 'moderate_chat')
+  return caps
+}
+
+// Mirror of internal/policy.NavFor — keep route list in sync with rules.go.
+function personaNavRoutes(p: Persona): string[] {
+  const cf = p.clubFunctions
+  const isAdmin = p.role === 'admin'
+  const isVorstandLike = isAdmin || cf.includes('vorstand')
+  const isTrainerLike = isAdmin || cf.includes('trainer') || cf.includes('sportliche_leitung')
+  const routes = ['/']
+  if (!isAdmin) routes.push('/profil')
+  routes.push('/kalender', '/termine', '/mein-team', '/dokumente', '/dienste', '/mitfahrgelegenheiten', '/chat')
+  if (isTrainerLike || isVorstandLike) routes.push('/kader')
+  if (isVorstandLike) routes.push('/nutzer', '/mitglieder', '/diensttypen', '/dienstplan-vorlagen', '/veranstaltungsorte', '/einstellungen')
+  return routes
+}
+
+function makeCtx(user: User, capabilities: string[], navRoutes: string[]): AuthCtx {
   return {
     user,
     loading: false,
     impersonating: null,
     mapsProvider: 'auto',
     setMapsProvider: () => {},
+    capabilities,
+    hasCapability: (cap: string) => capabilities.includes(cap),
+    navRoutes,
     login: async () => {},
     logout: async () => {},
     startImpersonation: async () => {},
@@ -56,7 +93,7 @@ export function renderAsPersona(
   const { route = '/', initialEntries, mocks } = options
   setupApiMock(mocks)
   const persona = personaById(personaId)
-  const ctx = makeCtx(personaToUser(persona))
+  const ctx = makeCtx(personaToUser(persona), personaCapabilities(persona), personaNavRoutes(persona))
 
   return render(
     <AuthContext.Provider value={ctx}>
@@ -74,7 +111,7 @@ export function renderAsPersonaNoRouter(
 ): RenderResult {
   setupApiMock(options.mocks)
   const persona = personaById(personaId)
-  const ctx = makeCtx(personaToUser(persona))
+  const ctx = makeCtx(personaToUser(persona), personaCapabilities(persona), personaNavRoutes(persona))
 
   return render(
     <AuthContext.Provider value={ctx}>

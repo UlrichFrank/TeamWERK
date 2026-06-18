@@ -137,9 +137,9 @@ function RsvpButton({ label, icon, active, activeClass, disabled, onClick }: {
 }
 
 export default function TerminePage() {
-  const { user } = useAuth()
+  const { user, hasCapability } = useAuth()
   const navigate = useNavigate()
-  const isTrainer = user?.role === 'admin' || user?.clubFunctions?.includes('trainer') || user?.clubFunctions?.includes('sportliche_leitung')
+  const isTrainer = hasCapability('manage_trainings')
   const isParent = user?.isParent === true
 
   const [searchParams, setSearchParams] = useSearchParams()

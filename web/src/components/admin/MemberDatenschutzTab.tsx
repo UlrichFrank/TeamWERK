@@ -36,7 +36,7 @@ interface Props {
 }
 
 export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
-  const { user } = useAuth()
+  const { user, hasCapability } = useAuth()
   const sepaInputRef = useRef<HTMLInputElement>(null)
   const [sepaUploading, setSepaUploading] = useState(false)
   const [sepaUploadError, setSepaUploadError] = useState('')
@@ -47,9 +47,7 @@ export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, on
   const dsgvoDraft = drafts.find(d => d.field_name === 'dsgvo')
   const sepaDraft = drafts.find(d => d.field_name === 'sepa_mandat')
 
-  const isAdmin = user?.role === 'admin'
-  const isVorstand = user?.clubFunctions?.includes('vorstand') === true
-  const canDeleteSepa = isAdmin || isVorstand || user?.isParent
+  const canDeleteSepa = hasCapability('manage_members') || user?.isParent === true
 
   const MAX_SEPA_BYTES = 2 * 1024 * 1024
 
@@ -201,7 +199,7 @@ export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, on
                     <ExternalLink className="w-4 h-4" />
                     Dokument öffnen
                   </button>
-                  {(isAdmin || isVorstand || canDeleteSepa) && (
+                  {canDeleteSepa && (
                     <button
                       onClick={() => setConfirmDelete(true)}
                       className="flex items-center gap-1.5 bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors"

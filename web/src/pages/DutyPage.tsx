@@ -65,8 +65,11 @@ function parseFilters(sp: URLSearchParams) {
 }
 
 export default function DutyPage() {
-  const { user } = useAuth()
-  const isAdminOrTrainer = Boolean(user?.role === 'admin' || user?.clubFunctions?.includes('trainer') || user?.clubFunctions?.includes('sportliche_leitung'))
+  const { user, hasCapability } = useAuth()
+  // Slot-Verwaltung (Bearbeiten/Löschen) = manage_duties (admin/vorstand/trainer/
+  // sportliche_leitung) — deckungsgleich mit dem Backend-Gate der duty-slots-Routen.
+  // Vorstand ist hier bewusst eingeschlossen (Dienste wie Kasse/Einkauf).
+  const canManageDuties = hasCapability('manage_duties')
 
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll } = parseFilters(searchParams)
@@ -263,7 +266,7 @@ export default function DutyPage() {
               <DutySlotList
                 slots={g.slots}
                 isPast={g.past}
-                canEdit={isAdminOrTrainer}
+                canEdit={canManageDuties}
                 onReload={load}
                 proxyChildren={proxyChildren}
               />
