@@ -114,6 +114,7 @@ func serve() {
 		JWTSecret:    cfg.JWTSecret,
 		Database:     database,
 		BaseURL:      cfg.BaseURL,
+		BuildHash:    buildHash,
 	}
 
 	distFS, err := fs.Sub(webFS, "web/dist")

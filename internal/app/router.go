@@ -1,9 +1,12 @@
 package app
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"regexp"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -51,6 +54,9 @@ type Handlers struct {
 	JWTSecret string
 	Database  *sql.DB
 	BaseURL   string
+	// BuildHash is the git commit injected via -ldflags. It seeds the ETag for
+	// non-hashed static files so every deploy invalidates the browser cache.
+	BuildHash string
 }
 
 // BuildRouter wires all routes, middleware, and handlers.
@@ -335,7 +341,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	})
 
 	if spaFS != nil {
-		r.Get("/*", spaFallback(spaFS))
+		r.Get("/*", spaFallback(spaFS, h.BuildHash))
 	}
 
 	return r
@@ -357,7 +363,12 @@ func corsMiddleware(baseURL string) func(http.Handler) http.Handler {
 	}
 }
 
-func spaFallback(static fs.FS) http.HandlerFunc {
+// hashedAssetRegex matches Vite-emitted content-hashed assets (e.g.
+// assets/index-AbCd1234.js). Their filename changes on every build, so they
+// are safe to cache forever.
+var hashedAssetRegex = regexp.MustCompile(`^assets/[^/]+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$`)
+
+func spaFallback(static fs.FS, buildHash string) http.HandlerFunc {
 	fileServer := http.FileServer(http.FS(static))
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -366,7 +377,36 @@ func spaFallback(static fs.FS) http.HandlerFunc {
 		} else {
 			path = path[1:]
 		}
+
+		// SPA fallback: a path that is not a real file resolves to index.html.
+		// Cache headers must reflect the file we actually serve, so the ETag is
+		// derived from the served path, not the requested one.
+		servePath := path
+		spa := false
 		if _, err := fs.Stat(static, path); err != nil {
+			servePath = "index.html"
+			spa = true
+		}
+
+		if hashedAssetRegex.MatchString(servePath) {
+			// Content-hashed asset — immutable, cache forever.
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			// index.html, sw.js, manifest, icons, … — always revalidate.
+			// embed.FS has no ModTime, so http.ServeContent never emits
+			// validators on its own. We derive an ETag from buildHash (changes
+			// every deploy) plus the path, and handle If-None-Match ourselves.
+			sum := sha256.Sum256([]byte(servePath))
+			etag := fmt.Sprintf(`"%s-%x"`, buildHash, sum[:4])
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+			w.Header().Set("ETag", etag)
+			if match := r.Header.Get("If-None-Match"); match == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+
+		if spa {
 			r2 := r.Clone(r.Context())
 			r2.URL.Path = "/"
 			fileServer.ServeHTTP(w, r2)
