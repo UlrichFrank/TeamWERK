@@ -24,7 +24,7 @@
 
 - [x] 4.1 `AppShell.tsx`: Nav-Items aus `GET /api/me` → `nav` beziehen statt aus `navModules[i].items[j].roles`
 - [x] 4.2 `AppShell.tsx`: `roles`/`excludeRoles`-Felder aus `navModules` entfernt; Sichtbarkeit via `navRoutes.has(item.to)`
-- [ ] 4.3 Manueller Test: Vorstand sieht „Mitglieder" in Sidebar, Spieler nicht
+- [x] 4.3 Sidebar-Sichtbarkeit pro Persona automatisiert abgedeckt (`web/src/components/__tests__/AppShell.permissions.test.tsx` — Vorstand sieht „Mitglieder", Spieler nicht)
 
 ## 5. Weitere Backend-Domänen
 
@@ -53,3 +53,14 @@
 - [x] 8.1 `hasFunction` und `hasAnyFunction` aus `AuthContext.tsx` entfernen (erst wenn alle Aufrufer migriert)
 - [x] 8.2 Verbleibende direkte `user.role`-Vergleiche in Frontend-Pages entfernen
 - [x] 8.3 Alle Baseline-Tests aus `permissions-baseline-tests` laufen lassen — kein Test darf brechen
+
+## 9. Nachzug Frontend-Capabilities (2026-06-18)
+
+Die Tasks 6.x/8.2 waren ursprünglich verfrüht abgehakt; nachgezogen:
+
+- [x] 9.1 `AuthContext` liefert `capabilities` + `navRoutes` aus `GET /api/me`; `AppShell` bezieht Nav daraus (statt eigenem `/api/me`-Fetch)
+- [x] 9.2 Neue Capabilities in `policy.Capabilities` (verhaltensgleich zu den ersetzten Role-Checks): `manage_trainings`, `fulfill_duties`, `manage_documents`, `broadcast_messages`, `broadcast_all`, `moderate_chat` (+ Tests in `rules_test.go`)
+- [x] 9.3 Alle `user.role`-Privileg-Gates migriert: `MembersPage`, `MemberDetailPage`, `MemberDatenschutzTab`, `TerminePage`, `TermineDetailPage`, `DutyPage`, `DocumentsPage`, `ChatPage`, `KalenderPage`
+- [x] 9.4 `isParent` und eigene-Profil-/eigene-Funktion-Toggles (`spieler`-Reminder, `canCreateAbsence`, Stammdaten-Formularfeld) bewusst belassen — Relationship-Marker, keine Privileg-Gates
+- [x] 9.5 Specs `nav-visibility` + `me-capabilities` auf reale deutsche Routen (`/mitglieder`, `/profil`, `/`) korrigiert; Capability-Vokabular dokumentiert
+- [x] 9.6 `tsc` grün, 318 Frontend-Tests grün, gesamte Go-Suite grün
