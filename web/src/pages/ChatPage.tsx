@@ -986,7 +986,7 @@ function MessageBubble({
       >
         {!isOwn && <span className="text-xs text-brand-text-muted mb-0.5">{msg.senderName}</span>}
 
-        <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm select-none ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
+        <div className={`max-w-xs sm:max-w-sm rounded-xl px-3 py-2 text-sm select-text ${isOwn ? 'bg-brand-yellow text-brand-black' : 'bg-white border border-brand-border text-brand-text'}`}>
           {/* Reply quote */}
           {msg.replyToId && (
             <div className={`mb-1.5 pl-2 border-l-2 ${isOwn ? 'border-brand-black/40' : 'border-brand-yellow'} text-xs opacity-80`}>
@@ -1058,7 +1058,6 @@ function MobileMessageActionOverlay({
   userId: number | undefined
 }) {
   const { message: msg, isOwn } = overlay
-
 
   const copyText = () => {
     const sel = window.getSelection()

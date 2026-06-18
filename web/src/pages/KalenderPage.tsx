@@ -756,7 +756,7 @@ export default function KalenderPage() {
               }
               setShowCreate(true)
             }}
-            aria-label="Event"
+            aria-label={canEdit ? 'Event' : 'Abwesenheit'}
             className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'}`}
           >
             <Plus className="w-3.5 h-3.5" />
