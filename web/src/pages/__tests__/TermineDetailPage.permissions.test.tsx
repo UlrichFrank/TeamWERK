@@ -7,7 +7,7 @@ import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { Routes, Route } from 'react-router-dom'
 import TermineDetailPage from '../TermineDetailPage'
-import { renderAsPersona } from '../../test/renderAsPersona'
+import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
@@ -62,6 +62,7 @@ describe('TermineDetailPage — isTrainer-Gate: Anwesenheits-Checkbox', () => {
 
     // Wait for session data to load (member name from ATTENDANCE_FIXTURE)
     await screen.findByText('Max Mustermann')
+    await flushAsync()
 
     // isTrainer: Anwesenheits-Checkbox ist editierbar (nicht readOnly)
     // !isTrainer: Checkbox ist readOnly

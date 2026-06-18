@@ -9,7 +9,7 @@
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import MemberDetailPage from '../MemberDetailPage'
-import { renderAsPersona } from '../../test/renderAsPersona'
+import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
@@ -46,7 +46,7 @@ const MEMBER_FIXTURE = {
 const ALLOWED_IDS = ['admin', 'vorstand', 'vorstand_elternteil']
 
 describe('MemberDetailPage — isAdmin-Gate: "Datenschutz"-Tab', () => {
-  test.each(PERSONAS)('Persona $id', (persona) => {
+  test.each(PERSONAS)('Persona $id', async (persona) => {
     renderAsPersona(<MemberDetailPage />, persona.id, {
       route: '/mitglieder/1',
       initialEntries: ['/mitglieder/1'],
@@ -56,6 +56,7 @@ describe('MemberDetailPage — isAdmin-Gate: "Datenschutz"-Tab', () => {
         { url: /invitations/, data: [] },
       ],
     })
+    await flushAsync()
 
     const tab = screen.queryByRole('button', { name: 'Datenschutz' })
     if (ALLOWED_IDS.includes(persona.id)) {

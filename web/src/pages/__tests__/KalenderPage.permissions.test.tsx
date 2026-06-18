@@ -7,7 +7,7 @@
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import KalenderPage from '../KalenderPage'
-import { renderAsPersona } from '../../test/renderAsPersona'
+import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
@@ -35,7 +35,7 @@ const CAN_CREATE_ABSENCE_IDS = [
 ]
 
 describe('KalenderPage — canEdit-Gate: "Event"-Button', () => {
-  test.each(PERSONAS)('Persona $id', (persona) => {
+  test.each(PERSONAS)('Persona $id', async (persona) => {
     renderAsPersona(<KalenderPage />, persona.id, {
       mocks: [
         { url: /\/games/, data: [] },
@@ -44,6 +44,7 @@ describe('KalenderPage — canEdit-Gate: "Event"-Button', () => {
         { url: /\/absences/, data: [] },
       ],
     })
+    await flushAsync()
 
     // canEdit → aria-label="Event"
     const eventBtn = screen.queryByRole('button', { name: /^Event$/i })
@@ -63,7 +64,7 @@ describe('KalenderPage — canEdit-Gate: "Event"-Button', () => {
 })
 
 describe('KalenderPage — canCreateAbsence-Gate: "Abwesenheit"-Button', () => {
-  test.each(PERSONAS)('Persona $id', (persona) => {
+  test.each(PERSONAS)('Persona $id', async (persona) => {
     renderAsPersona(<KalenderPage />, persona.id, {
       mocks: [
         { url: /\/games/, data: [] },
@@ -72,6 +73,7 @@ describe('KalenderPage — canCreateAbsence-Gate: "Abwesenheit"-Button', () => {
         { url: /\/absences/, data: [] },
       ],
     })
+    await flushAsync()
 
     // !canEdit && canCreateAbsence → aria-label="Abwesenheit"
     const absBtn = screen.queryByRole('button', { name: /^Abwesenheit$/i })

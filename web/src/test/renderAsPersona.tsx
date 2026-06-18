@@ -1,9 +1,21 @@
-import { render, type RenderResult } from '@testing-library/react'
+import { act, render, type RenderResult } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { AuthContext, type AuthCtx, type User } from '../contexts/AuthContext'
 import { type Persona, personaById } from './personas'
 import { setupApiMock, type MockEntry } from './apiMock'
+
+/**
+ * Flush pending microtasks and effect-driven state updates.
+ * Use after renderAsPersona() in tests whose component triggers fetches in useEffect —
+ * otherwise React emits "not wrapped in act(...)" warnings when those promises resolve
+ * after the test has already asserted.
+ */
+export async function flushAsync(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
 
 function personaToUser(p: Persona): User {
   return {

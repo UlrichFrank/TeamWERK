@@ -7,7 +7,7 @@
 import { describe, test, expect, vi, beforeAll } from 'vitest'
 import { screen } from '@testing-library/react'
 import AppShell from '../AppShell'
-import { renderAsPersona } from '../../test/renderAsPersona'
+import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 vi.mock('../../hooks/usePushSubscription', () => ({
@@ -72,15 +72,17 @@ const VERWALTUNG_ITEMS: { label: string; allowedIds: string[] }[] = [
 const NO_VERWALTUNG_IDS = ['vorstand_beisitzer', 'kassierer', 'spieler', 'elternteil']
 
 describe('AppShell — Sidebar-Items pro Persona', () => {
-  test.each(PERSONAS)('Persona $id: immer sichtbare Items vorhanden', (persona) => {
+  test.each(PERSONAS)('Persona $id: immer sichtbare Items vorhanden', async (persona) => {
     renderAsPersona(<AppShell />, persona.id, { route: '/' })
+    await flushAsync()
     for (const label of ALWAYS_VISIBLE) {
       expect(screen.queryByText(label), `"${label}" für ${persona.id}`).not.toBeNull()
     }
   })
 
-  test.each(PERSONAS)('Persona $id: "Mein Profil" (nicht für admin)', (persona) => {
+  test.each(PERSONAS)('Persona $id: "Mein Profil" (nicht für admin)', async (persona) => {
     renderAsPersona(<AppShell />, persona.id, { route: '/' })
+    await flushAsync()
     if (persona.id === 'admin') {
       expect(screen.queryByText('Mein Profil')).toBeNull()
     } else {
@@ -89,8 +91,9 @@ describe('AppShell — Sidebar-Items pro Persona', () => {
   })
 
   describe('Verwaltungs-Modul sichtbar/versteckt', () => {
-    test.each(PERSONAS)('Persona $id: Modul-Header "Verwaltung"', (persona) => {
+    test.each(PERSONAS)('Persona $id: Modul-Header "Verwaltung"', async (persona) => {
       renderAsPersona(<AppShell />, persona.id, { route: '/' })
+      await flushAsync()
       const header = screen.queryByRole('button', { name: /Verwaltung/i })
       if (NO_VERWALTUNG_IDS.includes(persona.id)) {
         // Kein Item sichtbar → Header muss fehlen (§6.2 Drift-Schutz)
@@ -101,8 +104,9 @@ describe('AppShell — Sidebar-Items pro Persona', () => {
     })
 
     for (const item of VERWALTUNG_ITEMS) {
-      test.each(PERSONAS)(`Persona $id: "${item.label}"`, (persona) => {
+      test.each(PERSONAS)(`Persona $id: "${item.label}"`, async (persona) => {
         renderAsPersona(<AppShell />, persona.id, { route: '/' })
+        await flushAsync()
         const el = screen.queryByText(item.label)
         if (item.allowedIds.includes(persona.id)) {
           expect(el, `"${item.label}" muss für ${persona.id} sichtbar sein`).not.toBeNull()

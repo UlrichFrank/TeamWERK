@@ -10,8 +10,9 @@
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
+import { Routes, Route } from 'react-router-dom'
 import TermineDetailPage from '../TermineDetailPage'
-import { renderAsPersona } from '../../test/renderAsPersona'
+import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
@@ -57,13 +58,20 @@ const IS_TRAINER_IDS = [
 
 describe('SpieltagDetailPage (TermineDetailPage game-view) — isTrainer-Gate: Aufstellungs-Checkbox', () => {
   test.each(PERSONAS)('Persona $id', async (persona) => {
-    renderAsPersona(<TermineDetailPage />, persona.id, {
-      initialEntries: ['/termine/spiel/1'],
-      mocks: [
-        { url: /\/games\/1$/, data: GAME_FIXTURE },
-        { url: /\/games\/1\/participants/, data: PARTICIPANTS_FIXTURE },
-      ],
-    })
+    renderAsPersona(
+      <Routes>
+        <Route path="/termine/:type/:id" element={<TermineDetailPage />} />
+      </Routes>,
+      persona.id,
+      {
+        initialEntries: ['/termine/spiel/1'],
+        mocks: [
+          { url: /\/games\/1$/, data: GAME_FIXTURE },
+          { url: /\/games\/1\/participants/, data: PARTICIPANTS_FIXTURE },
+        ],
+      },
+    )
+    await flushAsync()
 
     // Seite muss ohne Crash rendern
     const playerRow = screen.queryByText('Max Mustermann')

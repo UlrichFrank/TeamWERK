@@ -7,7 +7,7 @@
 import { describe, test, expect, vi } from 'vitest'
 import { screen, fireEvent } from '@testing-library/react'
 import ChatPage from '../ChatPage'
-import { renderAsPersona } from '../../test/renderAsPersona'
+import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
@@ -26,14 +26,16 @@ const CAN_BROADCAST_IDS = [
 ]
 
 describe('ChatPage — canBroadcast-Gate: "Mitteilung senden"-Button', () => {
-  test.each(PERSONAS)('Persona $id', (persona) => {
+  test.each(PERSONAS)('Persona $id', async (persona) => {
     renderAsPersona(<ChatPage />, persona.id)
+    await flushAsync()
 
     // Mitteilungen-Tab anklicken (initial ist "Chats" aktiv)
     const mittelungenTab = screen.queryByText('Mitteilungen')
     if (mittelungenTab) {
       fireEvent.click(mittelungenTab)
     }
+    await flushAsync()
 
     const btn = screen.queryByText('Mitteilung senden')
     if (CAN_BROADCAST_IDS.includes(persona.id)) {
