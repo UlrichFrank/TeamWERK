@@ -1,6 +1,8 @@
 const WAITING_POLL_INTERVAL_MS = 250
 const WAITING_POLL_TIMEOUT_MS = 5000
 const API_CACHE_NAME = 'api-cache'
+const APP_SHELL_CACHE_NAME = 'app-shell'
+const WORKBOX_PRECACHE_PREFIX = 'workbox-precache'
 
 function activateWaitingAndReload(reg: ServiceWorkerRegistration): void {
   const fallback = setTimeout(() => location.reload(), 3000)
@@ -49,13 +51,24 @@ export async function reloadWithSwActivation(): Promise<void> {
     return
   }
 
-  // No new SW arrived. Clear the API cache so the reload at least surfaces
-  // fresh server data — the precached shell may still be old, but that
-  // resolves on the next SW activation.
+  // No new SW arrived. As the emergency hammer, drop every cache that could
+  // still serve the old app — the Workbox precache(s), the NetworkFirst
+  // app-shell, and the API cache — so the reload below can only come from the
+  // server. Unrelated caches (Google Fonts) are left untouched.
   try {
-    await caches.delete(API_CACHE_NAME)
+    const keys = await caches.keys()
+    await Promise.all(
+      keys
+        .filter(
+          (n) =>
+            n === API_CACHE_NAME ||
+            n === APP_SHELL_CACHE_NAME ||
+            n.startsWith(WORKBOX_PRECACHE_PREFIX)
+        )
+        .map((n) => caches.delete(n))
+    )
   } catch {
-    // caches may be unavailable; ignore.
+    // caches may be unavailable; ignore and still reload below.
   }
   location.reload()
 }
