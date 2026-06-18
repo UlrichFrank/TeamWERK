@@ -34,15 +34,21 @@ func NewServer(t *testing.T, routeFn func(r chi.Router)) *httptest.Server {
 	return srv
 }
 
-// Token returns a signed Bearer token for the given user identity.
+// Token returns a signed Bearer token for the given user identity (isParent=false).
 func Token(t *testing.T, userID int, role string, clubFunctions []string) string {
+	t.Helper()
+	return TokenWithIsParent(t, userID, role, clubFunctions, false)
+}
+
+// TokenWithIsParent returns a signed Bearer token including the isParent flag.
+func TokenWithIsParent(t *testing.T, userID int, role string, clubFunctions []string, isParent bool) string {
 	t.Helper()
 	if clubFunctions == nil {
 		clubFunctions = []string{}
 	}
-	tok, err := auth.IssueAccessToken(TestJWTSecret, userID, "test@test.local", role, clubFunctions, false)
+	tok, err := auth.IssueAccessToken(TestJWTSecret, userID, "test@test.local", role, clubFunctions, isParent)
 	if err != nil {
-		t.Fatalf("testutil.Token: %v", err)
+		t.Fatalf("testutil.TokenWithIsParent: %v", err)
 	}
 	return "Bearer " + tok
 }
