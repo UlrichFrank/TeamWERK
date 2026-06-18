@@ -3,7 +3,11 @@ const WAITING_POLL_TIMEOUT_MS = 5000
 const API_CACHE_NAME = 'api-cache'
 
 function activateWaitingAndReload(reg: ServiceWorkerRegistration): void {
-  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true })
+  const fallback = setTimeout(() => location.reload(), 3000)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    clearTimeout(fallback)
+    location.reload()
+  }, { once: true })
   reg.waiting!.postMessage({ type: 'SKIP_WAITING' })
 }
 

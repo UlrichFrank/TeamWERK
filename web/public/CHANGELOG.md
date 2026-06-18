@@ -1,4 +1,11 @@
+## 18.06.2026
+- [feat] chat: Tageswechsel-Separator im Chat-Verlauf
+
 ## 17.06.2026
+- [fix] carpooling: Kurznamen statt langer Teamnamen in Mitfahrgelegenheiten anzeigen
+- [fix] members: Abwesenheits-Sichtbarkeit nur für Spieler anzeigen
+- [fix] update: fix double banner
+- [fix] chat: Overlay-Breite, Textselektion und iOS-Click-Bug behoben
 - [feat] chat: Push-Benachrichtigungen für Nachrichten steuerbar im Profil
 - [fix] chat: Mobile Overlay – Scroll-Sperre, schmäleres Menü, keine Textselektion in Buttons
 - [fix] chat: WhatsApp-Style Mobile Action Overlay bei Long-Press

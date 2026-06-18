@@ -73,10 +73,11 @@ function formatDate(iso: string) {
   return iso
 }
 
-function gameTitle(game: GameCarpoolData['game']): string {
-  if (game.eventType === 'generisch') return `${game.team} - ${game.opponent}`
-  if (game.eventType === 'heim') return `${game.team} - Team Stuttgart vs ${game.opponent}`
-  return `${game.team} - ${game.opponent} vs Team Stuttgart`
+function gameTitle(game: GameCarpoolData['game'], teamShort?: string): string {
+  const team = teamShort ?? game.team
+  if (game.eventType === 'generisch') return `${team} - ${game.opponent}`
+  if (game.eventType === 'heim') return `${team} - Team Stuttgart vs ${game.opponent}`
+  return `${team} - ${game.opponent} vs Team Stuttgart`
 }
 
 // How many seats the bieter still has available (pending + confirmed count against capacity)
@@ -392,6 +393,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
 
 interface GameCardProps {
   data: GameCarpoolData
+  teamShortNames: Map<number, string>
   onDelete: (id: number) => void
   onOpenForm: (gameId: number, typ: 'biete' | 'suche') => void
   onRequest: (bieteId: number, sucheId: number) => void
@@ -399,8 +401,11 @@ interface GameCardProps {
   onReject: (paarungId: number) => void
 }
 
-function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }: GameCardProps) {
+function GameCard({ data, teamShortNames, onDelete, onOpenForm, onRequest, onConfirm, onReject }: GameCardProps) {
   const [activeTab, setActiveTab] = useState<'biete' | 'suche'>('biete')
+  const teamIds = data.game.teamIds ?? []
+  const shorts = teamIds.map(id => teamShortNames.get(id)).filter((s): s is string => !!s).sort()
+  const teamShort = shorts.length > 0 ? shorts.join(' / ') : undefined
   const hasOwnBiete = (data.biete ?? []).some(e => e.isOwn)
   const hasOwn = hasOwnBiete || (data.suche ?? []).some(e => e.isOwn)
 
@@ -421,7 +426,7 @@ function GameCard({ data, onDelete, onOpenForm, onRequest, onConfirm, onReject }
             <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${colors.card.icon}`} />
             <div>
               <p className="text-xs text-brand-text-muted">{formatDate(data.game.date)}</p>
-              <h2 className="text-sm font-semibold text-brand-text">{gameTitle(data.game)}</h2>
+              <h2 className="text-sm font-semibold text-brand-text">{gameTitle(data.game, teamShort)}</h2>
             </div>
           </div>
           {!hasOwn && (
@@ -749,6 +754,7 @@ export default function MitfahrgelegenheitenPage() {
               <GameCard
                 key={d.game.id}
                 data={d}
+                teamShortNames={teamShortNames}
                 onDelete={handleDelete}
                 onOpenForm={(gameId, typ) => setModal({ gameId, typ })}
                 onRequest={handleRequest}

@@ -1,9 +1,9 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import Toggle from '../Toggle'
-import { useAuth, MapsProvider } from '../../contexts/AuthContext'
+import { useAuth, MapsProvider, hasFunction } from '../../contexts/AuthContext'
 
-type Category = 'games' | 'trainings' | 'duties' | 'carpooling'
+type Category = 'games' | 'trainings' | 'duties' | 'carpooling' | 'chat'
 
 interface Pref {
   push: boolean
@@ -17,6 +17,7 @@ const defaults: Prefs = {
   trainings: { push: true, email: false },
   duties: { push: true, email: false },
   carpooling: { push: true, email: false },
+  chat: { push: true, email: false },
 }
 
 const categoryLabels: Record<Category, string> = {
@@ -24,10 +25,12 @@ const categoryLabels: Record<Category, string> = {
   trainings: 'Trainings',
   duties: 'Dienste',
   carpooling: 'Fahrgemeinschaften',
+  chat: 'Nachrichten',
 }
 
 export default function ProfileMiscTab() {
-  const { mapsProvider: ctxMapsProvider, setMapsProvider: setCtxMapsProvider } = useAuth()
+  const { user, mapsProvider: ctxMapsProvider, setMapsProvider: setCtxMapsProvider } = useAuth()
+  const isSpieler = hasFunction(user, 'spieler')
   const [prefs, setPrefs] = useState<Prefs>(defaults)
   const [changed, setChanged] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -41,9 +44,11 @@ export default function ProfileMiscTab() {
   const [mapsError, setMapsError] = useState('')
 
   useEffect(() => {
-    api.get('/profile/me').then(r => {
-      setAbsencesPublic(r.data?.own_member?.absences_public === 1 || r.data?.own_member?.absences_public === true)
-    }).catch(() => {})
+    if (isSpieler) {
+      api.get('/profile/me').then(r => {
+        setAbsencesPublic(r.data?.own_member?.absences_public === 1 || r.data?.own_member?.absences_public === true)
+      }).catch(() => {})
+    }
     api.get('/profile/notification-preferences').then(r => {
       const loaded: Prefs = { ...defaults }
       for (const cat of Object.keys(defaults) as Category[]) {
@@ -140,22 +145,24 @@ export default function ProfileMiscTab() {
         </div>
       </div>
 
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
-        <div className="p-6 pb-2">
-          <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit für Mitglieder</h2>
-          <p className="text-xs text-brand-text-subtle mb-3">Wenn aktiv, sehen Trainer deine Abwesenheiten im Kalender.</p>
-        </div>
-        <div className="divide-y divide-brand-border-subtle">
-          <div className="flex items-center justify-between px-6 py-3">
-            <p className="text-sm font-medium text-brand-text">Abwesenheiten für Trainer sichtbar</p>
-            <Toggle
-              enabled={absencesPublic}
-              onToggle={absenceSaving ? () => {} : toggleAbsenceVisibility}
-              label="Abwesenheiten für Trainer sichtbar"
-            />
+      {isSpieler && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+          <div className="p-6 pb-2">
+            <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit für Mitglieder</h2>
+            <p className="text-xs text-brand-text-subtle mb-3">Wenn aktiv, sehen Trainer deine Abwesenheiten im Kalender.</p>
+          </div>
+          <div className="divide-y divide-brand-border-subtle">
+            <div className="flex items-center justify-between px-6 py-3">
+              <p className="text-sm font-medium text-brand-text">Abwesenheiten für Trainer sichtbar</p>
+              <Toggle
+                enabled={absencesPublic}
+                onToggle={absenceSaving ? () => {} : toggleAbsenceVisibility}
+                label="Abwesenheiten für Trainer sichtbar"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <div className="p-6 pb-2">

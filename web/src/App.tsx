@@ -1,11 +1,7 @@
-import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useRegisterSW } from 'virtual:pwa-register/react'
 import { AuthProvider, useAuth, hasFunction } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
-import { VersionProvider, useVersion } from './contexts/VersionContext'
-import { UpdateBanner } from './components/UpdateBanner'
-import { reloadWithSwActivation } from './lib/reload'
+import { VersionProvider } from './contexts/VersionContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import RequestMembershipPage from './pages/RequestMembershipPage'
@@ -52,34 +48,6 @@ export function RoleRoute({ roles, children }: { roles: string[]; children: Reac
   return <>{children}</>
 }
 
-// Sentinel für SW-Updates ohne bekannten Hash (z.B. wenn nur useRegisterSW
-// triggert, ohne dass SSE eine neue Version gemeldet hat).
-const SW_BANNER_SENTINEL = '__sw__'
-
-function AppUpdateBanner() {
-  const { updateAvailable: sseUpdateAvailable, latestVersion } = useVersion()
-  const [swUpdateAvailable, setSwUpdateAvailable] = useState(false)
-  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null)
-
-  useRegisterSW({ onNeedRefresh() { setSwUpdateAvailable(true) } })
-
-  const shouldShow = sseUpdateAvailable || swUpdateAvailable
-  if (!shouldShow) return null
-
-  // currentBanneredVersion: der Hash, der diesen Banner triggert. Bevorzugt
-  // der vom Server zuletzt gemeldete; Sentinel wenn nur SW-Pfad aktiv.
-  const currentBanneredVersion = sseUpdateAvailable
-    ? (latestVersion ?? SW_BANNER_SENTINEL)
-    : SW_BANNER_SENTINEL
-  if (dismissedVersion === currentBanneredVersion) return null
-
-  return (
-    <UpdateBanner
-      onReload={reloadWithSwActivation}
-      onDismiss={() => setDismissedVersion(currentBanneredVersion)}
-    />
-  )
-}
 
 export default function App() {
   return (
@@ -87,7 +55,6 @@ export default function App() {
       <VersionProvider>
         <PersonContactProvider>
           <BrowserRouter>
-          <AppUpdateBanner />
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />

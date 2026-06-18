@@ -24,7 +24,7 @@
 
 ## 5. Frontend — ProfileMiscTab.tsx
 
-- [x] 5.1 Select-Element mit drei Optionen anlegen: „Automatisch (Gerät erkennen)", „Google Maps", „Apple Maps"
+- [x] 5.1 Select-Element mit drei Optionen anlegen: „Automatisch", „Google Maps", „Apple Maps"
 - [x] 5.2 Aktuellen Wert aus Profil-API laden und Select vorbelegen
 - [x] 5.3 Bei Änderung `PUT /api/profile/me` aufrufen und Feedback (Erfolg/Fehler) anzeigen
 - [x] 5.4 UI im Browser testen: Select zeigt korrekten Initialwert; Speichern persistiert; nach Reload ist Wert korrekt

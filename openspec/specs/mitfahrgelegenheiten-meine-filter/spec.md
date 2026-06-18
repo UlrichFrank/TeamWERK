@@ -1,25 +1,37 @@
-### Requirement: Meine-Filter-Toggle
-Die Seite SHALL einen Toggle „Team | Meine" oben rechts neben der `<h1>` anzeigen. Im Modus „Team" werden alle Spiele der eigenen Mannschaft(en) angezeigt (Standardansicht). Im Modus „Meine" werden nur Spiele angezeigt, bei denen der eingeloggte Nutzer mindestens einen Eintrag hat (biete oder suche) oder in einer Paarung beteiligt ist. Der Filter ist für alle Rollen sichtbar und aktiv.
+## MODIFIED Requirements
+
+### Requirement: Meine-Filter als Pill
+
+Die Seite SHALL einen Pill-Button "Meine" oben im Header anzeigen, im selben visuellen Stil wie die Event-Typ-Pills (Heim, Auswärts, Sonstiges) — gleicher Border, gleiches Padding, gleicher Active-State (gelber Hintergrund mit dunklem Text). Die "Meine"-Pill verwendet ein eigenes Icon (z. B. `UserCheck`), um sie semantisch von den Typ-Pills zu unterscheiden.
+
+Im inaktiven Zustand (Default) werden alle Spiele der eigenen Mannschaft(en) angezeigt. Im aktiven Zustand werden nur Spiele angezeigt, bei denen der eingeloggte Nutzer mindestens einen Eintrag (biete oder suche) hat oder in einer Paarung beteiligt ist (`bieteIsOwn || sucheIsOwn`).
+
+Der Filter ist für alle Rollen sichtbar und aktiv.
 
 #### Scenario: Standard-Ansicht zeigt Team-Spiele
+
 - **WHEN** Nutzer die Seite öffnet
-- **THEN** Toggle steht auf „Team" und alle Spiele der eigenen Mannschaft(en) werden angezeigt
+- **THEN** ist die "Meine"-Pill inaktiv und alle Spiele der eigenen Mannschaft(en) werden angezeigt
 
-#### Scenario: Wechsel zu „Meine"
-- **WHEN** Nutzer auf „Meine" klickt
-- **THEN** es werden nur noch Spiele angezeigt, bei denen `isOwn === true` auf mindestens einem Eintrag steht oder der Nutzer in einer Paarung (`bieteIsOwn || sucheIsOwn`) beteiligt ist
+#### Scenario: Aktivierung der Meine-Pill
 
-#### Scenario: Keine eigenen Einträge
-- **WHEN** Nutzer auf „Meine" klickt und keine eigenen Einträge hat
-- **THEN** alle Tab-Listen sind leer; passende Leer-Meldung wird angezeigt
+- **WHEN** Nutzer auf die "Meine"-Pill klickt und sie aktiv wird
+- **THEN** werden nur noch Spiele angezeigt, bei denen `isOwn === true` auf mindestens einem Eintrag steht oder der Nutzer in einer Paarung (`bieteIsOwn || sucheIsOwn`) beteiligt ist
+
+#### Scenario: Meine-Pill ohne eigene Einträge
+
+- **WHEN** Nutzer die "Meine"-Pill aktiviert und keine eigenen Einträge oder Paarungen hat
+- **THEN** ist die Liste leer und zeigt eine passende Hinweismeldung
+
+#### Scenario: Meine-Pill kombinierbar mit Typ-Filtern
+
+- **WHEN** Nutzer die "Meine"-Pill aktiviert und gleichzeitig "Heim" deaktiviert
+- **THEN** werden nur Spiele mit `eventType ∈ {auswärts, generisch}` angezeigt, bei denen der Nutzer beteiligt ist
+
+## REMOVED Requirements
 
 ### Requirement: Tab-Counts spiegeln den aktiven Filter
-Die Spiel-Counts in den Event-Typ-Tabs (Auswärtsspiele / Heimspiele / Events) SHALL die Anzahl der im aktuell aktiven Filter sichtbaren Spiele zeigen.
 
-#### Scenario: Tab-Count im Meine-Modus
-- **WHEN** Filter auf „Meine" steht und Nutzer hat 2 eigene Auswärtsspiele
-- **THEN** Tab „Auswärtsspiele" zeigt `(2)` statt der Gesamtzahl
+**Reason**: Die Tab-Navigation (Auswärtsspiele / Heimspiele / Events) wird durch eine einzige chronologische Liste mit Pill-Filtern ersetzt. Es gibt keine Tabs mehr, also auch keine Tab-Counts. Die Anzahl der sichtbaren Spiele ergibt sich implizit aus der Listendarstellung.
 
-#### Scenario: Tab-Count im Team-Modus
-- **WHEN** Filter auf „Team" steht
-- **THEN** Tab-Counts zeigen die Gesamtzahl aller Spiele des eigenen Teams
+**Migration**: Keine Anpassung im Client nötig — der Counter war reine UI-Anzeige. Falls eine Mengenanzeige gewünscht ist, kann ein optionaler Header über der Liste die Gesamtzahl der sichtbaren Spiele anzeigen (außerhalb dieses Changes).
