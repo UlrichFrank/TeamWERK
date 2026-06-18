@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
+import { daySeparatorLabel, shouldRenderSeparator } from '../lib/chatDateFormat'
+import { DaySeparator } from '../components/DaySeparator'
 import { useAuth, hasFunction } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
 import ConversationParticipantsModal from '../components/ConversationParticipantsModal'
@@ -542,32 +544,48 @@ export default function ChatPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2">
-                {messages.map(msg => {
-                  if (msg.isSystem) {
-                    return (
-                      <div key={msg.id} className="flex justify-center my-1">
-                        <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
-                          {msg.senderName} {msg.body}
-                        </span>
-                      </div>
+                {(() => {
+                  const now = new Date()
+                  const nodes: JSX.Element[] = []
+                  let prevSentAt: string | null = null
+                  for (const msg of messages) {
+                    if (shouldRenderSeparator(prevSentAt, msg.sentAt)) {
+                      nodes.push(
+                        <DaySeparator
+                          key={`sep-${msg.id}`}
+                          label={daySeparatorLabel(new Date(msg.sentAt), now)}
+                        />
+                      )
+                    }
+                    prevSentAt = msg.sentAt
+                    if (msg.isSystem) {
+                      nodes.push(
+                        <div key={msg.id} className="flex justify-center my-1">
+                          <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
+                            {msg.senderName} {msg.body}
+                          </span>
+                        </div>
+                      )
+                      continue
+                    }
+                    const isOwn = msg.senderId === user?.id
+                    nodes.push(
+                      <MessageBubble
+                        key={msg.id}
+                        msg={msg}
+                        isOwn={isOwn}
+                        onContextMenu={handleContextMenu}
+                        onSwipeReply={startReply}
+                        onLongPress={handleLongPress}
+                        isPickerOpen={emojiPickerMsgId === msg.id}
+                        onOpenPicker={(e) => { e.stopPropagation(); setEmojiPickerMsgId(msg.id) }}
+                        onClosePicker={() => setEmojiPickerMsgId(null)}
+                        onToggleReaction={toggleReaction}
+                      />
                     )
                   }
-                  const isOwn = msg.senderId === user?.id
-                  return (
-                    <MessageBubble
-                      key={msg.id}
-                      msg={msg}
-                      isOwn={isOwn}
-                      onContextMenu={handleContextMenu}
-                      onSwipeReply={startReply}
-                      onLongPress={handleLongPress}
-                      isPickerOpen={emojiPickerMsgId === msg.id}
-                      onOpenPicker={(e) => { e.stopPropagation(); setEmojiPickerMsgId(msg.id) }}
-                      onClosePicker={() => setEmojiPickerMsgId(null)}
-                      onToggleReaction={toggleReaction}
-                    />
-                  )
-                })}
+                  return nodes
+                })()}
                 <div ref={messagesEndRef} />
               </div>
 
