@@ -146,7 +146,7 @@ pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal eins
 
 test: ## Backend (race) + Frontend (vitest) Tests ausführen
 	$(GO) test -race ./...
-	cd web && pnpm test:run
+	cd web && pnpm test
 
 lint: ## Statische Codeanalyse mit golangci-lint
 	@if ! command -v golangci-lint > /dev/null 2>&1; then \
