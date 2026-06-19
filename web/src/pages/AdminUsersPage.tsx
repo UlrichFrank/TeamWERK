@@ -208,8 +208,15 @@ export default function AdminUsersPage() {
       setInviteEmail('')
       setInviteComment('')
       setTimeout(() => { closeInviteModal(); loadInvitationsAndRequests() }, 2000)
-    } catch {
-      setInviteError('Einladung konnte nicht gesendet werden. Bitte E-Mail-Konfiguration prüfen.')
+    } catch (err: any) {
+      const status = err?.response?.status
+      if (status === 403) {
+        setInviteError('Keine Berechtigung, Einladungen zu versenden.')
+      } else if (status === 502) {
+        setInviteError('E-Mail konnte nicht zugestellt werden. Bitte E-Mail-Konfiguration prüfen.')
+      } else {
+        setInviteError('Einladung konnte nicht gesendet werden.')
+      }
     }
   }
 
