@@ -51,18 +51,32 @@ func TestList_VorstandCanFlags(t *testing.T) {
 	}
 }
 
-// TC-MCAN-02: Trainer is gated out of /api/members (403) — scope applies when gate opens
-func TestList_TrainerGated(t *testing.T) {
+// TC-MCAN-02: Trainer darf /api/members aufrufen (Kadersuche), sieht aber nur
+// die eigenen Kader. Ein Trainer ohne Kader-Verknüpfung bekommt 200 mit leerer
+// Liste (policy.ScopeMembersQuery), nicht mehr 403.
+func TestList_TrainerScopedEmpty(t *testing.T) {
 	database := testutil.NewDB(t)
 	trainerUserID := testutil.CreateUser(t, database, "standard")
 	tok := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
 
+	testutil.CreateMember(t, database, 0)
+
 	srv := newMembersServer(t, database)
 	res := testutil.Get(t, srv, "/api/members", tok)
-	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusForbidden {
-		t.Errorf("expected 403 for trainer on /api/members, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for trainer on /api/members, got %d", res.StatusCode)
+	}
+	var body struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		res.Body.Close()
+		t.Fatalf("decode: %v", err)
+	}
+	res.Body.Close()
+	if body.Total != 0 {
+		t.Errorf("expected total=0 for trainer without kader, got %d", body.Total)
 	}
 }
 

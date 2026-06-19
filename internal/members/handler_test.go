@@ -168,13 +168,10 @@ func TestList_AusgetretenHidden(t *testing.T) {
 
 // ── TC-M04: trainer sees only members of their team ───────────────────────────
 
-// Production-Route GET /api/members ist via RequireClubFunction("vorstand")
-// gated — Trainer kommen nicht durch. Der Test prüft eine Handler-interne
-// Scope-Logik, die durch Mini-Router das Routing-Gate umging.
-// Klärung der fachlichen Frage "soll Trainer /api/members aufrufen?" gehört
-// in einen eigenen Change, nicht in diesen API-Konsistenz-Cleanup.
+// GET /api/members ist für Trainer freigeschaltet (Kadersuche). Ohne
+// ?club_function-Filter sieht ein Trainer nur Mitglieder der eigenen Kader
+// (policy.ScopeMembersQuery).
 func TestList_TrainerScope(t *testing.T) {
-	t.Skip("Trainer-Scope via /api/members ist in Production durch RequireClubFunction(vorstand) blockiert — Trainer-Members-View läuft heute über /api/teams/{id}/roster. Siehe Cleanup-Followup.")
 	database := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, database, "2025/26")
 
@@ -191,7 +188,7 @@ func TestList_TrainerScope(t *testing.T) {
 	testutil.AddKaderTrainer(t, database, kaderA, trainerMemberID)
 
 	// Create 3 members in team A via kader_members (player_memberships is a view)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		mID := testutil.CreateMember(t, database, 0)
 		addKaderMember(t, database, kaderA, mID)
 	}
@@ -200,7 +197,7 @@ func TestList_TrainerScope(t *testing.T) {
 	kaderB := testutil.CreateKader(t, database, teamB, seasonID)
 
 	// Create 2 members in team B
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		mID := testutil.CreateMember(t, database, 0)
 		addKaderMember(t, database, kaderB, mID)
 	}
@@ -219,6 +216,45 @@ func TestList_TrainerScope(t *testing.T) {
 	}
 	if len(lr.Items) != 3 {
 		t.Errorf("expected 3 items, got %d", len(lr.Items))
+	}
+}
+
+// addClubFunction assigns a Vereinsfunktion to a member directly.
+func addClubFunction(t *testing.T, database *sql.DB, memberID int, fn string) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT OR IGNORE INTO member_club_functions (member_id, function) VALUES (?, ?)`,
+		memberID, fn); err != nil {
+		t.Fatalf("addClubFunction: %v", err)
+	}
+}
+
+// TC-M04b: Ein Trainer, der gezielt nach Trainern sucht (?club_function=trainer),
+// bekommt vereinsweit alle Trainer — auch ohne eigene Kader-Verknüpfung. Das ist
+// der /kader-Anwendungsfall (Trainer einem Kader zuordnen). Spieler tauchen nicht
+// auf. Sportliche Leitung muss denselben Zugriff haben.
+func TestList_TrainerSearchTrainers_Wide(t *testing.T) {
+	database := testutil.NewDB(t)
+
+	// Two trainers anywhere in the club + one plain player.
+	t1 := testutil.CreateMember(t, database, 0)
+	addClubFunction(t, database, t1, "trainer")
+	t2 := testutil.CreateMember(t, database, 0)
+	addClubFunction(t, database, t2, "trainer")
+	testutil.CreateMember(t, database, 0) // Spieler ohne Funktion
+
+	// Caller is a trainer with no kader of their own.
+	callerUserID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, callerUserID, "standard", []string{"trainer"})
+
+	srv := newMembersServer(t, database)
+	res := testutil.Get(t, srv, "/api/members?club_function=trainer&limit=20", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	lr := decodeList(t, res)
+	if lr.Total != 2 {
+		t.Errorf("expected total=2 (club-wide trainers), got %d", lr.Total)
 	}
 }
 
