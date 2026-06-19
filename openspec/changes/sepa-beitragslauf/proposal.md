@@ -53,7 +53,7 @@ Das aktuelle Schema kennt zwar `iban`, `sepa_mandat`, `home_club` und `join_date
 - Mandatsreferenz = `members.member_number`
 - Mandatsdatum = `members.sepa_mandat_date`
 - Gläubiger-ID = `clubs.glaeubiger_id`
-- Verwendungszweck = `"Jahresbeitrag Saison {saison_kurz} – Mitgliedsnr. {member_number}"`
+- Verwendungszweck = `"Mitgliedsbeitrag Team Stuttgart {saison_kurz}  Mitglied {member_number}"`
 - Kontoinhaber-Name im `<DbtrAcct>` = `members.account_holder` falls gesetzt, sonst `first_name + last_name`
 - Adresse strukturiert (Pflicht in .08) aus `street`, `zip`, `city`
 
