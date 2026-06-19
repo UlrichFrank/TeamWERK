@@ -46,6 +46,14 @@ func IsKassiererLike(p *Principal) bool {
 	return IsVorstandLike(p) || p.hasFunction("kassierer")
 }
 
+// CanReadMemberAdminFields returns true if the caller may see administrative member
+// fields in the members list (exact date of birth, member number, account linkage).
+// Pure trainers are kader-scoped and only get a reduced set: name, year of birth (not
+// the exact date), pass number, club functions, plus sport fields.
+func CanReadMemberAdminFields(p *Principal) bool {
+	return p.Role == "admin" || p.hasAnyFunction("vorstand", "kassierer", "sportliche_leitung")
+}
+
 // CanEditMember returns true if the caller may edit the given member (identified by their user_id).
 func CanEditMember(p *Principal, memberUserID int) bool {
 	if p.Role == "admin" || p.hasFunction("vorstand") {
