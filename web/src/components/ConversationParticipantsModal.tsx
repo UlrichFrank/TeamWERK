@@ -3,6 +3,7 @@ import { X, Pencil, Search, UserMinus, Crown } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { errorMessage } from '../lib/errors'
 
 interface ConvMember { id: number; name: string }
 interface ChatUser { id: number; name: string }
@@ -66,10 +67,10 @@ export default function ConversationParticipantsModal({
     try {
       await api.put(`/chat/conversations/${convId}`, { name: trimmed })
       onChanged()
-    } catch (e: any) {
+    } catch (e) {
       setName(previous)
       setDraftName(previous)
-      setError(e.response?.data || 'Fehler beim Umbenennen')
+      setError(errorMessage(e, 'Fehler beim Umbenennen'))
     }
   }
 
@@ -79,8 +80,8 @@ export default function ConversationParticipantsModal({
       await api.delete(`/chat/conversations/${convId}/members/${uid}`)
       setLocalMembers(prev => prev.filter(m => m.id !== uid))
       onChanged()
-    } catch (e: any) {
-      setError(e.response?.data || 'Fehler beim Entfernen')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Entfernen'))
     }
   }
 
@@ -91,8 +92,8 @@ export default function ConversationParticipantsModal({
       setLocalMembers(prev => [...prev, { id: u.id, name: u.name }])
       setSearchResults(prev => prev.filter(x => x.id !== u.id))
       onChanged()
-    } catch (e: any) {
-      setError(e.response?.data || 'Fehler beim Hinzufügen')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Hinzufügen'))
     }
   }
 

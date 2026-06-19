@@ -58,6 +58,8 @@ export default function ProfileMiscTab() {
       }
       setPrefs(loaded)
     }).catch(() => {})
+    // Einmaliger Initial-Load (nur Mount); isSpieler ist für die Komponenten-Lebensdauer stabil
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const toggleAbsenceVisibility = async () => {

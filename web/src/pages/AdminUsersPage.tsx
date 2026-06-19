@@ -14,6 +14,7 @@ import { usePagination } from '../lib/usePagination'
 import ActionMenu from '../components/ActionMenu'
 import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { errorStatus, errorMessage } from '../lib/errors'
 
 interface User {
   id: number
@@ -177,8 +178,8 @@ export default function AdminUsersPage() {
       })
       closeCreateModal()
       refreshUsers()
-    } catch (err: any) {
-      setCreateError(err?.response?.status === 409 ? 'Diese E-Mail-Adresse ist bereits vergeben.' : 'Account konnte nicht angelegt werden.')
+    } catch (e) {
+      setCreateError(errorStatus(e) === 409 ? 'Diese E-Mail-Adresse ist bereits vergeben.' : 'Account konnte nicht angelegt werden.')
     } finally {
       setCreateLoading(false)
     }
@@ -208,8 +209,8 @@ export default function AdminUsersPage() {
       setInviteEmail('')
       setInviteComment('')
       setTimeout(() => { closeInviteModal(); loadInvitationsAndRequests() }, 2000)
-    } catch (err: any) {
-      const status = err?.response?.status
+    } catch (e) {
+      const status = errorStatus(e)
       if (status === 403) {
         setInviteError('Keine Berechtigung, Einladungen zu versenden.')
       } else if (status === 502) {
@@ -249,8 +250,8 @@ export default function AdminUsersPage() {
       await api.put(`/users/${activateModal.userId}`, { can_login: 1, email: activateEmail })
       closeActivateModal()
       refreshUsers()
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
+    } catch (e) {
+      if (errorStatus(e) === 409) {
         setActivateError('Diese E-Mail-Adresse ist bereits vergeben.')
       } else {
         setActivateError('Aktivierung fehlgeschlagen.')
@@ -273,8 +274,8 @@ export default function AdminUsersPage() {
       const r = await api.post('/invitations/import-csv', form)
       setCsvResult(r.data)
       loadInvitationsAndRequests()
-    } catch (e: any) {
-      setCsvError(e?.response?.data || 'Fehler beim Import. Bitte CSV-Datei prüfen.')
+    } catch (e) {
+      setCsvError(errorMessage(e, 'Fehler beim Import. Bitte CSV-Datei prüfen.'))
     } finally {
       setCsvLoading(false)
     }
@@ -302,8 +303,8 @@ export default function AdminUsersPage() {
       await api.put(`/invitations/${linkModal.invId}/member`, { member_id: memberId })
       closeLinkModal()
       loadInvitationsAndRequests()
-    } catch (e: any) {
-      setLinkError(e?.response?.status === 409 ? 'Mitglied ist bereits mit einem Nutzer verknüpft.' : 'Fehler beim Verknüpfen.')
+    } catch (e) {
+      setLinkError(errorStatus(e) === 409 ? 'Mitglied ist bereits mit einem Nutzer verknüpft.' : 'Fehler beim Verknüpfen.')
     } finally {
       setLinkLoading(false)
     }

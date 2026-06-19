@@ -176,6 +176,8 @@ export default function MeinTeamPage() {
       })
   }
 
+  // loadRosters kapselt focusTeamId, soll nur bei dessen Änderung neu laufen
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadRosters() }, [focusTeamId])
 
   useLiveUpdates(event => { if (event === 'members' || event === 'kader') loadRosters() })

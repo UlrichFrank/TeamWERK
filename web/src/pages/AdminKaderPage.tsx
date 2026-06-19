@@ -9,6 +9,7 @@ import PositionStatus from '../components/PositionStatus'
 import CopyKaderModal from '../components/CopyKaderModal'
 import AutoAssignModal from '../components/AutoAssignModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { errorStatus, errorData } from '../lib/errors'
 
 interface Season {
   id: number
@@ -223,8 +224,8 @@ export default function AdminKaderPage() {
       setCreateDedicatedYear(null)
       await loadKader(selectedSeason.id)
       showToast('Kader angelegt')
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
+    } catch (e) {
+      if (errorStatus(e) === 409) {
         showToast('Kader existiert bereits')
       } else {
         showToast('Fehler beim Anlegen')
@@ -261,9 +262,9 @@ export default function AdminKaderPage() {
       setDeleteConfirm(null)
       if (selectedSeason) await loadKader(selectedSeason.id)
       showToast('Kader gelöscht')
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
-        showToast(`Kader hat noch ${err.response.data?.member_count ?? ''} Mitglieder`)
+    } catch (e) {
+      if (errorStatus(e) === 409) {
+        showToast(`Kader hat noch ${errorData<{ member_count?: number }>(e)?.member_count ?? ''} Mitglieder`)
       } else {
         showToast('Fehler beim Löschen')
       }

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ExternalLink, Trash2, AlertTriangle } from 'lucide-react'
 import { api } from '../../lib/api'
+import { errorMessage } from '../../lib/errors'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface Member {
@@ -17,8 +18,8 @@ interface Member {
 interface Draft {
   id: number
   field_name: string
-  old_value: any
-  new_value: any
+  old_value: { verarbeitung?: boolean; weitergabe?: boolean; [k: string]: unknown } | null
+  new_value: { verarbeitung?: boolean; weitergabe?: boolean; [k: string]: unknown } | null
 }
 
 interface Props {
@@ -70,8 +71,8 @@ export default function MemberDatenschutzTab({ memberId, form, isNew, drafts, on
         { headers: { 'Content-Type': 'multipart/form-data' } }
       )
       onFormChange({ sepa_mandat_url: data.sepa_mandat_url })
-    } catch (err: any) {
-      const msg: string = err?.response?.data ?? ''
+    } catch (e) {
+      const msg = errorMessage(e, '')
       setSepaUploadError(
         msg.includes('too_large')
           ? 'Die Datei ist zu groß. Maximal erlaubt sind 2 MB.'

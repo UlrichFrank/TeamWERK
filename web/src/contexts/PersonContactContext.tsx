@@ -52,6 +52,7 @@ export function PersonContactProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- Hook-Export neben Provider; betrifft nur Dev-HMR
 export function usePersonContact() {
   const ctx = useContext(PersonContactContext)
   if (!ctx) throw new Error('usePersonContact must be used within PersonContactProvider')

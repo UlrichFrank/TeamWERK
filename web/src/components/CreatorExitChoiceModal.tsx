@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, LogOut, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { errorMessage } from '../lib/errors'
 
 interface ConvMember { id: number; name: string }
 
@@ -44,8 +45,8 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
         await api.delete(`/chat/conversations/${convId}/everyone`)
       }
       onDone()
-    } catch (e: any) {
-      setError(e.response?.data || 'Fehler beim Verarbeiten')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Verarbeiten'))
       setBusy(false)
     }
   }

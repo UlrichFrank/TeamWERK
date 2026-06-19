@@ -72,7 +72,7 @@ export default function BeitragslaufPage() {
 
   const toggle = (id: number) => {
     const next = new Set(selected)
-    next.has(id) ? next.delete(id) : next.add(id)
+    if (next.has(id)) next.delete(id); else next.add(id)
     setSelected(next)
   }
 
@@ -244,7 +244,7 @@ function ConfirmDialog({ preview, selected, onClose, onDone }: {
 
   const toggleFail = (id: number) => {
     const next = new Set(failed)
-    next.has(id) ? next.delete(id) : next.add(id)
+    if (next.has(id)) next.delete(id); else next.add(id)
     setFailed(next)
   }
 

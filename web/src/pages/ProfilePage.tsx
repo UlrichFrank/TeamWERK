@@ -38,8 +38,8 @@ export interface Visibility {
 export interface ChangeDraft {
   id: number
   field_name: string
-  old_value: any
-  new_value: any
+  old_value: { iban?: string; account_holder?: string; [k: string]: string | number | undefined } | null
+  new_value: { iban?: string; account_holder?: string; [k: string]: string | number | undefined } | null
   created_at: string
 }
 

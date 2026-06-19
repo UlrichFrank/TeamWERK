@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { errorStatus } from '../../lib/errors'
 
 interface Props {
   onClose: () => void
@@ -23,8 +24,8 @@ export default function EmailChangeModal({ onClose }: Props) {
       await api.post('/profile/email', { new_email: emailNew, password: emailPw })
       setSuccess(true)
       setTimeout(() => onClose(), 3000)
-    } catch (err: any) {
-      const status = err.response?.status
+    } catch (err) {
+      const status = errorStatus(err)
       if (status === 403) setError('Passwort nicht korrekt.')
       else if (status === 409) setError('E-Mail-Adresse bereits vergeben.')
       else setError('Fehler beim Senden.')

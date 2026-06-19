@@ -24,8 +24,8 @@ interface Member {
 interface Draft {
   id: number
   field_name: string
-  old_value: any
-  new_value: any
+  old_value: { account_holder?: string; iban?: string; [k: string]: unknown } | null
+  new_value: { account_holder?: string; iban?: string; [k: string]: unknown } | null
 }
 
 interface Props {

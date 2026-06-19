@@ -186,6 +186,8 @@ export default function TermineDetailPage() {
 
   useEffect(() => {
     load()
+    // load kapselt id/type, soll nur bei deren Änderung neu laufen
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, type])
 
   useLiveUpdates((event) => {

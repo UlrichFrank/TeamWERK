@@ -58,6 +58,8 @@ export function usePagination<T>(endpoint: string, limit = 20, extraParams: Reco
 
     fetchData()
     return () => { cancelled = true }
+    // extraParamsKey serialisiert extraParams stabil (statt Objektidentität); endpoint/limit/setSearchParams gelten als stabil
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, currentSearch, refreshTick, extraParamsKey])
 
   function setSearch(val: string) {

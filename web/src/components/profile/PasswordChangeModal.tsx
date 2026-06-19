@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { errorStatus } from '../../lib/errors'
 import PasswordInput from '../forms/PasswordInput'
 
 interface Props {
@@ -31,8 +32,8 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
       await api.post('/profile/password', { current_password: pwCurrent, new_password: pwNew })
       setSuccess(true)
       setTimeout(() => logout(), 2500)
-    } catch (err: any) {
-      const status = err.response?.status
+    } catch (err) {
+      const status = errorStatus(err)
       setError(status === 403 ? 'Aktuelles Passwort nicht korrekt.' : 'Fehler beim Speichern.')
     } finally {
       setSaving(false)

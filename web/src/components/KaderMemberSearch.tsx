@@ -47,6 +47,8 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => fetchSuggestions(query, filterAge), 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    // open nur als Guard gelesen; bewusst keine Dep, sonst doppelter Fetch bei Focus
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, filterAge, fetchSuggestions])
 
   useEffect(() => {
