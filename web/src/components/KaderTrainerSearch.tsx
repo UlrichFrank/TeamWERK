@@ -55,6 +55,8 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => fetchSuggestions(query, filterTrainer), 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    // open nur als Guard gelesen; bewusst keine Dep, sonst doppelter Fetch bei Focus
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, filterTrainer, fetchSuggestions])
 
   useEffect(() => {

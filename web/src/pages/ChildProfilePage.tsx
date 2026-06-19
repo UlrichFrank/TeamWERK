@@ -51,6 +51,8 @@ export default function ChildProfilePage() {
       .catch(err => { if (err.response?.status === 403) navigate('/') })
   }
 
+  // load kapselt memberId, soll nur bei dessen Änderung neu laufen
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [memberId])
   useLiveUpdates(event => { if (event === 'members') load() })
 

@@ -32,6 +32,8 @@ export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
     setIban(ownMember.iban ?? '')
     setAccountHolder(ownMember.account_holder ?? '')
     if (!onSaveDirectly) loadDrafts(ownMember.id)
+    // Felder/Drafts nur bei Wechsel des Members neu initialisieren
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownMember?.id])
 
   if (!ownMember) return null

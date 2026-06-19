@@ -55,6 +55,8 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
       setEditJersey(ownMember.jersey_number?.toString() ?? '')
       setEditPosition(ownMember.position)
     }
+    // Edit-Felder/Drafts nur bei Wechsel des Members neu initialisieren
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownMember?.id])
 
   const loadDrafts = async () => {

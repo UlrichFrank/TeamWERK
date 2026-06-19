@@ -165,7 +165,7 @@ export default function KalenderPage() {
   const [selectedEndTime, setSelectedEndTime] = useState('16:00')
   const [selectedEndDate, setSelectedEndDate] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
-  const [templates, setTemplates] = useState<any[]>([])
+  const [templates, setTemplates] = useState<{ id: number; name: string; template_type: string; duration_minutes?: number }[]>([])
   const [preview, setPreview] = useState<SlotPreview[]>([])
   const [selectedSlotIndices, setSelectedSlotIndices] = useState<Set<number>>(new Set())
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -257,7 +257,7 @@ export default function KalenderPage() {
         api.get('/seasons')
           .then(r => {
             const seasons = Array.isArray(r.data) ? r.data : []
-            const active = seasons.find((s: any) => s.is_active)
+            const active = seasons.find((s: { id: number; is_active: boolean }) => s.is_active)
             if (active) setActiveSeasonId(active.id)
           })
           .catch(() => {}),
@@ -270,6 +270,8 @@ export default function KalenderPage() {
       }
     }
     loadInitialData()
+    // Initial-Load nur beim Mount; load*-Funktionen kapseln year/month/Filter, soll nicht erneut feuern
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => { loadTrainings(); loadAbsences() }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -335,7 +337,7 @@ export default function KalenderPage() {
     setCalendarTransform(isNext ? -width : width, true)
     setTimeout(() => {
       setCalendarTransform(isNext ? width : -width, false)
-      isNext ? nextMonth() : prevMonth()
+      if (isNext) nextMonth(); else prevMonth()
       requestAnimationFrame(() => requestAnimationFrame(() => setCalendarTransform(0, true)))
     }, 220)
   }
@@ -362,7 +364,7 @@ export default function KalenderPage() {
   const toggleType = (type: string) => {
     setFilterTypes(prev => {
       const next = new Set(prev)
-      next.has(type) ? next.delete(type) : next.add(type)
+      if (next.has(type)) next.delete(type); else next.add(type)
       return next
     })
   }
@@ -562,7 +564,7 @@ export default function KalenderPage() {
   const toggleSlot = (i: number) => {
     setSelectedSlotIndices(prev => {
       const next = new Set(prev)
-      next.has(i) ? next.delete(i) : next.add(i)
+      if (next.has(i)) next.delete(i); else next.add(i)
       return next
     })
   }

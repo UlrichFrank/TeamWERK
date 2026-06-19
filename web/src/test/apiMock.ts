@@ -23,7 +23,7 @@ export function setupApiMock(extra?: MockEntry[]): MockAdapter {
   mock = new MockAdapter(api, { onNoMatch: 'passthrough' })
   // Extra handlers come BEFORE the catch-all so they take priority.
   for (const { method = 'get', url, data } of extra ?? []) {
-    const m = method === 'any' ? mock.onAny(url as any) : mock.onGet(url as any)
+    const m = method === 'any' ? mock.onAny(url) : mock.onGet(url)
     m.reply(200, data)
   }
   mock.onGet('/profile/me').reply(200, DEFAULT_ME)

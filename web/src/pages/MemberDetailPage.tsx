@@ -84,7 +84,14 @@ export default function MemberDetailPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
-  const [drafts, setDrafts] = useState<Array<{ id: number; field_name: string; old_value: any; new_value: any }>>([])
+  type DraftValue = {
+    verarbeitung?: boolean; weitergabe?: boolean
+    account_holder?: string; iban?: string
+    first_name?: string; last_name?: string
+    street?: string; zip?: string; city?: string
+    [k: string]: unknown
+  } | null
+  const [drafts, setDrafts] = useState<Array<{ id: number; field_name: string; old_value: DraftValue; new_value: DraftValue }>>([])
 
   const loadLinkedParents = () => {
     if (isAdmin && !isNew && id) {
@@ -165,6 +172,8 @@ export default function MemberDetailPage() {
       loadLinkedParents()
     }
     return () => { cancelled = true }
+    // loadDrafts/loadLinkedParents lesen nur id/isAdmin/isNew (bereits in den Deps); bewusst nicht als Deps, um Endlosschleifen durch neue Funktionsidentitäten pro Render zu vermeiden.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isNew, isAdmin, authLoading])
 
   useLiveUpdates(event => {

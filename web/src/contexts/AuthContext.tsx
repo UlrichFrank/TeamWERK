@@ -30,6 +30,7 @@ const LOGOUT_MS = 30 * 60 * 1000
 const COUNTDOWN_SECS = 5 * 60
 const IDLE_EVENTS = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'] as const
 
+// eslint-disable-next-line react-refresh/only-export-components -- Context-Export neben Provider; betrifft nur Dev-HMR
 export const AuthContext = createContext<AuthCtx | null>(null)
 
 function fmtCountdown(s: number): string {
@@ -103,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => setUser(null))
       .finally(() => setLoading(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Start idle timer only when logged in; clean up on logout or unmount
   useEffect(() => {
@@ -197,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- Hook-Export neben Provider; betrifft nur Dev-HMR
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be inside AuthProvider')

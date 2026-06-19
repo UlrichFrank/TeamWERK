@@ -94,8 +94,8 @@ export default function AppShell() {
         api.get('/chat/conversations'),
         api.get('/chat/broadcasts'),
       ])
-      const convUnread = (convs.data ?? []).reduce((s: number, c: any) => s + (c.unreadCount ?? 0), 0)
-      const bcUnread = (bcs.data ?? []).filter((b: any) => !b.isRead && !b.isSent).length
+      const convUnread = (convs.data ?? []).reduce((s: number, c: { unreadCount?: number }) => s + (c.unreadCount ?? 0), 0)
+      const bcUnread = (bcs.data ?? []).filter((b: { isRead?: boolean; isSent?: boolean }) => !b.isRead && !b.isSent).length
       setChatUnread(convUnread + bcUnread)
     } catch {}
   }, [user])
@@ -109,6 +109,8 @@ export default function AppShell() {
       setNavChildren(kids)
     }).catch(() => {})
     loadChatUnread()
+    // Effekt soll nur bei Wechsel der Nutzer-Identität laufen (user?.id), nicht bei jeder user-Objektreferenz
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, loadChatUnread])
 
   useChatEvents((event) => {

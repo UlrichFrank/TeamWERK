@@ -587,7 +587,7 @@ export default function MitfahrgelegenheitenPage() {
 
   const toggleType = (type: EventTypeFilter) => {
     const next = new Set(filterTypes)
-    next.has(type) ? next.delete(type) : next.add(type)
+    if (next.has(type)) next.delete(type); else next.add(type)
     updateFilter({ types: next })
   }
 

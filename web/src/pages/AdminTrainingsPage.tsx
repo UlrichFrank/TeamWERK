@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 import VenuePicker from '../components/VenuePicker'
 import MapsLink from '../components/MapsLink'
+import { errorMessage } from '../lib/errors'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 const WEEKDAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
@@ -190,8 +191,8 @@ export default function AdminTrainingsPage() {
       }
       setSeriesModal(null)
       loadSeries()
-    } catch (err: any) {
-      setError(err.response?.data || 'Fehler beim Speichern.')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Speichern.'))
     } finally {
       setSaving(false)
     }
@@ -223,8 +224,8 @@ export default function AdminTrainingsPage() {
       }
       setSessionModal(null)
       loadStandalone()
-    } catch (err: any) {
-      setError(err.response?.data || 'Fehler beim Speichern.')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Speichern.'))
     } finally {
       setSaving(false)
     }
@@ -246,7 +247,7 @@ export default function AdminTrainingsPage() {
   const toggleExpand = (id: number) => {
     setExpandedSeries(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
   }

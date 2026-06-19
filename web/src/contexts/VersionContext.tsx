@@ -14,6 +14,7 @@ export function VersionProvider({ children }: { children: ReactNode }) {
   return <VersionContext.Provider value={value}>{children}</VersionContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- Hook-Export neben Provider; betrifft nur Dev-HMR
 export function useVersion(): VersionCtx {
   const ctx = useContext(VersionContext)
   if (!ctx) throw new Error('useVersion must be used within VersionProvider')
