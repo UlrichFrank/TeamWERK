@@ -174,9 +174,19 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 		events = append(events, duties...)
 	}
 
+	// Append the person's first name to the calendar name so families can
+	// subscribe to several members' feeds and tell them apart.
+	calName := "TeamWERK"
+	var firstName string
+	h.db.QueryRowContext(r.Context(),
+		`SELECT first_name FROM users WHERE id = ?`, userID).Scan(&firstName)
+	if firstName != "" {
+		calName = "TeamWERK – " + firstName
+	}
+
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=\"teamwerk.ics\"")
-	fmt.Fprint(w, renderICal(events))
+	fmt.Fprint(w, renderICal(events, calName))
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -354,12 +364,12 @@ func (h *Handler) fetchDuties(r *http.Request, userID int) ([]calEvent, error) {
 
 // ── iCal rendering ───────────────────────────────────────────────────────────
 
-func renderICal(events []calEvent) string {
+func renderICal(events []calEvent, calName string) string {
 	var sb strings.Builder
 	writeLine(&sb, "BEGIN:VCALENDAR")
 	writeLine(&sb, "VERSION:2.0")
 	writeLine(&sb, "PRODID:-//TeamWERK//Team Stuttgart//DE")
-	writeLine(&sb, "X-WR-CALNAME:TeamWERK")
+	writeLine(&sb, "X-WR-CALNAME:"+escapeText(calName))
 	writeLine(&sb, "CALSCALE:GREGORIAN")
 	writeLine(&sb, "METHOD:PUBLISH")
 	for _, e := range events {
@@ -424,6 +434,14 @@ func formatDT(t time.Time) string {
 }
 
 func parseDT(date, timeStr string, loc *time.Location) time.Time {
+	// modernc.org/sqlite returns DATE columns as full ISO timestamps
+	// ("2026-08-15T00:00:00Z"), not "2026-08-15" — normalize to the date part.
+	if len(date) > 10 {
+		date = date[:10]
+	}
+	if timeStr == "" {
+		timeStr = "00:00"
+	}
 	t, err := time.ParseInLocation("2006-01-02 15:04", date+" "+timeStr, loc)
 	if err != nil {
 		t, _ = time.ParseInLocation("2006-01-02", date, loc)
