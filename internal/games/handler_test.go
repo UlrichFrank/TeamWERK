@@ -1466,3 +1466,26 @@ func mkKaderCustomReturn(t *testing.T, db *sql.DB, seasonID, teamID int, ageClas
 	id, _ := res.LastInsertId()
 	return int(id)
 }
+
+// TestCreateGame_InvalidEventType rejects event_type outside the allowed set with HTTP 400.
+func TestCreateGame_InvalidEventType(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Post(t, srv, "/api/games", token, map[string]any{
+		"date":       "2026-06-15",
+		"time":       "18:00",
+		"opponent":   "Foo",
+		"team_ids":   []int{teamID},
+		"event_type": "unknown-type",
+		"season_id":  seasonID,
+	})
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", res.StatusCode)
+	}
+}

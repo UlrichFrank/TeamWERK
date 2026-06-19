@@ -15,6 +15,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
 	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
+	"github.com/teamstuttgart/teamwerk/internal/calendar"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -53,6 +54,7 @@ type Handlers struct {
 	Venues         *venues.Handler
 	Beitragssaetze *beitragssaetze.Handler
 	Beitragslauf   *beitragslauf.Handler
+	Calendar       *calendar.Handler
 	Hub            *hub.Handler
 
 	JWTSecret string
@@ -87,6 +89,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Post("/api/auth/forgot-password", h.Auth.ForgotPassword)
 	r.Post("/api/auth/reset-password", h.Auth.ResetPassword)
 	r.Get("/api/profile/email/confirm", h.Auth.ConfirmEmailChange)
+	r.Get("/api/calendar/feed/{token}", h.Calendar.Feed)
 
 	// SSE — cookie-authenticated (EventSource cannot send headers)
 	r.Group(func(r chi.Router) {
@@ -161,6 +164,11 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Put("/api/profile/kind/{memberId}/visibility", h.Members.UpdateChildVisibility)
 		r.Post("/api/upload/user-photo", h.Upload.UploadUserPhoto)
 		r.Delete("/api/upload/user-photo", h.Upload.DeleteUserPhoto)
+
+		// Calendar feed token management
+		r.Get("/api/calendar/token", h.Calendar.GetToken)
+		r.Post("/api/calendar/token", h.Calendar.UpsertToken)
+		r.Delete("/api/calendar/token", h.Calendar.DeleteToken)
 
 		// Dashboard
 		r.Get("/api/dashboard", h.Dashboard.Get)

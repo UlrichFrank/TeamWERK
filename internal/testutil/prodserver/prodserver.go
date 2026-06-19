@@ -15,6 +15,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
 	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
+	"github.com/teamstuttgart/teamwerk/internal/calendar"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -59,6 +60,7 @@ func buildHandlers(t *testing.T, database *sql.DB) *app.Handlers {
 		Venues:         venues.NewHandler(database, hubInstance),
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, t.TempDir()),
+		Calendar:       calendar.NewHandler(database),
 		Hub:            hub.NewHandler(hubInstance, "test"),
 		JWTSecret:      testutil.TestJWTSecret,
 		Database:       database,

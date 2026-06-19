@@ -41,6 +41,7 @@ var domain = map[string]bool{
 	"members": true, "duties": true, "games": true, "kader": true, "teams": true,
 	"trainings": true, "venues": true, "beitragslauf": true, "beitragssaetze": true,
 	"chat": true, "carpooling": true, "absences": true, "dashboard": true,
+	"calendar": true,
 }
 
 // composition = the wiring root. Allowed to import any internal package.
