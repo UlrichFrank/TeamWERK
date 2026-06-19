@@ -12,7 +12,7 @@ Guidance for Claude Code working in this repository.
 
 TeamWERK (TeamWERK — Where Engagement Really Klicks) ist die interne Verwaltungsplattform für Team Stuttgart (Handball). Sie läuft unter `https://internal.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
 
-**Stack:** Go 1.23 + Chi v5 · SQLite (WAL) · React 18 + Tailwind v3 · Vite · JWT-Auth
+**Stack:** Go 1.25 + Chi v5 · SQLite (WAL) · React 18 + Tailwind v3 · Vite · JWT-Auth
 
 Die öffentliche TYPO3-Homepage (`team-stuttgart.org`) ist ein separates Repo und hat keinen Code-Overlap — lediglich ein Link im TYPO3-Header verweist hierher.
 
@@ -663,3 +663,24 @@ Coverage-Zahlen sind ein Indikator, kein Gate. Eine neue Route mit 2 sinnvollen 
 - **`internal/testutil/`** — alle Fixtures: `NewDB`, `NewServer`, `CreateUser`, `CreateMember`, `CreateSeason`, `CreateTeam`, `CreateGame`, `CreateKader`, `CreateDutyType`, `CreateDutySlot`, `CreateInvitationToken`, `CreatePasswordResetToken`, `CreateRefreshToken`
 - **Go-Version:** `/usr/local/go/bin/go` (1.25) — nicht `go` (Homebrew 1.26+, inkompatibel mit go.mod)
 - **player_memberships** ist eine View über `kader_members` — kein direktes INSERT möglich, stattdessen: `INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`
+
+---
+
+## Harness / Verifikation
+
+TeamWERK setzt Konventionen nicht nur per Doku, sondern mechanisch durch (Agent-Harness).
+
+**Provider-agnostischer Einstieg:** `AGENTS.md` im Repo-Root enthält die destillierten Hard-Rules für beliebige Coding-Agenten und verweist auf diese Datei als kanonische Quelle.
+
+**Git-Hooks** (einmalig aktivieren mit `make hooks`, in `make init` enthalten):
+- `pre-commit` — `gofmt`-Check auf gestagete Go-Dateien.
+- `pre-push` — vollständiges Gate: `go vet`, `go test -race ./...` (inkl. Architektur-Test), `golangci-lint`, `pnpm -C web build/test/lint`, `openspec validate`.
+- Notausgang: `git push --no-verify` (bewusst, mit Vorsicht).
+
+**Architektur-Test** `internal/arch/arch_test.go` (reine stdlib, Teil von `make test`): erzwingt das Layering — Domain-Packages importieren sich nicht gegenseitig, die Foundation-Schicht importiert keine Domain/Composition, jedes neue `internal/`-Package muss klassifiziert werden (sonst Testfehler).
+
+**gofmt-Selbstkorrektur:** `.claude/settings.json` verdrahtet einen `PostToolUse`-Hook (`scripts/claude-gofmt-hook.sh`), der jede via Edit/Write geänderte `*.go`-Datei automatisch formatiert.
+
+**Pre-Completion-Checkliste:** Slash-Command **`/verify-change`** führt vor „fertig" durch Build/Test/Lint und die Projekt-Invarianten (Route→Tests, Mutation→`hub.Broadcast`/`useLiveUpdates`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).
+
+**Permissions:** geteilte, sichere Routine-Befehle stehen committet in `.claude/settings.json`; `.claude/settings.local.json` (gitignored) hält nur maschinen-/personenspezifische Ergänzungen.

@@ -61,5 +61,5 @@ rules:
   tasks:
     - Backend-Tasks vor Frontend-Tasks listen (API zuerst, dann UI)
     - Neue Migrations-Dateien bekommen die nächste freie Nummer (aktuell: 004 ist die letzte)
-    - Go-Handler-Tests sind optional (kein Test-Framework eingerichtet)
+    - Tests sind verbindlich (siehe Test-Standard in CLAUDE.md): jede neue Route braucht Happy-Path- + Fehlerfall-Test; Fixtures in internal/testutil
     - Jeder Task soll in < 2 Stunden umsetzbar sein
