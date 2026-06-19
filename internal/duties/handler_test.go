@@ -1060,12 +1060,12 @@ func TestCreateSlot_IsCustom(t *testing.T) {
 
 	token := testutil.Token(t, adminID, "admin", nil)
 	body := map[string]any{
-		"event_name":  "Aufbau Heimspiel",
-		"event_date":  "2026-06-14",
+		"event_name":   "Aufbau Heimspiel",
+		"event_date":   "2026-06-14",
 		"duty_type_id": dtID,
-		"slots_total": 2,
-		"team_id":     teamID,
-		"season_id":   seasonID,
+		"slots_total":  2,
+		"team_id":      teamID,
+		"season_id":    seasonID,
 	}
 	res := testutil.Post(t, srv, "/api/duty-slots", token, body)
 	res.Body.Close()

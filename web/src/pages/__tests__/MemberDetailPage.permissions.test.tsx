@@ -66,3 +66,25 @@ describe('MemberDetailPage — isAdmin-Gate: "Datenschutz"-Tab', () => {
     }
   })
 })
+
+describe('MemberDetailPage — Kassierer: nur Bankdaten editierbar', () => {
+  test('Kassierer sieht Bankdaten-Tab, aber nicht Stammdaten/Datenschutz', async () => {
+    renderAsPersona(<MemberDetailPage />, 'kassierer', {
+      route: '/mitglieder/1',
+      initialEntries: ['/mitglieder/1'],
+      mocks: [
+        { url: /members\/1$/, data: MEMBER_FIXTURE },
+        { url: /members\/1\/change-drafts/, data: [] },
+        { url: /invitations/, data: [] },
+      ],
+    })
+    await flushAsync()
+
+    expect(screen.queryByRole('button', { name: 'Bankdaten' }),
+      'Kassierer muss den Bankdaten-Tab sehen').not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stammdaten' }),
+      'Kassierer darf den Stammdaten-Tab NICHT sehen').toBeNull()
+    expect(screen.queryByRole('button', { name: 'Datenschutz' }),
+      'Kassierer darf den Datenschutz-Tab NICHT sehen').toBeNull()
+  })
+})

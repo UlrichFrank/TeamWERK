@@ -16,11 +16,11 @@ const (
 )
 
 type Claims struct {
-	UserID       int      `json:"uid"`
-	Email        string   `json:"email"`
-	Role         string   `json:"role"`
+	UserID        int      `json:"uid"`
+	Email         string   `json:"email"`
+	Role          string   `json:"role"`
 	ClubFunctions []string `json:"club_functions"`
-	IsParent     bool     `json:"is_parent"`
+	IsParent      bool     `json:"is_parent"`
 	jwt.RegisteredClaims
 }
 

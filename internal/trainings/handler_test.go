@@ -154,9 +154,9 @@ func TestCreateSeries_GeneratesSessions(t *testing.T) {
 
 	token := testutil.Token(t, adminUserID, "admin", nil)
 	body := map[string]any{
-		"team_id":   teamID,
-		"season_id": seasonID,
-		"name":      "Dienstags-Training",
+		"team_id":     teamID,
+		"season_id":   seasonID,
+		"name":        "Dienstags-Training",
 		"day_of_week": 1, // Tuesday (0=Mon, 1=Tue, …)
 		"start_time":  "18:00",
 		"end_time":    "20:00",

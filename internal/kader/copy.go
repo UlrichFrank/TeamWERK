@@ -14,10 +14,10 @@ type CopyAssignment struct {
 }
 
 type createdKader struct {
-	ID           int    `json:"id"`
-	AgeClass     string `json:"age_class"`
-	Gender       string `json:"gender"`
-	MemberCount  int    `json:"member_count"`
+	ID          int    `json:"id"`
+	AgeClass    string `json:"age_class"`
+	Gender      string `json:"gender"`
+	MemberCount int    `json:"member_count"`
 }
 
 // ageClassBelow returns the next younger age class (one level down).
@@ -48,7 +48,10 @@ func copyKader(ctx context.Context, db *sql.DB, fromSeasonID, toSeasonID, target
 	if err != nil {
 		return nil, err
 	}
-	type srcKader struct{ id int; ageClass, gender string }
+	type srcKader struct {
+		id               int
+		ageClass, gender string
+	}
 	sourceMap := map[string]int{} // "A-Jugend|m" → kader_id
 	var srcList []srcKader
 	for srcRows.Next() {
@@ -159,7 +162,7 @@ func copyKader(ctx context.Context, db *sql.DB, fromSeasonID, toSeasonID, target
 			if err != nil {
 				return nil, err
 			}
-		// "empty" or unrecognized: no members
+			// "empty" or unrecognized: no members
 		}
 
 		created = append(created, createdKader{

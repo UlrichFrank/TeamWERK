@@ -15,6 +15,7 @@ import ProfilePage from './pages/ProfilePage'
 import ChildProfilePage from './pages/ChildProfilePage'
 import DutyPage from './pages/DutyPage'
 import AdminSettingsPage from './pages/AdminSettingsPage'
+import BeitragslaufPage from './pages/admin/BeitragslaufPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
@@ -66,8 +67,8 @@ export default function App() {
             {/* Protected */}
             <Route path="/" element={<PrivateRoute><AppShell /></PrivateRoute>}>
               <Route index element={<DashboardPage />} />
-              <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand']}><MembersPage /></RoleRoute>} />
-              <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand']}><MemberDetailPage /></RoleRoute>} />
+              <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand','kassierer']}><MembersPage /></RoleRoute>} />
+              <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand','kassierer']}><MemberDetailPage /></RoleRoute>} />
               <Route path="profil" element={<ProfilePage />} />
               <Route path="profil/kind/:memberId" element={<ChildProfilePage />} />
               <Route path="dokumente" element={<DocumentsPage />} />
@@ -75,7 +76,8 @@ export default function App() {
               <Route path="dienste" element={<DutyPage />} />
               <Route path="mitfahrgelegenheiten" element={<MitfahrgelegenheitenPage />} />
               <Route path="anfragen" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
-              <Route path="einstellungen" element={<RoleRoute roles={['admin','vorstand']}><AdminSettingsPage /></RoleRoute>} />
+              <Route path="einstellungen" element={<RoleRoute roles={['admin','vorstand','kassierer']}><AdminSettingsPage /></RoleRoute>} />
+              <Route path="beitragslauf" element={<RoleRoute roles={['admin','vorstand','kassierer']}><BeitragslaufPage /></RoleRoute>} />
               <Route path="kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
               <Route path="nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />

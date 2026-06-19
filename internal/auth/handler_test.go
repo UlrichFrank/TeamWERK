@@ -464,7 +464,7 @@ func itoa(n int) string {
 func TestChangePassword_Valid(t *testing.T) {
 	db := testutil.NewDB(t)
 	userID := testutil.CreateUser(t, db, "standard") // password = "test"
-	testutil.CreateRefreshToken(t, db, userID)        // active session that must be wiped
+	testutil.CreateRefreshToken(t, db, userID)       // active session that must be wiped
 
 	srv := newAuthServer(t, db)
 	token := testutil.Token(t, userID, "standard", nil)
@@ -962,4 +962,3 @@ func TestLogout_ClearsLegacyPathCookie(t *testing.T) {
 		t.Error("logout must emit Set-Cookie to clear Path=/api/auth")
 	}
 }
-

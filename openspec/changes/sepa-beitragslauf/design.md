@@ -15,17 +15,11 @@ Validierung im Handler vor `PUT /api/club`:
 - `glaeubiger_id` Format: `DE\d{2}[A-Z0-9]{3}\d{11}` (z.B. `DE98ZZZ09999999999`)
 - `iban` Format-Check (Land + Prüfsumme + Länge nach IBAN-Registry, hier nur DE/AT/CH praktisch relevant)
 - `bic` 8 oder 11 Zeichen
-- Alle vier Felder müssen vor Export-Versuch gesetzt sein → Vorab-Check in `POST /api/beitragslauf/export`, sonst HTTP 400 mit klarem Fehler.
+- Alle vier Felder müssen vor Export-Versuch gesetzt sein → Vorab-Check in `POST /api/fee-run/export`, sonst HTTP 400 mit klarem Fehler.
 
-### 1.2 `members` — Erweiterung
+### 1.2 `members` — keine Änderung
 
-```sql
-ALTER TABLE members ADD COLUMN in_ausbildung        INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE members ADD COLUMN last_sepa_einzug_am  DATETIME;
-```
-
-- `in_ausbildung` = 1 wenn „Ausbildung oder Freiwilligendienst" zutrifft. Manuell vom Vorstand gepflegt (kein Auto-Reset bei Saisonwechsel).
-- `last_sepa_einzug_am` = Zeitpunkt der letzten **bestätigten** Bank-Einreichung. Steuert FRST/RCUR im XML.
+Es werden **keine** neuen `members`-Spalten benötigt. Da alle Einzüge `RCUR` sind, gibt es kein FRST/RCUR-Tracking (`last_sepa_einzug_am` entfällt), und Ausbildung/Beruf werden für den Beitrag nicht berücksichtigt (`in_ausbildung` entfällt).
 
 ### 1.3 `beitrags_saetze` — neu
 
@@ -33,12 +27,8 @@ ALTER TABLE members ADD COLUMN last_sepa_einzug_am  DATETIME;
 CREATE TABLE beitrags_saetze (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     kategorie   TEXT NOT NULL CHECK (kategorie IN (
-        'aktiv_volljaehrig_ohne',
-        'aktiv_volljaehrig_mit',
-        'aktiv_volljaehrig_ausb_ohne',
-        'aktiv_volljaehrig_ausb_mit',
-        'aktiv_minderj_ohne',
-        'aktiv_minderj_mit',
+        'aktiv_ohne',
+        'aktiv_mit',
         'passiv'
     )),
     betrag_eur  INTEGER NOT NULL,    -- in Cent gespeichert (Integer)
@@ -49,21 +39,22 @@ CREATE TABLE beitrags_saetze (
 CREATE INDEX idx_beitrags_saetze_kat_valid ON beitrags_saetze(kategorie, valid_from);
 ```
 
+Kategorien:
+- `aktiv_ohne` — Aktivbeitrag ohne Stammverein (Kinder-Satz, gilt für alle aktiven Spieler)
+- `aktiv_mit` — Aktivbeitrag mit Stammverein (ermäßigt)
+- `passiv` — Passivbeitrag
+
 **Seed (idempotent via `INSERT OR IGNORE`):**
 
 | Kategorie | Betrag (Cent) | valid_from |
 |---|---:|---|
-| aktiv_volljaehrig_ohne | 30000 | 2026-07-01 |
-| aktiv_volljaehrig_mit | 14000 | 2026-07-01 |
-| aktiv_volljaehrig_ausb_ohne | 22600 | 2026-07-01 |
-| aktiv_volljaehrig_ausb_mit | 9600 | 2026-07-01 |
-| aktiv_minderj_ohne | 22600 | 2026-07-01 |
-| aktiv_minderj_mit | 9600 | 2026-07-01 |
+| aktiv_ohne | 22600 | 2026-07-01 |
+| aktiv_mit | 9600 | 2026-07-01 |
 | passiv | 6000 | 2027-01-01 |
 
 Cent statt Float gegen Rundungsdrift. UI rechnet beim Lesen `/100` und beim Schreiben `*100`.
 
-Lookup-Logik: „letzter Satz vor Effective Start einer Saison" =
+Lookup-Logik: „letzter Satz vor Saisonstart (01.07.)" =
 ```sql
 SELECT betrag_eur FROM beitrags_saetze
 WHERE kategorie = ? AND valid_from <= ?
@@ -103,39 +94,22 @@ func beitragsGruppe(status string) string {
 }
 ```
 
-### 2.3 Kategorie-Bestimmung (Aktiv-Gruppe)
+### 2.3 Kategorie-Bestimmung
+
+Volljährigkeit, Ausbildung und Beruf werden **nicht** geprüft. Die einzige Abstufung innerhalb der Aktiv-Gruppe ist die Stammverein-Zugehörigkeit:
 
 ```go
-func aktivKategorie(volljaehrig, inAusb, mitStammverein bool) string {
-    if !volljaehrig {
-        if mitStammverein {
-            return "aktiv_minderj_mit"
-        }
-        return "aktiv_minderj_ohne"
-    }
-    if inAusb {
-        if mitStammverein {
-            return "aktiv_volljaehrig_ausb_mit"
-        }
-        return "aktiv_volljaehrig_ausb_ohne"
-    }
+func aktivKategorie(mitStammverein bool) string {
     if mitStammverein {
-        return "aktiv_volljaehrig_mit"
+        return "aktiv_mit"
     }
-    return "aktiv_volljaehrig_ohne"
+    return "aktiv_ohne"
 }
 ```
 
-### 2.4 Volljährigkeit
+Die Passiv-Gruppe bildet immer Kategorie `passiv`.
 
-```go
-func istVolljaehrigAmSaisonstart(dob, saisonStart time.Time) bool {
-    achtzehn := dob.AddDate(18, 0, 0)
-    return !achtzehn.After(saisonStart) // achtzehn <= saisonStart
-}
-```
-
-### 2.5 Stammverein-Match
+### 2.4 Stammverein-Match
 
 Hardcodierte Whitelist (case-insensitive, Vergleich nach Normalisierung — alle Klein, Whitespace-collapse, Punkte/Bindestriche raus):
 
@@ -166,57 +140,27 @@ func matchHomeClub(homeClub string) ClubMatch
 
 Bei `Warning != ""` zeigt das UI ein gelbes Hinweis-Icon in der Vorschau, der Vorstand kann manuell den Haken setzen/entfernen, die Berechnung läuft wie bei Match.
 
-### 2.6 Pro-rata-Logik
+### 2.5 Beitrag = voller Jahresbeitrag
+
+Es gibt **keine Pro-rata-Berechnung**. Jedes eingeschlossene Mitglied wird mit dem vollen Jahresbeitrag laut Beitragssatz abgerechnet — unabhängig von `join_date` oder Eintrittszeitpunkt:
 
 ```go
-// effectiveStart = MAX(saisonStart, validFromKategorie, joinDate)
-// monate = Anzahl voller Kalendermonate ab Folgemonat von effectiveStart bis Saisonende
-//
-// Beispiel: saisonStart=2026-07-01, joinDate=2026-09-15, validFromKategorie=2026-07-01
-//   effectiveStart = 2026-09-15
-//   FolgeMonat-Anfang = 2026-10-01
-//   Saisonende = 2027-06-30
-//   monate = 9 (Oktober bis Juni einschl.)
-
-func proRataMonate(effectiveStart, saisonEnde time.Time) int {
-    folgeMonat := time.Date(effectiveStart.Year(), effectiveStart.Month()+1, 1, 0, 0, 0, 0, time.UTC)
-    if !folgeMonat.Before(saisonEnde) {
-        return 0
-    }
-    monate := (saisonEnde.Year()-folgeMonat.Year())*12 + int(saisonEnde.Month()-folgeMonat.Month()) + 1
-    if monate < 0 { return 0 }
-    if monate > 12 { return 12 }
-    return monate
-}
-
-func proRataBetrag(jahresbeitragCent int, monate int) int {
-    // kaufmännische Rundung auf Cent
-    raw := float64(jahresbeitragCent) * float64(monate) / 12.0
-    return int(math.Round(raw))
-}
+// betragCent = LookupBetragCent(saetze, kategorie, saisonStart)
+// saisonStart = 01.07.YYYY der gewählten Saison
 ```
 
-**Sonderfall Saisonbeitritt am 1.:** join_date=2026-07-01 → folgeMonat=2026-08-01 → monate=11. Bewusst so: wer am Ersten kommt, zählt den Monat nicht voll (Konsistenz mit der "angefangene Monate zählen nicht"-Regel). Falls Vorstand das anders will: in den Tasks als manuelle Anpassung dokumentieren.
+`join_date` beeinflusst den Betrag nicht (kein anteiliger Abzug).
 
-### 2.7 FRST/RCUR-Bestimmung
+### 2.6 Sequenztyp — immer RCUR
 
-```go
-func sequenceType(lastEinzug *time.Time) string {
-    if lastEinzug == nil {
-        return "FRST"
-    }
-    return "RCUR"
-}
-```
-
-Hinweis: Bank kann bei Rejekt verlangen, dass nächster Einzug wieder FRST ist. Dafür existiert `PUT /api/members/{id}/sepa-sequence-reset`.
+Es wird **nicht** zwischen Erst- und Folgelastschrift unterschieden. Alle Buchungen tragen `SeqTp = RCUR`. Es gibt daher kein FRST/RCUR-Tracking, keine `confirm-uploaded`- und keine `sequence-reset`-Logik.
 
 ## 3. Vorschau-Endpoint
 
 ### 3.1 Request
 
 ```
-GET /api/beitragslauf/preview?saison_id=42
+GET /api/fee-run/preview?saison_id=42
 ```
 
 ### 3.2 Response-Schema
@@ -225,18 +169,15 @@ GET /api/beitragslauf/preview?saison_id=42
 {
   "saison_id": 42,
   "saison_label": "2026/27",
-  "faelligkeit": "2026-06-23",
+  "faelligkeit": "2026-07-01",
   "items": [
     {
       "member_id": 17,
       "name": "Max Müller",
       "status": "aktiv",
-      "kategorie": "aktiv_volljaehrig_mit",
-      "kategorie_label": "Aktiv volljährig (mit Stammverein)",
-      "monate": 12,
-      "jahresbeitrag_cent": 14000,
-      "betrag_cent": 14000,
-      "seq_tp": "FRST",
+      "kategorie": "aktiv_mit",
+      "kategorie_label": "Aktiv (mit Stammverein)",
+      "betrag_cent": 9600,
       "included": true,
       "warnings": [],
       "exclusions": []
@@ -245,11 +186,8 @@ GET /api/beitragslauf/preview?saison_id=42
       "member_id": 18,
       "name": "Anna Schmidt",
       "status": "aktiv",
-      "kategorie": "aktiv_minderj_mit",
-      "monate": 9,
-      "jahresbeitrag_cent": 9600,
-      "betrag_cent": 7200,
-      "seq_tp": "RCUR",
+      "kategorie": "aktiv_ohne",
+      "betrag_cent": 22600,
       "included": true,
       "warnings": ["home_club_unklar"],
       "exclusions": []
@@ -275,14 +213,14 @@ GET /api/beitragslauf/preview?saison_id=42
 
 Eine SQL-Query pro Member ist verschwenderisch. Stattdessen ein einziger JOIN mit `members LEFT JOIN clubs ON 1=1` (clubs ist Single-Row, in der Praxis konfiguriert mit `id=1`).
 
-Die Sätze (`beitrags_saetze`) werden einmal pro Request geladen — eine Map `kategorie -> []SatzMitValidFrom`, sortiert absteigend. Lookup pro Member dann reine In-Memory-Operation.
+Die Sätze (`beitrags_saetze`) werden einmal pro Request geladen — eine Map `kategorie -> []SatzMitValidFrom`, sortiert absteigend. Lookup pro Member dann reine In-Memory-Operation gegen den Saisonstart.
 
 ## 4. Export-Endpoint
 
 ### 4.1 Request
 
 ```
-POST /api/beitragslauf/export
+POST /api/fee-run/export
 Content-Type: application/json
 
 {
@@ -296,7 +234,7 @@ Content-Type: application/json
 ```
 200 OK
 Content-Type: application/xml
-Content-Disposition: attachment; filename="beitragslauf_2026_2027_2026-06-16.xml"
+Content-Disposition: attachment; filename="beitragslauf_2026_2027.xml"
 
 <?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.08">
@@ -323,19 +261,19 @@ Content-Disposition: attachment; filename="beitragslauf_2026_2027_2026-06-16.xml
       </InitgPty>
     </GrpHdr>
 
-    <!-- Ein PmtInf-Block pro SeqTp (FRST und RCUR getrennt!) -->
+    <!-- Genau ein PmtInf-Block, SeqTp immer RCUR -->
     <PmtInf>
-      <PmtInfId>TW-{saison_kurz}-FRST-{YYYYMMDD}</PmtInfId>
+      <PmtInfId>TW-{saison_kurz}-RCUR</PmtInfId>
       <PmtMtd>DD</PmtMtd>
       <BtchBookg>true</BtchBookg>
-      <NbOfTxs>{N_FRST}</NbOfTxs>
-      <CtrlSum>{Summe FRST}</CtrlSum>
+      <NbOfTxs>{N}</NbOfTxs>
+      <CtrlSum>{Summe}</CtrlSum>
       <PmtTpInf>
         <SvcLvl><Cd>SEPA</Cd></SvcLvl>
         <LclInstrm><Cd>CORE</Cd></LclInstrm>
-        <SeqTp>FRST</SeqTp>
+        <SeqTp>RCUR</SeqTp>
       </PmtTpInf>
-      <ReqdColltnDt>{heute + 7 Werktage, YYYY-MM-DD}</ReqdColltnDt>
+      <ReqdColltnDt>{01.07. der Saison, YYYY-MM-DD}</ReqdColltnDt>
       <Cdtr>
         <Nm>{clubs.kontoinhaber}</Nm>
         <PstlAdr>{strukturierte Vereinsadresse aus clubs.address}</PstlAdr>
@@ -382,19 +320,15 @@ Content-Disposition: attachment; filename="beitragslauf_2026_2027_2026-06-16.xml
         </RmtInf>
       </DrctDbtTxInf>
     </PmtInf>
-
-    <PmtInf>
-      <!-- SeqTp=RCUR, sonst identisch -->
-    </PmtInf>
   </CstmrDrctDbtInitn>
 </Document>
 ```
 
 ### 4.4 Wichtige Constraints
 
-- Ein `PmtInf`-Block je `SeqTp` — pain.008.001.08 erlaubt nicht, FRST und RCUR im selben Block zu mischen.
-- `ReqdColltnDt`: für FRST muss Bank ≥ 5 Bankarbeitstage Vorlauf haben, für RCUR ≥ 2. Wir setzen einheitlich `heute + 7 Kalendertage` und verschieben auf den nächsten Werktag, falls Sa/So.
-- `CtrlSum` als Euro mit Punkt-Dezimaltrenner (`14000` Cent → `140.00`).
+- Genau **ein** `PmtInf`-Block — alle Buchungen `SeqTp = RCUR`. Keine FRST/RCUR-Trennung.
+- `ReqdColltnDt`: Fälligkeit ist immer der 01.07. der Saison. Fällt der 01.07. auf Sa/So, wird auf den nächsten Werktag verschoben.
+- `CtrlSum` als Euro mit Punkt-Dezimaltrenner (`9600` Cent → `96.00`).
 - `MsgId` und `PmtInfId` müssen ≤ 35 Zeichen, ASCII (keine Umlaute).
 - `EndToEndId` muss eindeutig pro Buchung innerhalb der Datei.
 - Adresse strukturiert (pain.008.001.08-Pflicht) — kein `AdrLine`-Fallback mehr.
@@ -413,62 +347,107 @@ Edge-Case: Eingaben wie "Postfach 100" → kein Hausnr-Match → komplett in Str
 
 ### 4.6 Side-Effects
 
-Der Export ist **nicht** selbst der Confirm. Er **setzt nicht** `last_sepa_einzug_am`. Begründung: Vorstand lädt evtl. die XML runter, prüft, korrigiert, lädt nochmal. Erst nach „Bei Bank hochgeladen bestätigen" wird der Status persistiert.
+Der Export hat **keine** persistenten Side-Effects. Es wird nichts markiert. Der Kassierer kann die XML beliebig oft erzeugen, prüfen und neu herunterladen. Persistiert wird ausschließlich beim separaten Bestätigen (§5).
 
-## 5. Confirm-Endpoint
+## 5. Confirm-Endpoint & Saison-Protokoll
 
 ### 5.1 Request
 
 ```
-POST /api/beitragslauf/confirm-uploaded
+POST /api/fee-run/confirm
 Content-Type: application/json
 
 {
-  "member_ids": [17, 18, 21, 22, ...]
+  "saison_id": 42,
+  "results": [
+    { "member_id": 17, "betrag_cent": 9600,  "success": true },
+    { "member_id": 18, "betrag_cent": 22600, "success": true },
+    { "member_id": 99, "betrag_cent": 22600, "success": false }
+  ]
 }
 ```
 
-### 5.2 Logik
+Die `results` kommen vom UI aus der zuvor exportierten Auswahl. Default im UI: alle `success = true`; der Kassierer hakt einzelne Mitglieder als „nicht eingezogen" ab.
 
-```sql
-UPDATE members SET last_sepa_einzug_am = CURRENT_TIMESTAMP
-WHERE id IN (?, ?, ...);
+### 5.2 Protokoll-Datei
+
+Das Protokoll ist eine **append-only Textdatei pro Saisonjahr**, kein DB-Eintrag.
+
+- Verzeichnis: `cfg.BeitragslaufDir` (neue Konfig, default `./storage/beitragslauf-protokolle`), beim Start via `os.MkdirAll` angelegt
+- Dateiname: `beitragslauf_{saison_kurz}.txt`, z.B. `beitragslauf_2026-2027.txt` (`saison_kurz` aus dem Saison-Label, `/`→`-`)
+- Öffnen mit `os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)` — jeder Confirm hängt einen Block an, bestehende Blöcke werden nie verändert
+
+Format eines angehängten Blocks:
+
+```
+=== Lauf bestätigt 2026-07-02T14:33:05Z durch anna@team-stuttgart.org (User #5) ===
+Erfolgreich (2) — Summe 318,00 €
+  Mitgl.-Nr 1042  Max Müller          96,00 €
+  Mitgl.-Nr 1099  Anna Schmidt       226,00 €
+Nicht erfolgreich (1)
+  Mitgl.-Nr 1200  Pete Reject        226,00 €
+
 ```
 
-Keine Idempotenz-Garantie über mehrere Aufrufe hinweg — wenn der Vorstand „Confirm" doppelt klickt, wird das Datum erneut gesetzt. Das ist OK (RCUR bleibt RCUR). Die Test-Invariante „pro Saison max. einmal gesetzt" ist im Sinne von: pro Lauf-Bestätigung wird der SeqTp-Status korrekt fortgeschrieben.
+Der Zeitstempel kommt aus `time.Now()` im Handler (nicht aus dem Request). Name/Mitgliedsnummer werden beim Confirm aus der DB nachgeladen, damit das Protokoll auch ohne UI-Mitlieferung vollständig ist.
 
 ### 5.3 Response
 
 ```json
-{ "updated_count": 87 }
+{ "saison_label": "2026/27", "erfolgreich": 2, "nicht_erfolgreich": 1, "summe_erfolgreich_cent": 31800 }
 ```
 
-### 5.4 Live-Update
-
-```go
-h.hub.Broadcast("members-changed")
-```
-
-Damit verbundene Detail-Seiten den „SEPA-Sequenz zurücksetzen"-Button korrekt anzeigen.
-
-## 6. Reset-Endpoint
+### 5.4 Protokoll lesen
 
 ```
-PUT /api/members/{id}/sepa-sequence-reset
+GET /api/fee-run/protocol?saison_id=42
 ```
 
-```sql
-UPDATE members SET last_sepa_einzug_am = NULL WHERE id = ?;
+Gibt den kompletten Textdatei-Inhalt als `text/plain` zurück (für Anzeige im UI und Download). Existiert keine Datei, antwortet der Server mit `200` und leerem Body (oder `404` — Implementierung wählt eine Variante, Test deckt sie ab).
+
+### 5.5 Berechtigung & Side-Effects
+
+`POST /confirm` und `GET /protocol` laufen unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override. Der Confirm verändert **keine** Mitgliederdaten — er schreibt ausschließlich das Protokoll. Kein FRST/RCUR-Tracking, keine DB-Mutation.
+
+## 6. Kassierer-Zugriff auf Mitglieder
+
+### 6.1 Route-Gruppen-Umbau in `router.go`
+
+Heute liegen die Member-Lese-Routen in der Vorstand-only-Gruppe (`auth.RequireClubFunction("vorstand")`). Folgende **Lese**-Routen wandern in eine neue `vorstand`+`kassierer`-Gruppe:
+
+- `GET /api/members` (`List`)
+- `GET /api/members/{id}` (`Get`)
+- `GET /api/members/{id}/parents` (`GetMemberParents`)
+- `GET /api/members/export` (`Export`)
+
+Zusätzlich für `kassierer` freigegeben (Bankdaten-Pflege):
+
+- `PUT /api/members/{id}/bank-details` (neuer Handler, s.u.)
+- `POST /api/upload/sepa-mandat/{id}` (`Upload.UploadSepaMandat`)
+- `DELETE /api/members/{id}/sepa-mandat` (`Upload.DeleteSepaMandat`)
+
+**Unverändert vorstand-only:** `POST /api/members`, `PUT /api/members/{id}` (Voll-Update), `PUT /api/members/{id}/status`, `DELETE`, `Import`, `LinkUser`, Family-Links, Proxy-Account, Welcome-Mail.
+
+Da `admin` alle `RequireClubFunction`-Checks umgeht, bleibt Admin-Zugriff erhalten.
+
+### 6.2 Bankdaten-Endpoint (Feld-Whitelist)
+
+```
+PUT /api/members/{id}/bank-details
+Content-Type: application/json
+
+{ "iban": "DE…", "sepa_mandat": true, "sepa_mandat_date": "2026-05-01",
+  "account_holder": "Max Müller", "street": "Hauptstr. 12", "zip": "70182", "city": "Stuttgart" }
 ```
 
-Wird genutzt, wenn die Bank ein Mandat ablehnt und der nächste Einzug wieder FRST sein muss. Audit-Log nicht in Scope dieses Proposals (separates Cleanup ist möglich, wenn Auditierbarkeit gewünscht).
+Der Handler aktualisiert **ausschließlich** diese Spalten via gezieltem `UPDATE members SET iban=?, sepa_mandat=?, sepa_mandat_date=?, account_holder=?, street=?, zip=?, city=? WHERE id=?`. Name, Status, Rollen, `beitragsfrei` etc. werden nicht angefasst. IBAN wird wie in §1.1 mit Mod-97 validiert (sonst 400). `h.hub.Broadcast("members-changed")`.
 
 ## 7. Beitragssätze-Pflege
 
 ### 7.1 Endpoints
 
 ```
-GET /api/beitrags-saetze
+GET /api/fee-rates
 ```
 
 Response: alle Sätze, sortiert nach `kategorie, valid_from DESC`.
@@ -476,21 +455,21 @@ Response: alle Sätze, sortiert nach `kategorie, valid_from DESC`.
 ```json
 {
   "items": [
-    { "id": 7, "kategorie": "aktiv_volljaehrig_mit", "betrag_cent": 14000, "valid_from": "2026-07-01" },
-    { "id": 14, "kategorie": "aktiv_volljaehrig_mit", "betrag_cent": 15000, "valid_from": "2027-07-01" }
+    { "id": 7, "kategorie": "aktiv_mit", "betrag_cent": 9600, "valid_from": "2026-07-01" },
+    { "id": 14, "kategorie": "aktiv_mit", "betrag_cent": 10000, "valid_from": "2027-07-01" }
   ]
 }
 ```
 
 ```
-POST /api/beitrags-saetze
+POST /api/fee-rates
 Content-Type: application/json
 
 { "kategorie": "passiv", "betrag_cent": 7000, "valid_from": "2028-01-01" }
 ```
 
 Validation:
-- `kategorie` in CHECK-Liste
+- `kategorie` in CHECK-Liste (`aktiv_ohne`, `aktiv_mit`, `passiv`)
 - `betrag_cent > 0`
 - `valid_from` parsebar ISO-Datum
 - Kein Dedup-Check: zwei Sätze für dieselbe `kategorie + valid_from` sind erlaubt (User-Fehler, der über UI sichtbar wird).
@@ -501,7 +480,7 @@ Validation:
 [Verein] [Saisons] [Kader] [Beiträge*] [Dienste] [Nutzer]
 ```
 
-Tab-Inhalt: pro Kategorie eine Tabelle mit Spalten `valid_from | Betrag €`. Inline-Form unten zum Anlegen eines neuen Eintrags.
+Tab-Inhalt: pro Kategorie (3 Stück) eine Tabelle mit Spalten `valid_from | Betrag €`. Inline-Form unten zum Anlegen eines neuen Eintrags.
 
 ## 8. Frontend — `/admin/beitragslauf`
 
@@ -517,69 +496,68 @@ Tab-Inhalt: pro Kategorie eine Tabelle mit Spalten `valid_from | Betrag €`. In
 │ Summe: 18.654,00 €                                              │
 │                                                                  │
 │ ┌──────────────────────────────────────────────────────────────┐ │
-│ │ ☑ │ Name           │ Status  │ Kategorie         │ Mon │ Be... │
+│ │ ☑ │ Name           │ Status  │ Kategorie         │ Betrag    │ │
 │ ├──────────────────────────────────────────────────────────────┤ │
-│ │ ☑ │ Max Müller     │ aktiv   │ Aktiv volljährig… │ 12  │ 140… │
-│ │ ☑⚠│ Anna Schmidt   │ aktiv   │ Aktiv minderj.…   │  9  │  72… │
-│ │ ⛔│ Pete Honorar   │ honorar │ —                 │  —  │   — │
+│ │ ☑ │ Max Müller     │ aktiv   │ Aktiv (mit Stamm…)│  96,00 €  │ │
+│ │ ☑⚠│ Anna Schmidt   │ aktiv   │ Aktiv (ohne Stam…)│ 226,00 €  │ │
+│ │ ⛔│ Pete Honorar   │ honorar │ —                 │   —       │ │
 │ └──────────────────────────────────────────────────────────────┘ │
 │                                                                  │
-│ [XML herunterladen]                                              │
+│ [XML herunterladen]   [Lauf bestätigen]   [Protokoll ansehen]    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 8.2 State-Machine
+### 8.2 Ablauf
 
 ```
 [Vorschau geladen]
    │
    ├── User passt Haken an → State.selected_ids ändert sich
    │
-   ├── [XML herunterladen] → POST /export mit selected_ids
-   │    → Browser-Download
-   │    → State wechselt auf "exported"
+   ├── [XML herunterladen] → POST /export mit selected_ids → Browser-Download
    │
-[exported]
+   ├── [Lauf bestätigen] → Dialog: Liste der exportierten Mitglieder,
+   │        Default „erfolgreich", einzelne als „nicht eingezogen" abhakbar
+   │        → POST /confirm {saison_id, results} → Protokoll fortgeschrieben, Toast
    │
-   ├── [Bei Bank hochgeladen bestätigen] → POST /confirm-uploaded
-   │    → Success-Toast
-   │    → Reload Vorschau (jetzt mit aktualisiertem SeqTp = RCUR)
-   │
-[idle]
+   └── [Protokoll ansehen] → GET /protocol?saison_id=… → Textinhalt in Modal/Download
 ```
+
+„Lauf bestätigen" ist erst nach einem Export aktiv. Es gibt keinen Zwang zur Bestätigung — der Kassierer bestätigt erst, wenn die Bank den Lauf angenommen hat.
 
 ### 8.3 Visual Cues
 
 - Roter „⛔" Icon bei ausgeschlossenen Zeilen, mit Tooltip-Liste der Exclusion-Gründe.
 - Gelbes „⚠" Icon bei warnungsbehafteten Zeilen.
 - Checkbox bei ausgeschlossenen Zeilen disabled.
-- Spalte SeqTp zeigt `FRST` (grün) oder `RCUR` (grau).
 
 ## 9. Caveats und bewusste Vereinfachungen
 
-1. **Kein Job-Queueing / kein E-Mail-Versand** der XML. Vorstand lädt selbst herunter und reicht im Banking-Portal ein.
-2. **Kein Diff zur Vor-Saison.** Falls Beitragssatz innerhalb einer Saison ändert (selten), nimmt der Vorschau-Endpoint den Satz, der zum Effective Start gilt. Mid-Season-Wechsel wird nicht zwei-stufig abgerechnet (Komplexität nicht gerechtfertigt).
-3. **Stammverein-Whitelist hardcoded.** Wenn ein neuer Verein hinzukommt (selten), Code-Änderung nötig. Pflegbare Tabelle wäre möglich, lohnt aktuell den Aufwand nicht.
-4. **Adresse strukturiert.** Bestandsdaten haben evtl. „Hauptstr. 12 / Hinterhof"-Eingaben — die werden nicht perfekt zerlegt. Im Vorschau-Endpoint wird das als Warnung markiert (`adresse_komplex`), keine harte Exclusion.
-5. **Keine Multi-Club-Mandanten.** TeamWERK kennt aktuell nur einen Verein (`clubs.id=1`). Falls jemals mehrere Vereine, müsste die Beitragsmatrix pro Club gehen.
-6. **Kein direkter HBCI-/EBICS-Upload.** Out of scope; Vorstand nutzt BW-Bank-Onlinebanking manuell.
+1. **Keine anteilige Berechnung.** Jedes einzuziehende Mitglied zahlt den vollen Jahresbeitrag, fällig immer zum 01.07. Eintrittsdatum spielt keine Rolle.
+2. **Keine Volljährigkeits-, Ausbildungs- oder Berufsprüfung.** Aktive Spieler werden grundsätzlich mit dem Kinder-/Aktiv-Satz abgerechnet.
+3. **Keine Erst-/Folge-Unterscheidung.** Alle Lastschriften sind RCUR; kein FRST/RCUR-Tracking, kein Sequence-Reset. Die Bestätigung dient nur dem Protokoll, nicht der SeqTp-Steuerung.
+4. **Protokoll ist eine Textdatei, keine DB-Tabelle.** Bewusst einfach gehalten (append-only). Keine strukturierte Auswertung/Filterung; wer Statistiken will, parst die Datei manuell.
+5. **Kein automatischer Bank-Rückabgleich.** Rejects (pain.002) werden nicht eingelesen; der Kassierer markiert „nicht erfolgreich" manuell beim Bestätigen.
+6. **Kein Job-Queueing / kein E-Mail-Versand** der XML. Kassierer lädt selbst herunter und reicht im Banking-Portal ein.
+7. **Stammverein-Whitelist hardcoded.** Wenn ein neuer Verein hinzukommt (selten), Code-Änderung nötig. Pflegbare Tabelle wäre möglich, lohnt aktuell den Aufwand nicht.
+8. **Adresse strukturiert.** Bestandsdaten haben evtl. „Hauptstr. 12 / Hinterhof"-Eingaben — die werden nicht perfekt zerlegt. Im Vorschau-Endpoint wird das als Warnung markiert (`adresse_komplex`), keine harte Exclusion.
+9. **Keine Multi-Club-Mandanten.** TeamWERK kennt aktuell nur einen Verein (`clubs.id=1`). Falls jemals mehrere Vereine, müsste die Beitragsmatrix pro Club gehen.
+10. **Kein direkter HBCI-/EBICS-Upload.** Out of scope; Vorstand/Kassierer nutzt BW-Bank-Onlinebanking manuell.
 
 ## 10. Test-Strategie
 
 ### 10.1 Unit-Tests im Package `beitragslauf`
 
-- `proRataMonate_*` — Tabelle mit (effectiveStart, saisonEnde, expectedMonate)
-- `proRataBetrag_KaufmaennischeRundung` — z.B. 14000 Cent × 9 / 12 = 10500.0 (rund), 14000 × 7 / 12 = 8166.666… → 8167
-- `aktivKategorie_AlleKombinationen` — 2³ = 8 Fälle
-- `istVolljaehrigAmSaisonstart_Stichtag` — DOB = saisonstart - 18 Jahre → true; DOB = saisonstart - 18 Jahre + 1 Tag → false
+- `aktivKategorie_MitOhneStammverein` — 2 Fälle
+- `beitragsGruppe_*` — aktiv/verletzt → aktiv, pausiert/passiv → passiv, sonst → ""
 - `matchHomeClub_*` — exakt, fuzzy, leer, Müll
-- `sequenceType_FRST_vs_RCUR`
+- `lookupBetragCent_*` — Satz zum Saisonstart, kein Satz vor valid_from → Error
 
 ### 10.2 Integration-Tests im Handler
 
 Setup über `testutil.NewServer(t, db, allRoutes)` mit gesäter clubs-Row + beitrags_saetze + members in allen relevanten Konstellationen.
 
-Tests siehe Proposal-Abschnitt „Test-Anforderungen".
+Tests siehe Proposal-Abschnitt „Test-Anforderungen". Insbesondere `TestPreview_NeumitgliedZahltVollenBeitrag` sichert die „kein Pro-rata"-Invariante ab, `TestExport_EinPmtInfBlockRCUR` die „immer RCUR"-Invariante, `TestConfirm_HaengtProtokollAn` die Append-only-Invariante, `TestBankdaten_KassiererUpdatetNurBankfelder` die Feld-Whitelist. Protokoll-Tests setzen `cfg.BeitragslaufDir` auf ein `t.TempDir()`.
 
 ### 10.3 XSD-Validierung
 
@@ -595,15 +573,15 @@ func TestExport_XSDValid(t *testing.T) {
 }
 ```
 
-Implementierung über `github.com/lestrrat-go/libxml2` oder einfacher: `xmllint` aufrufen, falls auf VPS verfügbar. In CI/lokal über externe Library — siehe Tasks-Eintrag.
+Implementierung über `xmllint --schema` als externer Aufruf (Skip wenn nicht im PATH) — siehe Tasks-Eintrag.
 
 ## 11. Risiken & Mitigationen
 
 | Risiko | Mitigation |
 |---|---|
 | Bank lehnt XML aus formellem Grund ab | XSD-Validierung im Test verhindert Schema-Fehler; manueller Probelauf mit Test-IBAN vor Echtbetrieb |
-| Falsche FRST/RCUR-Markierung → Bank-Reject | Reset-Endpoint, automatische Vorschau zeigt SeqTp, Vorstand kann pro Member ablesen |
-| Vorstand wählt falsche Member-Untermenge | Klare Summe + Anzahl im Header der Vorschau; "Ausgeschlossen"-Liste ausklappbar |
-| Doppelte Einreichung | Warnung „last_sepa_einzug_am ≥ Saisonstart" im UI; trotzdem nicht hart geblockt (manche Bankreklamationen erfordern Wiedereinreichung) |
+| Kassierer wählt falsche Member-Untermenge | Klare Summe + Anzahl im Header der Vorschau; "Ausgeschlossen"-Liste ausklappbar |
 | Stammverein-Fehlklassifizierung | Warnung im UI, manuelle Override-Möglichkeit |
-| Cent-Rundungsdrift bei Pro-rata | Cent-Integer in DB, `math.Round` einmalig pro Member, Summe = `Σ betrag_cent` (exakt) |
+| Fälligkeit 01.07. liegt in der Vergangenheit | Kassierer reicht den Lauf rechtzeitig ein; XML-Datum bleibt 01.07. der Saison, Bank verschiebt ggf. auf nächsten Ausführungstag |
+| Protokolldatei geht verloren / nicht im Backup | `BeitragslaufDir` ins Backup aufnehmen (Doku in CLAUDE.md/Deploy); append-only minimiert versehentliches Überschreiben |
+| Kassierer ändert versehentlich Nicht-Bankfelder | Dedizierter `bankdaten`-Endpoint mit Feld-Whitelist; voller Member-Update bleibt vorstand-only |

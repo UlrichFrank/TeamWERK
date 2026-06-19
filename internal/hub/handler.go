@@ -11,7 +11,9 @@ type Handler struct {
 	buildHash string
 }
 
-func NewHandler(h *EventHub, buildHash string) *Handler { return &Handler{hub: h, buildHash: buildHash} }
+func NewHandler(h *EventHub, buildHash string) *Handler {
+	return &Handler{hub: h, buildHash: buildHash}
+}
 
 func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)

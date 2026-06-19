@@ -1305,7 +1305,6 @@ func TestGetGame_ReturnsCounts(t *testing.T) {
 	}
 }
 
-
 // helper: insert a team with custom age_class+gender (avoids "Erwachsene"/"mixed" fixture default)
 func mkTeamCustom(t *testing.T, db *sql.DB, name, ageClass, gender string) int {
 	t.Helper()

@@ -228,4 +228,3 @@ func TestListPermissions_DisplayName(t *testing.T) {
 	}
 	t.Error("no user-type permission found in response")
 }
-

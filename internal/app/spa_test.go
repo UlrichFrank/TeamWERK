@@ -10,7 +10,7 @@ import (
 // spaTestFS mirrors a realistic web/dist layout for spaFallback.
 func spaTestFS() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":               {Data: []byte("<!doctype html><html></html>")},
+		"index.html":                {Data: []byte("<!doctype html><html></html>")},
 		"sw.js":                     {Data: []byte("// service worker")},
 		"manifest.webmanifest":      {Data: []byte("{}")},
 		"assets/index-AbCd1234.js":  {Data: []byte("console.log(1)")},

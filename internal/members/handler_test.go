@@ -494,7 +494,9 @@ func TestList_UnlinkedUserFilter(t *testing.T) {
 	if len(lr.Items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(lr.Items))
 	}
-	var item struct{ ID int `json:"id"` }
+	var item struct {
+		ID int `json:"id"`
+	}
 	json.Unmarshal(lr.Items[0], &item)
 	if item.ID != unlinkedMemberID {
 		t.Errorf("expected unlinked member %d, got %d", unlinkedMemberID, item.ID)
@@ -526,7 +528,9 @@ func TestList_HasDraftFilter(t *testing.T) {
 	if len(lr.Items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(lr.Items))
 	}
-	var item struct{ ID int `json:"id"` }
+	var item struct {
+		ID int `json:"id"`
+	}
 	json.Unmarshal(lr.Items[0], &item)
 	if item.ID != memberWithDraft {
 		t.Errorf("expected member %d with draft, got %d", memberWithDraft, item.ID)
@@ -582,7 +586,9 @@ func TestMemberStatus_Anwaerter_Create(t *testing.T) {
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", res.StatusCode)
 	}
-	var body struct{ ID int `json:"id"` }
+	var body struct {
+		ID int `json:"id"`
+	}
 	json.NewDecoder(res.Body).Decode(&body)
 	res.Body.Close()
 

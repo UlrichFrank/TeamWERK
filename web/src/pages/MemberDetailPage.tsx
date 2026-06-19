@@ -51,9 +51,11 @@ type TabName = 'stammdaten' | 'kontakt' | 'datenschutz' | 'familie' | 'admin'
 export default function MemberDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { loading: authLoading, hasCapability } = useAuth()
+  const { loading: authLoading, hasCapability, user } = useAuth()
   const isNew = id === 'neu'
   const isAdmin = hasCapability('manage_members')
+  // Kassierer ohne volle Mitgliederverwaltung: nur Bankdaten editierbar.
+  const canEditBankOnly = !isAdmin && (user?.clubFunctions?.includes('kassierer') ?? false)
 
   const [activeTab, setActiveTab] = useState<TabName>(() => {
     const saved = localStorage.getItem('memberDetailTab')
@@ -196,6 +198,31 @@ export default function MemberDetailPage() {
     }
   }
 
+  // Kassierer-Pfad: nur die Bankfelder über /bank-details speichern (Feld-Whitelist).
+  // Es werden alle bankrelevanten Felder aus dem geladenen Formular gesendet, damit
+  // nicht editierte Werte (z. B. Adresse) nicht überschrieben/genullt werden.
+  const handleSaveBank = async () => {
+    if (!id) return
+    setSaving(true); setError('')
+    try {
+      await api.put(`/members/${id}/bank-details`, {
+        iban: form.iban ?? '',
+        sepa_mandat: !!form.sepa_mandat,
+        sepa_mandat_date: form.sepa_mandat_date ?? '',
+        account_holder: form.account_holder ?? '',
+        street: form.street ?? '',
+        zip: form.zip ?? '',
+        city: form.city ?? '',
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setError('Fehler beim Speichern.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleFamilyLink = async (parentUserId: number) => {
     if (!id) return
     try {
@@ -238,12 +265,23 @@ export default function MemberDetailPage() {
   }
 
   const tabButtons: { name: TabName; label: string; show: boolean }[] = [
-    { name: 'stammdaten', label: 'Stammdaten', show: true },
+    // Stammdaten nur für Voll-Verwaltung (oder Neuanlage); Kassierer sieht nur Bankdaten.
+    { name: 'stammdaten', label: 'Stammdaten', show: isNew || isAdmin },
     { name: 'kontakt', label: 'Bankdaten', show: !isNew },
     { name: 'datenschutz', label: 'Datenschutz', show: !isNew && isAdmin },
     { name: 'familie', label: 'Familie', show: !isNew && isAdmin },
     { name: 'admin', label: 'Admin', show: !isNew && isAdmin },
   ]
+
+  // Falls der aktuell gewählte Tab für diese Rolle nicht sichtbar ist, auf den
+  // ersten sichtbaren Tab zurückfallen (z. B. Kassierer → Bankdaten).
+  useEffect(() => {
+    const visible = tabButtons.filter(t => t.show).map(t => t.name)
+    if (visible.length > 0 && !visible.includes(activeTab)) {
+      setActiveTab(visible[0])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, isNew, activeTab])
 
   return (
     <div className="max-w-2xl">
@@ -295,7 +333,7 @@ export default function MemberDetailPage() {
           onFormChange={updates => setForm(f => ({ ...f, ...updates }))}
           onDraftAccept={handleDraftAccept}
           onDraftReject={handleDraftReject}
-          onSave={handleSave}
+          onSave={canEditBankOnly ? handleSaveBank : handleSave}
           saving={saving}
           saved={saved}
           error={error}

@@ -84,13 +84,13 @@ type trainerRow struct {
 
 type kaderDetail struct {
 	kaderRow
-	BirthYears      []int               `json:"birth_years"`      // filtered: [dedicated] or [yr1, yr2]
-	BracketYears    []int               `json:"bracket_years"`    // always both bracket years [yr1, yr2]
-	Members         []memberRow         `json:"members"`
-	MemberCount     int                 `json:"member_count"`
-	Trainers        []trainerRow        `json:"trainers"`
-	ExtendedMembers []memberRow         `json:"extended_members"`
-	Can             policy.CanFlags     `json:"can"`
+	BirthYears      []int           `json:"birth_years"`   // filtered: [dedicated] or [yr1, yr2]
+	BracketYears    []int           `json:"bracket_years"` // always both bracket years [yr1, yr2]
+	Members         []memberRow     `json:"members"`
+	MemberCount     int             `json:"member_count"`
+	Trainers        []trainerRow    `json:"trainers"`
+	ExtendedMembers []memberRow     `json:"extended_members"`
+	Can             policy.CanFlags `json:"can"`
 }
 
 func computeBirthYears(k kaderRow, seasonStartYear int) (birthYears []int, bracketYears []int) {
@@ -216,15 +216,15 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		MembersAdd              []int   `json:"members_add"`
-		MembersRemove           []int   `json:"members_remove"`
-		DedicatedBirthYear      *int    `json:"dedicated_birth_year"`
-		SetDedicatedBirthYear   bool    `json:"set_dedicated_birth_year"`
-		TrainersAdd             []int   `json:"trainers_add"`
-		TrainersRemove          []int   `json:"trainers_remove"`
-		AgeClass                *string `json:"age_class"`
-		ExtendedMembersAdd      []int   `json:"extended_members_add"`
-		ExtendedMembersRemove   []int   `json:"extended_members_remove"`
+		MembersAdd            []int   `json:"members_add"`
+		MembersRemove         []int   `json:"members_remove"`
+		DedicatedBirthYear    *int    `json:"dedicated_birth_year"`
+		SetDedicatedBirthYear bool    `json:"set_dedicated_birth_year"`
+		TrainersAdd           []int   `json:"trainers_add"`
+		TrainersRemove        []int   `json:"trainers_remove"`
+		AgeClass              *string `json:"age_class"`
+		ExtendedMembersAdd    []int   `json:"extended_members_add"`
+		ExtendedMembersRemove []int   `json:"extended_members_remove"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -371,11 +371,11 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/kader — initialize standard kader OR create a single new kader
 func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SeasonID           int  `json:"season_id"`
+		SeasonID           int    `json:"season_id"`
 		AgeClass           string `json:"age_class"`
 		Gender             string `json:"gender"`
-		TeamNumber         int  `json:"team_number"`
-		DedicatedBirthYear *int `json:"dedicated_birth_year"`
+		TeamNumber         int    `json:"team_number"`
+		DedicatedBirthYear *int   `json:"dedicated_birth_year"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SeasonID == 0 {
 		http.Error(w, "season_id required", http.StatusBadRequest)
@@ -706,11 +706,11 @@ func (h *Handler) ExtendedMemberSuggestions(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 
 	type suggestion struct {
-		ID              int    `json:"id"`
-		Name            string `json:"name"`
-		BirthYear       int    `json:"birth_year"`
-		Gender          string `json:"gender"`
-		AlreadyInKader  bool   `json:"already_in_kader"`
+		ID             int    `json:"id"`
+		Name           string `json:"name"`
+		BirthYear      int    `json:"birth_year"`
+		Gender         string `json:"gender"`
+		AlreadyInKader bool   `json:"already_in_kader"`
 	}
 	result := []suggestion{}
 	for rows.Next() {

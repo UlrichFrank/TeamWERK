@@ -268,10 +268,10 @@ func (h *Handler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 type contentsResponse struct {
-	Folders []folderResponse `json:"folders"`
-	Files   []fileResponse   `json:"files"`
-	CanRead bool             `json:"can_read"`
-	CanWrite bool            `json:"can_write"`
+	Folders  []folderResponse `json:"folders"`
+	Files    []fileResponse   `json:"files"`
+	CanRead  bool             `json:"can_read"`
+	CanWrite bool             `json:"can_write"`
 }
 
 // GET /api/folders/{id}/contents

@@ -250,7 +250,6 @@ func (h *Handler) CreateConversation(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func (h *Handler) createDirect(w http.ResponseWriter, r *http.Request, claims *auth.Claims, targetUserID int) {
 	if targetUserID == 0 {
 		http.Error(w, "userId required", http.StatusBadRequest)
@@ -521,7 +520,10 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 			 ORDER BY mr.message_id, mr.created_at`, strings.Join(placeholders, ",")), ids...)
 		if rerr == nil {
 			defer rrows.Close()
-			type reactionKey struct{ msgID int; emoji string }
+			type reactionKey struct {
+				msgID int
+				emoji string
+			}
 			type reactionAcc struct {
 				names []string
 				hasMe bool

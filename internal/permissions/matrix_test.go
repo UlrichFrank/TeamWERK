@@ -74,9 +74,19 @@ var exVorstand = map[string]int{
 	"spieler": 403, "elternteil": 403,
 }
 
+// RequireClubFunction("vorstand","kassierer")
+var exVorstandKassierer = map[string]int{
+	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
+	"kassierer":          httpAllowed,
+	"vorstand_beisitzer": 403,
+	"trainer":            403, "trainer_elternteil": 403,
+	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
+	"spieler": 403, "elternteil": 403,
+}
+
 // RequireRole("admin")
 var exAdmin = map[string]int{
-	"admin": httpAllowed,
+	"admin":    httpAllowed,
 	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
 	"kassierer": 403, "trainer": 403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
@@ -345,10 +355,20 @@ var matrix = []endpointCase{
 	// ── Admin only ───────────────────────────────────────────────────────────────
 	{method: "POST", path: "/api/impersonate/{id}", expected: exAdmin},
 
+	// ── Vorstand + Kassierer ─────────────────────────────────────────────────────
+	{method: "GET", path: "/api/members", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/members/export", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/members/{id}", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/members/{id}/parents", expected: exVorstandKassierer},
+	{method: "PUT", path: "/api/members/{id}/bank-details", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/fee-rates", expected: exVorstandKassierer},
+	{method: "POST", path: "/api/fee-rates", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/fee-run/preview", expected: exVorstandKassierer},
+	{method: "POST", path: "/api/fee-run/export", expected: exVorstandKassierer},
+	{method: "POST", path: "/api/fee-run/confirm", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/fee-run/protocol", expected: exVorstandKassierer},
+
 	// ── Vorstand ─────────────────────────────────────────────────────────────────
-	{method: "GET", path: "/api/members", expected: exVorstand},
-	{method: "GET", path: "/api/members/export", expected: exVorstand},
-	{method: "GET", path: "/api/members/{id}", expected: exVorstand},
 	{method: "POST", path: "/api/members", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}/status", expected: exVorstand},
@@ -376,7 +396,6 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/members/{id}/user", expected: exVorstand},
 	{method: "POST", path: "/api/members/{id}/proxy-account", expected: exVorstand},
 	{method: "POST", path: "/api/members/{id}/welcome-email", expected: exVorstand},
-	{method: "GET", path: "/api/members/{id}/parents", expected: exVorstand},
 	{method: "POST", path: "/api/users/{id}/create-member", expected: exVorstand},
 	{method: "POST", path: "/api/family-links", expected: exVorstand},
 	{method: "DELETE", path: "/api/family-links", expected: exVorstand},
@@ -389,7 +408,7 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/duty-templates/{id}", expected: exVorstand},
 	{method: "POST", path: "/api/upload/member-photo/{id}", expected: exVorstand},
 	{method: "DELETE", path: "/api/upload/member-photo/{id}", expected: exVorstand},
-	{method: "POST", path: "/api/upload/sepa-mandat/{id}", expected: exVorstand},
+	{method: "POST", path: "/api/upload/sepa-mandat/{id}", expected: exVorstandKassierer},
 	{method: "PUT", path: "/api/age-class-rules/{ageClass}", expected: exVorstand},
 }
 

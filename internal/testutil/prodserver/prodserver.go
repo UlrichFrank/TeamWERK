@@ -13,6 +13,8 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/absences"
 	"github.com/teamstuttgart/teamwerk/internal/app"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
+	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -38,27 +40,29 @@ func buildHandlers(t *testing.T, database *sql.DB) *app.Handlers {
 	hubInstance := hub.NewHub()
 	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
 	return &app.Handlers{
-		Auth:         auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost"),
-		Config:       appconfig.NewHandler(database, hubInstance),
-		Members:      members.NewHandler(database, hubInstance),
-		WelcomeEmail: members.NewWelcomeEmailHandler(database, m),
-		Duties:       duties.NewHandler(database, cfg, hubInstance),
-		Dashboard:    dashboard.NewHandler(database),
-		Games:        games.NewHandler(database, cfg, hubInstance),
-		Kader:        kader.NewHandler(database, hubInstance),
-		Upload:       upload.NewHandler(database, t.TempDir(), testutil.TestJWTSecret),
-		Files:        files.NewHandler(database, t.TempDir(), testutil.TestJWTSecret),
-		Carpool:      carpooling.NewHandler(database, cfg, hubInstance),
-		Chat:         chat.NewHandler(database, hubInstance, cfg),
-		Notif:        notifications.NewHandler(database, cfg),
-		Training:     trainings.NewHandler(database, cfg, hubInstance),
-		Absences:     absences.NewHandler(database, hubInstance),
-		Teams:        teams.NewHandler(database),
-		Venues:       venues.NewHandler(database, hubInstance),
-		Hub:          hub.NewHandler(hubInstance, "test"),
-		JWTSecret:    testutil.TestJWTSecret,
-		Database:     database,
-		BaseURL:      "",
+		Auth:           auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost"),
+		Config:         appconfig.NewHandler(database, hubInstance),
+		Members:        members.NewHandler(database, hubInstance),
+		WelcomeEmail:   members.NewWelcomeEmailHandler(database, m),
+		Duties:         duties.NewHandler(database, cfg, hubInstance),
+		Dashboard:      dashboard.NewHandler(database),
+		Games:          games.NewHandler(database, cfg, hubInstance),
+		Kader:          kader.NewHandler(database, hubInstance),
+		Upload:         upload.NewHandler(database, t.TempDir(), testutil.TestJWTSecret),
+		Files:          files.NewHandler(database, t.TempDir(), testutil.TestJWTSecret),
+		Carpool:        carpooling.NewHandler(database, cfg, hubInstance),
+		Chat:           chat.NewHandler(database, hubInstance, cfg),
+		Notif:          notifications.NewHandler(database, cfg),
+		Training:       trainings.NewHandler(database, cfg, hubInstance),
+		Absences:       absences.NewHandler(database, hubInstance),
+		Teams:          teams.NewHandler(database),
+		Venues:         venues.NewHandler(database, hubInstance),
+		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
+		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, t.TempDir()),
+		Hub:            hub.NewHandler(hubInstance, "test"),
+		JWTSecret:      testutil.TestJWTSecret,
+		Database:       database,
+		BaseURL:        "",
 	}
 }
 

@@ -29,7 +29,9 @@ func TestUsersPicker_AdminSeesAll(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var users []struct{ ID int `json:"id"` }
+	var users []struct {
+		ID int `json:"id"`
+	}
 	json.NewDecoder(res.Body).Decode(&users)
 	res.Body.Close()
 
@@ -82,7 +84,9 @@ func TestUsersPicker_SpielerSeesTeamOnly(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var users []struct{ ID int `json:"id"` }
+	var users []struct {
+		ID int `json:"id"`
+	}
 	json.NewDecoder(res.Body).Decode(&users)
 	res.Body.Close()
 

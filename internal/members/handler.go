@@ -18,6 +18,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
+	"github.com/teamstuttgart/teamwerk/internal/sepa"
 )
 
 type Handler struct {
@@ -28,32 +29,32 @@ type Handler struct {
 func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 type Member struct {
-	ID           int     `json:"id"`
-	FirstName    string  `json:"first_name"`
-	LastName     string  `json:"last_name"`
-	DateOfBirth  string  `json:"date_of_birth,omitempty"`
-	MemberNumber string  `json:"member_number,omitempty"`
-	PassNumber   string  `json:"pass_number,omitempty"`
-	JerseyNumber *int    `json:"jersey_number,omitempty"`
-	Position     string  `json:"position,omitempty"`
-	Gender       string  `json:"gender"`
-	Status       string  `json:"status"`
-	UserID       *int    `json:"user_id,omitempty"`
+	ID            int      `json:"id"`
+	FirstName     string   `json:"first_name"`
+	LastName      string   `json:"last_name"`
+	DateOfBirth   string   `json:"date_of_birth,omitempty"`
+	MemberNumber  string   `json:"member_number,omitempty"`
+	PassNumber    string   `json:"pass_number,omitempty"`
+	JerseyNumber  *int     `json:"jersey_number,omitempty"`
+	Position      string   `json:"position,omitempty"`
+	Gender        string   `json:"gender"`
+	Status        string   `json:"status"`
+	UserID        *int     `json:"user_id,omitempty"`
 	ClubFunctions []string `json:"club_functions"`
 
 	// Extended fields (populated by GetMember)
-	Street    *string `json:"street,omitempty"`
-	Zip       *string `json:"zip,omitempty"`
-	City      *string `json:"city,omitempty"`
-	HomeClub  *string `json:"home_club,omitempty"`
-	JoinDate  *string `json:"join_date,omitempty"`
-	IBAN          *string `json:"iban,omitempty"`
-	AccountHolder *string `json:"account_holder,omitempty"`
-	PhotoURL      *string `json:"photo_url,omitempty"`
-	PhotoVisible  bool    `json:"photo_visible,omitempty"`
-	PhonesVisible  bool   `json:"phones_visible,omitempty"`
-	AddressVisible bool   `json:"address_visible,omitempty"`
-	EmailVisible   bool   `json:"email_visible,omitempty"`
+	Street         *string `json:"street,omitempty"`
+	Zip            *string `json:"zip,omitempty"`
+	City           *string `json:"city,omitempty"`
+	HomeClub       *string `json:"home_club,omitempty"`
+	JoinDate       *string `json:"join_date,omitempty"`
+	IBAN           *string `json:"iban,omitempty"`
+	AccountHolder  *string `json:"account_holder,omitempty"`
+	PhotoURL       *string `json:"photo_url,omitempty"`
+	PhotoVisible   bool    `json:"photo_visible,omitempty"`
+	PhonesVisible  bool    `json:"phones_visible,omitempty"`
+	AddressVisible bool    `json:"address_visible,omitempty"`
+	EmailVisible   bool    `json:"email_visible,omitempty"`
 
 	DsgvoVerarbeitung     bool    `json:"dsgvo_verarbeitung,omitempty"`
 	DsgvoVerarbeitungDate *string `json:"dsgvo_verarbeitung_date,omitempty"`
@@ -528,10 +529,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Status        string   `json:"status"`
 		ClubFunctions []string `json:"club_functions"`
 
-		Street   string `json:"street"`
-		Zip      string `json:"zip"`
-		City     string `json:"city"`
-		HomeClub string `json:"home_club"`
+		Street        string `json:"street"`
+		Zip           string `json:"zip"`
+		City          string `json:"city"`
+		HomeClub      string `json:"home_club"`
 		JoinDate      string `json:"join_date"`
 		IBAN          string `json:"iban"`
 		AccountHolder string `json:"account_holder"`
@@ -636,6 +637,57 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(), `UPDATE members SET status=?, updated_at=? WHERE id=?`, req.Status, time.Now(), id)
 	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/members/{id}/bank-details
+// Aktualisiert ausschließlich die bankrelevanten Felder (Feld-Whitelist),
+// damit der Kassierer korrigieren kann, ohne Stammdaten/Status zu verändern.
+func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		IBAN           string `json:"iban"`
+		SepaMandat     bool   `json:"sepa_mandat"`
+		SepaMandatDate string `json:"sepa_mandat_date"`
+		AccountHolder  string `json:"account_holder"`
+		Street         string `json:"street"`
+		Zip            string `json:"zip"`
+		City           string `json:"city"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "ungültiger Body", http.StatusBadRequest)
+		return
+	}
+	req.IBAN = sepa.NormalizeIBAN(req.IBAN)
+	if req.IBAN != "" && !sepa.IsValidIBAN(req.IBAN) {
+		http.Error(w, "ungültige IBAN", http.StatusBadRequest)
+		return
+	}
+	mandat := 0
+	if req.SepaMandat {
+		mandat = 1
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE members SET iban=?, sepa_mandat=?, sepa_mandat_date=?, account_holder=?, street=?, zip=?, city=?, updated_at=?
+		 WHERE id=?`,
+		nullStr(req.IBAN), mandat, nullStr(req.SepaMandatDate), nullStr(req.AccountHolder),
+		nullStr(req.Street), nullStr(req.Zip), nullStr(req.City), time.Now(), id)
+	if err != nil {
+		http.Error(w, "DB-Fehler", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "Mitglied nicht gefunden", http.StatusNotFound)
+		return
+	}
+	h.hub.Broadcast("members")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // POST /api/members/{id}/proxy-account
@@ -1408,9 +1460,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Duplicate detection within CSV
 	type dupKey struct{ first, last, dob string }
-	seenAt := make(map[dupKey]int)            // key → first line number
-	dupOf := make(map[int]int)                // later line → first line
-	firstDupPartner := make(map[int]int)      // first line → first later duplicate
+	seenAt := make(map[dupKey]int)       // key → first line number
+	dupOf := make(map[int]int)           // later line → first line
+	firstDupPartner := make(map[int]int) // first line → first later duplicate
 	isDupLine := make(map[int]bool)
 	for i, row := range allRows {
 		lineNum := i + 2
@@ -1497,16 +1549,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		query += ` LIMIT 1`
 
 		var (
-			existingID                                     int
-			dbMemberNum, dbPassNum, dbPosition             sql.NullString
-			dbDOB, dbGender, dbStatus                      string
-			dbJerseyNum                                    sql.NullInt64
-			dbUserID                                       sql.NullInt64
-			dbHomeClub                                     sql.NullString
-			dbStreet, dbZip, dbCity                        string
-			dbJoinDate, dbIBAN, dbAccountHolder            string
-			dbSepaMandat                                   int
-			dbBeitragsfrei                                 int
+			existingID                          int
+			dbMemberNum, dbPassNum, dbPosition  sql.NullString
+			dbDOB, dbGender, dbStatus           string
+			dbJerseyNum                         sql.NullInt64
+			dbUserID                            sql.NullInt64
+			dbHomeClub                          sql.NullString
+			dbStreet, dbZip, dbCity             string
+			dbJoinDate, dbIBAN, dbAccountHolder string
+			dbSepaMandat                        int
+			dbBeitragsfrei                      int
 		)
 		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
 			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
@@ -1908,12 +1960,12 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		WhatsAppVisible bool `json:"whatsapp_visible"`
 	}
 	type userContactEntry struct {
-		FirstName  string        `json:"first_name"`
-		LastName   string        `json:"last_name"`
-		Street     string        `json:"street"`
-		Zip        string        `json:"zip"`
-		City       string        `json:"city"`
-		Phones     []phoneEntry  `json:"phones"`
+		FirstName  string          `json:"first_name"`
+		LastName   string          `json:"last_name"`
+		Street     string          `json:"street"`
+		Zip        string          `json:"zip"`
+		City       string          `json:"city"`
+		Phones     []phoneEntry    `json:"phones"`
 		Visibility visibilityEntry `json:"visibility"`
 	}
 

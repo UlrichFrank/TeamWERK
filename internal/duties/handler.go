@@ -99,17 +99,17 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type dt struct {
-		ID                    int      `json:"id"`
-		Name                  string   `json:"name"`
-		HoursValue            float64  `json:"hours_value"`
-		CashSubstitute        *float64 `json:"cash_substitute,omitempty"`
-		DefaultAnchor         string   `json:"default_anchor"`
-		DefaultOffsetMinutes  int      `json:"default_offset_minutes"`
-		SameDayBehavior       string   `json:"same_day_behavior"`
-		SameDayVariantID      *int     `json:"same_day_variant_id,omitempty"`
-		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
-		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id,omitempty"`
-		Audiences             []string `json:"audiences,omitempty"`
+		ID                   int      `json:"id"`
+		Name                 string   `json:"name"`
+		HoursValue           float64  `json:"hours_value"`
+		CashSubstitute       *float64 `json:"cash_substitute,omitempty"`
+		DefaultAnchor        string   `json:"default_anchor"`
+		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		SameDayBehavior      string   `json:"same_day_behavior"`
+		SameDayVariantID     *int     `json:"same_day_variant_id,omitempty"`
+		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
+		AdjacentDayVariantID *int     `json:"adjacent_day_variant_id,omitempty"`
+		Audiences            []string `json:"audiences,omitempty"`
 	}
 	result := []dt{}
 	for rows.Next() {
@@ -141,16 +141,16 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/duty-types
 func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name                  string   `json:"name"`
-		HoursValue            float64  `json:"hours_value"`
-		CashSubstitute        *float64 `json:"cash_substitute"`
-		DefaultAnchor         string   `json:"default_anchor"`
-		DefaultOffsetMinutes  int      `json:"default_offset_minutes"`
-		SameDayBehavior       string   `json:"same_day_behavior"`
-		SameDayVariantID      *int     `json:"same_day_variant_id"`
-		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
-		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id"`
-		Audiences             []string `json:"audiences"`
+		Name                 string   `json:"name"`
+		HoursValue           float64  `json:"hours_value"`
+		CashSubstitute       *float64 `json:"cash_substitute"`
+		DefaultAnchor        string   `json:"default_anchor"`
+		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		SameDayBehavior      string   `json:"same_day_behavior"`
+		SameDayVariantID     *int     `json:"same_day_variant_id"`
+		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
+		AdjacentDayVariantID *int     `json:"adjacent_day_variant_id"`
+		Audiences            []string `json:"audiences"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
@@ -183,16 +183,16 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Name                  string   `json:"name"`
-		HoursValue            float64  `json:"hours_value"`
-		CashSubstitute        *float64 `json:"cash_substitute"`
-		DefaultAnchor         string   `json:"default_anchor"`
-		DefaultOffsetMinutes  int      `json:"default_offset_minutes"`
-		SameDayBehavior       string   `json:"same_day_behavior"`
-		SameDayVariantID      *int     `json:"same_day_variant_id"`
-		AdjacentDayBehavior   string   `json:"adjacent_day_behavior"`
-		AdjacentDayVariantID  *int     `json:"adjacent_day_variant_id"`
-		Audiences             []string `json:"audiences"`
+		Name                 string   `json:"name"`
+		HoursValue           float64  `json:"hours_value"`
+		CashSubstitute       *float64 `json:"cash_substitute"`
+		DefaultAnchor        string   `json:"default_anchor"`
+		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		SameDayBehavior      string   `json:"same_day_behavior"`
+		SameDayVariantID     *int     `json:"same_day_variant_id"`
+		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
+		AdjacentDayVariantID *int     `json:"adjacent_day_variant_id"`
+		Audiences            []string `json:"audiences"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
@@ -241,14 +241,14 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 		 ORDER BY ds.event_date DESC`)
 	defer rows.Close()
 	type slot struct {
-		ID          int                  `json:"id"`
-		EventName   string               `json:"event_name"`
-		EventDate   string               `json:"event_date"`
-		SlotsTotal  int                  `json:"slots_total"`
-		SlotsFilled int                  `json:"slots_filled"`
-		DutyType    string               `json:"duty_type"`
-		RoleDesc    string               `json:"role_desc,omitempty"`
-		Can         policy.DutyCanFlags  `json:"can"`
+		ID          int                 `json:"id"`
+		EventName   string              `json:"event_name"`
+		EventDate   string              `json:"event_date"`
+		SlotsTotal  int                 `json:"slots_total"`
+		SlotsFilled int                 `json:"slots_filled"`
+		DutyType    string              `json:"duty_type"`
+		RoleDesc    string              `json:"role_desc,omitempty"`
+		Can         policy.DutyCanFlags `json:"can"`
 	}
 	dutyCan := policy.DutyCan(p)
 	result := []slot{}
