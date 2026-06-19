@@ -7,6 +7,7 @@ import EditModal from '../components/EditModal'
 import MobileCard from '../components/MobileCard'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import NumberSpinner from '../components/NumberSpinner'
+import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
@@ -17,10 +18,17 @@ const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs f
 
 // ─── Verein Tab ───────────────────────────────────────────────────────────────
 
+const GLAEUBIGER_RE = /^DE\d{2}[A-Z0-9]{3}\d{11}$/
+
 function VereinTab() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [glaeubigerId, setGlaeubigerId] = useState('')
+  const [iban, setIban] = useState('')
+  const [bic, setBic] = useState('')
+  const [kontoinhaber, setKontoinhaber] = useState('')
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -28,6 +36,10 @@ function VereinTab() {
     api.get('/club').then(r => {
       setName(r.data.name ?? '')
       setAddress(r.data.address ?? '')
+      setGlaeubigerId(r.data.glaeubiger_id ?? '')
+      setIban(r.data.iban ?? '')
+      setBic(r.data.bic ?? '')
+      setKontoinhaber(r.data.kontoinhaber ?? '')
       setLoaded(true)
     })
   }, [loaded])
@@ -36,9 +48,25 @@ function VereinTab() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    await api.put('/club', { name, address })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setError(null)
+    const gid = glaeubigerId.replace(/\s/g, '').toUpperCase()
+    if (gid && !GLAEUBIGER_RE.test(gid)) {
+      setError('Gläubiger-ID hat ein ungültiges Format (z. B. DE98ZZZ09999999999).')
+      return
+    }
+    try {
+      await api.put('/club', {
+        name, address,
+        glaeubiger_id: gid,
+        iban: iban.replace(/\s/g, '').toUpperCase(),
+        bic: bic.replace(/\s/g, '').toUpperCase(),
+        kontoinhaber,
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setError('Speichern fehlgeschlagen – bitte IBAN/BIC/Gläubiger-ID prüfen.')
+    }
   }
 
   return (
@@ -52,6 +80,32 @@ function VereinTab() {
           <label className="block text-sm font-medium text-brand-text-muted mb-1">Adresse</label>
           <input value={address} onChange={e => setAddress(e.target.value)} className={INPUT} />
         </div>
+
+        <div className="pt-2 border-t border-brand-border-subtle">
+          <h3 className="text-sm font-semibold text-brand-text mb-3">SEPA-Stammdaten</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Gläubiger-ID</label>
+              <input value={glaeubigerId} onChange={e => setGlaeubigerId(e.target.value)} placeholder="DE98ZZZ09999999999" className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
+              <input value={kontoinhaber} onChange={e => setKontoinhaber(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
+              <input value={iban} onChange={e => setIban(e.target.value)} placeholder="DE.." className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">BIC</label>
+              <input value={bic} onChange={e => setBic(e.target.value)} className={INPUT} />
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
+        )}
         <button type="submit" className={BTN_PRIMARY}>
           {saved ? 'Gespeichert ✓' : 'Speichern'}
         </button>
@@ -475,19 +529,117 @@ function AltersklassenTab() {
   )
 }
 
+// ─── Beiträge Tab ───────────────────────────────────────────────────────────────
+
+interface BeitragsSatz {
+  id: number
+  kategorie: string
+  betrag_cent: number
+  valid_from: string
+}
+
+function BeitraegeTab() {
+  const [saetze, setSaetze] = useState<BeitragsSatz[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [forms, setForms] = useState<Record<string, { datum: string; betrag: string }>>({})
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    api.get('/beitrags-saetze').then(r => {
+      setSaetze(r.data.items ?? [])
+      setLoaded(true)
+    })
+  }
+  useEffect(() => { if (!loaded) load() }, [loaded])
+  useLiveUpdates(event => { if (event === 'beitragssatz-changed') load() })
+
+  const add = async (kategorie: string) => {
+    setError(null)
+    const f = forms[kategorie] ?? { datum: '', betrag: '' }
+    const betrag = parseFloat((f.betrag || '').replace(',', '.'))
+    if (!f.datum || isNaN(betrag) || betrag <= 0) {
+      setError('Bitte gültiges Datum und einen Betrag > 0 angeben.')
+      return
+    }
+    await api.post('/beitrags-saetze', {
+      kategorie,
+      betrag_cent: Math.round(betrag * 100),
+      valid_from: f.datum,
+    })
+    setForms({ ...forms, [kategorie]: { datum: '', betrag: '' } })
+    load()
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      {error && (
+        <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
+      )}
+      {BEITRAGS_KATEGORIEN.map(kat => {
+        const rows = saetze
+          .filter(s => s.kategorie === kat)
+          .sort((a, b) => b.valid_from.slice(0, 10).localeCompare(a.valid_from.slice(0, 10)))
+        const f = forms[kat] ?? { datum: '', betrag: '' }
+        return (
+          <div key={kat} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-4">
+            <h3 className="text-sm font-semibold text-brand-text mb-3">{kategorieLabel(kat)}</h3>
+            <table className="w-full text-sm mb-3">
+              <thead>
+                <tr className="text-brand-text-muted text-xs uppercase text-left">
+                  <th className="py-1">Gültig ab</th>
+                  <th className="py-1 text-right">Betrag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 && (
+                  <tr><td colSpan={2} className="py-2 text-brand-text-muted">Noch kein Satz hinterlegt.</td></tr>
+                )}
+                {rows.map(s => (
+                  <tr key={s.id} className="border-t border-brand-border-subtle">
+                    <td className="py-1.5 text-brand-text">{s.valid_from.slice(0, 10)}</td>
+                    <td className="py-1.5 text-right text-brand-text">{(s.betrag_cent / 100).toFixed(2)} €</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex flex-wrap gap-2 items-end">
+              <input
+                type="date"
+                value={f.datum}
+                onChange={e => setForms({ ...forms, [kat]: { ...f, datum: e.target.value } })}
+                className={`${INPUT} w-auto`}
+              />
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="Betrag in €"
+                value={f.betrag}
+                onChange={e => setForms({ ...forms, [kat]: { ...f, betrag: e.target.value } })}
+                className={`${INPUT} w-32`}
+              />
+              <button type="button" onClick={() => add(kat)} className={BTN_SM}>Hinzufügen</button>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'verein' | 'saisons' | 'altersklassen'
+type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'verein', label: 'Verein' },
   { id: 'saisons', label: 'Saisons' },
   { id: 'altersklassen', label: 'Altersklassen' },
+  { id: 'beitraege', label: 'Beiträge' },
 ]
 
 export default function AdminSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const rawTab = searchParams.get('tab')
-  const activeTab: Tab = (rawTab === 'saisons' || rawTab === 'altersklassen') ? rawTab : 'verein'
+  const activeTab: Tab = (rawTab === 'saisons' || rawTab === 'altersklassen' || rawTab === 'beitraege') ? rawTab : 'verein'
 
   const setTab = (id: Tab) => setSearchParams({ tab: id }, { replace: true })
 
@@ -515,6 +667,7 @@ export default function AdminSettingsPage() {
       {activeTab === 'verein' && <VereinTab />}
       {activeTab === 'saisons' && <SaisonsTab />}
       {activeTab === 'altersklassen' && <AltersklassenTab />}
+      {activeTab === 'beitraege' && <BeitraegeTab />}
     </div>
   )
 }
