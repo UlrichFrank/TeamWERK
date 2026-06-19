@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Calendar, BarChart2, Users, Car, ArrowRight,
-  Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check
+  Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check, Search
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -62,11 +62,26 @@ interface CarpoolingConfirmed {
   paarungen: CarpoolingPaarung[]
 }
 
+interface CarpoolingOpenRequest {
+  sucheId: number
+  requesterName: string
+  plaetze: number
+  treffpunkt: string
+}
+
+interface CarpoolingOpenGroup {
+  gameId: number
+  date: string
+  title: string
+  requests: CarpoolingOpenRequest[]
+}
+
 interface DashboardData {
   currentSeason: Season | null
   meineTermine: NextEvent[]
   meineDienste: MeineDienste | null
   carpoolingConfirmed: CarpoolingConfirmed[]
+  carpoolingOpenGroups: CarpoolingOpenGroup[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -279,13 +294,14 @@ function MeinTeamSection() {
   )
 }
 
-function FahrgemeinschaftenSection({ confirmed }: { confirmed: CarpoolingConfirmed[] | undefined }) {
+function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: CarpoolingConfirmed[] | undefined; openGroups: CarpoolingOpenGroup[] | undefined }) {
   const withPairings = (confirmed ?? []).filter(c => (c.paarungen ?? []).length > 0)
+  const openWithRequests = (openGroups ?? []).filter(g => (g.requests ?? []).length > 0)
 
-  if (withPairings.length === 0) {
+  if (withPairings.length === 0 && openWithRequests.length === 0) {
     return (
       <div>
-        <p className="text-sm text-brand-text-muted py-1">Keine bestätigten Fahrgemeinschaften.</p>
+        <p className="text-sm text-brand-text-muted py-1">Keine Fahrgemeinschaften oder offenen Gesuche.</p>
         <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 mt-1">
           Zur Übersicht <ArrowRight className="w-3 h-3" />
         </Link>
@@ -294,22 +310,51 @@ function FahrgemeinschaftenSection({ confirmed }: { confirmed: CarpoolingConfirm
   }
 
   return (
-    <div className="space-y-3 mt-1">
-      {withPairings.map(g => (
-        <div key={g.gameId}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-1">
-            {formatDate(g.date)} · {g.opponent}
-          </p>
-          <ul className="space-y-1">
-            {g.paarungen.map(p => (
-              <li key={p.paarungId} className="flex items-center gap-1.5 text-sm text-brand-text">
-                <Check className="w-4 h-4 text-brand-success flex-shrink-0" />
-                <span>{p.partnerName}</span>
-              </li>
-            ))}
-          </ul>
+    <div className="space-y-4 mt-1">
+      {withPairings.length > 0 && (
+        <div className="space-y-3">
+          {withPairings.map(g => (
+            <div key={g.gameId}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-1">
+                {formatDate(g.date)} · {g.opponent}
+              </p>
+              <ul className="space-y-1">
+                {g.paarungen.map(p => (
+                  <li key={p.paarungId} className="flex items-center gap-1.5 text-sm text-brand-text">
+                    <Check className="w-4 h-4 text-brand-success flex-shrink-0" />
+                    <span>{p.partnerName}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
+
+      {openWithRequests.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-subtle">Offene Gesuche</p>
+          {openWithRequests.map(g => (
+            <div key={g.gameId}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-1">
+                {formatDate(g.date)} · {g.title}
+              </p>
+              <ul className="space-y-1">
+                {g.requests.map(req => (
+                  <li key={req.sucheId} className="flex items-center gap-1.5 text-sm text-brand-text">
+                    <Search className="w-4 h-4 text-brand-text-muted flex-shrink-0" />
+                    <span>
+                      {req.requesterName} · braucht {req.plaetze} {req.plaetze === 1 ? 'Platz' : 'Plätze'}
+                      {req.treffpunkt ? ` · ${req.treffpunkt}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
       <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1">
         Alle Mitfahrten <ArrowRight className="w-3 h-3" />
       </Link>
@@ -401,7 +446,7 @@ export default function DashboardPage() {
 
         {showFahrt && (
           <Accordion id="fahrt" title="Fahrgemeinschaften" icon={Car} isOpen={isOpen('fahrt')} onToggle={() => toggle('fahrt')}>
-            <FahrgemeinschaftenSection confirmed={data.carpoolingConfirmed} />
+            <FahrgemeinschaftenSection confirmed={data.carpoolingConfirmed} openGroups={data.carpoolingOpenGroups} />
           </Accordion>
         )}
       </div>

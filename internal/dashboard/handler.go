@@ -79,11 +79,26 @@ type CarpoolingConfirmed struct {
 	Paarungen []CarpoolingPaarung `json:"paarungen"`
 }
 
+type CarpoolingOpenRequest struct {
+	SucheID       int    `json:"sucheId"`
+	RequesterName string `json:"requesterName"`
+	Plaetze       int    `json:"plaetze"`
+	Treffpunkt    string `json:"treffpunkt"`
+}
+
+type CarpoolingOpenGroup struct {
+	GameID   int                     `json:"gameId"`
+	Date     string                  `json:"date"`
+	Title    string                  `json:"title"`
+	Requests []CarpoolingOpenRequest `json:"requests"`
+}
+
 type Response struct {
-	CurrentSeason       *Season               `json:"currentSeason"`
-	MeineTermine        []NextEvent           `json:"meineTermine"`
-	MeineDienste        *MeineDienste         `json:"meineDienste"`
-	CarpoolingConfirmed []CarpoolingConfirmed `json:"carpoolingConfirmed"`
+	CurrentSeason        *Season               `json:"currentSeason"`
+	MeineTermine         []NextEvent           `json:"meineTermine"`
+	MeineDienste         *MeineDienste         `json:"meineDienste"`
+	CarpoolingConfirmed  []CarpoolingConfirmed `json:"carpoolingConfirmed"`
+	CarpoolingOpenGroups []CarpoolingOpenGroup `json:"carpoolingOpenGroups"`
 }
 
 // GET /api/dashboard
@@ -94,8 +109,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	role := effectivePersona(claims.ClubFunctions, claims.IsParent)
 
 	resp := Response{
-		MeineTermine:        []NextEvent{},
-		CarpoolingConfirmed: []CarpoolingConfirmed{},
+		MeineTermine:         []NextEvent{},
+		CarpoolingConfirmed:  []CarpoolingConfirmed{},
+		CarpoolingOpenGroups: []CarpoolingOpenGroup{},
 	}
 
 	var season Season
@@ -117,6 +133,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	resp.MeineTermine = h.queryNextEvents(r, userID, seasonID)
 	resp.MeineDienste = h.queryMeineDienste(r, userID, role, seasonID, season.Name)
 	resp.CarpoolingConfirmed = h.queryCarpoolingConfirmed(r, userID, seasonID)
+	resp.CarpoolingOpenGroups = h.queryCarpoolingOpenRequests(r, userID, seasonID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -449,6 +466,80 @@ func (h *Handler) queryCarpoolingConfirmed(r *http.Request, userID int, seasonID
 		return []CarpoolingConfirmed{}
 	}
 	return games
+}
+
+// queryCarpoolingOpenRequests returns open ride requests (suche without a
+// confirmed pairing) for the next max. 3 upcoming games of the user's teams,
+// regardless of event_type. One group per game; games without open requests
+// are omitted.
+func (h *Handler) queryCarpoolingOpenRequests(r *http.Request, userID int, seasonID int) []CarpoolingOpenGroup {
+	teamQuery := h.teamQueryForUser()
+
+	rows, err := h.db.QueryContext(r.Context(), fmt.Sprintf(`
+		SELECT g.id, g.date, g.opponent
+		FROM games g
+		JOIN game_teams gt ON g.id = gt.game_id
+		WHERE gt.team_id IN (%s)
+		  AND g.season_id = ?
+		  AND DATE(g.date) >= DATE('now')
+		GROUP BY g.id
+		ORDER BY g.date ASC
+		LIMIT 3`, teamQuery),
+		userID, seasonID, seasonID,
+	)
+	if err != nil {
+		return []CarpoolingOpenGroup{}
+	}
+	defer rows.Close()
+
+	var groups []CarpoolingOpenGroup
+	for rows.Next() {
+		var g CarpoolingOpenGroup
+		g.Requests = []CarpoolingOpenRequest{}
+		rows.Scan(&g.GameID, &g.Date, &g.Title)
+		groups = append(groups, g)
+	}
+
+	result := []CarpoolingOpenGroup{}
+	for _, g := range groups {
+		sRows, err := h.db.QueryContext(r.Context(), `
+			SELECT s.id,
+			       u.first_name || ' ' || u.last_name,
+			       s.plaetze,
+			       s.treffpunkt
+			FROM mitfahrgelegenheiten s
+			JOIN users u ON u.id = s.user_id
+			WHERE s.game_id = ?
+			  AND s.typ = 'suche'
+			  AND NOT EXISTS (
+			      SELECT 1 FROM mitfahrt_paarungen p
+			      WHERE p.suche_id = s.id AND p.status = 'confirmed')
+			ORDER BY s.created_at ASC`,
+			g.GameID)
+		if err != nil {
+			continue
+		}
+		for sRows.Next() {
+			var req CarpoolingOpenRequest
+			var plaetze sql.NullInt64
+			var treffpunkt sql.NullString
+			sRows.Scan(&req.SucheID, &req.RequesterName, &plaetze, &treffpunkt)
+			if plaetze.Valid {
+				req.Plaetze = int(plaetze.Int64)
+			}
+			if treffpunkt.Valid {
+				req.Treffpunkt = treffpunkt.String
+			}
+			g.Requests = append(g.Requests, req)
+		}
+		sRows.Close()
+
+		if len(g.Requests) > 0 {
+			result = append(result, g)
+		}
+	}
+
+	return result
 }
 
 func computeAvgSlotsPerGame(ctx context.Context, db *sql.DB) (float64, error) {
