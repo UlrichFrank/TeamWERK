@@ -1,13 +1,31 @@
+## 19.06.2026
+- [feat] members: Kassierer kann Bankdaten über /bank-details bearbeiten
+- [feat] web: SEPA-Beitragslauf-UI (VereinTab, BeitraegeTab, BeitragslaufPage)
+- [feat] app: Beitragslauf-/Beitragssatz-Routen und Kassierer-Gruppe verdrahten
+- [feat] members: Kassierer-Lesezugriff + Bankdaten-Endpoint (Feld-Whitelist)
+- [feat] beitragslauf: Kategorisierung, pain.008.001.08-XML, Saison-Protokoll
+- [feat] beitragssaetze: CRUD-Handler für Beitragsmatrix (3 Kategorien)
+- [feat] config: Club-API um SEPA-Stammdaten erweitert
+- [feat] sepa: IBAN-Validierung (Mod-97, länderspezifische Länge)
+
 ## 18.06.2026
+- [fix] permissions: Vorstand darf Dienst-Slots verwalten (manage_duties)
+- [feat] permissions: zusätzliche Policy-Capabilities für Frontend-Gating
+- [fix] pwa: Reload-Fallback löscht Precache- und app-shell-Cache
+- [feat] pwa: Navigationen via NetworkFirst, index.html nicht mehr im Precache
+- [feat] app: Cache-Control- und ETag-Header im SPA-Handler
+- [feat] permissions: Policy-Package, _can-Annotationen und hasFunction-Migration
 - [feat] chat: Tageswechsel-Separator im Chat-Verlauf
 
 ## 17.06.2026
 - [fix] carpooling: Kurznamen statt langer Teamnamen in Mitfahrgelegenheiten anzeigen
+- [fix] test: Import-Zyklus files↔testutil beheben, SQLite-In-Memory-Schema stabil machen
 - [fix] members: Abwesenheits-Sichtbarkeit nur für Spieler anzeigen
 - [fix] update: fix double banner
 - [fix] chat: Overlay-Breite, Textselektion und iOS-Click-Bug behoben
 - [feat] chat: Push-Benachrichtigungen für Nachrichten steuerbar im Profil
 - [fix] chat: Mobile Overlay – Scroll-Sperre, schmäleres Menü, keine Textselektion in Buttons
+- [fix] chat: Reaktions-Toggle löscht vorherige Emoji, Context-Menu-Clamp und Copy-Option
 - [fix] chat: WhatsApp-Style Mobile Action Overlay bei Long-Press
 - [fix] chat: Nachrichten-UX – Zeilenumbrüche, Textselektion, Links, Emoji-Regeln
 - [fix] dashboard: Meine Dienste filtert offene Slots nach Audience
