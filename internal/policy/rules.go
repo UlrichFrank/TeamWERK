@@ -40,6 +40,12 @@ func IsVorstandLike(p *Principal) bool {
 	return p.Role == "admin" || p.hasFunction("vorstand")
 }
 
+// IsKassiererLike returns true for kassierer (plus vorstand/admin pass-through).
+// Kassierer dürfen Mitglieder lesen/Bankdaten pflegen und den Beitragslauf ausführen.
+func IsKassiererLike(p *Principal) bool {
+	return IsVorstandLike(p) || p.hasFunction("kassierer")
+}
+
 // CanEditMember returns true if the caller may edit the given member (identified by their user_id).
 func CanEditMember(p *Principal, memberUserID int) bool {
 	if p.Role == "admin" || p.hasFunction("vorstand") {
@@ -226,10 +232,18 @@ func NavFor(p *Principal) []NavItem {
 	}
 	if IsVorstandLike(p) {
 		nav = append(nav, NavItem{"Nutzerverwaltung", "/nutzer"})
+	}
+	// Mitglieder + Beitragslauf + Einstellungen: auch für Kassierer sichtbar.
+	if IsKassiererLike(p) {
 		nav = append(nav, NavItem{"Mitglieder", "/mitglieder"})
+	}
+	if IsVorstandLike(p) {
 		nav = append(nav, NavItem{"Diensttypen", "/diensttypen"})
 		nav = append(nav, NavItem{"Dienstplan-Vorlagen", "/dienstplan-vorlagen"})
 		nav = append(nav, NavItem{"Veranstaltungsorte", "/veranstaltungsorte"})
+	}
+	if IsKassiererLike(p) {
+		nav = append(nav, NavItem{"Beitragslauf", "/beitragslauf"})
 		nav = append(nav, NavItem{"Einstellungen", "/einstellungen"})
 	}
 

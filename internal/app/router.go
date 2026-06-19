@@ -13,6 +13,8 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/absences"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
+	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -32,24 +34,26 @@ import (
 
 // Handlers holds all HTTP handler instances needed to build the router.
 type Handlers struct {
-	Auth         *auth.Handler
-	Config       *appconfig.Handler
-	Members      *members.Handler
-	WelcomeEmail *members.WelcomeEmailHandler
-	Duties       *duties.Handler
-	Dashboard    *dashboard.Handler
-	Games        *games.Handler
-	Kader        *kader.Handler
-	Upload       *upload.Handler
-	Files        *files.Handler
-	Carpool      *carpooling.Handler
-	Chat         *chat.Handler
-	Notif        *notifications.Handler
-	Training     *trainings.Handler
-	Absences     *absences.Handler
-	Teams        *teams.Handler
-	Venues       *venues.Handler
-	Hub          *hub.Handler
+	Auth           *auth.Handler
+	Config         *appconfig.Handler
+	Members        *members.Handler
+	WelcomeEmail   *members.WelcomeEmailHandler
+	Duties         *duties.Handler
+	Dashboard      *dashboard.Handler
+	Games          *games.Handler
+	Kader          *kader.Handler
+	Upload         *upload.Handler
+	Files          *files.Handler
+	Carpool        *carpooling.Handler
+	Chat           *chat.Handler
+	Notif          *notifications.Handler
+	Training       *trainings.Handler
+	Absences       *absences.Handler
+	Teams          *teams.Handler
+	Venues         *venues.Handler
+	Beitragssaetze *beitragssaetze.Handler
+	Beitragslauf   *beitragslauf.Handler
+	Hub            *hub.Handler
 
 	JWTSecret string
 	Database  *sql.DB
@@ -269,12 +273,30 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/impersonate/{id}", h.Auth.Impersonate)
 		})
 
-		// Vorstand
+		// Vorstand + Kassierer (Beitragslauf, Member-Lesen, Bankdaten)
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireClubFunction("vorstand"))
+			r.Use(auth.RequireClubFunction("vorstand", "kassierer"))
+			// Member-Lesezugriff
 			r.Get("/api/members", h.Members.List)
 			r.Get("/api/members/export", h.Members.Export)
 			r.Get("/api/members/{id}", h.Members.Get)
+			r.Get("/api/members/{id}/parents", h.Members.GetMemberParents)
+			r.Put("/api/members/{id}/bankdaten", h.Members.UpdateBankdaten)
+			r.Post("/api/upload/sepa-mandat/{id}", h.Upload.UploadSepaMandat)
+			// (DELETE sepa-mandat bleibt in der Authenticated-Gruppe — breiterer Zugriff)
+			// Beitragsmatrix
+			r.Get("/api/beitrags-saetze", h.Beitragssaetze.List)
+			r.Post("/api/beitrags-saetze", h.Beitragssaetze.Create)
+			// Beitragslauf
+			r.Get("/api/beitragslauf/preview", h.Beitragslauf.Preview)
+			r.Post("/api/beitragslauf/export", h.Beitragslauf.Export)
+			r.Post("/api/beitragslauf/confirm", h.Beitragslauf.Confirm)
+			r.Get("/api/beitragslauf/protocol", h.Beitragslauf.Protocol)
+		})
+
+		// Vorstand
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand"))
 			r.Post("/api/members", h.Members.Create)
 			r.Put("/api/members/{id}", h.Members.Update)
 			r.Put("/api/members/{id}/status", h.Members.UpdateStatus)
@@ -302,7 +324,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Put("/api/members/{id}/user", h.Members.LinkUser)
 			r.Post("/api/members/{id}/proxy-account", h.Members.CreateProxyAccount)
 			r.Post("/api/members/{id}/welcome-email", h.WelcomeEmail.Send)
-			r.Get("/api/members/{id}/parents", h.Members.GetMemberParents)
 			r.Post("/api/users/{id}/create-member", h.Members.CreateMemberFromUser)
 			r.Post("/api/family-links", h.Members.CreateFamilyLink)
 			r.Delete("/api/family-links", h.Members.DeleteFamilyLink)
@@ -315,7 +336,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Delete("/api/duty-templates/{id}", h.Games.DeleteTemplate)
 			r.Post("/api/upload/member-photo/{id}", h.Upload.UploadMemberPhoto)
 			r.Delete("/api/upload/member-photo/{id}", h.Upload.DeleteMemberPhoto)
-			r.Post("/api/upload/sepa-mandat/{id}", h.Upload.UploadSepaMandat)
 			r.Put("/api/age-class-rules/{ageClass}", h.Config.UpdateAgeClassRuleHandler)
 		})
 

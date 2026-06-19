@@ -22,6 +22,8 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/absences"
 	"github.com/teamstuttgart/teamwerk/internal/app"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
+	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -93,28 +95,30 @@ func serve() {
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
 	hubInstance := hub.NewHub()
 	handlers := &app.Handlers{
-		Auth:         auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL),
-		Config:       appconfig.NewHandler(database, hubInstance),
-		Members:      members.NewHandler(database, hubInstance),
-		WelcomeEmail: members.NewWelcomeEmailHandler(database, m),
-		Duties:       duties.NewHandler(database, cfg, hubInstance),
-		Dashboard:    dashboard.NewHandler(database),
-		Games:        games.NewHandler(database, cfg, hubInstance),
-		Kader:        kader.NewHandler(database, hubInstance),
-		Upload:       upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret),
-		Files:        files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret),
-		Carpool:      carpooling.NewHandler(database, cfg, hubInstance),
-		Chat:         chat.NewHandler(database, hubInstance, cfg),
-		Notif:        notifications.NewHandler(database, cfg),
-		Training:     trainings.NewHandler(database, cfg, hubInstance),
-		Absences:     absences.NewHandler(database, hubInstance),
-		Teams:        teams.NewHandler(database),
-		Venues:       venues.NewHandler(database, hubInstance),
-		Hub:          hub.NewHandler(hubInstance, buildHash),
-		JWTSecret:    cfg.JWTSecret,
-		Database:     database,
-		BaseURL:      cfg.BaseURL,
-		BuildHash:    buildHash,
+		Auth:           auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL),
+		Config:         appconfig.NewHandler(database, hubInstance),
+		Members:        members.NewHandler(database, hubInstance),
+		WelcomeEmail:   members.NewWelcomeEmailHandler(database, m),
+		Duties:         duties.NewHandler(database, cfg, hubInstance),
+		Dashboard:      dashboard.NewHandler(database),
+		Games:          games.NewHandler(database, cfg, hubInstance),
+		Kader:          kader.NewHandler(database, hubInstance),
+		Upload:         upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret),
+		Files:          files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret),
+		Carpool:        carpooling.NewHandler(database, cfg, hubInstance),
+		Chat:           chat.NewHandler(database, hubInstance, cfg),
+		Notif:          notifications.NewHandler(database, cfg),
+		Training:       trainings.NewHandler(database, cfg, hubInstance),
+		Absences:       absences.NewHandler(database, hubInstance),
+		Teams:          teams.NewHandler(database),
+		Venues:         venues.NewHandler(database, hubInstance),
+		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
+		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, cfg.BeitragslaufDir),
+		Hub:            hub.NewHandler(hubInstance, buildHash),
+		JWTSecret:      cfg.JWTSecret,
+		Database:       database,
+		BaseURL:        cfg.BaseURL,
+		BuildHash:      buildHash,
 	}
 
 	distFS, err := fs.Sub(webFS, "web/dist")
@@ -129,7 +133,6 @@ func serve() {
 	log.Printf("listening on :%s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, root))
 }
-
 
 func runGenVapid() {
 	priv, pub, err := webpush.GenerateVAPIDKeys()
