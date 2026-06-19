@@ -962,3 +962,75 @@ func TestLogout_ClearsLegacyPathCookie(t *testing.T) {
 		t.Error("logout must emit Set-Cookie to clear Path=/api/auth")
 	}
 }
+
+// ── Auth-Tier: Einladungen & Beitrittsanträge sind Vorstand-only ─────────────
+// Regression: /api/auth/invite und /api/membership-requests lagen versehentlich
+// in der trainer/sportliche_leitung-Gruppe, sodass Vorstand 403 bekam und das
+// Frontend irreführend "E-Mail-Konfiguration prüfen" anzeigte.
+
+// TC: Vorstand darf einladen (Happy-Path; Mailer ist im Test deaktiviert → 204).
+func TestInvite_Vorstand_Allowed(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/auth/invite",
+		testutil.Token(t, userID, "standard", []string{"vorstand"}),
+		map[string]string{"email": "neu@test.local", "role": "standard"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("Vorstand-Invite: erwartet 204, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM invitation_tokens WHERE email='neu@test.local'`).Scan(&n)
+	if n != 1 {
+		t.Errorf("erwartet 1 invitation_token, got %d", n)
+	}
+}
+
+// TC: Trainer darf nicht mehr einladen (Fehlerfall 403).
+func TestInvite_Trainer_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/auth/invite",
+		testutil.Token(t, userID, "standard", []string{"trainer", "sportliche_leitung"}),
+		map[string]string{"email": "neu2@test.local", "role": "standard"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("Trainer-Invite: erwartet 403, got %d", res.StatusCode)
+	}
+}
+
+// TC: Vorstand darf Beitrittsanträge lesen (Happy-Path).
+func TestListMembershipRequests_Vorstand_Allowed(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Get(t, srv, "/api/membership-requests",
+		testutil.Token(t, userID, "standard", []string{"vorstand"}))
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("Vorstand-MembershipRequests: erwartet 200, got %d", res.StatusCode)
+	}
+}
+
+// TC: Trainer darf Beitrittsanträge nicht mehr lesen (Fehlerfall 403).
+func TestListMembershipRequests_Trainer_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Get(t, srv, "/api/membership-requests",
+		testutil.Token(t, userID, "standard", []string{"trainer", "sportliche_leitung"}))
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("Trainer-MembershipRequests: erwartet 403, got %d", res.StatusCode)
+	}
+}
