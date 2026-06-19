@@ -219,6 +219,37 @@ func TestList_TrainerScope(t *testing.T) {
 	}
 }
 
+// Ein Kassierer ist (anders als ein Trainer) keiner Kader-Mannschaft zugeordnet,
+// verwaltet aber Bankdaten und Beitragslauf vereinsweit. policy.ScopeMembersQuery
+// muss ihm daher die ungescopte (1=1) Mitgliederliste liefern — sonst bliebe die
+// Liste für einen reinen Kassierer leer (Regression: /mitglieder zeigte nichts).
+func TestList_KassiererSeesAll(t *testing.T) {
+	database := testutil.NewDB(t)
+
+	// Kassierer-Nutzer ohne Kader-/Trainer-Zuordnung.
+	kassiererUserID := testutil.CreateUser(t, database, "standard")
+
+	// 4 vereinsweite Mitglieder, in keinem Kader.
+	for range 4 {
+		testutil.CreateMember(t, database, 0)
+	}
+
+	tok := testutil.Token(t, kassiererUserID, "standard", []string{"kassierer"})
+
+	srv := newMembersServer(t, database)
+	res := testutil.Get(t, srv, "/api/members", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	lr := decodeList(t, res)
+	if lr.Total != 4 {
+		t.Errorf("kassierer should see all 4 members club-wide, got total=%d", lr.Total)
+	}
+	if len(lr.Items) != 4 {
+		t.Errorf("kassierer should see all 4 members club-wide, got %d items", len(lr.Items))
+	}
+}
+
 // TC-MCAN-04: Feld-Redaction für kader-gescopte Trainer. Ein Trainer sieht in der
 // Mitgliederliste nur Name, Jahrgang (birth_year, nicht das exakte Datum), Passnummer
 // und Vereinsfunktionen. Mitgliedsnummer, exaktes Geburtsdatum und user_id werden

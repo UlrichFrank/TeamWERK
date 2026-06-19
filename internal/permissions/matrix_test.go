@@ -65,6 +65,16 @@ var exVorstandTrainer = map[string]int{
 	"vorstand_beisitzer": 403, "kassierer": 403, "spieler": 403, "elternteil": 403,
 }
 
+// RequireClubFunction("vorstand","trainer","sportliche_leitung","kassierer")
+// Saisons lesen: Kader (Vorstand/Trainer/sL) + Beitragslauf (Kassierer).
+var exSeasonsRead = map[string]int{
+	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
+	"kassierer": httpAllowed,
+	"trainer":   httpAllowed, "trainer_elternteil": httpAllowed,
+	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
+	"vorstand_beisitzer": 403, "spieler": 403, "elternteil": 403,
+}
+
 // RequireClubFunction("vorstand")
 var exVorstand = map[string]int{
 	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
@@ -345,7 +355,6 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/duty-templates", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/duty-templates/{id}", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/duty-templates/{id}/preview", expected: exVorstandTrainer},
-	{method: "GET", path: "/api/seasons", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/kader", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/kader", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/kader/{id}", expected: exVorstandTrainer},
@@ -357,6 +366,9 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/kader/copy-from-season", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/kader/auto-assign", expected: exVorstandTrainer},
 
+	// ── Saisons lesen: Vorstand/Trainer/sL + Kassierer ───────────────────────────
+	{method: "GET", path: "/api/seasons", expected: exSeasonsRead},
+
 	// ── Admin only ───────────────────────────────────────────────────────────────
 	{method: "POST", path: "/api/impersonate/{id}", expected: exAdmin},
 
@@ -366,6 +378,8 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/members/{id}", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/members/{id}/parents", expected: exVorstandKassierer},
 	{method: "PUT", path: "/api/members/{id}/bank-details", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/club", expected: exVorstandKassierer},
+	{method: "PUT", path: "/api/club", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/fee-rates", expected: exVorstandKassierer},
 	{method: "POST", path: "/api/fee-rates", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/fee-run/preview", expected: exVorstandKassierer},
@@ -377,8 +391,6 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/members", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}/status", expected: exVorstand},
-	{method: "GET", path: "/api/club", expected: exVorstand},
-	{method: "PUT", path: "/api/club", expected: exVorstand},
 	{method: "POST", path: "/api/seasons", expected: exVorstand},
 	{method: "PUT", path: "/api/seasons/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/seasons/{id}/activate", expected: exVorstand},

@@ -153,7 +153,7 @@ func CanModerateChat(p *Principal) bool {
 // set visible to the caller. needsUserIDArg=true means the caller must supply Principal.UserID
 // as the next query argument.
 func ScopeMembersQuery(p *Principal) (where string, needsUserIDArg bool) {
-	if p.Role == "admin" || p.hasFunction("vorstand") || p.hasFunction("sportliche_leitung") {
+	if p.Role == "admin" || p.hasFunction("vorstand") || p.hasFunction("sportliche_leitung") || p.hasFunction("kassierer") {
 		return "1=1", false
 	}
 	return `EXISTS (
@@ -174,6 +174,7 @@ const (
 	CapManageUsers     = "manage_users"
 	CapManageSeasons   = "manage_seasons"
 	CapManageClub      = "manage_club"
+	CapManageFees      = "manage_fees"
 	CapManageDutyTypes = "manage_duty_types"
 	CapImpersonate     = "impersonate"
 	CapManageTrainings = "manage_trainings"
@@ -188,9 +189,14 @@ const (
 func Capabilities(p *Principal) []string {
 	caps := []string{}
 	if IsVorstandLike(p) {
-		caps = append(caps, CapManageMembers, CapManageGames, CapManageDuties, CapManageKader, CapManageUsers, CapManageSeasons, CapManageClub, CapManageDutyTypes)
+		caps = append(caps, CapManageMembers, CapManageGames, CapManageDuties, CapManageKader, CapManageUsers, CapManageSeasons, CapManageDutyTypes)
 	} else if IsTrainerLike(p) {
 		caps = append(caps, CapManageGames, CapManageDuties, CapManageKader)
+	}
+	// Kassierer-like (kassierer + vorstand + admin): Vereins-Stammdaten (SEPA) und
+	// Beitragswesen — steuert die Einstellungen-Tabs „Verein" und „Beiträge".
+	if IsKassiererLike(p) {
+		caps = append(caps, CapManageClub, CapManageFees)
 	}
 	// Trainer-like personas (admin, trainer, sportliche_leitung) — excludes pure vorstand.
 	if CanManageTrainings(p) {

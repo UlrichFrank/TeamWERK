@@ -20,6 +20,9 @@ func slP() *policy.Principal {
 func spielerP() *policy.Principal {
 	return &policy.Principal{UserID: 5, Role: "standard", ClubFunctions: []string{"spieler"}}
 }
+func kassiererP() *policy.Principal {
+	return &policy.Principal{UserID: 6, Role: "standard", ClubFunctions: []string{"kassierer"}}
+}
 
 func TestIsTrainerLike(t *testing.T) {
 	if !policy.IsTrainerLike(adminP()) {
@@ -101,6 +104,11 @@ func TestScopeMembersQuery(t *testing.T) {
 	if wideWhere != "1=1" || wideArg {
 		t.Error("vorstand should get wide search")
 	}
+	// Kassierer verwaltet Bankdaten/Beitragslauf vereinsweit → ungescopte Mitgliederliste.
+	wideWhere, wideArg = policy.ScopeMembersQuery(kassiererP())
+	if wideWhere != "1=1" || wideArg {
+		t.Error("kassierer should get wide search (manages fees club-wide)")
+	}
 	narrowWhere, narrowArg := policy.ScopeMembersQuery(trainerP())
 	if narrowWhere == "1=1" || !narrowArg {
 		t.Error("trainer should get narrow search with user-id arg")
@@ -149,6 +157,26 @@ func TestNavFor_MitgliederVisibility(t *testing.T) {
 	for _, item := range trainerNav {
 		if item.Route == "/mitglieder" {
 			t.Error("trainer should not see /mitglieder in nav")
+		}
+	}
+}
+
+func TestNavFor_Kassierer(t *testing.T) {
+	// Kassierer sieht Mitglieder, Beitragslauf und Einstellungen.
+	nav := policy.NavFor(kassiererP())
+	routes := make(map[string]bool, len(nav))
+	for _, item := range nav {
+		routes[item.Route] = true
+	}
+	for _, want := range []string{"/mitglieder", "/beitragslauf", "/einstellungen"} {
+		if !routes[want] {
+			t.Errorf("kassierer should see %s in nav", want)
+		}
+	}
+	// Aber keine reinen Vorstands-Einträge (Nutzerverwaltung, Diensttypen).
+	for _, notWant := range []string{"/nutzer", "/diensttypen"} {
+		if routes[notWant] {
+			t.Errorf("kassierer should NOT see %s in nav", notWant)
 		}
 	}
 }
@@ -227,6 +255,39 @@ func TestCapabilities_Vorstand(t *testing.T) {
 	}
 	if hasCap(caps, policy.CapManageDocuments) {
 		t.Error("pure vorstand should NOT have manage_documents (admin only)")
+	}
+}
+
+func TestCapabilities_Kassierer(t *testing.T) {
+	caps := policy.Capabilities(kassiererP())
+	// Kassierer pflegt Vereins-Stammdaten (SEPA) und Beitragswesen.
+	if !hasCap(caps, policy.CapManageClub) {
+		t.Error("kassierer should have manage_club")
+	}
+	if !hasCap(caps, policy.CapManageFees) {
+		t.Error("kassierer should have manage_fees")
+	}
+	// Aber keine Vollverwaltung von Mitgliedern, Saisons oder Nutzern.
+	for _, c := range []string{
+		policy.CapManageMembers, policy.CapManageSeasons, policy.CapManageUsers,
+		policy.CapManageTrainings, policy.CapBroadcast, policy.CapBroadcastAll,
+	} {
+		if hasCap(caps, c) {
+			t.Errorf("kassierer should NOT have %q", c)
+		}
+	}
+}
+
+func TestCapabilities_VorstandAdminGetFeesAndClub(t *testing.T) {
+	// Vorstand/Admin sind kassierer-like → sehen auch Verein/Beiträge.
+	for _, p := range []*policy.Principal{vorstandP(), adminP()} {
+		caps := policy.Capabilities(p)
+		if !hasCap(caps, policy.CapManageClub) {
+			t.Errorf("%v should have manage_club", p.ClubFunctions)
+		}
+		if !hasCap(caps, policy.CapManageFees) {
+			t.Errorf("%v should have manage_fees", p.ClubFunctions)
+		}
 	}
 }
 

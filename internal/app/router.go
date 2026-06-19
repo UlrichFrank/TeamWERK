@@ -288,6 +288,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Put("/api/members/{id}/bank-details", h.Members.UpdateBankdaten)
 			r.Post("/api/upload/sepa-mandat/{id}", h.Upload.UploadSepaMandat)
 			// (DELETE sepa-mandat bleibt in der Authenticated-Gruppe — breiterer Zugriff)
+			// Vereins-Stammdaten (Verein-Tab: Name/Adresse + SEPA) — Kassierer pflegt SEPA-Daten für den Beitragslauf
+			r.Get("/api/club", h.Config.GetClub)
+			r.Put("/api/club", h.Config.UpdateClub)
 			// Beitragsmatrix
 			r.Get("/api/fee-rates", h.Beitragssaetze.List)
 			r.Post("/api/fee-rates", h.Beitragssaetze.Create)
@@ -304,8 +307,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/members", h.Members.Create)
 			r.Put("/api/members/{id}", h.Members.Update)
 			r.Put("/api/members/{id}/status", h.Members.UpdateStatus)
-			r.Get("/api/club", h.Config.GetClub)
-			r.Put("/api/club", h.Config.UpdateClub)
 			r.Post("/api/seasons", h.Config.CreateSeason)
 			r.Put("/api/seasons/{id}", h.Config.UpdateSeason)
 			r.Put("/api/seasons/{id}/activate", h.Config.ActivateSeason)
@@ -348,6 +349,12 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Put("/api/age-class-rules/{ageClass}", h.Config.UpdateAgeClassRuleHandler)
 		})
 
+		// Saisons lesen — Vorstand/Trainer/sportliche_leitung (Kader) + Kassierer (Beitragslauf braucht die Saisonliste)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung", "kassierer"))
+			r.Get("/api/seasons", h.Config.ListSeasons)
+		})
+
 		// Vorstand + Trainer + sportliche_leitung (read-only)
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
@@ -355,7 +362,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Get("/api/duty-templates", h.Games.ListTemplates)
 			r.Get("/api/duty-templates/{id}", h.Games.GetTemplateByID)
 			r.Get("/api/duty-templates/{id}/preview", h.Games.PreviewSlots)
-			r.Get("/api/seasons", h.Config.ListSeasons)
 			r.Get("/api/kader", h.Kader.ListKader)
 			r.Post("/api/kader", h.Kader.InitializeKader)
 			r.Get("/api/kader/{id}", h.Kader.GetKader)

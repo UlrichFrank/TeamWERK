@@ -2,6 +2,7 @@ import { useEffect, useState, FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import EditModal from '../components/EditModal'
 import MobileCard from '../components/MobileCard'
@@ -629,17 +630,22 @@ function BeitraegeTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege'
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'verein', label: 'Verein' },
-  { id: 'saisons', label: 'Saisons' },
-  { id: 'altersklassen', label: 'Altersklassen' },
-  { id: 'beitraege', label: 'Beiträge' },
+// Sichtbarkeit pro Tab über Capabilities (nie über role/clubFunctions direkt):
+//   Kassierer      → manage_club + manage_fees      → Verein, Beiträge
+//   Vorstand/Admin → zusätzlich manage_seasons      → alle vier Tabs
+const TABS: { id: Tab; label: string; cap: string }[] = [
+  { id: 'verein', label: 'Verein', cap: 'manage_club' },
+  { id: 'saisons', label: 'Saisons', cap: 'manage_seasons' },
+  { id: 'altersklassen', label: 'Altersklassen', cap: 'manage_seasons' },
+  { id: 'beitraege', label: 'Beiträge', cap: 'manage_fees' },
 ]
 
 export default function AdminSettingsPage() {
+  const { hasCapability } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const visibleTabs = TABS.filter(t => hasCapability(t.cap))
   const rawTab = searchParams.get('tab')
-  const activeTab: Tab = (rawTab === 'saisons' || rawTab === 'altersklassen' || rawTab === 'beitraege') ? rawTab : 'verein'
+  const activeTab: Tab = visibleTabs.find(t => t.id === rawTab)?.id ?? visibleTabs[0]?.id ?? 'verein'
 
   const setTab = (id: Tab) => setSearchParams({ tab: id }, { replace: true })
 
@@ -649,7 +655,7 @@ export default function AdminSettingsPage() {
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-brand-border-subtle mb-6">
-        {TABS.map(t => (
+        {visibleTabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
