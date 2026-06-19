@@ -55,11 +55,11 @@ context: |
 # Per-artifact rules
 rules:
   proposal:
-    - Neue Features müssen mit dem bestehenden Rollen-Modell (admin/trainer/elternteil/spieler) kompatibel sein
+    - Neue Features müssen mit dem zweidimensionalen Berechtigungs-Modell kompatibel sein (System-Rolle admin/standard via RequireRole; Vereinsfunktionen spieler/trainer/sportliche_leitung/vorstand/vorstand_beisitzer/kassierer via RequireClubFunction; Eltern via family_links/claims.IsParent — Details in CLAUDE.md)
     - RAM-Footprint im Blick behalten (VPS hat 1 GB)
     - Keine neuen externen Dienste ohne explizite Begründung
   tasks:
     - Backend-Tasks vor Frontend-Tasks listen (API zuerst, dann UI)
-    - Neue Migrations-Dateien bekommen die nächste freie Nummer (aktuell: 004 ist die letzte)
+    - Neue Migrations-Dateien bekommen die nächste freie Nummer (höchste vorhandene per `ls internal/db/migrations/` prüfen; nie eine Nummer ≤ aktueller DB-Version)
     - Tests sind verbindlich (siehe Test-Standard in CLAUDE.md): jede neue Route braucht Happy-Path- + Fehlerfall-Test; Fixtures in internal/testutil
     - Jeder Task soll in < 2 Stunden umsetzbar sein
