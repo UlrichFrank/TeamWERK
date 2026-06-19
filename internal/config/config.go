@@ -7,13 +7,14 @@ import (
 )
 
 type Config struct {
-	Port           string
-	DBPath         string
-	JWTSecret      string
-	BaseURL        string
-	UploadDir      string
-	FilesDir       string
-	SMTP           SMTPConfig
+	Port            string
+	DBPath          string
+	JWTSecret       string
+	BaseURL         string
+	UploadDir       string
+	FilesDir        string
+	BeitragslaufDir string
+	SMTP            SMTPConfig
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDEmail      string
@@ -31,12 +32,13 @@ type SMTPConfig struct {
 func Load() (*Config, error) {
 	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
 	c := &Config{
-		Port:      getEnv("PORT", "8080"),
-		DBPath:    getEnv("DB_PATH", "./teamwerk.db"),
-		JWTSecret: os.Getenv("JWT_SECRET"),
-		BaseURL:   getEnv("BASE_URL", "https://internal.team-stuttgart.org"),
-		UploadDir: getEnv("UPLOAD_DIR", "./storage/uploads"),
-		FilesDir:  getEnv("FILES_DIR", "./storage/files"),
+		Port:            getEnv("PORT", "8080"),
+		DBPath:          getEnv("DB_PATH", "./teamwerk.db"),
+		JWTSecret:       os.Getenv("JWT_SECRET"),
+		BaseURL:         getEnv("BASE_URL", "https://internal.team-stuttgart.org"),
+		UploadDir:       getEnv("UPLOAD_DIR", "./storage/uploads"),
+		FilesDir:        getEnv("FILES_DIR", "./storage/files"),
+		BeitragslaufDir: getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle"),
 		SMTP: SMTPConfig{
 			Host:     getEnv("SMTP_HOST", "mail.agenturserver.de"),
 			Port:     smtpPort,
