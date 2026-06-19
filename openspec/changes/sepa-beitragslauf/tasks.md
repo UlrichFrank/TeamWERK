@@ -240,10 +240,10 @@
 ## 13. Frontend — Mitglieder-Bereich für Kassierer
 
 - [x] 13.1 `AppShell.tsx`: Mitglieder-Nav-Eintrag zusätzlich für `kassierer` sichtbar.
-- [ ] 13.2 `web/src/pages/MembersPage.tsx` / `MemberDetailPage.tsx`: für `kassierer` erreichbar; Nicht-Bankfelder schreibgeschützt anzeigen.
-- [ ] 13.3 `web/src/components/admin/MemberDatenschutzTab.tsx`: Bankdaten-Formular (IBAN, SEPA-Mandat, Kontoinhaber, Adresse) für `kassierer` editierbar → `PUT /api/members/{id}/bank-details`; SEPA-Mandat-Upload/Delete für `kassierer` freigeschaltet.
-- [ ] 13.4 Tests in `web/src/pages/__tests__/MemberDetailPage.permissions.test.tsx`: Kassierer sieht/bearbeitet Bankdaten, kann übrige Felder nicht ändern (sofern Permission-Tests aus `permissions-baseline-tests` laufen).
-- [ ] 13.5 Commit: `feat(members): Kassierer-Zugriff im Mitglieder-Bereich`
+- [x] 13.2 `web/src/pages/MembersPage.tsx` / `MemberDetailPage.tsx`: für `kassierer` erreichbar; Nicht-Bankfelder schreibgeschützt anzeigen.
+- [x] 13.3 `web/src/components/admin/MemberDatenschutzTab.tsx`: Bankdaten-Formular (IBAN, SEPA-Mandat, Kontoinhaber, Adresse) für `kassierer` editierbar → `PUT /api/members/{id}/bank-details`; SEPA-Mandat-Upload/Delete für `kassierer` freigeschaltet. (Backend freigegeben; Mandat-PDF-Widget bleibt vorerst im Admin-Datenschutz-Tab.)
+- [x] 13.4 Tests in `web/src/pages/__tests__/MemberDetailPage.permissions.test.tsx`: Kassierer sieht/bearbeitet Bankdaten, kann übrige Felder nicht ändern (sofern Permission-Tests aus `permissions-baseline-tests` laufen).
+- [x] 13.5 Commit: `feat(members): Kassierer-Zugriff im Mitglieder-Bereich`
 
 ## 14. Frontend — Helper & Live-Updates
 
