@@ -219,6 +219,114 @@ func TestList_TrainerScope(t *testing.T) {
 	}
 }
 
+// TC-MCAN-04: Feld-Redaction für kader-gescopte Trainer. Ein Trainer sieht in der
+// Mitgliederliste nur Name, Jahrgang (birth_year, nicht das exakte Datum), Passnummer
+// und Vereinsfunktionen. Mitgliedsnummer, exaktes Geburtsdatum und user_id werden
+// entfernt. Vorstand sieht weiterhin alle Felder.
+func TestList_TrainerFieldRedaction(t *testing.T) {
+	database := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, database, "2025/26")
+	teamA := testutil.CreateTeam(t, database, "Team A")
+
+	trainerUserID := testutil.CreateUser(t, database, "standard")
+	trainerMemberID := testutil.CreateMember(t, database, trainerUserID)
+	kaderA := testutil.CreateKader(t, database, teamA, seasonID)
+	testutil.AddKaderTrainer(t, database, kaderA, trainerMemberID)
+
+	// Ein Spieler im Kader mit sensiblen Feldern.
+	playerUserID := testutil.CreateUser(t, database, "standard")
+	playerID := testutil.CreateMember(t, database, playerUserID)
+	addKaderMember(t, database, kaderA, playerID)
+	addClubFunction(t, database, playerID, "spieler")
+	if _, err := database.Exec(
+		`UPDATE members SET date_of_birth='2008-04-15', member_number='M-100', pass_number='P-200' WHERE id=?`,
+		playerID); err != nil {
+		t.Fatalf("update player: %v", err)
+	}
+
+	type item struct {
+		FirstName     string   `json:"first_name"`
+		LastName      string   `json:"last_name"`
+		DateOfBirth   string   `json:"date_of_birth"`
+		BirthYear     *int     `json:"birth_year"`
+		MemberNumber  string   `json:"member_number"`
+		PassNumber    string   `json:"pass_number"`
+		UserID        *int     `json:"user_id"`
+		ClubFunctions []string `json:"club_functions"`
+	}
+	srv := newMembersServer(t, database)
+
+	// Trainer: redigierte Felder.
+	resT := testutil.Get(t, srv, "/api/members",
+		testutil.Token(t, trainerUserID, "standard", []string{"trainer"}))
+	if resT.StatusCode != http.StatusOK {
+		t.Fatalf("trainer: expected 200, got %d", resT.StatusCode)
+	}
+	var bodyT struct {
+		Items []item `json:"items"`
+	}
+	if err := json.NewDecoder(resT.Body).Decode(&bodyT); err != nil {
+		resT.Body.Close()
+		t.Fatalf("decode trainer: %v", err)
+	}
+	resT.Body.Close()
+	if len(bodyT.Items) != 1 {
+		t.Fatalf("trainer: expected 1 item, got %d", len(bodyT.Items))
+	}
+	it := bodyT.Items[0]
+	if it.FirstName == "" || it.LastName == "" {
+		t.Error("trainer: name must be present")
+	}
+	if it.BirthYear == nil || *it.BirthYear != 2008 {
+		t.Errorf("trainer: expected birth_year=2008, got %v", it.BirthYear)
+	}
+	if it.DateOfBirth != "" {
+		t.Errorf("trainer: date_of_birth must be redacted, got %q", it.DateOfBirth)
+	}
+	if it.MemberNumber != "" {
+		t.Errorf("trainer: member_number must be redacted, got %q", it.MemberNumber)
+	}
+	if it.UserID != nil {
+		t.Errorf("trainer: user_id must be redacted, got %v", *it.UserID)
+	}
+	if it.PassNumber != "P-200" {
+		t.Errorf("trainer: pass_number must be kept, got %q", it.PassNumber)
+	}
+	if len(it.ClubFunctions) == 0 {
+		t.Error("trainer: club_functions must be kept")
+	}
+
+	// Vorstand: volle Felder.
+	resV := testutil.Get(t, srv, "/api/members",
+		testutil.Token(t, trainerUserID, "standard", []string{"vorstand"}))
+	if resV.StatusCode != http.StatusOK {
+		t.Fatalf("vorstand: expected 200, got %d", resV.StatusCode)
+	}
+	var bodyV struct {
+		Items []item `json:"items"`
+	}
+	if err := json.NewDecoder(resV.Body).Decode(&bodyV); err != nil {
+		resV.Body.Close()
+		t.Fatalf("decode vorstand: %v", err)
+	}
+	resV.Body.Close()
+	var player *item
+	for i := range bodyV.Items {
+		if bodyV.Items[i].MemberNumber == "M-100" {
+			player = &bodyV.Items[i]
+		}
+	}
+	if player == nil {
+		t.Fatal("vorstand: player with member_number M-100 not found (fields must not be redacted)")
+	}
+	if player.DateOfBirth == "" {
+		t.Error("vorstand: date_of_birth must be present (full)")
+	}
+	if player.BirthYear != nil {
+		t.Error("vorstand: birth_year must not be set (uses full date_of_birth)")
+	}
+}
+
 // addClubFunction assigns a Vereinsfunktion to a member directly.
 func addClubFunction(t *testing.T, database *sql.DB, memberID int, fn string) {
 	t.Helper()

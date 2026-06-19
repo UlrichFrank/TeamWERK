@@ -33,6 +33,7 @@ type Member struct {
 	FirstName     string   `json:"first_name"`
 	LastName      string   `json:"last_name"`
 	DateOfBirth   string   `json:"date_of_birth,omitempty"`
+	BirthYear     *int     `json:"birth_year,omitempty"`
 	MemberNumber  string   `json:"member_number,omitempty"`
 	PassNumber    string   `json:"pass_number,omitempty"`
 	JerseyNumber  *int     `json:"jersey_number,omitempty"`
@@ -97,6 +98,22 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	}
 	m.ClubFunctions = parseFunctions(clubFunctionsStr)
 	return m, nil
+}
+
+// redactMemberForScopedViewer reduces a member to the fields a kader-scoped viewer
+// (pure trainer) may see: names, year of birth (not the exact date), pass number,
+// club functions, plus sport fields (jersey/position/gender/status). Administrative
+// fields — exact date of birth, member number, account linkage — are stripped.
+func redactMemberForScopedViewer(m Member) Member {
+	if len(m.DateOfBirth) >= 4 {
+		if y, err := strconv.Atoi(m.DateOfBirth[:4]); err == nil {
+			m.BirthYear = &y
+		}
+	}
+	m.DateOfBirth = ""
+	m.MemberNumber = ""
+	m.UserID = nil
+	return m
 }
 
 func parseFunctions(s string) []string {
@@ -260,13 +277,18 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		Member
 		Can policy.CanFlags `json:"can"`
 	}
+	redact := !policy.CanReadMemberAdminFields(p)
 	annotated := make([]memberItem, len(result))
 	for i, m := range result {
 		memberUserID := 0
 		if m.UserID != nil {
 			memberUserID = *m.UserID
 		}
-		annotated[i] = memberItem{Member: m, Can: policy.MemberCan(p, memberUserID)}
+		can := policy.MemberCan(p, memberUserID)
+		if redact {
+			m = redactMemberForScopedViewer(m)
+		}
+		annotated[i] = memberItem{Member: m, Can: can}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
