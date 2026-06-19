@@ -14,7 +14,7 @@ EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local pull-db test lint
+.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local pull-db test lint
 
 .DEFAULT_GOAL := help
 
@@ -28,9 +28,13 @@ env: ## .env aus .env.example erstellen
 		echo ".env erstellt (JWT_SECRET automatisch gesetzt)."; \
 	fi
 
-init: ## Abhängigkeiten installieren (go mod tidy, pnpm install)
+init: hooks ## Abhängigkeiten installieren (go mod tidy, pnpm install) + Git-Hooks aktivieren
 	$(GO) mod tidy
 	cd web && pnpm install
+
+hooks: ## Git-Hooks aktivieren (core.hooksPath → .githooks: pre-commit gofmt, pre-push Gate)
+	git config core.hooksPath .githooks
+	@echo "Git-Hooks aktiv (.githooks). pre-commit: gofmt · pre-push: vet+test+lint+build."
 
 dev: ## Backend (mit air Auto-Reload) + Vite Dev-Server lokal starten
 	@echo "Starting backend on :8080 (with auto-reload) and frontend dev server..."

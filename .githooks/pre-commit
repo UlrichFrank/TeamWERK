@@ -1,0 +1,28 @@
+#!/bin/sh
+# TeamWERK Harness — pre-commit (schnell, nur Staged-Files).
+# Prüft nur, dass alle gestageten Go-Dateien gofmt-konform sind.
+# Vollständige Tests/Lint laufen im pre-push-Hook.
+#
+# Installation: `make hooks` (setzt core.hooksPath auf .githooks).
+
+set -e
+
+GO="$( [ -x /usr/local/go/bin/go ] && echo /usr/local/go/bin/go || echo go )"
+GOFMT="$(dirname "$GO")/gofmt"
+[ -x "$GOFMT" ] || GOFMT=gofmt
+
+# Gestagete, existierende .go-Dateien (keine gelöschten).
+staged_go="$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)"
+[ -z "$staged_go" ] && exit 0
+
+unformatted="$(echo "$staged_go" | xargs "$GOFMT" -l 2>/dev/null || true)"
+if [ -n "$unformatted" ]; then
+	echo "✗ pre-commit: folgende Go-Dateien sind nicht gofmt-konform:" >&2
+	echo "$unformatted" | sed 's/^/    /' >&2
+	echo "" >&2
+	echo "  Beheben mit:  $GOFMT -w $unformatted" >&2
+	echo "  (Tipp: der Claude-Code-PostToolUse-Hook formatiert .go-Dateien automatisch.)" >&2
+	exit 1
+fi
+
+exit 0

@@ -1,0 +1,44 @@
+#!/bin/sh
+# TeamWERK Harness — pre-push (vollständiges Gate, spiegelt was sonst CI wäre).
+# Blockiert den Push, wenn Build/Tests/Lint fehlschlagen.
+#
+# Installation: `make hooks` (setzt core.hooksPath auf .githooks).
+# Notausgang (bewusst, mit Vorsicht):  git push --no-verify
+
+set -e
+
+GO="$( [ -x /usr/local/go/bin/go ] && echo /usr/local/go/bin/go || echo go )"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "▸ pre-push: go vet ./..."
+"$GO" vet ./...
+
+echo "▸ pre-push: go test -race ./...  (inkl. Architektur-Test)"
+"$GO" test -race ./...
+
+if command -v golangci-lint >/dev/null 2>&1; then
+	echo "▸ pre-push: golangci-lint run ./..."
+	golangci-lint run ./...
+else
+	echo "⚠ pre-push: golangci-lint nicht gefunden — übersprungen."
+fi
+
+echo "▸ pre-push: Frontend build (tsc + vite)"
+pnpm -C web build
+
+echo "▸ pre-push: Frontend tests (vitest)"
+pnpm -C web test
+
+echo "▸ pre-push: Frontend lint (eslint)"
+pnpm -C web lint
+
+if command -v openspec >/dev/null 2>&1; then
+	echo "▸ pre-push: openspec validate --all"
+	openspec validate --all || true
+else
+	echo "⚠ pre-push: openspec nicht gefunden — übersprungen."
+fi
+
+echo "✓ pre-push: alle Gates grün."
+exit 0
