@@ -273,11 +273,20 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/impersonate/{id}", h.Auth.Impersonate)
 		})
 
+		// Member-Liste (Suche) — Vorstand + Kassierer (Mitgliederverwaltung) sowie
+		// Trainer + sportliche_leitung (Kader-/Trainersuche im /kader). Die
+		// Trefferliste wird pro Persona über policy.ScopeMembersQuery eingeschränkt:
+		// Vorstand/sportliche_leitung sehen alle, Trainer nur die eigenen Kader bzw.
+		// bei ?club_function=trainer die vereinsweite Trainerliste.
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand", "kassierer", "trainer", "sportliche_leitung"))
+			r.Get("/api/members", h.Members.List)
+		})
+
 		// Vorstand + Kassierer (Beitragslauf, Member-Lesen, Bankdaten)
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "kassierer"))
 			// Member-Lesezugriff
-			r.Get("/api/members", h.Members.List)
 			r.Get("/api/members/export", h.Members.Export)
 			r.Get("/api/members/{id}", h.Members.Get)
 			r.Get("/api/members/{id}/parents", h.Members.GetMemberParents)
