@@ -316,7 +316,7 @@ Content-Disposition: attachment; filename="beitragslauf_2026_2027.xml"
           <Id><IBAN>{members.iban}</IBAN></Id>
         </DbtrAcct>
         <RmtInf>
-          <Ustrd>Jahresbeitrag Saison {saison_kurz} – Mitgliedsnr. {member_number}</Ustrd>
+          <Ustrd>Mitgliedsbeitrag Team-Stuttgart {saison_kurz} Mitglied {member_number}</Ustrd>
         </RmtInf>
       </DrctDbtTxInf>
     </PmtInf>

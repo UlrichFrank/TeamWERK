@@ -6,15 +6,17 @@ GO         := $(or $(wildcard /usr/local/go/bin/go),go)
 REMOTE     := $(shell grep '^REMOTE=' .env 2>/dev/null | cut -d= -f2)
 REMOTE_DIR := $(shell grep '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2)
 DB_PATH        := /var/lib/teamwerk/teamwerk.db
-UPLOAD_DIR_REMOTE := /var/lib/teamwerk/uploads
-FILES_DIR_REMOTE  := /var/lib/teamwerk/files
-UPLOAD_DIR_LOCAL  := ./storage/uploads
-FILES_DIR_LOCAL   := ./storage/files
+UPLOAD_DIR_REMOTE        := /var/lib/teamwerk/uploads
+FILES_DIR_REMOTE         := /var/lib/teamwerk/files
+BEITRAGSLAUF_DIR_REMOTE  := /var/lib/teamwerk/beitragslauf-protokolle
+UPLOAD_DIR_LOCAL         := ./storage/uploads
+FILES_DIR_LOCAL          := ./storage/files
+BEITRAGSLAUF_DIR_LOCAL   := ./storage/beitragslauf-protokolle
 EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local pull-db test lint
+.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint
 
 .DEFAULT_GOAL := help
 
@@ -123,11 +125,14 @@ backup: ## Prod-DB + Bilder (uploads) auf VPS sichern (./teamwerk-backup.db, ./b
 	rsync -az $(REMOTE):$(UPLOAD_DIR_REMOTE)/ ./backup/uploads/
 	@echo "Backup gespeichert: ./teamwerk-backup.db, ./backup/uploads/"
 
-backup-files: ## Dokumente vom VPS sichern (./backup/files/)
+backup-files: ## Dokumente + Beitragslauf-Protokolle vom VPS sichern (./backup/files/, ./backup/beitragslauf-protokolle/)
 	@echo "Synchronisiere Dokumente..."
 	@mkdir -p ./backup/files
 	rsync -az $(REMOTE):$(FILES_DIR_REMOTE)/ ./backup/files/
-	@echo "Backup gespeichert: ./backup/files/"
+	@echo "Synchronisiere Beitragslauf-Protokolle..."
+	@mkdir -p ./backup/beitragslauf-protokolle
+	rsync -az $(REMOTE):$(BEITRAGSLAUF_DIR_REMOTE)/ ./backup/beitragslauf-protokolle/
+	@echo "Backup gespeichert: ./backup/files/, ./backup/beitragslauf-protokolle/"
 
 restore-local: ## Backup (DB + Bilder) lokal einspielen
 	@if [ ! -f ./teamwerk-backup.db ]; then echo "Fehler: teamwerk-backup.db nicht gefunden. Zuerst 'make backup' ausführen."; exit 1; fi
@@ -146,7 +151,27 @@ restore-local: ## Backup (DB + Bilder) lokal einspielen
 		exit 1; \
 	fi
 
+restore-local-files: ## Backup (Dokumente + Beitragslauf-Protokolle) lokal einspielen
+	@if [ ! -d ./backup/files ] && [ ! -d ./backup/beitragslauf-protokolle ]; then echo "Fehler: ./backup/files/ und ./backup/beitragslauf-protokolle/ nicht gefunden. Zuerst 'make backup-files' ausführen."; exit 1; fi
+	@echo "WARNUNG: $(FILES_DIR_LOCAL) und $(BEITRAGSLAUF_DIR_LOCAL) werden überschrieben."
+	@printf "Fortfahren? [y/N] "; \
+	read ans; \
+	if [ "$$ans" = "y" ]; then \
+		if [ -d ./backup/files ]; then \
+			mkdir -p $(FILES_DIR_LOCAL) && rsync -a --delete ./backup/files/ $(FILES_DIR_LOCAL)/; \
+		fi; \
+		if [ -d ./backup/beitragslauf-protokolle ]; then \
+			mkdir -p $(BEITRAGSLAUF_DIR_LOCAL) && rsync -a --delete ./backup/beitragslauf-protokolle/ $(BEITRAGSLAUF_DIR_LOCAL)/; \
+		fi; \
+		echo "Restore abgeschlossen."; \
+	else \
+		echo "Abgebrochen."; \
+		exit 1; \
+	fi
+
 pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal einspielen
+
+pull-files: backup-files restore-local-files ## Dokumente + Protokolle in einem Schritt sichern und lokal einspielen
 
 test: ## Backend (race) + Frontend (vitest) Tests ausführen
 	$(GO) test -race ./...
