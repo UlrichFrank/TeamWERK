@@ -7,6 +7,7 @@ import {
 import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 import { daySeparatorLabel, shouldRenderSeparator } from '../lib/chatDateFormat'
+import { errorMessage } from '../lib/errors'
 import { DaySeparator } from '../components/DaySeparator'
 import { useAuth } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
@@ -1161,8 +1162,8 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
         : { type, name: groupName, memberIds: selected.map(u => u.id) }
       const r = await api.post('/chat/conversations', payload)
       onCreated(r.data)
-    } catch (e: any) {
-      setError(e.response?.data || 'Fehler beim Erstellen')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Erstellen'))
     } finally {
       setLoading(false)
     }
@@ -1269,8 +1270,8 @@ function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onS
     try {
       await api.post('/chat/broadcasts', { body: body.trim(), targetType, targetId, targetRole })
       onSent()
-    } catch (e: any) {
-      setError(e.response?.data || 'Fehler beim Senden')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Senden'))
     } finally {
       setLoading(false)
     }
@@ -1287,7 +1288,7 @@ function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onS
         <label className="block text-sm font-medium text-brand-text mb-1">Zielgruppe</label>
         <select
           value={targetType}
-          onChange={e => setTargetType(e.target.value as any)}
+          onChange={e => setTargetType(e.target.value as 'all' | 'team' | 'role')}
           className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
         >
           {isAdmin && <option value="all">Alle Mitglieder</option>}
@@ -1360,8 +1361,8 @@ function BroadcastEditModal({ broadcast, onClose, onSaved }: {
     try {
       await api.put(`/chat/broadcasts/${broadcast.id}`, { body: body.trim() })
       onSaved()
-    } catch (e: any) {
-      setError(e.response?.data || 'Fehler beim Speichern')
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Speichern'))
     } finally {
       setLoading(false)
     }

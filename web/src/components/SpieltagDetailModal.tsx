@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTeamList } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { errorStatus } from '../lib/errors'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from './DutySlotList'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
@@ -90,8 +91,8 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
       setGame(r.data.game)
       setSlots(r.data.slots ?? [])
       return r.data.game as GameDetail
-    } catch (e: any) {
-      if (e?.response?.status === 404) setNotFound(true)
+    } catch (e) {
+      if (errorStatus(e) === 404) setNotFound(true)
       return null
     }
   }
@@ -100,7 +101,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
     try {
       const params = mayEdit ? `game_id=${gameId}&audience=all` : `game_id=${gameId}`
       const r = await api.get(`/duty-board?${params}`)
-      const groups: any[] = r.data ?? []
+      const groups: Array<{ slots?: BoardSlot[] }> = r.data ?? []
       setBoardSlots(groups.length > 0 ? groups[0].slots ?? [] : [])
     } catch {
       setBoardSlots([])
@@ -117,6 +118,8 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
       ])
       setLoading(false)
     })()
+    // loadGame/loadBoard sind stabile Closures; nur Neuladen bei Wechsel des Spiels gewünscht
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId])
 
   useLiveUpdates((event) => { if (event === 'duties') loadBoard(canEdit) })

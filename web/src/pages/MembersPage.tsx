@@ -219,7 +219,7 @@ export default function MembersPage() {
   const toggleRow = (line: number) => {
     setExpandedRows(prev => {
       const next = new Set(prev)
-      next.has(line) ? next.delete(line) : next.add(line)
+      if (next.has(line)) next.delete(line); else next.add(line)
       return next
     })
   }

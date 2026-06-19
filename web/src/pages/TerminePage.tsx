@@ -182,7 +182,7 @@ export default function TerminePage() {
 
   const toggleType = (type: string) => {
     const next = new Set(filterTypes)
-    next.has(type) ? next.delete(type) : next.add(type)
+    if (next.has(type)) next.delete(type); else next.add(type)
     updateFilter({ types: next })
   }
 
@@ -210,6 +210,8 @@ export default function TerminePage() {
   useEffect(() => {
     load()
     api.get('/teams').then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? []))).catch(() => {})
+    // load kapselt from/to (aus showPast), soll nur bei showPast-Wechsel neu laufen
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPast])
   useLiveUpdates((event) => { if (event === 'trainings' || event === 'games') load() })
 
@@ -234,6 +236,8 @@ export default function TerminePage() {
       triedPastExpansion.current = true
       updateFilter({ past: true })
     }
+    // Soll nur bei Fokus-Wechsel / nach dem Laden prüfen; termine/showPast/updateFilter bewusst ausgelassen, um Re-Trigger zu vermeiden
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.kind, focus?.id, loading])
 
   useEffect(() => { triedPastExpansion.current = false }, [focus?.kind, focus?.id])
@@ -246,6 +250,8 @@ export default function TerminePage() {
     el.classList.add('ring-2', 'ring-brand-yellow', 'transition-all')
     const t = setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
     return () => clearTimeout(t)
+    // focus über kind/id abgedeckt; nicht das ganze focus-Objekt als Dep, soll nur bei dessen Identität scrollen
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.kind, focus?.id, loading, visibleTermine.length])
 
   const respondTraining = async (sessionId: number, status: string, reason = '', memberId?: number) => {

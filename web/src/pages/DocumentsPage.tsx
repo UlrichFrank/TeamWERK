@@ -8,6 +8,7 @@ import {
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { CLUB_FUNCTION_OPTIONS } from '../lib/constants'
+import { errorMessage, errorStatus } from '../lib/errors'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -146,8 +147,8 @@ function UploadModal({ folderId, onUploaded, onClose }: {
       })
       setDone(true)
       onUploaded()
-    } catch (err: any) {
-      const status = err?.response?.status
+    } catch (e) {
+      const status = errorStatus(e)
       if (status === 413) setError('Datei zu groß (max. 50 MB).')
       else if (status === 403) setError('Keine Berechtigung zum Hochladen.')
       else setError('Upload fehlgeschlagen.')
@@ -273,8 +274,8 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
       setNewRead(true)
       setNewWrite(false)
       load()
-    } catch (err: any) {
-      if (err?.response?.status === 403) setError('Du kannst keine höheren Rechte vergeben als du selbst hast.')
+    } catch (e) {
+      if (errorStatus(e) === 403) setError('Du kannst keine höheren Rechte vergeben als du selbst hast.')
       else setError('Fehler beim Speichern.')
     } finally {
       setSaving(false)
@@ -550,8 +551,8 @@ export default function DocumentsPage() {
     try {
       const { data } = await api.get<FolderContents>(`/folders/${id}/contents`)
       setContents(data)
-    } catch (err: any) {
-      if (err?.response?.status === 403) setError('Kein Zugriff auf diesen Ordner.')
+    } catch (e) {
+      if (errorStatus(e) === 403) setError('Kein Zugriff auf diesen Ordner.')
       else setError('Fehler beim Laden.')
     } finally {
       setLoading(false)
@@ -614,9 +615,8 @@ export default function DocumentsPage() {
         await api.delete(`/files/${id}`)
       }
       if (currentFolderId) loadContents(currentFolderId)
-    } catch (err: any) {
-      const msg = err?.response?.data || 'Löschen fehlgeschlagen.'
-      alert(msg)
+    } catch (e) {
+      alert(errorMessage(e, 'Löschen fehlgeschlagen.'))
     } finally {
       setConfirmDelete(null)
     }

@@ -3,7 +3,7 @@ import PasswordChangeModal from './PasswordChangeModal'
 import EmailChangeModal from './EmailChangeModal'
 
 interface Props {
-  user: any
+  user: { email?: string } | null
   logout: () => void
 }
 

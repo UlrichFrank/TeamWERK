@@ -286,7 +286,7 @@ export default function AdminDutyTemplatesPage() {
         name: r.data.name,
         template_type: r.data.template_type,
         duration_minutes: r.data.duration_minutes,
-        items: (r.data.items ?? []).map((it: any) => ({ ...it, audiences: it.audiences ?? [] })),
+        items: (r.data.items ?? []).map((it: Omit<TemplateItem, 'audiences'> & { audiences?: string[] | null }) => ({ ...it, audiences: it.audiences ?? [] })),
       })
     } catch {
       setModalError('Vorlage konnte nicht geladen werden.')

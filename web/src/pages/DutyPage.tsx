@@ -114,7 +114,7 @@ export default function DutyPage() {
 
   const toggleType = (type: string) => {
     const next = new Set(filterTypes)
-    next.has(type) ? next.delete(type) : next.add(type)
+    if (next.has(type)) next.delete(type); else next.add(type)
     updateFilter({ types: next })
   }
 
@@ -127,6 +127,8 @@ export default function DutyPage() {
     api.get(url).then(r => setGroups(r.data ?? []))
   }
 
+  // load kapselt viewMine/audienceAll, soll nur bei deren Änderung neu laufen
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [viewMine, audienceAll])
   useLiveUpdates((event) => { if (event === 'duties') load() })
 

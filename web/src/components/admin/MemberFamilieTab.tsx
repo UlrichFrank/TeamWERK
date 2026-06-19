@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../../lib/api'
+import { errorStatus } from '../../lib/errors'
 
 interface User {
   id: number
@@ -56,8 +57,8 @@ export default function MemberFamilieTab({
     try {
       await api.post(`/members/${memberId}/proxy-account`)
       onReload?.()
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
+    } catch (e) {
+      if (errorStatus(e) === 409) {
         setProxyError('Mitglied hat bereits einen Account.')
       } else {
         setProxyError('Fehler beim Anlegen des Proxy-Accounts.')

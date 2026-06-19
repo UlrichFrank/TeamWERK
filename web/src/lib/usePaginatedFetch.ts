@@ -87,6 +87,8 @@ export function usePaginatedFetch<T>(endpoint: string, limit = 50): UsePaginated
 
   useEffect(() => {
     fetchData(search, 0)
+    // Nur initialer Mount-Fetch; spätere Aktualisierungen laufen über setSearch/loadMore/reset
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return {

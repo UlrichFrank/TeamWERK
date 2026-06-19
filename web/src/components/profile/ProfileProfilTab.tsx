@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, FormEvent } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
-import { Member, Parent, Phone, Visibility } from '../../pages/ProfilePage'
+import { Member, Parent, Phone, Visibility, ChangeDraft } from '../../pages/ProfilePage'
 import { UserContact } from '../../pages/ChildProfilePage'
 import ImageCropModal from '../ImageCropModal'
 import Toggle from '../Toggle'
@@ -26,7 +26,7 @@ export default function ProfileProfilTab({
   const [phones, setPhones] = useState<Phone[]>([])
   const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false, email_visible: false, whatsapp_visible: false })
   const [photoURL, setPhotoURL] = useState('')
-  const [profilDraft, setProfilDraft] = useState<any>(null)
+  const [profilDraft, setProfilDraft] = useState<ChangeDraft | null>(null)
 
   const [changed, setChanged] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -52,6 +52,8 @@ export default function ProfileProfilTab({
       setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false, email_visible: false, whatsapp_visible: false })
       if (r.data?.photo_url) setPhotoURL(r.data.photo_url)
     })
+    // Einmaliger Initial-Load der eigenen Profildaten (nur Mount)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -60,22 +62,26 @@ export default function ProfileProfilTab({
       setFirstName(r.data.first_name ?? '')
       setLastName(r.data.last_name ?? '')
     })
+    // Einmaliger Initial-Load der Account-Daten (nur Mount)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (mode === 'child') {
       if (!childMemberId) return
       api.get(`/members/${childMemberId}/change-drafts`).then(r => {
-        const drafts: any[] = r.data?.drafts ?? []
+        const drafts: ChangeDraft[] = r.data?.drafts ?? []
         setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
       }).catch(() => {})
       return
     }
     if (!ownMember) return
     api.get(`/members/${ownMember.id}/change-drafts`).then(r => {
-      const drafts: any[] = r.data?.drafts ?? []
+      const drafts: ChangeDraft[] = r.data?.drafts ?? []
       setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
     }).catch(() => {})
+    // Drafts neu laden, wenn sich Member/Kind/Refresh-Key ändert (mode bewusst stabil)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownMember?.id, childMemberId, draftRefreshKey])
 
   // Child-mode: init from userContact (wenn Kind Account hat) oder ownMember (Fallback)
@@ -94,6 +100,8 @@ export default function ProfileProfilTab({
       setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
       setPhotoURL(ownMember.photo_url ?? '')
     }
+    // Init aus userContact/ownMember nur bei Wechsel des Datensatzes (mode stabil)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownMember?.id, userContact])
 
   useEffect(() => {
@@ -147,7 +155,7 @@ export default function ProfileProfilTab({
           new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city },
         })
         const r = await api.get(`/members/${childMemberId}/change-drafts`)
-        const drafts: any[] = r.data?.drafts ?? []
+        const drafts: ChangeDraft[] = r.data?.drafts ?? []
         setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
       } else {
         await api.put('/profile/me', { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city })
@@ -157,7 +165,7 @@ export default function ProfileProfilTab({
             new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city },
           })
           const r = await api.get(`/members/${ownMember.id}/change-drafts`)
-          const drafts: any[] = r.data?.drafts ?? []
+          const drafts: ChangeDraft[] = r.data?.drafts ?? []
           setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
         }
         await api.put('/profile/visibility', visibility)

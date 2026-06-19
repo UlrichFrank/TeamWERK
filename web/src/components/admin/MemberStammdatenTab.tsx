@@ -28,8 +28,8 @@ interface Member {
 interface Draft {
   id: number
   field_name: string
-  old_value: any
-  new_value: any
+  old_value: { first_name?: string; last_name?: string; street?: string; zip?: string; city?: string; [k: string]: unknown } | null
+  new_value: { first_name?: string; last_name?: string; street?: string; zip?: string; city?: string; [k: string]: unknown } | null
 }
 
 interface Props {
