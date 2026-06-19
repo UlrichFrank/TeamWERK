@@ -1696,8 +1696,13 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 				SELECT DISTINCT tm.team_id FROM team_memberships tm
 				JOIN members m ON m.id = tm.member_id
 				JOIN family_links fl ON fl.member_id = m.id
+				WHERE fl.parent_user_id = ?
+				UNION
+				SELECT DISTINCT k.team_id FROM kader_extended_members kem
+				JOIN kader k ON k.id = kem.kader_id
+				JOIN family_links fl ON fl.member_id = kem.member_id
 				WHERE fl.parent_user_id = ?)`)
-			teamArgs = append(teamArgs, claims.UserID)
+			teamArgs = append(teamArgs, claims.UserID, claims.UserID)
 		}
 		conds = append(conds, `gt.team_id IN (
 			SELECT DISTINCT tm.team_id FROM team_memberships tm
