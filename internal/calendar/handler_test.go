@@ -86,6 +86,35 @@ func TestCalendarFeed_ValidToken(t *testing.T) {
 	}
 }
 
+// TestCalendarFeed_GameAndDutyHaveRealDates is a regression guard: the
+// modernc.org/sqlite driver returns DATE columns as ISO timestamps
+// ("2026-08-15T00:00:00Z"), so parseDT must normalize them. A regression
+// produces DTSTART of the Go zero-time (00010101...), which calendar clients
+// place in year 1 — the feed "imports but shows nothing".
+func TestCalendarFeed_GameAndDutyHaveRealDates(t *testing.T) {
+	srv, _, userToken, _, _ := setupCalendarFixture(t)
+	tok := postToken(t, srv, userToken, allTogglesOn())
+	calToken := tok["token"].(string)
+
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+calToken, "")
+	defer res.Body.Close()
+	body := readBody(t, res.Body)
+
+	if !strings.Contains(body, "UID:game-") {
+		t.Errorf("feed must contain the user's game, body:\n%s", body)
+	}
+	if !strings.Contains(body, "UID:duty-") {
+		t.Errorf("feed must contain the user's duty, body:\n%s", body)
+	}
+	// Game date is 2026-08-15 at 18:00 → must carry the real date, not year 1.
+	if !strings.Contains(body, "DTSTART;TZID=Europe/Berlin:20260815T180000") {
+		t.Errorf("game DTSTART has wrong date (parseDT regression?), body:\n%s", body)
+	}
+	if strings.Contains(body, "00010101T000000") {
+		t.Errorf("feed contains Go zero-time DTSTART — date parsing failed, body:\n%s", body)
+	}
+}
+
 // TestCalendarFeed_InvalidToken returns 404.
 func TestCalendarFeed_InvalidToken(t *testing.T) {
 	db := testutil.NewDB(t)

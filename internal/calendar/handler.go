@@ -424,6 +424,14 @@ func formatDT(t time.Time) string {
 }
 
 func parseDT(date, timeStr string, loc *time.Location) time.Time {
+	// modernc.org/sqlite returns DATE columns as full ISO timestamps
+	// ("2026-08-15T00:00:00Z"), not "2026-08-15" — normalize to the date part.
+	if len(date) > 10 {
+		date = date[:10]
+	}
+	if timeStr == "" {
+		timeStr = "00:00"
+	}
 	t, err := time.ParseInLocation("2006-01-02 15:04", date+" "+timeStr, loc)
 	if err != nil {
 		t, _ = time.ParseInLocation("2006-01-02", date, loc)
