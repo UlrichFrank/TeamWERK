@@ -1,686 +1,236 @@
 # CLAUDE.md
 
 Guidance for Claude Code working in this repository.
+Provider-agnostische Kurzfassung der Hard-Rules: [`AGENTS.md`](./AGENTS.md).
 
-## Wichtig: pnpm verwenden
+## Hard Rules
 
-**Immer `pnpm` für alle npm-Operationen verwenden. Niemals `npm`.**
+- **`pnpm`, nie `npm`** für alle Frontend-/npm-Operationen.
+- **Go-Befehle mit `/usr/local/go/bin/go`** (1.25) — nicht dem Homebrew-`go` (1.26+, inkompatibel mit go.mod).
+- **Nur `brand-*`-Tokens**, keine Raw-Tailwind-Farben (`bg-gray-50`, `text-red-600`, …).
+- **Keine Unicode-Icons/Emojis in JSX** — `lucide-react`.
+- **Jede Mutations-Route ruft `h.hub.Broadcast(...)`**, das Frontend abonniert mit `useLiveUpdates` (siehe Gotcha SSE).
+- **Jede neue Route bekommt Tests** (Happy-Path + Fehlerfall).
+- **Kein ORM** — direktes `database/sql`.
 
 ---
 
 ## Überblick
 
-TeamWERK (TeamWERK — Where Engagement Really Klicks) ist die interne Verwaltungsplattform für Team Stuttgart (Handball). Sie läuft unter `https://internal.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
+TeamWERK — interne Verwaltungsplattform für Team Stuttgart (Handball), läuft unter
+`https://internal.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
 
-**Stack:** Go 1.25 + Chi v5 · SQLite (WAL) · React 18 + Tailwind v3 · Vite · JWT-Auth
+**Stack:** Go 1.25 + Chi v5 · SQLite (WAL, `modernc.org/sqlite`, kein CGo) · React 18 + Tailwind v3 · Vite · JWT-Auth.
 
-Die öffentliche TYPO3-Homepage (`team-stuttgart.org`) ist ein separates Repo und hat keinen Code-Overlap — lediglich ein Link im TYPO3-Header verweist hierher.
-
----
-
-## Verzeichnisstruktur
-
-```
-teamwerk/
-├── cmd/teamwerk/main.go   ← Einstiegspunkt: Router, embed.FS, Subcommands
-├── internal/
-│   ├── auth/                 ← JWT-Tokens, Middleware, Auth-Handler
-│   ├── config/               ← Config-Struct (.env-Laden), Club/Season/Team-Handler
-│   ├── db/                   ← SQLite öffnen + WAL setzen, Migrations
-│   ├── duties/               ← Diensttypen, Slots, Assignments, Accounts
-│   ├── mailer/               ← SMTP-Versand (net/smtp)
-│   ├── members/              ← Mitglieder, Familien-Links, Fahrzeuginfo
-│   ├── games/                ← Spielplan, Template, Slot-Generierung
-│   └── scheduler/            ← Expired-Token-Bereinigung
-├── internal/db/migrations/   ← golang-migrate .up/.down SQL-Dateien (embedded im Binary)
-├── web/                      ← Vite + React-Projekt
-│   ├── src/
-│   │   ├── App.tsx           ← Routen-Baum (BrowserRouter)
-│   │   ├── components/       ← AppShell (Sidebar-Nav)
-│   │   ├── contexts/         ← AuthContext (User + JWT in Memory)
-│   │   ├── lib/api.ts        ← Axios-Instanz mit Auto-Refresh-Interceptor
-│   │   └── pages/            ← Eine Datei pro Route
-│   └── vite.config.ts        ← Proxy /api → :8080
-├── deploy/                   ← setup-vps.sh, nginx-intern.conf, teamwerk.service
-├── Makefile
-└── .env.example
-```
+**Struktur:** Entrypoint `cmd/teamwerk/main.go` (`embed.FS`, Subcommands wie `migrate`/`scheduler:run`/`create-admin`/`gen-vapid`, baut `app.Handlers` und mountet `app.BuildRouter`). Der **Routenbaum mit allen Auth-Tiers liegt in `internal/app/router.go` (`BuildRouter`)**. Je ein Package pro Domäne unter `internal/` (`auth`, `members`, `duties`, `games`, …). Migrations in `internal/db/migrations/`. Frontend in `web/` (Vite + React; `App.tsx` = Routen-Baum, `lib/api.ts` = Axios mit Auto-Refresh, eine Datei pro Route in `pages/`). Deploy-Skripte in `deploy/`. Bei Bedarf per `ls`/Glob erkunden statt aus dem Gedächtnis.
 
 ---
 
 ## Entwicklungsworkflow
 
-### Lokaler Start (zwei Prozesse)
-
 ```bash
-# Terminal 1 — Go-Backend auf :8080
-go run ./cmd/teamwerk
+# Lokaler Start (zwei Prozesse)
+go run ./cmd/teamwerk        # Backend :8080  (braucht web/dist/ wegen //go:embed — sonst web/dist/.gitkeep anlegen)
+cd web && pnpm dev           # Vite :5173, proxyt /api → :8080
 
-# Terminal 2 — Vite Dev-Server auf :5173 (proxyt /api → :8080)
-cd web && pnpm dev
+make build                   # pnpm build + go build → bin/teamwerk
+make deploy                  # build + rsync auf VPS + systemctl restart (führt automatisch migrate up aus)
+make migrate-up / migrate-down
+make test / lint / coverage
 ```
 
-`make dev` startet beide, aber das Go-Backend läuft dann im Hintergrund ohne sauberes Beenden.
-
-> **Wichtig:** `go run ./cmd/teamwerk` erfordert `web/dist/` (wegen `//go:embed all:web/dist`).  
-> Im reinen Backend-Dev einfach `web/dist/.gitkeep` anlegen oder `make build` einmal laufen lassen.
-
-### Build & Deploy
-
-```bash
-make build    # pnpm build + go build → bin/teamwerk
-make deploy   # build + rsync auf VPS + systemctl restart
-```
-
-### Datenbank-Migrations lokal
-
-```bash
-make migrate-up    # go run ./cmd/teamwerk migrate up --db ./teamwerk.db
-make migrate-down
-```
-
-Neue Migration anlegen: `internal/db/migrations/00N_beschreibung.up.sql` + `.down.sql`.
-
-> **Warnung:** Nie eine Nummer einfügen, die ≤ der aktuellen DB-Version ist — golang-migrate überspringt sie lautlos. Immer die nächste freie Nummer verwenden.
+**Neue Migration:** `internal/db/migrations/00N_beschreibung.up.sql` + `.down.sql` mit der **nächsten freien Nummer**. Nie eine Nummer ≤ aktueller DB-Version — golang-migrate überspringt sie lautlos.
 
 ---
 
 ## Go-Konventionen
 
-### Package-Struktur
-
-Jede Domäne (`auth`, `members`, `duties`, …) ist ein Package unter `internal/`. Pattern:
+**Handler-Pattern** — ein Package pro Domäne unter `internal/`:
 
 ```go
-type Handler struct{ db *sql.DB }
-func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
+type Handler struct{ db *sql.DB; hub *hub.EventHub }
+func NewHandler(db *sql.DB, hub *hub.EventHub) *Handler { return &Handler{db, hub} }
 func (h *Handler) MethodName(w http.ResponseWriter, r *http.Request) { … }
 ```
 
-### Router-Patterns (Chi v5)
+**Router (Chi v5):** `r.Get("/api/members/{id}", membH.Get)`, auslesen mit `r.PathValue("id")`.
 
-```go
-r.Get("/api/members/{id}", membH.Get)     // Pfadparameter
-id := r.PathValue("id")                  // Auslesen (Go 1.22+ std, Chi wraps it)
-```
+**Auth/JWT:** `claims := auth.ClaimsFromCtx(r.Context())`. Access-Token 15 min (HS256, im Frontend im Memory), Refresh-Token 7 Tage (opaque, SHA256-Hash in DB, HttpOnly-Cookie). Gating via `auth.RequireRole(...)` und `auth.RequireClubFunction(...)`.
 
-Route-Gruppen:
-- **Public**: Login, Register, Passwort-Reset, Beitrittsantrag
-- **Authenticated** (`auth.Middleware`): alle eingeloggten Nutzer
-- **Admin + Trainer** (`auth.RequireRole("admin","trainer")`): Slot-Verwaltung, Anfragen
-- **Vorstand** (`auth.RequireRole("vorstand")`): Vereinskonfig, Nutzer
-- **Admin only** (`auth.RequireRole("admin")`): Export
+**DB-Zugriff:** Kein ORM. Bei DB-Open automatisch `PRAGMA journal_mode=WAL; foreign_keys=ON;`. Nullable Felder über `sql.NullInt64` & Co. scannen, dann `.Valid` prüfen.
 
-### Auth / JWT
+**E-Mail:** `h.mailer.Send(to, subject, body)` (net/smtp, Config aus `.env`).
 
-```go
-// Claims-Felder im JWT
-type Claims struct {
-    UserID int    `json:"uid"`
-    Email  string `json:"email"`
-    Role   string `json:"role"`
-    jwt.RegisteredClaims
-}
+### Rollen und Vereinsfunktionen (zwei orthogonale Dimensionen)
 
-// Im Handler die Claims aus dem Context holen
-claims := auth.ClaimsFromCtx(r.Context())
-```
+**System-Rolle** (`users.role`, JWT-Claim `role`, via `auth.RequireRole(...)`):
 
-Access Token: 15 min, HS256, im Frontend im Memory.  
-Refresh Token: 7 Tage, opaque (SHA256-Hash in DB), als HttpOnly-Cookie.
-
-### Rollen und Vereinsfunktionen
-
-TeamWERK kennt zwei orthogonale Berechtigungs-Dimensionen.
-
-**System-Rolle** (`users.role`, CHECK auf zwei Werte). Wird im JWT-Claim `role` mitgeführt und via `auth.RequireRole(...)` gegated.
-
-| System-Rolle | Bedeutung |
-|-------|-----------|
-| `admin` | Vollzugriff; umgeht alle `RequireClubFunction`-Checks |
-| `standard` | Default; Zugriff ergibt sich aus Vereinsfunktionen und Ownership |
-
-**Vereinsfunktion** (`member_club_functions.function`). Pro Member 0–n Funktionen möglich. Im JWT-Claim `club_functions: string[]`; geprüft via `auth.RequireClubFunction(...)` bzw. `claims.HasFunction(...)`.
-
-| Vereinsfunktion | Bedeutung |
+| Rolle | Bedeutung |
 |---|---|
-| `spieler` | Aktiver Spieler; Dienstbörse, Konto, eigenes Profil |
-| `trainer` | Team-Coach; verwaltet Slots, Anfragen, Kader |
-| `sportliche_leitung` | Trainer-äquivalente Rechte teamübergreifend |
-| `vorstand` | Vereinsverwaltung (Mitglieder, Saisons, Teams, Nutzer) |
-| `vorstand_beisitzer` | Unterstützer des Vorstands (eingeschränktere Rechte) |
-| `kassierer` | Finanzdaten (SEPA, Beiträge) |
+| `admin` | Vollzugriff; umgeht alle `RequireClubFunction`-Checks |
+| `standard` | Default; Zugriff aus Vereinsfunktionen + Ownership |
 
-**Eltern** sind **keine** Vereinsfunktion. Eltern werden über `family_links` (parent_user_id → member_id) modelliert und im JWT als `is_parent: true` mitgeführt. Code-Checks gehen über `claims.IsParent`, niemals über `HasFunction("elternteil")`.
+**Vereinsfunktion** (`member_club_functions.function`, 0–n pro Member, JWT-Claim `club_functions: string[]`, via `auth.RequireClubFunction(...)` / `claims.HasFunction(...)`): `spieler`, `trainer`, `sportliche_leitung`, `vorstand`, `vorstand_beisitzer`, `kassierer`.
 
-**Nicht existent:** `sportvorstand` ist keine valide Vereinsfunktion. Falls fachlich gewünscht, kombiniere `vorstand` + `sportliche_leitung`.
-
-### Datenbankzugriff
-
-Kein ORM, direktes `database/sql`. SQLite via `modernc.org/sqlite` (pure Go, kein CGo).  
-Bei DB-Open wird automatisch gesetzt: `PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`
-
-Nullable Felder:
-
-```go
-var jerseyNum sql.NullInt64
-rows.Scan(…, &jerseyNum, …)
-if jerseyNum.Valid { n := int(jerseyNum.Int64); m.JerseyNumber = &n }
-```
-
-### E-Mail-Versand
-
-```go
-h.mailer.Send(to, subject, body)  // net/smtp, SMTP-Config aus .env
-```
+- **Eltern** sind keine Vereinsfunktion → `claims.IsParent` (aus `family_links`), nie `HasFunction("elternteil")`.
+- `sportvorstand` existiert **nicht** (= `vorstand` + `sportliche_leitung`).
 
 ---
 
-## Datenbankschema
+## API & Datenbank — Quelle der Wahrheit ist der Code
 
-### 001 – Auth
+**Routen:** Die maßgebliche Liste steht in `internal/app/router.go` (`BuildRouter`, nach Auth-Tier gruppiert). Dort nachschlagen statt aus dem Gedächtnis — eine Doku-Kopie würde driften.
 
-| Tabelle | Schlüsselfelder |
-|---------|----------------|
-| `users` | `id`, `email` UNIQUE, `name`, `password` (bcrypt), `role` CHECK('admin','standard'), `team_id` FK |
-| `refresh_tokens` | `user_id` FK, `token_hash` UNIQUE, `expires_at` |
-| `invitation_tokens` | `email`, `team_id`, `role`, `token` UNIQUE, `expires_at`, `used_at` |
-| `password_reset_tokens` | `user_id` FK, `token` UNIQUE, `expires_at`, `used_at` |
-| `membership_requests` | `name`, `email`, `team_id` FK, `status` CHECK('pending','approved','rejected'), `handled_by`, `handled_at` |
+**Schema:** Maßgeblich sind die Migrations in `internal/db/migrations/` (`*.up.sql`). Dort die Tabellen/Spalten/CHECK-Constraints lesen.
 
-### 002 – Core
+### Namens- & Sprachkonvention
 
-| Tabelle | Schlüsselfelder |
-|---------|----------------|
-| `clubs` | `id`, `name`, `address`, `founded_year` |
-| `seasons` | `id`, `name`, `start_date`, `end_date`, `is_active` (max. 1 aktiv) |
-| `teams` | `id`, `name`, `age_class`, `gender` CHECK('m','f','mixed'), `is_active` |
-| `team_trainers` | `team_id` FK, `user_id` FK (UNIQUE-Paar) |
+- **Backend-API-Routen: englisch**, lowercase/kebab-case, generische REST-Struktur `/api/{resource}/{id}/{action}` (z.B. `/api/members/{id}/bank-details`). Bestehende deutsche Ausnahmen (`/api/mitfahrgelegenheiten`) nicht als Vorbild nehmen.
+- **Frontend-Routen (`App.tsx`, sichtbare Pfade): deutsch** (z.B. `/admin/saisons`, `/admin/beitragslauf`).
+- Alle Frontend-API-Calls relativ zu `/api/` (Prefix in `lib/api.ts`: `baseURL: '/api'`).
 
-### 003 – Members
+### Auth-Tiers (wo gehört eine neue Route hin?)
 
-| Tabelle | Schlüsselfelder |
-|---------|----------------|
-| `members` | `id`, `first_name`, `last_name`, `date_of_birth`, `pass_number` UNIQUE, `jersey_number`, `position`, `status` CHECK('aktiv','verletzt','pausiert','ausgetreten'), `user_id` FK |
-| `team_memberships` | `member_id` FK, `team_id` FK, `season_id` FK, `is_primary`, UNIQUE(member,team,season) |
-| `family_links` | `parent_user_id` FK, `member_id` FK (PK zusammen) |
-| `vehicle_info` | `user_id` PK FK, `seats`, `notes` |
+| Tier | Zugriff |
+|---|---|
+| Public | Login, Register, Passwort-Reset, Beitrittsantrag, Downloads |
+| Authenticated | alle Eingeloggten (Profil, Dienstbörse, Spiele, Chat, …) |
+| Trainer + sportliche_leitung | Slots, Anfragen, Training, Venues |
+| Vorstand (+ Trainer/sL) | Spiele, Kader, Duty-Slots, Saisons (lesen) |
+| Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates |
+| Vorstand + Kassierer | Mitglieder lesen, `PUT /members/{id}/bank-details` (Feld-Whitelist), Fee-Run |
+| Admin only | Impersonate |
 
-### 004 – Duties
+### Schema-Konventionen (nicht-ableitbar)
 
-| Tabelle | Schlüsselfelder |
-|---------|----------------|
-| `duty_types` | `id`, `name`, `hours_value`, `cash_substitute`, `default_anchor`, `default_offset_minutes` |
-| `duty_slots` | `id`, `duty_type_id` FK, `event_name`, `event_date`, `event_time`, `slots_total`, `slots_filled`, `role_desc`, `team_id` FK, `season_id` FK, `game_id` FK |
-| `duty_assignments` | `id`, `duty_slot_id` FK, `user_id` FK, `status` CHECK('pending','fulfilled','cash_substitute'), `cash_amount`, `fulfilled_at`, UNIQUE(slot,user) |
-| `duty_accounts` | `user_id` PK FK, `season_id` PK FK, `soll`, `ist` |
-| `duty_season_targets` | `season_id` FK, `duty_type_id` FK, `soll_hours` |
+- **Geldbeträge in Cent** (z.B. `beitrags_saetze.betrag_eur`).
+- **`player_memberships` ist eine View** über `kader_members` — kein direktes INSERT; stattdessen `INSERT INTO kader_members (kader_id, member_id) …`.
+- **Beitragslauf-Protokoll ist keine Tabelle**, sondern append-only Textdatei pro Saison unter `BEITRAGSLAUF_DIR` (`./storage/beitragslauf-protokolle`) — ins Backup aufnehmen.
+- **Status-Felder** sind CHECK-Constraints (z.B. `members.status`: `aktiv|verletzt|pausiert|ausgetreten`) — gültige Werte in der jeweiligen Migration nachsehen.
 
-### 010 – Games
+### Paginierung
 
-| Tabelle | Schlüsselfelder |
-|---------|----------------|
-| `games` | `id`, `team_id` FK, `season_id` FK, `opponent`, `date`, `time`, `is_home`, `source` |
-| `game_templates` | `id`, `name`, `game_duration_minutes`, `is_active` |
-| `game_template_items` | `id`, `template_id` FK, `duty_type_id` FK, `anchor`, `offset_minutes`, `slots_count`, `role_desc`, `sort_order` |
-
-### 043 – SEPA-Beitragslauf
-
-| Tabelle | Schlüsselfelder |
-|---------|----------------|
-| `clubs` (erweitert) | `glaeubiger_id`, `iban`, `bic`, `kontoinhaber` (SEPA-Stammdaten) |
-| `beitrags_saetze` | `id`, `kategorie` CHECK('aktiv_ohne','aktiv_mit','passiv'), `betrag_eur` (in **Cent**), `valid_from` |
-
-Das Saison-Protokoll des Beitragslaufs ist **keine** Tabelle, sondern eine append-only Textdatei pro Saisonjahr unter `BEITRAGSLAUF_DIR` (`./storage/beitragslauf-protokolle`).
-
----
-
-## API-Routen (Übersicht)
-
-### Public
-```
-POST /api/auth/login
-POST /api/auth/refresh
-POST /api/auth/logout
-POST /api/auth/request-membership
-POST /api/auth/register
-POST /api/auth/forgot-password
-POST /api/auth/reset-password
-GET  /api/auth/token-info
-GET  /api/profile/email/confirm
-GET  /api/uploads/*
-GET  /api/files/{id}/download
-```
-
-### Authenticated (alle eingeloggt)
-```
-GET  /api/games
-GET  /api/games/{id}
-GET  /api/teams                          ← rollenabhängig gefiltert (vorstand/admin → alle; andere → Kader-View)
-GET  /api/teams/my
-GET  /api/teams/{id}/roster
-GET  /api/profile/me
-PUT  /api/profile/me
-GET/PUT  /api/profile/vehicle
-GET/PUT  /api/profile/account
-POST /api/profile/password
-POST /api/profile/email
-POST /api/profile/phones
-PUT/DELETE /api/profile/phones/{id}
-PUT  /api/profile/visibility
-PUT  /api/profile/reminder-preference
-GET/PUT  /api/profile/kind/{memberId}
-GET  /api/duty-board
-POST /api/duty-board/{slotId}/claim
-DELETE /api/duty-board/{slotId}/claim
-GET  /api/duty-accounts
-GET  /api/duty-slots
-GET  /api/duty-slots/{id}/assignments
-GET  /api/training-sessions
-GET  /api/training-sessions/{id}
-POST /api/training-sessions/{id}/respond
-GET  /api/training-sessions/{id}/attendances
-GET  /api/games/my
-POST /api/games/{id}/respond
-GET  /api/games/{id}/responses
-GET  /api/games/{id}/participants
-POST /api/games/{id}/lineup
-GET  /api/mitfahrgelegenheiten
-POST /api/mitfahrgelegenheiten
-DELETE /api/mitfahrgelegenheiten/{id}
-GET  /api/dashboard
-GET  /api/chat/conversations
-POST /api/chat/conversations
-GET/POST /api/chat/conversations/{id}/messages
-POST /api/chat/conversations/{id}/read
-GET  /api/chat/broadcasts
-POST /api/folders
-GET  /api/folders/{id}/contents
-GET  /api/push/vapid-public-key
-POST /api/push/subscribe
-```
-
-### Trainer + sportliche_leitung
-```
-GET  /api/venues
-GET  /api/training-series
-POST /api/training-series
-PUT/DELETE /api/training-series/{id}
-POST /api/training-sessions
-PUT/DELETE /api/training-sessions/{id}
-POST /api/training-sessions/{id}/attendances
-POST /api/duty-assignments/{id}/fulfill
-POST /api/duty-assignments/{id}/cash-substitute
-GET  /api/membership-requests
-POST /api/membership-requests/{id}/approve
-POST /api/membership-requests/{id}/reject
-DELETE /api/membership-requests/{id}
-POST /api/auth/invite
-```
-
-### Vorstand + Trainer + sportliche_leitung
-```
-POST /api/venues
-POST /api/venues/import
-DELETE /api/venues
-PUT/DELETE /api/venues/{id}
-POST /api/games
-PUT/DELETE /api/games/{id}
-POST /api/games/{id}/regenerate
-POST /api/games/regenerate-day
-POST /api/duty-slots
-PUT/DELETE /api/duty-slots/{id}
-POST /api/members/{id}/change-drafts/{draftId}/accept
-DELETE /api/members/{id}/change-drafts/{draftId}
-GET  /api/age-class-rules
-GET  /api/seasons                        ← auch Trainer-Gruppe
-GET  /api/kader
-POST /api/kader
-GET/PUT/DELETE /api/kader/{id}
-GET  /api/kader/{id}/member-suggestions
-GET  /api/kader/{id}/extended-member-suggestions
-PATCH /api/kader/{id}/games-per-season
-POST /api/kader/copy-from-season
-POST /api/kader/auto-assign
-```
-
-### Vorstand
-```
-GET  /api/members
-GET  /api/members/export
-POST /api/members
-POST /api/members/import
-GET/PUT /api/members/{id}
-PUT  /api/members/{id}/status
-DELETE /api/members/{id}
-PUT  /api/members/{id}/user
-POST /api/members/{id}/welcome-email
-GET  /api/members/{id}/parents
-GET/PUT /api/club
-POST /api/seasons
-PUT  /api/seasons/{id}
-PUT  /api/seasons/{id}/activate
-DELETE /api/seasons/{id}
-PUT  /api/seasons/{id}/duty-targets
-POST /api/teams
-PUT  /api/teams/{id}
-GET  /api/users
-PUT  /api/users/{id}/role
-DELETE /api/users/{id}
-POST /api/users/{id}/create-member
-GET  /api/invitations
-DELETE /api/invitations/{id}
-POST /api/invitations/import-csv
-POST /api/invitations/{id}/send
-PUT  /api/invitations/{id}/member
-POST /api/family-links
-DELETE /api/family-links
-GET/POST /api/duty-types
-PUT/DELETE /api/duty-types/{id}
-GET  /api/duty-accounts/export
-GET  /api/duty-templates
-POST /api/duty-templates
-GET/PUT/DELETE /api/duty-templates/{id}
-GET  /api/duty-templates/{id}/preview
-PUT  /api/age-class-rules/{ageClass}
-```
-
-### Vorstand + Kassierer
-```
-GET  /api/members                        ← Lesen (auch Kassierer)
-GET  /api/members/export
-GET  /api/members/{id}
-GET  /api/members/{id}/parents
-PUT  /api/members/{id}/bank-details          ← nur Bankfelder (Feld-Whitelist)
-POST /api/upload/sepa-mandat/{id}
-GET/POST /api/fee-rates
-GET  /api/fee-run/preview?saison_id=
-POST /api/fee-run/export             ← SEPA-XML (pain.008.001.08)
-POST /api/fee-run/confirm            ← schreibt Saison-Protokoll
-GET  /api/fee-run/protocol?saison_id=
-```
-
-### Admin only
-```
-POST /api/impersonate/{id}
-```
+`GET /api/members` und `GET /api/users`: `?search=&limit=50&offset=0` → `{ items: [...], total: N }`. Frontend: serverseitige Suche (auf Mobile `sticky top-0 z-10`) + „Mehr laden"-Button, kein clientseitiges `filter()`.
 
 ---
 
 ## Frontend-Konventionen
 
-### Auth-Context
+**Auth:** `const { user, login, logout, loading } = useAuth()` — `user` hat `email`, `role` (aus JWT).
+**API:** `import { api } from '../lib/api'` → `api.get('/members')` (Bearer + Auto-Refresh bei 401).
+**Neue Seite:** Datei in `web/src/pages/`, Route in `App.tsx` unter dem `AppShell`-Outlet, ggf. Nav-Eintrag in `AppShell.tsx` (`roles`-Array).
 
-```tsx
-const { user, login, logout, loading } = useAuth()
-// user hat: email, role (aus JWT-Payload dekodiert)
-```
+### Styling (Tailwind v3)
 
-### API-Calls
-
-```tsx
-import { api } from '../lib/api'
-
-api.get('/members')           // automatisch Bearer-Token + Auto-Refresh bei 401
-api.post('/members', { … })
-```
-
-Alle Pfade relativ zu `/api/` (der Prefix wird in api.ts gesetzt: `baseURL: '/api'`).
-
-### Neue Seite anlegen
-
-1. Datei `web/src/pages/MeineSeite.tsx` erstellen
-2. In `App.tsx` importieren und Route unter dem `AppShell`-Outlet anlegen
-3. In `AppShell.tsx` ggf. Nav-Eintrag mit `roles`-Array eintragen
-
-### Styling
-
-Tailwind v3. Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`-Direktiven).  
-Marken-Primärfarben: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`. Sekundär: Blau `#3E4A98`, Grün `#6EB42E`.  
-Schrift: Hanken Grotesk (Google Fonts). Logo: `../team-stuttgart-org/team-stuttgart-site/Resources/Public/Images/logo.svg`
-
-**Keine raw Tailwind-Farben** (`bg-gray-50`, `text-gray-700`, `text-red-600` etc.) — immer `brand-*`-Tokens verwenden.
-
-#### Semantische Tokens (`tailwind.config.js`)
+Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`). Schrift: Hanken Grotesk.
+Marke: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`; sekundär Blau `#3E4A98`, Grün `#6EB42E`.
+**Keine raw Tailwind-Farben** — immer `brand-*`-Tokens (`tailwind.config.js`):
 
 | Token | Wert | Ersetzt |
 |---|---|---|
-| `brand-surface-card` | `#F9FAFB` | `bg-gray-50` (Card/Tabellen-BG) |
+| `brand-surface-card` | `#F9FAFB` | `bg-gray-50` |
 | `brand-text` | `#111827` | `text-gray-900`, `text-black` |
-| `brand-text-muted` | `#6B7280` | `text-gray-500`, `text-black/50` |
+| `brand-text-muted` | `#6B7280` | `text-gray-500` |
 | `brand-text-subtle` | `#9CA3AF` | `text-gray-400`, Placeholder |
 | `brand-border` | `#D1D5DB` | `border-gray-300` |
 | `brand-border-subtle` | `#E5E7EB` | `border-gray-200`, Divider |
-| `brand-danger` | `#C0253A` | `text-red-600`, destruktive Aktionen |
-| `brand-danger-light` | `#FCEEF1` | `bg-red-50`/`bg-red-100` in Alerts |
-| `brand-info` | `#3B82F6` | Info-Alert-Farbe |
-| `brand-table-select` | `#E5E7EB` | Row-Hover in Tabellen |
+| `brand-danger` | `#C0253A` | `text-red-600`, destruktiv |
+| `brand-danger-light` | `#FCEEF1` | `bg-red-50/100` in Alerts |
+| `brand-info` | `#3B82F6` | Info-Alert |
+| `brand-table-select` | `#E5E7EB` | Row-Hover |
 
-#### Verbindliche Klassen-Strings
+**Verbindliche Klassen-Strings:**
 
-**Button — Primary:** `bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+- **Button Primary:** `bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+- **Button Small (Tabellen):** `bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+- **Button Danger:** `bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+- **Input:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+- **Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6` (Tabellen-Container: `… overflow-hidden`)
+- **Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6`
+- **Alert Info:** `p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text`
+- **Alert Fehler:** `p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger`
+- **Tabellen-Header (th):** `bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left`
+- **Tabellen-Row:** `hover:bg-brand-table-select transition-colors` / Zelle `px-4 py-3 text-sm text-brand-text`
 
-**Button — Small (Tabellen):** `bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+**Icons (lucide-react):** Keine Unicode/Emojis in JSX. `☰`→`<Menu>`, `✕`→`<X>`, `⋮`→`<MoreVertical>`, `▸/▾`→`<ChevronRight>/<ChevronDown>`, `✓`→`<Check>`, `⚠`→`<AlertTriangle>`, `🗑`→`<Trash2>`, `«/»`→`<ChevronsLeft>/<ChevronsRight>`, Heim→`<Home>`, Auswärts→`<MapPin>`. Größen `w-4 h-4` (inline) · `w-5 h-5` (Buttons/Nav) · `w-6 h-6` (standalone). Icon-only-Buttons brauchen `aria-label`.
 
-**Button — Danger:** `bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
+**Button-Position:** Listen → Primär oben rechts neben `<h1>`; Formulare → unten; Inline-Form in Karte → unten in der Karte.
 
-**Input — Standard:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+### Mobile & PWA
 
-**Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6`  
-**Card — Tabellen-Container:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden`  
-**Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6`  
-**Alert — Info:** `p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text`  
-**Alert — Fehler:** `p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger`  
-**Tabellen-Header (th):** `bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left`  
-**Tabellen-Row (tr/td):** `hover:bg-brand-table-select transition-colors` / `px-4 py-3 text-sm text-brand-text`
-
-#### Icons (Lucide React)
-
-`lucide-react` ist installiert. Keine Unicode-Zeichen (`☰`, `✕`, `⋮`, `▸`, `▾`, `✓`, `⚠`, `«`, `»`) oder Emojis in JSX.
-
-| Alt | Lucide |
-|---|---|
-| `☰` | `<Menu>` |
-| `✕` / `✗` | `<X>` |
-| `⋮` | `<MoreVertical>` |
-| `▸` / `▾` | `<ChevronRight>` / `<ChevronDown>` |
-| `✓` | `<Check>` |
-| `⚠` | `<AlertTriangle>` |
-| `🗑` | `<Trash2>` |
-| `«` / `»` | `<ChevronsLeft>` / `<ChevronsRight>` |
-| Heimspiel | `<Home>` |
-| Auswärtsspiel | `<MapPin>` |
-
-Größen: `w-4 h-4` (Inline/Tabelle) · `w-5 h-5` (Buttons/Nav) · `w-6 h-6` (Standalone). Farbe via `currentColor`. Icon-only-Buttons brauchen `aria-label`.
-
-#### Button-Position
-
-- **Listen-Seiten** (Tabellen): Primär-Button oben rechts neben `<h1>` → „Neu anlegen"
-- **Formular-Seiten**: Primär-Button unten im Formular → „Speichern"
-- **Karten mit Inline-Form**: Button unten in der Karte
-
----
-
-## Deployment
-
-**Ziel:** IONOS VPS Linux XS · `/usr/local/bin/teamwerk` · systemd-Service `teamwerk`  
-**Nginx:** Reverse Proxy Port 443 → 8080, Zertifikat via Certbot  
-**Konfiguration:** `/etc/teamwerk/env` (enthält PORT, DB_PATH, JWT_SECRET, SMTP_*)  
-**DB:** `/var/lib/teamwerk/teamwerk.db`  
-**Scheduler:** Cronjob `* * * * * /usr/local/bin/teamwerk scheduler:run`
-
-Für einen Erstaufbau: `bash deploy/setup-vps.sh` auf dem VPS ausführen (root).
-
----
-
-## Mobile & PWA
-
-### Breakpoint-Konvention
-
-`sm:` (640px) ist die einzige Mobile/Desktop-Grenze. Mobile = `< 640px`, Desktop = `≥ 640px`. Keine `md:`-Logik für Mobile-Unterscheidungen.
-
-### Navigation auf Mobile
-
-Hamburger-Button (☰) in einer mobilen Kopfzeile ersetzt die Sidebar. Die Sidebar öffnet sich als Fixed-Position-Overlay (`z-50`) mit halbtransparentem Backdrop. Die Desktop-Sidebar ist immer sichtbar und bleibt unverändert. Main-Content Padding auf Mobile: `px-4 py-4` (statt `p-8`). Die Dekorationsklassen des Main-Content (`rounded-tl-3xl rounded-bl-3xl border-l-4 border-brand-yellow`) sind nur auf Desktop aktiv: `sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow`.
-
-### Tabellen auf Mobile
-
-Alle tabellenbasierten Seiten zeigen auf Mobile (`< 640px`) ein Card-Layout statt `<table>`. Jede Zeile wird als Card gerendert. Actions hinter ⋮-Dropdown. Inline-Edit-Formulare mit mehreren Feldern (z.B. AdminDutyTypesPage) öffnen auf Mobile ein Modal. Shared-Komponenten: `MobileCard`, `ActionMenu`, `EditModal` in `web/src/components/`.
-
-### Paginierte Listen
-
-`GET /api/members` und `GET /api/users` unterstützen Paginierung:
-
-```
-GET /api/members?search=&limit=50&offset=0
-Response: { items: [...Member], total: 1000 }
-```
-
-Suchleiste auf diesen Seiten ist serverseitig und auf Mobile `sticky top-0 z-10`. Frontend nutzt „Mehr laden"-Button (kein automatisches Infinite Scroll). Die Clientseitige `filter()`-Logik in MembersPage entfällt.
-
-### Touch-Targets
-
-Alle interaktiven Elemente müssen auf Mobile mindestens **44px** Höhe haben. Buttons erhalten `py-2.5` statt `py-1.5` auf Mobile (`sm:py-1.5`).
-
-### Progressive Web App (PWA)
-
-TeamWERK ist als PWA installierbar. Setup via `vite-plugin-pwa` (einzige neue Frontend-Dependency):
-
-- **Service Worker**: Network-first für `/api/*`, Cache-first für statische Assets
-- **Manifest**: `web/public/manifest.json` — Name: „TeamWERK", Theme: `#000000`, Background: `#FFFFFF`
-- **Icons**: PNG-Icons in `web/public/icons/` (generiert aus Logo-SVG, Größen: 192×192, 512×512)
-- **Offline**: Zeigt Shell mit „Sie sind offline"-Hinweis wenn keine Verbindung
+- **Breakpoint:** `sm:` (640px) ist die einzige Mobile/Desktop-Grenze. Keine `md:`-Logik für Mobile.
+- **Navigation:** Hamburger (`<Menu>`) öffnet die Sidebar als Fixed-Overlay (`z-50`) mit Backdrop. Desktop-Sidebar immer sichtbar. Main-Padding Mobile `px-4 py-4` statt `p-8`; Deko-Klassen (`rounded-tl-3xl …`) nur `sm:`.
+- **Tabellen auf Mobile:** Card-Layout statt `<table>`; Actions hinter `<MoreVertical>`-Dropdown; Multi-Feld-Inline-Edit als Modal. Shared: `MobileCard`, `ActionMenu`, `EditModal` in `web/src/components/`.
+- **Touch-Targets:** min. 44px Höhe → `py-2.5` auf Mobile (`sm:py-1.5`).
+- **PWA** (`vite-plugin-pwa`): Service Worker network-first für `/api/*`, cache-first für Assets. Manifest `web/public/manifest.json`, Icons `web/public/icons/`. Offline-Shell mit Hinweis.
 
 ---
 
 ## Bekannte Gotchas
 
-**SQLite DATE-Felder:** API gibt Datumsfelder als ISO-Timestamp zurück (`"2026-05-30T00:00:00Z"`). Im Frontend immer `.slice(0, 10)` verwenden für Vergleiche und `date + 'T12:00:00'`-Konstruktionen.
+**SQLite DATE-Felder:** API gibt Datumsfelder als ISO-Timestamp zurück (`"2026-05-30T00:00:00Z"`). Im Frontend immer `.slice(0, 10)` für Vergleiche und `date + 'T12:00:00'`-Konstruktionen.
 
-**Aktive Saison:** Spielplan, Dienst-Erstellung und Dienst-Konten setzen eine aktive Saison voraus. Verwalten unter `/admin/saisons`. Ohne aktive Saison schlagen game- und slot-Inserts mit FK-Fehler fehl.
+**Aktive Saison:** Spielplan, Dienst-Erstellung und Dienst-Konten setzen eine aktive Saison voraus (Verwaltung `/admin/saisons`). Ohne aktive Saison schlagen game- und slot-Inserts mit FK-Fehler fehl.
 
-**`make deploy`** führt automatisch `migrate up` aus — der neue Binary hat die Migrations eingebettet.
+**SSE Live-Updates:** Jede Mutations-Route (`POST`/`PUT`/`DELETE`) muss `h.hub.Broadcast("domain-event")` aufrufen; das Frontend abonniert mit `useLiveUpdates((event) => { if (event === 'domain-event') reload() })`. `Handler`-Structs mit Mutationen brauchen ein `hub *hub.EventHub`-Feld (in `main.go` via `NewHandler(db, hub)` übergeben). Fehlt `Broadcast` (Backend) **oder** `useLiveUpdates` (Frontend), bleibt die Seite nach fremden Änderungen stumm.
 
-**SSE Live-Updates:** Jede Mutations-Route (`POST`/`PUT`/`DELETE`) muss `h.hub.Broadcast("domain-event")` aufrufen, damit alle verbundenen Clients sofort aktualisiert werden. Das Frontend abonniert mit `useLiveUpdates((event) => { if (event === 'domain-event') reload() })`. `Handler`-Structs, die Mutationen ausführen, müssen ein `hub *hub.EventHub`-Feld besitzen — das Hub wird in `main.go` via `NewHandler(db, hubInstance)` übergeben. Fehlt der `Broadcast`-Aufruf auf der Backend-Seite **oder** `useLiveUpdates` auf der Frontend-Seite, bleibt die Seite nach fremden Änderungen stumm.
-
-**Push Notifications:** Die vollständige Push-Infrastruktur ist in `internal/notifications/` implementiert. VAPID-Keys generieren mit `go run ./cmd/teamwerk gen-vapid` und in `.env` eintragen (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL`). Push an User senden:
+**Push Notifications:** Infrastruktur in `internal/notifications/`. VAPID-Keys via `go run ./cmd/teamwerk gen-vapid` in `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL`). Senden immer als Goroutine (darf den HTTP-Response nicht blockieren):
 
 ```go
 go notifications.SendToUsers(h.db, h.cfg, []int{userID1, userID2}, "Titel", "Text", "/ziel-url")
 ```
 
-Immer als Goroutine aufrufen (`go ...`) — der Aufruf darf den HTTP-Response nicht blockieren. Der Frontend-Hook `usePushSubscription` (eingebunden in `AppShell.tsx`) registriert Subscriptions automatisch beim App-Start. Auf iOS nur aktiv wenn die PWA zum Homescreen hinzugefügt wurde (`display-mode: standalone`). Subscriptions werden in `push_subscriptions` gespeichert; ungültige Endpoints (HTTP 410) werden automatisch bereinigt. Für Scheduled Notifications (Reminder, Alerts) — neuer Job-Typ im `internal/scheduler/`-Package, idempotent via `notification_log`-Tabelle.
+Frontend-Hook `usePushSubscription` (in `AppShell.tsx`) registriert automatisch beim App-Start. iOS nur als Homescreen-PWA (`display-mode: standalone`). Subscriptions in `push_subscriptions`; ungültige Endpoints (HTTP 410) werden bereinigt. Scheduled Notifications → Job im `internal/scheduler/`, idempotent via `notification_log`.
 
-**Auto-Duty-Regen:** Jede Änderung an einem Heim- oder Auswärtsspiel (`POST /api/games`, `PUT /api/games/{id}`, `DELETE /api/games/{id}`) triggert automatische Regeneration der Dienst-Slots für das Event-Datum ± 1 Tag. Diese Regen beachtet alle `same_day_behavior`- und `adjacent_day_behavior`-Regeln der Duty-Types. Slots mit `is_custom=1` (manuell angelegt oder editiert) werden geschont und nicht gelöscht oder verändert. Der Response enthält ein `regen_summary`-Objekt mit Informationen über erstellte, reduzierte, übersprungene Slots und benachrichtigte Helfer. Vor einem Deploy sollte der Vorstand manuell-editierte Bestandsslots mit `UPDATE duty_slots SET is_custom=1 WHERE id IN (...)` schützen, um unerwünschte Regeneration zu vermeiden.
+**Auto-Duty-Regen:** Jede Spieländerung (`POST/PUT/DELETE /api/games/{id}`) triggert Regeneration der Dienst-Slots für Event-Datum ± 1 Tag (beachtet `same_day_behavior`/`adjacent_day_behavior` der Duty-Types). Slots mit `is_custom=1` (manuell angelegt/editiert) werden geschont. Response enthält `regen_summary`. Vor Deploy manuell-editierte Bestandsslots mit `UPDATE duty_slots SET is_custom=1 WHERE id IN (...)` schützen.
 
-**SEPA-Beitragslauf:** Unter `/admin/beitragslauf` (sichtbar für `vorstand`, `kassierer`, `admin`). Bewusst einfach: **kein Pro-rata** — jedes einzuziehende Mitglied zahlt den vollen **Jahresbeitrag**; Fälligkeit ist **immer der 01.07.** der Saison; alle Lastschriften sind **RCUR** (keine FRST-Unterscheidung); Spieler gelten als Kinder (keine Volljährigkeits-/Ausbildungsprüfung). Vor dem ersten Lauf müssen die Vereins-SEPA-Stammdaten (`glaeubiger_id`, `iban`, `bic`, `kontoinhaber`) unter Einstellungen → Verein gepflegt sein, sonst liefert `POST /api/fee-run/export` HTTP 400. Die Beitragsmatrix wird unter Einstellungen → Beiträge gepflegt (3 Kategorien, Beträge in Cent, Historie via `valid_from`). Der „Lauf bestätigen"-Schritt schreibt ein **append-only** Saison-Protokoll (Textdatei) — `BEITRAGSLAUF_DIR` unbedingt ins Backup aufnehmen. Der **Kassierer** darf zusätzlich Mitglieder lesen und deren Bankdaten über `PUT /api/members/{id}/bank-details` (Feld-Whitelist) korrigieren.
-
----
-
-## VPS-Status
-
-VPS ist in Betrieb. SSH-Alias: `vServer` (in `.env`). Direkt erreichbar unter `https://217.160.118.39`.
-Domain `internal.team-stuttgart.org` und Certbot-Zertifikat noch ausstehend.
-
-Nützliche Remote-Befehle:
-```bash
-make migrate-remote-up                                      # Migrationen auf VPS anwenden
-make create-admin-remote EMAIL=… PASSWORD=… NAME=…         # Admin-User anlegen
-```
-
----
-
-## OpenSpec-Workflow: Commit-Konventionen
-
-Am Ende jedes OpenSpec Change Proposals **müssen Conventional Commits** verwendet werden. Kein freier Commit-Text.
-
-### Format
-
-```
-<type>(<scope>): <beschreibung>
-```
-
-**Typen:**
-
-| Typ | Bedeutung |
-|-----|-----------|
-| `feat` | Neues Feature |
-| `fix` | Bugfix |
-| `refactor` | Umstrukturierung ohne Verhaltensänderung |
-| `chore` | Migrations, Dependencies, Build-Skripte |
-| `docs` | Nur Dokumentation |
-| `style` | Formatierung, kein Logik-Wechsel |
-| `test` | Tests hinzufügen oder korrigieren |
-
-**Scope:** Domänen-Package oder Bereich, z.B. `duties`, `members`, `games`, `auth`, `pwa`, `db`.
-
-### Beispiele
-
-```
-feat(duties): Dienstbörse zeigt offene Slots nach Datum sortiert
-fix(auth): Refresh-Token-Cookie wird bei Logout korrekt gelöscht
-chore(db): Migration 011 – push_subscriptions-Tabelle
-refactor(members): Paginierung serverseitig, clientseitige filter() entfernt
-```
-
-### Wann committen
-
-Pro OpenSpec-Task ein Commit — nicht alle Tasks in einem Commit zusammenfassen. Nach dem letzten Task folgt ein abschließender Commit, der ggf. die OpenSpec-Proposal-Datei archiviert.
+**SEPA-Beitragslauf:** `/admin/beitragslauf` (`vorstand`, `kassierer`, `admin`). Bewusst einfach: **kein Pro-rata** (voller Jahresbeitrag), Fälligkeit **immer 01.07.** der Saison, alle Lastschriften **RCUR** (keine FRST), Spieler gelten als Kinder. Vor dem ersten Lauf müssen die SEPA-Stammdaten (`glaeubiger_id`, `iban`, `bic`, `kontoinhaber`) unter Einstellungen → Verein gepflegt sein, sonst liefert `POST /api/fee-run/export` HTTP 400. Beitragsmatrix unter Einstellungen → Beiträge (3 Kategorien, Cent, Historie via `valid_from`). „Lauf bestätigen" schreibt das append-only Saison-Protokoll. Kassierer darf Mitglieder lesen + Bankdaten via `PUT /api/members/{id}/bank-details` korrigieren.
 
 ---
 
 ## Test-Standard
 
-### Regel: Jede neue Route bekommt Tests
+Jede neue HTTP-Route **muss** mindestens **Happy-Path** (Erfolg) und **Fehlerfall** (401/403/400/404/409) abdecken. Tests prüfen fachliche Invarianten — keine Dummy-Assertions zur Coverage-Erhöhung.
 
-Jede neue HTTP-Route in einem OpenSpec-Change **muss** mindestens abdecken:
-- **Happy Path:** Erfolgsfall mit korrekten Vorbedingungen
-- **Fehlerfall:** Authorization (403/401) oder ungültige Eingabe (400/404/409)
+Jeder OpenSpec-Proposal mit neuen Routen / geänderter Geschäftslogik braucht einen Abschnitt `## Test-Anforderungen` (Route → Testname + erwarteter Status, plus die garantierte Invariante).
 
-Tests prüfen **fachliche Invarianten** — was das System garantieren muss. Keine Dummy-Assertions nur zur Coverage-Erhöhung.
+**Fixtures** in `internal/testutil/`: `NewDB`, `NewServer`, `CreateUser`, `CreateMember`, `CreateSeason`, `CreateTeam`, `CreateGame`, `CreateKader`, `CreateDutyType`, `CreateDutySlot`, `CreateInvitationToken`, `CreatePasswordResetToken`, `CreateRefreshToken`.
 
-### Pflicht in OpenSpec-Proposals
-
-Jeder Proposal der neue Routen oder geänderte Geschäftslogik enthält, **muss** einen Abschnitt enthalten:
-
-```markdown
-## Test-Anforderungen
-
-- Route `POST /api/xyz`: TestXyz_HappyPath (201), TestXyz_Forbidden (403)
-- Invariante: <was das System garantieren muss>
-```
-
-### Coverage-Tool
-
-```bash
-make coverage   # Coverage pro Package auf stdout + HTML nach /tmp/teamwerk-coverage.html
-```
-
-Coverage-Zahlen sind ein Indikator, kein Gate. Eine neue Route mit 2 sinnvollen Tests ist besser als 10 Dummy-Assertions.
-
-### Testinfrastruktur
-
-- **`internal/testutil/`** — alle Fixtures: `NewDB`, `NewServer`, `CreateUser`, `CreateMember`, `CreateSeason`, `CreateTeam`, `CreateGame`, `CreateKader`, `CreateDutyType`, `CreateDutySlot`, `CreateInvitationToken`, `CreatePasswordResetToken`, `CreateRefreshToken`
-- **Go-Version:** `/usr/local/go/bin/go` (1.25) — nicht `go` (Homebrew 1.26+, inkompatibel mit go.mod)
-- **player_memberships** ist eine View über `kader_members` — kein direktes INSERT möglich, stattdessen: `INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`
+`make coverage` → stdout + HTML nach `/tmp/teamwerk-coverage.html`. Coverage ist Indikator, kein Gate.
 
 ---
 
 ## Harness / Verifikation
 
-TeamWERK setzt Konventionen nicht nur per Doku, sondern mechanisch durch (Agent-Harness).
+Konventionen werden mechanisch durchgesetzt, nicht nur dokumentiert.
 
-**Provider-agnostischer Einstieg:** `AGENTS.md` im Repo-Root enthält die destillierten Hard-Rules für beliebige Coding-Agenten und verweist auf diese Datei als kanonische Quelle.
+- **Git-Hooks** (`make hooks`, in `make init`): `pre-commit` = gofmt auf gestagete Go-Dateien; `pre-push` = volles Gate (`go vet`, `go test -race ./...` inkl. Architektur-Test, `golangci-lint`, `pnpm -C web build/test/lint`, `openspec validate`). Notausgang: `git push --no-verify`.
+- **Architektur-Test** `internal/arch/arch_test.go` (stdlib, Teil von `make test`): Domain-Packages importieren sich nicht gegenseitig; Foundation importiert keine Domain/Composition; jedes neue `internal/`-Package muss klassifiziert werden.
+- **gofmt-Selbstkorrektur:** `PostToolUse`-Hook (`scripts/claude-gofmt-hook.sh`) formatiert via Edit/Write geänderte `*.go`-Dateien.
+- **Pre-Completion:** Slash-Command **`/verify-change`** prüft Build/Test/Lint + Projekt-Invarianten (Route→Tests, Mutation→`Broadcast`/`useLiveUpdates`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).
+- **Permissions:** geteilte Routine-Befehle in `.claude/settings.json`; `.claude/settings.local.json` (gitignored) nur maschinenspezifisch.
 
-**Git-Hooks** (einmalig aktivieren mit `make hooks`, in `make init` enthalten):
-- `pre-commit` — `gofmt`-Check auf gestagete Go-Dateien.
-- `pre-push` — vollständiges Gate: `go vet`, `go test -race ./...` (inkl. Architektur-Test), `golangci-lint`, `pnpm -C web build/test/lint`, `openspec validate`.
-- Notausgang: `git push --no-verify` (bewusst, mit Vorsicht).
+---
 
-**Architektur-Test** `internal/arch/arch_test.go` (reine stdlib, Teil von `make test`): erzwingt das Layering — Domain-Packages importieren sich nicht gegenseitig, die Foundation-Schicht importiert keine Domain/Composition, jedes neue `internal/`-Package muss klassifiziert werden (sonst Testfehler).
+## OpenSpec-Workflow
 
-**gofmt-Selbstkorrektur:** `.claude/settings.json` verdrahtet einen `PostToolUse`-Hook (`scripts/claude-gofmt-hook.sh`), der jede via Edit/Write geänderte `*.go`-Datei automatisch formatiert.
+Spezifikationsgetrieben über `openspec/` (Proposal → Design → Specs → Tasks → Apply → Archive).
 
-**Pre-Completion-Checkliste:** Slash-Command **`/verify-change`** führt vor „fertig" durch Build/Test/Lint und die Projekt-Invarianten (Route→Tests, Mutation→`hub.Broadcast`/`useLiveUpdates`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).
+**Conventional Commits** verpflichtend — Format `<type>(<scope>): <beschreibung>`.
+Typen: `feat`, `fix`, `refactor`, `chore`, `docs`, `style`, `test`. Scope = Domänen-Package (`duties`, `members`, `auth`, `db`, `pwa`, …).
+Beispiel: `feat(duties): Dienstbörse zeigt offene Slots nach Datum sortiert`.
 
-**Permissions:** geteilte, sichere Routine-Befehle stehen committet in `.claude/settings.json`; `.claude/settings.local.json` (gitignored) hält nur maschinen-/personenspezifische Ergänzungen.
+**Ein Commit pro OpenSpec-Task** (nicht alle Tasks zusammenfassen); abschließender Commit archiviert ggf. das Proposal.
+
+---
+
+## Deployment & VPS
+
+IONOS VPS Linux XS · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*). DB `/var/lib/teamwerk/teamwerk.db`. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk scheduler:run`. Erstaufbau: `bash deploy/setup-vps.sh` (root).
+
+SSH-Alias `vServer` (in `.env`), direkt `https://217.160.118.39`. Domain + Certbot-Zertifikat noch ausstehend.
+
+```bash
+make migrate-remote-up                               # Migrationen auf VPS
+make create-admin-remote EMAIL=… PASSWORD=… NAME=…   # Admin anlegen
+```
