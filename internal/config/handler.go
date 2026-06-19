@@ -5,15 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/hub"
+	"github.com/teamstuttgart/teamwerk/internal/sepa"
+)
+
+var (
+	glaeubigerIDRegex = regexp.MustCompile(`^DE\d{2}[A-Z0-9]{3}\d{11}$`)
+	bicRegex          = regexp.MustCompile(`^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$`)
 )
 
 type AgeClassRule struct {
-	AgeClass             string `json:"age_class"`
-	HalfDurationMinutes  int    `json:"half_duration_minutes"`
-	BreakMinutes         int    `json:"break_minutes"`
+	AgeClass            string `json:"age_class"`
+	HalfDurationMinutes int    `json:"half_duration_minutes"`
+	BreakMinutes        int    `json:"break_minutes"`
 }
 
 func GetAgeClassRules(db *sql.DB) ([]AgeClassRule, error) {
@@ -65,28 +73,67 @@ func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, 
 func (h *Handler) GetClub(w http.ResponseWriter, r *http.Request) {
 	var id int
 	var name string
-	var logoURL, address sql.NullString
-	h.db.QueryRowContext(r.Context(), `SELECT id, name, logo_url, address FROM clubs LIMIT 1`).
-		Scan(&id, &name, &logoURL, &address)
+	var logoURL, address, glaeubigerID, iban, bic, kontoinhaber sql.NullString
+	h.db.QueryRowContext(r.Context(),
+		`SELECT id, name, logo_url, address, glaeubiger_id, iban, bic, kontoinhaber FROM clubs LIMIT 1`).
+		Scan(&id, &name, &logoURL, &address, &glaeubigerID, &iban, &bic, &kontoinhaber)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"id": id, "name": name, "logo_url": logoURL.String, "address": address.String,
+		"glaeubiger_id": glaeubigerID.String, "iban": iban.String,
+		"bic": bic.String, "kontoinhaber": kontoinhaber.String,
 	})
 }
 
 // PUT /api/admin/club
 func (h *Handler) UpdateClub(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name    string `json:"name"`
-		LogoURL string `json:"logo_url"`
-		Address string `json:"address"`
+		Name         string `json:"name"`
+		LogoURL      string `json:"logo_url"`
+		Address      string `json:"address"`
+		GlaeubigerID string `json:"glaeubiger_id"`
+		IBAN         string `json:"iban"`
+		BIC          string `json:"bic"`
+		Kontoinhaber string `json:"kontoinhaber"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+
+	// Normalisieren + validieren (leere Werte sind erlaubt = noch nicht gepflegt).
+	req.IBAN = sepa.NormalizeIBAN(req.IBAN)
+	req.BIC = normalizeUpper(req.BIC)
+	req.GlaeubigerID = normalizeUpper(req.GlaeubigerID)
+	if req.GlaeubigerID != "" && !glaeubigerIDRegex.MatchString(req.GlaeubigerID) {
+		http.Error(w, "ungültige Gläubiger-ID", http.StatusBadRequest)
+		return
+	}
+	if req.IBAN != "" && !sepa.IsValidIBAN(req.IBAN) {
+		http.Error(w, "ungültige IBAN", http.StatusBadRequest)
+		return
+	}
+	if req.BIC != "" && !bicRegex.MatchString(req.BIC) {
+		http.Error(w, "ungültige BIC", http.StatusBadRequest)
+		return
+	}
+
 	h.db.ExecContext(r.Context(),
-		`UPDATE clubs SET name=?, logo_url=?, address=?, updated_at=? WHERE id=(SELECT id FROM clubs LIMIT 1)`,
-		req.Name, req.Name, req.Address, time.Now())
+		`UPDATE clubs SET name=?, logo_url=?, address=?, glaeubiger_id=?, iban=?, bic=?, kontoinhaber=?, updated_at=?
+		 WHERE id=(SELECT id FROM clubs LIMIT 1)`,
+		req.Name, req.LogoURL, req.Address,
+		nullIfEmpty(req.GlaeubigerID), nullIfEmpty(req.IBAN), nullIfEmpty(req.BIC), nullIfEmpty(req.Kontoinhaber),
+		time.Now())
 	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func normalizeUpper(s string) string {
+	return strings.ToUpper(strings.Join(strings.Fields(s), ""))
+}
+
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // GET /api/admin/seasons
@@ -214,7 +261,6 @@ func (h *Handler) ListTeams(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-
 // POST /api/admin/teams
 func (h *Handler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -297,4 +343,3 @@ func (h *Handler) UpdateAgeClassRuleHandler(w http.ResponseWriter, r *http.Reque
 	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
 }
-
