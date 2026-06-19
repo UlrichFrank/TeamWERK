@@ -228,7 +228,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("trainer", "sportliche_leitung"))
-			r.Get("/api/venues", h.Venues.List)
 			r.Get("/api/training-series", h.Training.ListSeries)
 			r.Post("/api/training-series", h.Training.CreateSeries)
 			r.Put("/api/training-series/{id}", h.Training.UpdateSeries)
@@ -249,6 +248,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Vorstand + Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
+			r.Get("/api/venues", h.Venues.List)
 			r.Post("/api/venues", h.Venues.Create)
 			r.Post("/api/venues/import", h.Venues.Import)
 			r.Delete("/api/venues", h.Venues.DeleteAll)
