@@ -174,9 +174,19 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 		events = append(events, duties...)
 	}
 
+	// Append the person's first name to the calendar name so families can
+	// subscribe to several members' feeds and tell them apart.
+	calName := "TeamWERK"
+	var firstName string
+	h.db.QueryRowContext(r.Context(),
+		`SELECT first_name FROM users WHERE id = ?`, userID).Scan(&firstName)
+	if firstName != "" {
+		calName = "TeamWERK – " + firstName
+	}
+
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=\"teamwerk.ics\"")
-	fmt.Fprint(w, renderICal(events))
+	fmt.Fprint(w, renderICal(events, calName))
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────────
@@ -354,12 +364,12 @@ func (h *Handler) fetchDuties(r *http.Request, userID int) ([]calEvent, error) {
 
 // ── iCal rendering ───────────────────────────────────────────────────────────
 
-func renderICal(events []calEvent) string {
+func renderICal(events []calEvent, calName string) string {
 	var sb strings.Builder
 	writeLine(&sb, "BEGIN:VCALENDAR")
 	writeLine(&sb, "VERSION:2.0")
 	writeLine(&sb, "PRODID:-//TeamWERK//Team Stuttgart//DE")
-	writeLine(&sb, "X-WR-CALNAME:TeamWERK")
+	writeLine(&sb, "X-WR-CALNAME:"+escapeText(calName))
 	writeLine(&sb, "CALSCALE:GREGORIAN")
 	writeLine(&sb, "METHOD:PUBLISH")
 	for _, e := range events {

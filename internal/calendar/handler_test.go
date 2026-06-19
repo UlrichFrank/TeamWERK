@@ -115,6 +115,27 @@ func TestCalendarFeed_GameAndDutyHaveRealDates(t *testing.T) {
 	}
 }
 
+// TestCalendarFeed_CalNameHasFirstName verifies the calendar name carries the
+// account's first name so families can subscribe to several feeds and tell them
+// apart. The name comes from users.first_name (a member is not always present).
+func TestCalendarFeed_CalNameHasFirstName(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	db.Exec(`UPDATE users SET first_name = ? WHERE id = ?`, "Anna", userID)
+	userToken := testutil.Token(t, userID, "standard", nil)
+	srv := prodserver.New(t, db)
+
+	tok := postToken(t, srv, userToken, allTogglesOn())
+	calToken := tok["token"].(string)
+
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+calToken, "")
+	defer res.Body.Close()
+	body := readBody(t, res.Body)
+	if !strings.Contains(body, "X-WR-CALNAME:TeamWERK – Anna") {
+		t.Errorf("calendar name must include the account first name, body:\n%s", body)
+	}
+}
+
 // TestCalendarFeed_InvalidToken returns 404.
 func TestCalendarFeed_InvalidToken(t *testing.T) {
 	db := testutil.NewDB(t)
