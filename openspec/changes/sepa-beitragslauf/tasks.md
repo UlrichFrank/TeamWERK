@@ -18,43 +18,43 @@
 
 ### 2.1 Club-Handler erweitern
 
-- [ ] 2.1.1 `internal/config/handler.go`: Struct `Club` um `GlaeubigerID`, `IBAN`, `BIC`, `Kontoinhaber` (alle `*string`, nullable) erweitern.
-- [ ] 2.1.2 `GetClub` SELECT um neue Felder erweitern, JSON-Marshalling testen.
-- [ ] 2.1.3 `UpdateClub` UPDATE um neue Felder erweitern, Validierung gemäß design.md §1.1:
+- [x] 2.1.1 `internal/config/handler.go`: Struct `Club` um `GlaeubigerID`, `IBAN`, `BIC`, `Kontoinhaber` (alle `*string`, nullable) erweitern.
+- [x] 2.1.2 `GetClub` SELECT um neue Felder erweitern, JSON-Marshalling testen.
+- [x] 2.1.3 `UpdateClub` UPDATE um neue Felder erweitern, Validierung gemäß design.md §1.1:
   - `glaeubigerIDRegex = regexp.MustCompile(`^DE\d{2}[A-Z0-9]{3}\d{11}$`)`
   - IBAN via `iban.Validate()` aus neuer interner Util-Funktion (keine externe Lib, manueller Mod-97-Check)
   - BIC: 8 oder 11 Zeichen, `^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$`
-- [ ] 2.1.4 Test `TestClub_SepaFelder_GetSet` in `internal/config/handler_test.go`: setzt alle 4 Felder via PUT, liest sie via GET zurück, prüft Validierungs-Fehler bei ungültiger Gläubiger-ID und ungültiger IBAN.
-- [ ] 2.1.5 Commit: `feat(config): Club-API um SEPA-Stammdaten erweitert`
+- [x] 2.1.4 Test `TestClub_SepaFelder_GetSet` in `internal/config/handler_test.go`: setzt alle 4 Felder via PUT, liest sie via GET zurück, prüft Validierungs-Fehler bei ungültiger Gläubiger-ID und ungültiger IBAN.
+- [x] 2.1.5 Commit: `feat(config): Club-API um SEPA-Stammdaten erweitert`
 
 ### 2.2 IBAN-Util
 
-- [ ] 2.2.1 `internal/sepa/iban.go` neu anlegen mit:
+- [x] 2.2.1 `internal/sepa/iban.go` neu anlegen mit:
   - `func NormalizeIBAN(s string) string` — Leerzeichen raus, uppercase
   - `func IsValidIBAN(iban string) bool` — Längen-Check pro Ländercode + Mod-97-Prüfsumme
-- [ ] 2.2.2 Tabellen-Test mit gültigen und ungültigen IBANs (DE, AT, CH, Müll, leerer String).
-- [ ] 2.2.3 Commit: `feat(sepa): IBAN-Validierung (Mod-97, länderspezifische Länge)`
+- [x] 2.2.2 Tabellen-Test mit gültigen und ungültigen IBANs (DE, AT, CH, Müll, leerer String).
+- [x] 2.2.3 Commit: `feat(sepa): IBAN-Validierung (Mod-97, länderspezifische Länge)`
 
 ## 3. Backend — Beitragssätze
 
-- [ ] 3.1 Package `internal/beitragssaetze/` mit `handler.go`:
+- [x] 3.1 Package `internal/beitragssaetze/` mit `handler.go`:
   - Struct `Satz { ID, Kategorie, BetragCent, ValidFrom, CreatedAt }`
   - `List(w, r)` → `GET /api/beitrags-saetze`
   - `Create(w, r)` → `POST /api/beitrags-saetze` mit Validation gemäß design.md §7.1 (Kategorie ∈ {`aktiv_ohne`, `aktiv_mit`, `passiv`})
   - Constructor `NewHandler(db, hub)` mit Broadcast `beitragssatz-changed`
-- [ ] 3.2 Routen in `cmd/teamwerk/main.go` / `internal/app/router.go` registrieren unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
-- [ ] 3.3 Tests in `internal/beitragssaetze/handler_test.go`:
+- [x] 3.2 Routen in `cmd/teamwerk/main.go` / `internal/app/router.go` registrieren unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
+- [x] 3.3 Tests in `internal/beitragssaetze/handler_test.go`:
   - `TestSaetze_HistorieErhalten` — anlegen mit zwei `valid_from`, GET liefert beide sortiert
   - `TestSaetze_NeueValidFromAnlegen` — POST mit identischer `kategorie + valid_from` ist erlaubt, kein 409
   - `TestSaetze_InvalidKategorie` — CHECK-Verletzung → 400
   - `TestSaetze_Forbidden` — Persona `spieler` → 403 (`testutil.Token` mit nur `club_functions: ["spieler"]`)
-- [ ] 3.4 Commit: `feat(beitragssaetze): CRUD-Handler + Tests`
+- [x] 3.4 Commit: `feat(beitragssaetze): CRUD-Handler + Tests`
 
 ## 4. Backend — Beitragslauf-Kern (Kategorisierung)
 
 ### 4.1 Package-Skelett
 
-- [ ] 4.1.1 `internal/beitragslauf/` neu anlegen mit Dateien:
+- [x] 4.1.1 `internal/beitragslauf/` neu anlegen mit Dateien:
   - `compute.go` — reine Funktionen, keine DB-Abhängigkeit
   - `query.go` — DB-Reads (members, clubs, sätze)
   - `xml.go` — XML-Generator
@@ -64,48 +64,48 @@
 
 ### 4.2 Pure-Compute-Funktionen
 
-- [ ] 4.2.1 `compute.go`:
+- [x] 4.2.1 `compute.go`:
   - `func BeitragsGruppe(status string) string` — gibt `"aktiv"`, `"passiv"` oder `""`
   - `func AktivKategorie(mitStammverein bool) string` — `"aktiv_mit"` oder `"aktiv_ohne"`
   - (Keine Pro-rata-/Volljährigkeits-/Ausbildungs-/SeqTp-Funktionen — bewusst entfallen.)
-- [ ] 4.2.2 `compute_test.go`:
+- [x] 4.2.2 `compute_test.go`:
   - `TestAktivKategorie_MitOhneStammverein` — 2 Fälle
   - `TestBeitragsGruppe_AlleStatus` — aktiv/verletzt → aktiv, pausiert/passiv → passiv, sonst → ""
-- [ ] 4.2.3 Commit: `feat(beitragslauf): Kategorisierungs-Funktionen + Tests`
+- [x] 4.2.3 Commit: `feat(beitragslauf): Kategorisierungs-Funktionen + Tests`
 
 ### 4.3 Stammverein-Matching
 
-- [ ] 4.3.1 `compute.go` ergänzen:
+- [x] 4.3.1 `compute.go` ergänzen:
   - `var Mitgliedsvereine = []string{...}` (8 Vereine aus Gebührenordnung)
   - `func NormalizeClubName(s string) string` — Lowercase, Whitespace-collapse, Punkte/Bindestriche raus, „/" raus
   - `func levenshtein(a, b string) int` — Standard-DP, max 50 Zeichen
   - `func MatchHomeClub(homeClub string) ClubMatch` — Result-Struct `{Matched bool, Canonical string, Warning string}`
-- [ ] 4.3.2 `compute_test.go`:
+- [x] 4.3.2 `compute_test.go`:
   - `TestMatchHomeClub_ExakterMatch` — `"TV Cannstatt 1846"` → Matched=true, kein Warning
   - `TestMatchHomeClub_LowerCase` — `"tv cannstatt 1846"` → Matched=true
   - `TestMatchHomeClub_Fuzzy` — `"TV Cannstadt 1846"` (Tippfehler) → Matched=true, Warning gesetzt
   - `TestMatchHomeClub_Leer` — `""` → Matched=false, Warning=""
   - `TestMatchHomeClub_Unbekannt` — `"FC Bayern"` → Matched=false, Warning gesetzt
-- [ ] 4.3.3 Commit: `feat(beitragslauf): Stammverein-Fuzzy-Match`
+- [x] 4.3.3 Commit: `feat(beitragslauf): Stammverein-Fuzzy-Match`
 
 ### 4.4 Sätze-Lookup
 
-- [ ] 4.4.1 `query.go`:
+- [x] 4.4.1 `query.go`:
   - `func LoadSaetzeMap(db *sql.DB) (map[string][]Satz, error)` — sortiert pro Kategorie nach `valid_from` DESC
   - `func LookupBetragCent(saetze map[string][]Satz, kategorie string, saisonStart time.Time) (int, error)` — erstes Element mit `validFrom <= saisonStart`; Error wenn kein Satz vor Saisonstart hinterlegt
-- [ ] 4.4.2 Test `TestLookupBetragCent_VorValidFrom` — wenn `saisonStart < kleinster validFrom`, dann Error (kein Beitragssatz hinterlegt)
-- [ ] 4.4.3 Commit: `feat(beitragslauf): Beitragssatz-Lookup nach Saisonstart`
+- [x] 4.4.2 Test `TestLookupBetragCent_VorValidFrom` — wenn `saisonStart < kleinster validFrom`, dann Error (kein Beitragssatz hinterlegt)
+- [x] 4.4.3 Commit: `feat(beitragslauf): Beitragssatz-Lookup nach Saisonstart`
 
 ## 5. Backend — Vorschau-Endpoint
 
-- [ ] 5.1 `query.go`: `func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error)` — alle Member (kein Status-Filter, der passiert im Compute), mit JOIN auf `clubs` (einzeilig — wir hängen die SEPA-Stammdaten an).
-- [ ] 5.2 `handler.go`: `func (h *Handler) Preview(w, r)` → `GET /api/beitragslauf/preview?saison_id=…`
+- [x] 5.1 `query.go`: `func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error)` — alle Member (kein Status-Filter, der passiert im Compute), mit JOIN auf `clubs` (einzeilig — wir hängen die SEPA-Stammdaten an).
+- [x] 5.2 `handler.go`: `func (h *Handler) Preview(w, r)` → `GET /api/beitragslauf/preview?saison_id=…`
   - Saison aus DB laden (`saisons.start_date`, `end_date`, `name` für `saison_label`); Fälligkeit = 01.07. der Saison
   - Pro Member: alle Filter-Bedingungen prüfen, exclusions-Array befüllen
   - Falls included: Beitragsgruppe → Kategorie (Stammverein), voller Jahresbeitrag via `LookupBetragCent(…, saisonStart)`, Warnings
   - Response gemäß design.md §3.2 (kein `monate`-, kein `seq_tp`-Feld)
-- [ ] 5.3 Route in `internal/app/router.go` unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
-- [ ] 5.4 Tests in `internal/beitragslauf/handler_test.go`:
+- [x] 5.3 Route in `internal/app/router.go` unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
+- [x] 5.4 Tests in `internal/beitragslauf/handler_test.go`:
   - `TestPreview_AktivMitStammverein` — Member mit `home_club="TV Cannstatt 1846"`, aktiv → Kategorie `aktiv_mit`, Betrag 9600
   - `TestPreview_AktivOhneStammverein` — Member ohne `home_club`, aktiv → Kategorie `aktiv_ohne`, Betrag 22600
   - `TestPreview_PassivVollerBeitrag` — Member mit Status `passiv` → Kategorie `passiv`, voller Beitrag
@@ -117,25 +117,25 @@
   - `TestPreview_NeumitgliedZahltVollenBeitrag` — `join_date=2026-09-15`, saisonStart=2026-07-01 → voller Jahresbeitrag (kein Pro-rata-Abzug)
   - `TestPreview_KassiererErlaubt` — Persona `kassierer` → 200
   - `TestPreview_Forbidden` — Persona `spieler` → 403
-- [ ] 5.5 Commit: `feat(beitragslauf): Vorschau-Endpoint mit Filter, Kategorie, Warnungen`
+- [x] 5.5 Commit: `feat(beitragslauf): Vorschau-Endpoint mit Filter, Kategorie, Warnungen`
 
 ## 6. Backend — XML-Generator
 
-- [ ] 6.1 `xml.go`: Structs `Document`, `CstmrDrctDbtInitn`, `GrpHdr`, `PmtInf`, `DrctDbtTxInf`, `PstlAdr` mit `encoding/xml`-Tags entsprechend pain.008.001.08.
-- [ ] 6.2 `func BuildXML(input BuildInput) ([]byte, error)`:
+- [x] 6.1 `xml.go`: Structs `Document`, `CstmrDrctDbtInitn`, `GrpHdr`, `PmtInf`, `DrctDbtTxInf`, `PstlAdr` mit `encoding/xml`-Tags entsprechend pain.008.001.08.
+- [x] 6.2 `func BuildXML(input BuildInput) ([]byte, error)`:
   - Input: Saison-Label, Vereinsdaten, Fälligkeitsdatum (01.07.), Liste `[]ExportItem{MemberID, Name, Adresse, IBAN, BetragCent, MandatRef, MandatDatum, MemberNumber}`
   - Output: serialisiertes XML inklusive `<?xml version="1.0" encoding="UTF-8"?>`-Header
   - Genau ein `PmtInf`-Block mit `SeqTp = RCUR`
   - `MsgId` und `PmtInfId` gemäß design.md §4.3, ≤ 35 Zeichen, ASCII (Umlaute strippen über `golang.org/x/text/unicode/norm` + Filter — keine externe Dependency)
-- [ ] 6.3 `func parseStreet(street string) (strtNm, bldgNb string)` mit Regex aus design.md §4.5.
-- [ ] 6.4 `func nextBusinessDay(t time.Time) time.Time` — wenn Sa/So, auf nächsten Werktag verschieben. Angewandt auf die 01.07.-Fälligkeit. (DE-Feiertage out of scope.)
-- [ ] 6.5 Tests `xml_test.go`:
+- [x] 6.3 `func parseStreet(street string) (strtNm, bldgNb string)` mit Regex aus design.md §4.5.
+- [x] 6.4 `func nextBusinessDay(t time.Time) time.Time` — wenn Sa/So, auf nächsten Werktag verschieben. Angewandt auf die 01.07.-Fälligkeit. (DE-Feiertage out of scope.)
+- [x] 6.5 Tests `xml_test.go`:
   - `TestBuildXML_SnapshotRCUR` — golden-XML-File `testdata/beitragslauf_sample.xml`, byte-equal-Compare nach `xml.Encoder` mit `Indent("", "  ")`
   - `TestBuildXML_EinPmtInfBlockRCUR` — Ausgabe enthält genau einen `PmtInf`-Block mit `SeqTp=RCUR`
   - `TestBuildXML_StraßenParsing` — „Hauptstr. 12" → StrtNm="Hauptstr.", BldgNb="12"; „Postfach 100" → StrtNm="Postfach 100", BldgNb=""
   - `TestBuildXML_UmlautInName` — „Müller" → in `<Nm>` als `Müller` (UTF-8, kein Strip), in `MsgId` als `Mueller` (ASCII)
   - `TestBuildXML_VerwendungszweckFormat` — exakt `Jahresbeitrag Saison 2026/27 – Mitgliedsnr. 1042`
-- [ ] 6.6 Commit: `feat(beitragslauf): XML-Generator pain.008.001.08`
+- [x] 6.6 Commit: `feat(beitragslauf): XML-Generator pain.008.001.08`
 
 ### 6.7 XSD-Validierung
 
@@ -146,7 +146,7 @@
 
 ## 7. Backend — Export-Endpoint
 
-- [ ] 7.1 `handler.go`:
+- [x] 7.1 `handler.go`:
   - `func (h *Handler) Export(w, r)` → `POST /api/beitragslauf/export`
     - Body: `{saison_id, member_ids}`
     - Verifiziert Vereins-SEPA-Stammdaten gesetzt (sonst 400)
@@ -154,8 +154,8 @@
     - Wirft 400 wenn einer der `member_ids` excluded ist
     - Ruft `BuildXML` auf, Response als `application/xml` mit Content-Disposition
     - Keine DB-Mutation, kein Protokoll-Schreiben
-- [ ] 7.2 Route unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
-- [ ] 7.3 Tests:
+- [x] 7.2 Route unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
+- [x] 7.3 Tests:
   - `TestExport_HappyPath` — vollständiges XML, validiert gegen XSD
   - `TestExport_EinPmtInfBlockRCUR` — Ausgabe enthält genau einen `PmtInf`-Block mit `SeqTp=RCUR`
   - `TestExport_VerwendungszweckFormat` — Ustrd-Inhalt exakt prüfen
@@ -163,16 +163,16 @@
   - `TestExport_ExcludedMember400` — `member_ids` enthält Member ohne Mandat → 400
   - `TestExport_KassiererErlaubt` — Persona `kassierer` → 200
   - `TestExport_Forbidden` — Persona `spieler` → 403
-- [ ] 7.4 Commit: `feat(beitragslauf): Export-Endpoint`
+- [x] 7.4 Commit: `feat(beitragslauf): Export-Endpoint`
 
 ## 8. Backend — Confirm & Saison-Protokoll
 
-- [ ] 8.1 `internal/config/config.go`: neues Feld `BeitragslaufDir` mit `getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle")`; beim App-Start via `os.MkdirAll(cfg.BeitragslaufDir, 0755)` anlegen.
-- [ ] 8.2 `protokoll.go`:
+- [x] 8.1 `internal/config/config.go`: neues Feld `BeitragslaufDir` mit `getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle")`; beim App-Start via `os.MkdirAll(cfg.BeitragslaufDir, 0755)` anlegen.
+- [x] 8.2 `protokoll.go`:
   - `func protokollPfad(dir, saisonKurz string) string` — `beitragslauf_{saison_kurz mit /→-}.txt`
   - `func AppendProtokoll(dir, saisonKurz string, entry ProtokollEntry) error` — `os.OpenFile(..., O_APPEND|O_CREATE|O_WRONLY, 0644)`, formatierter Block gemäß design.md §5.2
   - `func ReadProtokoll(dir, saisonKurz string) ([]byte, error)` — Datei-Inhalt; `os.IsNotExist` → leerer Inhalt
-- [ ] 8.3 `handler.go`:
+- [x] 8.3 `handler.go`:
   - `func (h *Handler) Confirm(w, r)` → `POST /api/beitragslauf/confirm`
     - Body: `{saison_id, results: [{member_id, betrag_cent, success}]}`
     - Saison-Label laden; Name + Mitgliedsnummer pro `member_id` aus DB nachladen
@@ -181,65 +181,65 @@
     - Keine Member-Mutation
   - `func (h *Handler) Protocol(w, r)` → `GET /api/beitragslauf/protocol?saison_id=…`
     - `ReadProtokoll(...)`, `Content-Type: text/plain; charset=utf-8`
-- [ ] 8.4 Routen unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
-- [ ] 8.5 Tests (Protokoll-Dir = `t.TempDir()`):
+- [x] 8.4 Routen unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
+- [x] 8.5 Tests (Protokoll-Dir = `t.TempDir()`):
   - `TestConfirm_HaengtProtokollAn` — zwei Confirm-Aufrufe → Datei enthält zwei Blöcke, erster Block unverändert
   - `TestConfirm_ErfolgUndFehlerGetrennt` — `success`/`failed` korrekt gelistet, Summe nur über erfolgreiche
   - `TestConfirm_Forbidden` — Persona `spieler` → 403
   - `TestProtocol_LiefertInhalt` — nach Confirm liefert GET den Text
   - `TestProtocol_LeerWennKeinLauf` — ohne Datei sauberer leerer/404-Response
   - `TestProtocol_Forbidden` — Persona `spieler` → 403
-- [ ] 8.6 Commit: `feat(beitragslauf): Confirm-Endpoint + append-only Saison-Protokoll`
+- [x] 8.6 Commit: `feat(beitragslauf): Confirm-Endpoint + append-only Saison-Protokoll`
 
 ## 9. Backend — Kassierer-Zugriff auf Mitglieder
 
-- [ ] 9.1 `internal/app/router.go`: Member-**Lese**-Routen aus der Vorstand-only-Gruppe in eine neue Gruppe `auth.RequireClubFunction("vorstand", "kassierer")` verschieben: `GET /api/members`, `GET /api/members/{id}`, `GET /api/members/{id}/parents`, `GET /api/members/export`. SEPA-Mandat-Datei-Routen (`POST /api/upload/sepa-mandat/{id}`, `DELETE /api/members/{id}/sepa-mandat`) ebenfalls für `kassierer` freigeben.
-- [ ] 9.2 `internal/members/handler.go`: neuer Handler `UpdateBankdaten(w, r)` → `PUT /api/members/{id}/bankdaten` mit Feld-Whitelist (`iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`); IBAN-Validierung (Mod-97); `h.hub.Broadcast("members-changed")`. Route in der `vorstand`+`kassierer`-Gruppe.
-- [ ] 9.3 Tests in `internal/members/handler_test.go`:
+- [x] 9.1 `internal/app/router.go`: Member-**Lese**-Routen aus der Vorstand-only-Gruppe in eine neue Gruppe `auth.RequireClubFunction("vorstand", "kassierer")` verschieben: `GET /api/members`, `GET /api/members/{id}`, `GET /api/members/{id}/parents`, `GET /api/members/export`. SEPA-Mandat-Datei-Routen (`POST /api/upload/sepa-mandat/{id}`, `DELETE /api/members/{id}/sepa-mandat`) ebenfalls für `kassierer` freigeben.
+- [x] 9.2 `internal/members/handler.go`: neuer Handler `UpdateBankdaten(w, r)` → `PUT /api/members/{id}/bankdaten` mit Feld-Whitelist (`iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`); IBAN-Validierung (Mod-97); `h.hub.Broadcast("members-changed")`. Route in der `vorstand`+`kassierer`-Gruppe.
+- [x] 9.3 Tests in `internal/members/handler_test.go`:
   - `TestMembers_KassiererDarfLesen` — Persona `kassierer` → `GET /api/members` 200
   - `TestMembers_SpielerVerboten` — Persona `spieler` → 403
   - `TestBankdaten_KassiererUpdatetNurBankfelder` — setzt IBAN/Adresse; Name, Status, `beitragsfrei` bleiben unverändert
   - `TestBankdaten_UngueltigeIBAN400`
   - `TestBankdaten_Forbidden` — Persona `spieler` → 403
-- [ ] 9.4 Commit: `feat(members): Kassierer-Lesezugriff + Bankdaten-Endpoint`
+- [x] 9.4 Commit: `feat(members): Kassierer-Lesezugriff + Bankdaten-Endpoint`
 
 ## 10. Frontend — AdminSettingsPage VereinTab
 
-- [ ] 10.1 `web/src/pages/AdminSettingsPage.tsx` (VereinTab): vier neue Input-Felder Gläubiger-ID, IBAN, BIC, Kontoinhaber. Layout: zweispaltig auf Desktop, einspaltig auf Mobile.
-- [ ] 10.2 Validierung clientseitig: Gläubiger-ID-Regex wie Backend; IBAN-Formattierung beim Tippen, Mod-97 serverseitig.
-- [ ] 10.3 PUT `/api/club` mit allen Feldern, Erfolgs-Toast.
-- [ ] 10.4 Commit: `feat(admin-settings): SEPA-Stammdaten im VereinTab`
+- [x] 10.1 `web/src/pages/AdminSettingsPage.tsx` (VereinTab): vier neue Input-Felder Gläubiger-ID, IBAN, BIC, Kontoinhaber. Layout: zweispaltig auf Desktop, einspaltig auf Mobile.
+- [x] 10.2 Validierung clientseitig: Gläubiger-ID-Regex wie Backend; IBAN-Formattierung beim Tippen, Mod-97 serverseitig.
+- [x] 10.3 PUT `/api/club` mit allen Feldern, Erfolgs-Toast.
+- [x] 10.4 Commit: `feat(admin-settings): SEPA-Stammdaten im VereinTab`
 
 ## 11. Frontend — BeitraegeTab in AdminSettingsPage
 
-- [ ] 11.1 Neuer Tab „Beiträge" in `AdminSettingsPage.tsx` (zwischen „Kader" und „Dienste").
-- [ ] 11.2 Sichtbarkeit: nur für `vorstand`, `kassierer`, `admin` (siehe bestehende `useHasFunction`-Pattern).
-- [ ] 11.3 Komponente `BeitraegeTab.tsx`:
+- [x] 11.1 Neuer Tab „Beiträge" in `AdminSettingsPage.tsx` (zwischen „Kader" und „Dienste").
+- [x] 11.2 Sichtbarkeit: nur für `vorstand`, `kassierer`, `admin` (siehe bestehende `useHasFunction`-Pattern).
+- [x] 11.3 Komponente `BeitraegeTab.tsx`:
   - GET `/api/beitrags-saetze`
   - Pro Kategorie (3 Stück) eine Tabelle (Datum + Betrag €), sortiert nach `valid_from` DESC
   - Inline-Form: `[Datum] [Betrag in €] [Hinzufügen]`-Button → POST `/api/beitrags-saetze`, Reload
   - Live-Update via `useLiveUpdates('beitragssatz-changed')`
-- [ ] 11.4 Kategorie-Labels in `web/src/lib/beitragsKategorien.ts` (`aktiv_mit` → „Aktiv (mit Stammverein)", `aktiv_ohne` → „Aktiv (ohne Stammverein)", `passiv` → „Passiv").
-- [ ] 11.5 Commit: `feat(admin-settings): BeitraegeTab — Beitragsmatrix-Pflege mit Historie`
+- [x] 11.4 Kategorie-Labels in `web/src/lib/beitragsKategorien.ts` (`aktiv_mit` → „Aktiv (mit Stammverein)", `aktiv_ohne` → „Aktiv (ohne Stammverein)", `passiv` → „Passiv").
+- [x] 11.5 Commit: `feat(admin-settings): BeitraegeTab — Beitragsmatrix-Pflege mit Historie`
 
 ## 12. Frontend — BeitragslaufPage
 
-- [ ] 12.1 `web/src/pages/admin/BeitragslaufPage.tsx` neu anlegen.
-- [ ] 12.2 Saison-Dropdown (default = aktive Saison) → triggert `GET /api/beitragslauf/preview?saison_id=…`.
-- [ ] 12.3 Summary-Header: angehakt/Warnungen/Ausgeschlossen + Gesamtsumme. Client-seitig via `useMemo` über `items`.
-- [ ] 12.4 Tabelle (Desktop) + MobileCard (`< 640px`):
+- [x] 12.1 `web/src/pages/admin/BeitragslaufPage.tsx` neu anlegen.
+- [x] 12.2 Saison-Dropdown (default = aktive Saison) → triggert `GET /api/beitragslauf/preview?saison_id=…`.
+- [x] 12.3 Summary-Header: angehakt/Warnungen/Ausgeschlossen + Gesamtsumme. Client-seitig via `useMemo` über `items`.
+- [x] 12.4 Tabelle (Desktop) + MobileCard (`< 640px`):
   - Spalten: Checkbox, Name, Status, Kategorie, Betrag, Hinweise (Icon + Tooltip) — keine Monate-/SeqTp-Spalte
   - Default-Haken aus `item.included`; ausgeschlossene Zeilen Checkbox disabled, grauer Hintergrund
-- [ ] 12.5 Button „XML herunterladen" → `POST /api/beitragslauf/export` mit `selected_ids`, Blob-Download via `URL.createObjectURL`.
-- [ ] 12.6 Button „Lauf bestätigen" (erst nach Export aktiv) → Dialog mit den exportierten Mitgliedern, Default „erfolgreich", einzelne als „nicht eingezogen" abhakbar → `POST /api/beitragslauf/confirm` mit `{saison_id, results}`, Success-Toast.
-- [ ] 12.7 Button „Protokoll ansehen" → `GET /api/beitragslauf/protocol?saison_id=…`, Text in Modal mit Download-Möglichkeit.
-- [ ] 12.8 Route in `web/src/App.tsx`: `<Route path="/admin/beitragslauf" element={<BeitragslaufPage />} />`
-- [ ] 12.9 Nav-Eintrag in `AppShell.tsx` unter Verwaltung-Modul, Sichtbarkeit: `vorstand`, `kassierer`, `admin`.
-- [ ] 12.10 Commit: `feat(admin): /admin/beitragslauf — Vorschau, Export, Bestätigen, Protokoll`
+- [x] 12.5 Button „XML herunterladen" → `POST /api/beitragslauf/export` mit `selected_ids`, Blob-Download via `URL.createObjectURL`.
+- [x] 12.6 Button „Lauf bestätigen" (erst nach Export aktiv) → Dialog mit den exportierten Mitgliedern, Default „erfolgreich", einzelne als „nicht eingezogen" abhakbar → `POST /api/beitragslauf/confirm` mit `{saison_id, results}`, Success-Toast.
+- [x] 12.7 Button „Protokoll ansehen" → `GET /api/beitragslauf/protocol?saison_id=…`, Text in Modal mit Download-Möglichkeit.
+- [x] 12.8 Route in `web/src/App.tsx`: `<Route path="/admin/beitragslauf" element={<BeitragslaufPage />} />`
+- [x] 12.9 Nav-Eintrag in `AppShell.tsx` unter Verwaltung-Modul, Sichtbarkeit: `vorstand`, `kassierer`, `admin`.
+- [x] 12.10 Commit: `feat(admin): /admin/beitragslauf — Vorschau, Export, Bestätigen, Protokoll`
 
 ## 13. Frontend — Mitglieder-Bereich für Kassierer
 
-- [ ] 13.1 `AppShell.tsx`: Mitglieder-Nav-Eintrag zusätzlich für `kassierer` sichtbar.
+- [x] 13.1 `AppShell.tsx`: Mitglieder-Nav-Eintrag zusätzlich für `kassierer` sichtbar.
 - [ ] 13.2 `web/src/pages/MembersPage.tsx` / `MemberDetailPage.tsx`: für `kassierer` erreichbar; Nicht-Bankfelder schreibgeschützt anzeigen.
 - [ ] 13.3 `web/src/components/admin/MemberDatenschutzTab.tsx`: Bankdaten-Formular (IBAN, SEPA-Mandat, Kontoinhaber, Adresse) für `kassierer` editierbar → `PUT /api/members/{id}/bankdaten`; SEPA-Mandat-Upload/Delete für `kassierer` freigeschaltet.
 - [ ] 13.4 Tests in `web/src/pages/__tests__/MemberDetailPage.permissions.test.tsx`: Kassierer sieht/bearbeitet Bankdaten, kann übrige Felder nicht ändern (sofern Permission-Tests aus `permissions-baseline-tests` laufen).
@@ -247,16 +247,16 @@
 
 ## 14. Frontend — Helper & Live-Updates
 
-- [ ] 14.1 `web/src/lib/sepa.ts` neu: `formatBetrag(cent)`, `formatIBAN(iban)` (Vierergruppen mit Leerzeichen).
-- [ ] 14.2 `useLiveUpdates('beitragssatz-changed')` auf BeitraegeTab; `useLiveUpdates('members-changed')` auf BeitragslaufPage/MemberDetailPage → Reload.
-- [ ] 14.3 Commit: `feat(web): SEPA-Helper und Live-Update-Bindings`
+- [x] 14.1 `web/src/lib/sepa.ts` neu: `formatBetrag(cent)`, `formatIBAN(iban)` (Vierergruppen mit Leerzeichen).
+- [x] 14.2 `useLiveUpdates('beitragssatz-changed')` auf BeitraegeTab; `useLiveUpdates('members-changed')` auf BeitragslaufPage/MemberDetailPage → Reload.
+- [x] 14.3 Commit: `feat(web): SEPA-Helper und Live-Update-Bindings`
 
 ## 15. CLAUDE.md & OpenSpec
 
-- [ ] 15.1 `CLAUDE.md` „API-Routen" um die neuen Endpoints erweitern; Kassierer-Block (Member-Lesen + `bankdaten`, Beitragslauf) dokumentieren.
-- [ ] 15.2 `CLAUDE.md` „Datenbankschema" — neue Tabelle `beitrags_saetze`, neue Spalten in `clubs`.
-- [ ] 15.3 `CLAUDE.md` „Bekannte Gotchas" — SEPA-Stammdaten Pflicht vor erstem Lauf; voller Jahresbeitrag ohne Pro-rata, Fälligkeit 01.07., alle Einzüge RCUR; `BEITRAGSLAUF_DIR` ins Backup aufnehmen.
-- [ ] 15.4 `.env.example` + Deploy-Doku um `BEITRAGSLAUF_DIR` ergänzen.
+- [x] 15.1 `CLAUDE.md` „API-Routen" um die neuen Endpoints erweitern; Kassierer-Block (Member-Lesen + `bankdaten`, Beitragslauf) dokumentieren.
+- [x] 15.2 `CLAUDE.md` „Datenbankschema" — neue Tabelle `beitrags_saetze`, neue Spalten in `clubs`.
+- [x] 15.3 `CLAUDE.md` „Bekannte Gotchas" — SEPA-Stammdaten Pflicht vor erstem Lauf; voller Jahresbeitrag ohne Pro-rata, Fälligkeit 01.07., alle Einzüge RCUR; `BEITRAGSLAUF_DIR` ins Backup aufnehmen.
+- [x] 15.4 `.env.example` + Deploy-Doku um `BEITRAGSLAUF_DIR` ergänzen.
 - [ ] 15.5 Commit: `docs(claude-md): SEPA-Beitragslauf dokumentiert`
 
 ## 16. Manuelle Verifikation
@@ -273,7 +273,7 @@
 
 ## 17. Abschluss
 
-- [ ] 17.1 Alle Tests grün: `make test` (Backend + Frontend).
+- [x] 17.1 Alle Tests grün: `make test` (Backend + Frontend).
 - [ ] 17.2 `make coverage` — `internal/beitragslauf` ≥ 80% (Kategorisierungs-, XML- und Protokoll-Logik abgedeckt).
 - [ ] 17.3 PR-Beschreibung mit Screenshots BeitragslaufPage (Desktop + Mobile), beispielhaftem XML- und Protokoll-Snippet (anonymisiert).
 - [ ] 17.4 Nach Merge: Proposal archivieren via `/openspec-archive-change`.
