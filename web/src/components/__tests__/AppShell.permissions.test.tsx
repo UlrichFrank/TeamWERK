@@ -40,7 +40,7 @@ const VERWALTUNG_ITEMS: { label: string; allowedIds: string[] }[] = [
   },
   {
     label: 'Mitglieder',
-    allowedIds: ['admin', 'vorstand', 'vorstand_elternteil'],
+    allowedIds: ['admin', 'vorstand', 'vorstand_elternteil', 'kassierer'],
   },
   {
     label: 'Kader',
@@ -63,13 +63,20 @@ const VERWALTUNG_ITEMS: { label: string; allowedIds: string[] }[] = [
     allowedIds: ['admin', 'vorstand', 'vorstand_elternteil'],
   },
   {
+    // Beitragslauf: kassierer-like (kassierer + vorstand + admin)
+    label: 'Beitragslauf',
+    allowedIds: ['admin', 'vorstand', 'vorstand_elternteil', 'kassierer'],
+  },
+  {
+    // Einstellungen: kassierer-like (Tabs werden in der Seite capability-gefiltert)
     label: 'Einstellungen',
-    allowedIds: ['admin', 'vorstand', 'vorstand_elternteil'],
+    allowedIds: ['admin', 'vorstand', 'vorstand_elternteil', 'kassierer'],
   },
 ]
 
-// Personas für die KEIN Verwaltungs-Item sichtbar ist → kein Modul-Header
-const NO_VERWALTUNG_IDS = ['vorstand_beisitzer', 'kassierer', 'spieler', 'elternteil']
+// Personas für die KEIN Verwaltungs-Item sichtbar ist → kein Modul-Header.
+// Kassierer sieht Mitglieder/Beitragslauf/Einstellungen und ist daher NICHT mehr hier.
+const NO_VERWALTUNG_IDS = ['vorstand_beisitzer', 'spieler', 'elternteil']
 
 describe('AppShell — Sidebar-Items pro Persona', () => {
   test.each(PERSONAS)('Persona $id: immer sichtbare Items vorhanden', async (persona) => {
