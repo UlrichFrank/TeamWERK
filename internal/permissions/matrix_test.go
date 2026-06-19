@@ -170,6 +170,8 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/auth/forgot-password", expected: exPublic},
 	{method: "POST", path: "/api/auth/reset-password", expected: exPublic},
 	{method: "GET", path: "/api/profile/email/confirm", expected: exPublic},
+	// Calendar feed — token im Pfad ist die Authentifizierung
+	{method: "GET", path: "/api/calendar/feed/{token}", expected: exPublic},
 
 	// ── Authenticated ───────────────────────────────────────────────────────────
 	// Chat (einfache Operationen ohne Konversations-Membership)
@@ -229,6 +231,11 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/profile/absence-visibility", expected: exAuth},
 	{method: "GET", path: "/api/profile/notification-preferences", expected: exAuth},
 	{method: "PUT", path: "/api/profile/notification-preferences", expected: exAuth},
+
+	// Calendar token (eigenes Token verwalten)
+	{method: "GET", path: "/api/calendar/token", expected: exAuth},
+	{method: "POST", path: "/api/calendar/token", expected: exAuth},
+	{method: "DELETE", path: "/api/calendar/token", expected: exAuth},
 
 	// Kind-Profil
 	{method: "GET", path: "/api/family/proxy-accounts", expected: exAuth},

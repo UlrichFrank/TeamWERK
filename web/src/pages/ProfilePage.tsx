@@ -7,6 +7,7 @@ import ProfileProfilTab from '../components/profile/ProfileProfilTab'
 import ProfileMemberTab from '../components/profile/ProfileMemberTab'
 import ProfileBankTab from '../components/profile/ProfileBankTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
+import ProfileKalenderTab from '../components/profile/ProfileKalenderTab'
 
 export interface Member {
   id: number; first_name: string; last_name: string
@@ -43,7 +44,7 @@ export interface ChangeDraft {
   created_at: string
 }
 
-type TabName = 'account' | 'profile' | 'member' | 'banking' | 'misc'
+type TabName = 'account' | 'profile' | 'member' | 'banking' | 'kalender' | 'misc'
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
@@ -83,6 +84,7 @@ export default function ProfilePage() {
     'account',
     'profile',
     ...(showMemberTabs ? (['member', 'banking'] as TabName[]) : []),
+    'kalender',
     'misc',
   ]
 
@@ -91,6 +93,7 @@ export default function ProfilePage() {
     profile: 'Kontakt',
     member: 'Mitgliedsdaten',
     banking: 'Bankdaten',
+    kalender: 'Kalender-Abo',
     misc: 'Sonstiges',
   }
 
@@ -131,6 +134,7 @@ export default function ProfilePage() {
       {showMemberTabs && activeTab === 'banking' && (
         <ProfileBankTab ownMember={ownMember} />
       )}
+      {activeTab === 'kalender' && <ProfileKalenderTab />}
       {activeTab === 'misc' && <ProfileMiscTab />}
     </div>
   )
