@@ -95,8 +95,8 @@ func (h *Handler) MethodName(w http.ResponseWriter, r *http.Request) { … }
 |---|---|
 | Public | Login, Register, Passwort-Reset, Beitrittsantrag, Downloads |
 | Authenticated | alle Eingeloggten (Profil, Dienstbörse, Spiele, Chat, …) |
-| Trainer + sportliche_leitung | Slots, Anfragen, Training, Venues |
-| Vorstand (+ Trainer/sL) | Spiele, Kader, Duty-Slots, Saisons (lesen) |
+| Trainer + sportliche_leitung | Slots, Anfragen, Training |
+| Vorstand (+ Trainer/sL) | Spiele, Kader, Duty-Slots, Saisons (lesen), Venues (CRUD) |
 | Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates |
 | Vorstand + Kassierer | Mitglieder lesen, `PUT /members/{id}/bank-details` (Feld-Whitelist), Fee-Run |
 | Admin only | Impersonate |

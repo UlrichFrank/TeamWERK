@@ -301,7 +301,6 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/teams/{id}/roster", expected: exPublic},
 
 	// ── Trainer + sportliche_leitung ────────────────────────────────────────────
-	{method: "GET", path: "/api/venues", expected: exTrainer},
 	{method: "GET", path: "/api/training-series", expected: exTrainer},
 	{method: "POST", path: "/api/training-series", expected: exTrainer},
 	{method: "PUT", path: "/api/training-series/{id}", expected: exTrainer},
@@ -319,6 +318,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/auth/invite", expected: exTrainer},
 
 	// ── Vorstand + Trainer + sportliche_leitung ──────────────────────────────────
+	{method: "GET", path: "/api/venues", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/venues", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/venues/import", expected: exVorstandTrainer},
 	{method: "DELETE", path: "/api/venues", expected: exVorstandTrainer},
