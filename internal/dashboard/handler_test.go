@@ -109,6 +109,181 @@ func TestDashboard_CarpoolingConfirmed_KindPaarung(t *testing.T) {
 	}
 }
 
+// decodeOpenGroups fetches the dashboard as the given user and returns the
+// carpoolingOpenGroups array.
+func decodeOpenGroups(t *testing.T, srv *httptest.Server, userID int, funcs []string) []map[string]any {
+	t.Helper()
+	token := testutil.Token(t, userID, "standard", funcs)
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	var groups []map[string]any
+	json.Unmarshal(body["carpoolingOpenGroups"], &groups)
+	return groups
+}
+
+// TestDashboard_OffeneGesuche_OwnTeam verifies that an open ride request (suche
+// without a confirmed pairing) on an upcoming game of the user's team appears
+// in carpoolingOpenGroups.
+func TestDashboard_OffeneGesuche_OwnTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	requesterID := testutil.CreateUser(t, db, "standard")
+	futureDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, futureDate)
+
+	sucheRes, _ := db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, 'suche', 2)`, gameID, requesterID)
+	sucheID, _ := sucheRes.LastInsertId()
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	groups := decodeOpenGroups(t, srv, userID, nil)
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 open-request group, got %d", len(groups))
+	}
+	reqs, _ := groups[0]["requests"].([]any)
+	if len(reqs) != 1 {
+		t.Fatalf("expected 1 open request, got %d", len(reqs))
+	}
+	r0 := reqs[0].(map[string]any)
+	if got, _ := r0["sucheId"].(float64); int64(got) != sucheID {
+		t.Errorf("expected sucheId=%d, got %v", sucheID, r0["sucheId"])
+	}
+	if got, _ := r0["plaetze"].(float64); got != 2 {
+		t.Errorf("expected plaetze=2, got %v", r0["plaetze"])
+	}
+}
+
+// TestDashboard_OffeneGesuche_ConfirmedExcluded verifies that a suche with a
+// confirmed pairing is NOT listed as open, but still appears in
+// carpoolingConfirmed.
+func TestDashboard_OffeneGesuche_ConfirmedExcluded(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	bieterID := testutil.CreateUser(t, db, "standard")
+
+	// Away game so it can also show in carpoolingConfirmed.
+	futureDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, futureDate)
+	db.Exec(`UPDATE games SET is_home=0 WHERE id=?`, gameID)
+
+	// User owns the suche; another user offers; pairing is confirmed.
+	bieteRes, _ := db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, 'biete', 3)`, gameID, bieterID)
+	bieteID, _ := bieteRes.LastInsertId()
+	sucheRes, _ := db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, 'suche', 1)`, gameID, userID)
+	sucheID, _ := sucheRes.LastInsertId()
+	db.Exec(`INSERT INTO mitfahrt_paarungen (biete_id, suche_id, initiiert_von, status) VALUES (?, ?, 'suche', 'confirmed')`, bieteID, sucheID)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+
+	// Not in open groups.
+	groups := decodeOpenGroups(t, srv, userID, nil)
+	for _, g := range groups {
+		reqs, _ := g["requests"].([]any)
+		if len(reqs) > 0 {
+			t.Fatalf("expected no open requests once pairing is confirmed, got %d", len(reqs))
+		}
+	}
+
+	// Still in carpoolingConfirmed.
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	var confirmed []map[string]any
+	json.Unmarshal(body["carpoolingConfirmed"], &confirmed)
+	if len(confirmed) == 0 {
+		t.Error("expected confirmed pairing to remain in carpoolingConfirmed")
+	}
+}
+
+// TestDashboard_OffeneGesuche_PendingStillOpen verifies that a suche with only a
+// pending pairing still counts as open.
+func TestDashboard_OffeneGesuche_PendingStillOpen(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	bieterID := testutil.CreateUser(t, db, "standard")
+	requesterID := testutil.CreateUser(t, db, "standard")
+	futureDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, futureDate)
+
+	bieteRes, _ := db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, 'biete', 3)`, gameID, bieterID)
+	bieteID, _ := bieteRes.LastInsertId()
+	sucheRes, _ := db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, 'suche', 1)`, gameID, requesterID)
+	sucheID, _ := sucheRes.LastInsertId()
+	db.Exec(`INSERT INTO mitfahrt_paarungen (biete_id, suche_id, initiiert_von, status) VALUES (?, ?, 'biete', 'pending')`, bieteID, sucheID)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	groups := decodeOpenGroups(t, srv, userID, nil)
+
+	if len(groups) != 1 {
+		t.Fatalf("expected suche with only a pending pairing to stay open, got %d groups", len(groups))
+	}
+	reqs, _ := groups[0]["requests"].([]any)
+	if len(reqs) != 1 {
+		t.Fatalf("expected 1 open request (pending counts as open), got %d", len(reqs))
+	}
+}
+
+// TestDashboard_OffeneGesuche_OtherTeamExcluded verifies that an open request on
+// a game of a team the user does not belong to is not shown (cross-team is a
+// follow-up proposal).
+func TestDashboard_OffeneGesuche_OtherTeamExcluded(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+
+	myTeamID := testutil.CreateTeam(t, db, "Herren 1")
+	myKaderID := testutil.CreateKader(t, db, myTeamID, seasonID)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, myKaderID, memberID)
+
+	// Foreign team + game the user has no access to.
+	otherTeamID := testutil.CreateTeam(t, db, "Damen 1")
+	testutil.CreateKader(t, db, otherTeamID, seasonID)
+	requesterID := testutil.CreateUser(t, db, "standard")
+	futureDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	otherGameID := testutil.CreateGame(t, db, seasonID, otherTeamID, futureDate)
+	db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, 'suche', 1)`, otherGameID, requesterID)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	groups := decodeOpenGroups(t, srv, userID, nil)
+
+	if len(groups) != 0 {
+		t.Fatalf("expected no open-request groups for a foreign team's game, got %d", len(groups))
+	}
+}
+
 // TestDashboard_MeineTermine_IsNotExtended verifies that a training event for a team
 // the user belongs to via kader_members has isExtended=false.
 func TestDashboard_MeineTermine_IsNotExtended(t *testing.T) {
