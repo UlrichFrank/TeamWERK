@@ -230,6 +230,9 @@ func (h *Handler) ListMyTeams(w http.ResponseWriter, r *http.Request) {
 		    OR EXISTS (SELECT 1 FROM family_links fl JOIN kader_members km2 ON km2.member_id = fl.member_id
 		              JOIN kader k ON k.id = km2.kader_id
 		              WHERE fl.parent_user_id = ? AND k.team_id = t.id AND k.season_id = s.id)
+		    OR EXISTS (SELECT 1 FROM family_links fl JOIN kader_extended_members kem ON kem.member_id = fl.member_id
+		              JOIN kader k ON k.id = kem.kader_id
+		              WHERE fl.parent_user_id = ? AND k.team_id = t.id AND k.season_id = s.id)
 		  )
 		UNION
 		SELECT t.id, t.name, 1 AS is_extended
@@ -245,7 +248,7 @@ func (h *Handler) ListMyTeams(w http.ResponseWriter, r *http.Request) {
 		    WHERE m2.user_id = ? AND k2.team_id = t.id AND k2.season_id = s.id
 		  )
 		ORDER BY t.name`,
-		userID, userID, userID, userID, userID, userID)
+		userID, userID, userID, userID, userID, userID, userID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
