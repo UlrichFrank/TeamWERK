@@ -905,13 +905,13 @@ func (h *Handler) ListInvitations(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type invitation struct {
-		ID         int     `json:"id"`
-		Email      string  `json:"email"`
-		Role       string  `json:"role"`
-		Comment    string  `json:"comment,omitempty"`
-		ExpiresAt  string  `json:"expires_at"`
-		MemberID   *int    `json:"member_id"`
-		MemberName string  `json:"member_name,omitempty"`
+		ID         int    `json:"id"`
+		Email      string `json:"email"`
+		Role       string `json:"role"`
+		Comment    string `json:"comment,omitempty"`
+		ExpiresAt  string `json:"expires_at"`
+		MemberID   *int   `json:"member_id"`
+		MemberName string `json:"member_name,omitempty"`
 	}
 	result := []invitation{}
 	for rows.Next() {

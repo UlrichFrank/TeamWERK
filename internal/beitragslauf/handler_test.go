@@ -75,10 +75,10 @@ func setupSrv(t *testing.T) (*httptest.Server, *sql.DB, string) {
 	srv := testutil.NewServer(t, func(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "kassierer"))
-			r.Get("/api/beitragslauf/preview", h.Preview)
-			r.Post("/api/beitragslauf/export", h.Export)
-			r.Post("/api/beitragslauf/confirm", h.Confirm)
-			r.Get("/api/beitragslauf/protocol", h.Protocol)
+			r.Get("/api/fee-run/preview", h.Preview)
+			r.Post("/api/fee-run/export", h.Export)
+			r.Post("/api/fee-run/confirm", h.Confirm)
+			r.Get("/api/fee-run/protocol", h.Protocol)
 		})
 	})
 	return srv, db, dir
@@ -99,7 +99,7 @@ type previewResp struct {
 
 func getPreview(t *testing.T, srv *httptest.Server, saisonID int) previewResp {
 	t.Helper()
-	res := testutil.Get(t, srv, "/api/beitragslauf/preview?saison_id="+itoa(saisonID), tok(t))
+	res := testutil.Get(t, srv, "/api/fee-run/preview?saison_id="+itoa(saisonID), tok(t))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("preview status %d", res.StatusCode)
 	}
@@ -245,7 +245,7 @@ func TestPreview_NeumitgliedZahltVollenBeitrag(t *testing.T) {
 func TestPreview_Forbidden(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	insertSeason2027(t, db)
-	res := testutil.Get(t, srv, "/api/beitragslauf/preview?saison_id=1", testutil.Token(t, 9, "standard", []string{"spieler"}))
+	res := testutil.Get(t, srv, "/api/fee-run/preview?saison_id=1", testutil.Token(t, 9, "standard", []string{"spieler"}))
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status %d, want 403", res.StatusCode)
 	}

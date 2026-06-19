@@ -163,7 +163,7 @@ func (h *Handler) loadSeason(ctx context.Context, id int) (label string, stichta
 	return name, time.Date(start.Year(), time.July, 1, 0, 0, 0, 0, time.UTC), nil
 }
 
-// GET /api/beitragslauf/preview?saison_id=
+// GET /api/fee-run/preview?saison_id=
 func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	saisonID, err := strconv.Atoi(r.URL.Query().Get("saison_id"))
 	if err != nil {
@@ -202,7 +202,7 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /api/beitragslauf/export  {saison_id, member_ids}
+// POST /api/fee-run/export  {saison_id, member_ids}
 func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SaisonID  int   `json:"saison_id"`
@@ -259,7 +259,7 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	w.Write(xmlBytes)
 }
 
-// POST /api/beitragslauf/confirm  {saison_id, results}
+// POST /api/fee-run/confirm  {saison_id, results}
 func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SaisonID int `json:"saison_id"`
@@ -312,7 +312,7 @@ func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/beitragslauf/protocol?saison_id=
+// GET /api/fee-run/protocol?saison_id=
 func (h *Handler) Protocol(w http.ResponseWriter, r *http.Request) {
 	saisonID, err := strconv.Atoi(r.URL.Query().Get("saison_id"))
 	if err != nil {

@@ -34,7 +34,7 @@ func TestBankdaten_KassiererUpdatetNurBankfelder(t *testing.T) {
 	srv := prodserver.New(t, db)
 	tok := testutil.Token(t, 5, "standard", []string{"kassierer"})
 
-	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bankdaten", tok, map[string]any{
+	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bank-details", tok, map[string]any{
 		"iban": "DE89370400440532013000", "sepa_mandat": true, "sepa_mandat_date": "2026-05-01",
 		"account_holder": "Vorname Nachname", "street": "Neue Str. 5", "zip": "70000", "city": "Stuttgart",
 	})
@@ -59,7 +59,7 @@ func TestBankdaten_UngueltigeIBAN400(t *testing.T) {
 	id := testutil.CreateMember(t, db, 0)
 	srv := prodserver.New(t, db)
 	tok := testutil.Token(t, 5, "standard", []string{"kassierer"})
-	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bankdaten", tok,
+	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bank-details", tok,
 		map[string]any{"iban": "DE88370400440532013000"})
 	if res.StatusCode != http.StatusBadRequest {
 		t.Errorf("status %d, want 400", res.StatusCode)
@@ -71,7 +71,7 @@ func TestBankdaten_Forbidden(t *testing.T) {
 	id := testutil.CreateMember(t, db, 0)
 	srv := prodserver.New(t, db)
 	tok := testutil.Token(t, 9, "standard", []string{"spieler"})
-	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bankdaten", tok,
+	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bank-details", tok,
 		map[string]any{"iban": "DE89370400440532013000"})
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status %d, want 403", res.StatusCode)

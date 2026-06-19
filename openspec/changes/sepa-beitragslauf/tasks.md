@@ -39,8 +39,8 @@
 
 - [x] 3.1 Package `internal/beitragssaetze/` mit `handler.go`:
   - Struct `Satz { ID, Kategorie, BetragCent, ValidFrom, CreatedAt }`
-  - `List(w, r)` → `GET /api/beitrags-saetze`
-  - `Create(w, r)` → `POST /api/beitrags-saetze` mit Validation gemäß design.md §7.1 (Kategorie ∈ {`aktiv_ohne`, `aktiv_mit`, `passiv`})
+  - `List(w, r)` → `GET /api/fee-rates`
+  - `Create(w, r)` → `POST /api/fee-rates` mit Validation gemäß design.md §7.1 (Kategorie ∈ {`aktiv_ohne`, `aktiv_mit`, `passiv`})
   - Constructor `NewHandler(db, hub)` mit Broadcast `beitragssatz-changed`
 - [x] 3.2 Routen in `cmd/teamwerk/main.go` / `internal/app/router.go` registrieren unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
 - [x] 3.3 Tests in `internal/beitragssaetze/handler_test.go`:
@@ -99,7 +99,7 @@
 ## 5. Backend — Vorschau-Endpoint
 
 - [x] 5.1 `query.go`: `func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error)` — alle Member (kein Status-Filter, der passiert im Compute), mit JOIN auf `clubs` (einzeilig — wir hängen die SEPA-Stammdaten an).
-- [x] 5.2 `handler.go`: `func (h *Handler) Preview(w, r)` → `GET /api/beitragslauf/preview?saison_id=…`
+- [x] 5.2 `handler.go`: `func (h *Handler) Preview(w, r)` → `GET /api/fee-run/preview?saison_id=…`
   - Saison aus DB laden (`saisons.start_date`, `end_date`, `name` für `saison_label`); Fälligkeit = 01.07. der Saison
   - Pro Member: alle Filter-Bedingungen prüfen, exclusions-Array befüllen
   - Falls included: Beitragsgruppe → Kategorie (Stammverein), voller Jahresbeitrag via `LookupBetragCent(…, saisonStart)`, Warnings
@@ -147,7 +147,7 @@
 ## 7. Backend — Export-Endpoint
 
 - [x] 7.1 `handler.go`:
-  - `func (h *Handler) Export(w, r)` → `POST /api/beitragslauf/export`
+  - `func (h *Handler) Export(w, r)` → `POST /api/fee-run/export`
     - Body: `{saison_id, member_ids}`
     - Verifiziert Vereins-SEPA-Stammdaten gesetzt (sonst 400)
     - Lädt Preview-Ergebnisse, filtert auf `member_ids`
@@ -173,13 +173,13 @@
   - `func AppendProtokoll(dir, saisonKurz string, entry ProtokollEntry) error` — `os.OpenFile(..., O_APPEND|O_CREATE|O_WRONLY, 0644)`, formatierter Block gemäß design.md §5.2
   - `func ReadProtokoll(dir, saisonKurz string) ([]byte, error)` — Datei-Inhalt; `os.IsNotExist` → leerer Inhalt
 - [x] 8.3 `handler.go`:
-  - `func (h *Handler) Confirm(w, r)` → `POST /api/beitragslauf/confirm`
+  - `func (h *Handler) Confirm(w, r)` → `POST /api/fee-run/confirm`
     - Body: `{saison_id, results: [{member_id, betrag_cent, success}]}`
     - Saison-Label laden; Name + Mitgliedsnummer pro `member_id` aus DB nachladen
     - Zeitstempel aus `time.Now()`, Nutzer aus `auth.ClaimsFromCtx`
     - `AppendProtokoll(...)`, Response `{saison_label, erfolgreich, nicht_erfolgreich, summe_erfolgreich_cent}`
     - Keine Member-Mutation
-  - `func (h *Handler) Protocol(w, r)` → `GET /api/beitragslauf/protocol?saison_id=…`
+  - `func (h *Handler) Protocol(w, r)` → `GET /api/fee-run/protocol?saison_id=…`
     - `ReadProtokoll(...)`, `Content-Type: text/plain; charset=utf-8`
 - [x] 8.4 Routen unter `auth.RequireClubFunction("vorstand", "kassierer")` mit Admin-Override.
 - [x] 8.5 Tests (Protokoll-Dir = `t.TempDir()`):
@@ -194,7 +194,7 @@
 ## 9. Backend — Kassierer-Zugriff auf Mitglieder
 
 - [x] 9.1 `internal/app/router.go`: Member-**Lese**-Routen aus der Vorstand-only-Gruppe in eine neue Gruppe `auth.RequireClubFunction("vorstand", "kassierer")` verschieben: `GET /api/members`, `GET /api/members/{id}`, `GET /api/members/{id}/parents`, `GET /api/members/export`. SEPA-Mandat-Datei-Routen (`POST /api/upload/sepa-mandat/{id}`, `DELETE /api/members/{id}/sepa-mandat`) ebenfalls für `kassierer` freigeben.
-- [x] 9.2 `internal/members/handler.go`: neuer Handler `UpdateBankdaten(w, r)` → `PUT /api/members/{id}/bankdaten` mit Feld-Whitelist (`iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`); IBAN-Validierung (Mod-97); `h.hub.Broadcast("members-changed")`. Route in der `vorstand`+`kassierer`-Gruppe.
+- [x] 9.2 `internal/members/handler.go`: neuer Handler `UpdateBankdaten(w, r)` → `PUT /api/members/{id}/bank-details` mit Feld-Whitelist (`iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`); IBAN-Validierung (Mod-97); `h.hub.Broadcast("members-changed")`. Route in der `vorstand`+`kassierer`-Gruppe.
 - [x] 9.3 Tests in `internal/members/handler_test.go`:
   - `TestMembers_KassiererDarfLesen` — Persona `kassierer` → `GET /api/members` 200
   - `TestMembers_SpielerVerboten` — Persona `spieler` → 403
@@ -215,9 +215,9 @@
 - [x] 11.1 Neuer Tab „Beiträge" in `AdminSettingsPage.tsx` (zwischen „Kader" und „Dienste").
 - [x] 11.2 Sichtbarkeit: nur für `vorstand`, `kassierer`, `admin` (siehe bestehende `useHasFunction`-Pattern).
 - [x] 11.3 Komponente `BeitraegeTab.tsx`:
-  - GET `/api/beitrags-saetze`
+  - GET `/api/fee-rates`
   - Pro Kategorie (3 Stück) eine Tabelle (Datum + Betrag €), sortiert nach `valid_from` DESC
-  - Inline-Form: `[Datum] [Betrag in €] [Hinzufügen]`-Button → POST `/api/beitrags-saetze`, Reload
+  - Inline-Form: `[Datum] [Betrag in €] [Hinzufügen]`-Button → POST `/api/fee-rates`, Reload
   - Live-Update via `useLiveUpdates('beitragssatz-changed')`
 - [x] 11.4 Kategorie-Labels in `web/src/lib/beitragsKategorien.ts` (`aktiv_mit` → „Aktiv (mit Stammverein)", `aktiv_ohne` → „Aktiv (ohne Stammverein)", `passiv` → „Passiv").
 - [x] 11.5 Commit: `feat(admin-settings): BeitraegeTab — Beitragsmatrix-Pflege mit Historie`
@@ -225,14 +225,14 @@
 ## 12. Frontend — BeitragslaufPage
 
 - [x] 12.1 `web/src/pages/admin/BeitragslaufPage.tsx` neu anlegen.
-- [x] 12.2 Saison-Dropdown (default = aktive Saison) → triggert `GET /api/beitragslauf/preview?saison_id=…`.
+- [x] 12.2 Saison-Dropdown (default = aktive Saison) → triggert `GET /api/fee-run/preview?saison_id=…`.
 - [x] 12.3 Summary-Header: angehakt/Warnungen/Ausgeschlossen + Gesamtsumme. Client-seitig via `useMemo` über `items`.
 - [x] 12.4 Tabelle (Desktop) + MobileCard (`< 640px`):
   - Spalten: Checkbox, Name, Status, Kategorie, Betrag, Hinweise (Icon + Tooltip) — keine Monate-/SeqTp-Spalte
   - Default-Haken aus `item.included`; ausgeschlossene Zeilen Checkbox disabled, grauer Hintergrund
-- [x] 12.5 Button „XML herunterladen" → `POST /api/beitragslauf/export` mit `selected_ids`, Blob-Download via `URL.createObjectURL`.
-- [x] 12.6 Button „Lauf bestätigen" (erst nach Export aktiv) → Dialog mit den exportierten Mitgliedern, Default „erfolgreich", einzelne als „nicht eingezogen" abhakbar → `POST /api/beitragslauf/confirm` mit `{saison_id, results}`, Success-Toast.
-- [x] 12.7 Button „Protokoll ansehen" → `GET /api/beitragslauf/protocol?saison_id=…`, Text in Modal mit Download-Möglichkeit.
+- [x] 12.5 Button „XML herunterladen" → `POST /api/fee-run/export` mit `selected_ids`, Blob-Download via `URL.createObjectURL`.
+- [x] 12.6 Button „Lauf bestätigen" (erst nach Export aktiv) → Dialog mit den exportierten Mitgliedern, Default „erfolgreich", einzelne als „nicht eingezogen" abhakbar → `POST /api/fee-run/confirm` mit `{saison_id, results}`, Success-Toast.
+- [x] 12.7 Button „Protokoll ansehen" → `GET /api/fee-run/protocol?saison_id=…`, Text in Modal mit Download-Möglichkeit.
 - [x] 12.8 Route in `web/src/App.tsx`: `<Route path="/admin/beitragslauf" element={<BeitragslaufPage />} />`
 - [x] 12.9 Nav-Eintrag in `AppShell.tsx` unter Verwaltung-Modul, Sichtbarkeit: `vorstand`, `kassierer`, `admin`.
 - [x] 12.10 Commit: `feat(admin): /admin/beitragslauf — Vorschau, Export, Bestätigen, Protokoll`
@@ -241,7 +241,7 @@
 
 - [x] 13.1 `AppShell.tsx`: Mitglieder-Nav-Eintrag zusätzlich für `kassierer` sichtbar.
 - [ ] 13.2 `web/src/pages/MembersPage.tsx` / `MemberDetailPage.tsx`: für `kassierer` erreichbar; Nicht-Bankfelder schreibgeschützt anzeigen.
-- [ ] 13.3 `web/src/components/admin/MemberDatenschutzTab.tsx`: Bankdaten-Formular (IBAN, SEPA-Mandat, Kontoinhaber, Adresse) für `kassierer` editierbar → `PUT /api/members/{id}/bankdaten`; SEPA-Mandat-Upload/Delete für `kassierer` freigeschaltet.
+- [ ] 13.3 `web/src/components/admin/MemberDatenschutzTab.tsx`: Bankdaten-Formular (IBAN, SEPA-Mandat, Kontoinhaber, Adresse) für `kassierer` editierbar → `PUT /api/members/{id}/bank-details`; SEPA-Mandat-Upload/Delete für `kassierer` freigeschaltet.
 - [ ] 13.4 Tests in `web/src/pages/__tests__/MemberDetailPage.permissions.test.tsx`: Kassierer sieht/bearbeitet Bankdaten, kann übrige Felder nicht ändern (sofern Permission-Tests aus `permissions-baseline-tests` laufen).
 - [ ] 13.5 Commit: `feat(members): Kassierer-Zugriff im Mitglieder-Bereich`
 

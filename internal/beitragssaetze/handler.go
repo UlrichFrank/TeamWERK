@@ -32,7 +32,7 @@ type Handler struct {
 
 func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
-// GET /api/beitrags-saetze
+// GET /api/fee-rates
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, kategorie, betrag_eur, valid_from FROM beitrags_saetze
@@ -57,7 +57,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"items": items})
 }
 
-// POST /api/beitrags-saetze
+// POST /api/fee-rates
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Kategorie  string `json:"kategorie"`

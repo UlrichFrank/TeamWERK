@@ -13,7 +13,7 @@ func TestExport_HappyPath(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	id := insertMember(t, db, "Max", defaultMember())
-	res := testutil.Post(t, srv, "/api/beitragslauf/export", tok(t),
+	res := testutil.Post(t, srv, "/api/fee-run/export", tok(t),
 		map[string]any{"saison_id": s, "member_ids": []int{id}})
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status %d", res.StatusCode)
@@ -34,7 +34,7 @@ func TestExport_EinPmtInfBlockRCUR(t *testing.T) {
 	m2 := defaultMember()
 	m2.memberNumber = "1099"
 	id2 := insertMember(t, db, "B", m2)
-	res := testutil.Post(t, srv, "/api/beitragslauf/export", tok(t),
+	res := testutil.Post(t, srv, "/api/fee-run/export", tok(t),
 		map[string]any{"saison_id": s, "member_ids": []int{id1, id2}})
 	body, _ := io.ReadAll(res.Body)
 	str := string(body)
@@ -53,7 +53,7 @@ func TestExport_VerwendungszweckFormat(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	id := insertMember(t, db, "Max", defaultMember())
-	res := testutil.Post(t, srv, "/api/beitragslauf/export", tok(t),
+	res := testutil.Post(t, srv, "/api/fee-run/export", tok(t),
 		map[string]any{"saison_id": s, "member_ids": []int{id}})
 	body, _ := io.ReadAll(res.Body)
 	if !strings.Contains(string(body), "<Ustrd>Jahresbeitrag Saison 2027/28 – Mitgliedsnr. 1042</Ustrd>") {
@@ -66,7 +66,7 @@ func TestExport_FehlendeStammdaten400(t *testing.T) {
 	db.Exec(`UPDATE clubs SET glaeubiger_id=NULL`)
 	s := insertSeason2027(t, db)
 	id := insertMember(t, db, "Max", defaultMember())
-	res := testutil.Post(t, srv, "/api/beitragslauf/export", tok(t),
+	res := testutil.Post(t, srv, "/api/fee-run/export", tok(t),
 		map[string]any{"saison_id": s, "member_ids": []int{id}})
 	if res.StatusCode != http.StatusBadRequest {
 		t.Errorf("status %d, want 400", res.StatusCode)
@@ -79,7 +79,7 @@ func TestExport_ExcludedMember400(t *testing.T) {
 	m := defaultMember()
 	m.sepaMandat = 0 // ausgeschlossen
 	id := insertMember(t, db, "Ohne", m)
-	res := testutil.Post(t, srv, "/api/beitragslauf/export", tok(t),
+	res := testutil.Post(t, srv, "/api/fee-run/export", tok(t),
 		map[string]any{"saison_id": s, "member_ids": []int{id}})
 	if res.StatusCode != http.StatusBadRequest {
 		t.Errorf("status %d, want 400", res.StatusCode)
@@ -90,7 +90,7 @@ func TestExport_KassiererErlaubt(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	id := insertMember(t, db, "Max", defaultMember())
-	res := testutil.Post(t, srv, "/api/beitragslauf/export",
+	res := testutil.Post(t, srv, "/api/fee-run/export",
 		testutil.Token(t, 5, "standard", []string{"kassierer"}),
 		map[string]any{"saison_id": s, "member_ids": []int{id}})
 	if res.StatusCode != http.StatusOK {
@@ -101,7 +101,7 @@ func TestExport_KassiererErlaubt(t *testing.T) {
 func TestExport_Forbidden(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
-	res := testutil.Post(t, srv, "/api/beitragslauf/export",
+	res := testutil.Post(t, srv, "/api/fee-run/export",
 		testutil.Token(t, 9, "standard", []string{"spieler"}),
 		map[string]any{"saison_id": s, "member_ids": []int{1}})
 	if res.StatusCode != http.StatusForbidden {
@@ -117,11 +117,11 @@ func TestConfirm_HaengtProtokollAn(t *testing.T) {
 		{"member_id": id, "betrag_cent": 9600, "success": true},
 	}}
 	for i := 0; i < 2; i++ {
-		if res := testutil.Post(t, srv, "/api/beitragslauf/confirm", tok(t), body); res.StatusCode != http.StatusOK {
+		if res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), body); res.StatusCode != http.StatusOK {
 			t.Fatalf("confirm %d: status %d", i, res.StatusCode)
 		}
 	}
-	res := testutil.Get(t, srv, "/api/beitragslauf/protocol?saison_id="+itoa(s), tok(t))
+	res := testutil.Get(t, srv, "/api/fee-run/protocol?saison_id="+itoa(s), tok(t))
 	txt, _ := io.ReadAll(res.Body)
 	if n := strings.Count(string(txt), "=== Lauf bestätigt"); n != 2 {
 		t.Errorf("Protokoll-Blöcke = %d, want 2 (append-only):\n%s", n, txt)
@@ -139,8 +139,8 @@ func TestConfirm_ErfolgUndFehlerGetrennt(t *testing.T) {
 		{"member_id": ok, "betrag_cent": 9600, "success": true},
 		{"member_id": fail, "betrag_cent": 22600, "success": false},
 	}}
-	testutil.Post(t, srv, "/api/beitragslauf/confirm", tok(t), body)
-	res := testutil.Get(t, srv, "/api/beitragslauf/protocol?saison_id="+itoa(s), tok(t))
+	testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), body)
+	res := testutil.Get(t, srv, "/api/fee-run/protocol?saison_id="+itoa(s), tok(t))
 	txt, _ := io.ReadAll(res.Body)
 	s2 := string(txt)
 	if !strings.Contains(s2, "Erfolgreich (1)") || !strings.Contains(s2, "Nicht erfolgreich (1)") {
@@ -151,7 +151,7 @@ func TestConfirm_ErfolgUndFehlerGetrennt(t *testing.T) {
 func TestConfirm_Forbidden(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
-	res := testutil.Post(t, srv, "/api/beitragslauf/confirm",
+	res := testutil.Post(t, srv, "/api/fee-run/confirm",
 		testutil.Token(t, 9, "standard", []string{"spieler"}),
 		map[string]any{"saison_id": s, "results": []map[string]any{}})
 	if res.StatusCode != http.StatusForbidden {
@@ -162,7 +162,7 @@ func TestConfirm_Forbidden(t *testing.T) {
 func TestProtocol_LeerWennKeinLauf(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
-	res := testutil.Get(t, srv, "/api/beitragslauf/protocol?saison_id="+itoa(s), tok(t))
+	res := testutil.Get(t, srv, "/api/fee-run/protocol?saison_id="+itoa(s), tok(t))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status %d", res.StatusCode)
 	}
@@ -175,7 +175,7 @@ func TestProtocol_LeerWennKeinLauf(t *testing.T) {
 func TestProtocol_Forbidden(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
-	res := testutil.Get(t, srv, "/api/beitragslauf/protocol?saison_id="+itoa(s),
+	res := testutil.Get(t, srv, "/api/fee-run/protocol?saison_id="+itoa(s),
 		testutil.Token(t, 9, "standard", []string{"spieler"}))
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status %d, want 403", res.StatusCode)

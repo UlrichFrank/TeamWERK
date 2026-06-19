@@ -545,7 +545,7 @@ function BeitraegeTab() {
   const [error, setError] = useState<string | null>(null)
 
   const load = () => {
-    api.get('/beitrags-saetze').then(r => {
+    api.get('/fee-rates').then(r => {
       setSaetze(r.data.items ?? [])
       setLoaded(true)
     })
@@ -561,7 +561,7 @@ function BeitraegeTab() {
       setError('Bitte gültiges Datum und einen Betrag > 0 angeben.')
       return
     }
-    await api.post('/beitrags-saetze', {
+    await api.post('/fee-rates', {
       kategorie,
       betrag_cent: Math.round(betrag * 100),
       valid_from: f.datum,

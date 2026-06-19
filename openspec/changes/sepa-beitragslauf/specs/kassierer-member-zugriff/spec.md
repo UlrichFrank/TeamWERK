@@ -16,16 +16,16 @@ Nutzer mit Vereinsfunktion `kassierer` SHALL die Mitgliederliste und Mitglieder-
 - **THEN** antwortet der Server mit HTTP 403
 
 ### Requirement: Bankdaten-Bearbeitung durch Kassierer
-Nutzer mit Vereinsfunktion `kassierer` (und `vorstand`/`admin`) SHALL via `PUT /api/members/{id}/bankdaten` ausschließlich die bankrelevanten Felder eines Mitglieds aktualisieren können: `iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`. Der Endpoint MUST alle übrigen Member-Felder (Name, Status, `beitragsfrei`, Rollen) unverändert lassen. Eine ungültige IBAN (Mod-97) MUST mit HTTP 400 abgelehnt werden. Das SEPA-Mandat-Hochladen/Löschen (`POST /api/upload/sepa-mandat/{id}`, `DELETE /api/members/{id}/sepa-mandat`) SHALL ebenfalls für `kassierer` erlaubt sein.
+Nutzer mit Vereinsfunktion `kassierer` (und `vorstand`/`admin`) SHALL via `PUT /api/members/{id}/bank-details` ausschließlich die bankrelevanten Felder eines Mitglieds aktualisieren können: `iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`. Der Endpoint MUST alle übrigen Member-Felder (Name, Status, `beitragsfrei`, Rollen) unverändert lassen. Eine ungültige IBAN (Mod-97) MUST mit HTTP 400 abgelehnt werden. Das SEPA-Mandat-Hochladen/Löschen (`POST /api/upload/sepa-mandat/{id}`, `DELETE /api/members/{id}/sepa-mandat`) SHALL ebenfalls für `kassierer` erlaubt sein.
 
 #### Scenario: Kassierer ändert nur Bankfelder
-- **WHEN** ein Kassierer `PUT /api/members/{id}/bankdaten` mit neuer IBAN und Adresse aufruft
+- **WHEN** ein Kassierer `PUT /api/members/{id}/bank-details` mit neuer IBAN und Adresse aufruft
 - **THEN** sind IBAN und Adresse aktualisiert und Name, Status sowie `beitragsfrei` des Mitglieds unverändert
 
 #### Scenario: Ungültige IBAN abgelehnt
-- **WHEN** ein `PUT /api/members/{id}/bankdaten` mit einer IBAN mit falscher Mod-97-Prüfsumme erfolgt
+- **WHEN** ein `PUT /api/members/{id}/bank-details` mit einer IBAN mit falscher Mod-97-Prüfsumme erfolgt
 - **THEN** antwortet der Server mit HTTP 400
 
 #### Scenario: Bankdaten ohne Berechtigung
-- **WHEN** ein Nutzer mit ausschließlich `club_functions: ["spieler"]` `PUT /api/members/{id}/bankdaten` aufruft
+- **WHEN** ein Nutzer mit ausschließlich `club_functions: ["spieler"]` `PUT /api/members/{id}/bank-details` aufruft
 - **THEN** antwortet der Server mit HTTP 403

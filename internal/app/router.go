@@ -281,17 +281,17 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Get("/api/members/export", h.Members.Export)
 			r.Get("/api/members/{id}", h.Members.Get)
 			r.Get("/api/members/{id}/parents", h.Members.GetMemberParents)
-			r.Put("/api/members/{id}/bankdaten", h.Members.UpdateBankdaten)
+			r.Put("/api/members/{id}/bank-details", h.Members.UpdateBankdaten)
 			r.Post("/api/upload/sepa-mandat/{id}", h.Upload.UploadSepaMandat)
 			// (DELETE sepa-mandat bleibt in der Authenticated-Gruppe — breiterer Zugriff)
 			// Beitragsmatrix
-			r.Get("/api/beitrags-saetze", h.Beitragssaetze.List)
-			r.Post("/api/beitrags-saetze", h.Beitragssaetze.Create)
+			r.Get("/api/fee-rates", h.Beitragssaetze.List)
+			r.Post("/api/fee-rates", h.Beitragssaetze.Create)
 			// Beitragslauf
-			r.Get("/api/beitragslauf/preview", h.Beitragslauf.Preview)
-			r.Post("/api/beitragslauf/export", h.Beitragslauf.Export)
-			r.Post("/api/beitragslauf/confirm", h.Beitragslauf.Confirm)
-			r.Get("/api/beitragslauf/protocol", h.Beitragslauf.Protocol)
+			r.Get("/api/fee-run/preview", h.Beitragslauf.Preview)
+			r.Post("/api/fee-run/export", h.Beitragslauf.Export)
+			r.Post("/api/fee-run/confirm", h.Beitragslauf.Confirm)
+			r.Get("/api/fee-run/protocol", h.Beitragslauf.Protocol)
 		})
 
 		// Vorstand

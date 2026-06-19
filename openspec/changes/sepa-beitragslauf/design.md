@@ -15,7 +15,7 @@ Validierung im Handler vor `PUT /api/club`:
 - `glaeubiger_id` Format: `DE\d{2}[A-Z0-9]{3}\d{11}` (z.B. `DE98ZZZ09999999999`)
 - `iban` Format-Check (Land + Prüfsumme + Länge nach IBAN-Registry, hier nur DE/AT/CH praktisch relevant)
 - `bic` 8 oder 11 Zeichen
-- Alle vier Felder müssen vor Export-Versuch gesetzt sein → Vorab-Check in `POST /api/beitragslauf/export`, sonst HTTP 400 mit klarem Fehler.
+- Alle vier Felder müssen vor Export-Versuch gesetzt sein → Vorab-Check in `POST /api/fee-run/export`, sonst HTTP 400 mit klarem Fehler.
 
 ### 1.2 `members` — keine Änderung
 
@@ -160,7 +160,7 @@ Es wird **nicht** zwischen Erst- und Folgelastschrift unterschieden. Alle Buchun
 ### 3.1 Request
 
 ```
-GET /api/beitragslauf/preview?saison_id=42
+GET /api/fee-run/preview?saison_id=42
 ```
 
 ### 3.2 Response-Schema
@@ -220,7 +220,7 @@ Die Sätze (`beitrags_saetze`) werden einmal pro Request geladen — eine Map `k
 ### 4.1 Request
 
 ```
-POST /api/beitragslauf/export
+POST /api/fee-run/export
 Content-Type: application/json
 
 {
@@ -354,7 +354,7 @@ Der Export hat **keine** persistenten Side-Effects. Es wird nichts markiert. Der
 ### 5.1 Request
 
 ```
-POST /api/beitragslauf/confirm
+POST /api/fee-run/confirm
 Content-Type: application/json
 
 {
@@ -400,7 +400,7 @@ Der Zeitstempel kommt aus `time.Now()` im Handler (nicht aus dem Request). Name/
 ### 5.4 Protokoll lesen
 
 ```
-GET /api/beitragslauf/protocol?saison_id=42
+GET /api/fee-run/protocol?saison_id=42
 ```
 
 Gibt den kompletten Textdatei-Inhalt als `text/plain` zurück (für Anzeige im UI und Download). Existiert keine Datei, antwortet der Server mit `200` und leerem Body (oder `404` — Implementierung wählt eine Variante, Test deckt sie ab).
@@ -422,7 +422,7 @@ Heute liegen die Member-Lese-Routen in der Vorstand-only-Gruppe (`auth.RequireCl
 
 Zusätzlich für `kassierer` freigegeben (Bankdaten-Pflege):
 
-- `PUT /api/members/{id}/bankdaten` (neuer Handler, s.u.)
+- `PUT /api/members/{id}/bank-details` (neuer Handler, s.u.)
 - `POST /api/upload/sepa-mandat/{id}` (`Upload.UploadSepaMandat`)
 - `DELETE /api/members/{id}/sepa-mandat` (`Upload.DeleteSepaMandat`)
 
@@ -433,7 +433,7 @@ Da `admin` alle `RequireClubFunction`-Checks umgeht, bleibt Admin-Zugriff erhalt
 ### 6.2 Bankdaten-Endpoint (Feld-Whitelist)
 
 ```
-PUT /api/members/{id}/bankdaten
+PUT /api/members/{id}/bank-details
 Content-Type: application/json
 
 { "iban": "DE…", "sepa_mandat": true, "sepa_mandat_date": "2026-05-01",
@@ -447,7 +447,7 @@ Der Handler aktualisiert **ausschließlich** diese Spalten via gezieltem `UPDATE
 ### 7.1 Endpoints
 
 ```
-GET /api/beitrags-saetze
+GET /api/fee-rates
 ```
 
 Response: alle Sätze, sortiert nach `kategorie, valid_from DESC`.
@@ -462,7 +462,7 @@ Response: alle Sätze, sortiert nach `kategorie, valid_from DESC`.
 ```
 
 ```
-POST /api/beitrags-saetze
+POST /api/fee-rates
 Content-Type: application/json
 
 { "kategorie": "passiv", "betrag_cent": 7000, "valid_from": "2028-01-01" }

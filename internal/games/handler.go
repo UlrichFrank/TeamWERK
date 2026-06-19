@@ -391,26 +391,26 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		Note       string `json:"note"`
 	}
 	type game struct {
-		ID                   int                 `json:"id"`
-		Date                 string              `json:"date"`
-		Time                 string              `json:"time"`
-		EndTime              *string             `json:"end_time,omitempty"`
-		EndDate              *string             `json:"end_date"`
-		Opponent             string              `json:"opponent"`
-		EventType            string              `json:"event_type"`
-		Teams                []team              `json:"teams"`
-		TeamDisplayShortCSV  string              `json:"team_display_short_csv"`
-		TeamDisplayLongCSV   string              `json:"team_display_long_csv"`
-		SlotCount            int                 `json:"slot_count"`
-		FilledCount          int                 `json:"filled_count"`
-		TotalCount           int                 `json:"total_count"`
-		ConfirmedCount       int                 `json:"confirmed_count"`
-		DeclinedCount        int                 `json:"declined_count"`
-		MaybeCount           int                 `json:"maybe_count"`
-		RsvpOptOut           int                 `json:"rsvp_opt_out"`
-		RsvpRequireReason    int                 `json:"rsvp_require_reason"`
-		Venue                *venueRef           `json:"venue,omitempty"`
-		Can                  policy.GameCanFlags `json:"can"`
+		ID                  int                 `json:"id"`
+		Date                string              `json:"date"`
+		Time                string              `json:"time"`
+		EndTime             *string             `json:"end_time,omitempty"`
+		EndDate             *string             `json:"end_date"`
+		Opponent            string              `json:"opponent"`
+		EventType           string              `json:"event_type"`
+		Teams               []team              `json:"teams"`
+		TeamDisplayShortCSV string              `json:"team_display_short_csv"`
+		TeamDisplayLongCSV  string              `json:"team_display_long_csv"`
+		SlotCount           int                 `json:"slot_count"`
+		FilledCount         int                 `json:"filled_count"`
+		TotalCount          int                 `json:"total_count"`
+		ConfirmedCount      int                 `json:"confirmed_count"`
+		DeclinedCount       int                 `json:"declined_count"`
+		MaybeCount          int                 `json:"maybe_count"`
+		RsvpOptOut          int                 `json:"rsvp_opt_out"`
+		RsvpRequireReason   int                 `json:"rsvp_require_reason"`
+		Venue               *venueRef           `json:"venue,omitempty"`
+		Can                 policy.GameCanFlags `json:"can"`
 	}
 
 	var games []*game
@@ -1615,26 +1615,26 @@ type gameVenueRef struct {
 }
 
 type gameListItem struct {
-	ID                  int             `json:"id"`
-	Date                string          `json:"date"`
-	Time                string          `json:"time"`
-	Opponent            string          `json:"opponent"`
-	EventType           string          `json:"event_type"`
-	IsHome              bool            `json:"is_home"`
-	SeasonID            int             `json:"season_id"`
-	TeamNames           string          `json:"team_names"`
-	TeamIDs             []int           `json:"team_ids"`
-	TeamDisplayShortCSV string          `json:"team_display_short_csv"`
-	TeamDisplayLongCSV  string          `json:"team_display_long_csv"`
-	ConfirmedCount      int             `json:"confirmed_count"`
-	DeclinedCount       int             `json:"declined_count"`
-	MaybeCount          int             `json:"maybe_count"`
-	MyRSVP              *string         `json:"my_rsvp"`
-	MyRSVPLocked        bool            `json:"my_rsvp_locked"`
-	ChildrenRSVP        []childRSVP     `json:"children_rsvp,omitempty"`
-	RsvpOptOut          int             `json:"rsvp_opt_out"`
-	RsvpRequireReason   int             `json:"rsvp_require_reason"`
-	Venue               *gameVenueRef   `json:"venue,omitempty"`
+	ID                  int           `json:"id"`
+	Date                string        `json:"date"`
+	Time                string        `json:"time"`
+	Opponent            string        `json:"opponent"`
+	EventType           string        `json:"event_type"`
+	IsHome              bool          `json:"is_home"`
+	SeasonID            int           `json:"season_id"`
+	TeamNames           string        `json:"team_names"`
+	TeamIDs             []int         `json:"team_ids"`
+	TeamDisplayShortCSV string        `json:"team_display_short_csv"`
+	TeamDisplayLongCSV  string        `json:"team_display_long_csv"`
+	ConfirmedCount      int           `json:"confirmed_count"`
+	DeclinedCount       int           `json:"declined_count"`
+	MaybeCount          int           `json:"maybe_count"`
+	MyRSVP              *string       `json:"my_rsvp"`
+	MyRSVPLocked        bool          `json:"my_rsvp_locked"`
+	ChildrenRSVP        []childRSVP   `json:"children_rsvp,omitempty"`
+	RsvpOptOut          int           `json:"rsvp_opt_out"`
+	RsvpRequireReason   int           `json:"rsvp_require_reason"`
+	Venue               *gameVenueRef `json:"venue,omitempty"`
 }
 
 // memberIDForUser returns the member_id for a user, or 0 if not found.

@@ -7,9 +7,10 @@ package db
 // in the active season.
 //
 // Format mirrors web/src/lib/teamName.ts → buildTeamShortNames:
-//   gender → m/w/g (m→m, f→w, anything else→g)
-//   + first character of age_class
-//   + team_number iff multiple teams share age_class+gender in active season
+//
+//	gender → m/w/g (m→m, f→w, anything else→g)
+//	+ first character of age_class
+//	+ team_number iff multiple teams share age_class+gender in active season
 //
 // Examples: "mA", "mA1", "wB2", "gE".
 func TeamDisplayShort(teamAlias string) string {

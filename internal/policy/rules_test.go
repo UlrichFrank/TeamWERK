@@ -7,13 +7,19 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
-func adminP() *policy.Principal    { return &policy.Principal{UserID: 1, Role: "admin"} }
-func vorstandP() *policy.Principal { return &policy.Principal{UserID: 2, Role: "standard", ClubFunctions: []string{"vorstand"}} }
-func trainerP() *policy.Principal  { return &policy.Principal{UserID: 3, Role: "standard", ClubFunctions: []string{"trainer"}} }
+func adminP() *policy.Principal { return &policy.Principal{UserID: 1, Role: "admin"} }
+func vorstandP() *policy.Principal {
+	return &policy.Principal{UserID: 2, Role: "standard", ClubFunctions: []string{"vorstand"}}
+}
+func trainerP() *policy.Principal {
+	return &policy.Principal{UserID: 3, Role: "standard", ClubFunctions: []string{"trainer"}}
+}
 func slP() *policy.Principal {
 	return &policy.Principal{UserID: 4, Role: "standard", ClubFunctions: []string{"sportliche_leitung"}}
 }
-func spielerP() *policy.Principal { return &policy.Principal{UserID: 5, Role: "standard", ClubFunctions: []string{"spieler"}} }
+func spielerP() *policy.Principal {
+	return &policy.Principal{UserID: 5, Role: "standard", ClubFunctions: []string{"spieler"}}
+}
 
 func TestIsTrainerLike(t *testing.T) {
 	if !policy.IsTrainerLike(adminP()) {

@@ -676,27 +676,27 @@ type sessionVenueRef struct {
 }
 
 type sessionListItem struct {
-	ID                int               `json:"id"`
-	SeriesID          *int              `json:"series_id,omitempty"`
-	TeamID            int               `json:"team_id"`
-	TeamName          string            `json:"team_name"`
-	SeasonID          int               `json:"season_id"`
-	Title             string            `json:"title"`
-	Date              string            `json:"date"`
-	StartTime         string            `json:"start_time"`
-	EndTime           string            `json:"end_time"`
-	Venue             *sessionVenueRef  `json:"venue,omitempty"`
-	Note              string            `json:"note"`
-	Status            string            `json:"status"`
-	CancelReason      string            `json:"cancel_reason,omitempty"`
-	ConfirmedCount    int               `json:"confirmed_count"`
-	DeclinedCount     int               `json:"declined_count"`
-	MaybeCount        int               `json:"maybe_count"`
-	MyRSVP            *string           `json:"my_rsvp"`
-	MyRSVPLocked      bool              `json:"my_rsvp_locked"`
-	ChildrenRSVP      []childRSVP       `json:"children_rsvp,omitempty"`
-	RsvpOptOut        int               `json:"rsvp_opt_out"`
-	RsvpRequireReason int               `json:"rsvp_require_reason"`
+	ID                int              `json:"id"`
+	SeriesID          *int             `json:"series_id,omitempty"`
+	TeamID            int              `json:"team_id"`
+	TeamName          string           `json:"team_name"`
+	SeasonID          int              `json:"season_id"`
+	Title             string           `json:"title"`
+	Date              string           `json:"date"`
+	StartTime         string           `json:"start_time"`
+	EndTime           string           `json:"end_time"`
+	Venue             *sessionVenueRef `json:"venue,omitempty"`
+	Note              string           `json:"note"`
+	Status            string           `json:"status"`
+	CancelReason      string           `json:"cancel_reason,omitempty"`
+	ConfirmedCount    int              `json:"confirmed_count"`
+	DeclinedCount     int              `json:"declined_count"`
+	MaybeCount        int              `json:"maybe_count"`
+	MyRSVP            *string          `json:"my_rsvp"`
+	MyRSVPLocked      bool             `json:"my_rsvp_locked"`
+	ChildrenRSVP      []childRSVP      `json:"children_rsvp,omitempty"`
+	RsvpOptOut        int              `json:"rsvp_opt_out"`
+	RsvpRequireReason int              `json:"rsvp_require_reason"`
 }
 
 // GET /api/training-sessions

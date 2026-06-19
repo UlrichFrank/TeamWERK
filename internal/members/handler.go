@@ -639,7 +639,7 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// PUT /api/members/{id}/bankdaten
+// PUT /api/members/{id}/bank-details
 // Aktualisiert ausschließlich die bankrelevanten Felder (Feld-Whitelist),
 // damit der Kassierer korrigieren kann, ohne Stammdaten/Status zu verändern.
 func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {

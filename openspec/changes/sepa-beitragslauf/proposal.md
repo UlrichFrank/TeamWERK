@@ -17,16 +17,16 @@ Das aktuelle Schema kennt zwar `iban`, `sepa_mandat`, `home_club` und `join_date
 
 **Backend (neu):**
 - `GET /api/club` und `PUT /api/club` erweitert um SEPA-Felder (`glaeubiger_id`, `iban`, `bic`, `kontoinhaber`)
-- `GET /api/beitrags-saetze` (vorstand/kassierer/admin) — alle Sätze inkl. Historie
-- `POST /api/beitrags-saetze` (vorstand/kassierer/admin) — neuen Satz mit `valid_from` anlegen
-- `GET /api/beitragslauf/preview?saison_id=…` (vorstand/kassierer/admin) — Vorschau-Liste pro Mitglied: Kategorie, Jahresbeitrag, Ausschluss-/Warnungs-Begründung
-- `POST /api/beitragslauf/export` (vorstand/kassierer/admin) — Body: `saison_id`, `member_ids` (vom UI angehakt). Antwort: SEPA-XML als Datei-Download
-- `POST /api/beitragslauf/confirm` (vorstand/kassierer/admin) — Body: `saison_id`, `results: [{member_id, betrag_cent, success}]`. Hängt einen Eintrag an das Saison-Protokoll an (kein Überschreiben). Keine sonstige DB-Mutation.
-- `GET /api/beitragslauf/protocol?saison_id=…` (vorstand/kassierer/admin) — gibt den Inhalt des Saison-Protokolls (Textdatei) zurück; für Anzeige/Download im UI
+- `GET /api/fee-rates` (vorstand/kassierer/admin) — alle Sätze inkl. Historie
+- `POST /api/fee-rates` (vorstand/kassierer/admin) — neuen Satz mit `valid_from` anlegen
+- `GET /api/fee-run/preview?saison_id=…` (vorstand/kassierer/admin) — Vorschau-Liste pro Mitglied: Kategorie, Jahresbeitrag, Ausschluss-/Warnungs-Begründung
+- `POST /api/fee-run/export` (vorstand/kassierer/admin) — Body: `saison_id`, `member_ids` (vom UI angehakt). Antwort: SEPA-XML als Datei-Download
+- `POST /api/fee-run/confirm` (vorstand/kassierer/admin) — Body: `saison_id`, `results: [{member_id, betrag_cent, success}]`. Hängt einen Eintrag an das Saison-Protokoll an (kein Überschreiben). Keine sonstige DB-Mutation.
+- `GET /api/fee-run/protocol?saison_id=…` (vorstand/kassierer/admin) — gibt den Inhalt des Saison-Protokolls (Textdatei) zurück; für Anzeige/Download im UI
 
 **Backend (geändert) — Kassierer-Zugriff auf Mitglieder:**
 - Mitglieder-Lesen für `kassierer` freigeben: `GET /api/members`, `GET /api/members/{id}`, `GET /api/members/{id}/parents`, `GET /api/members/export` (von der Vorstand-only-Gruppe in eine `vorstand`+`kassierer`-Gruppe verschieben)
-- Neuer Endpoint `PUT /api/members/{id}/bankdaten` (vorstand/kassierer) — aktualisiert **ausschließlich** die bankrelevanten Felder (`iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`). Keine Änderung an Name/Status/Rollen
+- Neuer Endpoint `PUT /api/members/{id}/bank-details` (vorstand/kassierer) — aktualisiert **ausschließlich** die bankrelevanten Felder (`iban`, `sepa_mandat`, `sepa_mandat_date`, `account_holder`, `street`, `zip`, `city`). Keine Änderung an Name/Status/Rollen
 - SEPA-Mandat-Datei: `POST /api/upload/sepa-mandat/{id}` und `DELETE /api/members/{id}/sepa-mandat` zusätzlich für `kassierer` freigeben
 - Mitglieder anlegen/löschen, Status, Import, Rollen-/Family-Verwaltung bleiben `vorstand`-only
 
@@ -106,17 +106,17 @@ Warnung (angehakt, aber Hinweis im UI):
 
 ## Test-Anforderungen
 
-- Route `GET /api/beitragslauf/preview`: TestPreview_AktivMitStammverein, TestPreview_AktivOhneStammverein, TestPreview_PassivVollerBeitrag, TestPreview_AusschlussOhneMandat, TestPreview_AusschlussOhneIBAN, TestPreview_WarnungUnklarerStammverein, TestPreview_BeitragsfreiAusgeschlossen, TestPreview_NeumitgliedZahltVollenBeitrag (kein Pro-rata), TestPreview_Forbidden (nicht-berechtigte Rolle → 403)
-- Route `POST /api/beitragslauf/export`: TestExport_HappyPath (gültiges pain.008.001.08-XML), TestExport_EinPmtInfBlockRCUR, TestExport_VerwendungszweckFormat, TestExport_FehlendeStammdaten400, TestExport_ExcludedMember400, TestExport_Forbidden (403); TestExport_KassiererErlaubt (kassierer → 200)
-- Route `POST /api/beitragslauf/confirm`: TestConfirm_HaengtProtokollAn (zweiter Aufruf ergänzt, überschreibt nicht), TestConfirm_ErfolgUndFehlerGetrennt (success/failed je gelistet), TestConfirm_Forbidden (403)
-- Route `GET /api/beitragslauf/protocol`: TestProtocol_LiefertInhalt, TestProtocol_LeerWennKeinLauf (leer/404 sauber), TestProtocol_Forbidden (403)
-- Route `GET/POST /api/beitrags-saetze`: TestSaetze_HistorieErhalten, TestSaetze_NeueValidFromAnlegen, TestSaetze_InvalidKategorie, TestSaetze_Forbidden (403)
+- Route `GET /api/fee-run/preview`: TestPreview_AktivMitStammverein, TestPreview_AktivOhneStammverein, TestPreview_PassivVollerBeitrag, TestPreview_AusschlussOhneMandat, TestPreview_AusschlussOhneIBAN, TestPreview_WarnungUnklarerStammverein, TestPreview_BeitragsfreiAusgeschlossen, TestPreview_NeumitgliedZahltVollenBeitrag (kein Pro-rata), TestPreview_Forbidden (nicht-berechtigte Rolle → 403)
+- Route `POST /api/fee-run/export`: TestExport_HappyPath (gültiges pain.008.001.08-XML), TestExport_EinPmtInfBlockRCUR, TestExport_VerwendungszweckFormat, TestExport_FehlendeStammdaten400, TestExport_ExcludedMember400, TestExport_Forbidden (403); TestExport_KassiererErlaubt (kassierer → 200)
+- Route `POST /api/fee-run/confirm`: TestConfirm_HaengtProtokollAn (zweiter Aufruf ergänzt, überschreibt nicht), TestConfirm_ErfolgUndFehlerGetrennt (success/failed je gelistet), TestConfirm_Forbidden (403)
+- Route `GET /api/fee-run/protocol`: TestProtocol_LiefertInhalt, TestProtocol_LeerWennKeinLauf (leer/404 sauber), TestProtocol_Forbidden (403)
+- Route `GET/POST /api/fee-rates`: TestSaetze_HistorieErhalten, TestSaetze_NeueValidFromAnlegen, TestSaetze_InvalidKategorie, TestSaetze_Forbidden (403)
 - Route `GET /api/members` & `GET /api/members/{id}`: TestMembers_KassiererDarfLesen (200), TestMembers_SpielerVerboten (403)
-- Route `PUT /api/members/{id}/bankdaten`: TestBankdaten_KassiererUpdatetNurBankfelder (Name/Status unverändert), TestBankdaten_Forbidden (403)
+- Route `PUT /api/members/{id}/bank-details`: TestBankdaten_KassiererUpdatetNurBankfelder (Name/Status unverändert), TestBankdaten_Forbidden (403)
 - Route `GET/PUT /api/club`: TestClub_SepaFelder_GetSet
 - Invariante: Jedes eingeschlossene Mitglied wird mit dem vollen Jahresbeitrag (`betrag_cent` = `beitrags_saetze.betrag_eur` der gültigen Kategorie) abgerechnet — niemals anteilig
 - Invariante: Jede Lastschrift im Export trägt `SeqTp = RCUR`; das XML enthält genau einen `PmtInf`-Block
 - Invariante: Mitglieder mit `status IN ('ausgetreten','honorar','anwaerter')` oder `beitragsfrei = 1` tauchen nie im Export-XML auf
 - Invariante: Erzeugtes XML validiert gegen das pain.008.001.08-XSD (mind. ein Schema-Validator-Test)
 - Invariante: `POST /confirm` hängt nur an das Saison-Protokoll an — bestehende Einträge werden nie verändert oder gelöscht
-- Invariante: `PUT /api/members/{id}/bankdaten` verändert ausschließlich die Bankfelder-Whitelist; alle übrigen Member-Felder bleiben unverändert
+- Invariante: `PUT /api/members/{id}/bank-details` verändert ausschließlich die Bankfelder-Whitelist; alle übrigen Member-Felder bleiben unverändert

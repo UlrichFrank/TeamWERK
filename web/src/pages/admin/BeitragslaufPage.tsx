@@ -60,7 +60,7 @@ export default function BeitragslaufPage() {
 
   const loadPreview = () => {
     if (!saisonId) return
-    api.get(`/beitragslauf/preview?saison_id=${saisonId}`).then(r => {
+    api.get(`/fee-run/preview?saison_id=${saisonId}`).then(r => {
       const data: PreviewResp = r.data
       setPreview(data)
       setSelected(new Set(data.items.filter(i => i.included).map(i => i.member_id)))
@@ -92,7 +92,7 @@ export default function BeitragslaufPage() {
 
   const downloadXML = async () => {
     if (!saisonId) return
-    const res = await api.post('/beitragslauf/export',
+    const res = await api.post('/fee-run/export',
       { saison_id: saisonId, member_ids: [...selected] },
       { responseType: 'blob' })
     const url = URL.createObjectURL(res.data)
@@ -106,7 +106,7 @@ export default function BeitragslaufPage() {
 
   const openProtocol = async () => {
     if (!saisonId) return
-    const res = await api.get(`/beitragslauf/protocol?saison_id=${saisonId}`, { responseType: 'text' })
+    const res = await api.get(`/fee-run/protocol?saison_id=${saisonId}`, { responseType: 'text' })
     setProtocolText(res.data || '(noch kein Lauf bestätigt)')
   }
 
@@ -255,7 +255,7 @@ function ConfirmDialog({ preview, selected, onClose, onDone }: {
       betrag_cent: it.betrag_cent ?? 0,
       success: !failed.has(it.member_id),
     }))
-    const res = await api.post('/beitragslauf/confirm', { saison_id: preview.saison_id, results })
+    const res = await api.post('/fee-run/confirm', { saison_id: preview.saison_id, results })
     const d = res.data
     onDone(`Protokoll fortgeschrieben: ${d.erfolgreich} erfolgreich, ${d.nicht_erfolgreich} nicht erfolgreich.`)
   }

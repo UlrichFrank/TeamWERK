@@ -50,14 +50,14 @@ func (s *Scheduler) cleanExpiredTokens() {
 }
 
 type openSlot struct {
-	id        int
-	eventName string
-	eventDate string
-	eventTime string
-	dutyType  string
-	roleDesc  string
-	slotsOpen int
-	teamID    sql.NullInt64
+	id         int
+	eventName  string
+	eventDate  string
+	eventTime  string
+	dutyType   string
+	roleDesc   string
+	slotsOpen  int
+	teamID     sql.NullInt64
 	targetRole string
 }
 

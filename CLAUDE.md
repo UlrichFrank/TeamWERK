@@ -391,13 +391,13 @@ GET  /api/members                        ← Lesen (auch Kassierer)
 GET  /api/members/export
 GET  /api/members/{id}
 GET  /api/members/{id}/parents
-PUT  /api/members/{id}/bankdaten          ← nur Bankfelder (Feld-Whitelist)
+PUT  /api/members/{id}/bank-details          ← nur Bankfelder (Feld-Whitelist)
 POST /api/upload/sepa-mandat/{id}
-GET/POST /api/beitrags-saetze
-GET  /api/beitragslauf/preview?saison_id=
-POST /api/beitragslauf/export             ← SEPA-XML (pain.008.001.08)
-POST /api/beitragslauf/confirm            ← schreibt Saison-Protokoll
-GET  /api/beitragslauf/protocol?saison_id=
+GET/POST /api/fee-rates
+GET  /api/fee-run/preview?saison_id=
+POST /api/fee-run/export             ← SEPA-XML (pain.008.001.08)
+POST /api/fee-run/confirm            ← schreibt Saison-Protokoll
+GET  /api/fee-run/protocol?saison_id=
 ```
 
 ### Admin only
@@ -573,7 +573,7 @@ Immer als Goroutine aufrufen (`go ...`) — der Aufruf darf den HTTP-Response ni
 
 **Auto-Duty-Regen:** Jede Änderung an einem Heim- oder Auswärtsspiel (`POST /api/games`, `PUT /api/games/{id}`, `DELETE /api/games/{id}`) triggert automatische Regeneration der Dienst-Slots für das Event-Datum ± 1 Tag. Diese Regen beachtet alle `same_day_behavior`- und `adjacent_day_behavior`-Regeln der Duty-Types. Slots mit `is_custom=1` (manuell angelegt oder editiert) werden geschont und nicht gelöscht oder verändert. Der Response enthält ein `regen_summary`-Objekt mit Informationen über erstellte, reduzierte, übersprungene Slots und benachrichtigte Helfer. Vor einem Deploy sollte der Vorstand manuell-editierte Bestandsslots mit `UPDATE duty_slots SET is_custom=1 WHERE id IN (...)` schützen, um unerwünschte Regeneration zu vermeiden.
 
-**SEPA-Beitragslauf:** Unter `/admin/beitragslauf` (sichtbar für `vorstand`, `kassierer`, `admin`). Bewusst einfach: **kein Pro-rata** — jedes einzuziehende Mitglied zahlt den vollen **Jahresbeitrag**; Fälligkeit ist **immer der 01.07.** der Saison; alle Lastschriften sind **RCUR** (keine FRST-Unterscheidung); Spieler gelten als Kinder (keine Volljährigkeits-/Ausbildungsprüfung). Vor dem ersten Lauf müssen die Vereins-SEPA-Stammdaten (`glaeubiger_id`, `iban`, `bic`, `kontoinhaber`) unter Einstellungen → Verein gepflegt sein, sonst liefert `POST /api/beitragslauf/export` HTTP 400. Die Beitragsmatrix wird unter Einstellungen → Beiträge gepflegt (3 Kategorien, Beträge in Cent, Historie via `valid_from`). Der „Lauf bestätigen"-Schritt schreibt ein **append-only** Saison-Protokoll (Textdatei) — `BEITRAGSLAUF_DIR` unbedingt ins Backup aufnehmen. Der **Kassierer** darf zusätzlich Mitglieder lesen und deren Bankdaten über `PUT /api/members/{id}/bankdaten` (Feld-Whitelist) korrigieren.
+**SEPA-Beitragslauf:** Unter `/admin/beitragslauf` (sichtbar für `vorstand`, `kassierer`, `admin`). Bewusst einfach: **kein Pro-rata** — jedes einzuziehende Mitglied zahlt den vollen **Jahresbeitrag**; Fälligkeit ist **immer der 01.07.** der Saison; alle Lastschriften sind **RCUR** (keine FRST-Unterscheidung); Spieler gelten als Kinder (keine Volljährigkeits-/Ausbildungsprüfung). Vor dem ersten Lauf müssen die Vereins-SEPA-Stammdaten (`glaeubiger_id`, `iban`, `bic`, `kontoinhaber`) unter Einstellungen → Verein gepflegt sein, sonst liefert `POST /api/fee-run/export` HTTP 400. Die Beitragsmatrix wird unter Einstellungen → Beiträge gepflegt (3 Kategorien, Beträge in Cent, Historie via `valid_from`). Der „Lauf bestätigen"-Schritt schreibt ein **append-only** Saison-Protokoll (Textdatei) — `BEITRAGSLAUF_DIR` unbedingt ins Backup aufnehmen. Der **Kassierer** darf zusätzlich Mitglieder lesen und deren Bankdaten über `PUT /api/members/{id}/bank-details` (Feld-Whitelist) korrigieren.
 
 ---
 
