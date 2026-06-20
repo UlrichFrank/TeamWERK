@@ -320,9 +320,17 @@ function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: Carpo
               </p>
               <ul className="space-y-1">
                 {g.paarungen.map(p => (
-                  <li key={p.paarungId} className="flex items-center gap-1.5 text-sm text-brand-text">
-                    <Check className="w-4 h-4 text-brand-success flex-shrink-0" />
-                    <span>{p.partnerName}</span>
+                  <li key={p.paarungId}>
+                    <Link
+                      to={`/mitfahrgelegenheiten#paarung-${p.paarungId}`}
+                      className="flex items-center justify-between gap-2 text-sm text-brand-text hover:bg-brand-border-subtle rounded px-2 -mx-2 py-0.5 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <Check className="w-4 h-4 text-brand-success flex-shrink-0" />
+                        <span className="truncate">{p.partnerName}</span>
+                      </span>
+                      <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -341,12 +349,20 @@ function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: Carpo
               </p>
               <ul className="space-y-1">
                 {g.requests.map(req => (
-                  <li key={req.sucheId} className="flex items-center gap-1.5 text-sm text-brand-text">
-                    <Search className="w-4 h-4 text-brand-text-muted flex-shrink-0" />
-                    <span>
-                      {req.requesterName} · braucht {req.plaetze} {req.plaetze === 1 ? 'Platz' : 'Plätze'}
-                      {req.treffpunkt ? ` · ${req.treffpunkt}` : ''}
-                    </span>
+                  <li key={req.sucheId}>
+                    <Link
+                      to={`/mitfahrgelegenheiten#suche-${req.sucheId}`}
+                      className="flex items-center justify-between gap-2 text-sm text-brand-text hover:bg-brand-border-subtle rounded px-2 -mx-2 py-0.5 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <Search className="w-4 h-4 text-brand-text-muted flex-shrink-0" />
+                        <span className="truncate">
+                          {req.requesterName} · braucht {req.plaetze} {req.plaetze === 1 ? 'Platz' : 'Plätze'}
+                          {req.treffpunkt ? ` · ${req.treffpunkt}` : ''}
+                        </span>
+                      </span>
+                      <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
+                    </Link>
                   </li>
                 ))}
               </ul>
