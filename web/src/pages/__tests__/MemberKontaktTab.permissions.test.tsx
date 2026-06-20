@@ -1,5 +1,5 @@
 /**
- * MemberDatenschutzTab inline gate:
+ * MemberKontaktTab (Bankdaten) inline gate für SEPA-Mandat:
  *   canDeleteSepa = isAdmin || isVorstand || user.isParent
  *   isAdmin = user.role === 'admin'
  *   isVorstand = hasFunction(user, 'vorstand')
@@ -8,19 +8,22 @@
  *
  * Designloch (§10): Die Spec listet nur isVorstand ohne admin. Tatsächlich inkludiert
  * canDeleteSepa auch isAdmin — admin kann das Dokument löschen.
+ *
+ * Hinweis: Die SEPA-Mandat-Sektion wurde von "Datenschutz" zu "Bankdaten" verschoben.
  */
 import { describe, test, expect } from 'vitest'
 import { screen } from '@testing-library/react'
-import MemberDatenschutzTab from '../../components/admin/MemberDatenschutzTab'
+import MemberKontaktTab from '../../components/admin/MemberKontaktTab'
 import { renderAsPersonaNoRouter } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 const FORM_WITH_SEPA = {
+  iban: '',
+  account_holder: '',
+  beitragsfrei: false,
   sepa_mandat: true,
   sepa_mandat_date: '2025-01-01',
   sepa_mandat_url: 'https://example.com/sepa.pdf',
-  dsgvo_verarbeitung: false,
-  dsgvo_weitergabe: false,
 }
 
 const noop = async () => {}
@@ -37,10 +40,10 @@ const CAN_DELETE_SEPA_IDS = [
   'elternteil',
 ]
 
-describe('MemberDatenschutzTab — canDeleteSepa-Gate: "Dokument löschen"-Button', () => {
+describe('MemberKontaktTab — canDeleteSepa-Gate: "Dokument löschen"-Button', () => {
   test.each(PERSONAS)('Persona $id', (persona) => {
     renderAsPersonaNoRouter(
-      <MemberDatenschutzTab
+      <MemberKontaktTab
         memberId={1}
         form={FORM_WITH_SEPA}
         isNew={false}
