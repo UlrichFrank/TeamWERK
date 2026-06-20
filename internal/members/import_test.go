@@ -40,6 +40,8 @@ func postImport(t *testing.T, srv string, token, csv, mode string) *http.Respons
 	return res
 }
 
+// memberNumberOf liefert (member_number, existiert). Der bool bedeutet, ob das
+// Mitglied existiert — NICHT, ob die Nummer gesetzt ist (NULL → "" mit true).
 func memberNumberOf(t *testing.T, db *sql.DB, firstName string) (string, bool) {
 	t.Helper()
 	var n sql.NullString
@@ -50,7 +52,7 @@ func memberNumberOf(t *testing.T, db *sql.DB, firstName string) (string, bool) {
 	if err != nil {
 		t.Fatalf("query member_number: %v", err)
 	}
-	return n.String, n.Valid
+	return n.String, true
 }
 
 // Regressionstest: Beim CSV-Import eines NEUEN Mitglieds (append) muss die
@@ -131,5 +133,47 @@ func TestImport_EnrichFillsEmptyMemberNumber(t *testing.T) {
 	}
 	if num != "TS-0001" {
 		t.Errorf("enrich sollte leere member_number füllen, got %q want %q", num, "TS-0001")
+	}
+}
+
+// Realdaten-nah: Bestandsmitglied MIT Geburtsdatum, CSV mit "geboren am".
+// Reproduziert den Fall, in dem enrich die Nummer NICHT füllt, weil der
+// Datums-Match (COALESCE(date_of_birth,”)=?) scheitert.
+func TestImport_EnrichFillsMemberNumber_WithDOB(t *testing.T) {
+	cases := []struct {
+		name       string
+		dbDOB      string // wie date_of_birth in der DB steht
+		csvGeboren string // "geboren am"-Wert in der CSV
+	}{
+		{"iso_date", "2007-10-14", "14.10.2007"},
+		{"iso_timestamp", "2007-10-14T00:00:00Z", "14.10.2007"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testutil.NewDB(t)
+			srv := newMembersServer(t, db)
+			token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+			if _, err := db.Exec(
+				`INSERT INTO members (first_name, last_name, status, date_of_birth) VALUES ('Petra','Test','aktiv',?)`,
+				tc.dbDOB); err != nil {
+				t.Fatalf("insert member: %v", err)
+			}
+
+			csv := "Vorname;Name;Mitgliedsnummer;geboren am;Status\n" +
+				"Petra;Test;TS-0001;" + tc.csvGeboren + ";aktiv\n"
+			res := postImport(t, srv.URL, token, csv, "enrich")
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("import status %d, want 200", res.StatusCode)
+			}
+
+			num, ok := memberNumberOf(t, db, "Petra")
+			if !ok {
+				t.Fatal("Mitglied Petra fehlt")
+			}
+			if num != "TS-0001" {
+				t.Errorf("enrich (dbDOB=%q) füllte member_number nicht: got %q want %q", tc.dbDOB, num, "TS-0001")
+			}
+		})
 	}
 }
