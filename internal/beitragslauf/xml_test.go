@@ -93,6 +93,15 @@ func TestBuildXML_UmlauteWerdenTransliteriert(t *testing.T) {
 	}
 }
 
+func TestBuildXML_FwdgAgtEnthältAbsenderBIC(t *testing.T) {
+	out, _ := BuildXML(sampleInput())
+	s := string(out)
+	want := "<FwdgAgt>\n        <FinInstnId>\n          <BICFI>GENODEF1S02</BICFI>\n        </FinInstnId>\n      </FwdgAgt>"
+	if !strings.Contains(s, want) {
+		t.Errorf("FwdgAgt mit Absender-BIC fehlt im GrpHdr:\n%s", s)
+	}
+}
+
 func TestBuildXML_VerwendungszweckFormat(t *testing.T) {
 	out, _ := BuildXML(sampleInput())
 	want := "<Ustrd>Mitgliedsbeitrag Team Stuttgart 26/27 - Mitglied 1042</Ustrd>"
