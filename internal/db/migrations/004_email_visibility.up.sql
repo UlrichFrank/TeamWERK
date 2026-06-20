@@ -1,1 +1,0 @@
-ALTER TABLE user_visibility ADD COLUMN email_visible INTEGER NOT NULL DEFAULT 0;

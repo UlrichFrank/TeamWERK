@@ -1,1 +1,0 @@
-ALTER TABLE training_sessions ADD COLUMN title TEXT NOT NULL DEFAULT '';

@@ -1,1 +1,0 @@
--- no-op (SQLite ALTER TABLE ADD COLUMN is not reversible before SQLite 3.35)
