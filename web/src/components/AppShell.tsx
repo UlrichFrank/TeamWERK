@@ -123,6 +123,27 @@ export default function AppShell() {
     setCanGoBack((window.history.state?.idx ?? 0) > 0)
   }, [location])
 
+  useEffect(() => {
+    const nav = navigator as Navigator & {
+      setAppBadge?: (n?: number) => Promise<void>
+      clearAppBadge?: () => Promise<void>
+    }
+    if (!('setAppBadge' in nav)) return
+    if (chatUnread > 0) {
+      nav.setAppBadge?.(chatUnread).catch(() => {})
+    } else {
+      nav.clearAppBadge?.().catch(() => {})
+    }
+  }, [chatUnread])
+
+  useEffect(() => {
+    if (user) return
+    const nav = navigator as Navigator & { clearAppBadge?: () => Promise<void> }
+    if ('clearAppBadge' in nav) {
+      nav.clearAppBadge?.().catch(() => {})
+    }
+  }, [user])
+
   const handleLogout = async () => {
     await logout()
     navigate('/login')

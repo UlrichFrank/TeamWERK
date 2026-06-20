@@ -81,3 +81,73 @@ func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, 
 		}
 	}
 }
+
+// BuildBadgePayload encodes the JSON push payload with a `badge` field.
+// Exported for tests; SendToUserWithBadge uses it internally.
+func BuildBadgePayload(title, body, url string, badge int) []byte {
+	payload, _ := json.Marshal(map[string]any{
+		"title": title,
+		"body":  body,
+		"url":   url,
+		"badge": badge,
+	})
+	return payload
+}
+
+// SendToUserWithBadge sends a push notification to all subscriptions of a single
+// user and includes the absolute app-badge value in the payload.
+// Runs as fire-and-forget — call via `go push.SendToUserWithBadge(...)`.
+func SendToUserWithBadge(db *sql.DB, cfg *appconfig.Config, userID int, title, body, url string, badge int) {
+	if cfg.VAPIDPrivateKey == "" {
+		return
+	}
+
+	rows, err := db.Query(
+		`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`,
+		userID)
+	if err != nil {
+		log.Printf("push: query subscriptions for user %d: %v", userID, err)
+		return
+	}
+	defer rows.Close()
+
+	type sub struct {
+		id       int
+		endpoint string
+		p256dh   string
+		auth     string
+	}
+	var subs []sub
+	for rows.Next() {
+		var s sub
+		rows.Scan(&s.id, &s.endpoint, &s.p256dh, &s.auth)
+		subs = append(subs, s)
+	}
+
+	payload := BuildBadgePayload(title, body, url, badge)
+
+	for _, s := range subs {
+		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
+			Endpoint: s.endpoint,
+			Keys: webpush.Keys{
+				P256dh: s.p256dh,
+				Auth:   s.auth,
+			},
+		}, &webpush.Options{
+			VAPIDPublicKey:  cfg.VAPIDPublicKey,
+			VAPIDPrivateKey: cfg.VAPIDPrivateKey,
+			Subscriber:      cfg.VAPIDEmail,
+			TTL:             3600,
+		})
+		if err != nil {
+			log.Printf("push: send to subscription %d: %v", s.id, err)
+			continue
+		}
+		resp.Body.Close()
+		switch resp.StatusCode {
+		case http.StatusGone, http.StatusNotFound,
+			http.StatusUnauthorized, http.StatusBadRequest:
+			db.Exec(`DELETE FROM push_subscriptions WHERE id = ?`, s.id)
+		}
+	}
+}

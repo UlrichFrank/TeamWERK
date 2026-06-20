@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,10 +17,14 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
+// PushWithBadgeFn matches push.SendToUserWithBadge; injectable for tests.
+type PushWithBadgeFn func(db *sql.DB, cfg *appconfig.Config, userID int, title, body, url string, badge int)
+
 type Handler struct {
-	db  *sql.DB
-	hub *hub.EventHub
-	cfg *appconfig.Config
+	db     *sql.DB
+	hub    *hub.EventHub
+	cfg    *appconfig.Config
+	pushFn PushWithBadgeFn
 }
 
 var allowedEmojiOrder = []string{"👍", "👎", "❤️", "😂", "😮", "😢", "🙌", "🔥"}
@@ -40,7 +45,12 @@ type messageReaction struct {
 }
 
 func NewHandler(db *sql.DB, h *hub.EventHub, cfg *appconfig.Config) *Handler {
-	return &Handler{db: db, hub: h, cfg: cfg}
+	return &Handler{db: db, hub: h, cfg: cfg, pushFn: push.SendToUserWithBadge}
+}
+
+// SetPushFn replaces the push function (test seam).
+func (h *Handler) SetPushFn(fn PushWithBadgeFn) {
+	h.pushFn = fn
 }
 
 // GET /api/chat/events
@@ -621,8 +631,17 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		h.hub.BroadcastToUser(uid, event)
 	}
 
-	go push.SendToUsers(h.db, h.cfg, push.FilterByPushPref(h.db, h.activeMembers(r, convID, claims.UserID), "chat"),
-		h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
+	pushRecipients := push.FilterByPushPref(h.db, h.activeMembers(r, convID, claims.UserID), "chat")
+	title := h.senderName(r, claims.UserID, claims.Email)
+	preview := truncate(body.Body, 80)
+	for _, uid := range pushRecipients {
+		badge, err := ComputeUnreadForUser(h.db, uid)
+		if err != nil {
+			log.Printf("chat: compute unread for user %d: %v", uid, err)
+			badge = 0
+		}
+		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat", badge)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -943,7 +962,17 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 			pushIDs = append(pushIDs, uid)
 		}
 	}
-	go push.SendToUsers(h.db, h.cfg, push.FilterByPushPref(h.db, pushIDs, "chat"), h.senderName(r, claims.UserID, claims.Email), truncate(body.Body, 80), "/chat")
+	pushRecipients := push.FilterByPushPref(h.db, pushIDs, "chat")
+	title := h.senderName(r, claims.UserID, claims.Email)
+	preview := truncate(body.Body, 80)
+	for _, uid := range pushRecipients {
+		badge, err := ComputeUnreadForUser(h.db, uid)
+		if err != nil {
+			log.Printf("chat: compute unread for user %d: %v", uid, err)
+			badge = 0
+		}
+		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat", badge)
+	}
 
 	w.WriteHeader(http.StatusCreated)
 }
