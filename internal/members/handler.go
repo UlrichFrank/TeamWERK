@@ -1598,13 +1598,49 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
 		args := []interface{}{firstName, lastName}
 		if dob != "" {
-			// Nur den Datumsanteil vergleichen: date_of_birth kann als reines
-			// ISO-Datum ("2007-10-14") ODER als ISO-Timestamp
-			// ("2007-10-14T00:00:00Z") gespeichert sein (SQLite-DATE-Gotcha).
-			// Ein exakter Vergleich verfehlt sonst Bestandsmitglieder, sodass
-			// enrich/update keine Felder (z.B. Mitgliedsnummer) füllt.
-			query += ` AND substr(COALESCE(date_of_birth,''),1,10)=?`
-			args = append(args, dob)
+			// Standard: exakter Vergleich nur auf den Datumsanteil — date_of_birth
+			// kann reines ISO-Datum ("2007-10-14") ODER ISO-Timestamp
+			// ("2007-10-14T00:00:00Z") sein (SQLite-DATE-Gotcha).
+			dobClause := ` AND substr(COALESCE(date_of_birth,''),1,10)=?`
+			useDobArg := true
+
+			// Fall B: Findet der exakte Abgleich nichts und ist beim Bestands-
+			// mitglied gar kein Geburtsdatum gepflegt, matchen wir in Füll-Modi
+			// ersatzweise über den Namen allein (Geburtsdatum wird per enrich
+			// ergänzt) — aber NUR wenn genau ein gleichnamiges Mitglied ohne
+			// Geburtsdatum existiert (Eindeutigkeits-Schutz), damit keine andere
+			// gleichnamige Person befüllt wird.
+			if mode == "enrich" || mode == "update" {
+				var exactCnt int
+				h.db.QueryRowContext(r.Context(),
+					`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND substr(COALESCE(date_of_birth,''),1,10)=?`,
+					firstName, lastName, dob).Scan(&exactCnt)
+				if exactCnt == 0 {
+					var emptyCnt int
+					h.db.QueryRowContext(r.Context(),
+						`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND COALESCE(date_of_birth,'')=''`,
+						firstName, lastName).Scan(&emptyCnt)
+					switch {
+					case emptyCnt == 1:
+						dobClause = ` AND COALESCE(date_of_birth,'')=''`
+						useDobArg = false
+					case emptyCnt >= 2:
+						report.Rows = append(report.Rows, ImportRow{
+							Line:    lineNum,
+							Status:  "error",
+							Name:    displayName,
+							Message: fmt.Sprintf("Mehrdeutig (%d gleichnamige ohne Geburtsdatum) – bitte manuell zuordnen", emptyCnt),
+						})
+						report.Errors++
+						continue
+					}
+				}
+			}
+
+			query += dobClause
+			if useDobArg {
+				args = append(args, dob)
+			}
 		}
 		query += ` LIMIT 1`
 
