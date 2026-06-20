@@ -16,15 +16,14 @@ import (
 
 // Exclusion-/Warnungs-Codes
 const (
-	exclStatusInaktiv  = "status_inaktiv"
-	exclBeitragsfrei   = "beitragsfrei"
-	exclKeinMandat     = "kein_sepa_mandat"
-	exclIBANFehlt      = "iban_fehlt"
-	exclIBANUngueltig  = "iban_ungueltig"
-	exclKeineMitglNr   = "mitgliedsnummer_fehlt"
-	exclAdresse        = "adresse_unvollstaendig"
-	exclKeinSatz       = "kein_beitragssatz"
-	warnHomeClubUnklar = "home_club_unklar"
+	exclStatusInaktiv = "status_inaktiv"
+	exclBeitragsfrei  = "beitragsfrei"
+	exclKeinMandat    = "kein_sepa_mandat"
+	exclIBANFehlt     = "iban_fehlt"
+	exclIBANUngueltig = "iban_ungueltig"
+	exclKeineMitglNr  = "mitgliedsnummer_fehlt"
+	exclAdresse       = "adresse_unvollstaendig"
+	exclKeinSatz      = "kein_beitragssatz"
 )
 
 var kategorieLabel = map[string]string{
@@ -123,16 +122,13 @@ func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) P
 		return it
 	}
 
-	// Kategorie bestimmen
+	// Kategorie bestimmen — deterministisch aus der Stammverein-Zuordnung
+	// (members.home_club_id). Kein Freitext-/Fuzzy-Abgleich mehr.
 	var kategorie string
 	if gruppe == "passiv" {
 		kategorie = "passiv"
 	} else {
-		match := MatchHomeClub(m.HomeClub)
-		if match.Warning != "" {
-			it.Warnings = append(it.Warnings, warnHomeClubUnklar)
-		}
-		kategorie = AktivKategorie(match.Matched)
+		kategorie = AktivKategorie(m.HasHomeClub)
 	}
 
 	betrag, err := LookupBetragCent(saetze, kategorie, saisonStart)

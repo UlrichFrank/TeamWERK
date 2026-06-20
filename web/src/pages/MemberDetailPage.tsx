@@ -23,6 +23,8 @@ interface Member {
   user_id?: number
   club_functions?: string[]
   home_club?: string
+  home_club_id?: number | null
+  home_club_name?: string
   street?: string
   zip?: string
   city?: string
@@ -69,7 +71,7 @@ export default function MemberDetailPage() {
   const [form, setForm] = useState<Omit<Member, 'id'>>({
     first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
     jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_functions: [],
-    home_club: '', street: '', zip: '', city: '', join_date: '', iban: '', account_holder: '',
+    home_club: '', home_club_id: null, street: '', zip: '', city: '', join_date: '', iban: '', account_holder: '',
     photo_url: '', photo_visible: false,
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
@@ -115,6 +117,7 @@ export default function MemberDetailPage() {
       gender: m.gender ?? 'u', status: m.status,
       club_functions: m.club_functions ?? [],
       home_club: m.home_club ?? '',
+      home_club_id: m.home_club_id ?? null,
       street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
       join_date: m.join_date?.slice(0, 10) ?? '',
       iban: m.iban ?? '',

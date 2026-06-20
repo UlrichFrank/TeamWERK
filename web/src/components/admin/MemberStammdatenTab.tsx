@@ -17,6 +17,8 @@ interface Member {
   status: string
   club_functions?: string[]
   home_club?: string
+  home_club_id?: number | null
+  home_club_name?: string
   zweitspielrecht?: boolean
   street?: string
   zip?: string
@@ -63,6 +65,13 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [photoDropdown, setPhotoDropdown] = useState(false)
   const [photoURL, setPhotoURL] = useState(form.photo_url || '')
+  const [stammvereine, setStammvereine] = useState<{ id: number; name: string; aktiv: boolean }[]>([])
+
+  useEffect(() => {
+    api.get('/stammvereine?include_inactive=1')
+      .then(r => setStammvereine(r.data.items ?? []))
+      .catch(() => setStammvereine([]))
+  }, [])
 
   useEffect(() => {
     if (form.photo_url && form.photo_url !== photoURL) {
@@ -335,6 +344,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                     updates.member_number = ''
                     updates.pass_number = ''
                     updates.home_club = ''
+                    updates.home_club_id = null
                   }
                   onFormChange(updates)
                 }}
@@ -376,13 +386,20 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         {!isHonorar && (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Stammverein</label>
-            <input
-              type="text"
-              value={form.home_club ?? ''}
-              onChange={e => onFormChange({ home_club: e.target.value })}
-              placeholder="z. B. TV Cannstatt"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-            />
+            <select
+              value={form.home_club_id ?? ''}
+              onChange={e => onFormChange({ home_club_id: e.target.value === '' ? null : Number(e.target.value) })}
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            >
+              <option value="">Kein Stammverein</option>
+              {stammvereine
+                .filter(v => v.aktiv || v.id === form.home_club_id)
+                .map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}{v.aktiv ? '' : ' (deaktiviert)'}
+                  </option>
+                ))}
+            </select>
             <label className="flex items-center gap-2 cursor-pointer mt-2">
               <input
                 type="checkbox"

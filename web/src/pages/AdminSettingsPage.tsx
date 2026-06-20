@@ -9,6 +9,7 @@ import MobileCard from '../components/MobileCard'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import NumberSpinner from '../components/NumberSpinner'
 import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
+import { errorStatus } from '../lib/errors'
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
@@ -627,16 +628,153 @@ function BeitraegeTab() {
   )
 }
 
+// ─── Stammvereine Tab ───────────────────────────────────────────────────────
+
+type Stammverein = { id: number; name: string; aktiv: boolean; sort_order: number }
+
+function StammvereineTab() {
+  const [vereine, setVereine] = useState<Stammverein[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [neu, setNeu] = useState('')
+  const [editId, setEditId] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    api.get('/stammvereine?include_inactive=1').then(r => {
+      setVereine(r.data.items ?? [])
+      setLoaded(true)
+    })
+  }
+  useEffect(() => { if (!loaded) load() }, [loaded])
+  useLiveUpdates(event => { if (event === 'stammvereine') load() })
+
+  const add = async () => {
+    setError(null)
+    const name = neu.trim()
+    if (!name) return
+    try {
+      await api.post('/stammvereine', { name })
+      setNeu('')
+      load()
+    } catch (e) {
+      setError(errorStatus(e) === 409 ? 'Ein Stammverein mit diesem Namen existiert bereits.' : 'Anlegen fehlgeschlagen.')
+    }
+  }
+
+  const rename = async (id: number) => {
+    const name = editName.trim()
+    if (!name) return
+    setError(null)
+    try {
+      await api.put(`/stammvereine/${id}`, { name })
+      setEditId(null)
+      load()
+    } catch (e) {
+      setError(errorStatus(e) === 409 ? 'Ein Stammverein mit diesem Namen existiert bereits.' : 'Umbenennen fehlgeschlagen.')
+    }
+  }
+
+  const toggleAktiv = async (v: Stammverein) => {
+    await api.put(`/stammvereine/${v.id}`, { aktiv: !v.aktiv })
+    load()
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      {error && (
+        <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
+      )}
+      <p className="text-sm text-brand-text-muted">
+        Stammvereine stehen auf der Mitgliederseite zur Auswahl. Ist einem aktiven Spieler ein Stammverein
+        zugeordnet, gilt im Beitragslauf der ermäßigte Satz (aktiv mit Stammverein).
+      </p>
+
+      <div className="flex flex-wrap gap-2 items-end">
+        <input
+          type="text"
+          placeholder="Name des Stammvereins"
+          value={neu}
+          onChange={e => setNeu(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') add() }}
+          className={`${INPUT} w-auto flex-1 min-w-[16rem]`}
+        />
+        <button type="button" onClick={add} className={BTN_SM}>Hinzufügen</button>
+      </div>
+
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-brand-surface-card text-brand-text-muted text-xs uppercase text-left">
+              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-right">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vereine.length === 0 && (
+              <tr><td colSpan={3} className="px-4 py-3 text-brand-text-muted">Noch keine Stammvereine angelegt.</td></tr>
+            )}
+            {vereine.map(v => (
+              <tr key={v.id} className="border-t border-brand-border-subtle">
+                <td className="px-4 py-3 text-brand-text">
+                  {editId === v.id ? (
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') rename(v.id) }}
+                      className={`${INPUT} w-auto`}
+                      autoFocus
+                    />
+                  ) : (
+                    <span className={v.aktiv ? '' : 'text-brand-text-muted line-through'}>{v.name}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-brand-text-muted">{v.aktiv ? 'Aktiv' : 'Deaktiviert'}</td>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  {editId === v.id ? (
+                    <>
+                      <button type="button" onClick={() => rename(v.id)} className={`${BTN_SM} mr-2`}>Speichern</button>
+                      <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setEditId(v.id); setEditName(v.name) }}
+                        className={`${BTN_SM} mr-2`}
+                      >Umbenennen</button>
+                      <button
+                        type="button"
+                        onClick={() => toggleAktiv(v)}
+                        className={v.aktiv ? BTN_DANGER_SM : BTN_SM}
+                      >{v.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege'
+type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege' | 'stammvereine'
 // Sichtbarkeit pro Tab über Capabilities (nie über role/clubFunctions direkt):
 //   Kassierer      → manage_club + manage_fees      → Verein, Beiträge
-//   Vorstand/Admin → zusätzlich manage_seasons      → alle vier Tabs
+//   Vorstand/Admin → zusätzlich manage_seasons      → alle Tabs
+// Stammvereine: manage_seasons (vorstand/admin) — deckt sich mit den
+// vorstand-only-Mutationen im Backend; Kassierer sieht den Tab bewusst nicht.
 const TABS: { id: Tab; label: string; cap: string }[] = [
   { id: 'verein', label: 'Verein', cap: 'manage_club' },
   { id: 'saisons', label: 'Saisons', cap: 'manage_seasons' },
   { id: 'altersklassen', label: 'Altersklassen', cap: 'manage_seasons' },
+  { id: 'stammvereine', label: 'Stammvereine', cap: 'manage_seasons' },
   { id: 'beitraege', label: 'Beiträge', cap: 'manage_fees' },
 ]
 
@@ -673,6 +811,7 @@ export default function AdminSettingsPage() {
       {activeTab === 'verein' && <VereinTab />}
       {activeTab === 'saisons' && <SaisonsTab />}
       {activeTab === 'altersklassen' && <AltersklassenTab />}
+      {activeTab === 'stammvereine' && <StammvereineTab />}
       {activeTab === 'beitraege' && <BeitraegeTab />}
     </div>
   )

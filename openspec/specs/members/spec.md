@@ -1,4 +1,9 @@
-## ADDED Requirements
+# members Specification
+
+## Purpose
+Verwaltung von Mitglieder-/Spielerprofilen: Stammdaten, Status-Lebenszyklus, Team-Zuordnung, Eltern-Kind-Verknüpfung, CSV-Import sowie die Stammverein-Referenz (`home_club_id`).
+
+## Requirements
 
 ### Requirement: Player profile management
 The system SHALL allow admins and users with the `trainer` club function to create and maintain player profiles. A player profile contains: first name, last name, date of birth, pass number, jersey number, position, and member status. Club functions are stored as a set (zero or more) in `member_club_functions` and are managed separately from the profile's base fields.
@@ -83,10 +88,6 @@ The system SHALL allow admins to export the full member list as CSV.
 - **WHEN** an admin triggers the CSV export
 - **THEN** the system returns a downloadable CSV file with all active member profiles and their team assignments
 
----
-
-## ADDED Requirements
-
 ### Requirement: Welcome email sent timestamp on member record
 The system SHALL store a nullable `welcome_email_sent_at` timestamp on every member record, set when a welcome email is successfully dispatched.
 
@@ -102,10 +103,6 @@ The system SHALL store a nullable `welcome_email_sent_at` timestamp on every mem
 - **WHEN** `GET /api/members/{id}` is called
 - **THEN** the response JSON includes `welcome_email_sent_at` as an ISO-8601 string or null
 
----
-
-## ADDED Requirements
-
 ### Requirement: Abwesenheits-Sichtbarkeit am Member-Profil
 Jeder Member SHALL ein Feld `absences_public` (Boolean, default `false`) besitzen, das steuert, ob seine Abwesenheiten für Trainer im Kalender sichtbar sind. Das Feld MUSS über das eigene Profil gesetzt werden können.
 
@@ -116,10 +113,6 @@ Jeder Member SHALL ein Feld `absences_public` (Boolean, default `false`) besitze
 #### Scenario: Spieler aktiviert Sichtbarkeit
 - **WHEN** ein Spieler `PUT /api/profile/absence-visibility` mit `{"public": true}` aufruft
 - **THEN** wird `absences_public` auf `true` gesetzt und ist sofort wirksam für Kalenderabfragen
-
----
-
-## MODIFIED Requirements
 
 ### Requirement: CSV-Import für Mitglieder
 Das System SHALL einen CSV-Import für Mitgliedsdaten unterstützen. Geburtsdaten in zweistelligem Jahresformat (DD.MM.YY) MÜSSEN korrekt auf das 20. oder 21. Jahrhundert abgebildet werden.
@@ -139,3 +132,18 @@ Das System SHALL einen CSV-Import für Mitgliedsdaten unterstützen. Geburtsdate
 #### Scenario: Vierstelliges Jahr bleibt unverändert
 - **WHEN** ein CSV-Import ein Geburtsdatum mit vierstelligem Jahr enthält (z.B. `10.05.2030`)
 - **THEN** wird das Geburtsjahr unverändert als `2030` gespeichert
+
+### Requirement: Stammverein eines Mitglieds als Referenz
+Ein Mitglied MUST einen Stammverein über `members.home_club_id` (FK auf `stammvereine`) zugeordnet bekommen können. `NULL` bedeutet „kein Stammverein". Beim Aktualisieren eines Mitglieds (`PUT /api/members/{id}`) MUST das Feld `home_club_id` (nullable Integer) akzeptiert und persistiert werden; ein gesetzter Wert MUST auf einen existierenden `stammvereine`-Eintrag verweisen, sonst HTTP 400.
+
+#### Scenario: Stammverein zuweisen
+- **WHEN** ein Vorstand `PUT /api/members/{id}` mit `home_club_id` eines existierenden Vereins sendet
+- **THEN** wird die Zuordnung gespeichert und in `GET /api/members/{id}` zurückgegeben
+
+#### Scenario: Stammverein entfernen
+- **WHEN** ein Vorstand `PUT /api/members/{id}` mit `home_club_id: null` sendet
+- **THEN** wird die Zuordnung entfernt (Mitglied gilt im Beitragslauf als `aktiv_ohne`)
+
+#### Scenario: Ungültiger Verein
+- **WHEN** ein `PUT /api/members/{id}` mit einer `home_club_id` ohne passenden `stammvereine`-Eintrag erfolgt
+- **THEN** antwortet der Server mit HTTP 400

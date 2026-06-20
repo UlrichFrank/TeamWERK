@@ -29,8 +29,13 @@ func AktivKategorie(mitStammverein bool) string {
 	return "aktiv_ohne"
 }
 
-// Mitgliedsvereine ist die hardcodierte Whitelist der 8 Vereine, deren
-// Mitgliedschaft den ermäßigten Stammverein-Beitrag auslöst.
+// Mitgliedsvereine ist die hardcodierte Whitelist der 8 Vereine.
+//
+// Deprecated: Die Stammvereine werden seit Migration 047 in der Tabelle
+// stammvereine verwaltet; der Beitragslauf leitet die Kategorie deterministisch
+// aus members.home_club_id ab. Diese Liste und MatchHomeClub werden im Lauf
+// nicht mehr aufgerufen und bleiben nur als einmaliges Migrations-Hilfsmittel
+// (Freitext → home_club_id) erhalten.
 var Mitgliedsvereine = []string{
 	"SKG Gablenberg 1884",
 	"SKG Stuttgart Max-Eyth-See 1898",
@@ -63,6 +68,9 @@ func NormalizeClubName(s string) string {
 //   - exakter (normalisierter) Treffer → Matched=true, kein Warning
 //   - Teilstring- oder Fuzzy-Treffer (Levenshtein ≤ 3) → Matched=true, mit Warning
 //   - sonst → Matched=false, mit Warning
+//
+// Deprecated: nur noch als einmaliges Migrations-Hilfsmittel. Der Beitragslauf
+// nutzt members.home_club_id (siehe Mitgliedsvereine).
 func MatchHomeClub(homeClub string) ClubMatch {
 	if strings.TrimSpace(homeClub) == "" {
 		return ClubMatch{Matched: false}

@@ -27,6 +27,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
@@ -54,6 +55,7 @@ type Handlers struct {
 	Venues         *venues.Handler
 	Beitragssaetze *beitragssaetze.Handler
 	Beitragslauf   *beitragslauf.Handler
+	Stammvereine   *stammvereine.Handler
 	Calendar       *calendar.Handler
 	Hub            *hub.Handler
 
@@ -233,6 +235,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/teams/my", h.Teams.ListMyTeams)
 		r.Get("/api/teams/{id}/roster", h.Teams.GetRoster)
 
+		// Stammvereine (Liste für Mitglied-Dropdown; alle Eingeloggten)
+		r.Get("/api/stammvereine", h.Stammvereine.List)
+
 		// Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("trainer", "sportliche_leitung"))
@@ -355,6 +360,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/upload/member-photo/{id}", h.Upload.UploadMemberPhoto)
 			r.Delete("/api/upload/member-photo/{id}", h.Upload.DeleteMemberPhoto)
 			r.Put("/api/age-class-rules/{ageClass}", h.Config.UpdateAgeClassRuleHandler)
+			r.Post("/api/stammvereine", h.Stammvereine.Create)
+			r.Put("/api/stammvereine/{id}", h.Stammvereine.Update)
+			r.Delete("/api/stammvereine/{id}", h.Stammvereine.Delete)
 		})
 
 		// Saisons lesen — Vorstand/Trainer/sportliche_leitung (Kader) + Kassierer (Beitragslauf braucht die Saisonliste)

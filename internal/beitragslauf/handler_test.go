@@ -27,6 +27,7 @@ type memberSpec struct {
 	zip           string
 	city          string
 	homeClub      string
+	homeClubID    *int
 	beitragsfrei  int
 	accountHolder string
 }
@@ -43,10 +44,10 @@ func insertMember(t *testing.T, db *sql.DB, first string, m memberSpec) int {
 	t.Helper()
 	res, err := db.Exec(`INSERT INTO members
 		(first_name, last_name, status, member_number, iban, sepa_mandat, sepa_mandat_path,
-		 sepa_mandat_date, street, zip, city, home_club, beitragsfrei, account_holder)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 sepa_mandat_date, street, zip, city, home_club, home_club_id, beitragsfrei, account_holder)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		first, "Test", m.status, m.memberNumber, m.iban, m.sepaMandat, m.mandatPath,
-		m.mandatDate, m.street, m.zip, m.city, m.homeClub, m.beitragsfrei, m.accountHolder)
+		m.mandatDate, m.street, m.zip, m.city, m.homeClub, m.homeClubID, m.beitragsfrei, m.accountHolder)
 	if err != nil {
 		t.Fatalf("insertMember: %v", err)
 	}
@@ -58,6 +59,18 @@ func insertMember(t *testing.T, db *sql.DB, first string, m memberSpec) int {
 func insertSeason2027(t *testing.T, db *sql.DB) int {
 	t.Helper()
 	res, err := db.Exec(`INSERT INTO seasons (name, start_date, end_date, is_active) VALUES ('2027/28','2027-09-01','2028-06-30',1)`)
+	if err != nil {
+		t.Fatalf("insertSeason: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// season 2026/27 → Stichtag 2026-07-01; deckt den Datums-Bug ab, bei dem der
+// Passiv-Satz erst ab 2027-01-01 galt (Migration 046 ergänzt 2026-07-01).
+func insertSeason2026(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO seasons (name, start_date, end_date, is_active) VALUES ('2026/27','2026-07-01','2027-06-30',1)`)
 	if err != nil {
 		t.Fatalf("insertSeason: %v", err)
 	}
@@ -140,7 +153,8 @@ func TestPreview_AktivMitStammverein(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	m := defaultMember()
-	m.homeClub = "TV Cannstatt 1846"
+	tvCannstatt := 8 // Seed-ID "TV Cannstatt 1846"
+	m.homeClubID = &tvCannstatt
 	id := insertMember(t, db, "Max", m)
 	it, _ := itemFor(getPreview(t, srv, s), id)
 	if !it.Included || it.Kategorie != "aktiv_mit" || it.BetragCent != 9600 {
@@ -167,6 +181,24 @@ func TestPreview_PassivVollerBeitrag(t *testing.T) {
 	it, _ := itemFor(getPreview(t, srv, s), id)
 	if !it.Included || it.Kategorie != "passiv" || it.BetragCent != 6000 {
 		t.Errorf("got %+v", it)
+	}
+}
+
+// Regressionstest für den Datums-Bug: In Saison 2026/27 (Stichtag 2026-07-01)
+// wurde ein passives Mitglied fälschlich mit kein_beitragssatz ausgeschlossen,
+// weil der Passiv-Satz erst ab 2027-01-01 galt. Migration 046 behebt das.
+func TestPreview_PassivSaison2026(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2026(t, db)
+	m := defaultMember()
+	m.status = "passiv"
+	id := insertMember(t, db, "Petra", m)
+	it, _ := itemFor(getPreview(t, srv, s), id)
+	if !it.Included || it.Kategorie != "passiv" || it.BetragCent != 6000 {
+		t.Errorf("got %+v, want included passiv 6000", it)
+	}
+	if contains(it.Exclusions, "kein_beitragssatz") {
+		t.Errorf("passives Mitglied darf nicht mit kein_beitragssatz ausgeschlossen werden: %+v", it.Exclusions)
 	}
 }
 
@@ -206,15 +238,20 @@ func TestPreview_AusschlussUngueltigeIBAN(t *testing.T) {
 	}
 }
 
-func TestPreview_WarnungUnklarerStammverein(t *testing.T) {
+// Ohne home_club_id-Zuordnung gilt das Mitglied deterministisch als aktiv_ohne;
+// der frühere Freitext-/Fuzzy-Abgleich und die Warnung home_club_unklar entfallen.
+func TestPreview_KeineHomeClubUnklarWarnung(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	m := defaultMember()
-	m.homeClub = "FC Bayern"
+	m.homeClub = "FC Bayern" // Freitext bleibt als Audit-Spur, beeinflusst die Kategorie aber nicht
 	id := insertMember(t, db, "Fcb", m)
 	it, _ := itemFor(getPreview(t, srv, s), id)
-	if !it.Included || it.Kategorie != "aktiv_ohne" || !contains(it.Warnings, "home_club_unklar") {
-		t.Errorf("got %+v", it)
+	if !it.Included || it.Kategorie != "aktiv_ohne" {
+		t.Errorf("got %+v, want included aktiv_ohne", it)
+	}
+	if contains(it.Warnings, "home_club_unklar") {
+		t.Errorf("home_club_unklar-Warnung sollte nicht mehr auftreten: %+v", it.Warnings)
 	}
 }
 
