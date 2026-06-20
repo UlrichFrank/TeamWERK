@@ -458,8 +458,8 @@ export default function MembersPage() {
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input type="radio" name="importMode" value="append" checked={importMode === 'append'} onChange={() => setImportMode('append')} className="mt-0.5 accent-brand-yellow" />
                       <div>
-                        <span className="text-sm font-medium text-brand-text">Nur ergänzen</span>
-                        <p className="text-xs text-brand-text-subtle">Neue Mitglieder anlegen, bestehende unverändert lassen</p>
+                        <span className="text-sm font-medium text-brand-text">Nur neue anlegen</span>
+                        <p className="text-xs text-brand-text-subtle">Neue Mitglieder anlegen, bestehende unverändert lassen (füllt keine fehlenden Felder bei Bestandsmitgliedern)</p>
                       </div>
                     </label>
                     <label className="flex items-start gap-2 cursor-pointer">
