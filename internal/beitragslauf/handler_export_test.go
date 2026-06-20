@@ -56,7 +56,7 @@ func TestExport_VerwendungszweckFormat(t *testing.T) {
 	res := testutil.Post(t, srv, "/api/fee-run/export", tok(t),
 		map[string]any{"saison_id": s, "member_ids": []int{id}})
 	body, _ := io.ReadAll(res.Body)
-	if !strings.Contains(string(body), "<Ustrd>Jahresbeitrag Saison 2027/28 – Mitgliedsnr. 1042</Ustrd>") {
+	if !strings.Contains(string(body), "<Ustrd>Mitgliedsbeitrag Team Stuttgart 27/28 - Mitglied 1042</Ustrd>") {
 		t.Errorf("Verwendungszweck-Format falsch:\n%s", body)
 	}
 }

@@ -203,7 +203,7 @@ func BuildXML(in BuildInput) ([]byte, error) {
 				PstlAdr: &pstlAdr{StrtNm: strt, BldgNb: bldg, PstCd: it.Zip, TwnNm: it.City, Ctry: "DE"},
 			},
 			DbtrAcct: acct{ID: acctID{IBAN: it.IBAN}},
-			RmtInf:   rmtInf{Ustrd: fmt.Sprintf("Jahresbeitrag Saison %s – Mitgliedsnr. %s", in.SaisonKurz, it.MemberNumber)},
+			RmtInf:   rmtInf{Ustrd: fmt.Sprintf("Mitgliedsbeitrag Team Stuttgart %s - Mitglied %s", saisonShort(in.SaisonKurz), it.MemberNumber)},
 		})
 	}
 
@@ -283,6 +283,27 @@ func euro(cent int) string {
 
 // saisonStamp wandelt "2026/27" in "2026-27" (für IDs).
 func saisonStamp(s string) string { return strings.ReplaceAll(s, "/", "-") }
+
+// saisonShort kürzt vierstellige Jahresangaben auf zwei Stellen:
+// "2026/27" → "26/27", "2026/2027" → "26/27". Andere Formate bleiben unverändert.
+func saisonShort(s string) string {
+	parts := strings.Split(s, "/")
+	for i, p := range parts {
+		if len(p) == 4 && isAllDigits(p) {
+			parts[i] = p[2:]
+		}
+	}
+	return strings.Join(parts, "/")
+}
+
+func isAllDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
+}
 
 var nonASCII = regexp.MustCompile(`[^\x20-\x7E]`)
 
