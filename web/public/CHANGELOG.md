@@ -1,5 +1,8 @@
 ## 20.06.2026
-- [fix] beitragslauf: SEPA-XML mit FwdgAgt-Absender-BIC im GrpHdr
+- [fix] fee-run: Aktions-Buttons im Beitragslauf-Header oben anordnen
+- [fix] beitragslauf: SEPA-XML mit FwdgAgt-Absender-BIC im GrpHdr (#41)
+- [fix] teams: Eltern des erweiterten Kaders in "Mein Team" anzeigen
+- [feat] dashboard: "Alle Termine"- und "Alle Dienste"-Links auf Übersicht
 - [fix] beitragslauf: SEPA-XML komplett auf ASCII transliterieren (#38)
 - [fix] beitragslauf: Verwendungszweck verkürzen und Vereinsnamen ergänzen (#37)
 - [feat] beitragslauf: Filter für Kategorie und Hinweis (#36)

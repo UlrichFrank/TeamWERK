@@ -427,6 +427,24 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		h.notifyOpposite(gameID, userID, actorName, senderTyp, oppositeTyp)
 	}()
+
+	if isNewEntry && body.Typ == "suche" {
+		go h.notifyTeamForNewSuche(gameID, userID, actorName)
+	}
+}
+
+// notifyTeamForNewSuche fans a push out to the kader-derived team circle
+// (parents of regular + extended kader members, plus kader_trainers) for the
+// game's team(s), but only when the game is each team's next upcoming game.
+// Silent no-op when no team qualifies or the recipient set is empty.
+func (h *Handler) notifyTeamForNewSuche(gameID, senderID int, senderName string) {
+	recipients := h.teamPushRecipients(context.Background(), gameID, senderID)
+	if len(recipients) == 0 {
+		return
+	}
+	opponent, date := h.gameInfo(gameID)
+	body := fmt.Sprintf("%s sucht eine Mitfahrgelegenheit zu %s, %s", senderName, opponent, date)
+	notify.Send(h.db, h.cfg, recipients, "carpooling", "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
 }
 
 // DELETE /api/mitfahrgelegenheiten/{id}
