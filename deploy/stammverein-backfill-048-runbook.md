@@ -1,35 +1,50 @@
-# Runbook: Stammverein-Backfill als Migration 048
+# Runbook: Stammverein-Backfill (Migrationen 048 + 049)
 
 **Ziel:** Den Backfill `members.home_club` (Freitext) → `members.home_club_id`
-(FK auf `stammvereine`) als versionierte Migration **048** festschreiben — mit
-**vorher manuell geprüfter** Zuordnung der Freitextwerte (kein Fuzzy-Matching im
-Blindflug).
+(FK auf `stammvereine`) als versionierte Migrationen festschreiben — mit
+**vorher manuell geprüfter** Zuordnung der Freitextwerte (kein Fuzzy-Matching
+im Blindflug).
 
 **Abweichung vom Ursprungsdesign (bewusst):** Migration 047 hielt den Backfill
-absichtlich aus den Migrationen heraus (reviewbar via `deploy/stammverein-mapping-*.sql`).
-Hier wird stattdessen eine reproduzierbare Migration gewählt — Voraussetzung ist,
-dass die Zuordnung **vor** dem Schreiben der Migration anhand der echten Prod-Werte
-geprüft wurde (Schritte 2–3). Damit bleibt die Review-Eigenschaft erhalten, nur das
-Ergebnis wird versioniert statt manuell ausgeführt.
+absichtlich aus den Migrationen heraus. Hier wird stattdessen eine reproduzierbare
+Migration gewählt — Voraussetzung ist, dass die Zuordnung **vor** dem Schreiben
+der Migration anhand der echten Prod-Werte geprüft wurde (Schritte 2–3). Damit
+bleibt die Review-Eigenschaft erhalten, nur das Ergebnis wird versioniert statt
+manuell ausgeführt.
+
+**Aufteilung in zwei Migrationen:**
+- **048** seedt die zusätzlich benötigten Stammvereine (Schema-/Seed-Änderung).
+- **049** macht den Backfill `home_club_id` und löscht nicht aufklärbare
+  Freitexte (reine Datenmigration).
+
+Diese Trennung erlaubt isoliertes Rollback der Datenmigration und macht
+Schema-Erweiterungen unabhängig vom Mapping reviewbar.
 
 ---
 
-## Ziel-Vereine (Seed aus Migration 047)
+## Quelle der Wahrheit: `deploy/stammverein-mapping-049.yaml`
 
-| ID | name |
-|----|------|
-| 1 | SKG Gablenberg 1884 |
-| 2 | SKG Stuttgart Max-Eyth-See 1898 |
-| 3 | SportKultur Stuttgart |
-| 4 | Spvgg 1897 Cannstatt |
-| 5 | TB Gaisburg 1886 |
-| 6 | TB Untertürkheim 1888 |
-| 7 | TSV Stuttgart-Münster 1875/99 |
-| 8 | TV Cannstatt 1846 |
+Die YAML-Datei dokumentiert für jeden Stammverein:
+- den kanonischen `name` (UNIQUE in `stammvereine`),
+- ob er in 048 erstmals geseedet wird (`neu: true`),
+- die `freitexte`-Liste — alle `members.home_club`-Werte, die auf diesen
+  Stammverein gemappt werden.
 
-> Im Migrations-SQL **nie über die rohe ID** mappen, sondern per Name-Subquery
-> (`SELECT id FROM stammvereine WHERE name='…'`) — robust gegen abweichende
-> AUTOINCREMENT-Reihenfolge.
+Bei jeder Änderung am Mapping müssen **YAML und Migrations-SQL synchron**
+gepflegt werden (bewusst nicht generiert, damit die Migration klartext-reviewbar
+bleibt).
+
+## Bestand nach 048 + 049 (Stand 2026-06-20)
+
+22 Stammvereine in `stammvereine` (8 aus 047 + 14 aus 048).
+
+| Quelle | Anzahl |
+|--------|-------:|
+| 8 bestehende (Migration 047) | 113 Mitglieder zugeordnet |
+| 14 neue (Migration 048) | 53 Mitglieder zugeordnet |
+| **Summe zugeordnet** | **166** |
+| Freitext `Flüchtling` (kein Verein) | 1 (bleibt NULL) |
+| Freitext `TS` (gelöscht) | 2 (`home_club` → NULL) |
 
 ---
 
@@ -39,7 +54,7 @@ Ergebnis wird versioniert statt manuell ausgeführt.
 make backup        # read-only sqlite .backup → ./teamwerk-backup.db (+ ./backup/uploads/)
 ```
 
-## Schritt 2 — Ist-Werte auslesen (keine Migration nötig, Spalte existiert schon)
+## Schritt 2 — Ist-Werte auslesen
 
 ```bash
 sqlite3 teamwerk-backup.db "
@@ -49,86 +64,64 @@ WHERE TRIM(COALESCE(home_club,'')) <> ''
 GROUP BY home_club ORDER BY anzahl DESC;"
 ```
 
-Optional zum Abgleich, welche Werte der normalisierte Auto-Match treffen würde
-(zeigt `exakt` vs. `UNMATCHED`) — dafür braucht die Kopie 047:
+Erwartung (Stand 2026-06-20): 31 verschiedene Freitexte, 169 Mitglieder. Bei
+Abweichung von dieser Verteilung **vor** dem Deploy die Differenz prüfen und
+ggf. `deploy/stammverein-mapping-049.yaml` ergänzen.
+
+## Schritt 3 — Zuordnung prüfen / aktualisieren
+
+`deploy/stammverein-mapping-049.yaml` öffnen und für jeden Freitextwert aus
+Schritt 2 die Zuordnung prüfen. Neue Freitexte → eintragen (entweder unter
+einem bestehenden Verein oder als neuer Stammverein mit `neu: true`).
+
+Falls neue Stammvereine hinzukommen oder Freitext-Listen geändert werden,
+**beide** Migrations-SQL-Dateien synchron pflegen (siehe Hinweis oben).
+
+## Schritt 4 — Auf einer Kopie verifizieren
 
 ```bash
-cp teamwerk-backup.db /tmp/tw-mapping.db
-/usr/local/go/bin/go run ./cmd/teamwerk migrate --db /tmp/tw-mapping.db
-sqlite3 /tmp/tw-mapping.db < deploy/stammverein-mapping-preview.sql
-```
-
-## Schritt 3 — Zuordnungstabelle festlegen
-
-Für **jeden** Freitextwert aus Schritt 2 entscheiden: welcher der 8 Vereine — oder
-bewusst **kein** Stammverein (`NULL` = `aktiv_ohne`). Ergebnis hier dokumentieren:
-
-| home_club (Freitext) | Anzahl | → Verein (Name) oder NULL |
-|----------------------|--------|---------------------------|
-| _(aus Schritt 2 eintragen)_ | | |
-
-## Schritt 4 — Migration 048 schreiben
-
-Nächste freie Nummer prüfen (`ls internal/db/migrations/ | tail`); aktuell ist 047
-das Höchste, also **048**. Zwei Dateien anlegen:
-
-`internal/db/migrations/048_stammverein_backfill.up.sql`:
-
-```sql
--- Backfill home_club -> home_club_id anhand der geprüften Zuordnung (Runbook
--- deploy/stammverein-backfill-048-runbook.md, Stand <DATUM>). Nur exakt geprüfte
--- Zuordnungen; UNMATCHED bleiben NULL und werden im Frontend zugewiesen.
--- Idempotent (nur wo home_club_id noch NULL) und über Name-Subquery (robust).
-
-UPDATE members SET home_club_id = (SELECT id FROM stammvereine WHERE name='SKG Gablenberg 1884')
-  WHERE home_club_id IS NULL AND home_club IN ('<Freitext A>', '<Freitext B>');
-
-UPDATE members SET home_club_id = (SELECT id FROM stammvereine WHERE name='TV Cannstatt 1846')
-  WHERE home_club_id IS NULL AND home_club IN ('<Freitext C>');
-
--- … je Verein einen Block, mit den in Schritt 3 zugeordneten Freitextwerten.
-```
-
-`internal/db/migrations/048_stammverein_backfill.down.sql`:
-
-```sql
--- Rücknahme: nur die von dieser Migration gesetzten Zuordnungen wieder lösen.
--- (Setzt voraus, dass vor 048 alle home_club_id NULL waren — gilt nach 047.)
-UPDATE members SET home_club_id = NULL
-  WHERE home_club IN (
-    '<Freitext A>', '<Freitext B>', '<Freitext C>' /* … alle in 048 gemappten Werte */
-  );
-```
-
-> Hinweis: Falls einzelne Mitglieder ihre Zuordnung schon manuell im Frontend
-> gesetzt haben, schützt `home_club_id IS NULL` im up sie vor Überschreiben.
-
-## Schritt 5 — Auf einer Kopie verifizieren
-
-```bash
-cp teamwerk-backup.db /tmp/tw-048.db
-/usr/local/go/bin/go run ./cmd/teamwerk migrate --db /tmp/tw-048.db
-sqlite3 /tmp/tw-048.db "
+cp teamwerk-backup.db /tmp/tw-test.db
+go run ./cmd/teamwerk migrate --db /tmp/tw-test.db
+sqlite3 /tmp/tw-test.db "
 SELECT COUNT(home_club_id) AS gesetzt,
        SUM(CASE WHEN TRIM(COALESCE(home_club,''))<>'' AND home_club_id IS NULL THEN 1 ELSE 0 END) AS noch_offen
 FROM members;"
-# 'gesetzt' muss der Summe der in Schritt 3 zugeordneten Zeilen entsprechen.
+# Erwartung: gesetzt = 166, noch_offen = 1 (nur 'Flüchtling').
 ```
 
-## Schritt 6 — Build/Test/Verify
+Optional Detail-Verifikation pro Stammverein:
 
 ```bash
-/usr/local/go/bin/go test ./...        # bzw. make test
-/verify-change                          # Migrationsnummer, Build/Test/Lint, openspec validate
+sqlite3 /tmp/tw-test.db "
+SELECT s.sort_order, s.name, COUNT(m.id) AS anzahl
+FROM stammvereine s
+LEFT JOIN members m ON m.home_club_id = s.id
+GROUP BY s.id ORDER BY s.sort_order;"
 ```
 
-## Schritt 7 — Commit & Deploy
+## Schritt 5 — Build / Test / Lint
 
 ```bash
-git add internal/db/migrations/048_stammverein_backfill.*.sql deploy/stammverein-backfill-048-runbook.md
-git commit -m "feat(db): Migration 048 — Backfill home_club_id aus geprüfter Zuordnung"
-make deploy                             # führt migrate up (048) automatisch auf dem VPS aus
+go test -race ./...
+make build
+# /verify-change   # Pre-Completion-Checkliste (Build/Test/Lint + Invarianten)
 ```
 
-Nach dem Deploy verbleibende `noch_offen`-Mitglieder im Frontend unter
-**Mitglied → Stammdaten** über das Stammverein-`<select>` zuweisen.
+## Schritt 6 — Deploy
+
+```bash
+git add internal/db/migrations/048_*.sql \
+        internal/db/migrations/049_*.sql \
+        deploy/stammverein-mapping-049.yaml \
+        deploy/stammverein-backfill-048-runbook.md \
+        internal/stammvereine/handler_test.go
+git commit -m "feat(db): Backfill home_club_id (Migrationen 048+049)"
+make deploy        # führt migrate up (046–049) automatisch auf dem VPS aus
+```
+
+## Schritt 7 — Nachbereitung
+
+Verbleibende Mitglieder mit `home_club_id IS NULL` und nicht-leerem `home_club`
+(aktuell: 1 Mitglied mit `home_club = 'Flüchtling'`) im Frontend unter
+**Mitglied → Stammdaten** über das Stammverein-`<select>` zuweisen oder bewusst
+als „aktiv_ohne" belassen.

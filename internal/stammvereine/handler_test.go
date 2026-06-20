@@ -54,8 +54,9 @@ func TestStammvereine_ListActive(t *testing.T) {
 		t.Fatalf("GET: status %d, want 200", res.StatusCode)
 	}
 	lr := decodeList(t, res)
-	if len(lr.Items) != 8 {
-		t.Fatalf("aktive Vereine = %d, want 8 (Seed)", len(lr.Items))
+	// 8 aus Migration 047 + 14 aus Migration 048 (13 SG/Vereine + 'SG Hegensberg-Liebersbronn').
+	if len(lr.Items) != 22 {
+		t.Fatalf("aktive Vereine = %d, want 22 (Seed 047+048)", len(lr.Items))
 	}
 	for _, v := range lr.Items {
 		if !v.Aktiv {

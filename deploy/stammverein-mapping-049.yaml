@@ -1,0 +1,135 @@
+## Mapping home_club (Freitext) -> stammvereine (kanonisch)
+##
+## Quelle der Wahrheit für Migration 048 (neue Stammvereine seeden) und
+## Migration 049 (Backfill members.home_club_id). Erstellt aus dem Ist-Stand
+## der Prod-DB am 2026-06-20 (165 Mitglieder mit nicht-leerem home_club).
+##
+## Geprüft von: Vorstand (Ulrich Frank).
+## Bei Änderungen an dieser Datei MÜSSEN die beiden Migrationen synchron
+## angepasst werden (manueller Doppel-Pflege-Schritt, bewusst nicht
+## generiert, damit die Migration reviewbarer Klartext bleibt).
+##
+## Konvention:
+##   - "stammverein" ist exakt der Wert in stammvereine.name (UNIQUE).
+##   - "freitexte" listet alle members.home_club-Werte, die auf diesen
+##     Stammverein gemappt werden (idempotent: nur WHERE home_club_id IS NULL).
+##   - "neu: true" markiert Stammvereine, die in Migration 048 erstmals
+##     in stammvereine eingefügt werden.
+
+mappings:
+
+  # --- Bestehende 8 Stammvereine (aus Migration 047) -------------------------
+
+  - stammverein: SKG Gablenberg 1884
+    neu: false
+    freitexte: [SKG Gablenberg, SkG]
+
+  - stammverein: SKG Stuttgart Max-Eyth-See 1898
+    neu: false
+    freitexte: [SKG Max-Eyth-See]
+
+  - stammverein: SportKultur Stuttgart
+    neu: false
+    freitexte: [SK Stuttgart]
+
+  - stammverein: Spvgg 1897 Cannstatt
+    neu: false
+    freitexte: [Spvgg Canstatt, Spvgg Cannstatt]
+
+  - stammverein: TB Gaisburg 1886
+    neu: false
+    freitexte: [TB Gaisburg]
+
+  - stammverein: TB Untertürkheim 1888
+    neu: false
+    freitexte: [TB Untertürkheim]
+
+  - stammverein: TSV Stuttgart-Münster 1875/99
+    neu: false
+    freitexte: [TSV Münster]
+
+  - stammverein: TV Cannstatt 1846
+    neu: false
+    freitexte: [TV Cannstatt]
+
+  # --- Neue Stammvereine (Migration 048) ------------------------------------
+
+  - stammverein: HSG Cannstatt/Münster/Max-Eyth-See
+    neu: true
+    sort_order: 9
+    freitexte: [HSG Cannstatt, Ca-Mü-Max]
+
+  - stammverein: HSG Oberer Neckar
+    neu: true
+    sort_order: 10
+    freitexte: [HSG Oberer Neckar, ON]
+
+  - stammverein: Hbi Weilimdorf/Feuerbach
+    neu: true
+    sort_order: 11
+    freitexte: [Hbi W/F, Hbi]
+
+  - stammverein: HSG Gablenberg-Gaisburg
+    neu: true
+    sort_order: 12
+    freitexte: [HsG GaGa, HSG GaGa, GaGa]
+
+  - stammverein: Sportvg Feuerbach
+    neu: true
+    sort_order: 13
+    freitexte: [Sportvg Feuerbach]
+
+  - stammverein: HSV Zuffenhausen
+    neu: true
+    sort_order: 14
+    freitexte: [HSV Zuffenhausen]
+
+  - stammverein: TuS Stuttgart
+    neu: true
+    sort_order: 15
+    freitexte: [TuS Stuttgart]
+
+  - stammverein: TV Obertürkheim
+    neu: true
+    sort_order: 16
+    freitexte: [TV Obertürkheim]
+
+  - stammverein: TSV Korntal
+    neu: true
+    sort_order: 17
+    freitexte: [TSV Korntal]
+
+  - stammverein: SV Stuttgarter Kickers
+    neu: true
+    sort_order: 18
+    freitexte: [SV Stgt Kickers]
+
+  - stammverein: TV Fellbach
+    neu: true
+    sort_order: 19
+    freitexte: [Fellbach]
+
+  - stammverein: TV Deizisau
+    neu: true
+    sort_order: 20
+    freitexte: [Deizisau]
+
+  - stammverein: SG Asperg
+    neu: true
+    sort_order: 21
+    freitexte: [Asperg]
+
+  - stammverein: SG Hegensberg-Liebersbronn
+    neu: true
+    sort_order: 22
+    freitexte: [HeLi]
+
+## Bewusst gelöscht (home_club -> NULL, kein Stammverein):
+##   - "TS" (2 Mitglieder: Yonas Ogbamicael, Florian Scheurle) —
+##     Freitext entfernen, da Bedeutung nicht aufklärbar.
+##
+## Bewusst NICHT zugeordnet (bleiben home_club_id = NULL):
+##   - "Flüchtling" (1) — kein Verein, sozialer Status
+##
+## Diese 4 Datensätze werden im Frontend unter "Mitglied → Stammdaten"
+## manuell zugewiesen oder bewusst als aktiv_ohne belassen.
