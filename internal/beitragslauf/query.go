@@ -58,7 +58,8 @@ type MemberRow struct {
 	Street         string
 	Zip            string
 	City           string
-	HomeClub       string
+	HomeClub       string // Freitext (Audit-Spur); für die Kategorie irrelevant
+	HasHomeClub    bool   // home_club_id IS NOT NULL → bestimmt aktiv_mit/aktiv_ohne
 	AccountHolder  string
 	SepaMandatDate string
 }
@@ -71,7 +72,7 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		       COALESCE(beitragsfrei,0), COALESCE(sepa_mandat,0),
 		       COALESCE(iban,''), COALESCE(sepa_mandat_path,''), COALESCE(member_number,''),
 		       COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
-		       COALESCE(home_club,''), COALESCE(account_holder,''), COALESCE(sepa_mandat_date,'')
+		       COALESCE(home_club,''), (home_club_id IS NOT NULL), COALESCE(account_holder,''), COALESCE(sepa_mandat_date,'')
 		FROM members`)
 	if err != nil {
 		return nil, err
@@ -80,14 +81,15 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 	out := []MemberRow{}
 	for rows.Next() {
 		var m MemberRow
-		var beitragsfrei, sepaMandat int
+		var beitragsfrei, sepaMandat, hasHomeClub int
 		if err := rows.Scan(&m.ID, &m.FirstName, &m.LastName, &m.Status,
 			&beitragsfrei, &sepaMandat, &m.IBAN, &m.SepaMandatPath, &m.MemberNumber,
-			&m.Street, &m.Zip, &m.City, &m.HomeClub, &m.AccountHolder, &m.SepaMandatDate); err != nil {
+			&m.Street, &m.Zip, &m.City, &m.HomeClub, &hasHomeClub, &m.AccountHolder, &m.SepaMandatDate); err != nil {
 			return nil, err
 		}
 		m.Beitragsfrei = beitragsfrei != 0
 		m.SepaMandat = sepaMandat != 0
+		m.HasHomeClub = hasHomeClub != 0
 		if len(m.SepaMandatDate) > 10 {
 			m.SepaMandatDate = m.SepaMandatDate[:10]
 		}
