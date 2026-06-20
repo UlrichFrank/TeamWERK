@@ -46,6 +46,7 @@ type RosterResponse struct {
 	Players         []PlayerEntry  `json:"players"`
 	Parents         []ParentEntry  `json:"parents"`
 	ExtendedPlayers []PlayerEntry  `json:"extended_players"`
+	ExtendedParents []ParentEntry  `json:"extended_parents"`
 }
 
 // GET /api/teams/:id/roster
@@ -91,6 +92,7 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 		Players:         []PlayerEntry{},
 		Parents:         []ParentEntry{},
 		ExtendedPlayers: []PlayerEntry{},
+		ExtendedParents: []ParentEntry{},
 	}
 
 	// Active season ID
@@ -163,40 +165,67 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parents: family_links where member is in kader for this team+season
+	// Parents: family_links where a child is in the regular OR extended kader for
+	// this team+season. hasRegular = the parent has at least one child in the
+	// regular kader; such parents belong to resp.Parents. Parents whose children
+	// are exclusively in the extended kader go to resp.ExtendedParents (mirrors
+	// the Players/ExtendedPlayers split: regular membership wins).
 	parentRows, err := h.db.QueryContext(ctx, `
-		SELECT DISTINCT u.id, u.first_name || ' ' || u.last_name
-		FROM family_links fl
-		JOIN kader_members km ON km.member_id = fl.member_id
-		JOIN kader k ON k.id = km.kader_id
-		JOIN users u ON u.id = fl.parent_user_id
-		WHERE k.team_id = ? AND k.season_id = ?
-		ORDER BY u.first_name, u.last_name`, teamID, seasonID)
+		SELECT u.id, u.first_name || ' ' || u.last_name,
+		       MAX(src.regular) AS has_regular
+		FROM (
+			SELECT fl.parent_user_id, 1 AS regular
+			FROM family_links fl
+			JOIN kader_members km ON km.member_id = fl.member_id
+			JOIN kader k ON k.id = km.kader_id
+			WHERE k.team_id = ? AND k.season_id = ?
+			UNION ALL
+			SELECT fl.parent_user_id, 0 AS regular
+			FROM family_links fl
+			JOIN kader_extended_members kem ON kem.member_id = fl.member_id
+			JOIN kader k ON k.id = kem.kader_id
+			WHERE k.team_id = ? AND k.season_id = ?
+		) src
+		JOIN users u ON u.id = src.parent_user_id
+		GROUP BY u.id, u.first_name, u.last_name
+		ORDER BY u.first_name, u.last_name`, teamID, seasonID, teamID, seasonID)
 	if err == nil {
 		defer parentRows.Close()
 		for parentRows.Next() {
 			var p ParentEntry
+			var hasRegular int
 			p.Children = []string{}
-			parentRows.Scan(&p.UserID, &p.Name)
+			parentRows.Scan(&p.UserID, &p.Name, &hasRegular)
 
-			// Get children names in this team
+			// Get children names in this team (regular + extended kader)
 			childRows, err := h.db.QueryContext(ctx, `
-				SELECT m.first_name || ' ' || m.last_name
+				SELECT DISTINCT m.first_name || ' ' || m.last_name, m.first_name
 				FROM family_links fl
 				JOIN members m ON m.id = fl.member_id
-				JOIN kader_members km ON km.member_id = m.id
-				JOIN kader k ON k.id = km.kader_id
-				WHERE fl.parent_user_id = ? AND k.team_id = ? AND k.season_id = ?
-				ORDER BY m.first_name`, p.UserID, teamID, seasonID)
+				WHERE fl.parent_user_id = ?
+				  AND EXISTS (
+				      SELECT 1 FROM kader_members km
+				      JOIN kader k ON k.id = km.kader_id
+				      WHERE km.member_id = m.id AND k.team_id = ? AND k.season_id = ?
+				      UNION ALL
+				      SELECT 1 FROM kader_extended_members kem
+				      JOIN kader k ON k.id = kem.kader_id
+				      WHERE kem.member_id = m.id AND k.team_id = ? AND k.season_id = ?
+				  )
+				ORDER BY m.first_name`, p.UserID, teamID, seasonID, teamID, seasonID)
 			if err == nil {
 				for childRows.Next() {
-					var childName string
-					childRows.Scan(&childName)
+					var childName, firstName string
+					childRows.Scan(&childName, &firstName)
 					p.Children = append(p.Children, childName)
 				}
 				childRows.Close()
 			}
-			resp.Parents = append(resp.Parents, p)
+			if hasRegular == 1 {
+				resp.Parents = append(resp.Parents, p)
+			} else {
+				resp.ExtendedParents = append(resp.ExtendedParents, p)
+			}
 		}
 	}
 
