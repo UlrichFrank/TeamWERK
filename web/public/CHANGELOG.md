@@ -1,5 +1,9 @@
 ## 20.06.2026
-- [feat] dashboard: Mitfahr-Einträge im Dashboard sind klickbar und springen zum Ziel-Eintrag
+- [feat] stammvereine: Settings-Tab CRUD + Stammverein-Auswahl im Mitglied
+- [feat] members: home_club_id-Zuordnung + home_club_name in GET
+- [feat] stammvereine: CRUD-Package mit Routen
+- [fix] db: Migration 046 — Passiv-Satz ab Saisonstart 2026/27 gültig
+- [feat] dashboard: Mitfahr-Einträge sind klickbar und springen zum Ziel-Eintrag
 - [feat] calendar: Vorname an iCal-Kalendernamen anhängen
 - [fix] calendar: iCal-Feed-Termine landeten im Jahr 1 (DATE als ISO-Timestamp)
 - [feat] calendar: persönlicher iCal-Feed für Spiele, Trainings und Dienste (#25)
