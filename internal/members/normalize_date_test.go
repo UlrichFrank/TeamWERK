@@ -3,31 +3,35 @@ package members
 import "testing"
 
 func TestNormalizeDate(t *testing.T) {
+	// Fester Pivot-Jahr 2026 → deterministisch unabhängig von der Systemzeit.
+	const currentYear = 2026
 	tests := []struct {
 		input string
 		want  string
 	}{
-		// Two-digit year < 68 → 20xx
+		// 2-stelliges Jahr, nicht in der Zukunft → 20xx
 		{"01.03.25", "2025-03-01"},
-		{"10.05.30", "2030-05-10"},
-		{"31.12.67", "2067-12-31"},
-		// Two-digit year >= 68 → 19xx
+		{"06.12.26", "2026-12-06"},
+		// 2-stelliges Jahr, läge sonst in der Zukunft → 19xx
+		{"10.05.30", "1930-05-10"},
+		{"31.12.67", "1967-12-31"}, // Götz: 67 → 1967, nicht 2067
+		{"06.12.67", "1967-12-06"},
 		{"15.07.72", "1972-07-15"},
 		{"01.01.68", "1968-01-01"},
 		{"31.12.99", "1999-12-31"},
-		// Four-digit year unchanged
+		// Vierstelliges Jahr unverändert (auch zukünftige Termine bleiben erhalten)
 		{"10.05.2030", "2030-05-10"},
 		{"01.01.1985", "1985-01-01"},
-		// Already ISO — unchanged
+		// Bereits ISO — unverändert
 		{"2024-06-15", "2024-06-15"},
-		// Unrecognized — unchanged
+		// Unbekannt — unverändert
 		{"", ""},
 		{"foobar", "foobar"},
 	}
 	for _, tt := range tests {
-		got := normalizeDate(tt.input)
+		got := normalizeDateAt(tt.input, currentYear)
 		if got != tt.want {
-			t.Errorf("normalizeDate(%q) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("normalizeDateAt(%q, %d) = %q, want %q", tt.input, currentYear, got, tt.want)
 		}
 	}
 }

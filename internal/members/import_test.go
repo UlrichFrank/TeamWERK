@@ -177,3 +177,32 @@ func TestImport_EnrichFillsMemberNumber_WithDOB(t *testing.T) {
 		})
 	}
 }
+
+// Realfall "Götz" (Mitglied id 25): DB-Geburtsdatum 1967-12-06, CSV liefert
+// "geboren am" als 2-stelliges Jahr "06.12.67". Vor dem Fix wurde 67 als 2067
+// interpretiert → kein Match → Mitgliedsnummer wurde nicht ergänzt.
+func TestImport_EnrichFillsMemberNumber_TwoDigitYear1967(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	if _, err := db.Exec(
+		`INSERT INTO members (first_name, last_name, status, date_of_birth) VALUES ('Götz-Bernhard','Haase','passiv','1967-12-06')`); err != nil {
+		t.Fatalf("insert member: %v", err)
+	}
+
+	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status\n" +
+		"Haase,Götz-Bernhard,61,06.12.67,passiv\n"
+	res := postImport(t, srv.URL, token, csv, "enrich")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	num, ok := memberNumberOf(t, db, "Götz-Bernhard")
+	if !ok {
+		t.Fatal("Mitglied Götz-Bernhard fehlt")
+	}
+	if num != "61" {
+		t.Errorf("enrich füllte member_number nicht: got %q want %q", num, "61")
+	}
+}
