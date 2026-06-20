@@ -97,7 +97,7 @@ func serve() {
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
 	hubInstance := hub.NewHub()
 	handlers := &app.Handlers{
-		Auth:           auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL),
+		Auth:           auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
 		Config:         appconfig.NewHandler(database, hubInstance),
 		Members:        members.NewHandler(database, hubInstance),
 		WelcomeEmail:   members.NewWelcomeEmailHandler(database, m),

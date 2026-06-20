@@ -13,6 +13,7 @@ import (
 	"time"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
@@ -25,10 +26,11 @@ type Handler struct {
 	jwtSecret string
 	mailer    *mailer.Mailer
 	baseURL   string
+	hub       *hub.EventHub
 }
 
-func NewHandler(db *sql.DB, cfg *appconfig.Config, jwtSecret string, m *mailer.Mailer, baseURL string) *Handler {
-	return &Handler{db: db, cfg: cfg, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL}
+func NewHandler(db *sql.DB, cfg *appconfig.Config, jwtSecret string, m *mailer.Mailer, baseURL string, h *hub.EventHub) *Handler {
+	return &Handler{db: db, cfg: cfg, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL, hub: h}
 }
 
 // dummyHash is a pre-computed bcrypt hash used in the login ErrNoRows branch to
@@ -45,10 +47,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id int
-	var hash, role string
+	var hash, role, ident string
+	// Login akzeptiert E-Mail ODER login_name (Vorname.Nachname für Kinder ohne
+	// E-Mail). Beide Spalten werden case-insensitiv gegen denselben Eingabewert
+	// geprüft. ident ist die Identität fürs JWT: E-Mail, sonst der login_name.
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, password, role FROM users WHERE LOWER(email) = LOWER(?) AND can_login = 1`, req.Email,
-	).Scan(&id, &hash, &role)
+		`SELECT id, password, role, COALESCE(NULLIF(email, ''), login_name, '')
+		 FROM users WHERE (LOWER(email) = LOWER(?) OR LOWER(login_name) = LOWER(?)) AND can_login = 1`,
+		req.Email, req.Email,
+	).Scan(&id, &hash, &role, &ident)
 	if err == sql.ErrNoRows {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password)) //nolint:errcheck
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
@@ -65,7 +72,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(), `UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?`, id)
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
 	log.Printf("Login: loadJWTExtras done - clubFunctions=%v, isParent=%v", clubFunctions, isParent)
-	accessToken, err := IssueAccessToken(h.jwtSecret, id, req.Email, role, clubFunctions, isParent)
+	accessToken, err := IssueAccessToken(h.jwtSecret, id, ident, role, clubFunctions, isParent)
 	if err != nil {
 		log.Printf("Login: IssueAccessToken error: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -131,7 +138,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var email, role string
 	var expiresAt time.Time
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT u.id, u.email, u.role, rt.expires_at
+		`SELECT u.id, COALESCE(NULLIF(u.email, ''), u.login_name, ''), u.role, rt.expires_at
 		 FROM refresh_tokens rt JOIN users u ON u.id = rt.user_id
 		 WHERE rt.token_hash = ?`, tokenHash,
 	).Scan(&id, &email, &role, &expiresAt)
@@ -213,22 +220,44 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Email     string `json:"email"`
-		Comment   string `json:"comment"`
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		Email       string `json:"email"`
+		Comment     string `json:"comment"`
+		IsChild     bool   `json:"is_child"`
+		ParentEmail string `json:"parent_email"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FirstName == "" || req.Email == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FirstName == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+
+	// Kinderaccount: keine eigene E-Mail, dafür Vor-/Nachname (für den Member)
+	// und eine gültige verwaltende Eltern-E-Mail (Korrespondenz). Die NOT-NULL-
+	// Spalte email wird mit der Eltern-Adresse gespiegelt.
+	isChild := 0
+	contactEmail := req.Email
+	var parentEmailVal any
+	if req.IsChild {
+		if req.LastName == "" || !looksLikeEmail(req.ParentEmail) {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		isChild = 1
+		contactEmail = req.ParentEmail
+		parentEmailVal = req.ParentEmail
+	} else if !looksLikeEmail(req.Email) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
 	var commentVal interface{}
 	if req.Comment != "" {
 		commentVal = req.Comment
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO membership_requests (first_name, last_name, email, comment) VALUES (?,?,?,?)`,
-		req.FirstName, req.LastName, req.Email, commentVal,
+		`INSERT INTO membership_requests (first_name, last_name, email, comment, is_child, parent_email) VALUES (?,?,?,?,?,?)`,
+		req.FirstName, req.LastName, contactEmail, commentVal, isChild, parentEmailVal,
 	)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -257,25 +286,31 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, first_name, last_name, email, COALESCE(comment,''), status, created_at FROM membership_requests WHERE status = 'pending' ORDER BY created_at`)
+		`SELECT id, first_name, last_name, email, COALESCE(comment,''), status, created_at,
+		        is_child, COALESCE(parent_email,'')
+		 FROM membership_requests WHERE status = 'pending' ORDER BY created_at`)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 	type row struct {
-		ID        int    `json:"id"`
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Email     string `json:"email"`
-		Comment   string `json:"comment,omitempty"`
-		Status    string `json:"status"`
-		CreatedAt string `json:"created_at"`
+		ID          int    `json:"id"`
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		Email       string `json:"email"`
+		Comment     string `json:"comment,omitempty"`
+		Status      string `json:"status"`
+		CreatedAt   string `json:"created_at"`
+		IsChild     bool   `json:"is_child"`
+		ParentEmail string `json:"parent_email,omitempty"`
 	}
 	results := []row{}
 	for rows.Next() {
 		var r row
-		rows.Scan(&r.ID, &r.FirstName, &r.LastName, &r.Email, &r.Comment, &r.Status, &r.CreatedAt)
+		var isChild int
+		rows.Scan(&r.ID, &r.FirstName, &r.LastName, &r.Email, &r.Comment, &r.Status, &r.CreatedAt, &isChild, &r.ParentEmail)
+		r.IsChild = isChild == 1
 		results = append(results, r)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -285,14 +320,22 @@ func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request)
 func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	claims := ClaimsFromCtx(r.Context())
-	var firstName, lastName, email string
+	var firstName, lastName, email, parentEmail string
+	var isChild int
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT first_name, last_name, email FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
-	).Scan(&firstName, &lastName, &email)
+		`SELECT first_name, last_name, email, is_child, COALESCE(parent_email,'')
+		 FROM membership_requests WHERE id = ? AND status = 'pending'`, id,
+	).Scan(&firstName, &lastName, &email, &isChild, &parentEmail)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+
+	if isChild == 1 {
+		h.approveChildRequest(w, r, id, firstName, lastName, parentEmail, claims.UserID)
+		return
+	}
+
 	plain, tokenHash, _ := GenerateOpaqueToken()
 	expiry := InvitationExpiry()
 	if _, err := h.db.ExecContext(r.Context(),
@@ -311,6 +354,88 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK wurde bestätigt",
 		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", firstName, link)); err != nil {
 		log.Printf("SMTP ERROR (ApproveMembership to %s): %v", email, err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// approveChildRequest legt für einen Kinderantrag (ohne E-Mail) in einer
+// Transaktion ein Kinder-Konto (login_name, can_login=0) und einen verknüpften
+// Member an und versendet einen Passwort-Setz-Link an die Eltern-Adresse.
+// Es wird KEIN family_link angelegt (reine Korrespondenz).
+func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, reqID, firstName, lastName, parentEmail string, handledBy int) {
+	ctx := r.Context()
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	loginName, err := generateUniqueLoginName(ctx, tx, firstName, lastName)
+	if err != nil {
+		log.Printf("ApproveMembership (child %s.%s): login name: %v", firstName, lastName, err)
+		http.Error(w, "konnte keinen eindeutigen Spielernamen erzeugen", http.StatusInternalServerError)
+		return
+	}
+
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO users (email, login_name, password, role, can_login) VALUES (NULL, ?, '', 'standard', 0)`,
+		loginName,
+	)
+	if err != nil {
+		log.Printf("ApproveMembership (child): insert user: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	userID, _ := res.LastInsertId()
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO members (first_name, last_name, user_id) VALUES (?,?,?)`,
+		firstName, lastName, userID,
+	); err != nil {
+		log.Printf("ApproveMembership (child): insert member: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Passwort-Setz-Token (48 h) — Eltern setzen das Passwort, das aktiviert das
+	// Konto (can_login=1, siehe ResetPassword).
+	plain, tokenHash, err := GenerateOpaqueToken()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?,?,?)`,
+		userID, tokenHash, InvitationExpiry(),
+	); err != nil {
+		log.Printf("ApproveMembership (child): insert token: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE membership_requests SET status='approved', handled_by=?, handled_at=CURRENT_TIMESTAMP WHERE id=?`,
+		handledBy, reqID,
+	); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Ab hier sind die Daten committed: Mailfehler dürfen den Vorgang nicht zurückrollen.
+	if h.hub != nil {
+		h.hub.Broadcast("members")
+	}
+	link := fmt.Sprintf("%s/reset-password?token=%s", h.baseURL, plain)
+	body := fmt.Sprintf("Hallo,\n\nder Account für %s %s wurde angelegt.\n\nLogin-Name (zum Einloggen): %s\n\nBitte setze jetzt das Passwort:\n%s\n\nDer Link ist 48 Stunden gültig.",
+		firstName, lastName, loginName, link)
+	if err := h.mailer.Send(parentEmail, "Kinder-Account bei TeamWERK – Passwort setzen", body); err != nil {
+		log.Printf("SMTP ERROR (ApproveMembership child to %s): %v", parentEmail, err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -526,7 +651,9 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	h.db.ExecContext(r.Context(), `UPDATE users SET password=? WHERE id=?`, string(hash), userID)
+	// can_login=1 aktiviert Kinder-Konten (can_login=0) beim ersten Passwort-Setzen;
+	// für bereits aktive Konten (normaler Reset) ist es ein No-op.
+	h.db.ExecContext(r.Context(), `UPDATE users SET password=?, can_login=1 WHERE id=?`, string(hash), userID)
 	h.db.ExecContext(r.Context(), `UPDATE password_reset_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?`, id)
 	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE user_id=?`, userID)
 	w.WriteHeader(http.StatusNoContent)

@@ -41,7 +41,7 @@ func buildHandlers(t *testing.T, database *sql.DB) *app.Handlers {
 	hubInstance := hub.NewHub()
 	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
 	return &app.Handlers{
-		Auth:           auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost"),
+		Auth:           auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost", hubInstance),
 		Config:         appconfig.NewHandler(database, hubInstance),
 		Members:        members.NewHandler(database, hubInstance),
 		WelcomeEmail:   members.NewWelcomeEmailHandler(database, m),

@@ -23,7 +23,7 @@ export default function LoginPage() {
       const next = searchParams.get('next')
       navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/')
     } catch {
-      setError('E-Mail oder Passwort ungültig.')
+      setError('E-Mail/Spielername oder Passwort ungültig.')
     }
   }
 
@@ -51,11 +51,12 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <p className="text-brand-danger text-sm">{error}</p>}
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
+                <label className="block text-sm font-medium text-brand-black mb-1">E-Mail oder Spielername</label>
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                  autoComplete="username"
                   required
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
