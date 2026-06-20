@@ -39,6 +39,26 @@ const EXCL_LABEL: Record<string, string> = {
   kein_beitragssatz: 'kein Beitragssatz hinterlegt',
 }
 
+const KATEGORIE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'alle Kategorien' },
+  { value: 'aktiv_mit', label: 'Aktiv (mit Stammverein)' },
+  { value: 'aktiv_ohne', label: 'Aktiv (ohne Stammverein)' },
+  { value: 'passiv', label: 'Passiv' },
+  { value: '__none__', label: '(keine Kategorie)' },
+]
+
+const HINWEIS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'alle Hinweise' },
+  { value: '__included__', label: 'enthalten' },
+  { value: 'kein_sepa_mandat', label: 'kein SEPA-Mandat' },
+  { value: 'iban_fehlt', label: 'IBAN fehlt' },
+  { value: 'iban_ungueltig', label: 'IBAN ungültig' },
+  { value: 'mitgliedsnummer_fehlt', label: 'Mitgliedsnummer fehlt' },
+  { value: 'adresse_unvollstaendig', label: 'Adresse unvollständig' },
+  { value: 'beitragsfrei', label: 'beitragsfrei' },
+  { value: 'kein_beitragssatz', label: 'kein Beitragssatz hinterlegt' },
+]
+
 export default function BeitragslaufPage() {
   const [seasons, setSeasons] = useState<Season[]>([])
   const [saisonId, setSaisonId] = useState<number | null>(null)
@@ -48,6 +68,8 @@ export default function BeitragslaufPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [protocolText, setProtocolText] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [kategorieFilter, setKategorieFilter] = useState<string>('')
+  const [hinweisFilter, setHinweisFilter] = useState<string>('')
 
   useEffect(() => {
     api.get('/seasons').then(r => {
@@ -76,10 +98,32 @@ export default function BeitragslaufPage() {
     setSelected(next)
   }
 
+  const filteredItems = useMemo(() => {
+    if (!preview) return [] as PreviewItem[]
+    return preview.items.filter(it => {
+      if (kategorieFilter) {
+        const k = it.kategorie ?? ''
+        if (kategorieFilter === '__none__') {
+          if (k !== '') return false
+        } else if (k !== kategorieFilter) {
+          return false
+        }
+      }
+      if (hinweisFilter) {
+        if (hinweisFilter === '__included__') {
+          if (!it.included) return false
+        } else if (!it.exclusions.includes(hinweisFilter)) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [preview, kategorieFilter, hinweisFilter])
+
   const summary = useMemo(() => {
     if (!preview) return { count: 0, warn: 0, excl: 0, sepaSum: 0, exclSum: 0 }
     let count = 0, warn = 0, excl = 0, sepaSum = 0, exclSum = 0
-    for (const it of preview.items) {
+    for (const it of filteredItems) {
       if (!it.included) {
         excl++
         exclSum += it.betrag_cent ?? 0
@@ -92,7 +136,7 @@ export default function BeitragslaufPage() {
       }
     }
     return { count, warn, excl, sepaSum, exclSum }
-  }, [preview, selected])
+  }, [preview, filteredItems, selected])
 
   const downloadXML = async () => {
     if (!saisonId) return
@@ -127,6 +171,24 @@ export default function BeitragslaufPage() {
         >
           {seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+
+        <label className="text-sm text-brand-text-muted sm:ml-4">Kategorie</label>
+        <select
+          value={kategorieFilter}
+          onChange={e => setKategorieFilter(e.target.value)}
+          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+        >
+          {KATEGORIE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+
+        <label className="text-sm text-brand-text-muted sm:ml-4">Hinweis</label>
+        <select
+          value={hinweisFilter}
+          onChange={e => setHinweisFilter(e.target.value)}
+          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+        >
+          {HINWEIS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       </div>
 
       {preview && (
@@ -157,7 +219,7 @@ export default function BeitragslaufPage() {
                 </tr>
               </thead>
               <tbody>
-                {preview.items.map(it => (
+                {filteredItems.map(it => (
                   <tr key={it.member_id} className={`border-t border-brand-border-subtle ${!it.included ? 'opacity-60' : ''}`}>
                     <td className="px-4 py-2">
                       <input
@@ -198,7 +260,7 @@ export default function BeitragslaufPage() {
 
           {/* Mobile-Cards */}
           <div className="sm:hidden space-y-2 mb-4">
-            {preview.items.map(it => (
+            {filteredItems.map(it => (
               <div key={it.member_id} className={`bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-4 py-3 ${!it.included ? 'opacity-60' : ''}`}>
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-medium text-brand-text">
