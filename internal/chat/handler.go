@@ -640,7 +640,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 			log.Printf("chat: compute unread for user %d: %v", uid, err)
 			badge = 0
 		}
-		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat", badge)
+		go h.pushFn(h.db, h.cfg, uid, title, preview, fmt.Sprintf("/chat?conv=%d", convID), badge)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -971,7 +971,7 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 			log.Printf("chat: compute unread for user %d: %v", uid, err)
 			badge = 0
 		}
-		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat", badge)
+		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat?tab=broadcasts", badge)
 	}
 
 	w.WriteHeader(http.StatusCreated)

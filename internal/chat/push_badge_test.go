@@ -58,8 +58,8 @@ func TestPostChatMessage_TriggersPushWithBadge(t *testing.T) {
 		if c.badge != 3 {
 			t.Fatalf("expected badge=3 (2 old + 1 new), got %d", c.badge)
 		}
-		if c.url != "/chat" {
-			t.Fatalf("expected url=/chat, got %q", c.url)
+		if want := "/chat?conv=" + strconv.Itoa(convB); c.url != want {
+			t.Fatalf("expected url=%s, got %q", want, c.url)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("push call was not triggered within 2s")
