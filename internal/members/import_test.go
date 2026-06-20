@@ -206,3 +206,69 @@ func TestImport_EnrichFillsMemberNumber_TwoDigitYear1967(t *testing.T) {
 		t.Errorf("enrich füllte member_number nicht: got %q want %q", num, "61")
 	}
 }
+
+// Fall B (Realfall Janosch Jäger, id 97): Bestandsmitglied OHNE Geburtsdatum,
+// CSV liefert eines. Bei eindeutigem Namen matcht enrich über den Namen und
+// füllt Mitgliedsnummer (und Geburtsdatum).
+func TestImport_EnrichFillsMemberNumber_DBohneGeburtsdatum(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	// Janosch ohne dob; zusätzlich ein gleichnamiger Nachname (Felix) MIT dob,
+	// um zu zeigen, dass der Vorname trotzdem eindeutig trennt.
+	if _, err := db.Exec(`INSERT INTO members (first_name, last_name, status) VALUES ('Janosch','Jäger','aktiv')`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO members (first_name, last_name, status, date_of_birth) VALUES ('Felix','Jäger','aktiv','2011-07-05')`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status\n" +
+		"Jäger,Janosch,259,23.11.2015,aktiv\n"
+	res := postImport(t, srv.URL, token, csv, "enrich")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	num, ok := memberNumberOf(t, db, "Janosch")
+	if !ok {
+		t.Fatal("Janosch fehlt")
+	}
+	if num != "259" {
+		t.Errorf("enrich füllte member_number nicht: got %q want %q", num, "259")
+	}
+	// Geburtsdatum wurde mitgefüllt (Datumsanteil; Speicherung kann Timestamp sein).
+	var dob sql.NullString
+	db.QueryRow(`SELECT substr(date_of_birth,1,10) FROM members WHERE first_name='Janosch'`).Scan(&dob)
+	if dob.String != "2015-11-23" {
+		t.Errorf("Geburtsdatum nicht ergänzt: got %q want %q", dob.String, "2015-11-23")
+	}
+}
+
+// Eindeutigkeits-Schutz: zwei gleichnamige Bestandsmitglieder OHNE Geburtsdatum
+// → kein Fall-B-Match, Fehler statt willkürlicher Befüllung.
+func TestImport_EnrichAmbiguousNoDOB_NichtBefuellt(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	for range 2 {
+		if _, err := db.Exec(`INSERT INTO members (first_name, last_name, status) VALUES ('Max','Muster','aktiv')`); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+
+	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status\n" +
+		"Muster,Max,900,01.01.10,aktiv\n"
+	res := postImport(t, srv.URL, token, csv, "enrich")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	var withNum int
+	db.QueryRow(`SELECT COUNT(*) FROM members WHERE first_name='Max' AND member_number IS NOT NULL`).Scan(&withNum)
+	if withNum != 0 {
+		t.Errorf("mehrdeutiger Fall sollte niemanden befüllen, befüllt: %d", withNum)
+	}
+}
