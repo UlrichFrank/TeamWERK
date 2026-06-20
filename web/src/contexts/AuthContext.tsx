@@ -93,7 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logoutTimer.current = setTimeout(logout, LOGOUT_MS)
   }
 
+  const bootstrapped = useRef(false)
   useEffect(() => {
+    // StrictMode (Dev) ruft Effects doppelt auf. Ohne Gate würden zwei
+    // parallele /auth/refresh laufen — der zweite trifft auf einen bereits
+    // rotierten Token → 401 → setUser(null) gewinnt → Endlos-Login-Loop.
+    if (bootstrapped.current) return
+    bootstrapped.current = true
     axios.post('/api/auth/refresh', {}, { withCredentials: true })
       .then(res => {
         const token: string = res.data.access_token
