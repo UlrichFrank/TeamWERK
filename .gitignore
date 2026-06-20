@@ -43,3 +43,7 @@ web/public/changes.json
 
 # Mitglieder-CSV-Exporte im Repo-Root (PII) — testdata/*.csv bleiben getrackt
 /*.csv
+
+# Affinity-Designer-Arbeitsdateien im Repo-Root (Icon-/Asset-Exporte)
+/*.af
+/*.af~lock~
