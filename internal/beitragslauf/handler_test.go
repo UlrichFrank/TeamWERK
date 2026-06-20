@@ -297,6 +297,25 @@ func TestPreview_NeumitgliedZahltVollenBeitrag(t *testing.T) {
 	}
 }
 
+// Mitglieder mit Status ausgetreten/honorar/anwaerter sind fachlich nie Teil
+// des Beitragslaufs und werden deshalb gar nicht erst geladen — weder in der
+// Preview-Tabelle noch in den Summen.
+func TestPreview_StatusOhneBeitragNichtImPreview(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	aktivID := insertMember(t, db, "Aktiv", defaultMember())
+	for i, status := range []string{"ausgetreten", "honorar", "anwaerter"} {
+		m := defaultMember()
+		m.status = status
+		m.memberNumber = "200" + itoa(i)
+		insertMember(t, db, status, m)
+	}
+	pr := getPreview(t, srv, s)
+	if len(pr.Items) != 1 || pr.Items[0].MemberID != aktivID {
+		t.Fatalf("erwarte exakt 1 Item (aktiv), got %d: %+v", len(pr.Items), pr.Items)
+	}
+}
+
 func TestPreview_Forbidden(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	insertSeason2027(t, db)

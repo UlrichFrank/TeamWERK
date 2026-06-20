@@ -64,8 +64,12 @@ type MemberRow struct {
 	SepaMandatDate string
 }
 
-// LoadMembersForLauf lädt alle Mitglieder (ohne Status-Filter; die
-// Kategorisierung passiert im Compute).
+// LoadMembersForLauf lädt alle für den Beitragslauf relevanten Mitglieder.
+// Status, die fachlich nie einen Beitrag zahlen (ausgetreten, honorar,
+// anwaerter), werden bereits hier ausgefiltert, damit sie weder in der
+// Preview-Tabelle noch in den Summen erscheinen. Die Kategorisierung der
+// verbleibenden Status (aktiv/verletzt → aktiv, pausiert/passiv → passiv)
+// passiert im Compute.
 func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 	rows, err := db.Query(`
 		SELECT id, first_name, last_name, status,
@@ -73,7 +77,8 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		       COALESCE(iban,''), COALESCE(sepa_mandat_path,''), COALESCE(member_number,''),
 		       COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
 		       COALESCE(home_club,''), (home_club_id IS NOT NULL), COALESCE(account_holder,''), COALESCE(sepa_mandat_date,'')
-		FROM members`)
+		FROM members
+		WHERE status NOT IN ('ausgetreten','honorar','anwaerter')`)
 	if err != nil {
 		return nil, err
 	}
