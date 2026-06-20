@@ -64,7 +64,6 @@ export default function BeitragslaufPage() {
   const [saisonId, setSaisonId] = useState<number | null>(null)
   const [preview, setPreview] = useState<PreviewResp | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [exported, setExported] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [protocolText, setProtocolText] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -86,7 +85,6 @@ export default function BeitragslaufPage() {
       const data: PreviewResp = r.data
       setPreview(data)
       setSelected(new Set(data.items.filter(i => i.included).map(i => i.member_id)))
-      setExported(false)
     })
   }
   useEffect(loadPreview, [saisonId])
@@ -149,7 +147,6 @@ export default function BeitragslaufPage() {
     a.download = `beitragslauf_${preview?.saison_label.replace('/', '-')}.xml`
     a.click()
     URL.revokeObjectURL(url)
-    setExported(true)
   }
 
   const openProtocol = async () => {
@@ -165,7 +162,7 @@ export default function BeitragslaufPage() {
         {preview && (
           <div className="flex flex-wrap gap-3">
             <button onClick={downloadXML} disabled={summary.count === 0} className={BTN_PRIMARY}>XML herunterladen</button>
-            <button onClick={() => setConfirmOpen(true)} disabled={!exported} className={BTN_SECONDARY}>Lauf bestätigen</button>
+            <button onClick={() => setConfirmOpen(true)} className={BTN_SECONDARY}>Lauf bestätigen</button>
             <button onClick={openProtocol} className={BTN_SECONDARY}>Protokoll ansehen</button>
           </div>
         )}
