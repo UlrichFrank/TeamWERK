@@ -80,7 +80,7 @@ func TestBuildXML_UmlautInName(t *testing.T) {
 
 func TestBuildXML_VerwendungszweckFormat(t *testing.T) {
 	out, _ := BuildXML(sampleInput())
-	want := "<Ustrd>Jahresbeitrag Saison 2026/27 – Mitgliedsnr. 1042</Ustrd>"
+	want := "<Ustrd>Mitgliedsbeitrag Team Stuttgart 26/27 - Mitglied 1042</Ustrd>"
 	if !strings.Contains(string(out), want) {
 		t.Errorf("Verwendungszweck-Format falsch, erwartet %q", want)
 	}
