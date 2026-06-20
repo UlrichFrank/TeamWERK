@@ -160,7 +160,16 @@ export default function BeitragslaufPage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold text-brand-text mb-6">Beitragslauf</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <h1 className="text-2xl font-bold text-brand-text">Beitragslauf</h1>
+        {preview && (
+          <div className="flex flex-wrap gap-3">
+            <button onClick={downloadXML} disabled={summary.count === 0} className={BTN_PRIMARY}>XML herunterladen</button>
+            <button onClick={() => setConfirmOpen(true)} disabled={!exported} className={BTN_SECONDARY}>Lauf bestätigen</button>
+            <button onClick={openProtocol} className={BTN_SECONDARY}>Protokoll ansehen</button>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <label className="text-sm text-brand-text-muted">Saison</label>
@@ -286,12 +295,6 @@ export default function BeitragslaufPage() {
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button onClick={downloadXML} disabled={summary.count === 0} className={BTN_PRIMARY}>XML herunterladen</button>
-            <button onClick={() => setConfirmOpen(true)} disabled={!exported} className={BTN_SECONDARY}>Lauf bestätigen</button>
-            <button onClick={openProtocol} className={BTN_SECONDARY}>Protokoll ansehen</button>
           </div>
         </>
       )}
