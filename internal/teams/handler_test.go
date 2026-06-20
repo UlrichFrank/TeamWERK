@@ -93,6 +93,110 @@ func TestGetRoster_ExtendedPlayerCanAccessRoster(t *testing.T) {
 	}
 }
 
+// TestGetRoster_ExtendedParents verifies that a parent whose child is only in the
+// extended kader appears in extended_parents (not parents), while a parent of a
+// regular kader child appears in parents. Regression: extended-squad parents were
+// previously missing entirely from the Eltern list.
+func TestGetRoster_ExtendedParents(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Jugend")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	// Regular kader child + parent
+	regChildUserID := testutil.CreateUser(t, db, "standard")
+	regChildMemberID := testutil.CreateMember(t, db, regChildUserID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, regChildMemberID)
+	regParentUserID := testutil.CreateUser(t, db, "standard")
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, regParentUserID, regChildMemberID)
+
+	// Extended kader child + parent
+	extChildUserID := testutil.CreateUser(t, db, "standard")
+	extChildMemberID := testutil.CreateMember(t, db, extChildUserID)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extChildMemberID)
+	extParentUserID := testutil.CreateUser(t, db, "standard")
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, extParentUserID, extChildMemberID)
+
+	h := teams.NewHandler(db)
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, regParentUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/teams/"+strconv.Itoa(teamID)+"/roster", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var roster map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&roster)
+	res.Body.Close()
+
+	var parents, extParents []map[string]any
+	json.Unmarshal(roster["parents"], &parents)
+	json.Unmarshal(roster["extended_parents"], &extParents)
+
+	if len(parents) != 1 || int(parents[0]["userId"].(float64)) != regParentUserID {
+		t.Errorf("expected only regular parent %d in parents, got %v", regParentUserID, parents)
+	}
+	if len(extParents) != 1 || int(extParents[0]["userId"].(float64)) != extParentUserID {
+		t.Errorf("expected only extended parent %d in extended_parents, got %v", extParentUserID, extParents)
+	}
+}
+
+// TestGetRoster_ParentWithRegularAndExtendedChild verifies that a parent with one
+// child in the regular kader and another in the extended kader is listed once under
+// parents (regular wins), with both children shown.
+func TestGetRoster_ParentWithRegularAndExtendedChild(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Jugend")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+
+	regChildUserID := testutil.CreateUser(t, db, "standard")
+	regChildMemberID := testutil.CreateMember(t, db, regChildUserID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, regChildMemberID)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, regChildMemberID)
+
+	extChildUserID := testutil.CreateUser(t, db, "standard")
+	extChildMemberID := testutil.CreateMember(t, db, extChildUserID)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extChildMemberID)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, extChildMemberID)
+
+	h := teams.NewHandler(db)
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, parentUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/teams/"+strconv.Itoa(teamID)+"/roster", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var roster map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&roster)
+	res.Body.Close()
+
+	var parents, extParents []map[string]any
+	json.Unmarshal(roster["parents"], &parents)
+	json.Unmarshal(roster["extended_parents"], &extParents)
+
+	if len(parents) != 1 {
+		t.Fatalf("expected 1 parent in parents (regular wins), got %d", len(parents))
+	}
+	if len(extParents) != 0 {
+		t.Errorf("parent must not be duplicated into extended_parents, got %d", len(extParents))
+	}
+	var children []any
+	if c, ok := parents[0]["children"].([]any); ok {
+		children = c
+	}
+	if len(children) != 2 {
+		t.Errorf("expected both children (regular + extended) listed, got %v", children)
+	}
+}
+
 // TestListMyTeams_IsExtended verifies that a user only in kader_extended_members gets isExtended=true.
 func TestListMyTeams_IsExtended(t *testing.T) {
 	db := testutil.NewDB(t)

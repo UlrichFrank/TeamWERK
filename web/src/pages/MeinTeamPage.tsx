@@ -14,6 +14,7 @@ interface TeamRoster {
   players: PlayerEntry[]
   parents: ParentEntry[]
   extended_players: PlayerEntry[]
+  extended_parents: ParentEntry[]
 }
 
 interface MyTeam { id: number; name: string }
@@ -125,23 +126,48 @@ function RosterSection({ roster }: { roster: TeamRoster }) {
         )}
 
         {activeTab === 'eltern' && (
-          roster.parents.length === 0 ? (
+          roster.parents.length === 0 && (roster.extended_parents?.length ?? 0) === 0 ? (
             <p className="text-sm text-brand-text-muted">— keine Einträge —</p>
           ) : (
-            <table className="w-full text-sm">
-              <tbody>
-                {roster.parents.map((p, i) => (
-                  <tr key={i} className="border-b border-brand-border-subtle last:border-0">
-                    <td className="py-2">
-                      <PersonChip userId={p.userId || undefined} name={p.name} />
-                      {p.children.length > 0 && (
-                        <p className="text-xs text-brand-text-muted mt-0.5">{p.children.join(', ')}</p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              {roster.parents.length > 0 && (
+                <table className="w-full text-sm">
+                  <tbody>
+                    {roster.parents.map((p, i) => (
+                      <tr key={i} className="border-b border-brand-border-subtle last:border-0">
+                        <td className="py-2">
+                          <PersonChip userId={p.userId || undefined} name={p.name} />
+                          {p.children.length > 0 && (
+                            <p className="text-xs text-brand-text-muted mt-0.5">{p.children.join(', ')}</p>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {roster.extended_parents?.length > 0 && (
+                <div className="mt-5">
+                  <p className="text-xs font-semibold text-brand-text-muted uppercase tracking-wide mb-2">
+                    Erweiterter Kader
+                  </p>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {roster.extended_parents.map((p, i) => (
+                        <tr key={i} className="border-b border-brand-border-subtle last:border-0">
+                          <td className="py-2">
+                            <PersonChip userId={p.userId || undefined} name={p.name} />
+                            {p.children.length > 0 && (
+                              <p className="text-xs text-brand-text-muted mt-0.5">{p.children.join(', ')}</p>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )
         )}
       </div>
