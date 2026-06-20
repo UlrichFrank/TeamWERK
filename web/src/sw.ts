@@ -67,8 +67,12 @@ self.addEventListener('push', (event) => {
   const tasks: Promise<unknown>[] = [
     self.registration.showNotification(data.title, {
       body: data.body,
+      // `icon` = große, farbige Vorschau in der aufgeklappten Notification.
       icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      // `badge` = monochromes Status-Bar-ICON (Android rendert nur den Alpha-
+      // Kanal weiß). Eigene Silhouette statt der vollflächigen Kreisfläche.
+      // Nicht zu verwechseln mit `data.badge` unten = App-Icon-Zahl (PR #46).
+      badge: '/icons/badge-96.png',
       data: { url: data.url },
     }),
   ]

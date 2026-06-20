@@ -16,22 +16,22 @@
 
 ## 3. Manifest konsolidieren
 
-- [ ] 3.1 `web/vite.config.ts`: `manifest.icons` auf drei Einträge umstellen — `icon-192` (`purpose: 'any'`), `icon-512` (`purpose: 'any'`), `icon-maskable-512` (`purpose: 'maskable'`); kein `'any maskable'` mehr
-- [ ] 3.2 `web/index.html`: `<link rel="manifest" href="/manifest.json" />` entfernen (VitePWA injiziert den Manifest-Link selbst); `<link rel="apple-touch-icon">` bleibt unverändert
-- [ ] 3.3 `web/public/manifest.json` löschen (`git rm`)
-- [ ] 3.4 `pnpm -C web build` und prüfen, dass das generierte `manifest.webmanifest` die drei Icon-Einträge mit korrekten Purposes enthält und genau ein `<link rel="manifest">` im gebauten `index.html` steht
+- [x] 3.1 `web/vite.config.ts`: `manifest.icons` auf drei Einträge umstellen — `icon-192` (`purpose: 'any'`), `icon-512` (`purpose: 'any'`), `icon-maskable-512` (`purpose: 'maskable'`); kein `'any maskable'` mehr
+- [x] 3.2 `web/index.html`: `<link rel="manifest" href="/manifest.json" />` entfernen (VitePWA injiziert den Manifest-Link selbst); `<link rel="apple-touch-icon">` bleibt unverändert
+- [x] 3.3 `web/public/manifest.json` löschen (`git rm`)
+- [x] 3.4 `pnpm -C web build` und prüfen, dass das generierte `manifest.webmanifest` die drei Icon-Einträge mit korrekten Purposes enthält und genau ein `<link rel="manifest">` im gebauten `index.html` steht
 
 ## 4. Service Worker: Badge
 
-- [ ] 4.1 `web/src/sw.ts`: im `push`-Handler `badge: '/icons/icon-192.png'` → `badge: '/icons/badge-96.png'` ändern; `icon:` bleibt `/icons/icon-192.png` (bunte Vorschau)
+- [x] 4.1 `web/src/sw.ts`: im `push`-Handler `badge: '/icons/icon-192.png'` → `badge: '/icons/badge-96.png'` ändern; `icon:` bleibt `/icons/icon-192.png` (bunte Vorschau)
 
 ## 5. Regressions-Tests (Vitest)
 
-- [ ] 5.1 `web/src/test/icons.test.ts` anlegen: assert `web/public/icons/icon-maskable-512.png` und `badge-96.png` existieren und > 1 KB groß sind
-- [ ] 5.2 Assert Konsolidierung: `web/public/manifest.json` existiert NICHT; `web/index.html` enthält kein `rel="manifest"`
-- [ ] 5.3 Assert Purposes: `web/vite.config.ts` enthält genau einen `purpose: 'maskable'`-Eintrag und keinen `'any maskable'`
-- [ ] 5.4 Assert SW: `web/src/sw.ts` referenziert `/icons/badge-96.png`
-- [ ] 5.5 `pnpm -C web test` grün
+- [x] 5.1 `web/src/test/icons.test.ts` anlegen: assert `web/public/icons/icon-maskable-512.png` und `badge-96.png` existieren und > 1 KB groß sind
+- [x] 5.2 Assert Konsolidierung: `web/public/manifest.json` existiert NICHT; `web/index.html` enthält kein `rel="manifest"`
+- [x] 5.3 Assert Purposes: `web/vite.config.ts` enthält genau einen `purpose: 'maskable'`-Eintrag und keinen `'any maskable'`
+- [x] 5.4 Assert SW: `web/src/sw.ts` referenziert `/icons/badge-96.png`
+- [x] 5.5 `pnpm -C web test` grün
 
 ## 6. Manuelle Geräteverifikation (Android)
 
