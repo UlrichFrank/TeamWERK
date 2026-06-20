@@ -57,4 +57,4 @@
 - [x] 8.1 Verifikation: `go vet` sauber, `openspec validate --strict` ok (beide Changes), Frontend-Lint sauber. Hinweis: `golangci-lint` lokal nicht ausführbar (installiertes v2-Binary vs. `.golangci.yml` im v1-Format — Umgebungsproblem, nicht von dieser Änderung); läuft im pre-push-Hook mit gepinnter Version.
 - [x] 8.2 `go test ./...` grün (inkl. `stammvereine`, `members`, `beitragslauf`, Architektur- und Permission-Matrix-Test).
 - [x] 8.3 `pnpm -C web build` + `test` (341) + `lint` grün.
-- [ ] 8.4 Proposal archivieren (nach Merge/Deploy).
+- [x] 8.4 Proposal archivieren (nach Merge/Deploy). Hinweis: mit --skip-specs archiviert; Main-Spec-Sync zurückgestellt (Legacy-Spec-Format repo-weit + MODIFIED-auf-nicht-existierendem-Requirement).
