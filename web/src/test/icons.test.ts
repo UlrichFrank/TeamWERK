@@ -59,4 +59,18 @@ describe('Service Worker Badge', () => {
     const sw = (await import('../sw.ts?raw')).default
     expect(sw).toMatch(/badge:\s*['"]\/icons\/badge-96\.png['"]/)
   })
+
+  // Regression: iOS hat alle Pushes verworfen, weil rejecting setAppBadge/
+  // clearAppBadge das event.waitUntil-Promise mit gerissen hat. Jeder Aufruf
+  // muss .catch(...) tragen, damit ein Badge-Fehler die Notification nicht killt.
+  it('setAppBadge/clearAppBadge-Aufrufe sind mit .catch abgesichert', async () => {
+    const sw = (await import('../sw.ts?raw')).default
+    const matches = sw.match(/(setAppBadge|clearAppBadge)\?\.\([^)]*\)/g) ?? []
+    expect(matches.length).toBeGreaterThan(0)
+    for (const call of matches) {
+      const idx = sw.indexOf(call)
+      const window = sw.slice(idx, idx + call.length + 200)
+      expect(window, `${call} braucht .catch-Absicherung`).toMatch(/\.catch\(/)
+    }
+  })
 })

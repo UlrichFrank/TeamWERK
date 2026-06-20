@@ -82,11 +82,13 @@ self.addEventListener('push', (event) => {
       clearAppBadge?: () => Promise<void>
     }
     if ('setAppBadge' in nav) {
-      tasks.push(
-        data.badge > 0
-          ? (nav.setAppBadge?.(data.badge) ?? Promise.resolve())
-          : (nav.clearAppBadge?.() ?? Promise.resolve())
-      )
+      // .catch() ist Pflicht: rejected setAppBadge sonst Promise.all und damit
+      // event.waitUntil — iOS wertet das als fehlgeschlagenen Push-Handler und
+      // liefert nichts mehr aus.
+      const badgePromise = data.badge > 0
+        ? nav.setAppBadge?.(data.badge)
+        : nav.clearAppBadge?.()
+      if (badgePromise) tasks.push(badgePromise.catch(() => {}))
     }
   }
   event.waitUntil(Promise.all(tasks))

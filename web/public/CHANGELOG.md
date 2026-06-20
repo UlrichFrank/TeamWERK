@@ -1,4 +1,10 @@
 ## 20.06.2026
+- [feat] pwa: Android maskable Icon + Notification-Badge korrigieren (#47)
+- [feat] files: Datei-Link aus 3-Punkte-Menü kopieren
+- [fix] auth: doppelten Refresh-Bootstrap im StrictMode verhindern
+- [feat] chat: App-Icon-Badge spiegelt ungelesene Chat-Nachrichten (#46)
+- [fix] ui: Dashboard-Link, Beitragslauf-Bestätigung und Stammvereine-Mobile (#45)
+- [feat] members: Mitgliedsnummer systemverwaltet und eindeutig
 - [feat] notification: Neue Mitfahrgesuche lösen Notfication aus
 - [fix] fee-run: Aktions-Buttons im Beitragslauf-Header oben anordnen
 - [fix] beitragslauf: SEPA-XML mit FwdgAgt-Absender-BIC im GrpHdr (#41)
