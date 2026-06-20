@@ -354,7 +354,7 @@ function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: Carpo
       <div>
         <p className="text-sm text-brand-text-muted py-1">Keine Fahrgemeinschaften oder offenen Gesuche.</p>
         <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 mt-1">
-          Zur Übersicht <ArrowRight className="w-3 h-3" />
+          Alle Fahrgemeinschaften <ArrowRight className="w-3 h-3" />
         </Link>
       </div>
     )
@@ -399,7 +399,7 @@ function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: Carpo
       </ul>
 
       <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 pt-2">
-        Alle Mitfahrten <ArrowRight className="w-3 h-3" />
+        Alle Fahrgemeinschaften <ArrowRight className="w-3 h-3" />
       </Link>
     </div>
   )

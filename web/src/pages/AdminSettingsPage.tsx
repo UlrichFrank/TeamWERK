@@ -702,7 +702,46 @@ function StammvereineTab() {
         <button type="button" onClick={add} className={BTN_SM}>Hinzufügen</button>
       </div>
 
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      {/* Mobile: Cards */}
+      <div className="sm:hidden space-y-0">
+        {vereine.length === 0 ? (
+          <p className="text-sm text-brand-text-muted py-4">Noch keine Stammvereine angelegt.</p>
+        ) : (
+          vereine.map(v => (
+            editId === v.id ? (
+              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 mb-3 space-y-3">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') rename(v.id) }}
+                  className={INPUT}
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+                  <button type="button" onClick={() => rename(v.id)} className={BTN_SM}>Speichern</button>
+                </div>
+              </div>
+            ) : (
+              <MobileCard
+                key={v.id}
+                title={v.name}
+                subtitle={v.aktiv ? 'Aktiv' : 'Deaktiviert'}
+                actions={[
+                  { label: 'Umbenennen', onClick: () => { setEditId(v.id); setEditName(v.name) } },
+                  v.aktiv
+                    ? { label: 'Deaktivieren', onClick: () => toggleAktiv(v), variant: 'danger' as const }
+                    : { label: 'Aktivieren', onClick: () => toggleAktiv(v) },
+                ]}
+              />
+            )
+          ))
+        )}
+      </div>
+
+      {/* Desktop: Table */}
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-brand-surface-card text-brand-text-muted text-xs uppercase text-left">
