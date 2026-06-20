@@ -16,6 +16,7 @@ interface Member {
   status: string; pass_number?: string; position?: string; gender?: string; club_functions?: string[]
   has_pending_profil_draft?: boolean
   has_pending_bank_draft?: boolean
+  member_number_conflict?: string
   user_id?: number
   user_photo_url?: string
   can?: { edit: boolean; delete: boolean }
@@ -59,6 +60,12 @@ const STATUS_LABEL: Record<string, string> = {
   honorar: 'Honorar',
   anwaerter: 'Anwärter',
   ausgetreten: 'Ausgetreten',
+}
+
+const MEMBER_NUMBER_CONFLICT_LABEL: Record<string, string> = {
+  duplicate: 'Mitgliedsnummer doppelt vergeben',
+  non_numeric: 'Mitgliedsnummer nicht numerisch',
+  missing: 'Mitgliedsnummer fehlt',
 }
 
 const rowStatusIcon = (s: ImportRow['status']) => {
@@ -346,6 +353,13 @@ export default function MembersPage() {
                       {m.has_pending_profil_draft && <User size={14} className="inline ml-2 text-brand-text-muted" aria-label="Persönliche Daten ausstehend" />}
                       {m.has_pending_bank_draft && <CreditCard size={14} className="inline ml-1 text-brand-text-muted" aria-label="Bankdaten ausstehend" />}
                     </>
+                  )}
+                  {m.member_number_conflict && (
+                    <AlertTriangle
+                      size={14}
+                      className="inline ml-2 text-brand-danger"
+                      aria-label={MEMBER_NUMBER_CONFLICT_LABEL[m.member_number_conflict] ?? 'Mitgliedsnummer-Konflikt'}
+                    />
                   )}
                   {/* Status badge inline on mobile */}
                   <div className="sm:hidden mt-0.5">

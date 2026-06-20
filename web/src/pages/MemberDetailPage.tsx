@@ -203,8 +203,13 @@ export default function MemberDetailPage() {
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
       }
-    } catch {
-      setError('Fehler beim Speichern.')
+    } catch (err) {
+      const ax = err as { response?: { status?: number; data?: unknown } }
+      if (ax.response?.status === 409 && typeof ax.response.data === 'string') {
+        setError(ax.response.data.trim())
+      } else {
+        setError('Fehler beim Speichern.')
+      }
     } finally {
       setSaving(false)
     }
