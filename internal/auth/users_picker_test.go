@@ -12,7 +12,7 @@ import (
 
 func TestUsersPicker_AdminSeesAll(t *testing.T) {
 	db := testutil.NewDB(t)
-	h := auth.NewHandler(db, testutil.TestConfig(), testutil.TestJWTSecret, nil, "")
+	h := auth.NewHandler(db, testutil.TestConfig(), testutil.TestJWTSecret, nil, "", nil)
 
 	adminID := testutil.CreateUser(t, db, "admin")
 	userA := testutil.CreateUser(t, db, "standard")
@@ -46,7 +46,7 @@ func TestUsersPicker_AdminSeesAll(t *testing.T) {
 
 func TestUsersPicker_SpielerSeesTeamOnly(t *testing.T) {
 	db := testutil.NewDB(t)
-	h := auth.NewHandler(db, testutil.TestConfig(), testutil.TestJWTSecret, nil, "")
+	h := auth.NewHandler(db, testutil.TestConfig(), testutil.TestJWTSecret, nil, "", nil)
 
 	// Set up two teams with an active season
 	seasonID := testutil.CreateSeason(t, db, "2025/26")

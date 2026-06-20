@@ -23,6 +23,8 @@ export default function RequestMembershipPage() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [comment, setComment] = useState('')
+  const [isChild, setIsChild] = useState(false)
+  const [parentEmail, setParentEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
 
@@ -30,7 +32,10 @@ export default function RequestMembershipPage() {
     e.preventDefault()
     setError('')
     try {
-      await axios.post('/api/auth/request-membership', { first_name: firstName, last_name: lastName, email, comment: comment || undefined })
+      const payload = isChild
+        ? { first_name: firstName, last_name: lastName, is_child: true, parent_email: parentEmail, comment: comment || undefined }
+        : { first_name: firstName, last_name: lastName, email, comment: comment || undefined }
+      await axios.post('/api/auth/request-membership', payload)
       setSent(true)
     } catch {
       setError('Fehler beim Senden. Bitte versuche es erneut.')
@@ -72,30 +77,58 @@ export default function RequestMembershipPage() {
             <p className="text-sm text-brand-text-muted mb-6">Team Stuttgart – TeamWERK</p>
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <p className="text-brand-danger text-sm">{error}</p>}
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox" checked={isChild} onChange={e => setIsChild(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-brand-yellow"
+                />
+                <span className="text-sm text-brand-text">
+                  Kinderaccount anlegen
+                  <span className="block text-brand-text-muted">Für ein Kind ohne eigene E-Mail-Adresse</span>
+                </span>
+              </label>
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">Vorname</label>
+                <label className="block text-sm font-medium text-brand-black mb-1">
+                  {isChild ? 'Vorname des Kindes' : 'Vorname'}
+                </label>
                 <input
                   type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">Nachname</label>
+                <label className="block text-sm font-medium text-brand-black mb-1">
+                  {isChild ? 'Nachname des Kindes' : 'Nachname'}
+                </label>
                 <input
-                  type="text" value={lastName} onChange={e => setLastName(e.target.value)}
+                  type="text" value={lastName} onChange={e => setLastName(e.target.value)} required={isChild}
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
-                />
-              </div>
+              {isChild ? (
+                <div>
+                  <label className="block text-sm font-medium text-brand-black mb-1">E-Mail der Eltern</label>
+                  <input
+                    type="email" value={parentEmail} onChange={e => setParentEmail(e.target.value)} required
+                    placeholder="verwaltendes Elternteil"
+                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  />
+                  <p className="mt-1 text-xs text-brand-text-muted">
+                    Der Login-Name (Vorname.Nachname) und der Link zum Passwort-Setzen gehen an diese Adresse.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
+                  <input
+                    type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-brand-black mb-1">
-                  Kommentar <span className="text-gray-400 font-normal">(optional)</span>
+                  Kommentar <span className="text-brand-text-subtle font-normal">(optional)</span>
                 </label>
                 <input
                   type="text" value={comment} onChange={e => setComment(e.target.value)}

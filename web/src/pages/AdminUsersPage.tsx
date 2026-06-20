@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from 'react'
-import { X, Check, Upload, ChevronDown, Copy, RefreshCw } from 'lucide-react'
+import { X, Check, Upload, ChevronDown, Copy, RefreshCw, Baby } from 'lucide-react'
 
 function generatePassword(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*'
@@ -36,7 +36,7 @@ interface Invitation {
   member_id?: number | null
   member_name?: string
 }
-interface MembershipRequest { id: number; first_name: string; last_name: string; email: string; comment: string; status: string; created_at: string }
+interface MembershipRequest { id: number; first_name: string; last_name: string; email: string; comment: string; status: string; created_at: string; is_child?: boolean; parent_email?: string }
 interface Member { id: number; first_name: string; last_name: string }
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Admin', standard: 'Standard' }
@@ -715,8 +715,19 @@ export default function AdminUsersPage() {
               <tbody className="divide-y divide-brand-border-subtle">
                 {filteredRequests.map(req => (
                   <tr key={`req-${req.id}`} className="hover:bg-brand-table-select transition-colors">
-                    <td className="px-4 py-3 font-medium text-brand-text">{req.first_name} {req.last_name}</td>
-                    <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{req.email}</td>
+                    <td className="px-4 py-3 font-medium text-brand-text">
+                      {req.first_name} {req.last_name}
+                      {req.is_child && (
+                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-brand-info/10 text-brand-info align-middle">
+                          <Baby className="w-3 h-3" />
+                          Kind
+                        </span>
+                      )}
+                    </td>
+                    <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">
+                      {req.is_child ? (req.parent_email || req.email) : req.email}
+                      {req.is_child && <span className="block text-xs text-brand-text-subtle">Eltern-E-Mail</span>}
+                    </td>
                     <td className="hidden lg:table-cell px-4 py-3 text-brand-text-subtle text-xs">{req.comment || '–'}</td>
                     <td className="px-4 py-3">
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-yellow text-brand-black">Anfrage</span>
