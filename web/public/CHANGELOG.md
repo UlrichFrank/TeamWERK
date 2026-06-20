@@ -1,4 +1,14 @@
+## 20.06.2026
+- [feat] dashboard: Mitfahr-Einträge im Dashboard sind klickbar und springen zum Ziel-Eintrag
+- [feat] calendar: Vorname an iCal-Kalendernamen anhängen
+- [fix] calendar: iCal-Feed-Termine landeten im Jahr 1 (DATE als ISO-Timestamp)
+- [feat] calendar: persönlicher iCal-Feed für Spiele, Trainings und Dienste (#25)
+- [fix] policy: Kassierer sieht Mitgliederliste, Beitragslauf und Einstellungen
+
 ## 19.06.2026
+- [feat] dashboard: Dashboard zeigt offene Mitfahr-Gesuche der eigenen Teams
+- [fix] members: Eltern von Anwärtern sehen Termine und Team des Kindes
+- [fix] members: Trainer sehen in der Liste nur reduzierte Mitgliedsfelder
 - [fix] auth: Vorstand darf Einladungen und Beitrittsanträge verwalten
 - [fix] members: Trainer und sportliche Leitung dürfen /api/members lesen
 - [fix] venues: Vorstand darf GET /api/venues lesen

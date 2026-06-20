@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { Trash2, Car, Users, X, Check, UserPlus, Home, Plane, Calendar, UserCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -121,7 +121,7 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
       (p.status === 'pending' || p.status === 'confirmed'))
 
   return (
-    <div className="py-2 border-b border-brand-border-subtle last:border-0">
+    <div id={`${typ}-${entry.id}`} className="py-2 border-b border-brand-border-subtle last:border-0 scroll-mt-24">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -394,6 +394,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
 interface GameCardProps {
   data: GameCarpoolData
   teamShortNames: Map<number, string>
+  focusTab?: 'biete' | 'suche'
   onDelete: (id: number) => void
   onOpenForm: (gameId: number, typ: 'biete' | 'suche') => void
   onRequest: (bieteId: number, sucheId: number) => void
@@ -401,8 +402,9 @@ interface GameCardProps {
   onReject: (paarungId: number) => void
 }
 
-function GameCard({ data, teamShortNames, onDelete, onOpenForm, onRequest, onConfirm, onReject }: GameCardProps) {
-  const [activeTab, setActiveTab] = useState<'biete' | 'suche'>('biete')
+function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequest, onConfirm, onReject }: GameCardProps) {
+  const [activeTab, setActiveTab] = useState<'biete' | 'suche'>(focusTab ?? 'biete')
+  useEffect(() => { if (focusTab) setActiveTab(focusTab) }, [focusTab])
   const teamIds = data.game.teamIds ?? []
   const shorts = teamIds.map(id => teamShortNames.get(id)).filter((s): s is string => !!s).sort()
   const teamShort = shorts.length > 0 ? shorts.join(' / ') : undefined
@@ -419,7 +421,7 @@ function GameCard({ data, teamShortNames, onDelete, onOpenForm, onRequest, onCon
   const Icon = data.game.eventType === 'heim' ? Home : data.game.eventType === 'auswärts' ? Plane : Calendar
 
   return (
-    <div className={`rounded-xl shadow border-t-4 overflow-hidden ${colors.card.bg} ${colors.card.border}`}>
+    <div id={`game-${data.game.id}`} className={`rounded-xl shadow border-t-4 overflow-hidden scroll-mt-24 ${colors.card.bg} ${colors.card.border}`}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3 min-w-0">
@@ -511,7 +513,7 @@ function GameCard({ data, teamShortNames, onDelete, onOpenForm, onRequest, onCon
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-2">Fahrgemeinschaften</p>
           <div className="space-y-1">
             {confirmedPaarungen.map(p => (
-              <div key={p.id} className="flex items-center gap-2 text-xs text-brand-text">
+              <div key={p.id} id={`paarung-${p.id}`} className="flex items-center gap-2 text-xs text-brand-text scroll-mt-24">
                 <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
                 <span className="flex items-center gap-1 flex-wrap">
                   <PersonChip userId={p.sucheUserId} name={p.sucheName} photoUrl={p.suchePhotoUrl} />
@@ -562,7 +564,14 @@ export default function MitfahrgelegenheitenPage() {
   const [allTeams, setAllTeams] = useState<TeamForName[]>([])
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, mine: viewMine } = parseFilters(searchParams)
+  const location = useLocation()
   const compact = useCompactHeader(950)
+
+  const focus = useMemo(() => {
+    const m = /^#(paarung|biete|suche)-(\d+)$/.exec(location.hash)
+    if (!m) return null
+    return { kind: m[1] as 'paarung' | 'biete' | 'suche', id: Number(m[2]) }
+  }, [location.hash])
   const teamShortNames = useMemo(() => buildTeamShortNames(allTeams), [allTeams])
 
   void user // used to re-render when auth changes
@@ -683,6 +692,28 @@ export default function MitfahrgelegenheitenPage() {
     .filter(d => !viewMine || mineMatches(d))
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
 
+  const focusGameId = useMemo(() => {
+    if (!focus) return null
+    const game = response.games.find(g =>
+      focus.kind === 'paarung' ? (g.paarungen ?? []).some(p => p.id === focus.id)
+      : focus.kind === 'biete' ? (g.biete ?? []).some(e => e.id === focus.id)
+      : (g.suche ?? []).some(e => e.id === focus.id)
+    )
+    return game?.game.id ?? null
+  }, [focus, response.games])
+
+  useEffect(() => {
+    if (!focus || loading) return
+    const target = document.getElementById(`${focus.kind}-${focus.id}`)
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.classList.add('ring-2', 'ring-brand-yellow', 'rounded-md')
+    const timer = setTimeout(() => {
+      target.classList.remove('ring-2', 'ring-brand-yellow', 'rounded-md')
+    }, 2200)
+    return () => clearTimeout(timer)
+  }, [focus, loading, focusGameId])
+
   const TYPE_PILLS: EventTypeFilterEntry[] = [
     ['heim',      'Heim',      <Home className="w-3.5 h-3.5" />],
     ['auswärts',  'Auswärts',  <Plane className="w-3.5 h-3.5" />],
@@ -755,6 +786,7 @@ export default function MitfahrgelegenheitenPage() {
                 key={d.game.id}
                 data={d}
                 teamShortNames={teamShortNames}
+                focusTab={focus && d.game.id === focusGameId && (focus.kind === 'biete' || focus.kind === 'suche') ? focus.kind : undefined}
                 onDelete={handleDelete}
                 onOpenForm={(gameId, typ) => setModal({ gameId, typ })}
                 onRequest={handleRequest}
