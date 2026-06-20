@@ -48,6 +48,8 @@ type Member struct {
 	Zip            *string `json:"zip,omitempty"`
 	City           *string `json:"city,omitempty"`
 	HomeClub       *string `json:"home_club,omitempty"`
+	HomeClubID     *int    `json:"home_club_id,omitempty"`
+	HomeClubName   *string `json:"home_club_name,omitempty"`
 	JoinDate       *string `json:"join_date,omitempty"`
 	IBAN           *string `json:"iban,omitempty"`
 	AccountHolder  *string `json:"account_holder,omitempty"`
@@ -371,7 +373,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
-		       m.street, m.zip, m.city, m.home_club, m.join_date, m.iban, m.account_holder,
+		       m.street, m.zip, m.city, m.home_club, m.home_club_id, COALESCE(sv.name,''), m.join_date, m.iban, m.account_holder,
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
@@ -380,12 +382,13 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       m.beitragsfrei, m.zweitspielrecht
 		FROM members m
 		LEFT JOIN users u ON u.id = m.user_id
+		LEFT JOIN stammvereine sv ON sv.id = m.home_club_id
 		WHERE m.id=?`, id)
 
 	var base Member
-	var jerseyNum, userID sql.NullInt64
+	var jerseyNum, userID, homeClubID sql.NullInt64
 	var clubFunctionsStr string
-	var mStreet, mZip, mCity, mHomeClub sql.NullString
+	var mStreet, mZip, mCity, mHomeClub, mHomeClubName sql.NullString
 	var joinDate, iban, accountHolder sql.NullString
 	var photoPath sql.NullString
 	var photoVisible int64
@@ -398,7 +401,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
 		&base.MemberNumber, &base.PassNumber,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunctionsStr,
-		&mStreet, &mZip, &mCity, &mHomeClub, &joinDate, &iban, &accountHolder,
+		&mStreet, &mZip, &mCity, &mHomeClub, &homeClubID, &mHomeClubName, &joinDate, &iban, &accountHolder,
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
@@ -436,6 +439,13 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	if mHomeClub.Valid && mHomeClub.String != "" {
 		base.HomeClub = &mHomeClub.String
+	}
+	if homeClubID.Valid {
+		n := int(homeClubID.Int64)
+		base.HomeClubID = &n
+		if mHomeClubName.Valid && mHomeClubName.String != "" {
+			base.HomeClubName = &mHomeClubName.String
+		}
 	}
 	base.Zweitspielrecht = zweitspielrecht == 1
 
@@ -555,6 +565,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Zip           string `json:"zip"`
 		City          string `json:"city"`
 		HomeClub      string `json:"home_club"`
+		HomeClubID    *int   `json:"home_club_id"`
 		JoinDate      string `json:"join_date"`
 		IBAN          string `json:"iban"`
 		AccountHolder string `json:"account_holder"`
@@ -581,6 +592,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		req.MemberNumber = ""
 		req.PassNumber = ""
 		req.HomeClub = ""
+		req.HomeClubID = nil
 		filtered := []string{}
 		for _, f := range req.ClubFunctions {
 			if f == "trainer" {
@@ -590,11 +602,21 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		req.ClubFunctions = filtered
 	}
 
+	// home_club_id muss (falls gesetzt) auf einen existierenden Stammverein zeigen.
+	if req.HomeClubID != nil {
+		var exists int
+		if err := h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM stammvereine WHERE id=?`, *req.HomeClubID).Scan(&exists); err != nil || exists == 0 {
+			http.Error(w, "ungültige home_club_id", http.StatusBadRequest)
+			return
+		}
+	}
+
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET
 			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
 			jersey_number=?, position=?, gender=?,
-			street=?, zip=?, city=?, home_club=?,
+			street=?, zip=?, city=?, home_club=?, home_club_id=?,
 			status=?,
 			photo_visible=?,
 			zweitspielrecht=?,
@@ -602,7 +624,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		WHERE id=?`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender,
-		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub),
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub), req.HomeClubID,
 		req.Status,
 		boolToInt(req.PhotoVisible),
 		boolToInt(req.Zweitspielrecht),
