@@ -212,6 +212,24 @@ func TestPreview_AusschlussOhneMandat(t *testing.T) {
 	if it.Included || !contains(it.Exclusions, "kein_sepa_mandat") {
 		t.Errorf("got %+v", it)
 	}
+	// Betrag bleibt sichtbar, damit das Frontend "nicht abbuchbar" ausweisen kann.
+	if it.BetragCent != 22600 {
+		t.Errorf("BetragCent=%d, want 22600 (aktiv_ohne) trotz Ausschluss", it.BetragCent)
+	}
+}
+
+func TestPreview_BeitragsfreiOhneBetrag(t *testing.T) {
+	// Gegenstück: beitragsfrei darf keinen Betrag tragen (zählt nicht zur
+	// Gesamtsumme).
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	m := defaultMember()
+	m.beitragsfrei = 1
+	id := insertMember(t, db, "Frei", m)
+	it, _ := itemFor(getPreview(t, srv, s), id)
+	if it.Included || it.BetragCent != 0 {
+		t.Errorf("beitragsfrei: included=%v betrag=%d, want false/0", it.Included, it.BetragCent)
+	}
 }
 
 func TestPreview_AusschlussOhneIBAN(t *testing.T) {

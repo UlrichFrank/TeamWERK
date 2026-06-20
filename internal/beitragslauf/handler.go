@@ -102,6 +102,27 @@ func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) P
 	if m.Beitragsfrei {
 		it.Exclusions = append(it.Exclusions, exclBeitragsfrei)
 	}
+
+	// Beitrag bereits hier berechnen — auch für Mitglieder, die später wegen
+	// fehlender SEPA-Daten ausgeschlossen werden. So bleibt im Frontend
+	// sichtbar, welcher Betrag NICHT abgebucht werden kann.
+	if gruppe != "" && !m.Beitragsfrei {
+		var kategorie string
+		if gruppe == "passiv" {
+			kategorie = "passiv"
+		} else {
+			kategorie = AktivKategorie(m.HasHomeClub)
+		}
+		betrag, err := LookupBetragCent(saetze, kategorie, saisonStart)
+		if err != nil {
+			it.Exclusions = append(it.Exclusions, exclKeinSatz)
+		} else {
+			it.Kategorie = kategorie
+			it.KategorieLabel = kategorieLabel[kategorie]
+			it.BetragCent = betrag
+		}
+	}
+
 	if m.MemberNumber == "" {
 		it.Exclusions = append(it.Exclusions, exclKeineMitglNr)
 	}
@@ -117,30 +138,7 @@ func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) P
 		it.Exclusions = append(it.Exclusions, exclAdresse)
 	}
 
-	if len(it.Exclusions) > 0 {
-		it.Included = false
-		return it
-	}
-
-	// Kategorie bestimmen — deterministisch aus der Stammverein-Zuordnung
-	// (members.home_club_id). Kein Freitext-/Fuzzy-Abgleich mehr.
-	var kategorie string
-	if gruppe == "passiv" {
-		kategorie = "passiv"
-	} else {
-		kategorie = AktivKategorie(m.HasHomeClub)
-	}
-
-	betrag, err := LookupBetragCent(saetze, kategorie, saisonStart)
-	if err != nil {
-		it.Included = false
-		it.Exclusions = append(it.Exclusions, exclKeinSatz)
-		return it
-	}
-	it.Included = true
-	it.Kategorie = kategorie
-	it.KategorieLabel = kategorieLabel[kategorie]
-	it.BetragCent = betrag
+	it.Included = len(it.Exclusions) == 0
 	return it
 }
 
@@ -171,16 +169,17 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Saison nicht gefunden", http.StatusNotFound)
 		return
 	}
-	var inc, exc, warn, total int
+	var inc, exc, warn, sepaTotal, exclTotal int
 	for _, it := range pr.Items {
 		if it.Included {
 			inc++
-			total += it.BetragCent
+			sepaTotal += it.BetragCent
 			if len(it.Warnings) > 0 {
 				warn++
 			}
 		} else {
 			exc++
+			exclTotal += it.BetragCent
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -190,10 +189,12 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 		"faelligkeit":  pr.Faelligkeit.Format("2006-01-02"),
 		"items":        pr.Items,
 		"summary": map[string]any{
-			"included_count": inc,
-			"excluded_count": exc,
-			"warned_count":   warn,
-			"total_cent":     total,
+			"included_count":   inc,
+			"excluded_count":   exc,
+			"warned_count":     warn,
+			"total_cent":       sepaTotal,
+			"excluded_cent":    exclTotal,
+			"gesamtsumme_cent": sepaTotal + exclTotal,
 		},
 	})
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Ban, X } from 'lucide-react'
+import { AlertTriangle, Ban, CheckSquare, X } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useLiveUpdates } from '../../hooks/useLiveUpdates'
 import { formatBetrag } from '../../lib/sepa'
@@ -77,17 +77,21 @@ export default function BeitragslaufPage() {
   }
 
   const summary = useMemo(() => {
-    if (!preview) return { count: 0, warn: 0, excl: 0, sum: 0 }
-    let count = 0, warn = 0, excl = 0, sum = 0
+    if (!preview) return { count: 0, warn: 0, excl: 0, sepaSum: 0, exclSum: 0 }
+    let count = 0, warn = 0, excl = 0, sepaSum = 0, exclSum = 0
     for (const it of preview.items) {
-      if (!it.included) { excl++; continue }
+      if (!it.included) {
+        excl++
+        exclSum += it.betrag_cent ?? 0
+        continue
+      }
       if (selected.has(it.member_id)) {
         count++
-        sum += it.betrag_cent ?? 0
+        sepaSum += it.betrag_cent ?? 0
         if (it.warnings.length > 0) warn++
       }
     }
-    return { count, warn, excl, sum }
+    return { count, warn, excl, sepaSum, exclSum }
   }, [preview, selected])
 
   const downloadXML = async () => {
@@ -119,7 +123,7 @@ export default function BeitragslaufPage() {
         <select
           value={saisonId ?? ''}
           onChange={e => setSaisonId(Number(e.target.value))}
-          className="border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
         >
           {seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
@@ -128,11 +132,15 @@ export default function BeitragslaufPage() {
       {preview && (
         <>
           <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow shadow px-5 py-3 mb-4 text-sm text-brand-text flex flex-wrap gap-x-6 gap-y-1">
-            <span>☑ {summary.count} angehakt</span>
-            <span className="text-brand-text-muted">⚠ {summary.warn} Warnungen</span>
-            <span className="text-brand-text-muted">⛔ {summary.excl} ausgeschlossen</span>
-            <span className="font-semibold ml-auto">Summe: {formatBetrag(summary.sum)}</span>
+            <span className="inline-flex items-center gap-1"><CheckSquare className="w-4 h-4 shrink-0" /> {summary.count} angehakt</span>
+            <span className="inline-flex items-center gap-1 text-brand-text-muted"><AlertTriangle className="w-4 h-4 shrink-0" /> {summary.warn} Warnungen</span>
+            <span className="inline-flex items-center gap-1 text-brand-text-muted"><Ban className="w-4 h-4 shrink-0" /> {summary.excl} ausgeschlossen</span>
             <span className="text-brand-text-muted w-full">Fälligkeit: {preview.faelligkeit}</span>
+            <span className="w-full border-t border-brand-border-subtle pt-2 flex flex-wrap gap-x-6 gap-y-1">
+              <span>SEPA-Summe: <span className="font-semibold">{formatBetrag(summary.sepaSum)}</span></span>
+              <span className="text-brand-text-muted">nicht abbuchbar: <span className="font-semibold">{formatBetrag(summary.exclSum)}</span></span>
+              <span className="ml-auto">Gesamtsumme: <span className="font-semibold">{formatBetrag(summary.sepaSum + summary.exclSum)}</span></span>
+            </span>
           </div>
 
           {/* Desktop-Tabelle */}
@@ -162,17 +170,23 @@ export default function BeitragslaufPage() {
                     <td className="px-4 py-2 text-brand-text">{it.name}</td>
                     <td className="px-4 py-2 text-brand-text-muted">{it.status}</td>
                     <td className="px-4 py-2 text-brand-text">{it.kategorie_label ?? '—'}</td>
-                    <td className="px-4 py-2 text-right text-brand-text">{it.included ? formatBetrag(it.betrag_cent ?? 0) : '—'}</td>
+                    <td className="px-4 py-2 text-right text-brand-text">
+                      {it.included
+                        ? formatBetrag(it.betrag_cent ?? 0)
+                        : (it.betrag_cent ?? 0) > 0
+                          ? <span className="line-through text-brand-text-muted" title="Wird nicht abgebucht">{formatBetrag(it.betrag_cent ?? 0)}</span>
+                          : '—'}
+                    </td>
                     <td className="px-4 py-2">
                       {!it.included && (
                         <span className="inline-flex items-center gap-1 text-brand-danger" title={it.exclusions.map(e => EXCL_LABEL[e] ?? e).join(', ')}>
-                          <Ban className="w-4 h-4" />
+                          <Ban className="w-4 h-4 shrink-0" />
                           {it.exclusions.map(e => EXCL_LABEL[e] ?? e).join(', ')}
                         </span>
                       )}
                       {it.included && it.warnings.length > 0 && (
                         <span className="inline-flex items-center gap-1 text-brand-text-muted" title="Stammverein unklar">
-                          <AlertTriangle className="w-4 h-4" /> Stammverein unklar
+                          <AlertTriangle className="w-4 h-4 shrink-0" /> Stammverein unklar
                         </span>
                       )}
                     </td>
@@ -191,12 +205,22 @@ export default function BeitragslaufPage() {
                     <input type="checkbox" disabled={!it.included} checked={selected.has(it.member_id)} onChange={() => toggle(it.member_id)} />
                     {it.name}
                   </label>
-                  <span className="text-brand-text">{it.included ? formatBetrag(it.betrag_cent ?? 0) : '—'}</span>
+                  <span className="text-brand-text">
+                    {it.included
+                      ? formatBetrag(it.betrag_cent ?? 0)
+                      : (it.betrag_cent ?? 0) > 0
+                        ? <span className="line-through text-brand-text-muted">{formatBetrag(it.betrag_cent ?? 0)}</span>
+                        : '—'}
+                  </span>
                 </div>
-                <div className="text-xs text-brand-text-muted mt-1">
-                  {it.status} · {it.kategorie_label ?? '—'}
-                  {!it.included && ' · ' + it.exclusions.map(e => EXCL_LABEL[e] ?? e).join(', ')}
-                  {it.included && it.warnings.length > 0 && ' · ⚠ Stammverein unklar'}
+                <div className="text-xs text-brand-text-muted mt-1 flex flex-wrap items-center gap-x-1">
+                  <span>{it.status} · {it.kategorie_label ?? '—'}</span>
+                  {!it.included && (
+                    <span className="inline-flex items-center gap-1">· <Ban className="w-4 h-4 shrink-0" />{it.exclusions.map(e => EXCL_LABEL[e] ?? e).join(', ')}</span>
+                  )}
+                  {it.included && it.warnings.length > 0 && (
+                    <span className="inline-flex items-center gap-1">· <AlertTriangle className="w-4 h-4 shrink-0" /> Stammverein unklar</span>
+                  )}
                 </div>
               </div>
             ))}
