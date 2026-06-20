@@ -40,3 +40,6 @@ build-errors.log
 # Deploy tracking
 .deployed-hash
 web/public/changes.json
+
+# Mitglieder-CSV-Exporte im Repo-Root (PII) — testdata/*.csv bleiben getrackt
+/*.csv
