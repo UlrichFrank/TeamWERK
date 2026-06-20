@@ -429,6 +429,16 @@ func spaFallback(static fs.FS, buildHash string) http.HandlerFunc {
 			path = path[1:]
 		}
 
+		// iOS-PWAs, die vor PR #47 gegen /manifest.json installiert wurden,
+		// fetchen diese URL beim Launch weiter. Würde sie auf den SPA-Fallback
+		// (HTML statt JSON) fallen, invalidiert iOS die Web-Push-Permission.
+		// Deshalb: Alias auf die heute generierte manifest.webmanifest.
+		aliased := false
+		if path == "manifest.json" {
+			path = "manifest.webmanifest"
+			aliased = true
+		}
+
 		// SPA fallback: a path that is not a real file resolves to index.html.
 		// Cache headers must reflect the file we actually serve, so the ETag is
 		// derived from the served path, not the requested one.
@@ -460,6 +470,12 @@ func spaFallback(static fs.FS, buildHash string) http.HandlerFunc {
 		if spa {
 			r2 := r.Clone(r.Context())
 			r2.URL.Path = "/"
+			fileServer.ServeHTTP(w, r2)
+			return
+		}
+		if aliased {
+			r2 := r.Clone(r.Context())
+			r2.URL.Path = "/" + path
 			fileServer.ServeHTTP(w, r2)
 			return
 		}

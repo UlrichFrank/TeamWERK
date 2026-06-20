@@ -95,6 +95,26 @@ func TestSpaHandler_ETag_304(t *testing.T) {
 	}
 }
 
+// Regression: iOS-PWAs aus der Zeit vor PR #47 wurden gegen /manifest.json
+// installiert. Würde der Pfad in den SPA-Fallback fallen, lieferte der Server
+// index.html (HTML) als Manifest aus — iOS wertet das als kaputtes Manifest
+// und revoked die Web-Push-Permission. Der Pfad muss deshalb auf den heute
+// generierten manifest.webmanifest-Inhalt aliasen.
+func TestSpaHandler_LegacyManifestJsonAlias(t *testing.T) {
+	h := spaFallback(spaTestFS(), "testhash")
+	req := httptest.NewRequest(http.MethodGet, "/manifest.json", nil)
+	rec := httptest.NewRecorder()
+	h(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if body != "{}" {
+		t.Errorf("body = %q, want manifest.webmanifest content %q (got SPA-Fallback?)", body, "{}")
+	}
+}
+
 func TestSpaHandler_ETag_Changes_With_BuildHash(t *testing.T) {
 	etagFor := func(hash string) string {
 		h := spaFallback(spaTestFS(), hash)
