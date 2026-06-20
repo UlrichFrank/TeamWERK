@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { CLUB_FUNCTION_OPTIONS } from '../../lib/constants'
+import { useAuth } from '../../contexts/AuthContext'
 import ImageCropModal from '../ImageCropModal'
 
 interface Member {
@@ -59,6 +60,8 @@ const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'honorar', 'a
 const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']
 
 export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const photoInputRef = useRef<HTMLInputElement>(null)
   const photoDropdownRef = useRef<HTMLDivElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
@@ -251,12 +254,22 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           {!isHonorar && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mitgliedsnummer</label>
-              <input
-                type="text"
-                value={form.member_number}
-                onChange={e => onFormChange({ member_number: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
+              {isNew ? (
+                <p className="text-sm text-brand-text-muted px-3 py-2 border border-brand-border-subtle rounded-md bg-brand-surface-card">
+                  Wird automatisch vergeben
+                </p>
+              ) : isAdmin ? (
+                <input
+                  type="text"
+                  value={form.member_number}
+                  onChange={e => onFormChange({ member_number: e.target.value })}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                />
+              ) : (
+                <p className="text-sm text-brand-text px-3 py-2 border border-brand-border-subtle rounded-md bg-brand-surface-card">
+                  {form.member_number || '—'}
+                </p>
+              )}
             </div>
           )}
           {hasSpieler && (

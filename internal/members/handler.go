@@ -79,6 +79,58 @@ type Member struct {
 	HasPendingBankDraft   bool `json:"has_pending_bank_draft,omitempty"`
 
 	AbsencesPublic int `json:"absences_public"`
+
+	// MemberNumberConflict markiert Nummern-Konflikte für die Übersicht:
+	// "duplicate" | "non_numeric" | "missing" | "" (kein Konflikt). Nur für
+	// Admin/Vorstand befüllt, da es ein administrativer Hinweis ist.
+	MemberNumberConflict string `json:"member_number_conflict,omitempty"`
+}
+
+// nextMemberNumber liefert die nächste freie Mitgliedsnummer (höchste vorhandene
+// numerische Nummer + 1, ohne Lücken-Reuse). Nicht-numerische Bestandswerte werden
+// über das GLOB-Muster von der Maximum-Bestimmung ausgenommen.
+func nextMemberNumber(ctx context.Context, db *sql.DB) (string, error) {
+	var maxNum sql.NullInt64
+	err := db.QueryRowContext(ctx,
+		`SELECT MAX(CAST(member_number AS INTEGER)) FROM members WHERE member_number GLOB '[0-9]*'`).Scan(&maxNum)
+	if err != nil {
+		return "", err
+	}
+	if maxNum.Valid {
+		return strconv.FormatInt(maxNum.Int64+1, 10), nil
+	}
+	return "1", nil
+}
+
+// isNumericMemberNumber prüft, ob eine Mitgliedsnummer rein numerisch ist.
+func isNumericMemberNumber(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// memberNumberConflict klassifiziert den Nummern-Konflikt eines Mitglieds.
+// honorar-Mitglieder ohne Nummer sind kein Konflikt.
+func memberNumberConflict(number, status string, duplicates map[string]bool) string {
+	if number == "" {
+		if status == "honorar" {
+			return ""
+		}
+		return "missing"
+	}
+	if duplicates[number] {
+		return "duplicate"
+	}
+	if !isNumericMemberNumber(number) {
+		return "non_numeric"
+	}
+	return ""
 }
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
@@ -280,6 +332,27 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		Can policy.CanFlags `json:"can"`
 	}
 	redact := !policy.CanReadMemberAdminFields(p)
+
+	// Nummern-Konflikte nur für Admin/Vorstand ermitteln (administrativer Hinweis;
+	// für redacted Viewer wird keine Nummer und kein Flag ausgeliefert).
+	if !redact && len(result) > 0 {
+		duplicates := map[string]bool{}
+		dupRows, derr := h.db.QueryContext(r.Context(),
+			`SELECT member_number FROM members WHERE member_number IS NOT NULL AND member_number <> '' GROUP BY member_number HAVING COUNT(*) > 1`)
+		if derr == nil {
+			for dupRows.Next() {
+				var n string
+				if dupRows.Scan(&n) == nil {
+					duplicates[n] = true
+				}
+			}
+			dupRows.Close()
+		}
+		for i := range result {
+			result[i].MemberNumberConflict = memberNumberConflict(result[i].MemberNumber, result[i].Status, duplicates)
+		}
+	}
+
 	annotated := make([]memberItem, len(result))
 	for i, m := range result {
 		memberUserID := 0
@@ -338,24 +411,31 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Gender == "" {
 		req.Gender = "u"
 	}
-	if req.MemberNumber == "" {
-		var maxNum sql.NullInt64
-		h.db.QueryRowContext(r.Context(), `SELECT MAX(CAST(member_number AS INTEGER)) FROM members`).Scan(&maxNum)
-		if maxNum.Valid {
-			req.MemberNumber = strconv.FormatInt(maxNum.Int64+1, 10)
-		} else {
-			req.MemberNumber = "1"
+	// Die Mitgliedsnummer ist systemverwaltet: ein im Request mitgeschickter Wert
+	// wird ignoriert, es wird immer automatisch die nächste freie Nummer vergeben.
+	// Bei seltener Race (parallele Anlage → Unique-Verletzung) wird die Nummer neu
+	// bestimmt und der INSERT wiederholt.
+	var id int64
+	for attempt := 0; attempt < 3; attempt++ {
+		memberNumber, err := nextMemberNumber(r.Context(), h.db)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
 		}
+		res, err := h.db.ExecContext(r.Context(),
+			`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender) VALUES (?,?,?,?,?,?,?)`,
+			req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(memberNumber),
+			nullableString(req.PassNumber), nullableString(req.Position), req.Gender)
+		if err != nil {
+			if attempt == 2 {
+				http.Error(w, "duplicate pass number or internal error", http.StatusConflict)
+				return
+			}
+			continue
+		}
+		id, _ = res.LastInsertId()
+		break
 	}
-	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender) VALUES (?,?,?,?,?,?,?)`,
-		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
-		nullableString(req.PassNumber), nullableString(req.Position), req.Gender)
-	if err != nil {
-		http.Error(w, "duplicate pass number or internal error", http.StatusConflict)
-		return
-	}
-	id, _ := res.LastInsertId()
 	h.writeClubFunctions(r.Context(), int(id), req.ClubFunctions)
 	h.hub.Broadcast("members")
 	w.Header().Set("Content-Type", "application/json")
@@ -612,6 +692,27 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Die Mitgliedsnummer ist systemverwaltet und read-only. Nur Admins dürfen sie
+	// nachträglich korrigieren; für alle anderen bleibt der bestehende Wert erhalten.
+	// (honorar leert die Nummer oben bereits für alle — bewusst beibehalten.)
+	memberNumber := req.MemberNumber
+	if req.Status != "honorar" {
+		if claims.Role == "admin" {
+			if memberNumber != "" {
+				var otherID int
+				if h.db.QueryRowContext(r.Context(),
+					`SELECT id FROM members WHERE member_number=? AND id<>?`, memberNumber, id).Scan(&otherID) == nil {
+					http.Error(w, fmt.Sprintf("Mitgliedsnummer %s ist bereits vergeben", memberNumber), http.StatusConflict)
+					return
+				}
+			}
+		} else {
+			var current sql.NullString
+			h.db.QueryRowContext(r.Context(), `SELECT member_number FROM members WHERE id=?`, id).Scan(&current)
+			memberNumber = current.String
+		}
+	}
+
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET
 			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
@@ -622,7 +723,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			zweitspielrecht=?,
 			updated_at=?
 		WHERE id=?`,
-		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(req.MemberNumber),
+		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(memberNumber),
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender,
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub), req.HomeClubID,
 		req.Status,
