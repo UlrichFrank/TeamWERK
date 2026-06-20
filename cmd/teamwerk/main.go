@@ -39,6 +39,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
+	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
@@ -115,6 +116,7 @@ func serve() {
 		Venues:         venues.NewHandler(database, hubInstance),
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, cfg.BeitragslaufDir),
+		Stammvereine:   stammvereine.NewHandler(database, hubInstance),
 		Calendar:       calendar.NewHandler(database),
 		Hub:            hub.NewHandler(hubInstance, buildHash),
 		JWTSecret:      cfg.JWTSecret,

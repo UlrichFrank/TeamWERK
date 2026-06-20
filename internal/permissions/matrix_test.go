@@ -326,6 +326,7 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/teams/my", expected: exAuth},
 	// roster: user_accessible_teams-Check → 403 wenn kein Season/Membership-Fixture
 	{method: "GET", path: "/api/teams/{id}/roster", expected: exPublic},
+	{method: "GET", path: "/api/stammvereine", expected: exAuth},
 
 	// ── Trainer + sportliche_leitung ────────────────────────────────────────────
 	{method: "GET", path: "/api/training-series", expected: exTrainer},
@@ -439,6 +440,9 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/upload/member-photo/{id}", expected: exVorstand},
 	{method: "POST", path: "/api/upload/sepa-mandat/{id}", expected: exVorstandKassierer},
 	{method: "PUT", path: "/api/age-class-rules/{ageClass}", expected: exVorstand},
+	{method: "POST", path: "/api/stammvereine", expected: exVorstand},
+	{method: "PUT", path: "/api/stammvereine/{id}", expected: exVorstand},
+	{method: "DELETE", path: "/api/stammvereine/{id}", expected: exVorstand},
 }
 
 // routeKey gibt den kanonischen Schlüssel für einen Endpoint zurück.
