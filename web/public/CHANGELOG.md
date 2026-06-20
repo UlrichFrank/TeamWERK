@@ -1,5 +1,12 @@
 ## 20.06.2026
-- [feat] dashboard: Einheitliches Tabellen-Layout für Termine/Dienste/Fahrgemeinschaften; Fahrgemeinschaften vor Mein Team
+- [refactor] members: SEPA-Mandat-Sektion vom Datenschutz- in den Bankdaten-Tab verschoben
+- [fix] members: 2-stelliges Jahr im CSV-Import nicht in die Zukunft mappen
+- [fix] members: CSV-Import-Match toleriert Timestamp-Geburtsdaten
+- [fix] members: irreführendes Import-Modus-Label 'Nur ergänzen' umbenannt
+- [feat] beitragslauf: nicht abbuchbare Beträge sichtbar machen
+- [feat] db: Migrationen 048+049 für Stammverein-Backfill
+- [feat] dashboard: einheitliches Zeilen-Raster für Termine, Dienste und Fahrt
+- [feat] dashboard: partnerTreffpunkt in carpoolingConfirmed-Payload
 - [feat] stammvereine: Settings-Tab CRUD + Stammverein-Auswahl im Mitglied
 - [feat] members: home_club_id-Zuordnung + home_club_name in GET
 - [feat] stammvereine: CRUD-Package mit Routen

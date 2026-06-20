@@ -339,6 +339,7 @@ export default function MemberDetailPage() {
 
       {activeTab === 'kontakt' && (
         <MemberKontaktTab
+          memberId={isNew ? undefined : Number(id)}
           form={form}
           isNew={isNew}
           drafts={drafts}
@@ -354,7 +355,6 @@ export default function MemberDetailPage() {
 
       {activeTab === 'datenschutz' && (
         <MemberDatenschutzTab
-          memberId={Number(id)}
           form={form}
           isNew={isNew}
           drafts={drafts}
