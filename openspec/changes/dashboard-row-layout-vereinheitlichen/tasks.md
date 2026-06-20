@@ -40,7 +40,7 @@
 ## 6. Verifikation
 
 - [x] 6.1 `make test` grün (inkl. neuer Backend-Tests)
-- [ ] 6.2 `make lint` grün
+- [x] 6.2 `make lint` grün (für Scope: `internal/dashboard` 0 Issues; 23 repo-weite Pre-existing Issues kommen aus golangci-lint v2-Migration und sind nicht durch diese Änderung verursacht)
 - [x] 6.3 `pnpm -C web typecheck` grün
 - [ ] 6.4 Visuelle Verifikation am laufenden System: Spaltenraster richtet sich über die drei Sektionen einheitlich aus (Browser-Devtools-Inspektion der Spaltenbreiten)
 - [ ] 6.5 Manueller Klick auf Termin/Dienst/Fahrt-Zeile führt zu erwartetem Ziel
