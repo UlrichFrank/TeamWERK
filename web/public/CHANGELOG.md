@@ -1,5 +1,10 @@
 ## 20.06.2026
-- [refactor] members: SEPA-Mandat-Sektion vom Datenschutz- in den Bankdaten-Tab verschoben
+- [fix] beitragslauf: SEPA-XML mit FwdgAgt-Absender-BIC im GrpHdr
+- [fix] beitragslauf: SEPA-XML komplett auf ASCII transliterieren (#38)
+- [fix] beitragslauf: Verwendungszweck verkürzen und Vereinsnamen ergänzen (#37)
+- [feat] beitragslauf: Filter für Kategorie und Hinweis (#36)
+- [fix] beitragslauf: ausgetreten/honorar/anwaerter aus Preview filtern (#35)
+- [fix] members: CSV-Import matcht Bestandsmitglieder ohne Geburtsdatum
 - [fix] members: 2-stelliges Jahr im CSV-Import nicht in die Zukunft mappen
 - [fix] members: CSV-Import-Match toleriert Timestamp-Geburtsdaten
 - [fix] members: irreführendes Import-Modus-Label 'Nur ergänzen' umbenannt

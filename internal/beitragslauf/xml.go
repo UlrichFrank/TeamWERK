@@ -57,6 +57,7 @@ type grpHdr struct {
 	NbOfTxs  int      `xml:"NbOfTxs"`
 	CtrlSum  string   `xml:"CtrlSum"`
 	InitgPty initgPty `xml:"InitgPty"`
+	FwdgAgt  *agtBIC  `xml:"FwdgAgt,omitempty"`
 }
 
 type initgPty struct {
@@ -217,6 +218,7 @@ func BuildXML(in BuildInput) ([]byte, error) {
 				NbOfTxs:  len(txs),
 				CtrlSum:  euro(sumCent),
 				InitgPty: initgPty{Nm: ascii(in.ClubName), ID: &party{OrgID: &orgID{Othr: othr{ID: in.GlaeubigerID}}}},
+				FwdgAgt:  &agtBIC{FinInstnID: finInstnBIC{BICFI: in.BIC}},
 			},
 			PmtInf: pmtInf{
 				PmtInfID:     ascii(fmt.Sprintf("TW-%s-RCUR", saisonStamp(in.SaisonKurz))),
