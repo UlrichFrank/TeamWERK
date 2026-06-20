@@ -1587,7 +1587,12 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
 		args := []interface{}{firstName, lastName}
 		if dob != "" {
-			query += ` AND COALESCE(date_of_birth,'')=?`
+			// Nur den Datumsanteil vergleichen: date_of_birth kann als reines
+			// ISO-Datum ("2007-10-14") ODER als ISO-Timestamp
+			// ("2007-10-14T00:00:00Z") gespeichert sein (SQLite-DATE-Gotcha).
+			// Ein exakter Vergleich verfehlt sonst Bestandsmitglieder, sodass
+			// enrich/update keine Felder (z.B. Mitgliedsnummer) füllt.
+			query += ` AND substr(COALESCE(date_of_birth,''),1,10)=?`
 			args = append(args, dob)
 		}
 		query += ` LIMIT 1`
