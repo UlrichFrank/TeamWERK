@@ -1276,6 +1276,63 @@ func TestGetParticipants_NoOptOutBehavesAsBefore(t *testing.T) {
 	}
 }
 
+// TestGetParticipants_MultiTeamCarriesTeamID verifies that for an event with
+// multiple teams each participant is tagged with the team_id of its kader, so
+// the frontend can group members by team. Regular and extended members both
+// carry their team_id.
+func TestGetParticipants_MultiTeamCarriesTeamID(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	if _, err := db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID); err != nil {
+		t.Fatalf("activate season: %v", err)
+	}
+	t1 := mkTeamCustom(t, db, "TS B1", "B-Jugend", "m")
+	t2 := mkTeamCustom(t, db, "TS B2", "B-Jugend", "m")
+	k1 := mkKaderCustomReturn(t, db, seasonID, t1, "B-Jugend", "m", 1)
+	k2 := mkKaderCustomReturn(t, db, seasonID, t2, "B-Jugend", "m", 2)
+
+	// Regular member in team 1, regular member in team 2, extended member in team 2.
+	m1 := testutil.CreateMember(t, db, testutil.CreateUser(t, db, "standard"))
+	m2 := testutil.CreateMember(t, db, testutil.CreateUser(t, db, "standard"))
+	mExt := testutil.CreateMember(t, db, testutil.CreateUser(t, db, "standard"))
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k1, m1)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k2, m2)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, k2, mExt)
+
+	// Generic event spanning both teams.
+	gameID := testutil.CreateGame(t, db, seasonID, t1, "2026-02-15")
+	db.Exec(`UPDATE games SET event_type='generisch' WHERE id=?`, gameID)
+	db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, t2)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", gameID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var participants []map[string]any
+	json.NewDecoder(res.Body).Decode(&participants)
+	if len(participants) != 3 {
+		t.Fatalf("expected 3 participants, got %d", len(participants))
+	}
+	teamByMember := map[int]int{}
+	for _, p := range participants {
+		teamByMember[int(p["member_id"].(float64))] = int(p["team_id"].(float64))
+	}
+	if teamByMember[m1] != t1 {
+		t.Errorf("regular member of team 1: expected team_id=%d, got %d", t1, teamByMember[m1])
+	}
+	if teamByMember[m2] != t2 {
+		t.Errorf("regular member of team 2: expected team_id=%d, got %d", t2, teamByMember[m2])
+	}
+	if teamByMember[mExt] != t2 {
+		t.Errorf("extended member of team 2: expected team_id=%d, got %d", t2, teamByMember[mExt])
+	}
+}
+
 // TestGetGame_ReturnsCounts verifies that the game detail endpoint exposes
 // confirmed_count / declined_count / maybe_count, opt-out-aware.
 func TestGetGame_ReturnsCounts(t *testing.T) {

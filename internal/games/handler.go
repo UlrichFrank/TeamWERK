@@ -1996,6 +1996,7 @@ type participantItem struct {
 	IsExtended bool    `json:"is_extended"`
 	RsvpStatus *string `json:"rsvp_status"`
 	InLineup   bool    `json:"in_lineup"`
+	TeamID     int     `json:"team_id"`
 }
 
 // GET /api/games/{id}/participants
@@ -2010,7 +2011,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	// implizit als "confirmed". Extended-Mitglieder sind davon ausgenommen — sie
 	// müssen explizit zusagen.
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, rsvp_status, in_lineup
+		SELECT member_id, member_name, is_extended, rsvp_status, in_lineup, team_id
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
@@ -2018,7 +2019,8 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			       COALESCE(gr.status,
 			                CASE WHEN (SELECT rsvp_opt_out FROM games WHERE id = ?) = 1
 			                     THEN 'confirmed' ELSE NULL END) AS rsvp_status,
-			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup
+			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup,
+			       k.team_id AS team_id
 			FROM members m
 			JOIN kader_members km ON km.member_id = m.id
 			JOIN kader k ON k.id = km.kader_id
@@ -2032,7 +2034,8 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       1 AS is_extended,
 			       NULL AS rsvp_status,
-			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup
+			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup,
+			       k.team_id AS team_id
 			FROM members m
 			JOIN kader_extended_members kem ON kem.member_id = m.id
 			JOIN kader k ON k.id = kem.kader_id
@@ -2054,7 +2057,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		var p participantItem
 		var status sql.NullString
 		var isExtended, inLineup int
-		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &status, &inLineup)
+		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &status, &inLineup, &p.TeamID)
 		p.IsExtended = isExtended == 1
 		p.InLineup = inLineup == 1
 		if status.Valid {

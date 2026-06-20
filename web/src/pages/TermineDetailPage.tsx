@@ -35,6 +35,7 @@ interface ParticipantItem {
   is_extended: boolean
   rsvp_status: string | null
   in_lineup: boolean
+  team_id: number
 }
 
 interface VenueRef {
@@ -66,6 +67,13 @@ interface SessionDetail {
   rsvp_require_reason?: number
 }
 
+interface TeamRef {
+  id: number
+  name: string
+  display_short: string
+  display_long: string
+}
+
 interface GameDetail {
   id: number
   date: string
@@ -77,6 +85,7 @@ interface GameDetail {
   venue?: VenueRef | null
   rsvp_opt_out?: number
   rsvp_require_reason?: number
+  teams?: TeamRef[]
   can?: { edit: boolean; delete: boolean; manage_lineup: boolean }
 }
 
@@ -115,6 +124,13 @@ interface TableRow {
   present: boolean | null
   is_extended?: boolean
   in_lineup?: boolean
+  team_id?: number
+}
+
+// Eine gruppierte Sektion der Teilnahme-Tabelle (Team- oder Kader-Überschrift + Zeilen).
+interface TableSection {
+  title: string | null
+  rows: TableRow[]
 }
 
 export default function TermineDetailPage() {
@@ -315,7 +331,7 @@ export default function TermineDetailPage() {
     ? g.opponent
     : (g.event_type === 'heim' ? `Heimspiel vs. ${g.opponent}` : `Auswärtsspiel vs. ${g.opponent}`)
 
-  const tableRows: TableRow[] = participants.map(p => ({
+  const toRow = (p: ParticipantItem): TableRow => ({
     member_id: p.member_id,
     member_name: p.member_name,
     rsvp_status: p.rsvp_status,
@@ -323,7 +339,30 @@ export default function TermineDetailPage() {
     present: null,
     is_extended: p.is_extended,
     in_lineup: p.in_lineup,
-  }))
+    team_id: p.team_id,
+  })
+
+  // Bei generischen Ereignissen mit mehreren Teams werden die Teilnehmer nach
+  // Team gruppiert; pro Team werden Stamm- und erweiterter Kader gemeinsam nach
+  // Vorname (= member_name beginnt mit dem Vornamen) sortiert. In allen anderen
+  // Fällen bleibt die bisherige Aufteilung Stammkader / Erweiterter Kader.
+  const groupByTeam = g.event_type === 'generisch' && (g.teams?.length ?? 0) > 1
+  let sections: TableSection[] | undefined
+  if (groupByTeam) {
+    sections = (g.teams ?? []).map(team => ({
+      title: team.display_long || team.display_short || team.name,
+      rows: participants
+        .filter(p => p.team_id === team.id)
+        .map(toRow)
+        .sort((a, b) => a.member_name.localeCompare(b.member_name, 'de')),
+    })).filter(s => s.rows.length > 0)
+  }
+
+  // Ohne Team-Gruppierung pro Mitglied nur eine Zeile (ein Mitglied kann in
+  // mehreren Team-Kadern stehen).
+  const tableRows: TableRow[] = groupByTeam
+    ? []
+    : Array.from(new Map(participants.map(p => [p.member_id, toRow(p)])).values())
 
   const confirmedCount = participants.filter(p => p.rsvp_status === 'confirmed').length
   const declinedCount = participants.filter(p => p.rsvp_status === 'declined').length
@@ -360,6 +399,7 @@ export default function TermineDetailPage() {
 
       <ResponseTable
         rows={tableRows}
+        sections={sections}
         showAttendanceCol={false}
         attendanceMap={{}}
         attendanceError={null}
@@ -375,8 +415,88 @@ export default function TermineDetailPage() {
   )
 }
 
-function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup }: {
+interface RowActions {
+  showAttendanceCol: boolean
+  attendanceMap: Record<number, boolean>
+  isTrainer: boolean
+  showReasonId: number | null
+  setShowReasonId: (id: number | null) => void
+  onToggleAttendance: (memberId: number, value: boolean) => Promise<void>
+  lineupMap?: Record<number, boolean>
+  onToggleLineup?: (memberId: number, value: boolean) => void
+}
+
+function colSpan(a: RowActions) {
+  return 2 + (a.lineupMap !== undefined ? 1 : 0) + (a.showAttendanceCol ? 1 : 0)
+}
+
+function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
+  return (
+    <Fragment>
+      <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
+        <td className="px-4 py-3 text-sm text-brand-text font-medium">
+          <span>{row.member_name}</span>
+        </td>
+        <td className="px-4 py-3">
+          <div className="relative group flex items-center gap-1">
+            <RsvpIcon status={row.rsvp_status} />
+            {row.reason && (
+              <>
+                <button
+                  onClick={() => a.setShowReasonId(row.member_id === a.showReasonId ? null : row.member_id)}
+                  aria-label="Kommentar anzeigen"
+                >
+                  <MessageCircle className="w-3 h-3 text-brand-text-muted" />
+                </button>
+                <div className="hidden group-hover:block absolute left-0 top-full z-10 mt-1 w-48 rounded-md bg-brand-text px-2 py-1 text-xs text-white shadow-lg pointer-events-none">
+                  {row.reason}
+                </div>
+              </>
+            )}
+          </div>
+        </td>
+        {a.lineupMap !== undefined && (
+          <td className="px-4 py-3 text-center">
+            {a.onToggleLineup ? (
+              <input
+                type="checkbox"
+                checked={a.lineupMap[row.member_id] ?? false}
+                onChange={e => a.onToggleLineup!(row.member_id, e.target.checked)}
+                className="w-4 h-4 rounded border-brand-border"
+              />
+            ) : (
+              a.lineupMap[row.member_id]
+                ? <Check className="w-4 h-4 text-green-600 mx-auto" />
+                : <span className="text-brand-text-muted text-sm">–</span>
+            )}
+          </td>
+        )}
+        {a.showAttendanceCol && (
+          <td className="px-4 py-3 text-center">
+            <input
+              type="checkbox"
+              checked={a.attendanceMap[row.member_id] ?? false}
+              onChange={a.isTrainer ? e => a.onToggleAttendance(row.member_id, e.target.checked) : undefined}
+              readOnly={!a.isTrainer}
+              className={`w-4 h-4 rounded border-brand-border ${a.isTrainer ? '' : 'cursor-default opacity-60'}`}
+            />
+          </td>
+        )}
+      </tr>
+      {a.showReasonId === row.member_id && row.reason && (
+        <tr className="bg-brand-surface-card">
+          <td colSpan={colSpan(a)} className="px-4 pb-2 text-xs text-brand-text-muted italic">
+            {row.reason}
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  )
+}
+
+function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup }: {
   rows: TableRow[]
+  sections?: TableSection[]
   showAttendanceCol: boolean
   attendanceMap: Record<number, boolean>
   attendanceError: string | null
@@ -388,12 +508,23 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
   lineupMap?: Record<number, boolean>
   onToggleLineup?: (memberId: number, value: boolean) => void
 }) {
+  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup }
+
+  // Wenn keine expliziten Sektionen übergeben werden, fällt die Tabelle auf die
+  // bisherige Aufteilung Stammkader / Erweiterter Kader zurück.
+  const effectiveSections: TableSection[] = sections ?? [
+    { title: null, rows: rows.filter(r => !r.is_extended) },
+    { title: 'Erweiterter Kader', rows: rows.filter(r => r.is_extended) },
+  ].filter(s => s.rows.length > 0)
+
+  const isEmpty = effectiveSections.every(s => s.rows.length === 0)
+
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
       <div className="px-6 py-4 border-b border-brand-border-subtle">
         <h2 className="font-semibold text-brand-text">Teilnahme</h2>
       </div>
-      {rows.length === 0 ? (
+      {isEmpty ? (
         <p className="px-6 py-4 text-sm text-brand-text-muted">
           {isTrainer ? 'Keine Mitglieder gefunden.' : 'Noch keine Rückmeldungen.'}
         </p>
@@ -413,125 +544,21 @@ function ResponseTable({ rows, showAttendanceCol, attendanceMap, attendanceError
               </tr>
             </thead>
             <tbody>
-              {rows.filter(r => !r.is_extended).map(row => (
-                <Fragment key={row.member_id}>
-                  <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
-                    <td className="px-4 py-3 text-sm text-brand-text font-medium">
-                      <span>{row.member_name}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="relative group flex items-center gap-1">
-                        <RsvpIcon status={row.rsvp_status} />
-                        {row.reason && (
-                          <>
-                            <button
-                              onClick={() => setShowReasonId(row.member_id === showReasonId ? null : row.member_id)}
-                              aria-label="Kommentar anzeigen"
-                            >
-                              <MessageCircle className="w-3 h-3 text-brand-text-muted" />
-                            </button>
-                            <div className="hidden group-hover:block absolute left-0 top-full z-10 mt-1 w-48 rounded-md bg-brand-text px-2 py-1 text-xs text-white shadow-lg pointer-events-none">
-                              {row.reason}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    {lineupMap !== undefined && (
-                      <td className="px-4 py-3 text-center">
-                        {onToggleLineup ? (
-                          <input
-                            type="checkbox"
-                            checked={lineupMap[row.member_id] ?? false}
-                            onChange={e => onToggleLineup(row.member_id, e.target.checked)}
-                            className="w-4 h-4 rounded border-brand-border"
-                          />
-                        ) : (
-                          lineupMap[row.member_id]
-                            ? <Check className="w-4 h-4 text-green-600 mx-auto" />
-                            : <span className="text-brand-text-muted text-sm">–</span>
-                        )}
-                      </td>
-                    )}
-                    {showAttendanceCol && (
-                      <td className="px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={attendanceMap[row.member_id] ?? false}
-                          onChange={isTrainer ? e => onToggleAttendance(row.member_id, e.target.checked) : undefined}
-                          readOnly={!isTrainer}
-                          className={`w-4 h-4 rounded border-brand-border ${isTrainer ? '' : 'cursor-default opacity-60'}`}
-                        />
-                      </td>
-                    )}
-                  </tr>
-                  {showReasonId === row.member_id && row.reason && (
-                    <tr className="bg-brand-surface-card">
-                      <td colSpan={2 + (lineupMap !== undefined ? 1 : 0) + (showAttendanceCol ? 1 : 0)} className="px-4 pb-2 text-xs text-brand-text-muted italic">
-                        {row.reason}
+              {effectiveSections.map((section, si) => (
+                <Fragment key={section.title ?? `section-${si}`}>
+                  {section.title && (
+                    <tr className="border-t-2 border-brand-border bg-brand-surface-card">
+                      <td colSpan={colSpan(a)}
+                          className="px-4 py-2 text-xs font-semibold text-brand-text-muted uppercase tracking-wide">
+                        {section.title}
                       </td>
                     </tr>
                   )}
+                  {section.rows.map(row => (
+                    <ParticipantRow key={row.member_id} row={row} a={a} />
+                  ))}
                 </Fragment>
               ))}
-              {rows.some(r => r.is_extended) && (
-                <>
-                  <tr className="border-t-2 border-brand-border bg-brand-surface-card">
-                    <td colSpan={2 + (lineupMap !== undefined ? 1 : 0) + (showAttendanceCol ? 1 : 0)}
-                        className="px-4 py-2 text-xs font-semibold text-brand-text-muted uppercase tracking-wide">
-                      Erweiterter Kader
-                    </td>
-                  </tr>
-                  {rows.filter(r => r.is_extended).map(row => (
-                    <Fragment key={row.member_id}>
-                      <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
-                        <td className="px-4 py-3 text-sm text-brand-text font-medium">
-                          <span>{row.member_name}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="relative group flex items-center gap-1">
-                            <RsvpIcon status={row.rsvp_status} />
-                          </div>
-                        </td>
-                        {lineupMap !== undefined && (
-                          <td className="px-4 py-3 text-center">
-                            {onToggleLineup ? (
-                              <input
-                                type="checkbox"
-                                checked={lineupMap[row.member_id] ?? false}
-                                onChange={e => onToggleLineup(row.member_id, e.target.checked)}
-                                className="w-4 h-4 rounded border-brand-border"
-                              />
-                            ) : (
-                              lineupMap[row.member_id]
-                                ? <Check className="w-4 h-4 text-green-600 mx-auto" />
-                                : <span className="text-brand-text-muted text-sm">–</span>
-                            )}
-                          </td>
-                        )}
-                        {showAttendanceCol && (
-                          <td className="px-4 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={attendanceMap[row.member_id] ?? false}
-                              onChange={isTrainer ? e => onToggleAttendance(row.member_id, e.target.checked) : undefined}
-                              readOnly={!isTrainer}
-                              className={`w-4 h-4 rounded border-brand-border ${isTrainer ? '' : 'cursor-default opacity-60'}`}
-                            />
-                          </td>
-                        )}
-                      </tr>
-                      {showReasonId === row.member_id && row.reason && (
-                        <tr className="bg-brand-surface-card">
-                          <td colSpan={2 + (lineupMap !== undefined ? 1 : 0) + (showAttendanceCol ? 1 : 0)} className="px-4 pb-2 text-xs text-brand-text-muted italic">
-                            {row.reason}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  ))}
-                </>
-              )}
             </tbody>
           </table>
           {attendanceError && (
