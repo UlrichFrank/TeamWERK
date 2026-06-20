@@ -1312,6 +1312,17 @@ func nullableString(s string) interface{} {
 // normalizeDate converts German DD.MM.YY / DD.MM.YYYY to ISO YYYY-MM-DD.
 // Leaves already-ISO or unrecognized strings unchanged.
 func normalizeDate(s string) string {
+	return normalizeDateAt(s, time.Now().Year())
+}
+
+// normalizeDateAt wandelt deutsches DD.MM.YY / DD.MM.YYYY in ISO YYYY-MM-DD.
+// Für 2-stellige Jahre wird das Jahrhundert so gewählt, dass das Datum NICHT in
+// der Zukunft liegt — Geburts-/Beitrittsdaten sind nie zukünftig: 20YY, sofern
+// das nicht nach currentYear läge, sonst 19YY. Damit wird z.B. "67" korrekt als
+// 1967 (statt 2067) interpretiert; sonst verfehlt der Import-Abgleich ältere
+// Mitglieder und füllt keine Felder. Bereits ISO- oder unbekannte Strings
+// bleiben unverändert.
+func normalizeDateAt(s string, currentYear int) string {
 	parts := strings.Split(s, ".")
 	if len(parts) != 3 {
 		return s
@@ -1323,10 +1334,10 @@ func normalizeDate(s string) string {
 		if err != nil {
 			return s
 		}
-		if y >= 68 {
-			year = "19" + year
+		if 2000+y > currentYear {
+			year = strconv.Itoa(1900 + y)
 		} else {
-			year = "20" + year
+			year = strconv.Itoa(2000 + y)
 		}
 	case 4:
 		// already full year

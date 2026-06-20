@@ -115,19 +115,15 @@ Jeder Member SHALL ein Feld `absences_public` (Boolean, default `false`) besitze
 - **THEN** wird `absences_public` auf `true` gesetzt und ist sofort wirksam für Kalenderabfragen
 
 ### Requirement: CSV-Import für Mitglieder
-Das System SHALL einen CSV-Import für Mitgliedsdaten unterstützen. Geburtsdaten in zweistelligem Jahresformat (DD.MM.YY) MÜSSEN korrekt auf das 20. oder 21. Jahrhundert abgebildet werden.
+Das System SHALL einen CSV-Import für Mitgliedsdaten unterstützen. Geburtsdaten in zweistelligem Jahresformat (DD.MM.YY) MÜSSEN auf das Jahrhundert abgebildet werden, das **nicht in der Zukunft** liegt: `20YY`, sofern dieses Jahr nicht nach dem aktuellen Jahr läge, sonst `19YY`. So werden auch ältere Mitglieder korrekt erkannt (Geburts- und Beitrittsdaten sind nie zukünftig).
 
 #### Scenario: Importierte Geburtstage — aktuelle Jugendliche
-- **WHEN** ein CSV-Import ein Geburtsdatum mit zweistelligem Jahr `< 30` enthält (z.B. `01.03.25`)
+- **WHEN** ein CSV-Import ein Geburtsdatum mit zweistelligem Jahr enthält, dessen `20YY`-Form nicht in der Zukunft liegt (z.B. `01.03.25` bei aktuellem Jahr 2026)
 - **THEN** wird das Geburtsjahr als `2025` gespeichert
 
 #### Scenario: Importierte Geburtstage — ältere Mitglieder
-- **WHEN** ein CSV-Import ein Geburtsdatum mit zweistelligem Jahr `>= 68` enthält (z.B. `15.07.72`)
-- **THEN** wird das Geburtsjahr als `1972` gespeichert
-
-#### Scenario: Importierte Geburtstage — Grenzbereich 2030er-Jahrgang
-- **WHEN** ein CSV-Import ein Geburtsdatum mit zweistelligem Jahr im Bereich `30`–`67` enthält (z.B. `10.05.30`)
-- **THEN** wird das Geburtsjahr als `2030` gespeichert (nicht als `1930`)
+- **WHEN** ein CSV-Import ein Geburtsdatum mit zweistelligem Jahr enthält, dessen `20YY`-Form in der Zukunft läge (z.B. `06.12.67` oder `15.07.72`)
+- **THEN** wird das Geburtsjahr als `1967` bzw. `1972` gespeichert (nicht `2067`/`2072`)
 
 #### Scenario: Vierstelliges Jahr bleibt unverändert
 - **WHEN** ein CSV-Import ein Geburtsdatum mit vierstelligem Jahr enthält (z.B. `10.05.2030`)
