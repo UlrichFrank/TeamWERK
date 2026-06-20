@@ -68,8 +68,9 @@ type DutyAccount struct {
 }
 
 type CarpoolingPaarung struct {
-	PaarungID   int    `json:"paarungId"`
-	PartnerName string `json:"partnerName"`
+	PaarungID         int    `json:"paarungId"`
+	PartnerName       string `json:"partnerName"`
+	PartnerTreffpunkt string `json:"partnerTreffpunkt"`
 }
 
 type CarpoolingConfirmed struct {
@@ -438,7 +439,10 @@ func (h *Handler) queryCarpoolingConfirmed(r *http.Request, userID int, seasonID
 			SELECT p.id,
 			       CASE WHEN mb.user_id = ? OR EXISTS(SELECT 1 FROM family_links fl JOIN members m ON m.id = fl.member_id WHERE fl.parent_user_id = ? AND m.user_id = mb.user_id)
 			            THEN us.first_name || ' ' || us.last_name
-			            ELSE ub.first_name || ' ' || ub.last_name END
+			            ELSE ub.first_name || ' ' || ub.last_name END,
+			       CASE WHEN mb.user_id = ? OR EXISTS(SELECT 1 FROM family_links fl JOIN members m ON m.id = fl.member_id WHERE fl.parent_user_id = ? AND m.user_id = mb.user_id)
+			            THEN ms.treffpunkt
+			            ELSE mb.treffpunkt END
 			FROM mitfahrt_paarungen p
 			JOIN mitfahrgelegenheiten mb ON mb.id = p.biete_id
 			JOIN mitfahrgelegenheiten ms ON ms.id = p.suche_id
@@ -450,13 +454,17 @@ func (h *Handler) queryCarpoolingConfirmed(r *http.Request, userID int, seasonID
 			       OR ms.user_id IN (SELECT m.user_id FROM family_links fl JOIN members m ON m.id = fl.member_id WHERE fl.parent_user_id = ?))
 			  AND mb.game_id = ?
 			ORDER BY p.updated_at DESC`,
-			userID, userID, userID, userID, userID, userID, g.GameID)
+			userID, userID, userID, userID, userID, userID, userID, userID, g.GameID)
 		if err != nil {
 			continue
 		}
 		for pRows.Next() {
 			var p CarpoolingPaarung
-			pRows.Scan(&p.PaarungID, &p.PartnerName)
+			var treffpunkt sql.NullString
+			pRows.Scan(&p.PaarungID, &p.PartnerName, &treffpunkt)
+			if treffpunkt.Valid {
+				p.PartnerTreffpunkt = treffpunkt.String
+			}
 			games[i].Paarungen = append(games[i].Paarungen, p)
 		}
 		pRows.Close()

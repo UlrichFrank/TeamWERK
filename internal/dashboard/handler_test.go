@@ -109,6 +109,144 @@ func TestDashboard_CarpoolingConfirmed_KindPaarung(t *testing.T) {
 	}
 }
 
+// decodeConfirmedPaarung fetches the dashboard for `userID` and returns the
+// first paarung of the first confirmed group, or fails.
+func decodeConfirmedPaarung(t *testing.T, srv *httptest.Server, userID int) map[string]any {
+	t.Helper()
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	var confirmed []map[string]any
+	json.Unmarshal(body["carpoolingConfirmed"], &confirmed)
+	if len(confirmed) == 0 {
+		t.Fatal("expected at least one confirmed group")
+	}
+	paarungen, _ := confirmed[0]["paarungen"].([]any)
+	if len(paarungen) == 0 {
+		t.Fatal("expected at least one paarung in confirmed group")
+	}
+	return paarungen[0].(map[string]any)
+}
+
+// setupConfirmedPaarung creates a season, team, away game, two carpool entries
+// (biete + suche) and a confirmed paarung between them. Returns userID for the
+// caller-controlled side. `myRole` is "biete" or "suche" — the test takes that
+// role and the partner takes the other. `myTreffpunkt` and `partnerTreffpunkt`
+// are written into the respective entries (empty string = NULL).
+func setupConfirmedPaarung(t *testing.T, myRole, myTreffpunkt, partnerTreffpunkt string) (srv *httptest.Server, myUserID int) {
+	t.Helper()
+	d := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, d, "2025/26")
+	d.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, d, "Herren 1")
+	kaderID := testutil.CreateKader(t, d, teamID, seasonID)
+
+	me := testutil.CreateUser(t, d, "standard")
+	meMember := testutil.CreateMember(t, d, me)
+	d.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, meMember)
+
+	partner := testutil.CreateUser(t, d, "standard")
+
+	futureDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, d, seasonID, teamID, futureDate)
+	d.Exec(`UPDATE games SET is_home=0 WHERE id=?`, gameID)
+
+	insertEntry := func(userID int, typ, tp string) int64 {
+		if tp == "" {
+			r, _ := d.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, ?, 1)`, gameID, userID, typ)
+			id, _ := r.LastInsertId()
+			return id
+		}
+		r, _ := d.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt) VALUES (?, ?, ?, 1, ?)`, gameID, userID, typ, tp)
+		id, _ := r.LastInsertId()
+		return id
+	}
+
+	var bieteID, sucheID int64
+	if myRole == "biete" {
+		bieteID = insertEntry(me, "biete", myTreffpunkt)
+		sucheID = insertEntry(partner, "suche", partnerTreffpunkt)
+	} else {
+		bieteID = insertEntry(partner, "biete", partnerTreffpunkt)
+		sucheID = insertEntry(me, "suche", myTreffpunkt)
+	}
+	d.Exec(`INSERT INTO mitfahrt_paarungen (biete_id, suche_id, initiiert_von, status) VALUES (?, ?, 'suche', 'confirmed')`, bieteID, sucheID)
+
+	srv = testServer(t, dashboard.NewHandler(d))
+	return srv, me
+}
+
+// TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_AsBieter verifies that the
+// user, being on the bieter side of a confirmed paarung, sees the sucher's
+// treffpunkt as partnerTreffpunkt.
+func TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_AsBieter(t *testing.T) {
+	srv, me := setupConfirmedPaarung(t, "biete", "MyTreff", "Bahnhof Mitte")
+	p := decodeConfirmedPaarung(t, srv, me)
+	if got := p["partnerTreffpunkt"]; got != "Bahnhof Mitte" {
+		t.Errorf("expected partnerTreffpunkt='Bahnhof Mitte', got %v", got)
+	}
+}
+
+// TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_AsSucher verifies that the
+// user, being on the sucher side of a confirmed paarung, sees the bieter's
+// treffpunkt as partnerTreffpunkt.
+func TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_AsSucher(t *testing.T) {
+	srv, me := setupConfirmedPaarung(t, "suche", "MyTreff", "Marktplatz")
+	p := decodeConfirmedPaarung(t, srv, me)
+	if got := p["partnerTreffpunkt"]; got != "Marktplatz" {
+		t.Errorf("expected partnerTreffpunkt='Marktplatz', got %v", got)
+	}
+}
+
+// TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_Empty verifies that when
+// the partner has no treffpunkt set, partnerTreffpunkt is the empty string.
+func TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_Empty(t *testing.T) {
+	srv, me := setupConfirmedPaarung(t, "biete", "MyTreff", "")
+	p := decodeConfirmedPaarung(t, srv, me)
+	if got := p["partnerTreffpunkt"]; got != "" {
+		t.Errorf("expected partnerTreffpunkt='', got %v", got)
+	}
+}
+
+// TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_KindAsBieter verifies
+// that a parent sees the sucher's treffpunkt when their child is the bieter.
+func TestDashboard_CarpoolingConfirmed_PartnerTreffpunkt_KindAsBieter(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	parentID := testutil.CreateUser(t, db, "standard")
+	childUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, childUserID)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentID, childMemberID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, childMemberID)
+
+	sucherID := testutil.CreateUser(t, db, "standard")
+	futureDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, futureDate)
+	db.Exec(`UPDATE games SET is_home=0 WHERE id=?`, gameID)
+
+	// Kind=bieter (no treffpunkt), sucher has treffpunkt "Schule"
+	bieteRes, _ := db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze) VALUES (?, ?, 'biete', 3)`, gameID, childUserID)
+	bieteID, _ := bieteRes.LastInsertId()
+	sucheRes, _ := db.Exec(`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt) VALUES (?, ?, 'suche', 1, ?)`, gameID, sucherID, "Schule")
+	sucheID, _ := sucheRes.LastInsertId()
+	db.Exec(`INSERT INTO mitfahrt_paarungen (biete_id, suche_id, initiiert_von, status) VALUES (?, ?, 'suche', 'confirmed')`, bieteID, sucheID)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	p := decodeConfirmedPaarung(t, srv, parentID)
+	if got := p["partnerTreffpunkt"]; got != "Schule" {
+		t.Errorf("expected partnerTreffpunkt='Schule', got %v", got)
+	}
+}
+
 // decodeOpenGroups fetches the dashboard as the given user and returns the
 // carpoolingOpenGroups array.
 func decodeOpenGroups(t *testing.T, srv *httptest.Server, userID int, funcs []string) []map[string]any {
