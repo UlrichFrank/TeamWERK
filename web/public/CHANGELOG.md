@@ -1,4 +1,5 @@
 ## 20.06.2026
+- [feat] dashboard: Einheitliches Tabellen-Layout für Termine/Dienste/Fahrgemeinschaften; Fahrgemeinschaften vor Mein Team
 - [feat] stammvereine: Settings-Tab CRUD + Stammverein-Auswahl im Mitglied
 - [feat] members: home_club_id-Zuordnung + home_club_name in GET
 - [feat] stammvereine: CRUD-Package mit Routen

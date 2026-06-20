@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Calendar, BarChart2, Users, Car, ArrowRight,
-  Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check, Search
+  Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check, Search, Info
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -53,7 +53,7 @@ interface MeineDienste {
   dutyAccount: DutyAccount | null
 }
 
-interface CarpoolingPaarung { paarungId: number; partnerName: string }
+interface CarpoolingPaarung { paarungId: number; partnerName: string; partnerTreffpunkt: string }
 
 interface CarpoolingConfirmed {
   gameId: number
@@ -141,45 +141,61 @@ function Accordion({
   )
 }
 
+function DashboardRow({
+  to, dateISO, icon, title, subtitle, badge,
+}: {
+  to: string
+  dateISO: string
+  icon: React.ReactNode
+  title: string
+  subtitle?: string | React.ReactNode
+  badge?: React.ReactNode
+}) {
+  const d = new Date(dateISO.slice(0, 10) + 'T12:00:00')
+  const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '')
+  const dayMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+  return (
+    <Link
+      to={to}
+      className="flex items-center gap-3 py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
+    >
+      <div className="flex-shrink-0 w-10 text-center">
+        <p className="text-xs font-semibold text-brand-text-muted leading-tight">{weekday}</p>
+        <p className="text-xs text-brand-text-subtle leading-tight">{dayMonth}</p>
+      </div>
+      <span className="flex-shrink-0 text-brand-text-muted">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="text-sm font-medium text-brand-text truncate">{title}</p>
+          {badge}
+        </div>
+        {subtitle && <p className="text-xs text-brand-text-muted truncate">{subtitle}</p>}
+      </div>
+      <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
+    </Link>
+  )
+}
+
 function MeineTermineSection({ events }: { events: NextEvent[] }) {
   if (events.length === 0) {
     return <p className="text-sm text-brand-text-muted py-1">Keine kommenden Termine.</p>
   }
   return (
     <ul className="space-y-1 mt-1">
-      {events.map(e => {
-        const d = new Date(e.date.slice(0, 10) + 'T12:00:00')
-        const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '')
-        const dayMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
-        return (
-          <li key={`${e.eventType}-${e.id}`}>
-            <Link
-              to={e.detailUrl}
-              className="flex items-center gap-3 py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
-            >
-              <div className="flex-shrink-0 w-10 text-center">
-                <p className="text-xs font-semibold text-brand-text-muted leading-tight">{weekday}</p>
-                <p className="text-xs text-brand-text-subtle leading-tight">{dayMonth}</p>
-              </div>
-              <span className="flex-shrink-0 text-brand-text-muted">
-                {e.eventType === 'training'
-                  ? <Dumbbell className="w-4 h-4" />
-                  : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <p className="text-sm font-medium text-brand-text truncate">{e.title}</p>
-                  {e.isExtended && <ExtendedBadge />}
-                </div>
-                <p className="text-xs text-brand-text-muted">
-                  {e.teamName} · {e.time}
-                </p>
-              </div>
-              <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
-            </Link>
-          </li>
-        )
-      })}
+      {events.map(e => (
+        <li key={`${e.eventType}-${e.id}`}>
+          <DashboardRow
+            to={e.detailUrl}
+            dateISO={e.date}
+            icon={e.eventType === 'training'
+              ? <Dumbbell className="w-4 h-4" />
+              : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
+            title={e.title}
+            subtitle={`${e.teamName} · ${e.time}`}
+            badge={e.isExtended ? <ExtendedBadge /> : undefined}
+          />
+        </li>
+      ))}
     </ul>
   )
 }
@@ -196,30 +212,29 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
   return (
     <div className="space-y-3 mt-1">
       {nextGame ? (
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-2">
-            {formatDate(nextGame.date)} · {nextGame.opponent}
-          </p>
-          {mySlots.length > 0 ? (
-            <ul className="space-y-1">
-              {mySlots.map((s, i) => (
-                <li key={i} className="flex items-center gap-2 text-sm text-brand-text py-0.5">
-                  <Check className="w-4 h-4 text-brand-success flex-shrink-0" />
-                  <span className="flex-1">{s.dutyTypeName}</span>
-                  {s.eventTime && <span className="text-xs text-brand-text-muted">{s.eventTime}</span>}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Link
-              to="/dienste"
-              className="flex items-center justify-between text-sm text-brand-text hover:bg-brand-border-subtle rounded px-2 py-1.5 -mx-2 transition-colors"
-            >
-              <span>{openSlotsCount} offene Dienst{openSlotsCount !== 1 ? 'e' : ''} verfügbar</span>
-              <ArrowRight className="w-4 h-4 text-brand-text-subtle" />
-            </Link>
-          )}
-        </div>
+        mySlots.length > 0 ? (
+          <ul className="space-y-1">
+            {mySlots.map((s, i) => (
+              <li key={i}>
+                <DashboardRow
+                  to="/dienste"
+                  dateISO={nextGame.date}
+                  icon={<Check className="w-4 h-4 text-brand-success" />}
+                  title={s.dutyTypeName}
+                  subtitle={s.eventTime ? `${nextGame.opponent} · ${s.eventTime}` : nextGame.opponent}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <DashboardRow
+            to="/dienste"
+            dateISO={nextGame.date}
+            icon={<Info className="w-4 h-4" />}
+            title={`${openSlotsCount} offene Dienst${openSlotsCount !== 1 ? 'e' : ''} verfügbar`}
+            subtitle={nextGame.opponent}
+          />
+        )
       ) : (
         <p className="text-sm text-brand-text-muted">Kein kommendes Spiel mit Diensten.</p>
       )}
@@ -294,11 +309,30 @@ function MeinTeamSection() {
   )
 }
 
-function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: CarpoolingConfirmed[] | undefined; openGroups: CarpoolingOpenGroup[] | undefined }) {
-  const withPairings = (confirmed ?? []).filter(c => (c.paarungen ?? []).length > 0)
-  const openWithRequests = (openGroups ?? []).filter(g => (g.requests ?? []).length > 0)
+type FahrtRow =
+  | { kind: 'zusage'; date: string; key: string; paarungId: number; partnerName: string; partnerTreffpunkt: string; opponent: string }
+  | { kind: 'gesuch'; date: string; key: string; sucheId: number; requesterName: string; plaetze: number; treffpunkt: string; gameTitle: string }
 
-  if (withPairings.length === 0 && openWithRequests.length === 0) {
+function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: CarpoolingConfirmed[] | undefined; openGroups: CarpoolingOpenGroup[] | undefined }) {
+  const rows: FahrtRow[] = []
+  for (const g of confirmed ?? []) {
+    for (const p of g.paarungen ?? []) {
+      rows.push({ kind: 'zusage', date: g.date, key: `z-${p.paarungId}`, paarungId: p.paarungId, partnerName: p.partnerName, partnerTreffpunkt: p.partnerTreffpunkt ?? '', opponent: g.opponent })
+    }
+  }
+  for (const g of openGroups ?? []) {
+    for (const req of g.requests ?? []) {
+      rows.push({ kind: 'gesuch', date: g.date, key: `g-${req.sucheId}`, sucheId: req.sucheId, requesterName: req.requesterName, plaetze: req.plaetze, treffpunkt: req.treffpunkt ?? '', gameTitle: g.title })
+    }
+  }
+  rows.sort((a, b) => {
+    const dateCmp = a.date.slice(0, 10).localeCompare(b.date.slice(0, 10))
+    if (dateCmp !== 0) return dateCmp
+    if (a.kind === b.kind) return 0
+    return a.kind === 'zusage' ? -1 : 1
+  })
+
+  if (rows.length === 0) {
     return (
       <div>
         <p className="text-sm text-brand-text-muted py-1">Keine Fahrgemeinschaften oder offenen Gesuche.</p>
@@ -310,68 +344,44 @@ function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: Carpo
   }
 
   return (
-    <div className="space-y-4 mt-1">
-      {withPairings.length > 0 && (
-        <div className="space-y-3">
-          {withPairings.map(g => (
-            <div key={g.gameId}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-1">
-                {formatDate(g.date)} · {g.opponent}
-              </p>
-              <ul className="space-y-1">
-                {g.paarungen.map(p => (
-                  <li key={p.paarungId}>
-                    <Link
-                      to={`/mitfahrgelegenheiten#paarung-${p.paarungId}`}
-                      className="flex items-center justify-between gap-2 text-sm text-brand-text hover:bg-brand-border-subtle rounded px-2 -mx-2 py-0.5 transition-colors"
-                    >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <Check className="w-4 h-4 text-brand-success flex-shrink-0" />
-                        <span className="truncate">{p.partnerName}</span>
-                      </span>
-                      <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="space-y-1 mt-1">
+      <ul className="space-y-1">
+        {rows.map(row => {
+          if (row.kind === 'zusage') {
+            const subtitle = row.partnerTreffpunkt
+              ? `${row.opponent} · ${row.partnerTreffpunkt}`
+              : row.opponent
+            return (
+              <li key={row.key}>
+                <DashboardRow
+                  to={`/mitfahrgelegenheiten#paarung-${row.paarungId}`}
+                  dateISO={row.date}
+                  icon={<Check className="w-4 h-4 text-brand-success" />}
+                  title={row.partnerName}
+                  subtitle={subtitle}
+                />
+              </li>
+            )
+          }
+          const plaetzeText = `${row.plaetze} ${row.plaetze === 1 ? 'Platz' : 'Plätze'}`
+          const subtitle = row.treffpunkt
+            ? `${plaetzeText} · ${row.treffpunkt}`
+            : `${plaetzeText} · ${row.gameTitle}`
+          return (
+            <li key={row.key}>
+              <DashboardRow
+                to={`/mitfahrgelegenheiten#suche-${row.sucheId}`}
+                dateISO={row.date}
+                icon={<Search className="w-4 h-4" />}
+                title={row.requesterName}
+                subtitle={subtitle}
+              />
+            </li>
+          )
+        })}
+      </ul>
 
-      {openWithRequests.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-subtle">Offene Gesuche</p>
-          {openWithRequests.map(g => (
-            <div key={g.gameId}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted mb-1">
-                {formatDate(g.date)} · {g.title}
-              </p>
-              <ul className="space-y-1">
-                {g.requests.map(req => (
-                  <li key={req.sucheId}>
-                    <Link
-                      to={`/mitfahrgelegenheiten#suche-${req.sucheId}`}
-                      className="flex items-center justify-between gap-2 text-sm text-brand-text hover:bg-brand-border-subtle rounded px-2 -mx-2 py-0.5 transition-colors"
-                    >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <Search className="w-4 h-4 text-brand-text-muted flex-shrink-0" />
-                        <span className="truncate">
-                          {req.requesterName} · braucht {req.plaetze} {req.plaetze === 1 ? 'Platz' : 'Plätze'}
-                          {req.treffpunkt ? ` · ${req.treffpunkt}` : ''}
-                        </span>
-                      </span>
-                      <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1">
+      <Link to="/mitfahrgelegenheiten" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 pt-2">
         Alle Mitfahrten <ArrowRight className="w-3 h-3" />
       </Link>
     </div>
@@ -456,15 +466,15 @@ export default function DashboardPage() {
           </Accordion>
         )}
 
-        <Accordion id="team" title="Mein Team" icon={Users} isOpen={isOpen('team')} onToggle={() => toggle('team')}>
-          <MeinTeamSection />
-        </Accordion>
-
         {showFahrt && (
           <Accordion id="fahrt" title="Fahrgemeinschaften" icon={Car} isOpen={isOpen('fahrt')} onToggle={() => toggle('fahrt')}>
             <FahrgemeinschaftenSection confirmed={data.carpoolingConfirmed} openGroups={data.carpoolingOpenGroups} />
           </Accordion>
         )}
+
+        <Accordion id="team" title="Mein Team" icon={Users} isOpen={isOpen('team')} onToggle={() => toggle('team')}>
+          <MeinTeamSection />
+        </Accordion>
       </div>
     </div>
   )
