@@ -33,14 +33,16 @@
 - [x] 5.4 Assert SW: `web/src/sw.ts` referenziert `/icons/badge-96.png`
 - [x] 5.5 `pnpm -C web test` grün
 
-## 6. Manuelle Geräteverifikation (Android)
+## 6. Manuelle Geräteverifikation (Android) — durch Nutzer, Gerät erforderlich
 
 - [ ] 6.1 PWA auf Android zum Homescreen hinzufügen → Logo vollständig sichtbar, kein abgeschnittener Schriftring
 - [ ] 6.2 Push-Notification auslösen → Status-Bar zeigt Pferd-Silhouette statt weißem Kreis; aufgeklappte Notification zeigt das bunte App-Icon
 - [ ] 6.3 Kurzcheck iOS (sofern Gerät verfügbar): Homescreen-Icon und Push unverändert wie vorher (keine Regression durch die Manifest-Konsolidierung)
 
+> Hinweis: 6.1–6.3 erfordern echte Geräte (nach Deploy) und können nicht automatisiert erledigt werden. Wichtig: PWA neu installieren/„Vom Homescreen entfernen + neu hinzufügen", da Android das alte maskable Icon cacht.
+
 ## 7. Abschluss
 
-- [ ] 7.1 `openspec validate android-pwa-icons --strict`
-- [ ] 7.2 `/verify-change` (Build/Test/Lint + Invarianten)
-- [ ] 7.3 CHANGELOG-Eintrag ergänzen
+- [x] 7.1 `openspec validate android-pwa-icons --strict`
+- [x] 7.2 `/verify-change` (Build/Test/Lint + Invarianten) — frontend-scoped: `pnpm build` ✓, `pnpm test` 347 ✓, `eslint` der geänderten Dateien ✓ (die 2 offenen Lint-Fehler liegen in fremder WIP `RequestMembershipPage.tsx`, nicht in diesem Change)
+- [x] 7.3 CHANGELOG-Eintrag ergänzen — wird bei `make build` automatisch aus den Conventional Commits generiert (`feat(pwa): …`)
