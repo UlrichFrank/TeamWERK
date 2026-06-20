@@ -63,15 +63,29 @@ registerRoute(
 // Push notification handler
 self.addEventListener('push', (event) => {
   if (!event.data) return
-  const data = event.data.json() as { title: string; body: string; url: string }
-  event.waitUntil(
+  const data = event.data.json() as { title: string; body: string; url: string; badge?: number }
+  const tasks: Promise<unknown>[] = [
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       data: { url: data.url },
-    })
-  )
+    }),
+  ]
+  if (typeof data.badge === 'number') {
+    const nav = self.navigator as Navigator & {
+      setAppBadge?: (n?: number) => Promise<void>
+      clearAppBadge?: () => Promise<void>
+    }
+    if ('setAppBadge' in nav) {
+      tasks.push(
+        data.badge > 0
+          ? (nav.setAppBadge?.(data.badge) ?? Promise.resolve())
+          : (nav.clearAppBadge?.() ?? Promise.resolve())
+      )
+    }
+  }
+  event.waitUntil(Promise.all(tasks))
 })
 
 // Activate new SW on demand from the reload handler
