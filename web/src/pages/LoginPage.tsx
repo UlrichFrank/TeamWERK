@@ -20,7 +20,8 @@ export default function LoginPage() {
     setError('')
     try {
       await login(email, password)
-      navigate('/')
+      const next = searchParams.get('next')
+      navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/')
     } catch {
       setError('E-Mail oder Passwort ungültig.')
     }

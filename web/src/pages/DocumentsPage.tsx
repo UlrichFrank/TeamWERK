@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Folder, FileText, Upload, FolderPlus, Download, Trash2, Pencil,
-  MoreVertical, ChevronRight, Lock, X, Check, AlertTriangle,
+  MoreVertical, ChevronRight, Lock, X, Check, AlertTriangle, Link2,
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -593,6 +593,18 @@ export default function DocumentsPage() {
   }
 
   const [fileError, setFileError] = useState('')
+  const [linkToast, setLinkToast] = useState('')
+
+  async function copyFileLink(file: FileItem) {
+    const url = `${window.location.origin}/dokumente/datei/${file.id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkToast('Link kopiert')
+    } catch {
+      setLinkToast(url)
+    }
+    setTimeout(() => setLinkToast(''), 2500)
+  }
 
   async function openFile(file: FileItem) {
     setFileError('')
@@ -725,6 +737,7 @@ export default function DocumentsPage() {
                         <span onClick={e => e.stopPropagation()}>
                           <ActionMenu items={[
                             { label: 'Herunterladen', icon: <Download className="w-4 h-4" />, onClick: () => openFile(file) },
+                            { label: 'Link kopieren', icon: <Link2 className="w-4 h-4" />, onClick: () => copyFileLink(file) },
                             ...(canWrite ? [{ label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'file', id: file.id, name: file.name }) }] : []),
                             ...(canWrite ? [{ label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'file', id: file.id, name: file.name }) }] : []),
                           ]} />
@@ -785,6 +798,7 @@ export default function DocumentsPage() {
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                             <ActionMenu items={[
                               { label: 'Herunterladen', icon: <Download className="w-4 h-4" />, onClick: () => openFile(file) },
+                              { label: 'Link kopieren', icon: <Link2 className="w-4 h-4" />, onClick: () => copyFileLink(file) },
                               ...(canWrite ? [{ label: 'Umbenennen', icon: <Pencil className="w-4 h-4" />, onClick: () => setRenaming({ type: 'file', id: file.id, name: file.name }) }] : []),
                               ...(canWrite ? [{ label: 'Löschen', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => setConfirmDelete({ type: 'file', id: file.id, name: file.name }) }] : []),
                             ]} />
@@ -834,6 +848,12 @@ export default function DocumentsPage() {
           }}
           onClose={() => setRenaming(null)}
         />
+      )}
+
+      {linkToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-brand-black text-brand-white text-sm px-4 py-2 rounded-lg shadow-lg z-50">
+          {linkToast}
+        </div>
       )}
 
       {/* Delete confirmation */}

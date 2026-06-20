@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
 import { VersionProvider } from './contexts/VersionContext'
@@ -24,6 +24,7 @@ import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminKaderPage from './pages/AdminKaderPage'
 import MitfahrgelegenheitenPage from './pages/MitfahrgelegenheitenPage'
 import DocumentsPage from './pages/DocumentsPage'
+import DocumentFileLinkPage from './pages/DocumentFileLinkPage'
 import TerminePage from './pages/TerminePage'
 import TermineDetailPage from './pages/TermineDetailPage'
 import MeinTeamPage from './pages/MeinTeamPage'
@@ -32,8 +33,13 @@ import ChatPage from './pages/ChatPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <div className="flex items-center justify-center h-screen">Laden…</div>
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    const next = location.pathname + location.search
+    const target = next && next !== '/' ? `/login?next=${encodeURIComponent(next)}` : '/login'
+    return <Navigate to={target} replace />
+  }
   return <>{children}</>
 }
 
@@ -72,6 +78,7 @@ export default function App() {
               <Route path="profil" element={<ProfilePage />} />
               <Route path="profil/kind/:memberId" element={<ChildProfilePage />} />
               <Route path="dokumente" element={<DocumentsPage />} />
+              <Route path="dokumente/datei/:fileId" element={<DocumentFileLinkPage />} />
               <Route path="dokumente/:folderId" element={<DocumentsPage />} />
               <Route path="dienste" element={<DutyPage />} />
               <Route path="mitfahrgelegenheiten" element={<MitfahrgelegenheitenPage />} />
