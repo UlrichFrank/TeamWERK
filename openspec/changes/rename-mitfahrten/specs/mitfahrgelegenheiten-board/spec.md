@@ -1,33 +1,15 @@
-## REMOVED Requirements
+## MODIFIED Requirements
 
-### Requirement: Mitfahrangebot eintragen
-**Reason**: Capability wurde umbenannt zu `mitfahrten-board`. Funktional unverändert, nur Namenskonsistenz.
-**Migration**: Siehe `mitfahrten-board` — gleiche Requirements, neue Routen (`/api/mitfahrten` statt `/api/mitfahrgelegenheiten`).
+### Requirement: Mitfahrten als chronologische Liste
 
-### Requirement: Mitfahrgesuch eintragen
-**Reason**: Capability umbenannt.
-**Migration**: Siehe `mitfahrten-board`.
+Die Mitfahrten-Seite SHALL alle zukünftigen Spiele und Events in einer einzigen, fortlaufenden Liste anzeigen. Eine Aufteilung in Tabs nach Event-Typ SHALL NICHT mehr existieren.
 
-### Requirement: Eigenen Eintrag zurückziehen
-**Reason**: Capability umbenannt.
-**Migration**: Siehe `mitfahrten-board`.
+#### Scenario: Liste zeigt alle Event-Typen zusammen
 
-### Requirement: Einträge einsehen
-**Reason**: Capability umbenannt.
-**Migration**: Siehe `mitfahrten-board`.
+- **WHEN** ein Nutzer die Mitfahrten-Seite öffnet
+- **THEN** sieht er alle zukünftigen Spiele und Events seines Teams in einer durchgehenden Liste — unabhängig vom Event-Typ (heim, auswärts, generisch)
 
-### Requirement: Datenschutz — Nutzernamen
-**Reason**: Capability umbenannt.
-**Migration**: Siehe `mitfahrten-board`.
+#### Scenario: Keine Tab-Navigation vorhanden
 
-### Requirement: Mitfahrgelegenheit anlegen ist idempotent (suche)
-**Reason**: Capability umbenannt, Requirement-Text aktualisiert auf „Mitfahrt".
-**Migration**: Siehe `mitfahrten-board` → „Mitfahrt anlegen ist idempotent (suche)".
-
-### Requirement: Modal zeigt bestehende Einträge des Nutzers
-**Reason**: Capability umbenannt.
-**Migration**: Siehe `mitfahrten-board`.
-
-### Requirement: Generische Events mit mehreren Teams erscheinen genau einmal
-**Reason**: Capability umbenannt.
-**Migration**: Siehe `mitfahrten-board`.
+- **WHEN** ein Nutzer die Seite öffnet
+- **THEN** existieren keine Tab-Schaltflächen "Auswärtsspiele", "Heimspiele" oder "Events" — alle Filterung erfolgt über Pill-Buttons

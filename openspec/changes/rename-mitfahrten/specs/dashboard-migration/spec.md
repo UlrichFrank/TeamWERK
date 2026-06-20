@@ -2,11 +2,7 @@
 
 ### Requirement: Dashboard-Sektion Fahrtgemeinschaften wird zu Link
 
-Die bisherige `VehicleSection`-Komponente in der „Fahrtgemeinschaften"-Accordion-Sektion wird durch eine kompakte Link-Karte zur `/mitfahrten`-Seite ersetzt.
-
-**Vorher:** Zeigt Fahrzeuginfo (Sitzplätze) und Link zu `/profil`.
-
-**Nachher:** Zeigt Kurzinfo zum nächsten Auswärtsspiel (Datum, Gegner, Angebots-/Gesuch-Zähler) und einen Link zu `/mitfahrten`.
+Die Fahrtgemeinschaften-Sektion des Dashboards SHALL die bisherige `VehicleSection`-Komponente durch eine kompakte Link-Karte zur `/mitfahrten`-Seite ersetzen. Die Karte SHALL eine Kurzinfo zum nächsten Auswärtsspiel (Datum, Gegner, Angebots-/Gesuch-Zähler) und einen Link zu `/mitfahrten` zeigen.
 
 #### Scenario: Dashboard Fahrtgemeinschaften-Sektion mit nächstem Auswärtsspiel
 - **WHEN** es ein zukünftiges Auswärtsspiel gibt
