@@ -1,4 +1,6 @@
 ## 20.06.2026
+- [feat] profile: Anleitung zum Kalender-Abo für iOS und Android
+- [fix] pwa: setAppBadge-Rejection killt iOS-Pushes nicht mehr
 - [feat] pwa: Android maskable Icon + Notification-Badge korrigieren (#47)
 - [feat] files: Datei-Link aus 3-Punkte-Menü kopieren
 - [fix] auth: doppelten Refresh-Bootstrap im StrictMode verhindern

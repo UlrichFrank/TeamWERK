@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Copy, Check, Trash2 } from 'lucide-react'
+import { Copy, Check, Trash2, Smartphone } from 'lucide-react'
 import { api } from '../../lib/api'
 import Toggle from '../Toggle'
 
@@ -156,6 +156,44 @@ export default function ProfileKalenderTab() {
                 ? <span className="inline-flex items-center gap-1"><Check className="w-4 h-4" /> Kopiert</span>
                 : <span className="inline-flex items-center gap-1"><Copy className="w-4 h-4" /> Kopieren</span>}
             </button>
+          </div>
+        </div>
+      )}
+
+      {token && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 space-y-5">
+          <h3 className="font-semibold text-brand-text-muted">Anleitung: Kalender abonnieren</h3>
+
+          <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+            <strong>Hinweis:</strong> Dieser Link enthält ausschließlich deine eigenen Termine.
+            Termine deiner Kinder oder anderer Familienmitglieder sind nicht enthalten — jede
+            Person braucht ihren eigenen Link aus ihrem jeweiligen Profil.
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Smartphone className="w-5 h-5 text-brand-text" aria-hidden="true" />
+              <h4 className="font-medium text-brand-text">iPhone / iPad (Apple Kalender)</h4>
+            </div>
+            <ol className="list-decimal pl-5 text-sm text-brand-text space-y-1">
+              <li>Oben auf <em>Kopieren</em> tippen, um die Feed-URL in die Zwischenablage zu legen.</li>
+              <li>Einstellungen-App öffnen → <em>Apps</em> → <em>Kalender</em> → <em>Kalender-Accounts</em> → <em>Account hinzufügen</em> → <em>Andere</em>.</li>
+              <li><em>Kalenderabo hinzufügen</em> wählen und den kopierten Link als Server einfügen.</li>
+              <li>Auf <em>Weiter</em> und dann <em>Sichern</em> tippen. Die Termine erscheinen in der Kalender-App.</li>
+            </ol>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Smartphone className="w-5 h-5 text-brand-text" aria-hidden="true" />
+              <h4 className="font-medium text-brand-text">Android (Google Kalender)</h4>
+            </div>
+            <ol className="list-decimal pl-5 text-sm text-brand-text space-y-1">
+              <li>Oben auf <em>Kopieren</em> tippen, um die Feed-URL in die Zwischenablage zu legen.</li>
+              <li>Im Browser <code className="text-xs">calendar.google.com</code> öffnen (am einfachsten am Computer; auf dem Handy in der Desktop-Ansicht).</li>
+              <li>Links neben <em>Weitere Kalender</em> auf das <em>+</em> tippen und <em>Per URL</em> wählen.</li>
+              <li>Den kopierten Link einfügen und auf <em>Kalender hinzufügen</em> tippen. Nach wenigen Minuten erscheinen die Termine auch in der Google-Kalender-App auf dem Handy.</li>
+            </ol>
           </div>
         </div>
       )}
