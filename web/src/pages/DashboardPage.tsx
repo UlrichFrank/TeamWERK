@@ -178,25 +178,38 @@ function DashboardRow({
 
 function MeineTermineSection({ events }: { events: NextEvent[] }) {
   if (events.length === 0) {
-    return <p className="text-sm text-brand-text-muted py-1">Keine kommenden Termine.</p>
+    return (
+      <div>
+        <p className="text-sm text-brand-text-muted py-1">Keine kommenden Termine.</p>
+        <Link to="/termine" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 mt-1">
+          Alle Termine <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+    )
   }
   return (
-    <ul className="space-y-1 mt-1">
-      {events.map(e => (
-        <li key={`${e.eventType}-${e.id}`}>
-          <DashboardRow
-            to={e.detailUrl}
-            dateISO={e.date}
-            icon={e.eventType === 'training'
-              ? <Dumbbell className="w-4 h-4" />
-              : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
-            title={e.title}
-            subtitle={`${e.teamName} · ${e.time}`}
-            badge={e.isExtended ? <ExtendedBadge /> : undefined}
-          />
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-1 mt-1">
+      <ul className="space-y-1">
+        {events.map(e => (
+          <li key={`${e.eventType}-${e.id}`}>
+            <DashboardRow
+              to={e.detailUrl}
+              dateISO={e.date}
+              icon={e.eventType === 'training'
+                ? <Dumbbell className="w-4 h-4" />
+                : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
+              title={e.title}
+              subtitle={`${e.teamName} · ${e.time}`}
+              badge={e.isExtended ? <ExtendedBadge /> : undefined}
+            />
+          </li>
+        ))}
+      </ul>
+
+      <Link to="/termine" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 pt-2">
+        Alle Termine <ArrowRight className="w-3 h-3" />
+      </Link>
+    </div>
   )
 }
 
@@ -274,6 +287,10 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
           )}
         </div>
       )}
+
+      <Link to="/dienste" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 pt-2">
+        Alle Dienste <ArrowRight className="w-3 h-3" />
+      </Link>
     </div>
   )
 }
