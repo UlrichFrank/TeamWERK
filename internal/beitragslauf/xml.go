@@ -196,14 +196,14 @@ func BuildXML(in BuildInput) ([]byte, error) {
 		txs = append(txs, txInf{
 			PmtID:     pmtID{EndToEndID: ascii(fmt.Sprintf("TW-%s-%s", it.MemberNumber, saisonStamp(in.SaisonKurz)))},
 			InstdAmt:  amount{Ccy: "EUR", Val: euro(it.BetragCent)},
-			DrctDbtTx: drctDbtTx{MndtRltdInf: mndtRltdInf{MndtID: it.MandatRef, DtOfSgntr: it.MandatDatum}},
+			DrctDbtTx: drctDbtTx{MndtRltdInf: mndtRltdInf{MndtID: ascii(it.MandatRef), DtOfSgntr: it.MandatDatum}},
 			DbtrAgt:   agtBIC{FinInstnID: finInstnBIC{Othr: &othr{ID: "NOTPROVIDED"}}},
 			Dbtr: dbtr{
-				Nm:      it.Name,
-				PstlAdr: &pstlAdr{StrtNm: strt, BldgNb: bldg, PstCd: it.Zip, TwnNm: it.City, Ctry: "DE"},
+				Nm:      ascii(it.Name),
+				PstlAdr: &pstlAdr{StrtNm: ascii(strt), BldgNb: ascii(bldg), PstCd: ascii(it.Zip), TwnNm: ascii(it.City), Ctry: "DE"},
 			},
 			DbtrAcct: acct{ID: acctID{IBAN: it.IBAN}},
-			RmtInf:   rmtInf{Ustrd: fmt.Sprintf("Mitgliedsbeitrag Team Stuttgart %s - Mitglied %s", saisonShort(in.SaisonKurz), it.MemberNumber)},
+			RmtInf:   rmtInf{Ustrd: ascii(fmt.Sprintf("Mitgliedsbeitrag Team Stuttgart %s - Mitglied %s", saisonShort(in.SaisonKurz), it.MemberNumber))},
 		})
 	}
 
@@ -216,7 +216,7 @@ func BuildXML(in BuildInput) ([]byte, error) {
 				CreDtTm:  in.CreatedAt.UTC().Format("2006-01-02T15:04:05"),
 				NbOfTxs:  len(txs),
 				CtrlSum:  euro(sumCent),
-				InitgPty: initgPty{Nm: in.ClubName, ID: &party{OrgID: &orgID{Othr: othr{ID: in.GlaeubigerID}}}},
+				InitgPty: initgPty{Nm: ascii(in.ClubName), ID: &party{OrgID: &orgID{Othr: othr{ID: in.GlaeubigerID}}}},
 			},
 			PmtInf: pmtInf{
 				PmtInfID:     ascii(fmt.Sprintf("TW-%s-RCUR", saisonStamp(in.SaisonKurz))),
@@ -226,7 +226,7 @@ func BuildXML(in BuildInput) ([]byte, error) {
 				CtrlSum:      euro(sumCent),
 				PmtTpInf:     pmtTpInf{SvcLvl: code{Cd: "SEPA"}, LclInstrm: code{Cd: "CORE"}, SeqTp: "RCUR"},
 				ReqdColltnDt: in.Faelligkeit.Format("2006-01-02"),
-				Cdtr:         partyName{Nm: in.Kontoinhaber},
+				Cdtr:         partyName{Nm: ascii(in.Kontoinhaber)},
 				CdtrAcct:     acct{ID: acctID{IBAN: in.ClubIBAN}},
 				CdtrAgt:      agtBIC{FinInstnID: finInstnBIC{BICFI: in.BIC}},
 				ChrgBr:       "SLEV",

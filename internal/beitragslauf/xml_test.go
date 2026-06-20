@@ -62,18 +62,33 @@ func TestBuildXML_StraßenParsing(t *testing.T) {
 	}
 }
 
-func TestBuildXML_UmlautInName(t *testing.T) {
-	out, _ := BuildXML(sampleInput())
+func TestBuildXML_UmlauteWerdenTransliteriert(t *testing.T) {
+	// Bank-Validatoren (z.B. Sparkassen-Modul) lehnen Nicht-ASCII auch in
+	// Name/Adresse/Verwendungszweck ab. Umlaute müssen vor dem Schreiben
+	// transliteriert werden (ä→ae usw.).
+	in := sampleInput()
+	in.Items[0].Name = "Max Müller"
+	in.Items[0].Street = "Albstraße 5"
+	in.Items[0].City = "München"
+	in.ClubName = "Team Stuttgart e.V. – Ürlich"
+	in.Kontoinhaber = "Team Stüttgart e.V."
+
+	out, _ := BuildXML(in)
 	s := string(out)
-	if !strings.Contains(s, "<Nm>Max Müller</Nm>") {
-		t.Errorf("Umlaut im Namen nicht erhalten:\n%s", s)
+
+	if !strings.Contains(s, "<Nm>Max Mueller</Nm>") {
+		t.Errorf("Name nicht transliteriert (erwarte Mueller):\n%s", s)
 	}
-	// MsgId/EndToEndId müssen ASCII sein → keine Umlaute
-	for _, line := range strings.Split(s, "\n") {
-		if strings.Contains(line, "MsgId") || strings.Contains(line, "EndToEndId") || strings.Contains(line, "PmtInfId") {
-			if strings.ContainsAny(line, "äöüÄÖÜß") {
-				t.Errorf("Nicht-ASCII in ID-Zeile: %s", line)
-			}
+	if !strings.Contains(s, "<StrtNm>Albstrasse</StrtNm>") {
+		t.Errorf("Straße nicht transliteriert (erwarte Albstrasse):\n%s", s)
+	}
+	if !strings.Contains(s, "<TwnNm>Muenchen</TwnNm>") {
+		t.Errorf("Stadt nicht transliteriert (erwarte Muenchen):\n%s", s)
+	}
+	// Gesamte XML muss reines ASCII sein (XML-Header und Body)
+	for i, b := range []byte(s) {
+		if b > 0x7E {
+			t.Fatalf("Nicht-ASCII-Byte 0x%02x an Position %d — Validator wird das ablehnen", b, i)
 		}
 	}
 }
