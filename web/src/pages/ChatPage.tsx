@@ -151,6 +151,31 @@ export default function ChatPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Deep-Link aus Chat-Push: /chat?conv=<id> öffnet die Unterhaltung,
+  // /chat?tab=broadcasts springt in den Broadcasts-Tab. Einmalig konsumieren
+  // (Guard-Ref), sonst würde jeder conversations-Reload via SSE die Auswahl
+  // erneut umschalten.
+  const deepLinkConsumed = useRef(false)
+  useEffect(() => {
+    if (deepLinkConsumed.current) return
+    const tabParam = searchParams.get('tab')
+    if (tabParam === 'broadcasts') {
+      deepLinkConsumed.current = true
+      setTab('broadcasts')
+      setSearchParams({}, { replace: true })
+      return
+    }
+    const convParam = searchParams.get('conv')
+    if (!convParam) return
+    const conv = conversations.find(c => c.id === Number(convParam))
+    if (!conv) return // conversations noch nicht geladen → bei nächstem Reload erneut prüfen
+    deepLinkConsumed.current = true
+    setTab('chats')
+    setSearchParams({}, { replace: true })
+    openConversation(conv)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, conversations])
+
   useChatEvents((event) => {
     if (event.startsWith('chat:new-message')) {
       loadConversations()
