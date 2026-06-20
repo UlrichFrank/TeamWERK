@@ -1,4 +1,5 @@
 ## 20.06.2026
+- [feat] notification: Neue Mitfahrgesuche lösen Notfication aus
 - [fix] fee-run: Aktions-Buttons im Beitragslauf-Header oben anordnen
 - [fix] beitragslauf: SEPA-XML mit FwdgAgt-Absender-BIC im GrpHdr (#41)
 - [fix] teams: Eltern des erweiterten Kaders in "Mein Team" anzeigen
