@@ -1,72 +1,81 @@
 ## Context
 
-Das Feature wird im Repo unter drei verschiedenen Namen geführt: „Mitfahrgelegenheiten" (DB-Tabelle, API-Pfade, Frontend-Route, Page-Komponente, drei Specs), „Mitfahrten" (Nav-Label, Paarungs-Tabellenpräfix `mitfahrt_paarungen`, Push-Notification-Titel teilweise) und „Carpooling" (Go-Package, Event-Tabelle `carpooling_events`). Das Nav-Label nutzt bereits „Mitfahrten" — der kürzere Begriff hat sich etabliert. Diese Inkonsistenz erschwert Onboarding und Code-Suche.
+Das Feature wird im Repo unter drei Namen geführt: „Mitfahrgelegenheiten" (DB-Tabelle, API-Pfade, Frontend-Route, Page-Komponente, SSE-Event, mehrere Specs), „Mitfahrten" (Nav-Label in `policy/rules.go` und `AppShell.tsx`, Paarungs-Tabellenpräfix `mitfahrt_paarungen`, Push-Titel teilweise) und „Carpooling" (Go-Package, Tabelle `carpooling_events`). Das Nav-Label nutzt bereits „Mitfahrten" — der kürzere Begriff hat sich etabliert. Diese Inkonsistenz erschwert Onboarding und Code-Suche.
 
-Das Go-Package `internal/carpooling/` bleibt unangetastet: Englischer Domain-Begriff, kollidiert nicht mit deutschen UI-Texten, und Package-Rename hätte hohen Diff-Aufwand ohne Nutzergewinn. Die `carpooling_events`-Tabelle bleibt aus demselben Grund.
+Das Go-Package `internal/carpooling/` bleibt unangetastet: englischer Domain-Begriff, kollidiert nicht mit deutschen UI-Texten, Package-Rename hätte hohen Diff-Aufwand ohne Nutzergewinn. `carpooling_events` bleibt aus demselben Grund.
+
+> **Stand der Migrations:** Das Repo hat die Migrations zu einer einzigen `001_initial.up.sql` konsolidiert. Die nächste freie Nummer ist daher **002** (nicht 043 wie in einer früheren Fassung dieses Changes angenommen).
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Einheitlicher deutscher Name „Mitfahrten" / „Mitfahrt" überall in UI, API-Pfaden, DB-Tabellen und Specs.
-- Spec-Folder-Namen reflektieren neuen Namen (Konsistenz mit künftiger Doku/Suche).
-- Atomarer Deploy: nach `make deploy` ist nur noch der neue Name aktiv (kein Übergangszustand mit Doppel-Routen).
+- Einheitlicher deutscher Name „Mitfahrten" / „Mitfahrt" in UI, API-Pfaden, DB-Tabelle, SSE-Event und Page-Komponente.
+- Atomarer Deploy: nach `make deploy` ist nur der neue Name aktiv (keine Doppel-Routen).
 - Bestehende Daten (Mitfahrt-Einträge, Paarungen) bleiben vollständig erhalten.
+- Specs konsistent: betroffene Routen-/Pfad-/Event-/Tabellen-Referenzen in den Live-Specs aktualisiert.
 
 **Non-Goals:**
-- Go-Package-Rename (`internal/carpooling/`) — bleibt englisch.
-- Tabellen-Rename `mitfahrt_paarungen`, `carpooling_events` — bereits konsistent bzw. internes Eventlog.
-- API-Versionierung oder Backwards-Compat-Routen für externe Clients (gibt es nicht).
-- Funktionale Änderungen am Mitfahrten-Feature.
+- Go-Package-Rename `internal/carpooling/` — bleibt englisch.
+- Tabellen-Rename `mitfahrt_paarungen`, `carpooling_events`.
+- OpenSpec-Capability-/Folder-Rename (siehe Entscheidung 5).
+- API-Versionierung / Backwards-Compat-Routen — keine externen Clients.
+- Frontend-Redirect vom alten Pfad.
+- Funktionale Änderungen am Feature.
 
 ## Decisions
 
-### Entscheidung 1: SQLite `ALTER TABLE ... RENAME TO` für `mitfahrgelegenheiten` → `mitfahrten`
+### Entscheidung 1: SQLite `ALTER TABLE … RENAME TO` (Migration 002)
 
-SQLite (≥ 3.25) unterstützt `ALTER TABLE alt RENAME TO neu`. Foreign-Key-Referenzen aus `mitfahrt_paarungen.biete_id`/`suche_id` werden bei aktivierter `PRAGMA legacy_alter_table=OFF` (default seit 3.26) und `PRAGMA foreign_keys=ON` automatisch in den FK-Definitionen aktualisiert (siehe SQLite docs: „Foreign key constraints are also rewritten" wenn `PRAGMA foreign_keys=ON`).
+`ALTER TABLE mitfahrgelegenheiten RENAME TO mitfahrten;`. Bei `PRAGMA foreign_keys=ON` (Default beim DB-Open dieses Projekts) und modernem SQLite (`legacy_alter_table=OFF`, Default seit 3.26) schreibt SQLite die FK-Definitionen referenzierender Tabellen automatisch um — d. h. `mitfahrt_paarungen.biete_id`/`suche_id REFERENCES mitfahrgelegenheiten(id)` wird zu `REFERENCES mitfahrten(id)`.
 
-**Alternative:** Tabelle neu anlegen, Daten kopieren, alte löschen. Mehr Boilerplate, höheres Risiko bei Crash mitten in Migration. **Verworfen.**
+**Alternative:** Tabelle neu anlegen, Daten kopieren, alte löschen. Mehr Boilerplate, höheres Crash-Risiko. **Verworfen.**
 
-**Risiko:** Falls eine SQLite-Version < 3.25 verwendet wird, schlägt `ALTER TABLE ... RENAME` fehl. Prod nutzt `modernc.org/sqlite` v1.x (SQLite-Engine ≥ 3.40) — kein Risiko. Lokale Migration prüft via `make migrate-up`.
+**Risiko:** SQLite < 3.25 würde fehlschlagen. Prod nutzt `modernc.org/sqlite` (Engine ≥ 3.40) — kein Risiko. Down-Migration: `ALTER TABLE mitfahrten RENAME TO mitfahrgelegenheiten;`. Roundtrip lokal via `make migrate-up`/`make migrate-down` verifizieren, danach `.schema mitfahrt_paarungen` prüfen (FK zeigt auf `mitfahrten`).
 
-### Entscheidung 2: Indizes ebenfalls umbenennen
+### Entscheidung 2: Keine Index-Umbenennung nötig
 
-Die Unique-Indizes `idx_mitfahr_biete_unique` (Migration 001) und `idx_mitfahr_suche_unique` (Migration 041) heißen bereits „mitfahr*", nicht „mitfahrgelegenheiten*" — kein Index-Rename nötig. Lediglich der `CREATE INDEX`-Tabellenbezug verweist intern auf den neuen Tabellennamen, was SQLite automatisch durchführt.
+Die partiellen Unique-Indizes heißen bereits `idx_mitfahr_biete_unique` / `idx_mitfahr_suche_unique` (nicht `…mitfahrgelegenheiten…`). Ihr interner Tabellenbezug wird beim `RENAME TO` automatisch auf `mitfahrten` gezogen. Kein `DROP/CREATE INDEX` erforderlich.
 
-### Entscheidung 3: SSE-Event-Name umbenennen ohne Doppel-Broadcast
+### Entscheidung 3: SSE-Event-Name ohne Doppel-Broadcast umbenennen
 
-Das SSE-Event-String `"mitfahrgelegenheiten"` wird zu `"mitfahrten"`. Da Backend-Binary und Frontend-Bundle zusammen deployt werden (single binary, `embed.FS`), gibt es keinen Übergangszustand mit altem Frontend gegen neues Backend. Kein Doppel-Broadcast nötig.
+Event-String `"mitfahrgelegenheiten"` → `"mitfahrten"` in allen `h.hub.Broadcast(...)`-Aufrufen (`handler.go`, `paarungen_handler.go`) und im Frontend-`useLiveUpdates`-Filter (`MitfahrtenPage.tsx`, `DashboardPage.tsx`). Da Backend-Binary und Frontend-Bundle gemeinsam deployt werden (Single Binary, `embed.FS`), gibt es keinen Übergangszustand → kein Doppel-Broadcast.
 
-### Entscheidung 4: Frontend-Pfad `/mitfahrgelegenheiten` ohne Redirect
+### Entscheidung 4: Frontend-Pfad ohne Redirect
 
-Da App intern und URL nicht öffentlich verlinkt ist, kein Redirect von `/mitfahrgelegenheiten` → `/mitfahrten` nötig. Bestehende Browser-Bookmarks zeigen nach Deploy 404, sobald Frontend reloaded. Aufwand für Redirect (zusätzlicher Route mit `<Navigate>`) > Nutzen.
+App intern, URL nicht öffentlich verlinkt → kein Redirect von `/mitfahrgelegenheiten`. Alte Bookmarks zeigen nach Reload den Standard-Not-Found-Zustand. Aufwand (`<Navigate>`-Route) > Nutzen.
 
-**Alternative:** `<Route path="mitfahrgelegenheiten" element={<Navigate to="/mitfahrten" replace />} />` für 30 Tage einbauen. Kann nachgereicht werden, falls Anwender klagen.
+**Alternative:** befristeter Redirect für 30 Tage — kann on demand nachgereicht werden.
 
-### Entscheidung 5: Spec-Folder physisch umbenennen
+### Entscheidung 5: Specs per MODIFIED-Delta statt Folder-Rename
 
-Statt REMOVED/ADDED-Akrobatik werden die Spec-Folder unter `openspec/specs/` per `git mv` umbenannt und die Inhalte angepasst. Archivierte Changes (`openspec/changes/archive/...`) bleiben mit altem Namen — historisch korrekt. Die Delta-Files in diesem Change beschreiben die Inhalts-Änderung in den neuen Folder-Namen.
+Die Capability-/Spec-Folder unter `openspec/specs/` behalten ihre Namen (`mitfahrgelegenheiten-board`, `-nav`, `-team-filter`, `-meine-filter`). Nur die **Inhalte** der betroffenen Requirements werden per `## MODIFIED Requirements`-Delta auf die neuen Bezeichner gebracht.
 
-**Alternative:** Old spec mit REMOVED, new spec mit ADDED. Verdoppelt Text, OpenSpec-Archive-Tooling muss zwei Specs synchronisieren. **Verworfen.**
+**Begründung:** Symmetrisch zur Go-Package-Entscheidung — der Folder-Name ist ein interner Bezeichner ohne Nutzergewinn beim Rename. Ein echter Capability-Rename in OpenSpec erfordert REMOVED-(alt)+ADDED-(neu)-Deltas mit **Volltextkopie** aller Requirements; das hatte sich in der ersten Fassung dieses Changes bereits als veraltet/driftend erwiesen (die ADDED-Deltas beschrieben einen alten Board-Stand, während die Live-Spec inzwischen UI-Requirements wie chronologische Liste, Pills, Farbcodierung und Compact-Header trägt). MODIFIED-Deltas halten den Diff klein, robust und valide.
+
+**Alternative:** REMOVED+ADDED-Folder-Rename. Verdoppelt Text, driftet erneut, höheres Fehlerrisiko. **Verworfen.**
+
+### Entscheidung 6: Navigation an zwei Stellen anpassen
+
+Der Nav-Eintrag existiert doppelt: backendseitig in `internal/policy/rules.go` (`NavItem{"Mitfahrten", "/mitfahrgelegenheiten"}`) und frontendseitig hartkodiert in `web/src/components/AppShell.tsx`. Beide Pfade müssen auf `/mitfahrten` — sonst zeigt einer der beiden ins Leere. Das Label „Mitfahrten" bleibt unverändert.
 
 ## Risks / Trade-offs
 
-- **[Risiko]** Frontend nach Deploy lädt mit altem Pfad `/mitfahrgelegenheiten` und zeigt 404 → **Mitigation:** Im Release-Hinweis (CHANGELOG) explizit erwähnen; ggf. nachträglich Redirect ergänzen.
-- **[Risiko]** Push-Notifications vor Deploy haben `/mitfahrgelegenheiten`-Deeplink im Service-Worker-State → **Mitigation:** akzeptabel, kurzlebig — Klick führt zu 404, Nutzer öffnen App manuell.
-- **[Risiko]** Migration 043 läuft auf einem Replica mit alter SQLite-Engine (< 3.25) fehl → **Mitigation:** Prod nutzt nur eine DB auf einem VPS; SQLite-Engine via `modernc.org/sqlite` aktuell. Lokal vor Deploy testen.
-- **[Risiko]** Vergessen, alle Stellen umzubenennen → **Mitigation:** Task-Liste enthält finalen `grep -ri "mitfahrgelegenheit"`-Check; nur Archiv-Pfade und Go-Package dürfen Hits liefern.
-- **[Trade-off]** Tabellen-Rename ist Breaking gegen Backups: ein Restore eines DB-Backups von vor Migration 043 läuft nur, wenn `migrate up` danach läuft. Standard-Procedure.
+- **[Risiko]** Frontend nach Deploy mit altem Pfad → Not-Found. **Mitigation:** im CHANGELOG erwähnen; Redirect bei Bedarf nachreichen.
+- **[Risiko]** Push-Notifications mit altem Deep-Link im Service-Worker-State. **Mitigation:** kurzlebig, akzeptabel; Klick führt zu Not-Found, Nutzer öffnen App manuell.
+- **[Risiko]** Eine Stelle wird beim Rename vergessen. **Mitigation:** finaler `grep -rni "mitfahrgelegenheit"` — erlaubte Resttreffer nur in `internal/carpooling/` (Package-Pfad, englisch), `mitfahrt_paarungen`/`carpooling_events` und archivierten Changes.
+- **[Trade-off]** Tabellen-Rename ist breaking gegen Backups: Restore eines Backups von vor Migration 002 läuft erst nach `migrate up`. Standard-Procedure.
 
 ## Migration Plan
 
-1. Code-Änderungen (Backend + Frontend + Migration) lokal entwickeln und testen.
-2. Lokale Migration prüfen: `make migrate-up`, manueller Smoke-Test der Mitfahrten-Seite.
-3. Commit-Reihe pro Task (Conventional Commits, scope=`carpooling` für Code, `db` für Migration, `pwa` falls Push betroffen).
-4. `make deploy` — buildet Frontend, embedded ins Binary, rsync auf VPS, systemctl restart, `migrate up` läuft automatisch.
-5. Smoke-Test auf Prod: Seite öffnen, neuen Eintrag anlegen, Paarung anfragen.
+1. Code (Backend + Frontend + Migration 002) lokal entwickeln und testen.
+2. `make migrate-up`, dann `.schema mitfahrt_paarungen` prüfen (FK → `mitfahrten`); Smoke-Test der Seite. `make migrate-down`-Roundtrip, danach wieder `migrate-up`.
+3. Commit-Reihe pro Task (Conventional Commits; scope `db` für Migration, `carpooling` für Code, `pwa`/Frontend für UI, `docs`).
+4. `make deploy` — baut Frontend embedded, rsync, restart, `migrate up` läuft automatisch.
+5. Prod-Smoke-Test: `/mitfahrten` öffnen, Eintrag anlegen, Paarung anfragen, SSE-Aktualisierung prüfen.
 
-**Rollback:** `make migrate-remote-down` rollt Migration 043 zurück (Tabelle wird wieder zu `mitfahrgelegenheiten`). Vorheriges Binary aus `bin/`-Archiv (oder Git-Tag) deployen.
+**Rollback:** `make migrate-remote-down` rollt Migration 002 zurück; vorheriges Binary deployen.
 
 ## Open Questions
 
-- Sollen wir den 30-Tage-Redirect `/mitfahrgelegenheiten` → `/mitfahrten` doch einbauen? → Default: **nein**, on demand nachreichen.
-- `internal/carpooling/` Package-Rename irgendwann? → Default: **nein**, separater Change wenn überhaupt.
+- 30-Tage-Redirect `/mitfahrgelegenheiten` → `/mitfahrten` doch einbauen? → Default **nein**, on demand.
+- `internal/carpooling/` irgendwann umbenennen? → Default **nein**, ggf. separater Change.
