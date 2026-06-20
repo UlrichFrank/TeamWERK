@@ -6,6 +6,13 @@ Das System SHALL in der Dashboard-Antwort (`GET /api/dashboard`) unter `carpooli
 
 `carpoolingConfirmed` enthält die nächsten max. 3 Auswärtsspiele, bei denen entweder der Nutzer selbst ODER eines seiner Kinder eine `confirmed`-Paarung hat. `partnerName` zeigt die Gegenseite aus Sicht des Nutzers/Kindes.
 
+Jeder Paarungs-Eintrag SHALL zusätzlich das Feld `partnerTreffpunkt` (string) enthalten. `partnerTreffpunkt` ist der Treffpunkt der **Gegenseite** der Paarung aus Sicht des Nutzers (bzw. des Kindes):
+
+- Ist die eigene Seite der **Bieter**-Eintrag der Paarung, dann ist `partnerTreffpunkt` der Treffpunkt des verknüpften **Sucher**-Eintrags.
+- Ist die eigene Seite der **Sucher**-Eintrag, dann ist `partnerTreffpunkt` der Treffpunkt des verknüpften **Bieter**-Eintrags.
+
+Wenn der Partner-Eintrag keinen Treffpunkt gesetzt hat (`mitfahrgelegenheiten.treffpunkt` NULL oder leer), SHALL `partnerTreffpunkt` als leerer String (`""`) zurückgegeben werden — nicht weggelassen und nicht `null`.
+
 #### Scenario: User mit bestätigter Paarung
 
 - **WHEN** der User eine Paarung mit `status='confirmed'` für ein kommendes Auswärtsspiel hat
@@ -25,3 +32,23 @@ Das System SHALL in der Dashboard-Antwort (`GET /api/dashboard`) unter `carpooli
 
 - **WHEN** ein Nutzer ohne `family_links`-Einträge das Dashboard lädt
 - **THEN** enthält `carpoolingConfirmed` ausschließlich seine eigenen Paarungen (Verhalten wie bisher)
+
+#### Scenario: partnerTreffpunkt bei eigener Bieter-Paarung
+
+- **WHEN** die eigene Seite Bieter ist und der verknüpfte Sucher-Eintrag den Treffpunkt `"Bahnhof Mitte"` hat
+- **THEN** liefert die Paarung `partnerTreffpunkt = "Bahnhof Mitte"`
+
+#### Scenario: partnerTreffpunkt bei eigener Sucher-Paarung
+
+- **WHEN** die eigene Seite Sucher ist und der verknüpfte Bieter-Eintrag den Treffpunkt `"Marktplatz"` hat
+- **THEN** liefert die Paarung `partnerTreffpunkt = "Marktplatz"`
+
+#### Scenario: partnerTreffpunkt leer, wenn Partner keinen gesetzt hat
+
+- **WHEN** der Partner-Eintrag keinen Treffpunkt gesetzt hat
+- **THEN** liefert die Paarung `partnerTreffpunkt = ""` (leerer String, nicht null und nicht weggelassen)
+
+#### Scenario: partnerTreffpunkt bei Kind-Paarung
+
+- **WHEN** das Kind des Eltern-Users Bieter ist und der verknüpfte Sucher-Eintrag den Treffpunkt `"Schule"` hat
+- **THEN** liefert die Paarung im Eltern-Dashboard `partnerTreffpunkt = "Schule"`
