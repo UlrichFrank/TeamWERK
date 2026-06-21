@@ -47,7 +47,7 @@ func UpdateAgeClassRule(db *sql.DB, ageClass string, half, brk int) error {
 		return errors.New("ungültige Altersklasse")
 	}
 	if half <= 0 || brk <= 0 {
-		return errors.New("Werte müssen größer als 0 sein")
+		return errors.New("werte müssen größer als 0 sein")
 	}
 	res, err := db.Exec(
 		`UPDATE age_class_game_rules SET half_duration_minutes=?, break_minutes=? WHERE age_class=?`,
@@ -57,7 +57,7 @@ func UpdateAgeClassRule(db *sql.DB, ageClass string, half, brk int) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return errors.New("Altersklasse nicht gefunden")
+		return errors.New("altersklasse nicht gefunden")
 	}
 	return nil
 }

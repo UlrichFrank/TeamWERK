@@ -47,10 +47,6 @@ func stdClaims(userID int) *auth.Claims {
 	return &auth.Claims{UserID: userID, Role: "standard", ClubFunctions: []string{}}
 }
 
-func claimsWithFn(userID int, fns ...string) *auth.Claims {
-	return &auth.Claims{UserID: userID, Role: "standard", ClubFunctions: fns}
-}
-
 // ── resolveAccess: nearest-ancestor-wins ─────────────────────────────────────
 
 func TestResolveAccess_NearestAncestorWins(t *testing.T) {
