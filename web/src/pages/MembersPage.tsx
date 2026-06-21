@@ -24,7 +24,7 @@ interface Member {
 
 interface ImportRow {
   line: number
-  status: 'created' | 'updated' | 'unchanged' | 'error' | 'not_found'
+  status: 'created' | 'updated' | 'unchanged' | 'skipped' | 'error' | 'not_found'
   name: string
   dob?: string
   changes?: string[]
@@ -37,10 +37,31 @@ interface ImportReport {
   created: number
   updated: number
   unchanged: number
+  skipped?: number
   errors: number
   not_found?: number
   rows: ImportRow[]
 }
+
+// Aktualisierbare DB-Spalten ↔ Anzeige-Label für die Feld-Auswahl beim Import.
+// Die `col`-Werte müssen exakt den Backend-Spaltennamen entsprechen (siehe Import-Handler).
+const IMPORT_FIELDS: { col: string; label: string }[] = [
+  { col: 'member_number', label: 'Mitgliedsnummer' },
+  { col: 'date_of_birth', label: 'Geburtsdatum' },
+  { col: 'gender', label: 'Geschlecht' },
+  { col: 'pass_number', label: 'Passnummer' },
+  { col: 'position', label: 'Position' },
+  { col: 'status', label: 'Status / Beitragsfrei' },
+  { col: 'home_club', label: 'Stammverein' },
+  { col: 'jersey_number', label: 'Trikotnummer' },
+  { col: 'street', label: 'Adresse' },
+  { col: 'zip', label: 'PLZ' },
+  { col: 'city', label: 'Ort' },
+  { col: 'join_date', label: 'Mitglied seit' },
+  { col: 'account_holder', label: 'Kontoinhaber' },
+  { col: 'sepa_mandat', label: 'SEPA-Mandat' },
+  { col: 'iban', label: 'IBAN' },
+]
 
 const genderLabel = (g?: string) => g === 'm' ? 'm' : g === 'f' ? 'w' : 'd'
 
@@ -72,6 +93,7 @@ const rowStatusIcon = (s: ImportRow['status']) => {
   if (s === 'created') return '+'
   if (s === 'updated') return '~'
   if (s === 'unchanged') return '='
+  if (s === 'skipped') return '⊘'
   if (s === 'not_found') return '—'
   return '✗'
 }
@@ -80,6 +102,7 @@ const rowStatusColor = (s: ImportRow['status']) => {
   if (s === 'created') return 'text-brand-success'
   if (s === 'updated') return 'text-brand-blue'
   if (s === 'unchanged') return 'text-brand-text-subtle'
+  if (s === 'skipped') return 'text-brand-text-muted'
   if (s === 'not_found') return 'text-brand-text-muted'
   return 'text-brand-danger'
 }
@@ -164,6 +187,10 @@ export default function MembersPage() {
   const [importResult, setImportResult] = useState<ImportReport | null>(null)
   const [previewResult, setPreviewResult] = useState<ImportReport | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
+  // Feld-Auswahl (nur update/enrich): standardmäßig alle Spalten ausgewählt.
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(() => new Set(IMPORT_FIELDS.map(f => f.col)))
+  // Mitglieder-Auswahl: angehakte CSV-Zeilennummern aus der Vorschau (default alle updated-Zeilen).
+  const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showActionsMenu, setShowActionsMenu] = useState(false)
   const actionsMenuRef = useRef<HTMLDivElement>(null)
@@ -179,6 +206,14 @@ export default function MembersPage() {
     })
   }
 
+  // Feld-Whitelist nur bei update/enrich anhängen. Leere Auswahl → Sentinel '__none__'
+  // (matcht keine Spalte → es wird nichts aktualisiert), sonst würde das Backend leer = alle interpretieren.
+  const appendFields = (fd: FormData) => {
+    if (importMode === 'update' || importMode === 'enrich') {
+      fd.append('fields', selectedFields.size > 0 ? [...selectedFields].join(',') : '__none__')
+    }
+  }
+
   const handlePreview = async () => {
     if (!importFile) return
     setImporting(true)
@@ -187,9 +222,12 @@ export default function MembersPage() {
       fd.append('file', importFile)
       fd.append('mode', importMode)
       fd.append('preview', '1')
+      appendFields(fd)
       const res = await api.post<ImportReport>('/members/import', fd)
       setPreviewResult(res.data)
       setExpandedRows(new Set())
+      // Standardmäßig alle Zeilen mit Änderungen anhaken.
+      setSelectedLines(new Set(res.data.rows.filter(r => r.status === 'updated').map(r => r.line)))
     } catch {
       alert('Vorschau fehlgeschlagen. Bitte CSV-Format prüfen.')
     } finally {
@@ -204,6 +242,11 @@ export default function MembersPage() {
       const fd = new FormData()
       fd.append('file', importFile)
       fd.append('mode', importMode)
+      appendFields(fd)
+      // Nur angehakte Zeilen anwenden. Leere Auswahl → Sentinel '0' (keine reale Datenzeile).
+      if (importMode === 'update' || importMode === 'enrich') {
+        fd.append('apply_lines', selectedLines.size > 0 ? [...selectedLines].join(',') : '0')
+      }
       const res = await api.post<ImportReport>('/members/import', fd)
       setImportResult(res.data)
       if (res.data.created > 0 || res.data.updated > 0) refresh()
@@ -214,12 +257,30 @@ export default function MembersPage() {
     }
   }
 
+  const toggleField = (col: string) => {
+    setSelectedFields(prev => {
+      const next = new Set(prev)
+      if (next.has(col)) next.delete(col); else next.add(col)
+      return next
+    })
+  }
+
+  const toggleLine = (line: number) => {
+    setSelectedLines(prev => {
+      const next = new Set(prev)
+      if (next.has(line)) next.delete(line); else next.add(line)
+      return next
+    })
+  }
+
   const resetImport = () => {
     setShowImport(false)
     setImportFile(null)
     setImportResult(null)
     setPreviewResult(null)
     setExpandedRows(new Set())
+    setSelectedFields(new Set(IMPORT_FIELDS.map(f => f.col)))
+    setSelectedLines(new Set())
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -493,6 +554,45 @@ export default function MembersPage() {
                   </div>
                 </div>
 
+                {(importMode === 'update' || importMode === 'enrich') && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-brand-text-muted">Felder aktualisieren</label>
+                      <div className="flex gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFields(new Set(IMPORT_FIELDS.map(f => f.col)))}
+                          className="text-brand-blue hover:underline"
+                        >
+                          Alle
+                        </button>
+                        <span className="text-brand-text-subtle">·</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFields(new Set())}
+                          className="text-brand-blue hover:underline"
+                        >
+                          Keine
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      {IMPORT_FIELDS.map(f => (
+                        <label key={f.col} className="flex items-center gap-2 cursor-pointer text-sm text-brand-text">
+                          <input
+                            type="checkbox"
+                            checked={selectedFields.has(f.col)}
+                            onChange={() => toggleField(f.col)}
+                            className="accent-brand-yellow"
+                          />
+                          {f.label}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-brand-text-subtle mt-2">Nur angehakte Spalten werden bei Bestandsmitgliedern aktualisiert. Neu angelegte Mitglieder bekommen alle Felder.</p>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2 pt-1">
                   <button onClick={resetImport} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
                     Abbrechen
@@ -531,19 +631,33 @@ export default function MembersPage() {
                     const hasDetails = (row.changes && row.changes.length > 0) || row.message || row.iban_warning
                     const expanded = expandedRows.has(row.line)
                     const hasOw = rowHasOverwrites(row)
+                    const selectable = row.status === 'updated'
                     return (
                       <div key={i} className={hasOw ? 'bg-amber-50 -mx-2 px-2 rounded' : ''}>
-                        <button
-                          onClick={() => hasDetails && toggleRow(row.line)}
-                          className={`flex items-center gap-1 w-full text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'}`}
-                        >
-                          {hasDetails && <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />}
-                          {!hasDetails && <span className="w-3" />}
-                          <span className="font-bold">{rowStatusIcon(row.status)}</span>
-                          <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
-                          {hasOw && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
-                          {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {selectable ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedLines.has(row.line)}
+                              onChange={() => toggleLine(row.line)}
+                              aria-label={`Zeile ${row.line} anwenden`}
+                              className="accent-brand-yellow shrink-0"
+                            />
+                          ) : (
+                            <span className="w-3.5 shrink-0" />
+                          )}
+                          <button
+                            onClick={() => hasDetails && toggleRow(row.line)}
+                            className={`flex items-center gap-1 flex-1 text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'} ${selectable && !selectedLines.has(row.line) ? 'opacity-50' : ''}`}
+                          >
+                            {hasDetails && <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />}
+                            {!hasDetails && <span className="w-3" />}
+                            <span className="font-bold">{rowStatusIcon(row.status)}</span>
+                            <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
+                            {hasOw && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
+                            {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
+                          </button>
+                        </div>
                         {expanded && (
                           <div className="pl-7 space-y-0.5">
                             {row.changes?.map((c, j) => {
@@ -566,17 +680,39 @@ export default function MembersPage() {
                     <div className="text-brand-text-subtle pt-1">= {previewResult.unchanged}× unverändert</div>
                   )}
                 </div>
-                <div className="px-6 py-4 border-t border-brand-border-subtle flex justify-between">
+                <div className="px-6 py-4 border-t border-brand-border-subtle flex items-center justify-between gap-3">
                   <button onClick={() => setPreviewResult(null)} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
                     Zurück
                   </button>
-                  <button
-                    onClick={handleImport}
-                    disabled={importing}
-                    className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
-                  >
-                    {importing ? 'Importieren…' : 'Jetzt anwenden'}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {previewResult.updated > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-brand-text-muted">
+                        <span>{selectedLines.size}/{previewResult.updated} ausgewählt</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLines(new Set(previewResult.rows.filter(r => r.status === 'updated').map(r => r.line)))}
+                          className="text-brand-blue hover:underline"
+                        >
+                          Alle
+                        </button>
+                        <span className="text-brand-text-subtle">·</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLines(new Set())}
+                          className="text-brand-blue hover:underline"
+                        >
+                          Keine
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={handleImport}
+                      disabled={importing}
+                      className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    >
+                      {importing ? 'Importieren…' : 'Jetzt anwenden'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -589,6 +725,7 @@ export default function MembersPage() {
                   <div className="flex flex-wrap gap-3 text-xs">
                     {importResult.created > 0 && <span className="text-brand-success font-medium">+ {importResult.created} neu</span>}
                     {importResult.updated > 0 && <span className="text-brand-blue font-medium">~ {importResult.updated} aktualisiert</span>}
+                    {(importResult.skipped ?? 0) > 0 && <span className="text-brand-text-muted font-medium">⊘ {importResult.skipped} übersprungen</span>}
                     {importResult.unchanged > 0 && <span className="text-brand-text-subtle">= {importResult.unchanged} unverändert</span>}
                     {(importResult.not_found ?? 0) > 0 && <span className="text-brand-text-muted font-medium">— {importResult.not_found} nicht gefunden</span>}
                     {importResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {importResult.errors} Fehler</span>}

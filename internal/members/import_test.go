@@ -3,6 +3,7 @@ package members_test
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"testing"
@@ -10,8 +11,53 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
+// importReport spiegelt den ImportReport für die JSON-Dekodierung in Tests.
+type importReport struct {
+	Total     int `json:"total"`
+	Created   int `json:"created"`
+	Updated   int `json:"updated"`
+	Unchanged int `json:"unchanged"`
+	Skipped   int `json:"skipped"`
+	Errors    int `json:"errors"`
+	NotFound  int `json:"not_found"`
+	Rows      []struct {
+		Line    int      `json:"line"`
+		Status  string   `json:"status"`
+		Name    string   `json:"name"`
+		Changes []string `json:"changes"`
+	} `json:"rows"`
+}
+
+func decodeReport(t *testing.T, res *http.Response) importReport {
+	t.Helper()
+	var rep importReport
+	if err := json.NewDecoder(res.Body).Decode(&rep); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	return rep
+}
+
+// gültige Test-IBAN (MOD-97 = 1, 22 Zeichen DE)
+const testIBAN = "DE89370400440532013000"
+
+// statusOf liefert den status eines Mitglieds anhand des Vornamens.
+func statusOf(t *testing.T, db *sql.DB, firstName string) string {
+	t.Helper()
+	var s string
+	if err := db.QueryRow(`SELECT status FROM members WHERE first_name=?`, firstName).Scan(&s); err != nil {
+		t.Fatalf("query status: %v", err)
+	}
+	return s
+}
+
 // postImport lädt eine CSV als multipart/form-data an POST /api/members/import hoch.
 func postImport(t *testing.T, srv string, token, csv, mode string) *http.Response {
+	return postImportOpts(t, srv, token, csv, mode, nil)
+}
+
+// postImportOpts wie postImport, aber mit zusätzlichen Formfeldern (z.B. "fields",
+// "apply_lines", "preview").
+func postImportOpts(t *testing.T, srv string, token, csv, mode string, extra map[string]string) *http.Response {
 	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -24,6 +70,11 @@ func postImport(t *testing.T, srv string, token, csv, mode string) *http.Respons
 	}
 	if err := mw.WriteField("mode", mode); err != nil {
 		t.Fatalf("WriteField: %v", err)
+	}
+	for k, v := range extra {
+		if err := mw.WriteField(k, v); err != nil {
+			t.Fatalf("WriteField %s: %v", k, err)
+		}
 	}
 	mw.Close()
 
@@ -270,5 +321,178 @@ func TestImport_EnrichAmbiguousNoDOB_NichtBefuellt(t *testing.T) {
 	db.QueryRow(`SELECT COUNT(*) FROM members WHERE first_name='Max' AND member_number IS NOT NULL`).Scan(&withNum)
 	if withNum != 0 {
 		t.Errorf("mehrdeutiger Fall sollte niemanden befüllen, befüllt: %d", withNum)
+	}
+}
+
+// Feld-Whitelist: fields=iban aktualisiert nur die IBAN, nicht den Status.
+func TestImport_FieldsWhitelist_NurIBAN(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	insertBareMember(t, db, "Petra", "Test") // status aktiv, iban leer
+
+	csv := "Vorname;Name;Status;IBAN\nPetra;Test;pausiert;" + testIBAN + "\n"
+	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"fields": "iban"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	var iban sql.NullString
+	db.QueryRow(`SELECT iban FROM members WHERE first_name='Petra'`).Scan(&iban)
+	if iban.String != testIBAN {
+		t.Errorf("iban = %q, want %q", iban.String, testIBAN)
+	}
+	if got := statusOf(t, db, "Petra"); got != "aktiv" {
+		t.Errorf("status = %q, want unverändert %q (nicht in fields)", got, "aktiv")
+	}
+}
+
+// Feld-Whitelist: ohne "status" in fields bleibt das abgeleitete beitragsfrei unverändert.
+func TestImport_FieldsWhitelist_StatusSteuertBeitragsfrei(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	insertBareMember(t, db, "Petra", "Test") // status aktiv, beitragsfrei 0
+
+	// CSV-Status "beitragsfrei" würde beitragsfrei=1 ableiten — darf ohne "status" in fields nicht greifen.
+	csv := "Vorname;Name;Status;IBAN\nPetra;Test;beitragsfrei;" + testIBAN + "\n"
+	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"fields": "iban"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	var beitragsfrei int
+	db.QueryRow(`SELECT COALESCE(beitragsfrei,0) FROM members WHERE first_name='Petra'`).Scan(&beitragsfrei)
+	if beitragsfrei != 0 {
+		t.Errorf("beitragsfrei = %d, want 0 (status nicht in fields)", beitragsfrei)
+	}
+	if got := statusOf(t, db, "Petra"); got != "aktiv" {
+		t.Errorf("status = %q, want unverändert %q", got, "aktiv")
+	}
+}
+
+// Regression: ohne fields werden wie bisher alle abweichenden Felder übernommen.
+func TestImport_LeeresFields_AlleFelder(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	insertBareMember(t, db, "Petra", "Test")
+
+	csv := "Vorname;Name;Status\nPetra;Test;pausiert\n"
+	res := postImport(t, srv.URL, token, csv, "update")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+	if got := statusOf(t, db, "Petra"); got != "pausiert" {
+		t.Errorf("status = %q, want %q (ohne fields alle Felder)", got, "pausiert")
+	}
+}
+
+// Feld-Whitelist gilt nur für Bestandsmitglieder: ein neu angelegtes Mitglied
+// bekommt trotz fields=iban alle CSV-Felder.
+func TestImport_FieldsWhitelist_NeuesMitgliedAllFelder(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	csv := "Vorname;Name;Status;Passnummer\nMax;Neu;pausiert;P123\n"
+	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"fields": "iban"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	var status string
+	var pass sql.NullString
+	if err := db.QueryRow(`SELECT status, pass_number FROM members WHERE first_name='Max'`).Scan(&status, &pass); err != nil {
+		t.Fatalf("Mitglied Max nicht angelegt: %v", err)
+	}
+	if status != "pausiert" {
+		t.Errorf("neues Mitglied: status = %q, want %q (Whitelist gilt nicht beim Anlegen)", status, "pausiert")
+	}
+	if pass.String != "P123" {
+		t.Errorf("neues Mitglied: pass_number = %q, want %q", pass.String, "P123")
+	}
+}
+
+// apply_lines: nur die ausgewählte Zeile wird geschrieben.
+func TestImport_ApplyLines_NurAusgewaehlteZeile(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	insertBareMember(t, db, "Petra", "Test") // Zeile 2
+	insertBareMember(t, db, "Hans", "Meier") // Zeile 3
+
+	csv := "Vorname;Name;Status\nPetra;Test;pausiert\nHans;Meier;verletzt\n"
+	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"apply_lines": "2"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	if got := statusOf(t, db, "Petra"); got != "pausiert" {
+		t.Errorf("Petra (Zeile 2, ausgewählt): status = %q, want %q", got, "pausiert")
+	}
+	if got := statusOf(t, db, "Hans"); got != "aktiv" {
+		t.Errorf("Hans (Zeile 3, nicht ausgewählt): status = %q, want unverändert %q", got, "aktiv")
+	}
+}
+
+// apply_lines: abgewählte Zeile mit Änderungen wird als skipped gemeldet, nicht geschrieben.
+func TestImport_ApplyLines_AbgewaehltIstSkipped(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	insertBareMember(t, db, "Petra", "Test") // Zeile 2
+
+	// apply_lines verweist auf eine nicht vorhandene Zeile → Zeile 2 ist abgewählt.
+	csv := "Vorname;Name;Status\nPetra;Test;pausiert\n"
+	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"apply_lines": "999"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	rep := decodeReport(t, res)
+	if rep.Skipped != 1 {
+		t.Errorf("skipped = %d, want 1", rep.Skipped)
+	}
+	if rep.Updated != 0 {
+		t.Errorf("updated = %d, want 0", rep.Updated)
+	}
+	if len(rep.Rows) != 1 || rep.Rows[0].Status != "skipped" {
+		t.Errorf("row status = %+v, want skipped", rep.Rows)
+	}
+	if got := statusOf(t, db, "Petra"); got != "aktiv" {
+		t.Errorf("status = %q, want unverändert %q", got, "aktiv")
+	}
+}
+
+// apply_lines wird im Dry-Run ignoriert: alle Zeilen werden als updated gemeldet, nichts geschrieben.
+func TestImport_ApplyLines_DryRunIgnoriert(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	insertBareMember(t, db, "Petra", "Test")
+
+	csv := "Vorname;Name;Status\nPetra;Test;pausiert\n"
+	res := postImportOpts(t, srv.URL, token, csv, "preview", map[string]string{"apply_lines": "999"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	rep := decodeReport(t, res)
+	if rep.Updated != 1 {
+		t.Errorf("updated = %d, want 1 (Dry-Run ignoriert apply_lines)", rep.Updated)
+	}
+	if rep.Skipped != 0 {
+		t.Errorf("skipped = %d, want 0 im Dry-Run", rep.Skipped)
+	}
+	if got := statusOf(t, db, "Petra"); got != "aktiv" {
+		t.Errorf("Dry-Run schrieb status = %q, want unverändert %q", got, "aktiv")
 	}
 }
