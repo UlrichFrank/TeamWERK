@@ -346,6 +346,10 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "gameId required", http.StatusBadRequest)
 		return
 	}
+	if ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, body.GameID); !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 	if body.Typ == "suche" && (body.Plaetze == nil || *body.Plaetze < 1) {
 		http.Error(w, "plaetze >= 1 required for suche", http.StatusBadRequest)
 		return
