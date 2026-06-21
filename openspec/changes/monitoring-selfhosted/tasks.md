@@ -23,10 +23,10 @@
 - [x] 4.2 Tests: `TestRecover_Panic_IncrementsCounterAndRecovers` (500 + Counter +1 + Server lebt, keine Benachrichtigung), `TestRecover_Panic_StructuredLog` (JSON-Record mit `event="panic"`)
 
 ## 5. Strukturiertes Logging (`slog`) — dritte neutrale Schnittstelle
-- [ ] 5.1 Zentrale Logger-Init in `cmd/teamwerk/main.go`: `slog.SetDefault(...)`; `LOG_FORMAT=json` (Default) → `JSONHandler(os.Stdout)`, `text` → `TextHandler` (lokale DX); `LOG_FORMAT` in `appconfig`
-- [ ] 5.2 `main.go` umstellen: `log.Fatalf` → `slog.Error(...)` + `os.Exit(1)`, `log.Printf` → `slog.Info/Warn`
-- [ ] 5.3 Foundation-/übrige Packages durchsweepen (verbleibende `log.*`-Aufrufe → `slog`); `go vet` + Architektur-Test grün, kein neues Package-Coupling
-- [ ] 5.4 Test: `TestLogger_EmitsJSON` (Default-Handler schreibt valides JSON mit `level`/`msg`/`time`)
+- [x] 5.1 Zentrale Logger-Init in `cmd/teamwerk/main.go`: `slog.SetDefault(...)`; `LOG_FORMAT=json` (Default) → `JSONHandler(os.Stdout)`, `text` → `TextHandler` (lokale DX); `LOG_FORMAT` in `appconfig`
+- [x] 5.2 `main.go` umstellen: `log.Fatalf` → `fatal()` (slog.Error + os.Exit(1)), `log.Printf` → `slog.Info`
+- [x] 5.3 Foundation-/übrige Packages durchsweepen (alle `log.*`-Aufrufe → `slog`, 7 Dateien); `go vet` + Architektur-Test grün, kein neues Package-Coupling
+- [x] 5.4 Test: `TestLogger_EmitsJSON` (Default-Handler schreibt valides JSON mit `level`/`msg`/`time`) + `TestLogger_TextFormatNotJSON`
 
 ## 6. Referenz-Konsument (außerhalb des App-Repos) & Doku
 - [ ] 6.1 mittwald-PHP-Cron-Script dokumentieren (nicht im Repo ablegen): `/api/healthz` pollen, Schwellen (`disk_free_pct`, `scheduler_age_sec`, HTTP/`db`) auswerten, TLS-Cert via `openssl_x509_parse`, Alarm via `mail()`; Cron-Intervall + Einrichtung in mStudio

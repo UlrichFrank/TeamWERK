@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -52,8 +52,35 @@ var webFS embed.FS
 
 var buildHash = "dev"
 
+// newLogHandler baut den slog-Handler aus dem konfigurierten Format. "text"
+// (lokale DX) → menschenlesbar auf stderr; sonst JSON auf stdout (Prod-Default,
+// neutrale Schnittstelle für beliebige Log-Collector).
+func newLogHandler(format string, w io.Writer) slog.Handler {
+	if format == "text" {
+		return slog.NewTextHandler(w, nil)
+	}
+	return slog.NewJSONHandler(w, nil)
+}
+
+// setupLogger setzt den Default-Logger gemäß LOG_FORMAT.
+func setupLogger(format string) {
+	if format == "text" {
+		slog.SetDefault(slog.New(newLogHandler("text", os.Stderr)))
+		return
+	}
+	slog.SetDefault(slog.New(newLogHandler("json", os.Stdout)))
+}
+
+// fatal loggt strukturiert und beendet den Prozess mit Exit-Code 1
+// (Ersatz für log.Fatal/Fatalf).
+func fatal(msg string, args ...any) {
+	slog.Error(msg, args...)
+	os.Exit(1)
+}
+
 func main() {
 	_ = godotenv.Load()
+	setupLogger(getEnvOrDefault("LOG_FORMAT", "json"))
 
 	if len(os.Args) > 1 && os.Args[1] == "scheduler:run" {
 		runScheduler()
@@ -86,12 +113,12 @@ func main() {
 func serve() {
 	cfg, err := appconfig.Load()
 	if err != nil {
-		log.Fatal(err)
+		fatal("config load failed", "error", err)
 	}
 
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("open db: %v", err)
+		fatal("open db failed", "error", err)
 	}
 	defer database.Close()
 
@@ -129,21 +156,21 @@ func serve() {
 
 	distFS, err := fs.Sub(webFS, "web/dist")
 	if err != nil {
-		log.Fatalf("embed: %v", err)
+		fatal("embed failed", "error", err)
 	}
 
 	root := chi.NewRouter()
 	root.Use(middleware.Logger)
 	root.Mount("/", app.BuildRouter(handlers, distFS))
 
-	log.Printf("listening on :%s", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, root))
+	slog.Info("listening", "port", cfg.Port)
+	fatal("http server stopped", "error", http.ListenAndServe(":"+cfg.Port, root))
 }
 
 func runGenVapid() {
 	priv, pub, err := webpush.GenerateVAPIDKeys()
 	if err != nil {
-		log.Fatalf("gen-vapid: %v", err)
+		fatal("gen-vapid failed", "error", err)
 	}
 	fmt.Printf("VAPID_PRIVATE_KEY=%s\nVAPID_PUBLIC_KEY=%s\n", priv, pub)
 }
@@ -174,21 +201,21 @@ func runPushTest() {
 
 	cfg, err := appconfig.Load()
 	if err != nil {
-		log.Fatalf("push-test: load config: %v", err)
+		fatal("push-test: load config failed", "error", err)
 	}
 	if cfg.VAPIDPrivateKey == "" {
-		log.Fatal("push-test: VAPID_PRIVATE_KEY nicht gesetzt")
+		fatal("push-test: VAPID_PRIVATE_KEY nicht gesetzt")
 	}
 
 	database, err := db.Open(*dbPath)
 	if err != nil {
-		log.Fatalf("push-test: open db: %v", err)
+		fatal("push-test: open db failed", "error", err)
 	}
 	defer database.Close()
 
 	rows, err := database.Query(`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`, *userID)
 	if err != nil {
-		log.Fatalf("push-test: query: %v", err)
+		fatal("push-test: query failed", "error", err)
 	}
 	defer rows.Close()
 
@@ -205,7 +232,7 @@ func runPushTest() {
 		subs = append(subs, s)
 	}
 	if len(subs) == 0 {
-		log.Fatalf("push-test: keine Subscriptions für User %d gefunden", *userID)
+		fatal("push-test: keine Subscriptions gefunden", "user", *userID)
 	}
 
 	payload, _ := json.Marshal(map[string]string{"title": *title, "body": *body, "url": *url})
@@ -251,13 +278,13 @@ func runCreateAdmin() {
 
 	database, err := db.Open(*dbPath)
 	if err != nil {
-		log.Fatalf("create-admin: open db: %v", err)
+		fatal("create-admin: open db failed", "error", err)
 	}
 	defer database.Close()
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Fatalf("create-admin: bcrypt: %v", err)
+		fatal("create-admin: bcrypt failed", "error", err)
 	}
 
 	_, err = database.Exec(
@@ -265,7 +292,7 @@ func runCreateAdmin() {
 		*email, *name, string(hash),
 	)
 	if err != nil {
-		log.Fatalf("create-admin: insert user: %v", err)
+		fatal("create-admin: insert user failed", "error", err)
 	}
 	fmt.Printf("Admin-Nutzer '%s' (%s) wurde angelegt.\n", *name, *email)
 }
@@ -274,11 +301,11 @@ func runScheduler() {
 	_ = godotenv.Load()
 	cfg, err := appconfig.Load()
 	if err != nil {
-		log.Fatalf("scheduler: load config: %v", err)
+		fatal("scheduler: load config failed", "error", err)
 	}
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("scheduler: open db: %v", err)
+		fatal("scheduler: open db failed", "error", err)
 	}
 	defer database.Close()
 	scheduler.New(database, cfg, mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)).Run()
@@ -298,13 +325,13 @@ func runMigrateForce() {
 	}
 	database, err := db.Open(dbPath)
 	if err != nil {
-		log.Fatalf("migrate force: open db: %v", err)
+		fatal("migrate force: open db failed", "error", err)
 	}
 	defer database.Close()
 	if err := db.MigrateForce(database, db.MigrationsFS, version); err != nil {
-		log.Fatalf("migrate force: %v", err)
+		fatal("migrate force failed", "error", err)
 	}
-	log.Printf("forced migration version to %d", version)
+	slog.Info("forced migration version", "version", version)
 }
 
 func runMigrate() {
@@ -317,13 +344,13 @@ func runMigrate() {
 	}
 	database, err := db.Open(dbPath)
 	if err != nil {
-		log.Fatalf("migrate: open db: %v", err)
+		fatal("migrate: open db failed", "error", err)
 	}
 	defer database.Close()
 	if err := db.Migrate(database, db.MigrationsFS); err != nil {
-		log.Fatalf("migrate: %v", err)
+		fatal("migrate failed", "error", err)
 	}
-	log.Println("migrations applied")
+	slog.Info("migrations applied")
 }
 
 func corsMiddleware(baseURL string) func(http.Handler) http.Handler {

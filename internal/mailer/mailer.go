@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
@@ -40,7 +40,7 @@ func New(cfg config.SMTPConfig, baseURL string, disabled bool) *Mailer {
 
 func (m *Mailer) Send(to, subject, textBody string) error {
 	if m.disabled {
-		log.Printf("[mailer] disabled — an: %s, Betreff: %s", to, subject)
+		slog.Info("mailer disabled", "to", to, "subject", subject)
 		return nil
 	}
 	auth := smtp.PlainAuth("", m.cfg.User, m.cfg.Password, m.cfg.Host)

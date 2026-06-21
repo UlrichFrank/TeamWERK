@@ -6,7 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -61,7 +61,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	} else if err != nil {
-		log.Printf("Login query error: %v", err)
+		slog.Error("login query failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -71,17 +71,17 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(), `UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?`, id)
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
-	log.Printf("Login: loadJWTExtras done - clubFunctions=%v, isParent=%v", clubFunctions, isParent)
+	slog.Info("login loadJWTExtras done", "clubFunctions", clubFunctions, "isParent", isParent)
 	accessToken, err := IssueAccessToken(h.jwtSecret, id, ident, role, clubFunctions, isParent)
 	if err != nil {
-		log.Printf("Login: IssueAccessToken error: %v", err)
+		slog.Error("login issue access token failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	plain, tokenHash, err := GenerateOpaqueToken()
-	log.Printf("Login: GenerateOpaqueToken done")
+	slog.Info("login generate opaque token done")
 	if err != nil {
-		log.Printf("Login: GenerateOpaqueToken error: %v", err)
+		slog.Error("login generate opaque token failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -90,7 +90,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?,?,?)`,
 		id, tokenHash, expiry,
 	); err != nil {
-		log.Printf("Login: INSERT refresh_tokens error: %v", err)
+		slog.Error("login insert refresh token failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -149,13 +149,13 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
 	accessToken, err := IssueAccessToken(h.jwtSecret, id, email, role, clubFunctions, isParent)
 	if err != nil {
-		log.Printf("Refresh: IssueAccessToken error: %v", err)
+		slog.Error("refresh issue access token failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	plain, newHash, err := GenerateOpaqueToken()
 	if err != nil {
-		log.Printf("Refresh: GenerateOpaqueToken error: %v", err)
+		slog.Error("refresh generate opaque token failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -163,14 +163,14 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		log.Printf("Refresh: BeginTx error: %v", err)
+		slog.Error("refresh begin tx failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE token_hash = ?`, tokenHash); err != nil {
-		log.Printf("Refresh: DELETE error: %v", err)
+		slog.Error("refresh delete failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -178,12 +178,12 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?,?,?)`,
 		id, newHash, newExpiry,
 	); err != nil {
-		log.Printf("Refresh: INSERT error: %v", err)
+		slog.Error("refresh insert failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("Refresh: Commit error: %v", err)
+		slog.Error("refresh commit failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -342,7 +342,7 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at, first_name, last_name) VALUES (?,?,?,?,?,?,?)`,
 		email, nil, "standard", tokenHash, expiry, firstName, lastName,
 	); err != nil {
-		log.Printf("DB ERROR (ApproveMembership token for %s): %v", email, err)
+		slog.Error("approve membership insert token failed", "email", email, "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -353,7 +353,7 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 	link := fmt.Sprintf("%s/register?token=%s", h.baseURL, plain)
 	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK wurde bestätigt",
 		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", firstName, link)); err != nil {
-		log.Printf("SMTP ERROR (ApproveMembership to %s): %v", email, err)
+		slog.Error("approve membership send mail failed", "email", email, "error", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -373,7 +373,7 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 
 	loginName, err := generateUniqueLoginName(ctx, tx, firstName, lastName)
 	if err != nil {
-		log.Printf("ApproveMembership (child %s.%s): login name: %v", firstName, lastName, err)
+		slog.Error("approve membership child login name failed", "firstName", firstName, "lastName", lastName, "error", err)
 		http.Error(w, "konnte keinen eindeutigen Spielernamen erzeugen", http.StatusInternalServerError)
 		return
 	}
@@ -389,7 +389,7 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 		loginName, recoveryEmail,
 	)
 	if err != nil {
-		log.Printf("ApproveMembership (child): insert user: %v", err)
+		slog.Error("approve membership child insert user failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -399,7 +399,7 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 		`INSERT INTO members (first_name, last_name, user_id) VALUES (?,?,?)`,
 		firstName, lastName, userID,
 	); err != nil {
-		log.Printf("ApproveMembership (child): insert member: %v", err)
+		slog.Error("approve membership child insert member failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -415,7 +415,7 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 		`INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?,?,?)`,
 		userID, tokenHash, InvitationExpiry(),
 	); err != nil {
-		log.Printf("ApproveMembership (child): insert token: %v", err)
+		slog.Error("approve membership child insert token failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -441,7 +441,7 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 	body := fmt.Sprintf("Hallo,\n\nder Account für %s %s wurde angelegt.\n\nLogin-Name (zum Einloggen): %s\n\nBitte setze jetzt das Passwort:\n%s\n\nDer Link ist 48 Stunden gültig.",
 		firstName, lastName, loginName, link)
 	if err := h.mailer.Send(parentEmail, "Kinder-Account bei TeamWERK – Passwort setzen", body); err != nil {
-		log.Printf("SMTP ERROR (ApproveMembership child to %s): %v", parentEmail, err)
+		slog.Error("approve membership child send mail failed", "email", parentEmail, "error", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -463,7 +463,7 @@ func (h *Handler) RejectMembershipRequest(w http.ResponseWriter, r *http.Request
 	)
 	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK",
 		fmt.Sprintf("Hallo %s,\n\nLeider konnte deine Anfrage nicht bestätigt werden. Wende dich an den Vereinsvorstand.", firstName)); err != nil {
-		log.Printf("SMTP ERROR (RejectMembership to %s): %v", email, err)
+		slog.Error("reject membership send mail failed", "email", email, "error", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -500,7 +500,7 @@ func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO invitation_tokens (email, team_id, role, token, expires_at, comment) VALUES (?,?,?,?,?,?)`,
 		req.Email, nil, req.Role, tokenHash, expiry, commentVal,
 	); err != nil {
-		log.Printf("DB ERROR (Invite for %s): %v", req.Email, err)
+		slog.Error("invite insert token failed", "email", req.Email, "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -518,7 +518,7 @@ Der Link ist 48 Stunden gültig. Falls du diese Einladung nicht erwartet hast, k
 Viele Grüße
 Team Stuttgart`, link)
 	if err := h.mailer.Send(req.Email, "Einladung zu TeamWERK – Team Stuttgart", body); err != nil {
-		log.Printf("SMTP ERROR (Invite to %s): %v", req.Email, err)
+		slog.Error("invite send mail failed", "email", req.Email, "error", err)
 		http.Error(w, "mail delivery failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
@@ -564,7 +564,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Register: bcrypt error: %v", err)
+		slog.Error("register bcrypt failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -1261,7 +1261,7 @@ func (h *Handler) RequestEmailChange(w http.ResponseWriter, r *http.Request) {
 	link := fmt.Sprintf("%s/api/profile/email/confirm?token=%s", h.baseURL, plain)
 	body := fmt.Sprintf("Hallo,\n\nbitte bestätige deine neue E-Mail-Adresse für TeamWERK:\n\n%s\n\nDer Link ist 24 Stunden gültig.\n\nFalls du diese Änderung nicht beantragt hast, ignoriere diese Mail.", link)
 	if err := h.mailer.Send(req.NewEmail, "E-Mail-Adresse bestätigen – TeamWERK", body); err != nil {
-		log.Printf("SMTP ERROR (EmailChange to %s): %v", req.NewEmail, err)
+		slog.Error("email change send mail failed", "email", req.NewEmail, "error", err)
 		h.db.ExecContext(r.Context(), `DELETE FROM email_change_tokens WHERE user_id=?`, claims.UserID)
 		http.Error(w, "mail delivery failed", http.StatusBadGateway)
 		return
@@ -1353,7 +1353,7 @@ func (h *Handler) RequestRecoveryEmailChange(w http.ResponseWriter, r *http.Requ
 	link := fmt.Sprintf("%s/api/profile/recovery-email/confirm?token=%s", h.baseURL, plain)
 	body := fmt.Sprintf("Hallo,\n\nfür ein Kinderkonto bei TeamWERK wurde beantragt, die Wiederherstellungs-E-Mail auf %s zu ändern.\n\nBitte bestätige die Änderung über diesen Link:\n%s\n\nDanach wird ein zweiter Bestätigungslink an die neue Adresse gesendet. Der Link ist 24 Stunden gültig.\n\nFalls du das nicht beantragt hast, ignoriere diese Mail — es ändert sich nichts.", req.NewEmail, link)
 	if err := h.mailer.Send(oldEmail, "Wiederherstellungs-E-Mail ändern – TeamWERK", body); err != nil {
-		log.Printf("SMTP ERROR (RecoveryEmailChange auth to %s): %v", oldEmail, err)
+		slog.Error("recovery email change send mail failed", "email", oldEmail, "error", err)
 		h.db.ExecContext(r.Context(),
 			`DELETE FROM email_change_tokens WHERE user_id=? AND field='recovery_email'`, childUserID.Int64)
 		http.Error(w, "mail delivery failed", http.StatusBadGateway)
@@ -1578,7 +1578,7 @@ Der Link ist 48 Stunden gültig. Falls du diese Einladung nicht erwartet hast, k
 Viele Grüße
 Team Stuttgart`, link)
 	if err := h.mailer.Send(email, "Einladung zu TeamWERK – Team Stuttgart", body); err != nil {
-		log.Printf("SMTP ERROR (SendInvitation to %s): %v", email, err)
+		slog.Error("send invitation send mail failed", "email", email, "error", err)
 		http.Error(w, "mail delivery failed", http.StatusBadGateway)
 		return
 	}

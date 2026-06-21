@@ -3,7 +3,7 @@ package notifications
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -58,7 +58,7 @@ func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 			  email_enabled = excluded.email_enabled`,
 			claims.UserID, category, pushVal, emailVal)
 		if err != nil {
-			log.Printf("notifications: update preferences for user %d category %s: %v", claims.UserID, category, err)
+			slog.Error("update notification preferences failed", "user", claims.UserID, "category", category, "error", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
