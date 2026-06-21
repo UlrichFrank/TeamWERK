@@ -120,6 +120,12 @@ export default function AdminUsersPage() {
   const [activateLoading, setActivateLoading] = useState(false)
   const [activateError, setActivateError] = useState('')
 
+  // Recovery-E-Mail-Override (Admin/Vorstand setzen direkt, wenn die alte Adresse tot ist)
+  const [recoveryModal, setRecoveryModal] = useState<{ userId: number; name: string } | null>(null)
+  const [recoveryEmailInput, setRecoveryEmailInput] = useState('')
+  const [recoveryLoading, setRecoveryLoading] = useState(false)
+  const [recoveryError, setRecoveryError] = useState('')
+
   const loadInvitationsAndRequests = () => Promise.all([
     api.get('/invitations').then(r => setInvitations(r.data ?? [])),
     api.get('/membership-requests').then(r => setRequests(r.data ?? [])),
@@ -264,7 +270,29 @@ export default function AdminUsersPage() {
     }
   }
 
-  useEscapeKey(showCreateModal ? closeCreateModal : showInviteModal ? closeInviteModal : showCsvModal ? closeCsvModal : linkModal ? closeLinkModal : activateModal ? closeActivateModal : null)
+  const closeRecoveryModal = () => {
+    setRecoveryModal(null)
+    setRecoveryEmailInput('')
+    setRecoveryError('')
+  }
+
+  const handleSetRecoveryEmail = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!recoveryModal) return
+    setRecoveryLoading(true)
+    setRecoveryError('')
+    try {
+      await api.put(`/users/${recoveryModal.userId}/recovery-email`, { recovery_email: recoveryEmailInput })
+      closeRecoveryModal()
+      refreshUsers()
+    } catch {
+      setRecoveryError('Speichern fehlgeschlagen. Bitte E-Mail-Adresse prüfen.')
+    } finally {
+      setRecoveryLoading(false)
+    }
+  }
+
+  useEscapeKey(showCreateModal ? closeCreateModal : showInviteModal ? closeInviteModal : showCsvModal ? closeCsvModal : linkModal ? closeLinkModal : activateModal ? closeActivateModal : recoveryModal ? closeRecoveryModal : null)
 
   const handleCsvUpload = async () => {
     if (!csvFile) return
@@ -712,6 +740,49 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      {recoveryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
+              <h2 className="font-semibold text-lg">Eltern-E-Mail setzen</h2>
+              <button onClick={closeRecoveryModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSetRecoveryEmail} className="px-6 py-5 space-y-4">
+              <p className="text-sm text-brand-text-muted">
+                Wiederherstellungs-E-Mail für <span className="font-medium text-brand-text">{recoveryModal.name}</span> direkt
+                setzen — ohne Bestätigungs-Workflow. Nur nutzen, wenn die bisherige Adresse nicht mehr erreichbar ist.
+              </p>
+              {recoveryError && (
+                <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{recoveryError}</p>
+              )}
+              <input
+                type="email"
+                required
+                placeholder="Eltern-E-Mail-Adresse"
+                value={recoveryEmailInput}
+                onChange={e => setRecoveryEmailInput(e.target.value)}
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={recoveryLoading || !recoveryEmailInput}
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {recoveryLoading ? 'Speichern…' : 'Speichern'}
+                </button>
+                <button type="button" onClick={closeRecoveryModal} className="flex-1 px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Pending requests and invitations */}
       {(filteredRequests.length > 0 || filteredInvitations.length > 0) && (
         <div className="mb-8">
@@ -845,6 +916,10 @@ export default function AdminUsersPage() {
                         label: 'Testen als',
                         onClick: () => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim()),
                       }] : []),
+                      {
+                        label: 'Eltern-E-Mail setzen',
+                        onClick: () => { setRecoveryModal({ userId: u.id, name: `${u.first_name} ${u.last_name}`.trim() }); setRecoveryEmailInput('') },
+                      },
                       { label: 'Löschen', onClick: () => handleDeleteUser(u), variant: 'danger' as const },
                     ]} />
                   </td>

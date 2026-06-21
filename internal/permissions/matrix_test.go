@@ -170,6 +170,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/auth/forgot-password", expected: exPublic},
 	{method: "POST", path: "/api/auth/reset-password", expected: exPublic},
 	{method: "GET", path: "/api/profile/email/confirm", expected: exPublic},
+	{method: "GET", path: "/api/profile/recovery-email/confirm", expected: exPublic},
 	// Calendar feed — token im Pfad ist die Authentifizierung
 	{method: "GET", path: "/api/calendar/feed/{token}", expected: exPublic},
 
@@ -251,6 +252,7 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/profile/kind/{memberId}/photo", expected: exPublic},
 	{method: "POST", path: "/api/profile/kind/{memberId}/phones", expected: exPublic},
 	{method: "DELETE", path: "/api/profile/kind/{memberId}/phones/{phoneId}", expected: exPublic},
+	{method: "POST", path: "/api/profile/kind/{memberId}/recovery-email", expected: exPublic},
 	{method: "PUT", path: "/api/profile/kind/{memberId}/visibility", expected: exPublic},
 
 	// Upload (User-Photo)
@@ -413,6 +415,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/users", expected: exVorstand},
 	{method: "PUT", path: "/api/users/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/users/{id}/role", expected: exVorstand},
+	{method: "PUT", path: "/api/users/{id}/recovery-email", expected: exVorstand},
 	{method: "DELETE", path: "/api/users/{id}", expected: exVorstand},
 	{method: "POST", path: "/api/auth/invite", expected: exVorstand},
 	{method: "GET", path: "/api/invitations", expected: exVorstand},

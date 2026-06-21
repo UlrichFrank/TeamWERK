@@ -378,9 +378,15 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
+	// Eltern-Adresse als recovery_email persistieren — sie bleibt damit als
+	// Wiederherstellungs-/Korrespondenz-Adresse erhalten (Passwort-Reset später).
+	var recoveryEmail any
+	if parentEmail != "" {
+		recoveryEmail = parentEmail
+	}
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO users (email, login_name, password, role, can_login) VALUES (NULL, ?, '', 'standard', 0)`,
-		loginName,
+		`INSERT INTO users (email, login_name, password, role, can_login, recovery_email) VALUES (NULL, ?, '', 'standard', 0, ?)`,
+		loginName, recoveryEmail,
 	)
 	if err != nil {
 		log.Printf("ApproveMembership (child): insert user: %v", err)
@@ -603,17 +609,22 @@ func (h *Handler) GetTokenInfo(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email string `json:"email"`
+		Email string `json:"email"` // E-Mail ODER login_name (Kinder ohne eigene E-Mail)
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	var userID int
-	var firstName, lastName string
+	var firstName, lastName, dest string
+	// Lookup über die "AccountName"-Qualität (E-Mail bei Erwachsenen, login_name
+	// bei Kindern). recovery_email ist NIE Lookup-Key — nur Ziel-Adresse.
+	// Versand an die "Wiederherstellungs"-Qualität: eigene E-Mail, sonst recovery_email.
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, first_name, last_name FROM users WHERE email = ? AND can_login = 1`, req.Email,
-	).Scan(&userID, &firstName, &lastName)
-	w.WriteHeader(http.StatusNoContent) // always same response
-	if err != nil {
-		return
+		`SELECT id, first_name, last_name, COALESCE(NULLIF(email,''), recovery_email, '')
+		 FROM users WHERE (LOWER(email) = LOWER(?) OR LOWER(login_name) = LOWER(?)) AND can_login = 1`,
+		req.Email, req.Email,
+	).Scan(&userID, &firstName, &lastName, &dest)
+	w.WriteHeader(http.StatusNoContent) // always same response (keine Enumeration)
+	if err != nil || dest == "" {
+		return // kein Treffer oder kein Ziel: kein (nutzloser) Token
 	}
 	plain, tokenHash, _ := GenerateOpaqueToken()
 	expiry := PasswordResetExpiry()
@@ -626,7 +637,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if lastName != "" {
 		fullName += " " + lastName
 	}
-	h.mailer.Send(req.Email, "Passwort zurücksetzen – TeamWERK", //nolint:errcheck // best-effort; token is stored regardless
+	h.mailer.Send(dest, "Passwort zurücksetzen – TeamWERK", //nolint:errcheck // best-effort; token is stored regardless
 		fmt.Sprintf("Hallo %s,\n\nPasswort zurücksetzen:\n%s\n\nDer Link ist 1 Stunde gültig.", fullName, link))
 }
 
@@ -934,6 +945,40 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int64{"id": newID}) //nolint:errcheck
 }
 
+// PUT /api/users/{id}/recovery-email
+// Admin/Vorstand setzen die Wiederherstellungs-E-Mail eines Kontos direkt, ohne
+// Bestätigungs-Workflow. Escape-Hatch, wenn die alte Adresse nicht mehr existiert
+// und der doppelte Bestätigungs-Loop deshalb nicht abschließbar ist.
+func (h *Handler) SetRecoveryEmail(w http.ResponseWriter, r *http.Request) {
+	targetID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		RecoveryEmail string `json:"recovery_email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !looksLikeEmail(req.RecoveryEmail) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE users SET recovery_email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+		req.RecoveryEmail, targetID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if h.hub != nil {
+		h.hub.Broadcast("members")
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // PUT /api/admin/users/{id}/role
 func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	caller := ClaimsFromCtx(r.Context())
@@ -1236,7 +1281,7 @@ func (h *Handler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	var newEmail string
 	var expiresAt time.Time
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, user_id, new_email, expires_at FROM email_change_tokens WHERE token=? AND used_at IS NULL`,
+		`SELECT id, user_id, new_email, expires_at FROM email_change_tokens WHERE token=? AND used_at IS NULL AND field='email'`,
 		tokenHash,
 	).Scan(&id, &userID, &newEmail, &expiresAt)
 	if err != nil || time.Now().After(expiresAt) {
@@ -1247,6 +1292,125 @@ func (h *Handler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(), `UPDATE email_change_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?`, id)
 	h.db.ExecContext(r.Context(), `DELETE FROM refresh_tokens WHERE user_id=?`, userID)
 	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
+// POST /api/profile/kind/{memberId}/recovery-email
+// Eltern stoßen die Änderung der Wiederherstellungs-E-Mail eines Kindkontos an.
+// Doppelte Bestätigung: zuerst an die ALTE Adresse (Autorisierung), dann an die
+// NEUE Adresse (Erreichbarkeit). Diese Route legt nur die Stufe 'auth' an.
+func (h *Handler) RequestRecoveryEmailChange(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		NewEmail string `json:"new_email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !looksLikeEmail(req.NewEmail) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	// Caller muss verknüpftes Elternteil sein.
+	var isParent int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM family_links WHERE parent_user_id=? AND member_id=?`,
+		claims.UserID, memberID).Scan(&isParent)
+	if isParent == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	// Kindkonto + aktuelle (alte) Adresse ermitteln.
+	var childUserID sql.NullInt64
+	var oldEmail string
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT m.user_id, COALESCE(u.recovery_email,'')
+		   FROM members m LEFT JOIN users u ON u.id = m.user_id WHERE m.id=?`,
+		memberID).Scan(&childUserID, &oldEmail); err != nil || !childUserID.Valid {
+		http.Error(w, "kein Konto für dieses Kind", http.StatusConflict)
+		return
+	}
+	if oldEmail == "" {
+		// Keine alte Adresse → Bestätigungs-Loop nicht möglich. Vorstand-Override nötig.
+		http.Error(w, "keine Wiederherstellungs-Adresse hinterlegt", http.StatusConflict)
+		return
+	}
+	h.db.ExecContext(r.Context(),
+		`DELETE FROM email_change_tokens WHERE user_id=? AND field='recovery_email'`, childUserID.Int64)
+	plain, tokenHash, err := GenerateOpaqueToken()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO email_change_tokens (user_id, token, new_email, expires_at, field, stage) VALUES (?,?,?,?, 'recovery_email', 'auth')`,
+		childUserID.Int64, tokenHash, req.NewEmail, time.Now().Add(24*time.Hour),
+	); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	link := fmt.Sprintf("%s/api/profile/recovery-email/confirm?token=%s", h.baseURL, plain)
+	body := fmt.Sprintf("Hallo,\n\nfür ein Kinderkonto bei TeamWERK wurde beantragt, die Wiederherstellungs-E-Mail auf %s zu ändern.\n\nBitte bestätige die Änderung über diesen Link:\n%s\n\nDanach wird ein zweiter Bestätigungslink an die neue Adresse gesendet. Der Link ist 24 Stunden gültig.\n\nFalls du das nicht beantragt hast, ignoriere diese Mail — es ändert sich nichts.", req.NewEmail, link)
+	if err := h.mailer.Send(oldEmail, "Wiederherstellungs-E-Mail ändern – TeamWERK", body); err != nil {
+		log.Printf("SMTP ERROR (RecoveryEmailChange auth to %s): %v", oldEmail, err)
+		h.db.ExecContext(r.Context(),
+			`DELETE FROM email_change_tokens WHERE user_id=? AND field='recovery_email'`, childUserID.Int64)
+		http.Error(w, "mail delivery failed", http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/profile/recovery-email/confirm?token=...
+// Stufe 'auth' (alte Adresse bestätigt) → Token rotiert auf 'verify', Mail an
+// neue Adresse. Stufe 'verify' (neue Adresse bestätigt) → recovery_email wird
+// geschrieben.
+func (h *Handler) ConfirmRecoveryEmailChange(w http.ResponseWriter, r *http.Request) {
+	plain := r.URL.Query().Get("token")
+	if plain == "" {
+		http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)
+		return
+	}
+	tokenHash := HashToken(plain)
+	var id, userID int
+	var newEmail, stage string
+	var expiresAt time.Time
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT id, user_id, new_email, expires_at, COALESCE(stage,'') FROM email_change_tokens
+		 WHERE token=? AND used_at IS NULL AND field='recovery_email'`,
+		tokenHash,
+	).Scan(&id, &userID, &newEmail, &expiresAt, &stage)
+	if err != nil || time.Now().After(expiresAt) {
+		http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)
+		return
+	}
+	switch stage {
+	case "auth":
+		// Alte Adresse bestätigt → Token rotieren, zweite Bestätigung an neue Adresse.
+		plain2, hash2, gerr := GenerateOpaqueToken()
+		if gerr != nil {
+			http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)
+			return
+		}
+		h.db.ExecContext(r.Context(),
+			`UPDATE email_change_tokens SET token=?, stage='verify', expires_at=?, created_at=CURRENT_TIMESTAMP WHERE id=?`,
+			hash2, time.Now().Add(24*time.Hour), id)
+		link := fmt.Sprintf("%s/api/profile/recovery-email/confirm?token=%s", h.baseURL, plain2)
+		body := fmt.Sprintf("Hallo,\n\nbitte bestätige, dass diese Adresse künftig die Wiederherstellungs-E-Mail für das TeamWERK-Kinderkonto sein soll:\n\n%s\n\nDer Link ist 24 Stunden gültig.", link)
+		h.mailer.Send(newEmail, "Neue Wiederherstellungs-E-Mail bestätigen – TeamWERK", body) //nolint:errcheck // best-effort
+		http.Redirect(w, r, "/login?info=recovery_verify_sent", http.StatusFound)
+	case "verify":
+		// Neue Adresse bestätigt → schreiben.
+		h.db.ExecContext(r.Context(), `UPDATE users SET recovery_email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, newEmail, userID)
+		h.db.ExecContext(r.Context(), `UPDATE email_change_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+		if h.hub != nil {
+			h.hub.Broadcast("members")
+		}
+		http.Redirect(w, r, "/login?info=recovery_changed", http.StatusFound)
+	default:
+		http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)
+	}
 }
 
 // loadJWTExtras queries club_functions and is_parent for inclusion in the JWT.
