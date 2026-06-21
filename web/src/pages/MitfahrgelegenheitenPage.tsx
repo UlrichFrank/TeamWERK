@@ -97,11 +97,12 @@ interface EntryCardProps {
   mySucheIds: number[]
   onDelete: (id: number) => void
   onRequest: (bieteId: number, sucheId: number) => void
+  onOpenQuickPair: (side: 'biete' | 'suche', counterpartId: number) => void
   onConfirm: (paarungId: number) => void
   onReject: (paarungId: number) => void
 }
 
-function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, onRequest, onConfirm, onReject }: EntryCardProps) {
+function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, onRequest, onOpenQuickPair, onConfirm, onReject }: EntryCardProps) {
   const free = typ === 'biete' ? freePlaetze(entry, paarungen) : null
 
   // Paarungen that involve this entry
@@ -109,14 +110,14 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
     typ === 'biete' ? p.bieteId === entry.id : p.sucheId === entry.id
   )
 
-  // Can a sucher request this biete entry?
+  // Can a sucher request this biete entry? Kein eigener Suche-Eintrag mehr nötig —
+  // fehlt er, legt der einseitige Request ihn beim Bestätigen des Mini-Dialogs an.
   const canRequestAsBiete = typ === 'biete' && !entry.isOwn && free !== null && free > 0 &&
-    mySucheIds.length > 0 &&
     !paarungen.some(p => p.bieteId === entry.id && (p.bieteIsOwn || p.sucheIsOwn) &&
       (p.status === 'pending' || p.status === 'confirmed'))
 
-  // Can a bieter invite this suche entry? (from one of their own biete entries)
-  const canInviteAsSuche = typ === 'suche' && !entry.isOwn && myBieteIds.length > 0 &&
+  // Can a bieter invite this suche entry? Kein eigener Biete-Eintrag mehr nötig.
+  const canInviteAsSuche = typ === 'suche' && !entry.isOwn &&
     !paarungen.some(p => p.sucheId === entry.id && (p.bieteIsOwn || p.sucheIsOwn) &&
       (p.status === 'pending' || p.status === 'confirmed'))
 
@@ -145,8 +146,10 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
           {canRequestAsBiete && (
             <button
               onClick={() => {
-                const mySuccheId = mySucheIds[0]
-                onRequest(entry.id, mySuccheId)
+                // Eigener Gesuch-Eintrag vorhanden → direkt paaren; sonst Mini-Dialog
+                // (legt den Suche-Spiegel beim Bestätigen einseitig an).
+                if (mySucheIds.length > 0) onRequest(entry.id, mySucheIds[0])
+                else onOpenQuickPair('suche', entry.id)
               }}
               title="Mitfahrt anfragen"
               className="bg-brand-yellow text-brand-black rounded-md px-2 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0 flex items-center gap-1"
@@ -157,7 +160,11 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
           )}
           {canInviteAsSuche && (
             <button
-              onClick={() => onRequest(myBieteIds[0], entry.id)}
+              onClick={() => {
+                // Eigener Biete-Eintrag vorhanden → direkt; sonst Mini-Dialog.
+                if (myBieteIds.length > 0) onRequest(myBieteIds[0], entry.id)
+                else onOpenQuickPair('biete', entry.id)
+              }}
               title="Mitnahme anbieten"
               className="bg-brand-yellow text-brand-black rounded-md px-2 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0 flex items-center gap-1"
             >
@@ -391,6 +398,97 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
   )
 }
 
+interface QuickPairModalProps {
+  side: 'biete' | 'suche'
+  counterpartId: number
+  children?: ChildUser[]
+  vehicleSeats?: number | null
+  onClose: () => void
+  onSaved: () => void
+}
+
+// QuickPairModal: schlanker Dialog für die One-Click-Paarung ohne vorhandenen
+// eigenen Eintrag. Fragt nur Plätze ab (auf der Mitfahren-Seite zusätzlich für
+// wen) und postet den einseitigen Paarungs-Request; der Spiegel-Eintrag entsteht
+// atomar im Backend.
+function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, onSaved }: QuickPairModalProps) {
+  const isRide = side === 'suche'
+  const [plaetze, setPlaetze] = useState<number>(isRide ? 1 : (vehicleSeats ?? 1))
+  const [forUserId, setForUserId] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      const body = isRide
+        ? { bieteId: counterpartId, plaetze, ...(forUserId != null ? { forUserId } : {}) }
+        : { sucheId: counterpartId, plaetze }
+      await api.post('/mitfahrt-paarungen', body)
+      onSaved()
+      onClose()
+    } catch (err: unknown) {
+      const status = (err as { response?: { status: number } })?.response?.status
+      if (status === 409) setError('Keine freien Plätze mehr oder bereits eine Anfrage vorhanden.')
+      else if (status === 403) setError('Dazu fehlt dir die Berechtigung.')
+      else setError('Fehler. Bitte erneut versuchen.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-brand-text">{isRide ? 'Mitfahren' : 'Platz anbieten'}</h2>
+          <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {isRide && children && children.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-brand-text mb-1">Für wen?</label>
+              <select
+                value={forUserId ?? ''}
+                onChange={e => setForUserId(e.target.value === '' ? null : Number(e.target.value))}
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              >
+                <option value="">Ich selbst</option>
+                {children.map(c => (
+                  <option key={c.userId} value={c.userId}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">
+              {isRide ? 'Anzahl Personen' : 'Freie Plätze'}
+            </label>
+            <NumberSpinner value={plaetze} min={1} max={8} onChange={setPlaetze} />
+          </div>
+
+          {error && (
+            <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Senden…' : (isRide ? 'Mitfahrt anfragen' : 'Platz anbieten')}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 interface GameCardProps {
   data: GameCarpoolData
   teamShortNames: Map<number, string>
@@ -398,11 +496,12 @@ interface GameCardProps {
   onDelete: (id: number) => void
   onOpenForm: (gameId: number, typ: 'biete' | 'suche') => void
   onRequest: (bieteId: number, sucheId: number) => void
+  onOpenQuickPair: (side: 'biete' | 'suche', counterpartId: number) => void
   onConfirm: (paarungId: number) => void
   onReject: (paarungId: number) => void
 }
 
-function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequest, onConfirm, onReject }: GameCardProps) {
+function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequest, onOpenQuickPair, onConfirm, onReject }: GameCardProps) {
   const [activeTab, setActiveTab] = useState<'biete' | 'suche'>(focusTab ?? 'biete')
   useEffect(() => { if (focusTab) setActiveTab(focusTab) }, [focusTab])
   const teamIds = data.game.teamIds ?? []
@@ -416,7 +515,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
 
   const confirmedPaarungen = (data.paarungen ?? []).filter(p => p.status === 'confirmed')
 
-  const entryCardProps = { paarungen: data.paarungen, myBieteIds, mySucheIds, onDelete, onRequest, onConfirm, onReject }
+  const entryCardProps = { paarungen: data.paarungen, myBieteIds, mySucheIds, onDelete, onRequest, onOpenQuickPair, onConfirm, onReject }
   const colors = getEventColors(data.game.eventType)
   const Icon = data.game.eventType === 'heim' ? Home : data.game.eventType === 'auswärts' ? Plane : Calendar
 
@@ -561,6 +660,7 @@ export default function MitfahrgelegenheitenPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<{ gameId: number; typ: 'biete' | 'suche' } | null>(null)
+  const [quickPair, setQuickPair] = useState<{ side: 'biete' | 'suche'; counterpartId: number } | null>(null)
   const [allTeams, setAllTeams] = useState<TeamForName[]>([])
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, mine: viewMine } = parseFilters(searchParams)
@@ -790,6 +890,7 @@ export default function MitfahrgelegenheitenPage() {
                 onDelete={handleDelete}
                 onOpenForm={(gameId, typ) => setModal({ gameId, typ })}
                 onRequest={handleRequest}
+                onOpenQuickPair={(side, counterpartId) => setQuickPair({ side, counterpartId })}
                 onConfirm={handleConfirm}
                 onReject={handleReject}
               />
@@ -815,6 +916,17 @@ export default function MitfahrgelegenheitenPage() {
           />
         )
       })()}
+
+      {quickPair && (
+        <QuickPairModal
+          side={quickPair.side}
+          counterpartId={quickPair.counterpartId}
+          children={response.children}
+          vehicleSeats={response.vehicleSeats}
+          onClose={() => setQuickPair(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   )
 }
