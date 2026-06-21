@@ -127,7 +127,10 @@ export default function AdminUsersPage() {
 
   useEffect(() => { loadInvitationsAndRequests() }, [])
 
-  useLiveUpdates(event => { if (event === 'members') loadInvitationsAndRequests() })
+  useLiveUpdates(event => {
+    if (event === 'members') loadInvitationsAndRequests()
+    if (event === 'users') refreshUsers()
+  })
 
   useEffect(() => {
     if (!showDropdown) return
@@ -316,8 +319,13 @@ export default function AdminUsersPage() {
   }
 
   const handleDeleteUser = async (u: User) => {
-    if (!window.confirm(`Nutzer „${u.first_name} ${u.last_name}" (${u.email}) wirklich löschen?`)) return
-    await api.delete(`/users/${u.id}`)
+    if (!window.confirm(`Nutzer „${u.first_name} ${u.last_name}"${u.email ? ` (${u.email})` : ''} wirklich löschen?`)) return
+    try {
+      await api.delete(`/users/${u.id}`)
+      refreshUsers()
+    } catch {
+      window.alert('Nutzer konnte nicht gelöscht werden.')
+    }
   }
 
   const handleDeleteInvitation = async (inv: Invitation) => {
