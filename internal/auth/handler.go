@@ -814,10 +814,12 @@ func (h *Handler) Impersonate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cannot impersonate yourself", http.StatusBadRequest)
 		return
 	}
-	var email, role, firstName, lastName string
+	// Identität NULL-sicher auflösen: Kinder-Accounts haben email=NULL und
+	// authentifizieren über login_name (konsistent mit Login/Refresh).
+	var ident, role, firstName, lastName string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT email, role, first_name, last_name FROM users WHERE id = ?`, targetID,
-	).Scan(&email, &role, &firstName, &lastName)
+		`SELECT COALESCE(NULLIF(email,''), login_name, ''), role, first_name, last_name FROM users WHERE id = ?`, targetID,
+	).Scan(&ident, &role, &firstName, &lastName)
 	if err != nil {
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
@@ -827,7 +829,7 @@ func (h *Handler) Impersonate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), targetID)
-	accessToken, err := IssueAccessToken(h.jwtSecret, targetID, email, role, clubFunctions, isParent)
+	accessToken, err := IssueAccessToken(h.jwtSecret, targetID, ident, role, clubFunctions, isParent)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1013,6 +1015,9 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+	if h.hub != nil {
+		h.hub.Broadcast("users")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
