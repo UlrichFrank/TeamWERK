@@ -10,6 +10,13 @@ import { useChatEvents } from '../hooks/useChatEvents'
 import { useVersion } from '../contexts/VersionContext'
 import { reloadWithSwActivation } from '../lib/reload'
 import { api } from '../lib/api'
+import {
+  setChannelDimension,
+  setTeamSlugDimension,
+  setRoleDimension,
+  slugifyTeam,
+  trackPageview,
+} from '../lib/telemetry'
 
 interface NavModule {
   label: string
@@ -70,7 +77,7 @@ function initOpenModules(): Record<string, boolean> {
 interface ChildEntry { id: number; first_name: string; last_name: string }
 
 export default function AppShell() {
-  const { user, logout, impersonating, stopImpersonation, navRoutes: navRouteList } = useAuth()
+  const { user, loading, logout, impersonating, stopImpersonation, navRoutes: navRouteList } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
@@ -86,6 +93,8 @@ export default function AppShell() {
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
   const navRoutes = new Set(navRouteList)
   const [chatUnread, setChatUnread] = useState(0)
+  // Matomo team_slug Custom Dimension. 'none' = kein Team; 'unknown' = Endpoint-Fehler; 'mixed' = mehrere Teams.
+  const [teamSlug, setTeamSlug] = useState<string>('none')
 
   const loadChatUnread = useCallback(async () => {
     if (!user) return
@@ -118,6 +127,36 @@ export default function AppShell() {
       loadChatUnread()
     }
   })
+
+  useEffect(() => {
+    if (!user) {
+      setTeamSlug('none')
+      return
+    }
+    let cancelled = false
+    api.get('/teams/my')
+      .then(r => {
+        if (cancelled) return
+        const teams = (r.data ?? []) as { name?: string }[]
+        if (teams.length === 0) setTeamSlug('none')
+        else if (teams.length === 1 && teams[0].name) setTeamSlug(slugifyTeam(teams[0].name))
+        else setTeamSlug('mixed')
+      })
+      .catch(() => {
+        if (!cancelled) setTeamSlug('unknown')
+      })
+    return () => { cancelled = true }
+    // Wie der Profil-Loader oben: nur bei Wechsel der Nutzer-Identität neu laden.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
+
+  useEffect(() => {
+    if (loading || !user) return
+    setChannelDimension()
+    setTeamSlugDimension(teamSlug)
+    setRoleDimension(user.role)
+    trackPageview(window.location.href, document.title)
+  }, [location.pathname, location.search, loading, user, teamSlug])
 
   useEffect(() => {
     setCanGoBack((window.history.state?.idx ?? 0) > 0)
