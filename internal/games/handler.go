@@ -148,62 +148,6 @@ func classifySlotPosition(slotTime string, gameTime string, allGameTimes []strin
 	return isBeforeAllGames, isAfterAllGames, isBetweenGames
 }
 
-// effectiveEventDuration returns the total event duration in minutes for slot-time calculations.
-// For heim/auswärts events it reads the team's age_class_game_rules (2×half + break).
-// For generisch events it reads the template's duration_minutes.
-func (h *Handler) effectiveEventDuration(ctx context.Context, eventType string, templateID, teamID int) (int, error) {
-	if eventType == "heim" || eventType == "auswärts" {
-		var ageClass sql.NullString
-		h.db.QueryRowContext(ctx, `SELECT age_class FROM teams WHERE id=?`, teamID).Scan(&ageClass)
-		if !ageClass.Valid || ageClass.String == "" {
-			return 0, fmt.Errorf("Team hat keine Altersklasse — Slot-Zeitberechnung nicht möglich")
-		}
-		var half, brk int
-		err := h.db.QueryRowContext(ctx,
-			`SELECT half_duration_minutes, break_minutes FROM age_class_game_rules WHERE age_class=?`,
-			ageClass.String).Scan(&half, &brk)
-		if err == sql.ErrNoRows {
-			return 0, fmt.Errorf("keine Altersklassen-Regel für Klasse %s gefunden", ageClass.String)
-		}
-		if err != nil {
-			return 0, err
-		}
-		return 2*half + brk, nil
-	}
-	var dur int
-	err := h.db.QueryRowContext(ctx,
-		`SELECT duration_minutes FROM game_templates WHERE id=?`, templateID).Scan(&dur)
-	if err != nil {
-		return 0, fmt.Errorf("Vorlage nicht gefunden")
-	}
-	if dur <= 0 {
-		return 0, fmt.Errorf("Vorlage hat keine Spieldauer konfiguriert")
-	}
-	return dur, nil
-}
-
-// findTemplateForGame returns the best-matching template for a game.
-// For home games: tries 'heim', falls back to 'generisch'.
-// For away games: tries 'auswärts', falls back to 'generisch'.
-func (h *Handler) findTemplateForGame(ctx context.Context, isHome bool) (id, durationMins int, err error) {
-	targetType := "auswärts"
-	if isHome {
-		targetType = "heim"
-	}
-	err = h.db.QueryRowContext(ctx,
-		`SELECT id, duration_minutes FROM game_templates WHERE template_type=? ORDER BY id LIMIT 1`, targetType).
-		Scan(&id, &durationMins)
-	if err == sql.ErrNoRows {
-		err = h.db.QueryRowContext(ctx,
-			`SELECT id, duration_minutes FROM game_templates WHERE template_type='generisch' ORDER BY id LIMIT 1`).
-			Scan(&id, &durationMins)
-	}
-	if err == sql.ErrNoRows {
-		return 0, 0, fmt.Errorf("kein passendes Dienstplan-Template gefunden (Typ: %s oder generisch)", targetType)
-	}
-	return id, durationMins, err
-}
-
 type templateItemRow struct {
 	DutyTypeID           int
 	DutyTypeName         string
@@ -268,7 +212,7 @@ func applyBehavior(it templateItemRow, gameTime, slotTime string, allGameTimes [
 			skip = true
 		} else if it.AdjacentDayBehavior == "reduced" && it.AdjacentDayVariantID.Valid {
 			// Nicht doppelt reduzieren, wenn schon same_day_behavior reduziert wurde
-			if !(isBetweenGames && it.SameDayBehavior == "reduced" && it.SameDayVariantID.Valid) {
+			if !isBetweenGames || it.SameDayBehavior != "reduced" || !it.SameDayVariantID.Valid {
 				dutyTypeID = int(it.AdjacentDayVariantID.Int64)
 			}
 		}

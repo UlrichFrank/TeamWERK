@@ -76,9 +76,10 @@ func (h *WelcomeEmailHandler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salutation := "Liebe/r"
-	if gender == "m" {
+	switch gender {
+	case "m":
 		salutation = "Lieber"
-	} else if gender == "f" {
+	case "f":
 		salutation = "Liebe"
 	}
 

@@ -403,8 +403,9 @@ func TestList_MultiTeamGenericEventTeamIDs(t *testing.T) {
 	if g.TeamIDs[0] >= g.TeamIDs[1] {
 		t.Errorf("expected teamIds sorted ascending, got %v", g.TeamIDs)
 	}
-	if !(g.TeamIDs[0] == teamA && g.TeamIDs[1] == teamB) &&
-		!(g.TeamIDs[0] == teamB && g.TeamIDs[1] == teamA) {
+	matchesPair := (g.TeamIDs[0] == teamA && g.TeamIDs[1] == teamB) ||
+		(g.TeamIDs[0] == teamB && g.TeamIDs[1] == teamA)
+	if !matchesPair {
 		t.Errorf("teamIds %v does not contain both teamA=%d and teamB=%d", g.TeamIDs, teamA, teamB)
 	}
 }

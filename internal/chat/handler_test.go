@@ -385,20 +385,6 @@ func itoa(n int) string {
 	return string(buf[i:])
 }
 
-// directConvExists checks whether a direct conversation exists between two users.
-func directConvExists(t *testing.T, db *sql.DB, userA, userB int) bool {
-	t.Helper()
-	var n int
-	if err := db.QueryRow(`
-		SELECT COUNT(*) FROM conversations c
-		JOIN conversation_members m1 ON m1.conversation_id = c.id AND m1.user_id = ?
-		JOIN conversation_members m2 ON m2.conversation_id = c.id AND m2.user_id = ?
-		WHERE c.type = 'direct'`, userA, userB).Scan(&n); err != nil {
-		t.Fatalf("directConvExists: %v", err)
-	}
-	return n > 0
-}
-
 // TC-CH-EXT01: Ein Mitglied verlässt eine Gruppe → left_at gesetzt, System-Nachricht.
 func TestLeave_MemberLeavesGroup(t *testing.T) {
 	db := testutil.NewDB(t)
