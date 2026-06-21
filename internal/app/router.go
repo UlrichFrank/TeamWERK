@@ -91,6 +91,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Post("/api/auth/forgot-password", h.Auth.ForgotPassword)
 	r.Post("/api/auth/reset-password", h.Auth.ResetPassword)
 	r.Get("/api/profile/email/confirm", h.Auth.ConfirmEmailChange)
+	r.Get("/api/profile/recovery-email/confirm", h.Auth.ConfirmRecoveryEmailChange)
 	r.Get("/api/calendar/feed/{token}", h.Calendar.Feed)
 
 	// SSE — cookie-authenticated (EventSource cannot send headers)
@@ -165,6 +166,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Post("/api/profile/kind/{memberId}/phones", h.Members.AddChildPhone)
 		r.Delete("/api/profile/kind/{memberId}/phones/{phoneId}", h.Members.DeleteChildPhone)
 		r.Put("/api/profile/kind/{memberId}/visibility", h.Members.UpdateChildVisibility)
+		r.Post("/api/profile/kind/{memberId}/recovery-email", h.Auth.RequestRecoveryEmailChange)
 		r.Post("/api/upload/user-photo", h.Upload.UploadUserPhoto)
 		r.Delete("/api/upload/user-photo", h.Upload.DeleteUserPhoto)
 
@@ -332,6 +334,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/users", h.Auth.CreateUser)
 			r.Put("/api/users/{id}", h.Auth.UpdateUser)
 			r.Put("/api/users/{id}/role", h.Auth.UpdateUserRole)
+			r.Put("/api/users/{id}/recovery-email", h.Auth.SetRecoveryEmail)
 			r.Delete("/api/users/{id}", h.Auth.DeleteUser)
 			r.Post("/api/auth/invite", h.Auth.Invite)
 			r.Get("/api/invitations", h.Auth.ListInvitations)
