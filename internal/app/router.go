@@ -23,6 +23,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/files"
 	"github.com/teamstuttgart/teamwerk/internal/games"
+	"github.com/teamstuttgart/teamwerk/internal/health"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/members"
@@ -57,6 +58,7 @@ type Handlers struct {
 	Beitragslauf   *beitragslauf.Handler
 	Stammvereine   *stammvereine.Handler
 	Calendar       *calendar.Handler
+	Health         *health.Handler
 	Hub            *hub.Handler
 
 	JWTSecret string
@@ -72,13 +74,19 @@ type Handlers struct {
 // CORS middleware is only added when BaseURL is non-empty.
 func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
+	// health.Recoverer ersetzt chi.Recoverer: zählt teamwerk_panics_total hoch und
+	// loggt strukturiert (event="panic") — ohne anbieter-spezifisches Alerting.
+	r.Use(health.Recoverer)
 	r.Use(middleware.CleanPath)
 	if h.BaseURL != "" {
 		r.Use(corsMiddleware(h.BaseURL))
 	}
 
 	// Public routes
+	// Monitoring-Signale (anbieter-neutral): healthz public, metrics token-geschützt
+	// (Token-Prüfung im Handler; ohne METRICS_TOKEN liefert er 404).
+	r.Get("/api/healthz", h.Health.Healthz)
+	r.Get("/api/metrics", h.Health.Metrics)
 	r.Get("/api/uploads/*", h.Upload.ServeUpload)
 	r.Get("/api/files/{id}/download", h.Files.DownloadFile)
 	r.Get("/api/members/{id}/sepa-mandat/download", h.Upload.SepaDownload)

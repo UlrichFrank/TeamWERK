@@ -19,6 +19,10 @@ type Config struct {
 	VAPIDPrivateKey string
 	VAPIDEmail      string
 	MailerDisabled  bool
+	// MetricsToken schützt GET /api/metrics. Leer ⇒ Endpoint deaktiviert (404).
+	MetricsToken string
+	// LogFormat steuert den slog-Handler: "json" (Default, Prod) oder "text" (lokal).
+	LogFormat string
 }
 
 type SMTPConfig struct {
@@ -50,6 +54,8 @@ func Load() (*Config, error) {
 		VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
 		VAPIDEmail:      getEnv("VAPID_EMAIL", "vorstand@team-stuttgart.org"),
 		MailerDisabled:  os.Getenv("MAILER_DISABLED") == "true",
+		MetricsToken:    os.Getenv("METRICS_TOKEN"),
+		LogFormat:       getEnv("LOG_FORMAT", "json"),
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
