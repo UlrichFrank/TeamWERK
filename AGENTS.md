@@ -8,12 +8,12 @@ Provider-agnostischer Einstieg für Coding-Agenten (Claude, Codex, Cursor, Gemin
 ## Projekt in einem Satz
 
 TeamWERK — interne Verwaltungsplattform für Team Stuttgart (Handball).
-**Stack:** Go 1.25 + Chi v5 · SQLite (WAL, `modernc.org/sqlite`, kein CGo) · React 18 + Tailwind v3 · Vite · JWT-Auth.
+**Stack:** Go 1.26 + Chi v5 · SQLite (WAL, `modernc.org/sqlite`, kein CGo) · React 18 + Tailwind v3 · Vite · JWT-Auth.
 
 ## Hard Rules (nicht verhandelbar)
 
 1. **`pnpm`, niemals `npm`** — für alle Frontend-/npm-Operationen.
-2. **Tests/Build mit `/usr/local/go/bin/go`** (Go 1.25), nicht dem Homebrew-`go`.
+2. **Go 1.26+** (go.mod: `go 1.26.0`). `/usr/local/go/bin/go` als Bootstrap zieht via `GOTOOLCHAIN` automatisch die 1.26-Toolchain; ein exportiertes `GOROOT=/usr/local/go` muss dafür ungesetzt sein.
 3. **Nur `brand-*`-Tokens**, keine Raw-Tailwind-Farben (`bg-gray-50`, `text-red-600`, …). Tokens siehe `tailwind.config.js` / `CLAUDE.md`.
 4. **Keine Unicode-Icons/Emojis in JSX** — `lucide-react` verwenden (`<Menu>`, `<X>`, `<Check>`, …).
 5. **SSE-Pflicht:** Jede Mutations-Route (`POST`/`PUT`/`DELETE`) ruft `h.hub.Broadcast("domain-event")`; das Frontend abonniert mit `useLiveUpdates`. Fehlt eine Seite, bleibt sie nach fremden Änderungen stumm.
