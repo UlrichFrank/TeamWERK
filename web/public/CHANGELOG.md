@@ -1,5 +1,5 @@
 ## 21.06.2026
-- [feat] members: SEPA-Mandat — Datum der Unterschrift in Kontakt-Tab editierbar (Pflichtfeld für XML-Erzeugung)
+- [feat] members: SEPA-Mandatsdatum in Kontakt-Tab editierbar
 - [feat] web: recovery_email UI — Kindprofil, Konto-Tab, Admin-Override, Passwort-vergessen
 - [feat] members: recovery_email lesbar im Kindprofil und eigenen Profil
 - [feat] auth: persistente recovery_email — forgot-password, Doppelbestätigung, Override
