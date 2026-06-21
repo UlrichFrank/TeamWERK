@@ -1,4 +1,5 @@
 ## 21.06.2026
+- [fix] auth: User-Löschung räumt offene member_change_drafts mit ab
 - [feat] members: SEPA-Mandatsdatum in Kontakt-Tab editierbar
 - [feat] web: recovery_email UI — Kindprofil, Konto-Tab, Admin-Override, Passwort-vergessen
 - [feat] members: recovery_email lesbar im Kindprofil und eigenen Profil

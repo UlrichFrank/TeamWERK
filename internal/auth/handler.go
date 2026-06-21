@@ -1049,9 +1049,11 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM family_links WHERE parent_user_id = ?`,
 		`DELETE FROM duty_assignments WHERE user_id = ?`,
 		`DELETE FROM duty_accounts WHERE user_id = ?`,
+		`DELETE FROM member_change_drafts WHERE created_by_user_id = ?`,
 		`DELETE FROM users WHERE id = ?`,
 	} {
 		if _, err := tx.ExecContext(r.Context(), q, targetID); err != nil {
+			log.Printf("DeleteUser %d: %q failed: %v", targetID, q, err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
