@@ -229,6 +229,9 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/profile/visibility", expected: exAuth},
 	{method: "PUT", path: "/api/profile/reminder-preference", expected: exAuth},
 	{method: "PUT", path: "/api/profile/absence-visibility", expected: exAuth},
+	// cross-team-visible: Handler-interner Ownership-Check (eigenes Member, Eltern,
+	// vorstand, admin); andere Authenticated-Caller → 403 im Handler.
+	{method: "PUT", path: "/api/members/{id}/cross-team-visible", expected: exAuth},
 	{method: "GET", path: "/api/profile/notification-preferences", expected: exAuth},
 	{method: "PUT", path: "/api/profile/notification-preferences", expected: exAuth},
 

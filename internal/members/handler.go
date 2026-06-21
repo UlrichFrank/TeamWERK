@@ -44,20 +44,21 @@ type Member struct {
 	ClubFunctions []string `json:"club_functions"`
 
 	// Extended fields (populated by GetMember)
-	Street         *string `json:"street,omitempty"`
-	Zip            *string `json:"zip,omitempty"`
-	City           *string `json:"city,omitempty"`
-	HomeClub       *string `json:"home_club,omitempty"`
-	HomeClubID     *int    `json:"home_club_id,omitempty"`
-	HomeClubName   *string `json:"home_club_name,omitempty"`
-	JoinDate       *string `json:"join_date,omitempty"`
-	IBAN           *string `json:"iban,omitempty"`
-	AccountHolder  *string `json:"account_holder,omitempty"`
-	PhotoURL       *string `json:"photo_url,omitempty"`
-	PhotoVisible   bool    `json:"photo_visible,omitempty"`
-	PhonesVisible  bool    `json:"phones_visible,omitempty"`
-	AddressVisible bool    `json:"address_visible,omitempty"`
-	EmailVisible   bool    `json:"email_visible,omitempty"`
+	Street           *string `json:"street,omitempty"`
+	Zip              *string `json:"zip,omitempty"`
+	City             *string `json:"city,omitempty"`
+	HomeClub         *string `json:"home_club,omitempty"`
+	HomeClubID       *int    `json:"home_club_id,omitempty"`
+	HomeClubName     *string `json:"home_club_name,omitempty"`
+	JoinDate         *string `json:"join_date,omitempty"`
+	IBAN             *string `json:"iban,omitempty"`
+	AccountHolder    *string `json:"account_holder,omitempty"`
+	PhotoURL         *string `json:"photo_url,omitempty"`
+	PhotoVisible     bool    `json:"photo_visible,omitempty"`
+	PhonesVisible    bool    `json:"phones_visible,omitempty"`
+	AddressVisible   bool    `json:"address_visible,omitempty"`
+	EmailVisible     bool    `json:"email_visible,omitempty"`
+	CrossTeamVisible bool    `json:"cross_team_visible,omitempty"`
 
 	DsgvoVerarbeitung     bool    `json:"dsgvo_verarbeitung,omitempty"`
 	DsgvoVerarbeitungDate *string `json:"dsgvo_verarbeitung_date,omitempty"`
@@ -650,7 +651,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		IBAN          string `json:"iban"`
 		AccountHolder string `json:"account_holder"`
 
-		PhotoVisible bool `json:"photo_visible"`
+		PhotoVisible     bool `json:"photo_visible"`
+		CrossTeamVisible bool `json:"cross_team_visible"`
 
 		DsgvoVerarbeitung     bool   `json:"dsgvo_verarbeitung"`
 		DsgvoVerarbeitungDate string `json:"dsgvo_verarbeitung_date"`
@@ -720,6 +722,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			street=?, zip=?, city=?, home_club=?, home_club_id=?,
 			status=?,
 			photo_visible=?,
+			cross_team_visible=?,
 			zweitspielrecht=?,
 			updated_at=?
 		WHERE id=?`,
@@ -728,6 +731,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub), req.HomeClubID,
 		req.Status,
 		boolToInt(req.PhotoVisible),
+		boolToInt(req.CrossTeamVisible),
 		boolToInt(req.Zweitspielrecht),
 		time.Now(), id)
 	if err != nil {
@@ -2094,6 +2098,59 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 	resp.WhatsAppVisible = wv == 1
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// PUT /api/members/{id}/cross-team-visible
+//
+// Persönliche Privacy-Präferenz pro Member — kein Draft-Workflow. Zulässig für:
+// das eigene Member (m.user_id = caller), Eltern eines Kind-Members (via
+// family_links), sowie admin/vorstand.
+func (h *Handler) UpdateCrossTeamVisible(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	memberID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	var ownerUserID sql.NullInt64
+	if err := h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&ownerUserID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	allowed := claims.Role == "admin" || claims.HasFunction("vorstand")
+	if !allowed && ownerUserID.Valid && int(ownerUserID.Int64) == claims.UserID {
+		allowed = true
+	}
+	if !allowed && h.isParentOf(r.Context(), claims.UserID, memberID) {
+		allowed = true
+	}
+	if !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		CrossTeamVisible bool `json:"cross_team_visible"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE members SET cross_team_visible=?, updated_at=? WHERE id=?`,
+		boolToInt(req.CrossTeamVisible), time.Now(), memberID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("members")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // isParentOf returns true if parentUserID has a family_links entry for memberID.

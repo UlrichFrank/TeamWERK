@@ -55,7 +55,10 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
 		       m.photo_visible, m.photo_path,
 		       COALESCE(m.phones_visible,0), COALESCE(m.address_visible,0), COALESCE(m.email_visible,0),
-		       COALESCE(m.absences_public,0)
+		       COALESCE(m.absences_public,0),
+		       COALESCE(m.cross_team_visible,0),
+		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
+		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date
 		FROM members m
 		WHERE m.id=?`, memberID)
 
@@ -64,6 +67,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	var clubFunctionsStr string
 	var street, zip, city, joinDate, iban, accountHolder, photoPath sql.NullString
 	var photoVisible, phonesVisible, addressVisible, emailVisible int64
+	var crossTeamVisible, dsgvoVerarbeitung, dsgvoWeitergabe int64
+	var dsgvoVerarbDate, dsgvoWeiterDate sql.NullString
 
 	err := row.Scan(
 		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
@@ -73,6 +78,9 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		&photoVisible, &photoPath,
 		&phonesVisible, &addressVisible, &emailVisible,
 		&m.AbsencesPublic,
+		&crossTeamVisible,
+		&dsgvoVerarbeitung, &dsgvoVerarbDate,
+		&dsgvoWeitergabe, &dsgvoWeiterDate,
 	)
 	if err != nil {
 		return nil, err
@@ -113,6 +121,15 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	m.PhonesVisible = phonesVisible != 0
 	m.AddressVisible = addressVisible != 0
 	m.EmailVisible = emailVisible != 0
+	m.CrossTeamVisible = crossTeamVisible != 0
+	m.DsgvoVerarbeitung = dsgvoVerarbeitung != 0
+	if dsgvoVerarbDate.Valid {
+		m.DsgvoVerarbeitungDate = &dsgvoVerarbDate.String
+	}
+	m.DsgvoWeitergabe = dsgvoWeitergabe != 0
+	if dsgvoWeiterDate.Valid {
+		m.DsgvoWeitergabeDate = &dsgvoWeiterDate.String
+	}
 
 	return &m, nil
 }
