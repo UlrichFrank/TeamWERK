@@ -1502,6 +1502,7 @@ type ImportReport struct {
 	Created   int         `json:"created"`
 	Updated   int         `json:"updated"`
 	Unchanged int         `json:"unchanged"`
+	Skipped   int         `json:"skipped"`
 	Errors    int         `json:"errors"`
 	NotFound  int         `json:"not_found"`
 	Rows      []ImportRow `json:"rows"`
@@ -1526,6 +1527,34 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	dryRun := mode == "preview" || r.FormValue("preview") == "1"
 	if mode == "preview" {
 		mode = "update" // legacy: preview mode uses update semantics
+	}
+
+	// Optionale Feld-Whitelist: nur diese DB-Spalten werden bei Bestandsmitgliedern
+	// aktualisiert. Leer/abwesend → alle Felder (rückwärtskompatibel).
+	var fieldWhitelist map[string]bool
+	if fieldsRaw := strings.TrimSpace(r.FormValue("fields")); fieldsRaw != "" {
+		fieldWhitelist = make(map[string]bool)
+		for _, f := range strings.Split(fieldsRaw, ",") {
+			if f = strings.TrimSpace(f); f != "" {
+				fieldWhitelist[f] = true
+			}
+		}
+	}
+	fieldAllowed := func(column string) bool {
+		return fieldWhitelist == nil || fieldWhitelist[column]
+	}
+
+	// Optionale Mitglieder-Auswahl: nur Updates dieser Zeilennummern werden
+	// angewendet (CSV-Zeile, 1-basiert inkl. Headerzeile). Leer/abwesend → alle.
+	// Greift nur außerhalb des Dry-Runs; die Vorschau zeigt stets alle Zeilen.
+	var applyLines map[int]bool
+	if linesRaw := strings.TrimSpace(r.FormValue("apply_lines")); linesRaw != "" {
+		applyLines = make(map[int]bool)
+		for _, s := range strings.Split(linesRaw, ",") {
+			if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				applyLines[n] = true
+			}
+		}
 	}
 
 	raw, err := io.ReadAll(file)
@@ -1854,6 +1883,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		var changes []string
 
 		addChange := func(csvVal, dbVal, label, column string) {
+			if !fieldAllowed(column) {
+				return // Feld nicht in der Auswahl
+			}
 			if csvVal == "" || csvVal == dbVal {
 				return
 			}
@@ -1865,6 +1897,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			changes = append(changes, fmt.Sprintf("%s: %q → %q", label, dbVal, csvVal))
 		}
 		addNullableChange := func(csvVal string, dbVal sql.NullString, label, column string) {
+			if !fieldAllowed(column) {
+				return // Feld nicht in der Auswahl
+			}
 			if csvVal == "" || csvVal == dbVal.String {
 				return
 			}
@@ -1884,7 +1919,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		addChange(normalizeStatus(col(row, "Status")), dbStatus, "Status", "status")
 		addNullableChange(col(row, "Stammverein"), dbHomeClub, "Stammverein", "home_club")
 
-		if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" {
+		if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" && fieldAllowed("jersey_number") {
 			dbJerseyStr := ""
 			if dbJerseyNum.Valid {
 				dbJerseyStr = fmt.Sprintf("%d", dbJerseyNum.Int64)
@@ -1905,7 +1940,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		addChange(joinDate, dbJoinDate, "Mitglied seit", "join_date")
 		addChange(col(row, "Kontoinhaber"), dbAccountHolder, "Kontoinhaber", "account_holder")
 
-		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly {
+		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly && fieldAllowed("sepa_mandat") {
 			sepaVal := normalizeSepa(sepaRaw)
 			if sepaVal != dbSepaMandat {
 				setClauses = append(setClauses, "sepa_mandat=?")
@@ -1914,8 +1949,8 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// beitragsfrei aus CSV-Status ableiten
-		if csvStatusRaw2 := col(row, "Status"); csvStatusRaw2 != "" && !enrichOnly {
+		// beitragsfrei aus CSV-Status ableiten (an die Status-Auswahl gekoppelt)
+		if csvStatusRaw2 := col(row, "Status"); csvStatusRaw2 != "" && !enrichOnly && fieldAllowed("status") {
 			csvBeitragsfrei2 := boolToInt(strings.EqualFold(strings.TrimSpace(csvStatusRaw2), "beitragsfrei"))
 			if csvBeitragsfrei2 != dbBeitragsfrei {
 				setClauses = append(setClauses, "beitragsfrei=?")
@@ -1926,7 +1961,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 		// IBAN with MOD-97 validation; in enrich mode only fill if DB field is empty.
 		var ibanWarn string
-		if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" {
+		if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" && fieldAllowed("iban") {
 			if ok, msg := validateIBAN(raw); ok {
 				if raw != dbIBAN && (!enrichOnly || dbIBAN == "") {
 					setClauses = append(setClauses, "iban=?")
@@ -1938,7 +1973,10 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if len(setClauses) > 0 && !dryRun {
+		// Mitglieder-Auswahl: außerhalb des Dry-Runs nur ausgewählte Zeilen anwenden.
+		selected := applyLines == nil || applyLines[lineNum]
+
+		if len(setClauses) > 0 && !dryRun && selected {
 			setArgs = append(setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
 				"UPDATE members SET "+strings.Join(setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -1953,12 +1991,19 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if len(changes) > 0 || ibanWarn != "" {
+		hasChanges := len(changes) > 0 || ibanWarn != ""
+		switch {
+		case hasChanges && (dryRun || selected):
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "updated", Name: displayName, Changes: changes, IBANWarning: ibanWarn,
 			})
 			report.Updated++
-		} else {
+		case hasChanges: // !dryRun && !selected: bewusst abgewählt
+			report.Rows = append(report.Rows, ImportRow{
+				Line: lineNum, Status: "skipped", Name: displayName, Changes: changes, IBANWarning: ibanWarn,
+			})
+			report.Skipped++
+		default:
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "unchanged", Name: displayName,
 			})
@@ -1966,7 +2011,10 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	report.Total = report.Created + report.Updated + report.Unchanged + report.Errors + report.NotFound
+	report.Total = report.Created + report.Updated + report.Unchanged + report.Skipped + report.Errors + report.NotFound
+	if !dryRun && (report.Created > 0 || report.Updated > 0) {
+		h.hub.Broadcast("members")
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(report)
 }
