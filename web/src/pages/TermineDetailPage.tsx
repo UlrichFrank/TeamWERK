@@ -38,6 +38,11 @@ interface ParticipantItem {
   team_id: number
 }
 
+interface ParticipantsResponse {
+  items: ParticipantItem[]
+  hidden_team_ids: number[]
+}
+
 interface VenueRef {
   id: number
   name: string
@@ -131,6 +136,9 @@ interface TableRow {
 interface TableSection {
   title: string | null
   rows: TableRow[]
+  // Wenn true, hat das Backend gefilterte Member aus diesem Team weggelassen
+  // (cross_team_visible=0). Footer „Weitere Mitglieder nicht sichtbar" wird gerendert.
+  hasHidden?: boolean
 }
 
 export default function TermineDetailPage() {
@@ -140,6 +148,7 @@ export default function TermineDetailPage() {
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [game, setGame] = useState<GameDetail | null>(null)
   const [participants, setParticipants] = useState<ParticipantItem[]>([])
+  const [hiddenTeamIds, setHiddenTeamIds] = useState<number[]>([])
   const [attendances, setAttendances] = useState<AttendanceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [attendanceMap, setAttendanceMap] = useState<Record<number, boolean>>({})
@@ -183,8 +192,12 @@ export default function TermineDetailPage() {
       ])
         .then(([gameRes, participantsRes]) => {
           setGame(gameRes.data.game ?? gameRes.data)
-          const items: ParticipantItem[] = participantsRes.data ?? []
+          const data: ParticipantsResponse | ParticipantItem[] = participantsRes.data ?? { items: [], hidden_team_ids: [] }
+          // Backwards-Kompat: alte Array-Form fallweise erkennen (Tests/Mocks).
+          const items: ParticipantItem[] = Array.isArray(data) ? data : (data.items ?? [])
+          const hidden: number[] = Array.isArray(data) ? [] : (data.hidden_team_ids ?? [])
           setParticipants(items)
+          setHiddenTeamIds(hidden)
           const map: Record<number, boolean> = {}
           for (const p of items) map[p.member_id] = p.in_lineup
           setLineupMap(map)
@@ -349,13 +362,18 @@ export default function TermineDetailPage() {
   const groupByTeam = g.event_type === 'generisch' && (g.teams?.length ?? 0) > 1
   let sections: TableSection[] | undefined
   if (groupByTeam) {
+    const hiddenSet = new Set(hiddenTeamIds)
     sections = (g.teams ?? []).map(team => ({
       title: team.display_long || team.display_short || team.name,
       rows: participants
         .filter(p => p.team_id === team.id)
         .map(toRow)
         .sort((a, b) => a.member_name.localeCompare(b.member_name, 'de')),
-    })).filter(s => s.rows.length > 0)
+      hasHidden: hiddenSet.has(team.id),
+    }))
+      // Sektionen ohne sichtbare Mitglieder weglassen (auch wenn `hasHidden`
+      // technisch true wäre): kein leerer Header.
+      .filter(s => s.rows.length > 0)
   }
 
   // Ohne Team-Gruppierung pro Mitglied nur eine Zeile (ein Mitglied kann in
@@ -557,6 +575,13 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
                   {section.rows.map(row => (
                     <ParticipantRow key={row.member_id} row={row} a={a} />
                   ))}
+                  {section.hasHidden && (
+                    <tr>
+                      <td colSpan={colSpan(a)} className="px-4 py-2 text-xs italic text-brand-text-muted">
+                        Weitere Mitglieder nicht sichtbar
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               ))}
             </tbody>
