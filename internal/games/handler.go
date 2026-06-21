@@ -323,12 +323,20 @@ func (h *Handler) loadSameDayContext(ctx context.Context, gameDate string, seaso
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
 	claims := auth.ClaimsFromCtx(r.Context())
-	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
 
-	scopeWhere, scopeArgs := policy.ScopeGamesQuery(p)
+	// Event-Sichtbarkeitsregel (Funktionsträger sehen alles, sonst nur Team-
+	// Zugehörigkeit). Ersetzt das alte policy.ScopeGamesQuery, das Trainer auf
+	// kader_trainers einschränkte und erweiterte Kader-Member ignorierte.
+	visClause, visArgs, _, err := auth.GameVisibilityClause(r.Context(), h.db, claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	andScope := ""
-	if scopeWhere != "1=1" {
-		andScope = " AND " + scopeWhere
+	scopeArgs := []any{}
+	if visClause != "1=1" {
+		andScope = " AND " + visClause
+		scopeArgs = visArgs
 	}
 
 	// confirmed_count berücksichtigt rsvp_opt_out: reguläre Kader-Mitglieder ohne
@@ -356,10 +364,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN venues v ON v.id = g.venue_id`
 	const suffix = ` GROUP BY g.id ORDER BY g.date, g.time`
 
-	var (
-		rows *sql.Rows
-		err  error
-	)
+	var rows *sql.Rows
 	if seasonID != "" {
 		args := append([]any{seasonID}, scopeArgs...)
 		rows, err = h.db.QueryContext(r.Context(), base+` WHERE g.season_id=?`+andScope+suffix, args...)
@@ -469,7 +474,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		g.TeamDisplayLongCSV = strings.Join(longs, ", ")
 	}
 
-	gameCan := policy.GameCan(p)
+	gameCan := policy.GameCan(&policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent})
 	result := make([]game, len(games))
 	for i, g := range games {
 		g.Can = gameCan
@@ -482,6 +487,15 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 // GET /api/games/{id}
 func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+
+	if gid, err := strconv.Atoi(id); err == nil {
+		claims := auth.ClaimsFromCtx(r.Context())
+		ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gid)
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+	}
 
 	type venueRef struct {
 		ID         int    `json:"id"`
@@ -1830,6 +1844,10 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	if ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gameID); !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 
 	var req struct {
 		MemberID int    `json:"member_id"`
@@ -1930,6 +1948,10 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	if ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gameID); !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 
 	isTrainerLike := claims.Role == "admin" || claims.HasFunction("trainer")
 
@@ -2026,6 +2048,12 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFromCtx(r.Context())
+	if claims != nil {
+		if ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gameID); !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+	}
 	bypass := claims != nil && (claims.Role == "admin" ||
 		claims.HasFunction("trainer") ||
 		claims.HasFunction("sportliche_leitung") ||

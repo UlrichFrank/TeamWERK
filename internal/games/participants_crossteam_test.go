@@ -215,6 +215,10 @@ func TestGetParticipants_MultiTeam_TrainerSiehtAlles(t *testing.T) {
 	db := testutil.NewDB(t)
 	fx := newCrossTeamFixture(t, db)
 	trainerUID := testutil.CreateUser(t, db, "standard")
+	// Auch in DB als trainer markieren — sonst greift event-team-visibility und
+	// liefert 404, bevor der cross-team-Filter überhaupt zum Zug kommt.
+	trainerMID := testutil.CreateMember(t, db, trainerUID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, ?)`, trainerMID, "trainer")
 	srv := testServer(t, db)
 	token := testutil.Token(t, trainerUID, "standard", []string{"trainer"})
 
@@ -233,6 +237,8 @@ func TestGetParticipants_MultiTeam_VorstandSiehtAlles(t *testing.T) {
 	db := testutil.NewDB(t)
 	fx := newCrossTeamFixture(t, db)
 	vUID := testutil.CreateUser(t, db, "standard")
+	vMID := testutil.CreateMember(t, db, vUID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, ?)`, vMID, "vorstand")
 	srv := testServer(t, db)
 	token := testutil.Token(t, vUID, "standard", []string{"vorstand"})
 
@@ -276,11 +282,13 @@ func TestGetParticipants_SingleTeam_KeinFilter(t *testing.T) {
 		t.Errorf("Single-Team: hidden_team_ids muss leer sein, got %v", hiddenA)
 	}
 
-	// Caller B: außerhalb des Teams — single-team, also kein Filter; sieht ebenfalls alles.
+	// Caller B: außerhalb des Teams — event-team-visibility liefert 404,
+	// weil der Caller kein Team-Bezug zum Event hat. Single-Team-Spezialregel
+	// gilt nur innerhalb der Cross-Team-Filterlogik, nicht oberhalb.
 	tokB := testutil.Token(t, otherUID, "standard", nil)
 	resB := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", gameID), tokB)
-	itemsB, _ := decodeParticipants(t, resB)
-	if len(itemsB) != 2 {
-		t.Errorf("Single-Team, Außenstehender: erwartet 2 Member (kein Filter), got %d", len(itemsB))
+	defer resB.Body.Close()
+	if resB.StatusCode != http.StatusNotFound {
+		t.Errorf("Single-Team, Außenstehender: erwartet 404, got %d", resB.StatusCode)
 	}
 }

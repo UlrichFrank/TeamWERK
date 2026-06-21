@@ -68,24 +68,24 @@ func TestListGames_EmptyRange(t *testing.T) {
 	}
 }
 
-// TestListGames_TrainerSeesOnlyOwnTeamGames verifies that a user with only the
-// trainer function sees games of teams they coach (via kader_trainers) and
-// nothing else. Mirrors the Florian-Steinle-mB2/mC2 scenario.
-func TestListGames_TrainerSeesOnlyOwnTeamGames(t *testing.T) {
+// TestListGames_TrainerSeesAllGames verifies that mit der neuen Event-
+// Sichtbarkeitsregel (event-team-visibility) ein Trainer Funktionsträger ist
+// und somit alle Spiele der Saison sieht, nicht nur seine kader_trainers-
+// Zuordnungen. Ablöse der früheren Florian-Steinle-mB2/mC2-Restriktion.
+func TestListGames_TrainerSeesAllGames(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	ownTeamID := testutil.CreateTeam(t, db, "mB2")
 	otherTeamID := testutil.CreateTeam(t, db, "mC2")
-	ownGameID := testutil.CreateGame(t, db, seasonID, ownTeamID, "2026-06-29")
+	testutil.CreateGame(t, db, seasonID, ownTeamID, "2026-06-29")
 	testutil.CreateGame(t, db, seasonID, otherTeamID, "2026-06-29")
 
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
-	ownKaderID := testutil.CreateKader(t, db, ownTeamID, seasonID)
 	if _, err := db.Exec(
-		`INSERT INTO kader_trainers (kader_id, member_id) VALUES (?, ?)`,
-		ownKaderID, trainerMemberID); err != nil {
-		t.Fatalf("insert kader_trainers: %v", err)
+		`INSERT INTO member_club_functions (member_id, function) VALUES (?, ?)`,
+		trainerMemberID, "trainer"); err != nil {
+		t.Fatalf("insert member_club_functions: %v", err)
 	}
 
 	srv := testServer(t, db)
@@ -98,11 +98,8 @@ func TestListGames_TrainerSeesOnlyOwnTeamGames(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&games)
 	res.Body.Close()
 
-	if len(games) != 1 {
-		t.Fatalf("expected 1 game, got %d", len(games))
-	}
-	if int(games[0]["id"].(float64)) != ownGameID {
-		t.Errorf("expected only own-team game id=%d, got id=%v", ownGameID, games[0]["id"])
+	if len(games) != 2 {
+		t.Fatalf("expected 2 games (Trainer-Bypass), got %d", len(games))
 	}
 }
 
