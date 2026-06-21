@@ -1991,15 +1991,33 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 }
 
 type participantItem struct {
-	MemberID   int     `json:"member_id"`
-	MemberName string  `json:"member_name"`
-	IsExtended bool    `json:"is_extended"`
-	RsvpStatus *string `json:"rsvp_status"`
-	InLineup   bool    `json:"in_lineup"`
-	TeamID     int     `json:"team_id"`
+	MemberID         int     `json:"member_id"`
+	MemberName       string  `json:"member_name"`
+	IsExtended       bool    `json:"is_extended"`
+	RsvpStatus       *string `json:"rsvp_status"`
+	InLineup         bool    `json:"in_lineup"`
+	TeamID           int     `json:"team_id"`
+	crossTeamVisible bool    `json:"-"`
+}
+
+// participantsResponse erlaubt es, neben den sichtbaren Items zusätzlich pro
+// Team einen Hinweis zu transportieren, wenn Mitglieder gefiltert wurden. Wir
+// behalten Items in einem `items`-Feld, damit das Frontend die `hidden_team_ids`
+// für den Footer „Weitere Mitglieder nicht sichtbar" rendern kann.
+type participantsResponse struct {
+	Items         []participantItem `json:"items"`
+	HiddenTeamIDs []int             `json:"hidden_team_ids"`
 }
 
 // GET /api/games/{id}/participants
+//
+// Bei Multi-Team-Events filtert die Antwort für Caller ohne Funktion
+// (admin/trainer/sportliche_leitung/vorstand) auf:
+//   - Mitglieder aus den Teams, in denen der Caller selbst oder eines seiner
+//     Kinder (via family_links) im Kader/erweiterten Kader steht ("meine Teams"),
+//   - plus Mitglieder fremder Teams, deren cross_team_visible=1 ist.
+//
+// Funktionsträger sehen ungefiltert. Single-Team-Events bleiben ungefiltert.
 func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -2007,11 +2025,32 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	claims := auth.ClaimsFromCtx(r.Context())
+	bypass := claims != nil && (claims.Role == "admin" ||
+		claims.HasFunction("trainer") ||
+		claims.HasFunction("sportliche_leitung") ||
+		claims.HasFunction("vorstand"))
+
+	// Filter greift nur bei Multi-Team-Events und für Nicht-Funktionsträger.
+	var teamCount int
+	h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM game_teams WHERE game_id=?`, gameID).Scan(&teamCount)
+	applyFilter := !bypass && teamCount > 1 && claims != nil
+
+	myTeamSet := map[int]bool{}
+	if applyFilter {
+		myTeamSet, err = h.myTeamsInEvent(r.Context(), gameID, claims.UserID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "GetParticipants/myTeams: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	// Bei rsvp_opt_out=1 gilt ein regulärer Kader-Spieler ohne Response-Eintrag
 	// implizit als "confirmed". Extended-Mitglieder sind davon ausgenommen — sie
 	// müssen explizit zusagen.
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, rsvp_status, in_lineup, team_id
+		SELECT member_id, member_name, is_extended, rsvp_status, in_lineup, team_id, cross_team_visible
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
@@ -2020,7 +2059,8 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			                CASE WHEN (SELECT rsvp_opt_out FROM games WHERE id = ?) = 1
 			                     THEN 'confirmed' ELSE NULL END) AS rsvp_status,
 			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup,
-			       k.team_id AS team_id
+			       k.team_id AS team_id,
+			       m.cross_team_visible AS cross_team_visible
 			FROM members m
 			JOIN kader_members km ON km.member_id = m.id
 			JOIN kader k ON k.id = km.kader_id
@@ -2035,7 +2075,8 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			       1 AS is_extended,
 			       NULL AS rsvp_status,
 			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup,
-			       k.team_id AS team_id
+			       k.team_id AS team_id,
+			       m.cross_team_visible AS cross_team_visible
 			FROM members m
 			JOIN kader_extended_members kem ON kem.member_id = m.id
 			JOIN kader k ON k.id = kem.kader_id
@@ -2052,21 +2093,76 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	result := []participantItem{}
+	items := []participantItem{}
+	teamsTouched := map[int]bool{}
+	teamsHidden := map[int]bool{}
 	for rows.Next() {
 		var p participantItem
 		var status sql.NullString
-		var isExtended, inLineup int
-		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &status, &inLineup, &p.TeamID)
+		var isExtended, inLineup, ctv int
+		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &status, &inLineup, &p.TeamID, &ctv)
 		p.IsExtended = isExtended == 1
 		p.InLineup = inLineup == 1
+		p.crossTeamVisible = ctv == 1
 		if status.Valid {
 			p.RsvpStatus = &status.String
 		}
-		result = append(result, p)
+		teamsTouched[p.TeamID] = true
+		if applyFilter && !myTeamSet[p.TeamID] && !p.crossTeamVisible {
+			teamsHidden[p.TeamID] = true
+			continue
+		}
+		items = append(items, p)
 	}
+
+	hidden := []int{}
+	for tid := range teamsHidden {
+		hidden = append(hidden, tid)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(participantsResponse{Items: items, HiddenTeamIDs: hidden})
+}
+
+// myTeamsInEvent liefert die Menge der team_ids im Event gameID, in deren
+// (regulärem ODER erweitertem) Kader der userID selbst Mitglied ist ODER eines
+// seiner Kinder (via family_links). Maßgeblich ist die Saison des Games.
+func (h *Handler) myTeamsInEvent(ctx context.Context, gameID, userID int) (map[int]bool, error) {
+	out := map[int]bool{}
+	rows, err := h.db.QueryContext(ctx, `
+		SELECT DISTINCT k.team_id
+		FROM kader k
+		WHERE k.season_id = (SELECT season_id FROM games WHERE id = ?)
+		  AND k.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
+		  AND (
+			EXISTS (
+				SELECT 1 FROM kader_members km
+				JOIN members m ON m.id = km.member_id
+				WHERE km.kader_id = k.id
+				  AND (m.user_id = ?
+				       OR m.id IN (SELECT member_id FROM family_links WHERE parent_user_id = ?))
+			)
+			OR EXISTS (
+				SELECT 1 FROM kader_extended_members kem
+				JOIN members m ON m.id = kem.member_id
+				WHERE kem.kader_id = k.id
+				  AND (m.user_id = ?
+				       OR m.id IN (SELECT member_id FROM family_links WHERE parent_user_id = ?))
+			)
+		  )`,
+		gameID, gameID, userID, userID, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tid int
+		if err := rows.Scan(&tid); err != nil {
+			return nil, err
+		}
+		out[tid] = true
+	}
+	return out, nil
 }
 
 // POST /api/games/{id}/lineup

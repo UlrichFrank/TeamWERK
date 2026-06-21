@@ -1208,8 +1208,12 @@ func TestGetParticipants_OptOutMarksKaderConfirmed(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var participants []map[string]any
-	json.NewDecoder(res.Body).Decode(&participants)
+	var participantsResp struct {
+		Items         []map[string]any `json:"items"`
+		HiddenTeamIDs []int            `json:"hidden_team_ids"`
+	}
+	json.NewDecoder(res.Body).Decode(&participantsResp)
+	participants := participantsResp.Items
 	if len(participants) != 2 {
 		t.Fatalf("expected 2 participants, got %d", len(participants))
 	}
@@ -1239,8 +1243,12 @@ func TestGetParticipants_OptOutExtendedRemainsNull(t *testing.T) {
 
 	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", gameID), token)
 	defer res.Body.Close()
-	var participants []map[string]any
-	json.NewDecoder(res.Body).Decode(&participants)
+	var participantsResp struct {
+		Items         []map[string]any `json:"items"`
+		HiddenTeamIDs []int            `json:"hidden_team_ids"`
+	}
+	json.NewDecoder(res.Body).Decode(&participantsResp)
+	participants := participantsResp.Items
 	if len(participants) != 1 {
 		t.Fatalf("expected 1 extended participant, got %d", len(participants))
 	}
@@ -1264,8 +1272,12 @@ func TestGetParticipants_NoOptOutBehavesAsBefore(t *testing.T) {
 
 	res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", gameID), token)
 	defer res.Body.Close()
-	var participants []map[string]any
-	json.NewDecoder(res.Body).Decode(&participants)
+	var participantsResp struct {
+		Items         []map[string]any `json:"items"`
+		HiddenTeamIDs []int            `json:"hidden_team_ids"`
+	}
+	json.NewDecoder(res.Body).Decode(&participantsResp)
+	participants := participantsResp.Items
 	if len(participants) != 2 {
 		t.Fatalf("expected 2 participants, got %d", len(participants))
 	}
@@ -1313,8 +1325,12 @@ func TestGetParticipants_MultiTeamCarriesTeamID(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var participants []map[string]any
-	json.NewDecoder(res.Body).Decode(&participants)
+	var participantsResp struct {
+		Items         []map[string]any `json:"items"`
+		HiddenTeamIDs []int            `json:"hidden_team_ids"`
+	}
+	json.NewDecoder(res.Body).Decode(&participantsResp)
+	participants := participantsResp.Items
 	if len(participants) != 3 {
 		t.Fatalf("expected 3 participants, got %d", len(participants))
 	}
