@@ -6,7 +6,7 @@ Provider-agnostische Kurzfassung der Hard-Rules: [`AGENTS.md`](./AGENTS.md).
 ## Hard Rules
 
 - **`pnpm`, nie `npm`** für alle Frontend-/npm-Operationen.
-- **Go-Befehle mit `/usr/local/go/bin/go`** (1.25) — nicht dem Homebrew-`go` (1.26+, inkompatibel mit go.mod).
+- **Go 1.26+** für alle Go-Befehle (go.mod: `go 1.26.0`). `/usr/local/go/bin/go` (1.25 als Bootstrap) zieht via `GOTOOLCHAIN` automatisch die 1.26-Toolchain; ein global exportiertes `GOROOT=/usr/local/go` muss dafür ungesetzt sein (sonst „version does not match"-Fehler).
 - **Nur `brand-*`-Tokens**, keine Raw-Tailwind-Farben (`bg-gray-50`, `text-red-600`, …).
 - **Keine Unicode-Icons/Emojis in JSX** — `lucide-react`.
 - **Jede Mutations-Route ruft `h.hub.Broadcast(...)`**, das Frontend abonniert mit `useLiveUpdates` (siehe Gotcha SSE).
@@ -20,7 +20,7 @@ Provider-agnostische Kurzfassung der Hard-Rules: [`AGENTS.md`](./AGENTS.md).
 TeamWERK — interne Verwaltungsplattform für Team Stuttgart (Handball), läuft unter
 `https://internal.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
 
-**Stack:** Go 1.25 + Chi v5 · SQLite (WAL, `modernc.org/sqlite`, kein CGo) · React 18 + Tailwind v3 · Vite · JWT-Auth.
+**Stack:** Go 1.26 + Chi v5 · SQLite (WAL, `modernc.org/sqlite`, kein CGo) · React 18 + Tailwind v3 · Vite · JWT-Auth.
 
 **Struktur:** Entrypoint `cmd/teamwerk/main.go` (`embed.FS`, Subcommands wie `migrate`/`scheduler:run`/`create-admin`/`gen-vapid`, baut `app.Handlers` und mountet `app.BuildRouter`). Der **Routenbaum mit allen Auth-Tiers liegt in `internal/app/router.go` (`BuildRouter`)**. Je ein Package pro Domäne unter `internal/` (`auth`, `members`, `duties`, `games`, …). Migrations in `internal/db/migrations/`. Frontend in `web/` (Vite + React; `App.tsx` = Routen-Baum, `lib/api.ts` = Axios mit Auto-Refresh, eine Datei pro Route in `pages/`). Deploy-Skripte in `deploy/`. Bei Bedarf per `ls`/Glob erkunden statt aus dem Gedächtnis.
 
