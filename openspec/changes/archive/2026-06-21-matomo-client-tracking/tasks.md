@@ -1,7 +1,7 @@
 ## 1. Vorbereitung & Recherche
 
 - [x] 1.1 Verifizieren, ob ein Endpoint existiert, der das/die Team(s) des eingeloggten Nutzers mit Slug zurückliefert (Kandidat: `/api/me/teams`, sonst über Member-Detail). Ergebnis im Design unter "Open Questions" festhalten.
-- [ ] 1.2 In Matomo bei mittwald eine neue Site `TeamWERK` anlegen, Site-ID notieren; Custom Dimensions konfigurieren (ID 1 `channel`, ID 2 `team_slug`, ID 3 `role` jeweils als Visit oder Action Scope — Empfehlung: Action Scope für alle drei).
+- [x] 1.2 Matomo-Site `TeamWERK` (Site-ID **4**, URL `https://internal.team-stuttgart.org`) bei mittwald angelegt. Custom Dimensions 1/2/3 (`channel`/`team_slug`/`role`) als Action-Scope angelegt.
 - [ ] 1.3 In Matomo-Admin Datenschutz-Einstellungen setzen: IP-Anonymisierung 2 Bytes, DoNotTrack respektieren, "Force anonymous tracking" aktivieren.
 
 ## 2. Tracker-Setup
@@ -48,7 +48,7 @@
 
 - [x] 8.1 `VITE_MATOMO_URL` und `VITE_MATOMO_SITE_ID` in der Deploy-Pipeline / `make build`-Aufruf bereitstellen. Neue Datei `web/.env.example` dokumentiert die Variablen + Optionen (`.env.production` in `web/` oder Shell-Export beim Build). Wurzel-`.env.example` enthält ebenfalls einen Eintrag.
 - [x] 8.2 `pnpm -C web build` ausgeführt; Bundle gzip 183.33 KB (vor Change unbekannt, aber Wachstum durch eigenen Wrapper minimal — kein neues npm-Paket, ~100 LoC Wrapper).
-- [ ] 8.3 Deployment auf VPS (`make deploy`).
+- [x] 8.3 `make deploy` erfolgreich auf VPS ausgerollt (Build-Hash `61deb34`, Bundle enthält `matomo.team-stuttgart.org` und Site-ID 4).
 - [ ] 8.4 In produktiver Umgebung verifizieren (Browser-DevTools Network-Tab): Matomo-Requests werden gesendet, enthalten Custom Dimensions 1/2/3, kein `_pk_*` Cookie wird gesetzt, IP im Matomo-Backend anonymisiert.
 
 ## 9. Vorstand-Freigabe & Go-Live
