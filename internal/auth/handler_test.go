@@ -436,6 +436,186 @@ func TestDeleteUser_Cascade(t *testing.T) {
 	}
 }
 
+// createChildUser inserts an activated child account (email=NULL, login_name,
+// can_login=1) as produced by the Kinderaccount approve-flow and returns its ID.
+func createChildUser(t *testing.T, db *sql.DB, loginName string) int {
+	t.Helper()
+	hash, err := bcrypt.GenerateFromPassword([]byte("test"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("createChildUser bcrypt: %v", err)
+	}
+	res, err := db.Exec(
+		`INSERT INTO users (email, login_name, password, role, can_login) VALUES (NULL, ?, ?, 'standard', 1)`,
+		loginName, string(hash))
+	if err != nil {
+		t.Fatalf("createChildUser: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// identityClaim parses the access_token from an impersonate response and returns
+// the identity (email/login_name) claim.
+func identityClaim(t *testing.T, res *http.Response) string {
+	t.Helper()
+	var body struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode impersonate response: %v", err)
+	}
+	if body.AccessToken == "" {
+		t.Fatal("access_token missing in impersonate response")
+	}
+	claims, err := auth.ParseAccessToken(testutil.TestJWTSecret, body.AccessToken)
+	if err != nil {
+		t.Fatalf("parse access_token: %v", err)
+	}
+	return claims.Email
+}
+
+// Impersonation eines aktivierten Kinder-Kontos (email=NULL) → 200, Identität=login_name.
+func TestImpersonate_ChildAccountWithoutEmail(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	childID := createChildUser(t, db, "Lena.Schmidt")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/impersonate/"+itoa(childID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	if got := identityClaim(t, res); got != "Lena.Schmidt" {
+		t.Errorf("expected identity claim 'Lena.Schmidt', got %q", got)
+	}
+}
+
+// Impersonation eines Standard-Kontos mit E-Mail → 200, Identität=E-Mail (Regression).
+func TestImpersonate_RegularUser(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	targetID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/impersonate/"+itoa(targetID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	if got := identityClaim(t, res); got != emailSuffix(t, db, targetID) {
+		t.Errorf("expected identity claim %q, got %q", emailSuffix(t, db, targetID), got)
+	}
+}
+
+// Impersonation eines Admins wird abgelehnt → 400 (Regression).
+func TestImpersonate_AdminRejected(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	otherAdminID := testutil.CreateUser(t, db, "admin")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/impersonate/"+itoa(otherAdminID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", res.StatusCode)
+	}
+}
+
+// Löschen eines Nutzers → 204 und genau ein Broadcast("users").
+func TestDeleteUser_Broadcast(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	targetID := testutil.CreateUser(t, db, "standard")
+
+	srv, h := prodserver.NewWithHub(t, db)
+	ch := h.Subscribe()
+	defer h.Unsubscribe(ch)
+
+	res := testutil.Do(t, srv, http.MethodDelete,
+		"/api/users/"+itoa(targetID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	select {
+	case ev := <-ch:
+		if ev != "users" {
+			t.Errorf("expected broadcast 'users', got %q", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected a 'users' broadcast after delete, got none")
+	}
+	// Kein weiteres Event.
+	select {
+	case ev := <-ch:
+		t.Errorf("expected exactly one broadcast, got an extra %q", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// Löschen eines Kinder-Kontos → 204; verknüpfter members-Datensatz bleibt mit user_id=NULL.
+func TestDeleteUser_ChildAccount(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	childID := createChildUser(t, db, "Max.Mustermann")
+	memberID := testutil.CreateMember(t, db, childID)
+	srv := newAuthServer(t, db)
+
+	res := testutil.Do(t, srv, http.MethodDelete,
+		"/api/users/"+itoa(childID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var exists bool
+	db.QueryRow(`SELECT COUNT(*) > 0 FROM users WHERE id=?`, childID).Scan(&exists)
+	if exists {
+		t.Error("child user should be deleted")
+	}
+	var userIDNull bool
+	if err := db.QueryRow(`SELECT user_id IS NULL FROM members WHERE id=?`, memberID).Scan(&userIDNull); err != nil {
+		t.Fatalf("member row should still exist: %v", err)
+	}
+	if !userIDNull {
+		t.Error("members.user_id should be NULL after the linked user was deleted")
+	}
+}
+
+// Selbst-Löschung → 400 und kein Broadcast.
+func TestDeleteUser_SelfRejected(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+
+	srv, h := prodserver.NewWithHub(t, db)
+	ch := h.Subscribe()
+	defer h.Unsubscribe(ch)
+
+	res := testutil.Do(t, srv, http.MethodDelete,
+		"/api/users/"+itoa(adminID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for self-delete, got %d", res.StatusCode)
+	}
+	select {
+	case ev := <-ch:
+		t.Errorf("expected no broadcast on rejected self-delete, got %q", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 // emailSuffix reads the email of a user by ID from DB.
 func emailSuffix(t *testing.T, db *sql.DB, userID int) string {
 	t.Helper()
