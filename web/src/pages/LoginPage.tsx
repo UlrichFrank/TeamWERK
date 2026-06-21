@@ -94,6 +94,14 @@ export default function LoginPage() {
                   Beitrittsantrag stellen
                 </Link>
               </div>
+              <div>
+                <Link
+                  to="/datenschutz"
+                  className="text-brand-text-muted hover:text-brand-text transition-colors"
+                >
+                  Datenschutz
+                </Link>
+              </div>
             </div>
           </div>
         </div>

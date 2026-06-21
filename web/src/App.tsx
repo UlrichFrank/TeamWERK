@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage'
 import RequestMembershipPage from './pages/RequestMembershipPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import DatenschutzPage from './pages/DatenschutzPage'
 import AppShell from './components/AppShell'
 import DashboardPage from './pages/DashboardPage'
 import MembersPage from './pages/MembersPage'
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="/join" element={<RequestMembershipPage />} />
             <Route path="/passwort-vergessen" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/datenschutz" element={<DatenschutzPage />} />
 
             {/* Protected */}
             <Route path="/" element={<PrivateRoute><AppShell /></PrivateRoute>}>
