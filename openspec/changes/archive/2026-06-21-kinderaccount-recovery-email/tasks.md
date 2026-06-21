@@ -89,6 +89,6 @@
 ## 10. Abschluss
 
 - [x] 10.1 `/verify-change` (Build/Test/Lint + Invarianten: Route→Tests, Mutation→Broadcast/useLiveUpdates, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).
-- [ ] 10.2 Proposal archivieren.
+- [x] 10.2 Proposal archivieren.
 
   _Commit:_ `docs(openspec): Change kinderaccount-recovery-email archivieren`
