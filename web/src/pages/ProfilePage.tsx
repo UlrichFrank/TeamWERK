@@ -62,6 +62,7 @@ export default function ProfilePage() {
   const [ownMember, setOwnMember] = useState<Member | null>(null)
   const [children, setChildren] = useState<Member[]>([])
   const [parents, setParents] = useState<Parent[]>([])
+  const [recoveryEmail, setRecoveryEmail] = useState('')
   const [draftRefreshKey, setDraftRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -73,6 +74,7 @@ export default function ProfilePage() {
       setOwnMember(r.data?.own_member ?? null)
       setChildren(r.data?.children ?? [])
       setParents(r.data?.parents ?? [])
+      setRecoveryEmail(r.data?.recovery_email ?? '')
     })
   }
 
@@ -127,7 +129,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'account' && <ProfileAccountTab user={user} logout={logout} />}
+      {activeTab === 'account' && <ProfileAccountTab user={user} logout={logout} recoveryEmail={recoveryEmail} />}
       {activeTab === 'profile' && (
         <ProfileProfilTab
           children={children}

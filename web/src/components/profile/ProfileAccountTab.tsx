@@ -5,9 +5,10 @@ import EmailChangeModal from './EmailChangeModal'
 interface Props {
   user: { email?: string } | null
   logout: () => void
+  recoveryEmail?: string
 }
 
-export default function ProfileAccountTab({ user, logout }: Props) {
+export default function ProfileAccountTab({ user, logout, recoveryEmail }: Props) {
   const [showPwModal, setShowPwModal] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
 
@@ -25,6 +26,18 @@ export default function ProfileAccountTab({ user, logout }: Props) {
             className="w-full border border-brand-border rounded-md px-3 py-2 text-sm bg-gray-100 text-brand-text-muted"
           />
         </div>
+        {recoveryEmail && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Eltern-E-Mail (Passwort-Reset)</label>
+            <input
+              type="email"
+              value={recoveryEmail}
+              disabled
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm bg-brand-surface-card text-brand-text-muted"
+            />
+            <p className="mt-1 text-xs text-brand-text-subtle">An diese Adresse gehen Passwort-Mails. Änderbar nur über die Eltern.</p>
+          </div>
+        )}
       </div>
 
       {/* Sicherheit */}
