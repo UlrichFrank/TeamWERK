@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import Toggle from '../Toggle'
 import { Member } from '../../pages/ProfilePage'
@@ -12,6 +12,14 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
   const [crossTeamVisible, setCrossTeamVisible] = useState<boolean>(!!ownMember.cross_team_visible)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Beim Wechsel des Members (z. B. /profil/kind/3 → /profil/kind/4) lokalen
+  // State neu aus den Props aufsetzen, sonst zeigt der Toggle weiter den
+  // Wert des vorigen Kindes.
+  useEffect(() => {
+    setCrossTeamVisible(!!ownMember.cross_team_visible)
+    setError(null)
+  }, [ownMember.id, ownMember.cross_team_visible])
 
   const toggleCrossTeamVisible = async () => {
     const next = !crossTeamVisible
