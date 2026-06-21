@@ -3,24 +3,24 @@
 > Ein Commit pro Task (Conventional Commits, Scope: `health`, `metrics`, `scheduler`, `log`, `app`, `db`, `docs`).
 
 ## 1. Health-Endpoint (`/api/healthz`)
-- [ ] 1.1 Migration `004_monitoring_heartbeat` (`.up`/`.down`): `monitoring_heartbeat(id PK CHECK(id=1), updated_at TEXT NOT NULL)`
-- [ ] 1.2 Health-Handler (`internal/health/`): DB-Ping, `disk_free_pct` (`syscall.Statfs` auf `DB_PATH`-Dir), `scheduler_age_sec` aus Heartbeat; `200`/`status:"ok"` bzw. `503`/`db:"fail"`; Payload minimal & PII-frei
-- [ ] 1.3 Route im **Public-Tier** von `internal/app/router.go` (kein Auth, GET ⇒ kein `Broadcast`)
-- [ ] 1.4 Tests: `TestHealthz_OK`, `TestHealthz_DBDown`, `TestHealthz_NoAuthRequired`, `TestHealthz_SchedulerAgeReported`
+- [x] 1.1 Migration `005_monitoring_heartbeat` (`.up`/`.down`): `monitoring_heartbeat(id PK CHECK(id=1), updated_at TEXT NOT NULL)`
+- [x] 1.2 Health-Handler (`internal/health/`): DB-Ping, `disk_free_pct` (`syscall.Statfs` auf `DB_PATH`-Dir), `scheduler_age_sec` aus Heartbeat; `200`/`status:"ok"` bzw. `503`/`db:"fail"`; Payload minimal & PII-frei
+- [x] 1.3 Route im **Public-Tier** von `internal/app/router.go` (kein Auth, GET ⇒ kein `Broadcast`)
+- [x] 1.4 Tests: `TestHealthz_OK`, `TestHealthz_DBDown`, `TestHealthz_NoAuthRequired`, `TestHealthz_SchedulerAgeReported`
 
 ## 2. Metrik-Schnittstelle (`/api/metrics`, Prometheus-Textformat)
-- [ ] 2.1 Prozess-Counter (`teamwerk_panics_total`, `teamwerk_uptime_seconds`-Start) als Paket-State im Health-/Metrics-Package
-- [ ] 2.2 Handler erzeugt Prometheus-Textformat: `teamwerk_up`, `teamwerk_db_up`, `teamwerk_disk_free_ratio`, `teamwerk_mem_free_ratio` (Linux, sonst weglassen), `teamwerk_scheduler_age_seconds`, `teamwerk_panics_total`, `teamwerk_uptime_seconds`
-- [ ] 2.3 Bearer-Token-Schutz: `METRICS_TOKEN` aus `appconfig`; ungesetzt ⇒ `404`, gesetzt ⇒ `Authorization: Bearer` Pflicht (sonst `401`). Route in `router.go`
-- [ ] 2.4 Tests: `TestMetrics_RequiresToken` (404 ohne Token / 401 falsch), `TestMetrics_ExposesSignals` (200 + Format + Schlüssel)
+- [x] 2.1 Prozess-Counter (`teamwerk_panics_total`, `teamwerk_uptime_seconds`-Start) als Paket-State im Health-/Metrics-Package
+- [x] 2.2 Handler erzeugt Prometheus-Textformat: `teamwerk_up`, `teamwerk_db_up`, `teamwerk_disk_free_ratio`, `teamwerk_mem_free_ratio` (Linux, sonst weglassen), `teamwerk_scheduler_age_seconds`, `teamwerk_panics_total`, `teamwerk_uptime_seconds`
+- [x] 2.3 Bearer-Token-Schutz: `METRICS_TOKEN` aus `appconfig`; ungesetzt ⇒ `404`, gesetzt ⇒ `Authorization: Bearer` Pflicht (sonst `401`). Route in `router.go`
+- [x] 2.4 Tests: `TestMetrics_RequiresToken` (404 ohne Token / 401 falsch), `TestMetrics_ExposesSignals` (200 + Format + Schlüssel)
 
 ## 3. Scheduler-Heartbeat (reine Datenquelle)
-- [ ] 3.1 `scheduler.Run()` schreibt am Ende erfolgreich `INSERT … ON CONFLICT(id) DO UPDATE` auf `monitoring_heartbeat` — **kein** Self-Alert
-- [ ] 3.2 Test: `TestScheduler_HeartbeatRecorded`
+- [x] 3.1 `scheduler.Run()` schreibt am Ende erfolgreich `INSERT … ON CONFLICT(id) DO UPDATE` auf `monitoring_heartbeat` — **kein** Self-Alert
+- [x] 3.2 Test: `TestScheduler_HeartbeatRecorded`
 
 ## 4. Recover-Middleware (Panic → Counter + strukturiertes Log)
-- [ ] 4.1 Custom Recover-Middleware (ersetzt `chi.Recoverer` in `router.go`): Panic als `slog`-Record mit `event="panic"` + Stacktrace-Feld loggen, `teamwerk_panics_total++`, Response `500`, Prozess lebt — **keine** Mail/Push aus der App
-- [ ] 4.2 Tests: `TestRecover_Panic_IncrementsCounterAndRecovers` (500 + Counter +1 + Server lebt, keine Benachrichtigung), `TestRecover_Panic_StructuredLog` (JSON-Record mit `event="panic"`)
+- [x] 4.1 Custom Recover-Middleware (ersetzt `chi.Recoverer` in `router.go`): Panic als `slog`-Record mit `event="panic"` + Stacktrace-Feld loggen, `teamwerk_panics_total++`, Response `500`, Prozess lebt — **keine** Mail/Push aus der App
+- [x] 4.2 Tests: `TestRecover_Panic_IncrementsCounterAndRecovers` (500 + Counter +1 + Server lebt, keine Benachrichtigung), `TestRecover_Panic_StructuredLog` (JSON-Record mit `event="panic"`)
 
 ## 5. Strukturiertes Logging (`slog`) — dritte neutrale Schnittstelle
 - [ ] 5.1 Zentrale Logger-Init in `cmd/teamwerk/main.go`: `slog.SetDefault(...)`; `LOG_FORMAT=json` (Default) → `JSONHandler(os.Stdout)`, `text` → `TextHandler` (lokale DX); `LOG_FORMAT` in `appconfig`

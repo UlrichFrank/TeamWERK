@@ -26,7 +26,7 @@ Als *Referenz*-Konsument (nicht Teil des App-Codes, beliebig ersetzbar) dient ei
 
 - **`GET /api/healthz`** (Public-Tier, ohne Auth): standardisierte Liveness/Readiness-Prüfung. `200`/`status:"ok"` bzw. `503` bei DB-Fehler. Body trägt grobe, **nicht-sensible** Signale für simple Checker (`db`, `disk_free_pct`, `scheduler_age_sec`). Kein PII, keine internen Pfade/Versionen.
 - **`GET /api/metrics`** im **Prometheus-Textformat**, per Bearer-Token geschützt (`METRICS_TOKEN`; ungesetzt ⇒ Endpoint deaktiviert / `404`). Exponiert `teamwerk_up`, `teamwerk_db_up`, `teamwerk_disk_free_ratio`, `teamwerk_mem_free_ratio` (Linux), `teamwerk_scheduler_age_seconds`, `teamwerk_panics_total`, `teamwerk_uptime_seconds`. Jeder Scraper (Prometheus, Grafana Agent, Netdata, Better-Stack-/Datadog-Collector …) kann das ohne App-Anpassung lesen.
-- **Migration `004`**: Single-Row-Tabelle `monitoring_heartbeat` für den Zeitstempel des letzten erfolgreichen Scheduler-Laufs.
+- **Migration `005`**: Single-Row-Tabelle `monitoring_heartbeat` für den Zeitstempel des letzten erfolgreichen Scheduler-Laufs.
 - **Scheduler-Heartbeat** (`scheduler.Run()`): schreibt nach erfolgreichem Lauf den Heartbeat — **reine Datenquelle**, kein Self-Alert. Der Dead-Man-Switch entsteht extern aus `scheduler_age_seconds`.
 - **Custom Recover-Middleware** ersetzt `chi.Recoverer`: bei Panic Stacktrace strukturiert loggen + `teamwerk_panics_total` inkrementieren, Response `500`, Prozess lebt weiter. **Keine** Mail/Push aus der App heraus — der Counter ist das (agnostische) Signal.
 - **Strukturiertes Logging (`slog`)**: Umstellung von stdlib `log` auf `slog` mit JSON-Handler nach stdout (`LOG_FORMAT=json|text`, Default `json` in Prod, `text` lokal). Panics und relevante Ereignisse werden zu maschinenlesbaren Log-Records mit stabilen Feldern (z. B. `event=panic`) — dritte neutrale Schnittstelle für beliebige Log-Collector, die App shippt selbst nicht.
@@ -45,7 +45,7 @@ Als *Referenz*-Konsument (nicht Teil des App-Codes, beliebig ersetzbar) dient ei
 ## Impact
 
 - **Zwei neue Routen** (`GET /api/healthz` public, `GET /api/metrics` token-geschützt) in `internal/app/router.go`; beide GET ⇒ kein `Broadcast`.
-- **Migration `004`** (`004_monitoring_heartbeat.up.sql`/`.down.sql`).
+- **Migration `005`** (`005_monitoring_heartbeat.up.sql`/`.down.sql`).
 - **`internal/scheduler/`** erweitert (Heartbeat-Schreiben). **`internal/health/`** (oder vergleichbar) neuer Handler für healthz + metrics + Panic-Counter.
 - **Middleware-Tausch** in `router.go` (`chi.Recoverer` → eigene Recover-Middleware mit Counter + strukturiertem Log).
 - **Keine** anbieter-spezifische Alerting-Logik im Repo. Externer Konsument (mittwald-Cron) lebt außerhalb des Repos.

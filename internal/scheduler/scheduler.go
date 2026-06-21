@@ -32,6 +32,21 @@ func (s *Scheduler) Run() {
 	s.sendGameReminders()
 	s.sendTrainingReminders()
 	s.sendCarpoolingReminders()
+	s.recordHeartbeat()
+}
+
+// recordHeartbeat schreibt den Zeitstempel des erfolgreichen Laufs in die
+// Single-Row-Tabelle monitoring_heartbeat. Reine Datenquelle für den externen
+// Dead-Man-Switch (scheduler_age_sec / teamwerk_scheduler_age_seconds) — die App
+// alarmiert selbst nicht.
+func (s *Scheduler) recordHeartbeat() {
+	if _, err := s.db.Exec(
+		`INSERT INTO monitoring_heartbeat (id, updated_at) VALUES (1, ?)
+		 ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at`,
+		time.Now().UTC().Format(time.RFC3339),
+	); err != nil {
+		log.Printf("scheduler: heartbeat error: %v", err)
+	}
 }
 
 func (s *Scheduler) cleanExpiredTokens() {
