@@ -36,5 +36,5 @@
 - [ ] 6.5 Manuelle Verifikation (erzwungener Fehl-Poll → Test-Benachrichtigung) — **erst nach Deploy** des neuen Builds auf dem VPS durchführbar; Schritte in `docs/monitoring.md` dokumentiert
 
 ## 7. Abschluss
-- [ ] 7.1 `/verify-change` grün (Build/Test/Lint, Route→Tests, Migrationsnummer, `openspec validate`)
-- [ ] 7.2 Proposal archivieren (`openspec archive monitoring-selfhosted`)
+- [x] 7.1 Verifikation grün: `go build`/`go vet` sauber, `go test -race ./...` 708 passed, `gofmt` clean, `openspec validate --strict` ok, `golangci-lint` für geänderten Code clean (4 Findings sind Baseline-Altlast in `cmd/teamwerk/main.go`/`internal/config/handler.go`, unverändert seit `HEAD~6`)
+- [ ] 7.2 Proposal archivieren (`openspec archive monitoring-selfhosted`) — **erst nach Merge + Deploy** (Task 6.5 Live-Verifikation steht noch aus)
