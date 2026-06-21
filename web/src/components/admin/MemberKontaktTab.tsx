@@ -237,9 +237,20 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
             <span className="text-sm text-brand-text">Mandat erteilt</span>
             {sepaDraft && <span className="text-sm text-brand-text-muted">(Änderung ausstehend)</span>}
           </label>
-          {form.sepa_mandat_date && (
-            <p className="text-xs text-brand-text-muted">seit {form.sepa_mandat_date}</p>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">
+              Datum der Unterschrift
+            </label>
+            <input
+              type="date"
+              value={form.sepa_mandat_date || ''}
+              onChange={e => onFormChange({ sepa_mandat_date: e.target.value })}
+              className="w-full sm:w-auto border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            />
+            <p className="text-xs text-brand-text-subtle mt-1">
+              Tag, an dem das Mitglied das SEPA-Mandat unterzeichnet hat (Pflichtfeld für die XML-Erzeugung im Beitragslauf).
+            </p>
+          </div>
 
           {!isNew && (
             <div className="mt-4 space-y-2">

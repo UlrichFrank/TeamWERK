@@ -1,3 +1,28 @@
+## 21.06.2026
+- [feat] members: SEPA-Mandat — Datum der Unterschrift in Kontakt-Tab editierbar (Pflichtfeld für XML-Erzeugung)
+- [feat] web: recovery_email UI — Kindprofil, Konto-Tab, Admin-Override, Passwort-vergessen
+- [feat] members: recovery_email lesbar im Kindprofil und eigenen Profil
+- [feat] auth: persistente recovery_email — forgot-password, Doppelbestätigung, Override
+- [feat] db: recovery_email auf users + field/stage auf email_change_tokens
+- [feat] telemetry: anonymes Matomo-Tracking für Frontend-Nutzung
+- [fix] profile: Datenschutz-Tab aktualisiert sich beim Wechsel zwischen Kindern
+- [feat] profile: Datenschutz-Tab auch im Kind-Profil
+- [feat] carpooling: Upsert prüft Event-Sichtbarkeit
+- [fix] auth: Nutzerliste aktualisiert sich nach dem Löschen live
+- [fix] auth: Impersonation und Löschen für Kinderaccounts ohne E-Mail
+- [feat] games: /games-Routen filtern nach Event-Sichtbarkeit
+- [feat] auth: zentraler Helper für Event-Sichtbarkeit pro User
+- [feat] termine: Hinweis bei gefilterten Multi-Team-Teilnehmern
+- [feat] members: Datenschutz-Tab im Admin um Sichtbarkeitstoggle ergänzen
+- [feat] profile: Datenschutz-Tab mit Sichtbarkeitstoggle und DSGVO-Anzeige
+- [feat] members: cross_team_visible per dediziertes Endpoint direkt setzbar
+- [feat] games: /participants filtert fremde Teams bei Multi-Team-Events
+- [feat] db: cross_team_visible auf members für Opt-In-Cross-Team-Sichtbarkeit
+- [fix] chat: Push-Notification springt zur richtigen Unterhaltung
+- [feat] games: Teilnehmer generischer Mehr-Team-Ereignisse nach Team gruppieren
+- [feat] auth: Kinderaccounts ohne E-Mail mit Spielername-Login
+- [fix] pwa: /manifest.json als Alias auf manifest.webmanifest
+
 ## 20.06.2026
 - [feat] profile: Anleitung zum Kalender-Abo für iOS und Android
 - [fix] pwa: setAppBadge-Rejection killt iOS-Pushes nicht mehr
