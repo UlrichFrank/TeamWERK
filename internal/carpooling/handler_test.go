@@ -58,7 +58,12 @@ func TestElternteil_UpsertFuerKind(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2099-12-31")
 
-	parentID, childUserID, _ := setupParentChild(t, db)
+	parentID, childUserID, childMemberID := setupParentChild(t, db)
+	// Kind ins Kader des Spiel-Teams — sonst greift event-team-visibility
+	// und Eltern sieht das Game nicht.
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, childMemberID)
+
 	h := carpooling.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	srv := testFullServer(t, h)
 
@@ -83,6 +88,8 @@ func TestElternteil_UpsertFuerKind(t *testing.T) {
 }
 
 // TestElternteil_UpsertFremdeUserId verifies 403 when forUserId is not a child.
+// Der Parent ist eigenes Member im Team (Team-Visibility), versucht aber für
+// einen Fremden zu schreiben → 403 (Ownership-Verstoß, nicht 404).
 func TestElternteil_UpsertFremdeUserId(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -90,6 +97,12 @@ func TestElternteil_UpsertFremdeUserId(t *testing.T) {
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2099-12-31")
 
 	parentID := testutil.CreateUser(t, db, "standard")
+	// Parent in Team-Kader, damit event-team-visibility 200 erlaubt — der 403
+	// muss aus dem Ownership-Check kommen, nicht aus fehlender Sichtbarkeit.
+	parentMemberID := testutil.CreateMember(t, db, parentID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, parentMemberID)
+
 	otherID := testutil.CreateUser(t, db, "standard")
 	h := carpooling.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	srv := testFullServer(t, h)

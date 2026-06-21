@@ -146,6 +146,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Put("/api/profile/phones/{id}", h.Members.UpdatePhone)
 		r.Delete("/api/profile/phones/{id}", h.Members.DeletePhone)
 		r.Put("/api/profile/visibility", h.Members.UpdateVisibility)
+		r.Put("/api/members/{id}/cross-team-visible", h.Members.UpdateCrossTeamVisible)
 		r.Put("/api/profile/reminder-preference", h.Members.UpdateReminderPreference)
 		r.Put("/api/profile/absence-visibility", h.Members.UpdateAbsenceVisibility)
 		r.Get("/api/absences/preview", h.Absences.Preview)

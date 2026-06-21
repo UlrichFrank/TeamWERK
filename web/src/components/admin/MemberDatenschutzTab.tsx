@@ -3,6 +3,7 @@ interface Member {
   dsgvo_verarbeitung_date?: string
   dsgvo_weitergabe?: boolean
   dsgvo_weitergabe_date?: string
+  cross_team_visible?: boolean
 }
 
 interface Draft {
@@ -30,6 +31,24 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
 
   return (
     <div className="space-y-6">
+      {/* Sichtbarkeit für Mitglieder */}
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <h2 className="font-semibold text-brand-text mb-1">Sichtbarkeit</h2>
+        <p className="text-xs text-brand-text-subtle mb-3">
+          Wenn aktiviert, sehen auch Mitglieder anderer Mannschaften Namen und Rückmeldung
+          dieses Mitglieds bei gemeinsamen Multi-Team-Terminen.
+        </p>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.cross_team_visible || false}
+            onChange={e => onFormChange({ cross_team_visible: e.target.checked })}
+            className="w-4 h-4 accent-brand-yellow"
+          />
+          <span className="text-sm text-brand-text">Sichtbarkeit für Mitglieder</span>
+        </label>
+      </div>
+
       {/* DSGVO */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text mb-4">Datenschutz (DSGVO)</h2>

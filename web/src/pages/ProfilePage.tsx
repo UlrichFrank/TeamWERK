@@ -8,6 +8,7 @@ import ProfileMemberTab from '../components/profile/ProfileMemberTab'
 import ProfileBankTab from '../components/profile/ProfileBankTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
 import ProfileKalenderTab from '../components/profile/ProfileKalenderTab'
+import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 
 export interface Member {
   id: number; first_name: string; last_name: string
@@ -22,6 +23,11 @@ export interface Member {
   phones_visible?: boolean
   address_visible?: boolean
   email_visible?: boolean
+  cross_team_visible?: boolean
+  dsgvo_verarbeitung?: boolean
+  dsgvo_verarbeitung_date?: string
+  dsgvo_weitergabe?: boolean
+  dsgvo_weitergabe_date?: string
 }
 
 export interface Parent {
@@ -44,7 +50,7 @@ export interface ChangeDraft {
   created_at: string
 }
 
-type TabName = 'account' | 'profile' | 'member' | 'banking' | 'kalender' | 'misc'
+type TabName = 'account' | 'profile' | 'member' | 'banking' | 'kalender' | 'datenschutz' | 'misc'
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
@@ -85,6 +91,7 @@ export default function ProfilePage() {
     'profile',
     ...(showMemberTabs ? (['member', 'banking'] as TabName[]) : []),
     'kalender',
+    ...(showMemberTabs ? (['datenschutz'] as TabName[]) : []),
     'misc',
   ]
 
@@ -94,6 +101,7 @@ export default function ProfilePage() {
     member: 'Mitgliedsdaten',
     banking: 'Bankdaten',
     kalender: 'Kalender-Abo',
+    datenschutz: 'Datenschutz',
     misc: 'Sonstiges',
   }
 
@@ -135,6 +143,9 @@ export default function ProfilePage() {
         <ProfileBankTab ownMember={ownMember} />
       )}
       {activeTab === 'kalender' && <ProfileKalenderTab />}
+      {showMemberTabs && activeTab === 'datenschutz' && ownMember && (
+        <ProfileDatenschutzTab ownMember={ownMember} onUpdated={loadProfile} />
+      )}
       {activeTab === 'misc' && <ProfileMiscTab />}
     </div>
   )
