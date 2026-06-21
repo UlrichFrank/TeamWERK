@@ -29,11 +29,11 @@
 - [x] 5.4 Test: `TestLogger_EmitsJSON` (Default-Handler schreibt valides JSON mit `level`/`msg`/`time`) + `TestLogger_TextFormatNotJSON`
 
 ## 6. Referenz-Konsument (außerhalb des App-Repos) & Doku
-- [ ] 6.1 mittwald-PHP-Cron-Script dokumentieren (nicht im Repo ablegen): `/api/healthz` pollen, Schwellen (`disk_free_pct`, `scheduler_age_sec`, HTTP/`db`) auswerten, TLS-Cert via `openssl_x509_parse`, Alarm via `mail()`; Cron-Intervall + Einrichtung in mStudio
-- [ ] 6.2 Optional: redundanter GitHub-Actions-Workflow `.github/workflows/uptime.yml` als zweites Auge (URL via Repo-Variable, nicht hardcodieren)
-- [ ] 6.3 Betriebsdoku: welche Schnittstelle liefert welches Signal (`/healthz`, `/metrics`, slog-Logs), Beispiel-Schwellen, Hinweis „mind. 1 Monitor muss konfiguriert bleiben", Beispiel-Configs (Prometheus-Scrape **und** ein Log-Collector, z. B. Vector/Alloy auf journald)
-- [ ] 6.4 `.env.example` + Deploy-Doku/`/etc/teamwerk/env` um `METRICS_TOKEN` und `LOG_FORMAT` ergänzen
-- [ ] 6.5 Manuelle Verifikation: erzwungener Fehl-Poll löst Test-Benachrichtigung aus
+- [x] 6.1 mittwald-PHP-Cron-Script dokumentiert (in `docs/monitoring.md`, nicht ausführbar im Repo): `/api/healthz` pollen, Schwellen auswerten, TLS-Cert via `openssl_x509_parse`, Alarm via `mail()`; mStudio-Cron-Einrichtung
+- [x] 6.2 Redundanter GitHub-Actions-Workflow `.github/workflows/uptime.yml` (URL via Repo-Variable `HEALTHZ_URL`)
+- [x] 6.3 Betriebsdoku `docs/monitoring.md`: Signal→Schnittstelle-Tabelle, Beispiel-Schwellen, „mind. 1 Monitor"-Hinweis, Prometheus-Scrape- **und** Vector-journald-Beispiel
+- [x] 6.4 `.env.example` um `METRICS_TOKEN` und `LOG_FORMAT` ergänzt
+- [ ] 6.5 Manuelle Verifikation (erzwungener Fehl-Poll → Test-Benachrichtigung) — **erst nach Deploy** des neuen Builds auf dem VPS durchführbar; Schritte in `docs/monitoring.md` dokumentiert
 
 ## 7. Abschluss
 - [ ] 7.1 `/verify-change` grün (Build/Test/Lint, Route→Tests, Migrationsnummer, `openspec validate`)

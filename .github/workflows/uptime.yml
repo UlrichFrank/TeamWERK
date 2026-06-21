@@ -1,0 +1,48 @@
+# Optionales zweites, redundantes externes Auge (primär: mittwald-Cron, siehe
+# docs/monitoring.md). Pollt /api/healthz und wertet die Signale aus; bei
+# Verletzung schlägt der Job fehl → GitHub benachrichtigt.
+#
+# Hinweis: GitHub-Actions-Cron ist nicht minutengenau (Jitter, gelegentlich
+# ausgelassene Ticks). Für harte Latenz das mittwald-Cron nutzen.
+#
+# Setup: Repo-Variable HEALTHZ_URL setzen (Settings → Secrets and variables →
+# Actions → Variables), damit die interne URL nicht im Repo steht.
+name: uptime
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  healthz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll /api/healthz und Schwellen prüfen
+        env:
+          HEALTHZ_URL: ${{ vars.HEALTHZ_URL }}
+          DISK_MIN: "15"
+          SCHED_MAX: "180"
+        run: |
+          set -euo pipefail
+          if [ -z "${HEALTHZ_URL:-}" ]; then
+            echo "Repo-Variable HEALTHZ_URL ist nicht gesetzt — übersprungen."
+            exit 0
+          fi
+          code=$(curl -s -o body.json -w '%{http_code}' --max-time 10 "$HEALTHZ_URL" || echo 000)
+          echo "HTTP $code"; cat body.json || true
+          if [ "$code" != "200" ]; then
+            echo "::error::healthz HTTP $code (erwartet 200)"; exit 1
+          fi
+          db=$(jq -r '.db' body.json)
+          disk=$(jq -r '.disk_free_pct' body.json)
+          sched=$(jq -r '.scheduler_age_sec' body.json)
+          fail=0
+          [ "$db" = "ok" ] || { echo "::error::db=$db"; fail=1; }
+          if [ "$disk" -ge 0 ] 2>/dev/null && [ "$disk" -lt "$DISK_MIN" ]; then
+            echo "::error::disk_free_pct=$disk (< $DISK_MIN)"; fail=1
+          fi
+          if [ "$sched" -gt "$SCHED_MAX" ] 2>/dev/null; then
+            echo "::error::scheduler_age_sec=$sched (> $SCHED_MAX, Cron tot?)"; fail=1
+          fi
+          exit $fail
