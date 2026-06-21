@@ -30,7 +30,7 @@ TeamWERK — interne Verwaltungsplattform für Team Stuttgart (Handball), läuft
 
 ```bash
 # Lokaler Start (zwei Prozesse)
-go run ./cmd/teamwerk        # Backend :8080  (braucht web/dist/ wegen //go:embed — sonst web/dist/.gitkeep anlegen)
+go run ./cmd/teamwerk        # Backend :8080  (braucht cmd/teamwerk/web/dist/ wegen //go:embed — sonst cmd/teamwerk/web/dist/.gitkeep anlegen)
 cd web && pnpm dev           # Vite :5173, proxyt /api → :8080
 
 make build                   # pnpm build + go build → bin/teamwerk
