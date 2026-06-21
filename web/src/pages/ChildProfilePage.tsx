@@ -6,6 +6,7 @@ import ProfileProfilTab from '../components/profile/ProfileProfilTab'
 import ProfileMemberTab from '../components/profile/ProfileMemberTab'
 import ProfileBankTab from '../components/profile/ProfileBankTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
+import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 import { Member, Parent, Phone } from './ProfilePage'
 
 export interface UserContact {
@@ -24,12 +25,13 @@ export interface UserContact {
   }
 }
 
-type TabName = 'profile' | 'member' | 'banking' | 'misc'
+type TabName = 'profile' | 'member' | 'banking' | 'datenschutz' | 'misc'
 
 const labels: Record<TabName, string> = {
   profile: 'Kontakt',
   member: 'Mitgliedsdaten',
   banking: 'Bankdaten',
+  datenschutz: 'Datenschutz',
   misc: 'Sonstiges',
 }
 
@@ -63,7 +65,7 @@ export default function ChildProfilePage() {
       <h1 className="text-2xl font-bold mb-6">{member.first_name}</h1>
 
       <div className="flex gap-1 mb-6 border-b border-brand-border-subtle flex-wrap">
-        {(['profile', 'member', 'banking', 'misc'] as TabName[]).map(tab => (
+        {(['profile', 'member', 'banking', 'datenschutz', 'misc'] as TabName[]).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -96,6 +98,9 @@ export default function ChildProfilePage() {
       )}
       {activeTab === 'banking' && (
         <ProfileBankTab ownMember={member} />
+      )}
+      {activeTab === 'datenschutz' && (
+        <ProfileDatenschutzTab ownMember={member} onUpdated={load} />
       )}
       {activeTab === 'misc' && (
         <ProfileMiscTab />
