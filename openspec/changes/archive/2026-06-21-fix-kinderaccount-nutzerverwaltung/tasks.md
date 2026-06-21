@@ -23,4 +23,4 @@
 
 - [x] 4.1 `/verify-change` ausführen (Build/Test/Lint + Invarianten: Mutation→Broadcast, Route→Tests, brand-Tokens, lucide-Icons)
 - [x] 4.2 `openspec validate fix-kinderaccount-nutzerverwaltung --strict`
-- [ ] 4.3 Conventional Commits je Task; abschließend Proposal archivieren
+- [x] 4.3 Conventional Commits je Task; abschließend Proposal archivieren
