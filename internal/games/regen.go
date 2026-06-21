@@ -537,7 +537,7 @@ func (h *Handler) effectiveEventDurationTx(ctx context.Context, tx *sql.Tx, even
 		var ageClass sql.NullString
 		tx.QueryRowContext(ctx, `SELECT age_class FROM teams WHERE id=?`, teamID).Scan(&ageClass)
 		if !ageClass.Valid || ageClass.String == "" {
-			return 0, fmt.Errorf("Team hat keine Altersklasse")
+			return 0, fmt.Errorf("team hat keine Altersklasse")
 		}
 		var half, brk int
 		err := tx.QueryRowContext(ctx,
@@ -555,10 +555,10 @@ func (h *Handler) effectiveEventDurationTx(ctx context.Context, tx *sql.Tx, even
 	err := tx.QueryRowContext(ctx,
 		`SELECT duration_minutes FROM game_templates WHERE id=?`, templateID).Scan(&dur)
 	if err != nil {
-		return 0, fmt.Errorf("Vorlage nicht gefunden")
+		return 0, fmt.Errorf("vorlage nicht gefunden")
 	}
 	if dur <= 0 {
-		return 0, fmt.Errorf("Vorlage hat keine Spieldauer konfiguriert")
+		return 0, fmt.Errorf("vorlage hat keine Spieldauer konfiguriert")
 	}
 	return dur, nil
 }

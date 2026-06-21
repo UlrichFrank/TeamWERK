@@ -373,16 +373,17 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 		scanErr := h.db.QueryRowContext(r.Context(),
 			`SELECT id FROM mitfahrgelegenheiten WHERE game_id = ? AND user_id = ? AND typ = 'biete'`,
 			body.GameID, userID).Scan(&existingID)
-		if scanErr == sql.ErrNoRows {
+		switch scanErr {
+		case sql.ErrNoRows:
 			_, err = h.db.ExecContext(r.Context(),
 				`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'biete', ?, ?, ?)`,
 				body.GameID, userID, plaetze, body.Treffpunkt, body.Notiz)
 			isNewEntry = true
-		} else if scanErr == nil {
+		case nil:
 			_, err = h.db.ExecContext(r.Context(),
 				`UPDATE mitfahrgelegenheiten SET plaetze = ?, treffpunkt = ?, notiz = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 				plaetze, body.Treffpunkt, body.Notiz, existingID)
-		} else {
+		default:
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -391,16 +392,17 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 		scanErr := h.db.QueryRowContext(r.Context(),
 			`SELECT id FROM mitfahrgelegenheiten WHERE game_id = ? AND user_id = ? AND typ = 'suche'`,
 			body.GameID, userID).Scan(&existingID)
-		if scanErr == sql.ErrNoRows {
+		switch scanErr {
+		case sql.ErrNoRows:
 			_, err = h.db.ExecContext(r.Context(),
 				`INSERT INTO mitfahrgelegenheiten (game_id, user_id, typ, plaetze, treffpunkt, notiz) VALUES (?, ?, 'suche', ?, ?, ?)`,
 				body.GameID, userID, *body.Plaetze, body.Treffpunkt, body.Notiz)
 			isNewEntry = true
-		} else if scanErr == nil {
+		case nil:
 			_, err = h.db.ExecContext(r.Context(),
 				`UPDATE mitfahrgelegenheiten SET plaetze = ?, treffpunkt = ?, notiz = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 				*body.Plaetze, body.Treffpunkt, body.Notiz, existingID)
-		} else {
+		default:
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -490,7 +492,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Event-Log: nur Paarungspartner (die direkt betroffen sind)
 	// Push: alle Suche-User des Spiels (bei biete_deleted), Paarungspartner (bei suche_deleted)
 	var eventUserIDs, pushUserIDs []int
-	if typ == "biete" {
+	switch typ {
+	case "biete":
 		eventUserIDs = h.sucherWithActivePaarung(id)
 		pushUserIDs = h.usersWithTyp(gameID, "suche", userID)
 		for _, uid := range eventUserIDs {
@@ -498,7 +501,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 				`INSERT INTO carpooling_events (user_id, game_id, type, actor_name) VALUES (?, ?, 'biete_deleted', ?)`,
 				uid, gameID, actorName)
 		}
-	} else if typ == "suche" {
+	case "suche":
 		eventUserIDs = h.bieterWithActivePaarung(id)
 		pushUserIDs = eventUserIDs
 		for _, uid := range eventUserIDs {
