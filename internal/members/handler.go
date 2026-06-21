@@ -1039,6 +1039,7 @@ type ProfileResponse struct {
 	Zip              string          `json:"zip,omitempty"`
 	City             string          `json:"city,omitempty"`
 	PhotoURL         string          `json:"photo_url,omitempty"`
+	RecoveryEmail    string          `json:"recovery_email,omitempty"`
 	Phones           []UserPhone     `json:"phones"`
 	Visibility       UserVisibility  `json:"visibility"`
 	DutyReminderDays *int            `json:"duty_reminder_days"`
@@ -1101,12 +1102,14 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	var street, zip, city, photoPath sql.NullString
 	var reminderDays sql.NullInt64
 	var mapsProvider string
+	var recoveryEmail sql.NullString
 	h.db.QueryRowContext(r.Context(),
-		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,''), duty_reminder_days, maps_provider FROM users WHERE id=?`,
-		claims.UserID).Scan(&street, &zip, &city, &photoPath, &reminderDays, &mapsProvider)
+		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,''), duty_reminder_days, maps_provider, COALESCE(recovery_email,'') FROM users WHERE id=?`,
+		claims.UserID).Scan(&street, &zip, &city, &photoPath, &reminderDays, &mapsProvider, &recoveryEmail)
 	resp.Street = street.String
 	resp.Zip = zip.String
 	resp.City = city.String
+	resp.RecoveryEmail = recoveryEmail.String
 	if photoPath.String != "" {
 		resp.PhotoURL = "/api/uploads/" + photoPath.String
 	}
@@ -2214,22 +2217,24 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		WhatsAppVisible bool `json:"whatsapp_visible"`
 	}
 	type userContactEntry struct {
-		FirstName  string          `json:"first_name"`
-		LastName   string          `json:"last_name"`
-		Street     string          `json:"street"`
-		Zip        string          `json:"zip"`
-		City       string          `json:"city"`
-		Phones     []phoneEntry    `json:"phones"`
-		Visibility visibilityEntry `json:"visibility"`
+		FirstName     string          `json:"first_name"`
+		LastName      string          `json:"last_name"`
+		Street        string          `json:"street"`
+		Zip           string          `json:"zip"`
+		City          string          `json:"city"`
+		RecoveryEmail string          `json:"recovery_email"`
+		Phones        []phoneEntry    `json:"phones"`
+		Visibility    visibilityEntry `json:"visibility"`
 	}
 
 	var userContact *userContactEntry
 	if m.UserID != nil {
 		uc := userContactEntry{Phones: []phoneEntry{}}
-		var street, zip, city sql.NullString
+		var street, zip, city, recoveryEmail sql.NullString
 		h.db.QueryRowContext(r.Context(),
-			`SELECT first_name, last_name, COALESCE(street,''), COALESCE(zip,''), COALESCE(city,'') FROM users WHERE id=?`,
-			*m.UserID).Scan(&uc.FirstName, &uc.LastName, &street, &zip, &city)
+			`SELECT first_name, last_name, COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(recovery_email,'') FROM users WHERE id=?`,
+			*m.UserID).Scan(&uc.FirstName, &uc.LastName, &street, &zip, &city, &recoveryEmail)
+		uc.RecoveryEmail = recoveryEmail.String
 		uc.Street = street.String
 		uc.Zip = zip.String
 		uc.City = city.String
