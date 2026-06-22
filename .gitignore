@@ -1,6 +1,9 @@
 # Binaries
 bin/
-teamwerk
+# Root-Binary aus `go build ./cmd/teamwerk`. Root-geankert (/teamwerk), sonst
+# würde das ungeankerte Pattern auch das Verzeichnis cmd/teamwerk/ ignorieren
+# und neue Dateien dort (z.B. Tests) bräuchten `git add -f`.
+/teamwerk
 
 # Embedded frontend build
 cmd/teamwerk/web/dist/

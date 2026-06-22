@@ -6,7 +6,7 @@ package notify
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -84,6 +84,6 @@ func sendCategoryEmail(db *sql.DB, cfg *appconfig.Config, userID int, title, bod
 	}
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
 	if err := m.Send(email, title, fullBody); err != nil {
-		log.Printf("notifications: send mail to user %d: %v", userID, err)
+		slog.Error("send mail failed", "user", userID, "error", err)
 	}
 }

@@ -173,6 +173,10 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/profile/recovery-email/confirm", expected: exPublic},
 	// Calendar feed — token im Pfad ist die Authentifizierung
 	{method: "GET", path: "/api/calendar/feed/{token}", expected: exPublic},
+	// Monitoring-Signale: healthz public; metrics ohne METRICS_TOKEN deaktiviert (404),
+	// mit Token Bearer-geschützt — beides ohne Auth-Middleware → exPublic.
+	{method: "GET", path: "/api/healthz", expected: exPublic},
+	{method: "GET", path: "/api/metrics", expected: exPublic},
 
 	// ── Authenticated ───────────────────────────────────────────────────────────
 	// Chat (einfache Operationen ohne Konversations-Membership)

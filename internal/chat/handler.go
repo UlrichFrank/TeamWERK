@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -637,7 +637,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	for _, uid := range pushRecipients {
 		badge, err := ComputeUnreadForUser(h.db, uid)
 		if err != nil {
-			log.Printf("chat: compute unread for user %d: %v", uid, err)
+			slog.Error("chat compute unread failed", "user", uid, "error", err)
 			badge = 0
 		}
 		go h.pushFn(h.db, h.cfg, uid, title, preview, fmt.Sprintf("/chat?conv=%d", convID), badge)
@@ -968,7 +968,7 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	for _, uid := range pushRecipients {
 		badge, err := ComputeUnreadForUser(h.db, uid)
 		if err != nil {
-			log.Printf("chat: compute unread for user %d: %v", uid, err)
+			slog.Error("chat compute unread failed", "user", uid, "error", err)
 			badge = 0
 		}
 		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat?tab=broadcasts", badge)

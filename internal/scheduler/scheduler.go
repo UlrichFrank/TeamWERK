@@ -3,7 +3,7 @@ package scheduler
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -32,6 +32,21 @@ func (s *Scheduler) Run() {
 	s.sendGameReminders()
 	s.sendTrainingReminders()
 	s.sendCarpoolingReminders()
+	s.recordHeartbeat()
+}
+
+// recordHeartbeat schreibt den Zeitstempel des erfolgreichen Laufs in die
+// Single-Row-Tabelle monitoring_heartbeat. Reine Datenquelle für den externen
+// Dead-Man-Switch (scheduler_age_sec / teamwerk_scheduler_age_seconds) — die App
+// alarmiert selbst nicht.
+func (s *Scheduler) recordHeartbeat() {
+	if _, err := s.db.Exec(
+		`INSERT INTO monitoring_heartbeat (id, updated_at) VALUES (1, ?)
+		 ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at`,
+		time.Now().UTC().Format(time.RFC3339),
+	); err != nil {
+		slog.Error("scheduler heartbeat failed", "error", err)
+	}
 }
 
 func (s *Scheduler) cleanExpiredTokens() {
@@ -40,12 +55,12 @@ func (s *Scheduler) cleanExpiredTokens() {
 		 DELETE FROM password_reset_tokens WHERE expires_at < CURRENT_TIMESTAMP AND used_at IS NULL;
 		 DELETE FROM refresh_tokens WHERE expires_at < CURRENT_TIMESTAMP;`)
 	if err != nil {
-		log.Printf("scheduler: cleanup error: %v", err)
+		slog.Error("scheduler cleanup failed", "error", err)
 		return
 	}
 	n, _ := res.RowsAffected()
 	if n > 0 {
-		log.Printf("scheduler: cleaned %d expired tokens", n)
+		slog.Info("expired tokens cleaned", "count", n)
 	}
 }
 
@@ -79,7 +94,7 @@ func (s *Scheduler) sendDutyReminders() {
 		WHERE ds.event_date = ?
 		  AND ds.slots_filled < ds.slots_total`, targetDate)
 	if err != nil {
-		log.Printf("scheduler: duty reminders: query slots: %v", err)
+		slog.Error("scheduler duty reminders query slots failed", "error", err)
 		return
 	}
 	defer rows.Close()
@@ -101,7 +116,7 @@ func (s *Scheduler) sendDutyReminders() {
 	for _, sl := range slots {
 		users, err := s.eligibleUsers(sl)
 		if err != nil {
-			log.Printf("scheduler: duty reminders: eligible users for slot %d: %v", sl.id, err)
+			slog.Error("scheduler duty reminders eligible users failed", "slot", sl.id, "error", err)
 			continue
 		}
 		for _, u := range users {
@@ -122,7 +137,7 @@ func (s *Scheduler) sendDutyReminders() {
 				body := buildReminderMail(u.name, targetDate, uSlots)
 				subject := fmt.Sprintf("Offene Dienste am %s", formatDate(targetDate))
 				if err := s.mailer.Send(u.email, subject, body); err != nil {
-					log.Printf("scheduler: duty reminders: send mail to %s: %v", u.email, err)
+					slog.Error("scheduler duty reminders send mail failed", "email", u.email, "error", err)
 				} else {
 					s.db.Exec(`INSERT OR IGNORE INTO duty_reminder_log (user_id, event_date) VALUES (?,?)`, uid, targetDate)
 					emailSent++
@@ -147,10 +162,10 @@ func (s *Scheduler) sendDutyReminders() {
 	}
 
 	if emailSent > 0 {
-		log.Printf("scheduler: duty reminders: sent %d email(s) for %s", emailSent, targetDate)
+		slog.Info("scheduler duty reminders emails sent", "count", emailSent, "date", targetDate)
 	}
 	if pushSent > 0 {
-		log.Printf("scheduler: duty reminders: sent %d push(s) for %s", pushSent, targetDate)
+		slog.Info("scheduler duty reminders push sent", "count", pushSent, "date", targetDate)
 	}
 }
 
@@ -175,7 +190,7 @@ func (s *Scheduler) sendGameReminders() {
 		JOIN game_teams gt ON gt.game_id = g.id
 		WHERE g.date BETWEEN ? AND ?`, from, to)
 	if err != nil {
-		log.Printf("scheduler: game reminders: %v", err)
+		slog.Error("scheduler game reminders failed", "error", err)
 		return
 	}
 	defer rows.Close()
@@ -209,7 +224,7 @@ func (s *Scheduler) sendGameReminders() {
 		}
 	}
 	if sent > 0 {
-		log.Printf("scheduler: game reminders: sent %d notification(s)", sent)
+		slog.Info("scheduler game reminders sent", "count", sent)
 	}
 }
 
@@ -239,7 +254,7 @@ func (s *Scheduler) sendTrainingReminders() {
 		WHERE ts.date BETWEEN ? AND ?
 		  AND ts.status = 'active'`, from, to)
 	if err != nil {
-		log.Printf("scheduler: training reminders: %v", err)
+		slog.Error("scheduler training reminders failed", "error", err)
 		return
 	}
 	defer rows.Close()
@@ -273,7 +288,7 @@ func (s *Scheduler) sendTrainingReminders() {
 		}
 	}
 	if sent > 0 {
-		log.Printf("scheduler: training reminders: sent %d notification(s)", sent)
+		slog.Info("scheduler training reminders sent", "count", sent)
 	}
 }
 
@@ -290,7 +305,7 @@ func (s *Scheduler) sendCarpoolingReminders() {
 		JOIN mitfahrt_paarungen p ON (p.biete_id = mg.id OR p.suche_id = mg.id) AND p.status = 'confirmed'
 		WHERE (g.date || ' ' || g.time) BETWEEN ? AND ?`, from, to)
 	if err != nil {
-		log.Printf("scheduler: carpooling reminders: %v", err)
+		slog.Error("scheduler carpooling reminders failed", "error", err)
 		return
 	}
 	defer rows.Close()
@@ -322,7 +337,7 @@ func (s *Scheduler) sendCarpoolingReminders() {
 		sent++
 	}
 	if sent > 0 {
-		log.Printf("scheduler: carpooling reminders: sent %d notification(s)", sent)
+		slog.Info("scheduler carpooling reminders sent", "count", sent)
 	}
 }
 

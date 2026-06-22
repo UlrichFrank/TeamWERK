@@ -3,7 +3,7 @@ package push
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -31,7 +31,7 @@ func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, 
 		`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN (`+inClause+`)`,
 		placeholders...)
 	if err != nil {
-		log.Printf("push: query subscriptions: %v", err)
+		slog.Error("push query subscriptions failed", "error", err)
 		return
 	}
 	defer rows.Close()
@@ -69,7 +69,7 @@ func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, 
 			TTL:             3600,
 		})
 		if err != nil {
-			log.Printf("push: send to subscription %d: %v", s.id, err)
+			slog.Error("push send failed", "subscription", s.id, "error", err)
 			continue
 		}
 		resp.Body.Close()
@@ -106,7 +106,7 @@ func SendToUserWithBadge(db *sql.DB, cfg *appconfig.Config, userID int, title, b
 		`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`,
 		userID)
 	if err != nil {
-		log.Printf("push: query subscriptions for user %d: %v", userID, err)
+		slog.Error("push query subscriptions failed", "user", userID, "error", err)
 		return
 	}
 	defer rows.Close()
@@ -140,7 +140,7 @@ func SendToUserWithBadge(db *sql.DB, cfg *appconfig.Config, userID int, title, b
 			TTL:             3600,
 		})
 		if err != nil {
-			log.Printf("push: send to subscription %d: %v", s.id, err)
+			slog.Error("push send failed", "subscription", s.id, "error", err)
 			continue
 		}
 		resp.Body.Close()
