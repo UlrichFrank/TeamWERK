@@ -152,16 +152,14 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 			continue
 		}
 
+		// templateID == 0 bedeutet: keine Auto-Slots für dieses Event. Es gibt
+		// keinen Fallback mehr (frühere `findTemplateForGameTx`-Auflösung auf
+		// die kleinste passende Template-ID entfällt). Existierende
+		// is_custom=0-Slots werden trotzdem gelöscht, damit ein Wechsel auf
+		// "keine Vorlage" sichtbar wird; is_custom=1-Slots bleiben unberührt.
 		templateID := 0
 		if g.TemplateID.Valid {
 			templateID = int(g.TemplateID.Int64)
-		} else {
-			tid, _, ferr := h.findTemplateForGameTx(ctx, tx, g.IsHome)
-			if ferr != nil {
-				// No template available — leave this game's slots untouched.
-				continue
-			}
-			templateID = tid
 		}
 
 		teamIDs, err := h.loadGameTeamIDsTx(ctx, tx, g.ID)
@@ -173,15 +171,18 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 			firstTeamID = teamIDs[0]
 		}
 
-		durationMins, err := h.effectiveEventDurationTx(ctx, tx, g.EventType, templateID, firstTeamID)
-		if err != nil {
-			// Duration unknown → can't position slots safely. Skip this game.
-			continue
-		}
-
-		items, err := h.loadTemplateItemsTx(ctx, tx, templateID)
-		if err != nil {
-			return RegenSummary{}, fmt.Errorf("load template %d: %w", templateID, err)
+		var items []templateItemRow
+		var durationMins int
+		if templateID > 0 {
+			durationMins, err = h.effectiveEventDurationTx(ctx, tx, g.EventType, templateID, firstTeamID)
+			if err != nil {
+				// Duration unknown → can't position slots safely. Skip this game.
+				continue
+			}
+			items, err = h.loadTemplateItemsTx(ctx, tx, templateID)
+			if err != nil {
+				return RegenSummary{}, fmt.Errorf("load template %d: %w", templateID, err)
+			}
 		}
 
 		eventName := composeEventName(g.EventType, g.IsHome, g.Opponent)
@@ -513,54 +514,31 @@ func (h *Handler) loadGameTeamIDsTx(ctx context.Context, tx *sql.Tx, gameID int)
 	return ids, nil
 }
 
-func (h *Handler) findTemplateForGameTx(ctx context.Context, tx *sql.Tx, isHome bool) (id, durationMins int, err error) {
-	targetType := "auswärts"
-	if isHome {
-		targetType = "heim"
-	}
-	err = tx.QueryRowContext(ctx,
-		`SELECT id, duration_minutes FROM game_templates WHERE template_type=? ORDER BY id LIMIT 1`, targetType).
-		Scan(&id, &durationMins)
-	if err == sql.ErrNoRows {
-		err = tx.QueryRowContext(ctx,
-			`SELECT id, duration_minutes FROM game_templates WHERE template_type='generisch' ORDER BY id LIMIT 1`).
-			Scan(&id, &durationMins)
-	}
-	if err == sql.ErrNoRows {
-		return 0, 0, fmt.Errorf("kein passendes Dienstplan-Template gefunden (Typ: %s oder generisch)", targetType)
-	}
-	return id, durationMins, err
-}
-
+// effectiveEventDurationTx berechnet die Spieldauer in Minuten. Wird nur für
+// heim/auswärts-Events mit gesetztem template_id aufgerufen — der frühere
+// generisch-Zweig (Dauer aus game_templates.duration_minutes) ist obsolet,
+// seit generische Events im Auto-Regen früher übersprungen werden.
 func (h *Handler) effectiveEventDurationTx(ctx context.Context, tx *sql.Tx, eventType string, templateID, teamID int) (int, error) {
-	if eventType == "heim" || eventType == "auswärts" {
-		var ageClass sql.NullString
-		tx.QueryRowContext(ctx, `SELECT age_class FROM teams WHERE id=?`, teamID).Scan(&ageClass)
-		if !ageClass.Valid || ageClass.String == "" {
-			return 0, fmt.Errorf("team hat keine Altersklasse")
-		}
-		var half, brk int
-		err := tx.QueryRowContext(ctx,
-			`SELECT half_duration_minutes, break_minutes FROM age_class_game_rules WHERE age_class=?`,
-			ageClass.String).Scan(&half, &brk)
-		if err == sql.ErrNoRows {
-			return 0, fmt.Errorf("keine Altersklassen-Regel für %s", ageClass.String)
-		}
-		if err != nil {
-			return 0, err
-		}
-		return 2*half + brk, nil
+	_ = templateID
+	if eventType != "heim" && eventType != "auswärts" {
+		return 0, fmt.Errorf("unerwarteter event_type %q im Auto-Regen", eventType)
 	}
-	var dur int
+	var ageClass sql.NullString
+	tx.QueryRowContext(ctx, `SELECT age_class FROM teams WHERE id=?`, teamID).Scan(&ageClass)
+	if !ageClass.Valid || ageClass.String == "" {
+		return 0, fmt.Errorf("team hat keine Altersklasse")
+	}
+	var half, brk int
 	err := tx.QueryRowContext(ctx,
-		`SELECT duration_minutes FROM game_templates WHERE id=?`, templateID).Scan(&dur)
+		`SELECT half_duration_minutes, break_minutes FROM age_class_game_rules WHERE age_class=?`,
+		ageClass.String).Scan(&half, &brk)
+	if err == sql.ErrNoRows {
+		return 0, fmt.Errorf("keine Altersklassen-Regel für %s", ageClass.String)
+	}
 	if err != nil {
-		return 0, fmt.Errorf("vorlage nicht gefunden")
+		return 0, err
 	}
-	if dur <= 0 {
-		return 0, fmt.Errorf("vorlage hat keine Spieldauer konfiguriert")
-	}
-	return dur, nil
+	return 2*half + brk, nil
 }
 
 func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateID int) ([]templateItemRow, error) {

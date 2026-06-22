@@ -57,6 +57,7 @@ interface Game {
   opponent: string
   teams: Array<{ id: number; name: string; display_short?: string; display_long?: string }>
   event_type: string
+  template_id?: number | null
   slot_count: number
   filled_count: number
   total_count: number
@@ -455,7 +456,7 @@ export default function KalenderPage() {
         opponent: selectedOpponent,
         team_ids: selectedTeamIds,
         event_type: eventType,
-        template_id: selectedTemplate ?? undefined,
+        template_id: selectedTemplate,
         venue_id: selectedVenueId,
         rsvp_opt_out: gameRsvpOptOut,
         rsvp_require_reason: gameRsvpRequireReason,
@@ -1388,13 +1389,20 @@ export default function KalenderPage() {
               <div>
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Dienstplan-Vorlage</h2>
                 {(() => {
-                  const filteredTemplates = templates.filter(t => t.template_type === eventType)
-                  return filteredTemplates.length === 0 ? (
-                    <div className="text-center py-6">
-                      <p className="text-brand-text-muted">Keine passende Vorlage — Event wird ohne Dienste angelegt.</p>
-                    </div>
-                  ) : (
+                  // Generische Events nutzen keine Auto-Dienst-Vorlagen — Backend lehnt das ab.
+                  const filteredTemplates = eventType === 'generisch'
+                    ? []
+                    : templates.filter(t => t.template_type === eventType)
+                  return (
                     <div className="space-y-2 mb-4">
+                      <label className="flex items-center gap-2 p-3 border border-brand-border-subtle rounded-lg hover:bg-brand-border-subtle cursor-pointer">
+                        <input type="radio" name="template" checked={selectedTemplate === null}
+                          onChange={() => setSelectedTemplate(null)} className="rounded-full accent-brand-yellow" />
+                        <div className="flex-1">
+                          <div className="font-medium text-sm text-brand-text">— Keine Vorlage (keine Auto-Dienste) —</div>
+                          <div className="text-xs text-brand-text-muted">Es werden keine Dienste automatisch erzeugt.</div>
+                        </div>
+                      </label>
                       {filteredTemplates.map(t => (
                         <label key={t.id} className="flex items-center gap-2 p-3 border border-brand-border-subtle rounded-lg hover:bg-brand-border-subtle cursor-pointer">
                           <input type="radio" name="template" checked={selectedTemplate === t.id}
@@ -1414,10 +1422,9 @@ export default function KalenderPage() {
                   <button onClick={() => setWizardStep(2)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
                     onClick={() => {
-                      const filteredTemplates = templates.filter(t => t.template_type === eventType)
                       if (selectedTemplate) {
                         handleFetchPreview()
-                      } else if (filteredTemplates.length === 0) {
+                      } else {
                         setWizardStep(4)
                       }
                     }}
@@ -1458,12 +1465,7 @@ export default function KalenderPage() {
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => setWizardStep(3)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
-                    onClick={() => doCreateGame([])}
-                    disabled={creating}
-                    className="border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text-muted hover:bg-brand-border-subtle hover:text-brand-text transition-colors disabled:opacity-50"
-                  >Ohne Dienste</button>
-                  <button
-                    onClick={() => doCreateGame(preview.filter((_, i) => selectedSlotIndices.has(i)))}
+                    onClick={() => doCreateGame(selectedTemplate ? preview.filter((_, i) => selectedSlotIndices.has(i)) : [])}
                     disabled={creating}
                     className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >

@@ -287,7 +287,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	// Response-Eintrag werden als "confirmed" gezählt. declined und maybe bleiben
 	// rein explizit — Opt-Out kennt keine implizite Absage.
 	const base = `
-		SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type,
+		SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type, g.template_id,
 		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0),
 		       CASE WHEN g.rsvp_opt_out = 1
 		            THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
@@ -347,6 +347,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		EndDate             *string             `json:"end_date"`
 		Opponent            string              `json:"opponent"`
 		EventType           string              `json:"event_type"`
+		TemplateID          *int                `json:"template_id"`
 		Teams               []team              `json:"teams"`
 		TeamDisplayShortCSV string              `json:"team_display_short_csv"`
 		TeamDisplayLongCSV  string              `json:"team_display_long_csv"`
@@ -366,14 +367,19 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var g game
 		var endTimeNull, endDateNull sql.NullString
+		var templateIDNull sql.NullInt64
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
-		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType,
+		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &templateIDNull,
 			&g.SlotCount, &g.FilledCount, &g.TotalCount,
 			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
 			&g.RsvpOptOut, &g.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			continue
+		}
+		if templateIDNull.Valid {
+			v := int(templateIDNull.Int64)
+			g.TemplateID = &v
 		}
 		if endTimeNull.Valid {
 			g.EndTime = &endTimeNull.String
@@ -639,6 +645,11 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.EventType == "generisch" && req.TemplateID != nil {
+		http.Error(w, `{"error":"template_id muss bei event_type=generisch null sein"}`, http.StatusBadRequest)
+		return
+	}
+
 	if req.SeasonID == 0 {
 		h.db.QueryRowContext(r.Context(),
 			`SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&req.SeasonID)
@@ -790,18 +801,37 @@ func toAny(teamIDs []int) []any {
 func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Date              string  `json:"date"`
-		Time              string  `json:"time"`
-		EndTime           *string `json:"end_time"`
-		EndDate           *string `json:"end_date"`
-		Opponent          string  `json:"opponent"`
-		TeamIDs           []int   `json:"team_ids"`
-		EventType         string  `json:"event_type"`
-		VenueID           *int    `json:"venue_id"`
-		RsvpOptOut        *int    `json:"rsvp_opt_out,omitempty"`
-		RsvpRequireReason *int    `json:"rsvp_require_reason,omitempty"`
+		Date              string          `json:"date"`
+		Time              string          `json:"time"`
+		EndTime           *string         `json:"end_time"`
+		EndDate           *string         `json:"end_date"`
+		Opponent          string          `json:"opponent"`
+		TeamIDs           []int           `json:"team_ids"`
+		EventType         string          `json:"event_type"`
+		VenueID           *int            `json:"venue_id"`
+		RsvpOptOut        *int            `json:"rsvp_opt_out,omitempty"`
+		RsvpRequireReason *int            `json:"rsvp_require_reason,omitempty"`
+		TemplateID        json.RawMessage `json:"template_id,omitempty"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+
+	// Tri-State für template_id: Feld fehlt = unverändert, "null" = NULL setzen,
+	// Zahl = setzen.
+	tplSet := len(req.TemplateID) > 0
+	tplToNull := false
+	var tplValue int
+	if tplSet {
+		if string(req.TemplateID) == "null" {
+			tplToNull = true
+		} else if err := json.Unmarshal(req.TemplateID, &tplValue); err != nil {
+			http.Error(w, "bad request: template_id muss null oder Zahl sein", http.StatusBadRequest)
+			return
+		}
+	}
+	if tplSet && !tplToNull && req.EventType == "generisch" {
+		http.Error(w, `{"error":"template_id muss bei event_type=generisch null sein"}`, http.StatusBadRequest)
+		return
+	}
 
 	if req.EndDate != nil && *req.EndDate != "" && req.Date != "" && *req.EndDate < req.Date {
 		http.Error(w, "end_date must be >= date", http.StatusBadRequest)
@@ -841,16 +871,24 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		venueIDVal = *req.VenueID
 	}
 	var res sql.Result
+	setCols := []string{"date=?", "time=?", "end_time=?", "end_date=?", "opponent=?", "venue_id=?"}
+	setArgs := []any{req.Date, req.Time, endTimeVal, endDateVal, req.Opponent, venueIDVal}
 	if req.EventType == "heim" || req.EventType == "auswärts" || req.EventType == "generisch" {
 		isHome := req.EventType == "heim"
-		res, err = tx.ExecContext(r.Context(),
-			`UPDATE games SET date=?, time=?, end_time=?, end_date=?, opponent=?, event_type=?, is_home=?, venue_id=? WHERE id=?`,
-			req.Date, req.Time, endTimeVal, endDateVal, req.Opponent, req.EventType, isHome, venueIDVal, id)
-	} else {
-		res, err = tx.ExecContext(r.Context(),
-			`UPDATE games SET date=?, time=?, end_time=?, end_date=?, opponent=?, venue_id=? WHERE id=?`,
-			req.Date, req.Time, endTimeVal, endDateVal, req.Opponent, venueIDVal, id)
+		setCols = append(setCols, "event_type=?", "is_home=?")
+		setArgs = append(setArgs, req.EventType, isHome)
 	}
+	if tplSet {
+		if tplToNull {
+			setCols = append(setCols, "template_id=NULL")
+		} else {
+			setCols = append(setCols, "template_id=?")
+			setArgs = append(setArgs, tplValue)
+		}
+	}
+	setArgs = append(setArgs, id)
+	res, err = tx.ExecContext(r.Context(),
+		`UPDATE games SET `+strings.Join(setCols, ", ")+` WHERE id=?`, setArgs...)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

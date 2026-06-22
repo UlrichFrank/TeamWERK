@@ -18,10 +18,17 @@ interface Game {
   end_date?: string | null
   opponent: string
   event_type: string
+  template_id?: number | null
   teams?: TeamRef[]
   venue?: { id: number; name: string; street: string; city: string; postal_code: string; note: string } | null
   rsvp_opt_out?: number
   rsvp_require_reason?: number
+}
+
+interface DutyTemplate {
+  id: number
+  name: string
+  template_type: string
 }
 
 interface AvailableTeam {
@@ -59,6 +66,8 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [rsvpRequireReason, setRsvpRequireReason] = useState<boolean>(game.rsvp_require_reason === 1)
   const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>(game.teams?.map(t => t.id) ?? [])
   const [availableTeams, setAvailableTeams] = useState<AvailableTeam[]>([])
+  const [templates, setTemplates] = useState<DutyTemplate[]>([])
+  const [templateId, setTemplateId] = useState<number | null>(game.template_id ?? null)
   const teamShortNames = useMemo(() => buildTeamShortNames(availableTeams), [availableTeams])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,6 +79,9 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   useEffect(() => {
     api.get<AvailableTeam[]>('/teams')
       .then(r => setAvailableTeams((r.data ?? []).filter(t => t.is_active)))
+      .catch(() => {})
+    api.get<DutyTemplate[]>('/duty-templates')
+      .then(r => setTemplates(r.data ?? []))
       .catch(() => {})
   }, [])
 
@@ -108,6 +120,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         team_ids: selectedTeamIds.length > 0 ? selectedTeamIds : undefined,
         rsvp_opt_out: rsvpOptOut ? 1 : 0,
         rsvp_require_reason: rsvpRequireReason ? 1 : 0,
+        template_id: isGeneric ? null : templateId,
       })
       onSaved(r.data?.regen_summary)
     } catch {
@@ -211,6 +224,21 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
             <VenuePicker value={venueId} onChange={setVenueId} />
           </div>
+          {!isGeneric && (
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Dienstplan-Vorlage</label>
+              <select
+                value={templateId === null ? '' : String(templateId)}
+                onChange={e => setTemplateId(e.target.value === '' ? null : Number(e.target.value))}
+                className={INPUT}
+              >
+                <option value="">— Keine Vorlage (keine Auto-Dienste) —</option>
+                {templates.filter(t => t.template_type === eventType).map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="pt-2 border-t border-brand-border-subtle space-y-2">
             <p className="text-sm font-medium text-brand-text-muted">RSVP-Einstellungen</p>
             <label className="flex items-start gap-2 cursor-pointer">

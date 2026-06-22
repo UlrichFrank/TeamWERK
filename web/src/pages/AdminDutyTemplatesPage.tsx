@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
@@ -265,10 +264,6 @@ export default function AdminDutyTemplatesPage() {
 
   useLiveUpdates(event => { if (event === 'games') loadTemplates() })
 
-  const typeCounts = templates.reduce<Record<string, number>>((acc, t) => {
-    acc[t.template_type] = (acc[t.template_type] || 0) + 1
-    return acc
-  }, {})
 
   const openCreateModal = () => {
     setModalTemplate(newTemplate())
@@ -373,13 +368,6 @@ export default function AdminDutyTemplatesPage() {
         </div>
       </div>
 
-      {Object.entries(typeCounts).some(([, count]) => count > 1) && (
-        <div className="mb-4 p-3 bg-brand-warning-light border border-brand-warning/40 rounded-lg text-sm text-brand-text flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-brand-warning mt-0.5 flex-shrink-0" />
-          Achtung: Es gibt mehrere Vorlagen des gleichen Typs. Bei der Slot-Generierung wird immer die erste verwendet (niedrigste ID).
-        </div>
-      )}
-
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-6">
         {templates.length === 0 ? (
           <p className="text-sm text-brand-text-subtle text-center py-10 italic">
@@ -412,9 +400,6 @@ export default function AdminDutyTemplatesPage() {
                       <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeBadge[t.template_type] ?? ''}`}>
                         {typeLabel[t.template_type] ?? t.template_type}
                       </span>
-                      {typeCounts[t.template_type] > 1 && (
-                        <AlertTriangle className="inline w-3.5 h-3.5 ml-1 text-brand-warning" aria-label="Doppelter Typ" />
-                      )}
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 text-brand-text-muted">
                       {t.template_type === 'generisch' ? `${t.duration_minutes} min` : '–'}
