@@ -83,16 +83,24 @@ export default function ChangelogModal({ onClose }: Props) {
               <p className="text-xs font-semibold text-brand-text-muted uppercase tracking-wide mb-2">{group.date}</p>
               <ul className="space-y-1.5">
                 {group.entries.map((entry, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className={`shrink-0 mt-0.5 rounded px-1.5 py-0.5 text-xs font-semibold ${
+                  <li
+                    key={i}
+                    className="grid grid-cols-[2.5rem_6rem_1fr] sm:grid-cols-[2.5rem_8rem_1fr] items-start gap-2 text-sm"
+                  >
+                    <span className={`mt-0.5 rounded px-1.5 py-0.5 text-xs font-semibold text-center ${
                       entry.type === 'feat'
                         ? 'bg-brand-yellow/30 text-brand-black'
                         : 'bg-brand-danger-light text-brand-danger'
                     }`}>
                       {entry.type}
                     </span>
-                    <span className="text-brand-text-muted shrink-0">{entry.scope}</span>
-                    <span className="text-brand-text">{entry.message}</span>
+                    <span
+                      className="text-brand-text-muted truncate"
+                      title={entry.scope}
+                    >
+                      {entry.scope}
+                    </span>
+                    <span className="text-brand-text break-words">{entry.message}</span>
                   </li>
                 ))}
               </ul>
