@@ -1,11 +1,53 @@
 package scheduler
 
 import (
+	"bytes"
 	"database/sql"
+	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
+
+// TestScheduler_SQLiteBusyEmitsLog verifiziert, dass der Scheduler-Pfad bei
+// einem SQLITE_BUSY-Error ein strukturiertes slog.Warn-Record emittiert. Das
+// ist die Cross-Prozess-Variante zum HTTP-Counter (siehe design.md).
+func TestScheduler_SQLiteBusyEmitsLog(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	logIfBusy(errors.New("database is locked"), "test-op")
+
+	out := buf.String()
+	for _, want := range []string{
+		`"event":"sqlite_busy"`,
+		`"source":"scheduler"`,
+		`"op":"test-op"`,
+		`"level":"WARN"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %s in log:\n%s", want, out)
+		}
+	}
+}
+
+// Sicherstellen, dass nicht-BUSY-Fehler KEIN Log emittieren.
+func TestScheduler_NonBusyError_NoLog(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	logIfBusy(errors.New("some other error"), "test-op")
+
+	if strings.Contains(buf.String(), "sqlite_busy") {
+		t.Fatalf("non-BUSY error must not emit sqlite_busy log:\n%s", buf.String())
+	}
+}
 
 // Spieler-Auflösung: User mit Vereinsfunktion 'spieler' im aktiven Kader des Teams
 // MUSS in der Empfängerliste auftauchen. Users.role spielt keine Rolle (war historisch

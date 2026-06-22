@@ -6,8 +6,10 @@ import (
 	"sync/atomic"
 	"testing"
 
+	// Importiert das db-Package, damit init() den Wrapping-Driver
+	// "sqlite-busy-counting" registriert. Tests gehen so durch denselben Pfad
+	// wie Produktion, inklusive teamwerk_sqlite_busy_total-Counter.
 	"github.com/teamstuttgart/teamwerk/internal/db"
-	_ "modernc.org/sqlite"
 )
 
 var dbCounter atomic.Uint64
@@ -21,7 +23,7 @@ func NewDB(t *testing.T) *sql.DB {
 	t.Helper()
 	name := fmt.Sprintf("testdb_%d", dbCounter.Add(1))
 	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared&_pragma=foreign_keys=on", name)
-	database, err := sql.Open("sqlite", dsn)
+	database, err := sql.Open("sqlite-busy-counting", dsn)
 	if err != nil {
 		t.Fatalf("testutil.NewDB open: %v", err)
 	}

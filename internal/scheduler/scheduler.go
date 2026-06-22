@@ -8,9 +8,27 @@ import (
 	"time"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/health"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
+
+// logIfBusy emittiert ein strukturiertes slog.Warn, falls err einen SQLITE_BUSY-
+// Return des SQLite-Treibers darstellt. Die App alarmiert selbst nicht — der
+// Log-Record (event="sqlite_busy", source="scheduler") ist das Signal, das ein
+// externer Log-Collector per Query alarmierbar macht. Wir zählen NICHT in
+// teamwerk_sqlite_busy_total: Scheduler ist ein separater Prozess, der
+// In-Memory-Counter im HTTP-Daemon würde davon nichts mitbekommen.
+func logIfBusy(err error, op string) {
+	if health.IsSQLiteBusy(err) {
+		slog.Warn("sqlite_busy",
+			"event", "sqlite_busy",
+			"source", "scheduler",
+			"op", op,
+			"error", err.Error(),
+		)
+	}
+}
 
 type Mailer interface {
 	Send(to, subject, body string) error
@@ -45,6 +63,7 @@ func (s *Scheduler) recordHeartbeat() {
 		 ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at`,
 		time.Now().UTC().Format(time.RFC3339),
 	); err != nil {
+		logIfBusy(err, "recordHeartbeat")
 		slog.Error("scheduler heartbeat failed", "error", err)
 	}
 }
@@ -55,6 +74,7 @@ func (s *Scheduler) cleanExpiredTokens() {
 		 DELETE FROM password_reset_tokens WHERE expires_at < CURRENT_TIMESTAMP AND used_at IS NULL;
 		 DELETE FROM refresh_tokens WHERE expires_at < CURRENT_TIMESTAMP;`)
 	if err != nil {
+		logIfBusy(err, "cleanExpiredTokens")
 		slog.Error("scheduler cleanup failed", "error", err)
 		return
 	}
@@ -94,6 +114,7 @@ func (s *Scheduler) sendDutyReminders() {
 		WHERE ds.event_date = ?
 		  AND ds.slots_filled < ds.slots_total`, targetDate)
 	if err != nil {
+		logIfBusy(err, "sendDutyReminders.query")
 		slog.Error("scheduler duty reminders query slots failed", "error", err)
 		return
 	}
@@ -190,6 +211,7 @@ func (s *Scheduler) sendGameReminders() {
 		JOIN game_teams gt ON gt.game_id = g.id
 		WHERE g.date BETWEEN ? AND ?`, from, to)
 	if err != nil {
+		logIfBusy(err, "sendGameReminders.query")
 		slog.Error("scheduler game reminders failed", "error", err)
 		return
 	}
@@ -254,6 +276,7 @@ func (s *Scheduler) sendTrainingReminders() {
 		WHERE ts.date BETWEEN ? AND ?
 		  AND ts.status = 'active'`, from, to)
 	if err != nil {
+		logIfBusy(err, "sendTrainingReminders.query")
 		slog.Error("scheduler training reminders failed", "error", err)
 		return
 	}
@@ -305,6 +328,7 @@ func (s *Scheduler) sendCarpoolingReminders() {
 		JOIN mitfahrt_paarungen p ON (p.biete_id = mg.id OR p.suche_id = mg.id) AND p.status = 'confirmed'
 		WHERE (g.date || ' ' || g.time) BETWEEN ? AND ?`, from, to)
 	if err != nil {
+		logIfBusy(err, "sendCarpoolingReminders.query")
 		slog.Error("scheduler carpooling reminders failed", "error", err)
 		return
 	}

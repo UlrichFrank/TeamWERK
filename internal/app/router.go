@@ -74,6 +74,9 @@ type Handlers struct {
 // CORS middleware is only added when BaseURL is non-empty.
 func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r := chi.NewRouter()
+	// health.InFlightMiddleware muss VOR der Recover-Middleware laufen, damit der
+	// defer-Dekrement auch bei Panic ausgeführt wird.
+	r.Use(health.InFlightMiddleware)
 	// health.Recoverer ersetzt chi.Recoverer: zählt teamwerk_panics_total hoch und
 	// loggt strukturiert (event="panic") — ohne anbieter-spezifisches Alerting.
 	r.Use(health.Recoverer)

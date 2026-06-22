@@ -39,6 +39,9 @@ Nur aktiv, wenn `METRICS_TOKEN` gesetzt ist. Exponierte Metriken:
 | `teamwerk_scheduler_age_seconds` | gauge | Sek. seit letztem Scheduler-Heartbeat (−1 = nie) |
 | `teamwerk_panics_total` | counter | abgefangene HTTP-Panics seit Start |
 | `teamwerk_uptime_seconds` | gauge | Prozess-Laufzeit |
+| `teamwerk_sqlite_wal_bytes` | gauge | Größe der SQLite-WAL-Datei (0 wenn nicht vorhanden) |
+| `teamwerk_sqlite_busy_total` | counter | `SQLITE_BUSY`-Returns im HTTP-Schreibpfad (Driver-Wrapper, alle Aufrufstellen) |
+| `teamwerk_http_requests_in_flight` | gauge | aktuell laufende HTTP-Requests |
 
 ## Tier-Abdeckung & Beispiel-Schwellen
 
@@ -49,7 +52,39 @@ Nur aktiv, wenn `METRICS_TOKEN` gesetzt ist. Exponierte Metriken:
 | 2 Cron lebt | `scheduler_age_sec` | `> 180` (Cron läuft 1×/min) |
 | 3 Panics | `teamwerk_panics_total` / Log `event=panic` | Counter steigt |
 | 4 Disk/RAM | `disk_free_pct` / `*_free_ratio` | Disk `< 15`, RAM `< 0.1` |
+| 5 Schreibkonkurrenz (HTTP) | `teamwerk_sqlite_busy_total` | `rate([5m]) > 0.05` |
+| 5 Schreibkonkurrenz (Scheduler) | Log-Query `event=sqlite_busy source=scheduler` | `count([1h]) > 5` |
+| 5 WAL-Wachstum | `teamwerk_sqlite_wal_bytes` | `> 50 MB` (Checkpoint hängt?) |
+| 5 Traffic-Kontext | `teamwerk_http_requests_in_flight` | gegen CPU-Chart deuten, kein direkter Alert |
 | + Cert | (App terminiert kein TLS) | Domain-Cert `< 14 Tage` |
+
+## Host- und App-Metriken via Vector-Pipeline
+
+Der bereits auf dem VPS installierte Vector-Prozess (ursprünglich nur Log-Shipper)
+betreibt zusätzlich zwei Metrik-Sources:
+
+| Source (Vector) | Liefert | Konsumiert von |
+|---|---|---|
+| `host_metrics` | CPU, Memory, Network, Disk-IO, Swap, Filesystem | Better Stack → Dashboard „Host(Vector)" |
+| `prometheus_scrape` gegen `http://127.0.0.1:8080/api/metrics` (Bearer `METRICS_TOKEN`) | alle `teamwerk_*`-Metriken | Better Stack → Telemetry-Source `teamwerk_app` |
+
+Beide Streams gehen in den **austauschbaren** Sink `betterstack_metrics`
+(`prometheus_remote_write` → `https://in.metrics.betterstack.com`). Konkrete
+Endpoint-URL und Token-Format werden in Better Stack beim Anlegen der
+Telemetry-Source im UI generiert; die Vector-Konfig in
+[`deploy/setup-vps.sh`](../deploy/setup-vps.sh) referenziert sie über zwei
+Token-Files (`/etc/teamwerk/betterstack-logs-token`,
+`/etc/teamwerk/betterstack-metrics-token`).
+
+**Konsequenz für Sink-Wechsel:** Soll ein anderer Anbieter konsumieren (Grafana
+Cloud, eigenes Prometheus, …), wird nur der `[sinks.betterstack_metrics]`-Block
+in `vector.toml` getauscht. Keine App-Änderung. Die App-Metriken
+(`teamwerk_sqlite_*`, `teamwerk_http_requests_in_flight`, …) und die Host-
+Metriken bleiben für jeden Konsumenten identisch.
+
+**Voraussetzung:** `METRICS_TOKEN` muss in `/etc/teamwerk/env` gesetzt sein
+(sonst antwortet `/api/metrics` mit `404` und Vector scrapet ins Leere).
+`setup-vps.sh` erzeugt den Token einmalig per `openssl rand -hex 32`.
 
 ## Referenz-Konsument: mittwald-Cron (austauschbar)
 

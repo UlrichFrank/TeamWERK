@@ -94,6 +94,9 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	writeMetric(&b, "teamwerk_scheduler_age_seconds", "gauge", "Sekunden seit letztem Scheduler-Heartbeat (-1 = nie)", float64(h.schedulerAgeSec()))
 	writeMetric(&b, "teamwerk_panics_total", "counter", "Abgefangene HTTP-Handler-Panics seit Prozessstart", float64(PanicsTotal()))
 	writeMetric(&b, "teamwerk_uptime_seconds", "gauge", "Prozess-Laufzeit in Sekunden", time.Since(startTime).Seconds())
+	writeMetric(&b, "teamwerk_sqlite_wal_bytes", "gauge", "Größe der SQLite-WAL-Datei in Bytes (0 wenn nicht vorhanden)", float64(walBytes(h.dbPath)))
+	writeMetric(&b, "teamwerk_sqlite_busy_total", "counter", "Beobachtete SQLITE_BUSY-Returns im HTTP-Schreibpfad seit Prozessstart", float64(SQLiteBusyTotal()))
+	writeMetric(&b, "teamwerk_http_requests_in_flight", "gauge", "Aktuell laufende HTTP-Requests", float64(HTTPInFlight()))
 
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -153,6 +156,19 @@ func diskFreeRatio(dbPath string) float64 {
 	}
 	free := st.Bavail * uint64(st.Bsize)
 	return float64(free) / float64(total)
+}
+
+// walBytes liefert die Größe der SQLite-WAL-Datei (<dbPath>-wal) in Bytes oder
+// 0, falls die Datei nicht existiert (WAL inaktiv oder gerade gecheckpointet).
+func walBytes(dbPath string) int64 {
+	if dbPath == "" {
+		return 0
+	}
+	st, err := os.Stat(dbPath + "-wal")
+	if err != nil {
+		return 0
+	}
+	return st.Size()
 }
 
 // memFreeRatio liest den freien RAM-Anteil aus /proc/meminfo (nur Linux).

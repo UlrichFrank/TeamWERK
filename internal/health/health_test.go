@@ -180,6 +180,89 @@ func TestRecover_Panic_IncrementsCounterAndRecovers(t *testing.T) {
 	// Reaching this line proves the process did not crash.
 }
 
+func TestMetrics_ExposesSQLiteWALBytes(t *testing.T) {
+	db := testutil.NewDB(t)
+	// In-Memory-DB hat keine -wal-Datei → walBytes liefert 0; Endpoint muss
+	// die Metrik trotzdem ausgeben.
+	srv := healthzServer(t, health.NewHandler(db, "/nonexistent/path.db", "s3cret"))
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/metrics", nil)
+	req.Header.Set("Authorization", "Bearer s3cret")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET metrics: %v", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+	buf := new(bytes.Buffer)
+	_, _ = buf.ReadFrom(res.Body)
+	res.Body.Close()
+	body := buf.String()
+	if !strings.Contains(body, "teamwerk_sqlite_wal_bytes") {
+		t.Fatalf("metrics body missing teamwerk_sqlite_wal_bytes\n---\n%s", body)
+	}
+	if !strings.Contains(body, "teamwerk_sqlite_wal_bytes 0") {
+		t.Fatalf("WAL-Datei existiert nicht → erwartet 0, body:\n---\n%s", body)
+	}
+}
+
+func TestMetrics_SQLiteBusyCounterIncrements(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := healthzServer(t, health.NewHandler(db, "", "s3cret"))
+
+	before := health.SQLiteBusyTotal()
+	health.RecordSQLiteBusy()
+	after := health.SQLiteBusyTotal()
+	if after != before+1 {
+		t.Fatalf("SQLiteBusyTotal = %d, want %d", after, before+1)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/metrics", nil)
+	req.Header.Set("Authorization", "Bearer s3cret")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET metrics: %v", err)
+	}
+	buf := new(bytes.Buffer)
+	_, _ = buf.ReadFrom(res.Body)
+	res.Body.Close()
+	body := buf.String()
+	if !strings.Contains(body, "teamwerk_sqlite_busy_total") {
+		t.Fatalf("metrics body missing teamwerk_sqlite_busy_total\n---\n%s", body)
+	}
+}
+
+func TestMetrics_InFlightRequestsTracked(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := health.NewHandler(db, "", "s3cret")
+
+	// Sidechannel: ein Handler, der den Gauge mid-request abfragt.
+	r := chi.NewRouter()
+	r.Use(health.InFlightMiddleware)
+	r.Get("/api/metrics", h.Metrics)
+	got := int64(-1)
+	r.Get("/api/probe", func(w http.ResponseWriter, _ *http.Request) {
+		got = health.HTTPInFlight()
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	res, err := http.Get(srv.URL + "/api/probe")
+	if err != nil {
+		t.Fatalf("GET probe: %v", err)
+	}
+	res.Body.Close()
+	if got < 1 {
+		t.Fatalf("HTTPInFlight während Request = %d, want >= 1", got)
+	}
+	// Nach Abschluss: Gauge zurück auf 0.
+	if rem := health.HTTPInFlight(); rem != 0 {
+		t.Fatalf("HTTPInFlight nach Abschluss = %d, want 0", rem)
+	}
+}
+
 func TestRecover_Panic_StructuredLog(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()
