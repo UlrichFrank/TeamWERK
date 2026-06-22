@@ -85,7 +85,7 @@ export default function ChangelogModal({ onClose }: Props) {
                 {group.entries.map((entry, i) => (
                   <li
                     key={i}
-                    className="grid grid-cols-[2.5rem_6rem_1fr] sm:grid-cols-[2.5rem_8rem_1fr] items-start gap-2 text-sm"
+                    className="grid grid-cols-[2.5rem_4.2rem_1fr] sm:grid-cols-[2.5rem_5.6rem_1fr] items-start gap-2 text-sm"
                   >
                     <span className={`mt-0.5 rounded px-1.5 py-0.5 text-xs font-semibold text-center ${
                       entry.type === 'feat'
