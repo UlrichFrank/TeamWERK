@@ -16,7 +16,7 @@ EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 
-.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint
+.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint coverage metrics metrics-gate
 
 .DEFAULT_GOAL := help
 
@@ -183,6 +183,12 @@ lint: ## Statische Codeanalyse mit golangci-lint
 		exit 1; \
 	fi
 	golangci-lint run ./...
+
+metrics: ## Code-Metriken erheben (Größe, Komplexität, Coverage, Lint-Dichte, Duplikation) — stdout + metrics/REPORT.md, Exit 0
+	$(GO) run ./cmd/teamwerk metrics
+
+metrics-gate: ## Wie metrics + Schwellwert-Prüfung gegen metrics/thresholds.yml (Exit 1 bei Regression)
+	$(GO) run ./cmd/teamwerk metrics --gate
 
 coverage: ## Testabdeckung messen: Coverage-Bericht auf stdout + HTML nach /tmp/teamwerk-coverage.html
 	$(GO) test -coverprofile=/tmp/teamwerk-coverage.out ./internal/...

@@ -38,6 +38,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
+	"github.com/teamstuttgart/teamwerk/internal/metrics"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
@@ -106,8 +107,22 @@ func main() {
 		runPushTest()
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "metrics" {
+		runMetrics()
+		return
+	}
 
 	serve()
+}
+
+func runMetrics() {
+	gate := false
+	for _, a := range os.Args[2:] {
+		if a == "--gate" {
+			gate = true
+		}
+	}
+	os.Exit(metrics.Run(metrics.Options{Gate: gate}))
 }
 
 func serve() {
