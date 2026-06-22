@@ -20,11 +20,13 @@ Diese Dinge müssen **vor** dem Setup existieren, sonst hängt das Script.
 | Better Stack Heartbeat-Monitor | uptime.betterstack.com | Scheduler-Totmann |
 | Better Stack Logs-Source | logs.betterstack.com | Vector → Log-Stream |
 | Better Stack HTTP-Monitor | uptime.betterstack.com | `/api/healthz` |
+| Better Stack Metrics-Source | telemetry.betterstack.com | Vector → Host- und App-Metriken |
 
 **Better-Stack-Vorbereitung:**
 1. Monitors → New → **HTTP** → `https://<DOMAIN>/api/healthz`, Keyword `"db":"ok"`, Intervall 1 min
 2. Monitors → New → **Heartbeat** → Period `2 min`, Grace `1 min` → URL kopieren
 3. Logs → Sources → New → Ubuntu → Source-Token kopieren
+4. Telemetry → Sources → New → **Vector** (prometheus_remote_write) → Endpoint-URL und Source-Token kopieren
 
 ---
 
@@ -53,7 +55,7 @@ ssh vServer "cd /tmp/deploy && bash setup-vps.sh"
 Das Script ist idempotent (kann mehrfach laufen). Es legt an:
 
 - `/etc/teamwerk/env` mit Platzhaltern (`REPLACE_*`)
-- `/etc/teamwerk/heartbeat-url`, `/etc/teamwerk/betterstack-logs-token`
+- `/etc/teamwerk/heartbeat-url`, `/etc/teamwerk/betterstack-logs-token`, `/etc/teamwerk/betterstack-metrics-token`
 - `/usr/local/bin/teamwerk-scheduler.sh` (Cron-Wrapper)
 - systemd-Service, Nginx-vhost, self-signed Cert
 - Vector (installiert, aber nicht gestartet bis Token gesetzt)
@@ -81,6 +83,10 @@ chmod 600 /etc/teamwerk/heartbeat-url
 # 3c. Better-Stack-Logs-Token
 echo "XXXXXXXXXXXXX" > /etc/teamwerk/betterstack-logs-token
 chmod 600 /etc/teamwerk/betterstack-logs-token
+
+# 3d. Better-Stack-Metrics-Token (aus Telemetry → Sources → Vector)
+echo "YYYYYYYYYYYYY" > /etc/teamwerk/betterstack-metrics-token
+chmod 600 /etc/teamwerk/betterstack-metrics-token
 ```
 
 ---
@@ -134,15 +140,33 @@ Backup nachziehen (Append-only-Textdateien — siehe `CLAUDE.md`).
 
 ---
 
-## 7. Vector starten (Log-Stream)
+## 7. Vector starten (Log- + Metrics-Stream)
 
-Nach Schritt 3c:
+Nach Schritt 3c + 3d:
 
 ```bash
 ssh vServer "systemctl restart vector && systemctl is-active vector"
 ```
 
-Verifizieren: Logs erscheinen innerhalb von ~1 min in Better Stack → Logs.
+Vector betreibt jetzt **drei Sources** (`journald` für Logs, `host_metrics` für
+CPU/RAM/Disk/Network/Swap, `prometheus_scrape` gegen `/api/metrics`) und **zwei
+Sinks** (Better Stack Logs + Better Stack Telemetry-Metrics).
+
+Verifizieren:
+- Logs erscheinen innerhalb von ~1 min in Better Stack → Logs.
+- Host-Charts (CPU/Memory/Network/Disk) füllen sich in Better Stack →
+  Telemetry → Dashboard „Host(Vector)" innerhalb von ~1–2 min.
+- `teamwerk_*`-Metriken sind unter Telemetry → Sources → `teamwerk_app`
+  (Vector-Source-Name) abfragbar.
+
+Wenn nichts erscheint, prüfen:
+
+```bash
+ssh vServer "journalctl -u vector -n 50 --no-pager"
+```
+
+Typische Fallstricke: `METRICS_TOKEN` nicht in `/etc/teamwerk/env` gesetzt →
+Vector scrapet `/api/metrics`, erhält 404, Metriken fehlen.
 
 ---
 

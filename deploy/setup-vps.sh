@@ -142,11 +142,23 @@ BETTERSTACK_TOKEN_FILE=/etc/teamwerk/betterstack-logs-token
 if [ ! -f "$BETTERSTACK_TOKEN_FILE" ]; then
     echo "REPLACE_WITH_BETTERSTACK_SOURCE_TOKEN" > "$BETTERSTACK_TOKEN_FILE"
     chmod 600 "$BETTERSTACK_TOKEN_FILE"
-    echo "⚠️  $BETTERSTACK_TOKEN_FILE angelegt — Better-Stack-Source-Token eintragen!"
+    echo "⚠️  $BETTERSTACK_TOKEN_FILE angelegt — Better-Stack-Logs-Source-Token eintragen!"
+fi
+
+BETTERSTACK_METRICS_TOKEN_FILE=/etc/teamwerk/betterstack-metrics-token
+if [ ! -f "$BETTERSTACK_METRICS_TOKEN_FILE" ]; then
+    echo "REPLACE_WITH_BETTERSTACK_METRICS_TOKEN" > "$BETTERSTACK_METRICS_TOKEN_FILE"
+    chmod 600 "$BETTERSTACK_METRICS_TOKEN_FILE"
+    echo "⚠️  $BETTERSTACK_METRICS_TOKEN_FILE angelegt — Better-Stack-Telemetry-Metrics-Token eintragen!"
 fi
 
 BS_TOKEN=$(cat "$BETTERSTACK_TOKEN_FILE")
+BS_METRICS_TOKEN=$(cat "$BETTERSTACK_METRICS_TOKEN_FILE")
+# METRICS_TOKEN aus /etc/teamwerk/env ziehen (von Vector für Prometheus-Scrape gegen /api/metrics gebraucht).
+APP_METRICS_TOKEN=$(grep -E '^METRICS_TOKEN=' /etc/teamwerk/env | cut -d= -f2-)
+
 cat > /etc/vector/vector.toml <<EOF
+# === Logs (bestehend) =====================================================
 [sources.teamwerk]
 type = "journald"
 include_units = ["teamwerk.service"]
@@ -160,17 +172,43 @@ encoding.codec = "json"
 [sinks.betterstack.auth]
 strategy = "bearer"
 token = "$BS_TOKEN"
+
+# === Metrics (Host + App via Prometheus-Scrape) ===========================
+# Host-Telemetrie: füllt CPU/Memory/Network/Disk/Swap-Charts im Better-Stack-
+# "Host(Vector)"-Dashboard.
+[sources.host]
+type = "host_metrics"
+scrape_interval_secs = 30
+collectors = ["cpu", "memory", "disk", "network", "filesystem", "load"]
+
+# App-Metriken: scrapet teamwerk_* aus /api/metrics (Bearer-Token aus /etc/teamwerk/env).
+[sources.teamwerk_app]
+type = "prometheus_scrape"
+endpoints = ["http://127.0.0.1:8080/api/metrics"]
+scrape_interval_secs = 30
+auth.strategy = "bearer"
+auth.token = "$APP_METRICS_TOKEN"
+
+# Beide Metrik-Streams in den austauschbaren Better-Stack-Telemetry-Sink.
+[sinks.betterstack_metrics]
+type = "prometheus_remote_write"
+inputs = ["host", "teamwerk_app"]
+endpoint = "https://in.metrics.betterstack.com"
+
+[sinks.betterstack_metrics.auth]
+strategy = "bearer"
+token = "$BS_METRICS_TOKEN"
 EOF
 
 if ! grep -q "^VECTOR_CONFIG=" /etc/default/vector 2>/dev/null; then
     echo "VECTOR_CONFIG=/etc/vector/vector.toml" >> /etc/default/vector
 fi
 
-if [ "$BS_TOKEN" != "REPLACE_WITH_BETTERSTACK_SOURCE_TOKEN" ]; then
+if [ "$BS_TOKEN" != "REPLACE_WITH_BETTERSTACK_SOURCE_TOKEN" ] && [ "$BS_METRICS_TOKEN" != "REPLACE_WITH_BETTERSTACK_METRICS_TOKEN" ]; then
     systemctl enable --now vector
     systemctl restart vector
 else
-    echo "⚠️  Vector noch nicht gestartet — zuerst Source-Token eintragen, dann: systemctl enable --now vector"
+    echo "⚠️  Vector noch nicht gestartet — zuerst Logs- UND Metrics-Source-Token eintragen, dann: systemctl enable --now vector"
 fi
 
 # ---------------------------------------------------------------------------
@@ -181,7 +219,9 @@ echo "Nächste Schritte:"
 echo "  1. /etc/teamwerk/env editieren — alle REPLACE_*-Werte ersetzen"
 echo "     VAPID-Keys erzeugen: /usr/local/bin/teamwerk gen-vapid (nach erstem Deploy)"
 echo "  2. /etc/teamwerk/heartbeat-url mit Better-Stack-URL füllen"
-echo "  3. /etc/teamwerk/betterstack-logs-token mit Better-Stack-Source-Token füllen"
+echo "  3. /etc/teamwerk/betterstack-logs-token mit Better-Stack-Logs-Source-Token füllen"
+echo "  3b. /etc/teamwerk/betterstack-metrics-token mit Better-Stack-Telemetry-Metrics-Token füllen"
+echo "      (in Better Stack: Telemetry → Sources → Vector / prometheus_remote_write)"
 echo "  4. Lokal: make deploy"
 echo "  5. Auf VPS: /usr/local/bin/teamwerk migrate up --db /var/lib/teamwerk/teamwerk.db"
 echo "  6. Admin anlegen: make create-admin-remote EMAIL=… PASSWORD=… NAME=…"
