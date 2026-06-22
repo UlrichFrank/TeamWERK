@@ -24,6 +24,7 @@ interface Member {
   iban?: string
   account_holder?: string
   beitragsfrei?: boolean
+  beitragsfrei_grund?: string
   sepa_mandat?: boolean
   sepa_mandat_date?: string
   sepa_mandat_url?: string
@@ -215,11 +216,30 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
             <input
               type="checkbox"
               checked={form.beitragsfrei || false}
-              onChange={e => onFormChange({ beitragsfrei: e.target.checked })}
+              onChange={e => onFormChange(
+                e.target.checked
+                  ? { beitragsfrei: true }
+                  : { beitragsfrei: false, beitragsfrei_grund: '' },
+              )}
               className="w-4 h-4 accent-brand-yellow"
             />
             <span className="text-sm text-brand-text">Beitragsfrei</span>
           </label>
+          {form.beitragsfrei && (
+            <div className="mt-2">
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                Grund für Beitragsfreiheit
+              </label>
+              <input
+                type="text"
+                value={form.beitragsfrei_grund || ''}
+                onChange={e => onFormChange({ beitragsfrei_grund: e.target.value })}
+                placeholder="z. B. kein aktiver Sportler mehr"
+                maxLength={200}
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              />
+            </div>
+          )}
         </div>
       </div>
 

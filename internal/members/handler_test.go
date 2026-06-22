@@ -775,3 +775,80 @@ func TestMemberStatus_Anwaerter_Create(t *testing.T) {
 		t.Fatalf("expected 204 on status update, got %d", res2.StatusCode)
 	}
 }
+
+// GET /api/members/{id} liefert beitragsfrei_grund in der Response (Vorstand sieht Bankfelder).
+func TestGetMember_BeitragsfreiGrundField(t *testing.T) {
+	database := testutil.NewDB(t)
+	memberID := testutil.CreateMember(t, database, 0)
+	if _, err := database.Exec(
+		`UPDATE members SET beitragsfrei=1, beitragsfrei_grund='kein aktiver Sportler mehr' WHERE id=?`,
+		memberID); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/members/%d", memberID), tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		Beitragsfrei      bool    `json:"beitragsfrei"`
+		BeitragsfreiGrund *string `json:"beitragsfrei_grund"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	if !body.Beitragsfrei {
+		t.Fatalf("beitragsfrei: got false, want true")
+	}
+	if body.BeitragsfreiGrund == nil || *body.BeitragsfreiGrund != "kein aktiver Sportler mehr" {
+		got := "<nil>"
+		if body.BeitragsfreiGrund != nil {
+			got = *body.BeitragsfreiGrund
+		}
+		t.Errorf("beitragsfrei_grund: got %q, want %q", got, "kein aktiver Sportler mehr")
+	}
+}
+
+// PUT /api/members/{id} mit beitragsfrei=false setzt beitragsfrei_grund auf NULL
+// (Kopplungs-Invariante, siehe Spec).
+func TestUpdateMember_BeitragsfreiFalseClearsGrund(t *testing.T) {
+	database := testutil.NewDB(t)
+	memberID := testutil.CreateMember(t, database, 0)
+	if _, err := database.Exec(
+		`UPDATE members SET first_name='Petra', last_name='Test', beitragsfrei=1, beitragsfrei_grund='Zweitspielrecht' WHERE id=?`,
+		memberID); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	// Trotz mitgesendetem Grund-Wert MUSS beitragsfrei=false den Grund leeren.
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
+		map[string]any{
+			"first_name":         "Petra",
+			"last_name":          "Test",
+			"status":             "aktiv",
+			"beitragsfrei":       false,
+			"beitragsfrei_grund": "wird ignoriert",
+		})
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("PUT /members/{id}: expected 204, got %d", res.StatusCode)
+	}
+
+	var beitragsfrei int
+	var grund sql.NullString
+	if err := database.QueryRow(
+		`SELECT beitragsfrei, beitragsfrei_grund FROM members WHERE id=?`, memberID).
+		Scan(&beitragsfrei, &grund); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if beitragsfrei != 0 {
+		t.Errorf("beitragsfrei: got %d, want 0", beitragsfrei)
+	}
+	if grund.Valid {
+		t.Errorf("beitragsfrei_grund: got %q, want NULL", grund.String)
+	}
+}

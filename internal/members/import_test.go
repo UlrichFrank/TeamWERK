@@ -114,7 +114,7 @@ func TestImport_SetsMemberNumber(t *testing.T) {
 	adminID := testutil.CreateUser(t, db, "admin")
 	token := testutil.Token(t, adminID, "admin", nil)
 
-	csv := "Vorname;Name;Mitgliedsnummer;Status\n" +
+	csv := "Vorname;Name;Mitgliedsnummer;Status TeamWERK\n" +
 		"Petra;Test;TS-0001;aktiv\n"
 
 	res := postImport(t, srv.URL, token, csv, "append")
@@ -150,7 +150,7 @@ func TestImport_AppendLeavesExistingMemberNumberUnset(t *testing.T) {
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
 	insertBareMember(t, db, "Petra", "Test")
 
-	csv := "Vorname;Name;Mitgliedsnummer;Status\nPetra;Test;TS-0001;aktiv\n"
+	csv := "Vorname;Name;Mitgliedsnummer;Status TeamWERK\nPetra;Test;TS-0001;aktiv\n"
 	res := postImport(t, srv.URL, token, csv, "append")
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -171,7 +171,7 @@ func TestImport_EnrichFillsEmptyMemberNumber(t *testing.T) {
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
 	insertBareMember(t, db, "Petra", "Test")
 
-	csv := "Vorname;Name;Mitgliedsnummer;Status\nPetra;Test;TS-0001;aktiv\n"
+	csv := "Vorname;Name;Mitgliedsnummer;Status TeamWERK\nPetra;Test;TS-0001;aktiv\n"
 	res := postImport(t, srv.URL, token, csv, "enrich")
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -210,7 +210,7 @@ func TestImport_EnrichFillsMemberNumber_WithDOB(t *testing.T) {
 				t.Fatalf("insert member: %v", err)
 			}
 
-			csv := "Vorname;Name;Mitgliedsnummer;geboren am;Status\n" +
+			csv := "Vorname;Name;Mitgliedsnummer;geboren am;Status TeamWERK\n" +
 				"Petra;Test;TS-0001;" + tc.csvGeboren + ";aktiv\n"
 			res := postImport(t, srv.URL, token, csv, "enrich")
 			defer res.Body.Close()
@@ -241,7 +241,7 @@ func TestImport_EnrichFillsMemberNumber_TwoDigitYear1967(t *testing.T) {
 		t.Fatalf("insert member: %v", err)
 	}
 
-	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status\n" +
+	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status TeamWERK\n" +
 		"Haase,Götz-Bernhard,61,06.12.67,passiv\n"
 	res := postImport(t, srv.URL, token, csv, "enrich")
 	defer res.Body.Close()
@@ -274,7 +274,7 @@ func TestImport_EnrichFillsMemberNumber_DBohneGeburtsdatum(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 
-	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status\n" +
+	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status TeamWERK\n" +
 		"Jäger,Janosch,259,23.11.2015,aktiv\n"
 	res := postImport(t, srv.URL, token, csv, "enrich")
 	defer res.Body.Close()
@@ -309,7 +309,7 @@ func TestImport_EnrichAmbiguousNoDOB_NichtBefuellt(t *testing.T) {
 		}
 	}
 
-	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status\n" +
+	csv := "Name,Vorname,Mitgliedsnummer,geboren am,Status TeamWERK\n" +
 		"Muster,Max,900,01.01.10,aktiv\n"
 	res := postImport(t, srv.URL, token, csv, "enrich")
 	defer res.Body.Close()
@@ -331,7 +331,7 @@ func TestImport_FieldsWhitelist_NurIBAN(t *testing.T) {
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
 	insertBareMember(t, db, "Petra", "Test") // status aktiv, iban leer
 
-	csv := "Vorname;Name;Status;IBAN\nPetra;Test;pausiert;" + testIBAN + "\n"
+	csv := "Vorname;Name;Status TeamWERK;IBAN\nPetra;Test;pausiert;" + testIBAN + "\n"
 	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"fields": "iban"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -348,15 +348,16 @@ func TestImport_FieldsWhitelist_NurIBAN(t *testing.T) {
 	}
 }
 
-// Feld-Whitelist: ohne "status" in fields bleibt das abgeleitete beitragsfrei unverändert.
-func TestImport_FieldsWhitelist_StatusSteuertBeitragsfrei(t *testing.T) {
+// Feld-Whitelist: ohne "beitragsfrei" in fields bleibt das Flag unverändert.
+// Status und beitragsfrei sind seit Mapping-Umstellung getrennte Whitelist-Einträge.
+func TestImport_FieldsWhitelist_BeitragsfreiSeparat(t *testing.T) {
 	db := testutil.NewDB(t)
 	srv := newMembersServer(t, db)
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
 	insertBareMember(t, db, "Petra", "Test") // status aktiv, beitragsfrei 0
 
-	// CSV-Status "beitragsfrei" würde beitragsfrei=1 ableiten — darf ohne "status" in fields nicht greifen.
-	csv := "Vorname;Name;Status;IBAN\nPetra;Test;beitragsfrei;" + testIBAN + "\n"
+	// CSV liefert beitragsfrei=ja — darf ohne "beitragsfrei" in fields nicht greifen.
+	csv := "Vorname;Name;beitragsfrei;IBAN\nPetra;Test;ja;" + testIBAN + "\n"
 	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"fields": "iban"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -366,10 +367,7 @@ func TestImport_FieldsWhitelist_StatusSteuertBeitragsfrei(t *testing.T) {
 	var beitragsfrei int
 	db.QueryRow(`SELECT COALESCE(beitragsfrei,0) FROM members WHERE first_name='Petra'`).Scan(&beitragsfrei)
 	if beitragsfrei != 0 {
-		t.Errorf("beitragsfrei = %d, want 0 (status nicht in fields)", beitragsfrei)
-	}
-	if got := statusOf(t, db, "Petra"); got != "aktiv" {
-		t.Errorf("status = %q, want unverändert %q", got, "aktiv")
+		t.Errorf("beitragsfrei = %d, want 0 (beitragsfrei nicht in fields)", beitragsfrei)
 	}
 }
 
@@ -380,7 +378,7 @@ func TestImport_LeeresFields_AlleFelder(t *testing.T) {
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
 	insertBareMember(t, db, "Petra", "Test")
 
-	csv := "Vorname;Name;Status\nPetra;Test;pausiert\n"
+	csv := "Vorname;Name;Status TeamWERK\nPetra;Test;pausiert\n"
 	res := postImport(t, srv.URL, token, csv, "update")
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -398,7 +396,7 @@ func TestImport_FieldsWhitelist_NeuesMitgliedAllFelder(t *testing.T) {
 	srv := newMembersServer(t, db)
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
 
-	csv := "Vorname;Name;Status;Passnummer\nMax;Neu;pausiert;P123\n"
+	csv := "Vorname;Name;Status TeamWERK;Passnummer\nMax;Neu;pausiert;P123\n"
 	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"fields": "iban"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -426,7 +424,7 @@ func TestImport_ApplyLines_NurAusgewaehlteZeile(t *testing.T) {
 	insertBareMember(t, db, "Petra", "Test") // Zeile 2
 	insertBareMember(t, db, "Hans", "Meier") // Zeile 3
 
-	csv := "Vorname;Name;Status\nPetra;Test;pausiert\nHans;Meier;verletzt\n"
+	csv := "Vorname;Name;Status TeamWERK\nPetra;Test;pausiert\nHans;Meier;verletzt\n"
 	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"apply_lines": "2"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -449,7 +447,7 @@ func TestImport_ApplyLines_AbgewaehltIstSkipped(t *testing.T) {
 	insertBareMember(t, db, "Petra", "Test") // Zeile 2
 
 	// apply_lines verweist auf eine nicht vorhandene Zeile → Zeile 2 ist abgewählt.
-	csv := "Vorname;Name;Status\nPetra;Test;pausiert\n"
+	csv := "Vorname;Name;Status TeamWERK\nPetra;Test;pausiert\n"
 	res := postImportOpts(t, srv.URL, token, csv, "update", map[string]string{"apply_lines": "999"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -478,7 +476,7 @@ func TestImport_ApplyLines_DryRunIgnoriert(t *testing.T) {
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
 	insertBareMember(t, db, "Petra", "Test")
 
-	csv := "Vorname;Name;Status\nPetra;Test;pausiert\n"
+	csv := "Vorname;Name;Status TeamWERK\nPetra;Test;pausiert\n"
 	res := postImportOpts(t, srv.URL, token, csv, "preview", map[string]string{"apply_lines": "999"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -494,5 +492,135 @@ func TestImport_ApplyLines_DryRunIgnoriert(t *testing.T) {
 	}
 	if got := statusOf(t, db, "Petra"); got != "aktiv" {
 		t.Errorf("Dry-Run schrieb status = %q, want unverändert %q", got, "aktiv")
+	}
+}
+
+// "Status TeamWERK" steuert members.status beim Anlegen neuer Mitglieder.
+func TestImport_StatusTeamWERK_AppendNew(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	// "Status" (Freitext) wird ignoriert, "Status TeamWERK" entscheidet.
+	csv := "Vorname;Name;Status;Status TeamWERK\nPetra;Test;Zweitspielrecht, beitragsfrei;passiv\n"
+	res := postImport(t, srv.URL, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+	if got := statusOf(t, db, "Petra"); got != "passiv" {
+		t.Errorf("status = %q, want %q (Status TeamWERK steuert)", got, "passiv")
+	}
+	var beitragsfrei int
+	db.QueryRow(`SELECT COALESCE(beitragsfrei,0) FROM members WHERE first_name='Petra'`).Scan(&beitragsfrei)
+	if beitragsfrei != 0 {
+		t.Errorf("beitragsfrei = %d, want 0 (Status-Spalte darf nichts mehr ableiten)", beitragsfrei)
+	}
+}
+
+// CSV-Spalte "beitragsfrei" landet direkt im Flag (Append-Pfad).
+func TestImport_BeitragsfreiSpalte_DirectMap(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	csv := "Vorname;Name;beitragsfrei\nPetra;Test;ja\n"
+	res := postImport(t, srv.URL, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+	var beitragsfrei int
+	db.QueryRow(`SELECT COALESCE(beitragsfrei,0) FROM members WHERE first_name='Petra'`).Scan(&beitragsfrei)
+	if beitragsfrei != 1 {
+		t.Errorf("beitragsfrei = %d, want 1", beitragsfrei)
+	}
+}
+
+// CSV-Spalte "Grund für Beitragsfreiheit" wird beim Anlegen übernommen.
+func TestImport_BeitragsfreiGrund_Append(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	csv := "Vorname;Name;beitragsfrei;Grund für Beitragsfreiheit\nPetra;Test;ja;kein aktiver Sportler mehr\n"
+	res := postImport(t, srv.URL, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+	var grund sql.NullString
+	db.QueryRow(`SELECT beitragsfrei_grund FROM members WHERE first_name='Petra'`).Scan(&grund)
+	if !grund.Valid || grund.String != "kein aktiver Sportler mehr" {
+		t.Errorf("beitragsfrei_grund = %v %q, want %q", grund.Valid, grund.String, "kein aktiver Sportler mehr")
+	}
+}
+
+// Enrich-Modus überschreibt einen bereits gefüllten Grund nicht.
+func TestImport_BeitragsfreiGrund_EnrichLeaves(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	if _, err := db.Exec(
+		`INSERT INTO members (first_name, last_name, status, beitragsfrei, beitragsfrei_grund) VALUES ('Petra','Test','aktiv',1,'Zweitspielrecht')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	csv := "Vorname;Name;beitragsfrei;Grund für Beitragsfreiheit\nPetra;Test;ja;kein aktiver Sportler mehr\n"
+	res := postImport(t, srv.URL, token, csv, "enrich")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+	var grund sql.NullString
+	db.QueryRow(`SELECT beitragsfrei_grund FROM members WHERE first_name='Petra'`).Scan(&grund)
+	if grund.String != "Zweitspielrecht" {
+		t.Errorf("beitragsfrei_grund = %q, want unverändert %q", grund.String, "Zweitspielrecht")
+	}
+}
+
+// Alte "Status"-Spalte wird ersatzlos ignoriert: weder Status noch beitragsfrei werden verändert.
+func TestImport_AlteStatusSpalteWirdIgnoriert(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	if _, err := db.Exec(
+		`INSERT INTO members (first_name, last_name, status, beitragsfrei) VALUES ('Petra','Test','passiv',0)`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Nur die alte "Status"-Spalte vorhanden — kein "Status TeamWERK", kein "beitragsfrei".
+	csv := "Vorname;Name;Status\nPetra;Test;beitragsfrei\n"
+	res := postImport(t, srv.URL, token, csv, "update")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	if got := statusOf(t, db, "Petra"); got != "passiv" {
+		t.Errorf("status = %q, want unverändert %q", got, "passiv")
+	}
+	var beitragsfrei int
+	db.QueryRow(`SELECT COALESCE(beitragsfrei,0) FROM members WHERE first_name='Petra'`).Scan(&beitragsfrei)
+	if beitragsfrei != 0 {
+		t.Errorf("beitragsfrei = %d, want unverändert 0 (alte Status-Spalte darf nichts ableiten)", beitragsfrei)
+	}
+}
+
+// "Status TeamWERK=gekündigt" mappt weiterhin auf members.status='ausgetreten'.
+func TestImport_GekuendigtBleibtAlias(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	insertBareMember(t, db, "Petra", "Test") // status aktiv
+
+	csv := "Vorname;Name;Status TeamWERK\nPetra;Test;gekündigt\n"
+	res := postImport(t, srv.URL, token, csv, "update")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+	if got := statusOf(t, db, "Petra"); got != "ausgetreten" {
+		t.Errorf("status = %q, want %q (gekündigt → ausgetreten Alias)", got, "ausgetreten")
 	}
 }

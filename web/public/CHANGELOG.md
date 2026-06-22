@@ -1,6 +1,22 @@
+## 22.06.2026
+- [feat] members: CSV-Import nutzt Status TeamWERK und eigene beitragsfrei-Spalten
+- [feat] members: Grund für Beitragsfreiheit im Bankdaten-Tab editierbar
+- [feat] members: Kassierer pflegt Beitragsfrei + Grund via bank-details
+- [feat] db: Migration 007 — members.beitragsfrei_grund
+- [feat] monitoring: Host- und SQLite-Metriken via Vector-Pipeline (#66)
+- [fix] games: generische Events mit template_id erlauben
+- [feat] games: template_id als persistente Slot-Quelle pro Event
+- [feat] metrics: make metrics + metrics-gate für Code-Qualität
+- [fix] auth: log.Printf in DeleteUser auf slog.Error migrieren
+- [fix] web: Changelog-Modal als 3-Spalten-Grid mit Scope-Truncate
+
 ## 21.06.2026
 - [feat] carpooling: One-Click-Paarung ohne vorherigen Gegen-Eintrag
 - [feat] members: selektiver CSV-Import (Feld-Whitelist + Zeilen-Auswahl)
+- [feat] log: Strukturiertes slog-Logging als neutrale Schnittstelle
+- [feat] scheduler: Monitoring-Heartbeat nach erfolgreichem Lauf
+- [feat] health: /api/healthz + /api/metrics + Panic-Recover-Middleware
+- [feat] db: Migration 005 monitoring_heartbeat (Dead-Man-Datenquelle)
 - [fix] auth: DeleteUser räumt member_change_drafts auf
 - [feat] members: SEPA-Mandatsdatum in Kontakt-Tab editierbar
 - [feat] web: recovery_email UI — Kindprofil, Konto-Tab, Admin-Override, Passwort-vergessen

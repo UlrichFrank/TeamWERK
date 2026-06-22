@@ -42,6 +42,7 @@ interface Member {
   sepa_mandat_date?: string
   sepa_mandat_url?: string
   beitragsfrei?: boolean
+  beitragsfrei_grund?: string
   zweitspielrecht?: boolean
   welcome_email_sent_at?: string
 }
@@ -77,7 +78,7 @@ export default function MemberDetailPage() {
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
     sepa_mandat: false, sepa_mandat_date: '', sepa_mandat_url: '',
-    beitragsfrei: false, zweitspielrecht: false,
+    beitragsfrei: false, beitragsfrei_grund: '', zweitspielrecht: false,
   })
   const [users, setUsers] = useState<User[]>([])
   const [invitations, setInvitations] = useState<PendingInvitation[]>([])
@@ -134,6 +135,7 @@ export default function MemberDetailPage() {
       sepa_mandat_date: m.sepa_mandat_date?.slice(0, 10) ?? '',
       sepa_mandat_url: m.sepa_mandat_url ?? '',
       beitragsfrei: m.beitragsfrei ?? false,
+      beitragsfrei_grund: m.beitragsfrei_grund ?? '',
       zweitspielrecht: m.zweitspielrecht ?? false,
     })
     setCurrentUserID(m.user_id ?? null)
@@ -232,6 +234,8 @@ export default function MemberDetailPage() {
         street: form.street ?? '',
         zip: form.zip ?? '',
         city: form.city ?? '',
+        beitragsfrei: !!form.beitragsfrei,
+        beitragsfrei_grund: form.beitragsfrei ? (form.beitragsfrei_grund ?? '') : '',
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)

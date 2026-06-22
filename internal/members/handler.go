@@ -68,6 +68,7 @@ type Member struct {
 	SepaMandatDate        *string `json:"sepa_mandat_date,omitempty"`
 	SepaMandatURL         *string `json:"sepa_mandat_url,omitempty"`
 	Beitragsfrei          bool    `json:"beitragsfrei,omitempty"`
+	BeitragsfreiGrund     *string `json:"beitragsfrei_grund,omitempty"`
 	Zweitspielrecht       bool    `json:"zweitspielrecht,omitempty"`
 
 	// Linked user contact data (shown when user visibility allows)
@@ -460,7 +461,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
 		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path,
 		       m.welcome_email_sent_at,
-		       m.beitragsfrei, m.zweitspielrecht
+		       m.beitragsfrei, m.beitragsfrei_grund, m.zweitspielrecht
 		FROM members m
 		LEFT JOIN users u ON u.id = m.user_id
 		LEFT JOIN stammvereine sv ON sv.id = m.home_club_id
@@ -477,6 +478,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
 	var welcomeEmailSentAt sql.NullString
 	var beitragsfrei, zweitspielrecht int64
+	var beitragsfreiGrund sql.NullString
 
 	err := row.Scan(
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
@@ -488,7 +490,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&dsgvoWeiter, &dsgvoWeiterDate,
 		&sepaMandat, &sepaMandatDate, &sepaMandatPath,
 		&welcomeEmailSentAt,
-		&beitragsfrei, &zweitspielrecht,
+		&beitragsfrei, &beitragsfreiGrund, &zweitspielrecht,
 	)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -557,6 +559,10 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 			base.SepaMandatDate = &sepaMandatDate.String
 		}
 		base.Beitragsfrei = beitragsfrei == 1
+		if beitragsfreiGrund.Valid && beitragsfreiGrund.String != "" {
+			grund := beitragsfreiGrund.String
+			base.BeitragsfreiGrund = &grund
+		}
 	}
 
 	// welcome_email_sent_at: admin only
@@ -661,6 +667,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		SepaMandat            bool   `json:"sepa_mandat"`
 		SepaMandatDate        string `json:"sepa_mandat_date"`
 		Beitragsfrei          bool   `json:"beitragsfrei"`
+		BeitragsfreiGrund     string `json:"beitragsfrei_grund"`
 		Zweitspielrecht       bool   `json:"zweitspielrecht"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
@@ -745,19 +752,23 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		if req.IBAN != "" {
 			ibanVal = req.IBAN
 		}
+		grundVal := nullableString(req.BeitragsfreiGrund)
+		if !req.Beitragsfrei {
+			grundVal = nil
+		}
 		h.db.ExecContext(r.Context(),
 			`UPDATE members SET
 				join_date=?, iban=COALESCE(?, iban), account_holder=?,
 				dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
 				dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
 				sepa_mandat=?, sepa_mandat_date=?,
-				beitragsfrei=?
+				beitragsfrei=?, beitragsfrei_grund=?
 			WHERE id=?`,
 			nullableString(req.JoinDate), ibanVal, nullableString(req.AccountHolder),
 			boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 			boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
 			boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
-			boolToInt(req.Beitragsfrei),
+			boolToInt(req.Beitragsfrei), grundVal,
 			id)
 	}
 
@@ -794,13 +805,15 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		IBAN           string `json:"iban"`
-		SepaMandat     bool   `json:"sepa_mandat"`
-		SepaMandatDate string `json:"sepa_mandat_date"`
-		AccountHolder  string `json:"account_holder"`
-		Street         string `json:"street"`
-		Zip            string `json:"zip"`
-		City           string `json:"city"`
+		IBAN              string  `json:"iban"`
+		SepaMandat        bool    `json:"sepa_mandat"`
+		SepaMandatDate    string  `json:"sepa_mandat_date"`
+		AccountHolder     string  `json:"account_holder"`
+		Street            string  `json:"street"`
+		Zip               string  `json:"zip"`
+		City              string  `json:"city"`
+		Beitragsfrei      *bool   `json:"beitragsfrei,omitempty"`
+		BeitragsfreiGrund *string `json:"beitragsfrei_grund,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "ungültiger Body", http.StatusBadRequest)
@@ -815,11 +828,25 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	if req.SepaMandat {
 		mandat = 1
 	}
+	// Beitragsfrei + Grund sind nur dann Teil des Updates, wenn beitragsfrei
+	// explizit mitgesendet wurde. Wenn beitragsfrei=false, MUSS der Grund auf
+	// NULL gehen (Kopplungs-Invariante, siehe Spec members::beitragsfrei_grund).
+	extra := ""
+	args := []any{nullStr(req.IBAN), mandat, nullStr(req.SepaMandatDate), nullStr(req.AccountHolder),
+		nullStr(req.Street), nullStr(req.Zip), nullStr(req.City), time.Now()}
+	if req.Beitragsfrei != nil {
+		extra = ", beitragsfrei=?, beitragsfrei_grund=?"
+		var grundVal any
+		if *req.Beitragsfrei && req.BeitragsfreiGrund != nil && *req.BeitragsfreiGrund != "" {
+			grundVal = *req.BeitragsfreiGrund
+		}
+		args = append(args, boolToInt(*req.Beitragsfrei), grundVal)
+	}
+	args = append(args, id)
 	res, err := h.db.ExecContext(r.Context(),
-		`UPDATE members SET iban=?, sepa_mandat=?, sepa_mandat_date=?, account_holder=?, street=?, zip=?, city=?, updated_at=?
+		`UPDATE members SET iban=?, sepa_mandat=?, sepa_mandat_date=?, account_holder=?, street=?, zip=?, city=?, updated_at=?`+extra+`
 		 WHERE id=?`,
-		nullStr(req.IBAN), mandat, nullStr(req.SepaMandatDate), nullStr(req.AccountHolder),
-		nullStr(req.Street), nullStr(req.Zip), nullStr(req.City), time.Now(), id)
+		args...)
 	if err != nil {
 		http.Error(w, "DB-Fehler", http.StatusInternalServerError)
 		return
@@ -1615,18 +1642,30 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			return "u"
 		}
 	}
+	// normalizeStatus mappt den Wert der CSV-Spalte "Status TeamWERK" auf einen
+	// CHECK-konformen members.status-Wert. Leerer Input ODER unbekannter Wert
+	// ergibt "" — der Aufrufer entscheidet (Insert: Default 'aktiv'; Update:
+	// addChange überspringt leere CSV-Werte, Status bleibt unverändert).
 	normalizeStatus := func(s string) string {
-		switch s {
+		switch strings.TrimSpace(s) {
+		case "":
+			return ""
 		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter":
 			return s
 		case "gekündigt", "Vereinswechsel":
 			return "ausgetreten"
-		case "kein aktiver Sportler mehr":
-			return "passiv"
-		case "beitragsfrei":
-			return "passiv"
 		default:
-			return "aktiv"
+			return ""
+		}
+	}
+	normalizeBeitragsfrei := func(s string) (int, bool) {
+		switch strings.ToLower(strings.TrimSpace(s)) {
+		case "":
+			return 0, false
+		case "ja":
+			return 1, true
+		default:
+			return 0, true
 		}
 	}
 	normalizeSepa := func(s string) int {
@@ -1730,7 +1769,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
 		                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
 		                 COALESCE(join_date,''), COALESCE(iban,''), COALESCE(account_holder,''),
-		                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0)
+		                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0), COALESCE(beitragsfrei_grund,'')
 		          FROM members
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
 		args := []interface{}{firstName, lastName}
@@ -1792,12 +1831,13 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			dbJoinDate, dbIBAN, dbAccountHolder string
 			dbSepaMandat                        int
 			dbBeitragsfrei                      int
+			dbBeitragsfreiGrund                 string
 		)
 		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
 			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
 				&dbStatus, &dbGender, &dbUserID, &dbHomeClub,
 				&dbStreet, &dbZip, &dbCity,
-				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat, &dbBeitragsfrei)
+				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat, &dbBeitragsfrei, &dbBeitragsfreiGrund)
 
 		if scanErr == sql.ErrNoRows {
 			if mode == "enrich" {
@@ -1810,11 +1850,19 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				report.NotFound++
 				continue
 			}
-			// New member — insert
-			csvStatusRaw := col(row, "Status")
-			csvBeitragsfrei := strings.EqualFold(strings.TrimSpace(csvStatusRaw), "beitragsfrei")
+			// New member — insert. Status kommt ausschließlich aus "Status TeamWERK";
+			// die alte Spalte "Status" (Freitext-Begründungen) wird ignoriert.
 			gender := normalizeGender(col(row, "Geschlecht"))
-			status := normalizeStatus(csvStatusRaw)
+			status := normalizeStatus(col(row, "Status TeamWERK"))
+			if status == "" {
+				status = "aktiv"
+			}
+			beitragsfreiVal, _ := normalizeBeitragsfrei(col(row, "beitragsfrei"))
+			grundRaw := col(row, "Grund für Beitragsfreiheit")
+			var grundArg any
+			if beitragsfreiVal == 1 && grundRaw != "" {
+				grundArg = grundRaw
+			}
 			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
 			joinDate := normalizeDate(col(row, "join_date"))
 
@@ -1833,8 +1881,8 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
 					                      pass_number, jersey_number, position, status, gender, home_club,
 					                      street, zip, city, join_date, iban, account_holder, sepa_mandat,
-					                      beitragsfrei)
-					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+					                      beitragsfrei, beitragsfrei_grund)
+					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 					nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
 					nullableString(dob), nullableString(col(row, "Passnummer")),
 					jerseyArg, nullableString(col(row, "Position")), status, gender,
@@ -1842,7 +1890,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
 					nullableString(joinDate), ibanArg, nullableString(col(row, "Kontoinhaber")),
 					normalizeSepa(col(row, "SEPA Mandat")),
-					boolToInt(csvBeitragsfrei))
+					beitragsfreiVal, grundArg)
 				if insErr != nil {
 					report.Rows = append(report.Rows, ImportRow{
 						Line: lineNum, Status: "error", Name: displayName,
@@ -1916,7 +1964,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		addChange(normalizeGender(col(row, "Geschlecht")), dbGender, "Geschlecht", "gender")
 		addNullableChange(col(row, "Passnummer"), dbPassNum, "Passnummer", "pass_number")
 		addNullableChange(col(row, "Position"), dbPosition, "Position", "position")
-		addChange(normalizeStatus(col(row, "Status")), dbStatus, "Status", "status")
+		addChange(normalizeStatus(col(row, "Status TeamWERK")), dbStatus, "Status", "status")
 		addNullableChange(col(row, "Stammverein"), dbHomeClub, "Stammverein", "home_club")
 
 		if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" && fieldAllowed("jersey_number") {
@@ -1949,13 +1997,23 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// beitragsfrei aus CSV-Status ableiten (an die Status-Auswahl gekoppelt)
-		if csvStatusRaw2 := col(row, "Status"); csvStatusRaw2 != "" && !enrichOnly && fieldAllowed("status") {
-			csvBeitragsfrei2 := boolToInt(strings.EqualFold(strings.TrimSpace(csvStatusRaw2), "beitragsfrei"))
-			if csvBeitragsfrei2 != dbBeitragsfrei {
+		// beitragsfrei kommt ausschließlich aus der gleichnamigen CSV-Spalte.
+		// Enrich-Modus: nur 0 → 1 erlauben, niemals ein bestehendes 1 zurücksetzen
+		// (siehe design.md D6).
+		if bfVal, bfPresent := normalizeBeitragsfrei(col(row, "beitragsfrei")); bfPresent && fieldAllowed("beitragsfrei") {
+			if bfVal != dbBeitragsfrei && (!enrichOnly || (dbBeitragsfrei == 0 && bfVal == 1)) {
 				setClauses = append(setClauses, "beitragsfrei=?")
-				setArgs = append(setArgs, csvBeitragsfrei2)
-				changes = append(changes, fmt.Sprintf("Beitragsfrei: %v → %v", dbBeitragsfrei == 1, csvBeitragsfrei2 == 1))
+				setArgs = append(setArgs, bfVal)
+				changes = append(changes, fmt.Sprintf("Beitragsfrei: %v → %v", dbBeitragsfrei == 1, bfVal == 1))
+			}
+		}
+
+		// Grund für Beitragsfreiheit: Enrich überschreibt belegten Grund nicht.
+		if grundRaw := col(row, "Grund für Beitragsfreiheit"); grundRaw != "" && fieldAllowed("beitragsfrei_grund") {
+			if grundRaw != dbBeitragsfreiGrund && (!enrichOnly || dbBeitragsfreiGrund == "") {
+				setClauses = append(setClauses, "beitragsfrei_grund=?")
+				setArgs = append(setArgs, grundRaw)
+				changes = append(changes, fmt.Sprintf("Grund für Beitragsfreiheit: %q → %q", dbBeitragsfreiGrund, grundRaw))
 			}
 		}
 
