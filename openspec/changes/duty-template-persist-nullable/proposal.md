@@ -9,11 +9,12 @@ Die Wahl der Dienstvorlage beim Event-Anlegen wird heute zwar in `games.template
 
 ## What Changes
 
-- `games.template_id` wird **persistente, frei änderbare Slot-Quelle** pro Event (Wert oder `NULL`).
+- `games.template_id` wird **persistente, frei änderbare Slot-Quelle** pro Event (Wert oder `NULL`) — für **alle** `event_type` (`heim`/`auswärts`/`generisch`).
 - `PUT /api/admin/games/{id}` akzeptiert `template_id` (Zahl oder `null`) und schreibt den Wert; bei fehlendem Feld wird der bestehende Wert beibehalten (Partial-Update für dieses eine Feld, damit Bestands-Clients nicht versehentlich NULL setzen).
 - `runAutoRegen` interpretiert `template_id IS NULL` als **„keine Auto-Dienste für dieses Event"** für alle `event_type`-Werte. Der ID-basierte Fallback `findTemplateForGameTx` entfällt; die Funktion selbst kann gelöscht werden, sofern keine anderen Aufrufer existieren.
+- Für `event_type='generisch'` werden Auto-Slots aus generisch-Templates erzeugt (Dauer aus `game_templates.duration_minutes`); benutzerdefinierte `slots[]` (is_custom=1) und template-basierte Slots (is_custom=0) koexistieren.
 - Frontend-Anlege- und Edit-Form (`/kalender`): Vorlage-Dropdown filtert nach `event_type` (`heim`/`auswärts`/`generisch`) und enthält die explizite Option **„— Keine Vorlage (keine Auto-Dienste) —"** (Wert `null`).
-- Das separate „Ohne Dienste"-Toggle (heute via `event_type='generisch'` erzwungen) wird **abgeschafft**. Wer keine Auto-Dienste will, wählt „Keine Vorlage". `event_type='generisch'` bleibt erhalten, bedeutet aber wieder nur den Event-**Typ** (Turnier, Sondertermin) — nicht den Slot-Modus.
+- Das separate „Ohne Dienste"-Toggle wird **abgeschafft**. Wer keine Auto-Dienste will, wählt „Keine Vorlage".
 - Frontend `/dienstplan-vorlagen`: Hinweistext „nur initial verwendet" entfernen; optional Anzeige „X Events nutzen diese Vorlage".
 
 **Bestehende Events:**

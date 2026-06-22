@@ -1674,12 +1674,23 @@ func TestCreateGame_GenericWithCustomSlots(t *testing.T) {
 	}
 }
 
-// TestCreateGame_GenericWithTemplateRejected: generisch + template_id != null → 400.
-func TestCreateGame_GenericWithTemplateRejected(t *testing.T) {
+// TestCreateGame_GenericWithTemplate: generisch + template_id → Auto-Slots aus
+// generisch-Template (Dauer aus game_templates.duration_minutes).
+func TestCreateGame_GenericWithTemplate(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
-	templateID, _ := seedHeimTemplate(t, db)
+
+	// Generisch-Template mit Item: Aufbau, anchor=start, offset=-30min.
+	dutyRes, _ := db.Exec(`INSERT INTO duty_types (name, hours_value) VALUES (?, ?)`, "Aufbau", 2.0)
+	dutyTypeID, _ := dutyRes.LastInsertId()
+	tplRes, _ := db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?, ?, ?)`,
+		"Sommerfest", "generisch", 240)
+	templateID, _ := tplRes.LastInsertId()
+	db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)`, templateID, dutyTypeID, "start", -30, 1, 0)
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
 	srv := testServer(t, db)
@@ -1692,8 +1703,17 @@ func TestCreateGame_GenericWithTemplateRejected(t *testing.T) {
 		"template_id": templateID,
 	})
 	res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 for generisch+template_id, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	var gameID int
+	db.QueryRow(`SELECT id FROM games WHERE date=?`, "2026-06-13").Scan(&gameID)
+	var slotTime string
+	err := db.QueryRow(
+		`SELECT event_time FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID).Scan(&slotTime)
+	if err != nil || slotTime != "13:30" {
+		t.Errorf("expected auto-slot at 13:30, got %s (err=%v)", slotTime, err)
 	}
 }
 

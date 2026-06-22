@@ -147,11 +147,6 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 
 	var summary RegenSummary
 	for _, g := range dayGames {
-		// Generic events have no template — their is_custom=1 slots stay, nothing to derive.
-		if g.EventType == "generisch" {
-			continue
-		}
-
 		// templateID == 0 bedeutet: keine Auto-Slots für dieses Event. Es gibt
 		// keinen Fallback mehr (frühere `findTemplateForGameTx`-Auflösung auf
 		// die kleinste passende Template-ID entfällt). Existierende
@@ -514,12 +509,22 @@ func (h *Handler) loadGameTeamIDsTx(ctx context.Context, tx *sql.Tx, gameID int)
 	return ids, nil
 }
 
-// effectiveEventDurationTx berechnet die Spieldauer in Minuten. Wird nur für
-// heim/auswärts-Events mit gesetztem template_id aufgerufen — der frühere
-// generisch-Zweig (Dauer aus game_templates.duration_minutes) ist obsolet,
-// seit generische Events im Auto-Regen früher übersprungen werden.
+// effectiveEventDurationTx berechnet die Spieldauer in Minuten. Für
+// heim/auswärts kommt die Dauer aus der Altersklassen-Regel des Teams; für
+// generische Events aus game_templates.duration_minutes.
 func (h *Handler) effectiveEventDurationTx(ctx context.Context, tx *sql.Tx, eventType string, templateID, teamID int) (int, error) {
-	_ = templateID
+	if eventType == "generisch" {
+		var dur int
+		err := tx.QueryRowContext(ctx,
+			`SELECT duration_minutes FROM game_templates WHERE id=?`, templateID).Scan(&dur)
+		if err != nil {
+			return 0, fmt.Errorf("vorlage nicht gefunden")
+		}
+		if dur <= 0 {
+			return 0, fmt.Errorf("vorlage hat keine Spieldauer konfiguriert")
+		}
+		return dur, nil
+	}
 	if eventType != "heim" && eventType != "auswärts" {
 		return 0, fmt.Errorf("unerwarteter event_type %q im Auto-Regen", eventType)
 	}

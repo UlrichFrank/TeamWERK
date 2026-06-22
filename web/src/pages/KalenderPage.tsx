@@ -1389,10 +1389,7 @@ export default function KalenderPage() {
               <div>
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Dienstplan-Vorlage</h2>
                 {(() => {
-                  // Generische Events nutzen keine Auto-Dienst-Vorlagen — Backend lehnt das ab.
-                  const filteredTemplates = eventType === 'generisch'
-                    ? []
-                    : templates.filter(t => t.template_type === eventType)
+                  const filteredTemplates = templates.filter(t => t.template_type === eventType)
                   return (
                     <div className="space-y-2 mb-4">
                       <label className="flex items-center gap-2 p-3 border border-brand-border-subtle rounded-lg hover:bg-brand-border-subtle cursor-pointer">

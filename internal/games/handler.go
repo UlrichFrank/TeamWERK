@@ -645,11 +645,6 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.EventType == "generisch" && req.TemplateID != nil {
-		http.Error(w, `{"error":"template_id muss bei event_type=generisch null sein"}`, http.StatusBadRequest)
-		return
-	}
-
 	if req.SeasonID == 0 {
 		h.db.QueryRowContext(r.Context(),
 			`SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&req.SeasonID)
@@ -827,10 +822,6 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad request: template_id muss null oder Zahl sein", http.StatusBadRequest)
 			return
 		}
-	}
-	if tplSet && !tplToNull && req.EventType == "generisch" {
-		http.Error(w, `{"error":"template_id muss bei event_type=generisch null sein"}`, http.StatusBadRequest)
-		return
 	}
 
 	if req.EndDate != nil && *req.EndDate != "" && req.Date != "" && *req.EndDate < req.Date {
