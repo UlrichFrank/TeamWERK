@@ -1,18 +1,18 @@
 ## ADDED Requirements
 
 
-### Requirement: Provider-agnostischer Agenten-Einstieg
+### Requirement: Kanonische Agenten-Konventionsquelle
 
-Das Repository SHALL im Root eine `AGENTS.md` bereitstellen, die für beliebige Coding-Agenten (nicht nur Claude) lesbar ist. Sie SHALL die nicht-verhandelbaren Hard-Rules in destillierter Form enthalten und `CLAUDE.md` ausdrücklich als kanonische, vollständige Quelle ausweisen. `CLAUDE.md` bleibt die maßgebliche Konventionsdatei; `AGENTS.md` darf deren Inhalte nicht widersprechen.
+Das Repository SHALL die verbindlichen Konventionen für Coding-Agenten zentral in `CLAUDE.md` bereitstellen. `CLAUDE.md` SHALL die nicht-verhandelbaren Hard-Rules im Kopf führen und die thematischen Detail-Kapitel aus `docs/agent/*.md` per `@`-Import vollständig in den Kontext laden. Es SHALL keine konkurrierende Konventionsdatei (z. B. eine separate `AGENTS.md`) geben, die `CLAUDE.md` widersprechen könnte.
 
-#### Scenario: Agent ohne Claude-Kontext findet die Hard-Rules
-- **WHEN** ein Agent, der nur `AGENTS.md` liest, das Projekt öffnet
-- **THEN** findet er die Kern-Regeln (pnpm statt npm, Tests via `/usr/local/go/bin/go`, brand-* Tokens statt Raw-Tailwind, `hub.Broadcast` bei jeder Mutation, neue Route braucht Happy-Path- + Fehlerfall-Test, Rollen/Vereinsfunktionen-Modell, nächste freie Migrationsnummer)
-- **AND** einen Verweis auf `CLAUDE.md` als vollständige Quelle
+#### Scenario: Agent findet die Hard-Rules
+- **WHEN** ein Coding-Agent das Projekt öffnet und `CLAUDE.md` liest
+- **THEN** findet er die Kern-Regeln (pnpm statt npm, Go 1.26 via `/usr/local/go/bin/go`, brand-* Tokens statt Raw-Tailwind, `hub.Broadcast` bei jeder Mutation, neue Route braucht Happy-Path- + Fehlerfall-Test, Rollen/Vereinsfunktionen-Modell, nächste freie Migrationsnummer)
+- **AND** die thematischen Detail-Kapitel sind über `@docs/agent/*`-Importe verfügbar
 
-#### Scenario: Keine widersprechende Regel
-- **WHEN** eine Hard-Rule sowohl in `AGENTS.md` als auch in `CLAUDE.md` steht
-- **THEN** stimmen beide inhaltlich überein
+#### Scenario: Keine konkurrierende Quelle
+- **WHEN** im Repo-Root nach Konventionsdateien gesucht wird
+- **THEN** ist `CLAUDE.md` die einzige maßgebliche Quelle (keine separate `AGENTS.md`, die driften könnte)
 
 ### Requirement: Automatische Go-Formatierung editierter Dateien
 
