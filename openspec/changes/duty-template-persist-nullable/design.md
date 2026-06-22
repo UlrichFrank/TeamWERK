@@ -83,7 +83,7 @@ WHERE template_id IS NULL
 ## Risks / Trade-offs
 
 - **Bestands-Events verlieren ihren impliziten Fallback.** Mitigiert durch Backfill-Migration. Risiko-Rest: wenn nach der Migration ein Admin manuell `template_id = NULL` setzt und annimmt, das System fängt's mit dem Fallback auf — passiert nicht mehr. Akzeptiert.
-- **`event_type='generisch'` bleibt überladen.** Es ist weiter Event-Klasse UND der Schalter, der `req.Slots`-Custom-Persistierung beim Create freischaltet. Nach diesem Change ist die Slot-Quelle aber auch für `generisch` über `template_id` ausdrückbar (man könnte ein generisches Event mit Template anlegen). In `CreateGame` bedeutet das: Wenn `event_type='generisch'` UND `template_id != null`, dann werden sowohl `req.Slots` als `is_custom=1` persistiert ALS AUCH die Template-Slots beim ersten Regen erzeugt — das ist neu und sollte vermieden werden. **Regel im Handler:** Bei `event_type='generisch'` muss `template_id` zwingend `null` sein (HTTP 400 sonst). Das hält die heutige semantische Trennung sauber, bis ein späterer Change die Doppel-Bedeutung auflöst.
+- **`event_type='generisch'` bleibt überladen.** Es ist weiter Event-Klasse UND der Schalter, der `req.Slots`-Custom-Persistierung beim Create freischaltet. Mit diesem Change ist die Slot-Quelle auch für `generisch` über `template_id` ausdrückbar — generische Templates (mit eigenem `duration_minutes`) waren bisher praktisch ungenutzt und dienen genau diesem Workflow. Bei `event_type='generisch'` UND `template_id != null` koexistieren `req.Slots`-Custom-Slots (`is_custom=1`) und template-basierte Auto-Slots (`is_custom=0`); die bestehende Konfliktlogik in `regen.go` (customSlots-Map → ConflictEntry) verhindert Doppel-Inserts und meldet sie im `regen_summary`.
 - **PUT mit explizitem `null` ist im Codebase neu.** Implementierungs-Aufwand für `UnmarshalJSON` oder `json.RawMessage`. Klein, aber nicht null.
 - **Down-Migration nicht verlustfrei.** Akzeptiert.
 
@@ -93,7 +93,7 @@ WHERE template_id IS NULL
 |---|---|---|
 | `POST /api/admin/games` mit `template_id=null`, `event_type=heim` | `TestCreateGame_HomeWithoutTemplate` | 201; `games.template_id IS NULL`; nach Regen keine `is_custom=0`-Slots am Event |
 | `POST /api/admin/games` mit `template_id=null`, `event_type=generisch`, `slots[]` befüllt | `TestCreateGame_GenericWithCustomSlots` | 201; alle `slots[]` als `is_custom=1` persistiert; keine Template-Slots |
-| `POST /api/admin/games` mit `template_id=7`, `event_type=generisch` | `TestCreateGame_GenericWithTemplateRejected` | 400 (`template_id muss NULL sein bei generisch`) |
+| `POST /api/admin/games` mit `template_id=<gen-tpl>`, `event_type=generisch` | `TestCreateGame_GenericWithTemplate` | 201; Auto-Slots aus generisch-Template (Dauer aus `duration_minutes`) |
 | `PUT /api/admin/games/{id}` ohne `template_id`-Feld im Body | `TestUpdateGame_TemplateIDFieldOmitted_Preserves` | 200; `template_id` unverändert |
 | `PUT /api/admin/games/{id}` mit `template_id: null` | `TestUpdateGame_TemplateIDExplicitNull_SetsNull` | 200; `games.template_id IS NULL`; Auto-Regen löscht `is_custom=0`-Slots |
 | `PUT /api/admin/games/{id}` mit `template_id: 7` (Wechsel) | `TestUpdateGame_TemplateIDChange_RegeneratesSlots` | 200; alte Slots weg, neue aus Template 7 vorhanden |

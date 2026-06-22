@@ -4,7 +4,7 @@
 
 Das System SHALL für `POST /api/admin/games` mit `event_type ∈ {heim, auswärts}` das Feld `slots[]` aus dem Request-Body ignorieren. Slots werden ausschließlich aus dem persistierten `games.template_id` generiert. Ist `template_id` `null`, werden keine Auto-Dienste erzeugt.
 
-Für `event_type=generisch` MUSS `template_id` `null` sein; ein gesetzter Wert führt zu HTTP 400. `slots[]` bleibt erhalten und wird mit `is_custom=1` persistiert.
+Für `event_type=generisch` werden `slots[]` mit `is_custom=1` persistiert. `template_id` ist optional — gesetzt löst Auto-Regen aus dem generisch-Template (Dauer aus `game_templates.duration_minutes`) aus; benutzerdefinierte und template-basierte Slots koexistieren (Konflikte werden im `regen_summary` als `conflicts` ausgewiesen).
 
 #### Scenario: Heimspiel mit `slots[]` im Request — `slots[]` wird ignoriert
 
@@ -19,16 +19,19 @@ Für `event_type=generisch` MUSS `template_id` `null` sein; ein gesetzter Wert f
 - **AND** der Auto-Regen erzeugt keine `is_custom=0`-Slots für dieses Event
 - **AND** die Response liefert HTTP 201 mit `id` und `regen_summary`
 
-#### Scenario: Generisches Event persistiert `slots[]` mit `is_custom=1`
+#### Scenario: Generisches Event mit `slots[]` persistiert `is_custom=1`
 
 - **WHEN** `POST /api/admin/games` mit `event_type=generisch`, `template_id=null` und `slots[]` aufgerufen wird
 - **THEN** werden alle Slots aus `slots[]` mit `is_custom=1` in `duty_slots` persistiert
 - **AND** Auto-Regen für `{D-1, D, D+1}` läuft anschließend, betrifft aber nur eventuelle template-basierte Slots benachbarter Spiele
 
-#### Scenario: Generisches Event mit Template wird abgewiesen
+#### Scenario: Generisches Event mit Template erzeugt Auto-Slots
 
-- **WHEN** `POST /api/admin/games` mit `event_type=generisch` und `template_id != null` aufgerufen wird
-- **THEN** antwortet die API mit HTTP 400 und Body `{"error":"template_id muss bei event_type=generisch null sein"}`
+- **GIVEN** ein generisch-Template mit `duration_minutes=240` und einem Item (Aufbau, anchor=start, offset=-30min)
+- **WHEN** `POST /api/admin/games` mit `event_type=generisch`, `template_id=<tpl>` und `time=14:00` aufgerufen wird
+- **THEN** wird das Game mit `template_id=<tpl>` persistiert
+- **AND** Auto-Regen erzeugt einen `is_custom=0`-Slot um 13:30 (Anchor `start`, Offset -30min)
+- **AND** Dauer für Adjacency-Berechnungen kommt aus `game_templates.duration_minutes` (240min)
 
 ## ADDED Requirements
 
@@ -58,9 +61,7 @@ Das System SHALL im `PUT /api/admin/games/{id}`-Endpoint das Feld `template_id` 
 | `"template_id": null`    | `template_id` wird auf NULL gesetzt        |
 | `"template_id": <int>`   | `template_id` wird auf den Wert gesetzt    |
 
-Nach der Persistierung läuft `runAutoRegen` für das Datum-Fenster (`oldDate ± 1` ∪ `newDate ± 1`) wie bisher; bei `NULL` werden bestehende `is_custom=0`-Slots des Events gelöscht und nicht ersetzt.
-
-Wenn `event_type='generisch'` UND das Feld `template_id` mit Wert ≠ `null` gesendet wird, antwortet die API mit HTTP 400.
+Nach der Persistierung läuft `runAutoRegen` für das Datum-Fenster (`oldDate ± 1` ∪ `newDate ± 1`) wie bisher; bei `NULL` werden bestehende `is_custom=0`-Slots des Events gelöscht und nicht ersetzt. Das Verhalten ist für alle `event_type` (`heim`/`auswärts`/`generisch`) gleich — `template_id` muss zum `template_type` passen (gleicher Wert), sonst sind die Slot-Quellen leer (kein Match).
 
 #### Scenario: Feld fehlt im Body — Wert bleibt unverändert
 
@@ -85,9 +86,3 @@ Wenn `event_type='generisch'` UND das Feld `template_id` mit Wert ≠ `null` ges
 - **THEN** wird `games.template_id=7` gesetzt
 - **AND** die Slots werden aus Template 7 neu erzeugt
 - **AND** die Response liefert HTTP 200 mit `regen_summary`
-
-#### Scenario: Generisches Event mit Template-Wechsel abgewiesen
-
-- **GIVEN** ein Game mit `event_type='generisch'` und `template_id=NULL`
-- **WHEN** `PUT /api/admin/games/{id}` mit `"template_id": 7` aufgerufen wird
-- **THEN** antwortet die API mit HTTP 400 und der bestehende NULL-Wert bleibt erhalten

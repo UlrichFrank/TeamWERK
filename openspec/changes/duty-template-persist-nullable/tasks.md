@@ -12,7 +12,7 @@
 
 ## 3. Backend — `CreateGame`
 
-- [x] 3.1 Validierung ergänzen: wenn `event_type='generisch'` UND `template_id != nil` → HTTP 400 mit Body `{"error":"template_id muss bei event_type=generisch null sein"}`
+- [x] 3.1 ~~Validierung ergänzen: wenn `event_type='generisch'` UND `template_id != nil` → HTTP 400~~ *zurückgenommen: generisch + template_id ist legitim und wird unterstützt (Slot-Quelle aus generisch-Template, Dauer aus `duration_minutes`)*
 - [x] 3.2 Sicherstellen, dass `template_id=null` korrekt als SQL NULL persistiert wird (heute schon korrekt — Regression-Test ergänzen)
 
 ## 4. Backend — `UpdateGame`
@@ -20,14 +20,14 @@
 - [x] 4.1 Request-Struct um `TemplateID` mit Tri-State-Semantik erweitern. *(via `json.RawMessage` — Feld fehlt → unverändert, `"null"` → NULL, Zahl → Wert)*
 - [x] 4.2 `UPDATE games SET ...` um `template_id=?` ergänzen, **nur wenn `Set==true`**
 - [x] 4.3 Wenn `Set==true && Valid==false` → `NULL`; wenn `Set==true && Valid==true` → Wert
-- [x] 4.4 Validierung: wenn `event_type='generisch'` UND `template_id != null` → HTTP 400 (gleiche Regel wie Create)
+- [x] 4.4 ~~Validierung: wenn `event_type='generisch'` UND `template_id != null` → HTTP 400~~ *zurückgenommen, siehe 3.1*
 - [x] 4.5 `runAutoRegen` läuft unverändert nach dem Update — Auto-Regen reagiert auf den neuen `template_id`-Wert
 
 ## 5. Tests Backend
 
 - [x] 5.1 `TestCreateGame_HomeWithoutTemplate` (201, NULL, keine Auto-Slots)
 - [x] 5.2 `TestCreateGame_GenericWithCustomSlots` (201, `is_custom=1`-Slots persistiert)
-- [x] 5.3 `TestCreateGame_GenericWithTemplateRejected` (400)
+- [x] 5.3 `TestCreateGame_GenericWithTemplate` (201, Auto-Slots aus generisch-Template)
 - [x] 5.4 `TestUpdateGame_TemplateIDFieldOmitted_Preserves` (200, Wert unverändert)
 - [x] 5.5 `TestUpdateGame_TemplateIDExplicitNull_SetsNull` (200, NULL, Slots weg)
 - [x] 5.6 `TestUpdateGame_TemplateIDChange_RegeneratesSlots` (200, neue Slots aus neuem Template)
@@ -39,7 +39,7 @@
 - [x] 6.1 Vorlage-Dropdown: erste Option `{ value: null, label: '— Keine Vorlage (keine Auto-Dienste) —' }`
 - [x] 6.2 Optionen filtern: `templates.filter(t => t.template_type === eventType)`
 - [x] 6.3 Default-Selektion: erste passende Vorlage falls vorhanden, sonst die Null-Option *(initialer State ist `null`; User wählt aktiv — bewusst keine Vorauswahl)*
-- [x] 6.4 Bei `event_type=generisch`: Vorlage-Dropdown ausblenden ODER fix auf „Keine Vorlage" gesperrt *(filteredTemplates für `generisch` → `[]`, nur Null-Option sichtbar)*
+- [x] 6.4 Bei `event_type=generisch`: generisch-Templates werden in der Liste angezeigt (gleiches Filter-Verhalten wie heim/auswärts); zusätzlich „Keine Vorlage"-Option
 - [x] 6.5 „Ohne Dienste"-Toggle aus der UI entfernen
 - [x] 6.6 Submit: `template_id: null` (nicht `undefined`) senden, wenn Null-Option gewählt — damit Backend NULL setzt
 
