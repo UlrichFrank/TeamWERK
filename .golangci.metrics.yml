@@ -1,0 +1,49 @@
+# Komplexitäts-Report-Config (NICHT das blockierende Gate).
+#
+# Wird von `make metrics` / `teamwerk metrics` per
+# `golangci-lint run -c .golangci.metrics.yml --issues-exit-code 0 ./...`
+# aufgerufen. Liefert ausschließlich gocyclo/gocognit/funlen/dupl als Signal.
+#
+# Das blockierende Gate bleibt `.golangci.yml` (unverändert).
+version: "2"
+linters:
+  default: none
+  enable:
+    - gocyclo
+    - gocognit
+    - funlen
+    - dupl
+  settings:
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 20
+    funlen:
+      lines: 100
+      statements: 60
+      ignore-comments: true
+    dupl:
+      threshold: 150
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - gocognit
+          - funlen
+          - dupl
+      - path: internal/testutil/
+        linters:
+          - gocyclo
+          - gocognit
+          - funlen
+          - dupl
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      - web/node_modules
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

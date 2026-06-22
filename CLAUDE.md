@@ -37,6 +37,8 @@ make build                   # pnpm build + go build → bin/teamwerk
 make deploy                  # build + rsync auf VPS + systemctl restart (führt automatisch migrate up aus)
 make migrate-up / migrate-down
 make test / lint / coverage
+make metrics                 # Code-Metriken (Größe/Komplexität/Coverage/Lint-Dichte/Duplikation) → stdout + metrics/REPORT.md (Exit 0)
+make metrics-gate            # Wie metrics + Schwellwert-Prüfung gegen metrics/thresholds.yml (Exit 1 bei Regression)
 ```
 
 **Neue Migration:** `internal/db/migrations/00N_beschreibung.up.sql` + `.down.sql` mit der **nächsten freien Nummer**. Nie eine Nummer ≤ aktueller DB-Version — golang-migrate überspringt sie lautlos.
@@ -199,6 +201,8 @@ Jeder OpenSpec-Proposal mit neuen Routen / geänderter Geschäftslogik braucht e
 **Fixtures** in `internal/testutil/`: `NewDB`, `NewServer`, `CreateUser`, `CreateMember`, `CreateSeason`, `CreateTeam`, `CreateGame`, `CreateKader`, `CreateDutyType`, `CreateDutySlot`, `CreateInvitationToken`, `CreatePasswordResetToken`, `CreateRefreshToken`.
 
 `make coverage` → stdout + HTML nach `/tmp/teamwerk-coverage.html`. Coverage ist Indikator, kein Gate.
+
+`make metrics` → erhebt Größe/Komplexität/Coverage/Lint-Dichte/Duplikation, schreibt `metrics/REPORT.md` (gitignored). Komplexität nutzt **separate** `.golangci.metrics.yml` (`gocyclo`, `gocognit`, `funlen`, `dupl`) — die Haupt-`.golangci.yml` (Gate) bleibt unangetastet. Tools sind im jeweiligen Manifest gepinnt: `scc` als `go.mod`-`tool`-Direktive (`go tool scc`), `jscpd` als pnpm-devDependency (`pnpm -C web exec jscpd`). `make metrics-gate` vergleicht zusätzlich gegen `metrics/thresholds.yml` (Ratchet-Prinzip; Exit 1 bei Regression).
 
 ---
 

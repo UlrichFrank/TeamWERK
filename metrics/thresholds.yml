@@ -1,0 +1,20 @@
+# Code-Metrics Schwellwerte für `make metrics-gate`.
+#
+# Ratchet-Prinzip (siehe openspec/code-metrics-target Design D5): Startwerte
+# knapp oberhalb des Ist-Zustands beim ersten Lauf, damit das Gate sofort grün
+# ist und Regression fängt. Bei Verbesserung Werte enger ziehen.
+#
+# Schwellwerte mit Wert -1 oder fehlend werden NICHT geprüft.
+# Format: einfache `key: zahl`-Paare. Kommentare hinter `#` erlaubt.
+
+# Maximalwerte (Verstoß = "höher als …")
+gocyclo_max:            12   # Funktionen mit zyklomatischer Komplexität > 15
+gocognit_max:           35   # Funktionen mit kognitiver Komplexität > 20
+funlen_max:              8   # Funktionen länger als 100 Zeilen / 60 Statements
+dupl_go_max:             4   # duplizierte Go-Blöcke (dupl)
+dupl_frontend_max_pct:   5.0 # max. Anteil duplizierter Frontend-Zeilen (jscpd)
+lint_issues_max:         5   # Gesamt-Issues aus Haupt-.golangci.yml
+
+# Minimalwerte (Verstoß = "kleiner als …")
+go_coverage_min_pct:        38.0  # Go-Testabdeckung
+frontend_coverage_min_pct:  15.0  # Frontend-Testabdeckung (vitest)

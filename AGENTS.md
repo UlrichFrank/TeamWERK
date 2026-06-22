@@ -31,6 +31,7 @@ TeamWERK — interne Verwaltungsplattform für Team Stuttgart (Handball).
 
 - `make hooks` einmalig (aktiviert Git-Hooks: pre-commit gofmt, pre-push Gate).
 - `make test` (Backend race + vitest, inkl. Architektur-Test) · `make lint` · `pnpm -C web build`.
+- `make metrics` (Reporting, Exit 0) · `make metrics-gate` (optional, Schwellwerte aus `metrics/thresholds.yml`) — getrennte `.golangci.metrics.yml`, Haupt-Gate unangetastet.
 - Slash-Command **`/verify-change`** führt durch alle Gates + Projekt-Invarianten.
 
 ## Workflow
