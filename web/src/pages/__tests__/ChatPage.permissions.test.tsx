@@ -51,3 +51,38 @@ describe('ChatPage — canBroadcast-Gate: "Mitteilung senden"-Button', () => {
     }
   })
 })
+
+describe('BroadcastModal — Team-Dropdown sichtbar für Trainer', () => {
+  test('Trainer ohne broadcast_all sieht Team-Auswahl direkt nach Modal-Öffnung', async () => {
+    renderAsPersona(<ChatPage />, 'trainer', {
+      mocks: [{ url: '/teams', data: [
+        { id: 7, name: 'mA1', age_class: 'mA', gender: 'm', team_number: 1, group_count: 1 },
+      ] }],
+    })
+    await flushAsync()
+
+    fireEvent.click(screen.getByText('Mitteilungen'))
+    await flushAsync()
+    fireEvent.click(screen.getByText('Mitteilung senden'))
+    await flushAsync()
+
+    // Modal ist offen; das zweite <select> mit „Team wählen…" muss vorhanden sein.
+    expect(
+      screen.queryByRole('option', { name: 'Team wählen…' }),
+      'Trainer-Modal: Team-Dropdown fehlt — vermutlich falscher targetType-Default',
+    ).not.toBeNull()
+  })
+
+  test('Admin sieht „Alle Mitglieder" als Default-Zielgruppe (kein Team-Dropdown)', async () => {
+    renderAsPersona(<ChatPage />, 'admin')
+    await flushAsync()
+
+    fireEvent.click(screen.getByText('Mitteilungen'))
+    await flushAsync()
+    fireEvent.click(screen.getByText('Mitteilung senden'))
+    await flushAsync()
+
+    expect(screen.queryByRole('option', { name: 'Team wählen…' })).toBeNull()
+    expect(screen.queryByRole('option', { name: 'Alle Mitglieder' })).not.toBeNull()
+  })
+})

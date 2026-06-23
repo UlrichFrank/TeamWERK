@@ -1276,7 +1276,7 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
 // --- Broadcast Modal ---
 function BroadcastModal({ onClose, onSent, isAdmin }: { onClose: () => void; onSent: () => void; isAdmin: boolean }) {
   const [body, setBody] = useState('')
-  const [targetType, setTargetType] = useState<'all' | 'team' | 'role'>('all')
+  const [targetType, setTargetType] = useState<'all' | 'team' | 'role'>(isAdmin ? 'all' : 'team')
   const [teams, setTeams] = useState<{ id: number; name: string; age_class: string; gender: string; team_number: number; group_count: number }[]>([])
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
   const [targetId, setTargetId] = useState(0)
