@@ -47,6 +47,13 @@ const KATEGORIE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '__none__', label: '(keine Kategorie)' },
 ]
 
+type Kategorie = 'aktiv_mit' | 'aktiv_ohne' | 'passiv'
+const EXPORT_KATEGORIEN: Array<{ value: Kategorie; label: string }> = [
+  { value: 'aktiv_mit', label: 'Aktiv (mit Stammverein)' },
+  { value: 'aktiv_ohne', label: 'Aktiv (ohne Stammverein)' },
+  { value: 'passiv', label: 'Passiv' },
+]
+
 const HINWEIS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '', label: 'alle Hinweise' },
   { value: '__included__', label: 'enthalten' },
@@ -69,6 +76,10 @@ export default function BeitragslaufPage() {
   const [toast, setToast] = useState<string | null>(null)
   const [kategorieFilter, setKategorieFilter] = useState<string>('')
   const [hinweisFilter, setHinweisFilter] = useState<string>('')
+  const [exportScope, setExportScope] = useState<Set<Kategorie>>(
+    new Set<Kategorie>(['aktiv_mit', 'aktiv_ohne', 'passiv'])
+  )
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
 
   useEffect(() => {
     api.get('/seasons').then(r => {
@@ -136,10 +147,19 @@ export default function BeitragslaufPage() {
     return { count, warn, excl, sepaSum, exclSum }
   }, [preview, filteredItems, selected])
 
-  const downloadXML = async () => {
+  const memberIDsForScope = (scope: Set<Kategorie>): number[] => {
+    if (!preview) return []
+    return preview.items
+      .filter(it => it.included && selected.has(it.member_id) && it.kategorie && scope.has(it.kategorie as Kategorie))
+      .map(it => it.member_id)
+  }
+
+  const downloadXML = async (scope: Set<Kategorie>) => {
     if (!saisonId) return
+    const ids = memberIDsForScope(scope)
+    if (ids.length === 0) return
     const res = await api.post('/fee-run/export',
-      { saison_id: saisonId, member_ids: [...selected] },
+      { saison_id: saisonId, member_ids: ids },
       { responseType: 'blob' })
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
@@ -161,7 +181,7 @@ export default function BeitragslaufPage() {
         <h1 className="text-2xl font-bold text-brand-text">Beitragslauf</h1>
         {preview && (
           <div className="flex flex-wrap gap-3">
-            <button onClick={downloadXML} disabled={summary.count === 0} className={BTN_PRIMARY}>XML herunterladen</button>
+            <button onClick={() => setExportDialogOpen(true)} disabled={summary.count === 0} className={BTN_PRIMARY}>XML herunterladen</button>
             <button onClick={() => setConfirmOpen(true)} className={BTN_SECONDARY}>Lauf bestätigen</button>
             <button onClick={openProtocol} className={BTN_SECONDARY}>Protokoll ansehen</button>
           </div>
@@ -296,10 +316,25 @@ export default function BeitragslaufPage() {
         </>
       )}
 
+      {exportDialogOpen && preview && (
+        <ExportScopeDialog
+          preview={preview}
+          selected={selected}
+          initialScope={exportScope}
+          onClose={() => setExportDialogOpen(false)}
+          onConfirm={async (scope) => {
+            setExportScope(scope)
+            setExportDialogOpen(false)
+            await downloadXML(scope)
+          }}
+        />
+      )}
+
       {confirmOpen && preview && (
         <ConfirmDialog
           preview={preview}
           selected={selected}
+          scope={exportScope}
           onClose={() => setConfirmOpen(false)}
           onDone={msg => { setConfirmOpen(false); setToast(msg); setTimeout(() => setToast(null), 3000); loadPreview() }}
         />
@@ -318,13 +353,15 @@ export default function BeitragslaufPage() {
   )
 }
 
-function ConfirmDialog({ preview, selected, onClose, onDone }: {
+function ConfirmDialog({ preview, selected, scope, onClose, onDone }: {
   preview: PreviewResp
   selected: Set<number>
+  scope: Set<Kategorie>
   onClose: () => void
   onDone: (msg: string) => void
 }) {
-  const items = preview.items.filter(i => selected.has(i.member_id) && i.included)
+  const items = preview.items.filter(i =>
+    selected.has(i.member_id) && i.included && i.kategorie && scope.has(i.kategorie as Kategorie))
   const [failed, setFailed] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
 
@@ -372,6 +409,73 @@ function ConfirmDialog({ preview, selected, onClose, onDone }: {
       <div className="flex justify-end gap-2 mt-4">
         <button onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
         <button onClick={submit} disabled={busy} className={BTN_PRIMARY}>Bestätigen ({items.length})</button>
+      </div>
+    </Modal>
+  )
+}
+
+function ExportScopeDialog({ preview, selected, initialScope, onClose, onConfirm }: {
+  preview: PreviewResp
+  selected: Set<number>
+  initialScope: Set<Kategorie>
+  onClose: () => void
+  onConfirm: (scope: Set<Kategorie>) => void
+}) {
+  const [scope, setScope] = useState<Set<Kategorie>>(new Set(initialScope))
+
+  const stats = useMemo(() => {
+    const out: Record<Kategorie, { count: number; sum: number }> = {
+      aktiv_mit: { count: 0, sum: 0 },
+      aktiv_ohne: { count: 0, sum: 0 },
+      passiv: { count: 0, sum: 0 },
+    }
+    for (const it of preview.items) {
+      if (!it.included || !selected.has(it.member_id) || !it.kategorie) continue
+      const k = it.kategorie as Kategorie
+      if (!(k in out)) continue
+      out[k].count++
+      out[k].sum += it.betrag_cent ?? 0
+    }
+    return out
+  }, [preview, selected])
+
+  const toggle = (k: Kategorie) => {
+    const next = new Set(scope)
+    if (next.has(k)) next.delete(k); else next.add(k)
+    setScope(next)
+  }
+
+  const totalCount = EXPORT_KATEGORIEN.reduce((n, k) => n + (scope.has(k.value) ? stats[k.value].count : 0), 0)
+  const totalSum = EXPORT_KATEGORIEN.reduce((s, k) => s + (scope.has(k.value) ? stats[k.value].sum : 0), 0)
+
+  return (
+    <Modal title="Welche Beiträge in die XML aufnehmen?" onClose={onClose}>
+      <p className="text-sm text-brand-text-muted mb-3">
+        Wähle, welche Kategorien in den Beitragslauf einfließen. Die Auswahl gilt auch für „Lauf bestätigen".
+      </p>
+      <div className="space-y-2">
+        {EXPORT_KATEGORIEN.map(k => {
+          const { count, sum } = stats[k.value]
+          return (
+            <label key={k.value} className="flex items-center justify-between gap-3 px-3 py-2 border border-brand-border-subtle rounded-lg">
+              <span className="flex items-center gap-2 text-brand-text">
+                <input type="checkbox" checked={scope.has(k.value)} onChange={() => toggle(k.value)} />
+                {k.label}
+              </span>
+              <span className="text-sm text-brand-text-muted">
+                {count} Mitglied{count === 1 ? '' : 'er'} · <span className="font-semibold text-brand-text">{formatBetrag(sum)}</span>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+      <div className="border-t border-brand-border-subtle mt-3 pt-3 flex justify-between text-sm">
+        <span className="text-brand-text-muted">Auswahl gesamt</span>
+        <span className="text-brand-text">{totalCount} Mitglied{totalCount === 1 ? '' : 'er'} · <span className="font-semibold">{formatBetrag(totalSum)}</span></span>
+      </div>
+      <div className="flex justify-end gap-2 mt-4">
+        <button onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
+        <button onClick={() => onConfirm(scope)} disabled={totalCount === 0} className={BTN_PRIMARY}>XML herunterladen</button>
       </div>
     </Modal>
   )
