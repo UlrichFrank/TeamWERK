@@ -67,6 +67,7 @@ betreibt zusätzlich zwei Metrik-Sources:
 |---|---|---|
 | `host_metrics` | CPU, Memory, Network, Disk-IO, Swap, Filesystem | Better Stack → Dashboard „Host(Vector)" |
 | `prometheus_scrape` gegen `http://127.0.0.1:8080/api/metrics` (Bearer `METRICS_TOKEN`) | alle `teamwerk_*`-Metriken | Better Stack → Telemetry-Source `teamwerk_app` |
+| `internal_metrics` | `vector_component_received_events_total`, `vector_utilization`, … | Better-Stack-„Vector"-Dashboard prüft genau diese Marker, sonst lehnt es die Source als „nicht kompatibel" ab |
 
 Beide Streams gehen in den **austauschbaren** Sink `betterstack_metrics`
 (`prometheus_remote_write`). Der konkrete Ingesting-Host wird pro Better-Stack-

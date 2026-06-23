@@ -198,10 +198,18 @@ scrape_interval_secs = 30
 auth.strategy = "bearer"
 auth.token = "$APP_METRICS_TOKEN"
 
-# Beide Metrik-Streams in den austauschbaren Better-Stack-Telemetry-Sink.
+# Vector-Selbsttelemetrie: Better Stack's "Vector"-Dashboard erwartet
+# vector_component_received_events_total / vector_utilization als Marker für
+# eine kompatible Source. Ohne diese internal_metrics weigert sich das
+# Dashboard, gegen die Source zu laufen.
+[sources.vector_internal]
+type = "internal_metrics"
+scrape_interval_secs = 30
+
+# Alle drei Metrik-Streams in den austauschbaren Better-Stack-Telemetry-Sink.
 [sinks.betterstack_metrics]
 type = "prometheus_remote_write"
-inputs = ["host", "teamwerk_app"]
+inputs = ["host", "teamwerk_app", "vector_internal"]
 endpoint = "https://$BS_METRICS_HOST"
 
 [sinks.betterstack_metrics.auth]
