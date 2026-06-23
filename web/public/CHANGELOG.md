@@ -1,3 +1,6 @@
+## 24.06.2026
+- [fix] members: SEPA-Bulk-Match — NFC-normalisieren vor Umlaut-Substitution
+
 ## 23.06.2026
 - [feat] members: SEPA-Bulk-Match — Fallback auf ersten Vornamens-Token
 - [fix] nginx: aktive Production-Config (internal.team-stuttgart.org) ins Repo spiegeln
