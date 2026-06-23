@@ -206,6 +206,19 @@ auth.token = "$APP_METRICS_TOKEN"
 type = "internal_metrics"
 scrape_interval_secs = 30
 
+# internal_metrics emittiert Namen wie "component_received_events_total" —
+# der vector_-Namespace wird beim http+json-Encoding NICHT in das name-Feld
+# gemergt. Better Stacks Eligibility-Query verlangt aber exakt
+# "vector_component_received_events_total". Diese Transform prependet den
+# Prefix nur für den vector_internal-Stream (host_/teamwerk_-Metriken bleiben
+# unverändert, weil sie ihre Prefixe schon mitbringen).
+[transforms.vector_internal_renamed]
+type = "remap"
+inputs = ["vector_internal"]
+source = '''
+  .name = "vector_" + string!(.name)
+'''
+
 # Alle drei Metrik-Streams in den Better-Stack-"Logs & Metrics"-Sink. Wichtig:
 # Vector-HTTP-Sink mit JSON-Encoding (NICHT prometheus_remote_write) — Better
 # Stacks Dashboard erwartet das native Vector-Metric-Event-Schema mit
@@ -215,7 +228,7 @@ scrape_interval_secs = 30
 [sinks.betterstack_metrics]
 type = "http"
 method = "post"
-inputs = ["host", "teamwerk_app", "vector_internal"]
+inputs = ["host", "teamwerk_app", "vector_internal_renamed"]
 uri = "https://$BS_METRICS_HOST/"
 encoding.codec = "json"
 compression = "gzip"
