@@ -1,8 +1,5 @@
 ## 22.06.2026
-- [feat] members: CSV-Import nutzt Status TeamWERK und eigene beitragsfrei-Spalten
-- [feat] members: Grund für Beitragsfreiheit im Bankdaten-Tab editierbar
-- [feat] members: Kassierer pflegt Beitragsfrei + Grund via bank-details
-- [feat] db: Migration 007 — members.beitragsfrei_grund
+- [feat] members: Status TeamWERK und Beitragsfrei-Grund im CSV-Import
 - [feat] monitoring: Host- und SQLite-Metriken via Vector-Pipeline (#66)
 - [fix] games: generische Events mit template_id erlauben
 - [feat] games: template_id als persistente Slot-Quelle pro Event
