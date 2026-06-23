@@ -1,4 +1,6 @@
 ## 23.06.2026
+- [feat] members: SEPA-Bulk-Match — Fallback auf ersten Vornamens-Token
+- [fix] nginx: aktive Production-Config (internal.team-stuttgart.org) ins Repo spiegeln
 - [fix] nginx: client_max_body_size 50m global + 600m für SEPA-Bulk-Import
 - [fix] backup: robust gegen fehlende Verzeichnisse
 - [feat] members: Bulk-Import für SEPA-Mandat-PDFs auf der Mitgliederseite

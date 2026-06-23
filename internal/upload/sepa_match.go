@@ -4,11 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // normalizeName collapses a name (or PDF basename) to a comparison-safe form:
 // lowercase, German umlaut substitution, and stripped of whitespace/punctuation.
+//
+// macOS Finder stores filenames in NFD (Unicode decomposed: ä = a + U+0308),
+// while typical DB text is NFC (single codepoint U+00E4). Without normalization
+// to NFC the umlaut substitution would silently miss decomposed forms — so we
+// run norm.NFC first and the substitution operates on the composed form.
 func normalizeName(s string) string {
+	s = norm.NFC.String(s)
 	s = strings.ToLower(s)
 
 	replacer := strings.NewReplacer(

@@ -7,10 +7,15 @@ import (
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
+	"golang.org/x/text/unicode/norm"
 )
 
 func TestNormalizeName(t *testing.T) {
 	t.Parallel()
+	// NFD-Form (decomposed: a + combining diaeresis), wie macOS Finder
+	// Dateinamen liefert. Explizit per norm.NFD aufgebaut, damit der Test
+	// nicht davon abhängt, in welcher Form das Source-Literal eingebettet ist.
+	nfdJaeger := norm.NFD.String("Jäger")
 	cases := []struct {
 		in, want string
 	}{
@@ -20,6 +25,7 @@ func TestNormalizeName(t *testing.T) {
 		{"Heß", "hess"},
 		{"Anna-Lena O'Connor", "annalenaoconnor"},
 		{"  Max_Mustermann.PDF ", "maxmustermannpdf"},
+		{nfdJaeger, "jaeger"},
 		{"", ""},
 	}
 	for _, c := range cases {
@@ -52,6 +58,8 @@ func TestMatchMemberByFilename(t *testing.T) {
 	dupB := insertMatchMember(t, db, "Lukas", "Schmidt")
 	// Member mit Zweitname im first_name → erster-Token-Fallback muss greifen
 	lucaID := insertMatchMember(t, db, "Luca Marco", "Buric")
+	// Member mit Umlaut → NFD-Input (macOS) muss matchen
+	felixID := insertMatchMember(t, db, "Felix", "Jäger")
 
 	cases := []struct {
 		name     string
@@ -68,6 +76,7 @@ func TestMatchMemberByFilename(t *testing.T) {
 		{"first-token fallback forward", "LucaBuric", []int{lucaID}},
 		{"first-token fallback reverse", "BuricLuca", []int{lucaID}},
 		{"full name with second name still matches", "LucaMarcoBuric", []int{lucaID}},
+		{"NFD basename matcht NFC-DB-Name", norm.NFD.String("JägerFelix"), []int{felixID}},
 		{"empty basename", "", nil},
 	}
 	for _, c := range cases {
