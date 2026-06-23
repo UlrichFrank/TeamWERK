@@ -32,9 +32,11 @@ func normalizeName(s string) string {
 	return b.String()
 }
 
-// matchMemberByFilename returns all member IDs whose first_name+last_name (in
-// either order) normalize to the same string as basename. Length 0 = no match,
-// 1 = unique match, >1 = ambiguous.
+// matchMemberByFilename returns all member IDs whose first_name+last_name
+// normalizes to basename. Beyond the exact full-name match, the first token of
+// first_name is also tried as a fallback so that members with a stored second
+// given name (e.g. "Luca Marco" Buric) still match a "BuricLuca.pdf". Length
+// 0 = no match, 1 = unique match, >1 = ambiguous.
 func matchMemberByFilename(ctx context.Context, db *sql.DB, basename string) ([]int, error) {
 	target := normalizeName(basename)
 	if target == "" {
@@ -54,9 +56,7 @@ func matchMemberByFilename(ctx context.Context, db *sql.DB, basename string) ([]
 		if err := rows.Scan(&id, &first, &last); err != nil {
 			return nil, err
 		}
-		fn := normalizeName(first + last)
-		ln := normalizeName(last + first)
-		if fn == target || ln == target {
+		if memberMatchesTarget(first, last, target) {
 			matches = append(matches, id)
 		}
 	}
@@ -64,4 +64,26 @@ func matchMemberByFilename(ctx context.Context, db *sql.DB, basename string) ([]
 		return nil, err
 	}
 	return matches, nil
+}
+
+// memberMatchesTarget returns true if the given member's name (in any of four
+// normalized variants — full and first-token-only, each in both orders) equals
+// the already-normalized target.
+func memberMatchesTarget(first, last, target string) bool {
+	if normalizeName(first+last) == target || normalizeName(last+first) == target {
+		return true
+	}
+	firstToken := firstWord(first)
+	if firstToken == "" || firstToken == first {
+		return false
+	}
+	return normalizeName(firstToken+last) == target || normalizeName(last+firstToken) == target
+}
+
+func firstWord(s string) string {
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }

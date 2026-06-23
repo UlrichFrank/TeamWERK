@@ -50,6 +50,8 @@ func TestMatchMemberByFilename(t *testing.T) {
 	annaID := insertMatchMember(t, db, "Anna-Lena", "O'Connor")
 	dupA := insertMatchMember(t, db, "Lukas", "Schmidt")
 	dupB := insertMatchMember(t, db, "Lukas", "Schmidt")
+	// Member mit Zweitname im first_name → erster-Token-Fallback muss greifen
+	lucaID := insertMatchMember(t, db, "Luca Marco", "Buric")
 
 	cases := []struct {
 		name     string
@@ -63,6 +65,9 @@ func TestMatchMemberByFilename(t *testing.T) {
 		{"reverse hyphen+apostrophe", "OConnorAnnaLena", []int{annaID}},
 		{"no match", "Unbekannt", nil},
 		{"ambiguous", "LukasSchmidt", []int{dupA, dupB}},
+		{"first-token fallback forward", "LucaBuric", []int{lucaID}},
+		{"first-token fallback reverse", "BuricLuca", []int{lucaID}},
+		{"full name with second name still matches", "LucaMarcoBuric", []int{lucaID}},
 		{"empty basename", "", nil},
 	}
 	for _, c := range cases {

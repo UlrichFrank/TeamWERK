@@ -16,7 +16,7 @@ Das System SHALL einen Bulk-Import-Endpoint `POST /api/members/sepa-mandates/imp
 - **THEN** antwortet der Server mit HTTP 403 Forbidden, ohne Dateien zu lesen
 
 ### Requirement: Filename-Match per normalisiertem Vor-/Nachnamen
-Das System SHALL pro PDF den Basename (ohne `.pdf`) normalisieren (lowercase, Umlaut-Substitution `ä→ae`, `ö→oe`, `ü→ue`, `ß→ss`, Entfernen von Leerzeichen/Bindestrichen/Apostrophen/Unterstrichen/Punkten) und gegen die normalisierte Konkatenation `first_name+last_name` und `last_name+first_name` jedes Mitglieds vergleichen.
+Das System SHALL pro PDF den Basename (ohne `.pdf`) normalisieren (lowercase, Umlaut-Substitution `ä→ae`, `ö→oe`, `ü→ue`, `ß→ss`, Entfernen von Leerzeichen/Bindestrichen/Apostrophen/Unterstrichen/Punkten) und gegen die normalisierte Konkatenation `first_name+last_name` und `last_name+first_name` jedes Mitglieds vergleichen. Schlägt der Voll-Vornamens-Match fehl, MUSS zusätzlich der **erste Token** des `first_name` (per `strings.Fields`) in beiden Reihenfolgen geprüft werden, damit Mitglieder mit Zweit-/Drittnamen (z. B. `first_name='Luca Marco'`) weiter matchen.
 
 #### Scenario: Eindeutiger Match in Vorname-Nachname-Reihenfolge
 - **WHEN** Datei `MaxMustermann.pdf` hochgeladen wird und genau ein Mitglied `first_name='Max', last_name='Mustermann'` existiert
@@ -29,6 +29,10 @@ Das System SHALL pro PDF den Basename (ohne `.pdf`) normalisieren (lowercase, Um
 #### Scenario: Umlaute werden normalisiert
 - **WHEN** Datei `JuergenMueller.pdf` hochgeladen wird und ein Mitglied `first_name='Jürgen', last_name='Müller'` existiert
 - **THEN** matcht der normalisierte Dateiname das normalisierte Mitglied und das PDF wird importiert
+
+#### Scenario: Zweitname im first_name — erster Token greift
+- **WHEN** Datei `BuricLuca.pdf` hochgeladen wird und ein Mitglied `first_name='Luca Marco', last_name='Buric'` existiert
+- **THEN** matcht der erste Token (`Luca`) zusammen mit dem Nachnamen und das PDF wird diesem Mitglied zugeordnet
 
 #### Scenario: Kein passendes Mitglied
 - **WHEN** Datei `Unbekannt.pdf` hochgeladen wird und kein Mitglied normalisiert auf diesen Basename matcht
