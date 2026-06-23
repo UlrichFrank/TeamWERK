@@ -148,7 +148,7 @@ func serve() {
 		Dashboard:      dashboard.NewHandler(database),
 		Games:          games.NewHandler(database, cfg, hubInstance),
 		Kader:          kader.NewHandler(database, hubInstance),
-		Upload:         upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret),
+		Upload:         upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret, hubInstance),
 		Files:          files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret),
 		Carpool:        carpooling.NewHandler(database, cfg, hubInstance),
 		Chat:           chat.NewHandler(database, hubInstance, cfg),

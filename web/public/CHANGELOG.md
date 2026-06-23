@@ -1,3 +1,13 @@
+## 23.06.2026
+- [feat] members: Bulk-Import für SEPA-Mandat-PDFs (Verzeichnis-Upload, Skip-Existing, Report)
+- [feat] beitragslauf: Kategorie-Auswahl beim XML-Export
+- [fix] chat: Broadcast-Modal initialisiert targetType abhängig von broadcast_all
+- [fix] monitoring: Better-Stack-Metrics-URI auf /metrics-Pfad zurückdrehen
+- [fix] monitoring: vector_-Namespace per VRL-Remap im name-Feld setzen
+- [fix] monitoring: Better-Stack-Metrics-Sink auf HTTP+JSON umstellen
+- [fix] monitoring: Vector-internal_metrics für Better-Stack-Dashboard ergänzen
+- [fix] monitoring: Better-Stack-Metrics-Endpoint pro Source konfigurierbar
+
 ## 22.06.2026
 - [feat] members: Status TeamWERK und Beitragsfrei-Grund im CSV-Import
 - [feat] monitoring: Host- und SQLite-Metriken via Vector-Pipeline (#66)

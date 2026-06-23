@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { X, User, CreditCard, ChevronDown, AlertTriangle, ChevronRight } from 'lucide-react'
+import { X, User, CreditCard, ChevronDown, AlertTriangle, ChevronRight, FolderUp } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
@@ -41,6 +41,25 @@ interface ImportReport {
   errors: number
   not_found?: number
   rows: ImportRow[]
+}
+
+interface SepaBulkEntry {
+  filename: string
+  member_id?: number
+  member_name?: string
+  reason?: string
+}
+
+interface SepaBulkAmbiguous {
+  filename: string
+  candidates: { member_id: number; member_name: string }[]
+}
+
+interface SepaBulkReport {
+  imported: SepaBulkEntry[]
+  already_exists: SepaBulkEntry[]
+  no_match: SepaBulkEntry[]
+  ambiguous: SepaBulkAmbiguous[]
 }
 
 // Aktualisierbare DB-Spalten ↔ Anzeige-Label für die Feld-Auswahl beim Import.
@@ -197,6 +216,57 @@ export default function MembersPage() {
   const [showActionsMenu, setShowActionsMenu] = useState(false)
   const actionsMenuRef = useRef<HTMLDivElement>(null)
 
+  // Bulk-Import SEPA-Mandate (siehe openspec/changes/sepa-mandates-bulk-import).
+  const canBulkSepa = isAdmin || hasCapability('manage_fees')
+  const [showSepaBulk, setShowSepaBulk] = useState(false)
+  const [sepaFiles, setSepaFiles] = useState<File[]>([])
+  const [sepaImporting, setSepaImporting] = useState(false)
+  const [sepaError, setSepaError] = useState('')
+  const [sepaReport, setSepaReport] = useState<SepaBulkReport | null>(null)
+  const sepaInputRef = useRef<HTMLInputElement>(null)
+
+  const resetSepaBulk = () => {
+    setShowSepaBulk(false)
+    setSepaFiles([])
+    setSepaError('')
+    setSepaReport(null)
+    setSepaImporting(false)
+    if (sepaInputRef.current) sepaInputRef.current.value = ''
+  }
+
+  const handleSepaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const all = Array.from(e.target.files ?? [])
+    setSepaFiles(all.filter(f => f.name.toLowerCase().endsWith('.pdf')))
+    setSepaError('')
+    setSepaReport(null)
+  }
+
+  const handleSepaSubmit = async () => {
+    if (sepaFiles.length === 0) return
+    setSepaImporting(true)
+    setSepaError('')
+    try {
+      const fd = new FormData()
+      sepaFiles.forEach(f => fd.append('files', f, f.name))
+      const res = await api.post<SepaBulkReport>('/members/sepa-mandates/import', fd)
+      setSepaReport(res.data)
+      if (res.data.imported.length > 0) refresh()
+    } catch (err) {
+      const resp = (err as { response?: { status?: number; data?: { limit?: string; error?: string } } })?.response
+      let detail = 'Import fehlgeschlagen.'
+      if (resp?.status === 413) {
+        detail = resp.data?.limit ?? 'Datei-Paket zu groß. Bitte in kleinere Tranchen aufteilen.'
+      } else if (resp?.data?.limit) {
+        detail = resp.data.limit
+      } else if (resp?.data?.error) {
+        detail = resp.data.error
+      }
+      setSepaError(detail)
+    } finally {
+      setSepaImporting(false)
+    }
+  }
+
   const handleExport = () => {
     api.get('/members/export', { responseType: 'blob' }).then(r => {
       const url = URL.createObjectURL(r.data)
@@ -294,7 +364,7 @@ export default function MembersPage() {
     })
   }
 
-  useEscapeKey(showNew ? resetNew : showImport ? resetImport : showActionsMenu ? () => setShowActionsMenu(false) : null)
+  useEscapeKey(showNew ? resetNew : showImport ? resetImport : showSepaBulk ? resetSepaBulk : showActionsMenu ? () => setShowActionsMenu(false) : null)
 
   useEffect(() => {
     if (!showActionsMenu) return
@@ -351,40 +421,54 @@ export default function MembersPage() {
                 </label>
               </div>
             )}
-            {isAdmin && (
+            {(isAdmin || canBulkSepa) && (
               <div ref={actionsMenuRef} className="relative">
                 <div className="flex">
-                  <button
-                    onClick={() => setShowNew(true)}
-                    className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow rounded-l-md px-3 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
-                  >
-                    + Neu
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setShowNew(true)}
+                      className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow rounded-l-md px-3 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+                    >
+                      + Neu
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowActionsMenu(v => !v)}
                     aria-label="Weitere Aktionen"
-                    className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow border-l-brand-black/20 border-l rounded-r-md px-2 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+                    className={`text-xs bg-brand-yellow text-brand-black border border-brand-yellow px-2 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors ${isAdmin ? 'border-l-brand-black/20 border-l rounded-r-md' : 'rounded-md'}`}
                   >
                     <ChevronDown className="w-4 h-4" />
                   </button>
                 </div>
                 {showActionsMenu && (
                   <div
-                    className="absolute right-0 mt-1 w-40 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden"
+                    className="absolute right-0 mt-1 w-52 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden"
                     onBlur={() => setShowActionsMenu(false)}
                   >
-                    <button
-                      onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
-                    >
-                      Import CSV
-                    </button>
-                    <button
-                      onClick={() => { setShowActionsMenu(false); handleExport() }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
-                    >
-                      Export CSV
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      >
+                        Import CSV
+                      </button>
+                    )}
+                    {canBulkSepa && (
+                      <button
+                        onClick={() => { setShowActionsMenu(false); setShowSepaBulk(true) }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      >
+                        Import SEPA-Mandate
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => { setShowActionsMenu(false); handleExport() }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      >
+                        Export CSV
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -783,6 +867,156 @@ export default function MembersPage() {
           </div>
         </div>
       )}
+
+      {/* SEPA-Mandate Bulk Import Modal */}
+      {showSepaBulk && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
+              <h2 className="font-semibold text-base text-brand-text">SEPA-Mandate importieren</h2>
+              <button onClick={resetSepaBulk} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!sepaReport && (
+              <div className="px-6 py-5 space-y-5 overflow-y-auto">
+                <p className="text-sm text-brand-text-muted">
+                  Verzeichnis mit SEPA-Mandat-PDFs auswählen. Dateinamen werden nach
+                  Schema <code className="font-mono text-xs">VornameNachname.pdf</code>{' '}
+                  Mitgliedern zugeordnet. Bestehende Mandate werden <strong>nicht</strong>{' '}
+                  überschrieben.
+                </p>
+
+                <input
+                  ref={sepaInputRef}
+                  type="file"
+                  multiple
+                  accept="application/pdf"
+                  // @ts-expect-error webkitdirectory is non-standard but widely supported.
+                  webkitdirectory=""
+                  directory=""
+                  className="hidden"
+                  onChange={handleSepaSelect}
+                />
+                <button
+                  type="button"
+                  onClick={() => sepaInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={sepaImporting}
+                >
+                  <FolderUp className="w-4 h-4" />
+                  Verzeichnis wählen
+                </button>
+
+                {sepaFiles.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs uppercase text-brand-text-muted">
+                      {sepaFiles.length} PDF{sepaFiles.length === 1 ? '' : 's'} ausgewählt ({(sepaFiles.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(1)} MB)
+                    </p>
+                    <ul className="max-h-48 overflow-y-auto text-sm text-brand-text divide-y divide-brand-border-subtle border border-brand-border-subtle rounded-md">
+                      {sepaFiles.map((f, i) => (
+                        <li key={i} className="px-3 py-1.5 truncate">{f.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {sepaError && (
+                  <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{sepaError}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {sepaReport && (
+              <div className="px-6 py-5 space-y-4 overflow-y-auto">
+                <SepaBulkSection title="Importiert" tone="ok" entries={sepaReport.imported} emptyText="keine" />
+                <SepaBulkSection title="Bereits vorhanden" tone="muted" entries={sepaReport.already_exists} emptyText="keine" />
+                <SepaBulkSection title="Nicht zugeordnet" tone="warn" entries={sepaReport.no_match} emptyText="keine" showReason />
+                <SepaBulkAmbiguousSection entries={sepaReport.ambiguous} />
+              </div>
+            )}
+
+            <div className="px-6 py-4 border-t border-brand-border-subtle flex justify-end gap-2">
+              {!sepaReport && (
+                <button
+                  onClick={handleSepaSubmit}
+                  disabled={sepaImporting || sepaFiles.length === 0}
+                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sepaImporting ? 'Importiere…' : 'Hochladen & Importieren'}
+                </button>
+              )}
+              <button
+                onClick={resetSepaBulk}
+                className="border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
+  title: string
+  tone: 'ok' | 'warn' | 'muted'
+  entries: SepaBulkEntry[]
+  emptyText: string
+  showReason?: boolean
+}) {
+  const headerClass = tone === 'ok'
+    ? 'text-brand-green'
+    : tone === 'warn'
+      ? 'text-brand-danger'
+      : 'text-brand-text-muted'
+  return (
+    <section>
+      <h3 className={`text-xs uppercase font-semibold ${headerClass}`}>
+        {title} ({entries.length})
+      </h3>
+      {entries.length === 0 ? (
+        <p className="text-xs text-brand-text-subtle mt-1">{emptyText}</p>
+      ) : (
+        <ul className="mt-1 text-sm text-brand-text divide-y divide-brand-border-subtle border border-brand-border-subtle rounded-md">
+          {entries.map((e, i) => (
+            <li key={i} className="px-3 py-1.5 flex items-baseline gap-2">
+              <span className="truncate flex-1">{e.filename}</span>
+              {e.member_name && <span className="text-xs text-brand-text-muted">→ {e.member_name}</span>}
+              {showReason && e.reason && <span className="text-xs text-brand-danger">{e.reason}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function SepaBulkAmbiguousSection({ entries }: { entries: SepaBulkAmbiguous[] }) {
+  return (
+    <section>
+      <h3 className="text-xs uppercase font-semibold text-amber-600">
+        Mehrdeutig ({entries.length})
+      </h3>
+      {entries.length === 0 ? (
+        <p className="text-xs text-brand-text-subtle mt-1">keine</p>
+      ) : (
+        <ul className="mt-1 text-sm text-brand-text divide-y divide-brand-border-subtle border border-brand-border-subtle rounded-md">
+          {entries.map((e, i) => (
+            <li key={i} className="px-3 py-1.5">
+              <div className="truncate">{e.filename}</div>
+              <div className="text-xs text-brand-text-muted">
+                Kandidaten: {e.candidates.map(c => c.member_name).join(', ')}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }

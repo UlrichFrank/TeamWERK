@@ -449,6 +449,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/upload/member-photo/{id}", expected: exVorstand},
 	{method: "DELETE", path: "/api/upload/member-photo/{id}", expected: exVorstand},
 	{method: "POST", path: "/api/upload/sepa-mandat/{id}", expected: exVorstandKassierer},
+	{method: "POST", path: "/api/members/sepa-mandates/import", expected: exVorstandKassierer},
 	{method: "PUT", path: "/api/age-class-rules/{ageClass}", expected: exVorstand},
 	{method: "POST", path: "/api/stammvereine", expected: exVorstand},
 	{method: "PUT", path: "/api/stammvereine/{id}", expected: exVorstand},

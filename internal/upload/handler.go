@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,24 +14,29 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
 var imageTypes = []string{"image/jpeg", "image/jpg", "image/png", "image/webp"}
 var pdfAndImageTypes = []string{"application/pdf", "image/jpeg", "image/png", "image/webp"}
+var pdfOnlyTypes = []string{"application/pdf"}
 
 const (
-	maxPhotoBytes = 5 << 20 // 5 MB
-	maxSepaBytes  = 2 << 20 // 2 MB
+	maxPhotoBytes        = 5 << 20   // 5 MB
+	maxSepaBytes         = 2 << 20   // 2 MB (Einzel-Upload via Detail-Tab)
+	maxBulkSepaFileBytes = 10 << 20  // 10 MB pro PDF im Bulk-Import (gescannte Mandate sind oft >2 MB)
+	maxBulkSepaBytes     = 500 << 20 // 500 MB Multipart-Body-Cap (~250 Mandate à 2 MB oder ~50 à 10 MB)
 )
 
 type Handler struct {
 	db        *sql.DB
 	uploadDir string
 	secret    string
+	hub       *hub.EventHub
 }
 
-func NewHandler(db *sql.DB, uploadDir, secret string) *Handler {
-	return &Handler{db: db, uploadDir: uploadDir, secret: secret}
+func NewHandler(db *sql.DB, uploadDir, secret string, h *hub.EventHub) *Handler {
+	return &Handler{db: db, uploadDir: uploadDir, secret: secret, hub: h}
 }
 
 func sniffImageType(b []byte) string {
@@ -57,6 +63,16 @@ func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string
 		return "", fmt.Errorf("missing file field")
 	}
 	defer file.Close()
+	return h.persistMultipartFile(file, hdr, subdir, allowedTypes, maxBytes)
+}
+
+// persistMultipartFile validates and persists a single multipart part. It is
+// shared between the single-file upload paths and BulkImportSepaMandate.
+// Size enforcement happens here: a part larger than maxBytes returns "too_large".
+func (h *Handler) persistMultipartFile(file multipart.File, hdr *multipart.FileHeader, subdir string, allowedTypes []string, maxBytes int64) (string, error) {
+	if hdr.Size > maxBytes {
+		return "", fmt.Errorf("too_large")
+	}
 
 	contentType := hdr.Header.Get("Content-Type")
 	isAllowed := func(ct string) bool {
@@ -80,7 +96,7 @@ func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string
 			contentType = sniffImageType(buf[:n])
 		}
 		if !isAllowed(contentType) {
-			return "", fmt.Errorf("unsupported file type: %s", hdr.Header.Get("Content-Type"))
+			return "", fmt.Errorf("unsupported_type")
 		}
 	}
 
@@ -99,6 +115,7 @@ func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
+		os.Remove(filepath.Join(dir, filename))
 		return "", fmt.Errorf("cannot write file")
 	}
 

@@ -314,6 +314,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Get("/api/members/{id}/parents", h.Members.GetMemberParents)
 			r.Put("/api/members/{id}/bank-details", h.Members.UpdateBankdaten)
 			r.Post("/api/upload/sepa-mandat/{id}", h.Upload.UploadSepaMandat)
+			r.Post("/api/members/sepa-mandates/import", h.Upload.BulkImportSepaMandate)
 			// (DELETE sepa-mandat bleibt in der Authenticated-Gruppe — breiterer Zugriff)
 			// Vereins-Stammdaten (Verein-Tab: Name/Adresse + SEPA) — Kassierer pflegt SEPA-Daten für den Beitragslauf
 			r.Get("/api/club", h.Config.GetClub)
