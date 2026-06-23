@@ -131,7 +131,11 @@ backup-files: ## Dokumente + Beitragslauf-Protokolle vom VPS sichern (./backup/f
 	rsync -az $(REMOTE):$(FILES_DIR_REMOTE)/ ./backup/files/
 	@echo "Synchronisiere Beitragslauf-Protokolle..."
 	@mkdir -p ./backup/beitragslauf-protokolle
-	rsync -az $(REMOTE):$(BEITRAGSLAUF_DIR_REMOTE)/ ./backup/beitragslauf-protokolle/
+	@if ssh $(REMOTE) "test -d $(BEITRAGSLAUF_DIR_REMOTE)"; then \
+		rsync -az $(REMOTE):$(BEITRAGSLAUF_DIR_REMOTE)/ ./backup/beitragslauf-protokolle/; \
+	else \
+		echo "  (Remote-Verzeichnis $(BEITRAGSLAUF_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
+	fi
 	@echo "Backup gespeichert: ./backup/files/, ./backup/beitragslauf-protokolle/"
 
 restore-local: ## Backup (DB + Bilder) lokal einspielen

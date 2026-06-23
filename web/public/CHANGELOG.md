@@ -1,5 +1,5 @@
 ## 23.06.2026
-- [feat] members: Bulk-Import für SEPA-Mandat-PDFs (Verzeichnis-Upload, Skip-Existing, Report)
+- [feat] members: Bulk-Import für SEPA-Mandat-PDFs auf der Mitgliederseite
 - [feat] beitragslauf: Kategorie-Auswahl beim XML-Export
 - [fix] chat: Broadcast-Modal initialisiert targetType abhängig von broadcast_all
 - [fix] monitoring: Better-Stack-Metrics-URI auf /metrics-Pfad zurückdrehen
