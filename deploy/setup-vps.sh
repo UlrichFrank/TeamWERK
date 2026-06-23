@@ -229,7 +229,7 @@ source = '''
 type = "http"
 method = "post"
 inputs = ["host", "teamwerk_app", "vector_internal_renamed"]
-uri = "https://$BS_METRICS_HOST/"
+uri = "https://$BS_METRICS_HOST/metrics"
 encoding.codec = "json"
 compression = "gzip"
 
