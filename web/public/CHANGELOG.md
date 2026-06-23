@@ -1,4 +1,6 @@
 ## 23.06.2026
+- [fix] nginx: client_max_body_size 50m global + 600m für SEPA-Bulk-Import
+- [fix] backup: robust gegen fehlende Verzeichnisse
 - [feat] members: Bulk-Import für SEPA-Mandat-PDFs auf der Mitgliederseite
 - [feat] beitragslauf: Kategorie-Auswahl beim XML-Export
 - [fix] chat: Broadcast-Modal initialisiert targetType abhängig von broadcast_all
