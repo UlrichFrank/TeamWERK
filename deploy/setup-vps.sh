@@ -152,8 +152,17 @@ if [ ! -f "$BETTERSTACK_METRICS_TOKEN_FILE" ]; then
     echo "⚠️  $BETTERSTACK_METRICS_TOKEN_FILE angelegt — Better-Stack-Telemetry-Metrics-Token eintragen!"
 fi
 
+# Ingesting-Host der Telemetry-Source (pro Better-Stack-Source individuell; aus der UI kopieren).
+BETTERSTACK_METRICS_ENDPOINT_FILE=/etc/teamwerk/betterstack-metrics-endpoint
+if [ ! -f "$BETTERSTACK_METRICS_ENDPOINT_FILE" ]; then
+    echo "REPLACE_WITH_BETTERSTACK_METRICS_INGESTING_HOST" > "$BETTERSTACK_METRICS_ENDPOINT_FILE"
+    chmod 600 "$BETTERSTACK_METRICS_ENDPOINT_FILE"
+    echo "⚠️  $BETTERSTACK_METRICS_ENDPOINT_FILE angelegt — Better-Stack-Telemetry-Ingesting-Host eintragen (z. B. s12345.eu-fsn-3.betterstackdata.com)!"
+fi
+
 BS_TOKEN=$(cat "$BETTERSTACK_TOKEN_FILE")
 BS_METRICS_TOKEN=$(cat "$BETTERSTACK_METRICS_TOKEN_FILE")
+BS_METRICS_HOST=$(cat "$BETTERSTACK_METRICS_ENDPOINT_FILE")
 # METRICS_TOKEN aus /etc/teamwerk/env ziehen (von Vector für Prometheus-Scrape gegen /api/metrics gebraucht).
 APP_METRICS_TOKEN=$(grep -E '^METRICS_TOKEN=' /etc/teamwerk/env | cut -d= -f2-)
 
@@ -193,7 +202,7 @@ auth.token = "$APP_METRICS_TOKEN"
 [sinks.betterstack_metrics]
 type = "prometheus_remote_write"
 inputs = ["host", "teamwerk_app"]
-endpoint = "https://in.metrics.betterstack.com"
+endpoint = "https://$BS_METRICS_HOST"
 
 [sinks.betterstack_metrics.auth]
 strategy = "bearer"
@@ -204,11 +213,13 @@ if ! grep -q "^VECTOR_CONFIG=" /etc/default/vector 2>/dev/null; then
     echo "VECTOR_CONFIG=/etc/vector/vector.toml" >> /etc/default/vector
 fi
 
-if [ "$BS_TOKEN" != "REPLACE_WITH_BETTERSTACK_SOURCE_TOKEN" ] && [ "$BS_METRICS_TOKEN" != "REPLACE_WITH_BETTERSTACK_METRICS_TOKEN" ]; then
+if [ "$BS_TOKEN" != "REPLACE_WITH_BETTERSTACK_SOURCE_TOKEN" ] \
+    && [ "$BS_METRICS_TOKEN" != "REPLACE_WITH_BETTERSTACK_METRICS_TOKEN" ] \
+    && [ "$BS_METRICS_HOST" != "REPLACE_WITH_BETTERSTACK_METRICS_INGESTING_HOST" ]; then
     systemctl enable --now vector
     systemctl restart vector
 else
-    echo "⚠️  Vector noch nicht gestartet — zuerst Logs- UND Metrics-Source-Token eintragen, dann: systemctl enable --now vector"
+    echo "⚠️  Vector noch nicht gestartet — zuerst Logs-Token, Metrics-Token UND Metrics-Endpoint eintragen, dann: systemctl enable --now vector"
 fi
 
 # ---------------------------------------------------------------------------
@@ -222,6 +233,9 @@ echo "  2. /etc/teamwerk/heartbeat-url mit Better-Stack-URL füllen"
 echo "  3. /etc/teamwerk/betterstack-logs-token mit Better-Stack-Logs-Source-Token füllen"
 echo "  3b. /etc/teamwerk/betterstack-metrics-token mit Better-Stack-Telemetry-Metrics-Token füllen"
 echo "      (in Better Stack: Telemetry → Sources → Vector / prometheus_remote_write)"
+echo "  3c. /etc/teamwerk/betterstack-metrics-endpoint mit Ingesting-Host der Telemetry-Source"
+echo "      füllen (z. B. s12345.eu-fsn-3.betterstackdata.com — Better Stack zeigt ihn"
+echo "      pro Source unten neben dem Token an)"
 echo "  4. Lokal: make deploy"
 echo "  5. Auf VPS: /usr/local/bin/teamwerk migrate up --db /var/lib/teamwerk/teamwerk.db"
 echo "  6. Admin anlegen: make create-admin-remote EMAIL=… PASSWORD=… NAME=…"

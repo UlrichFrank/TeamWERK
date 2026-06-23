@@ -55,7 +55,7 @@ ssh vServer "cd /tmp/deploy && bash setup-vps.sh"
 Das Script ist idempotent (kann mehrfach laufen). Es legt an:
 
 - `/etc/teamwerk/env` mit Platzhaltern (`REPLACE_*`)
-- `/etc/teamwerk/heartbeat-url`, `/etc/teamwerk/betterstack-logs-token`, `/etc/teamwerk/betterstack-metrics-token`
+- `/etc/teamwerk/heartbeat-url`, `/etc/teamwerk/betterstack-logs-token`, `/etc/teamwerk/betterstack-metrics-token`, `/etc/teamwerk/betterstack-metrics-endpoint` — Platzhalter (siehe Schritt 3)
 - `/usr/local/bin/teamwerk-scheduler.sh` (Cron-Wrapper)
 - systemd-Service, Nginx-vhost, self-signed Cert
 - Vector (installiert, aber nicht gestartet bis Token gesetzt)
@@ -87,6 +87,12 @@ chmod 600 /etc/teamwerk/betterstack-logs-token
 # 3d. Better-Stack-Metrics-Token (aus Telemetry → Sources → Vector)
 echo "YYYYYYYYYYYYY" > /etc/teamwerk/betterstack-metrics-token
 chmod 600 /etc/teamwerk/betterstack-metrics-token
+
+# 3e. Better-Stack-Metrics-Endpoint (Ingesting-Host der Telemetry-Source —
+#     Better Stack zeigt ihn pro Source unten neben dem Token an, z. B.
+#     s12345.eu-fsn-3.betterstackdata.com — ohne Schema, kein Slash)
+echo "sZZZZZ.eu-fsn-3.betterstackdata.com" > /etc/teamwerk/betterstack-metrics-endpoint
+chmod 600 /etc/teamwerk/betterstack-metrics-endpoint
 ```
 
 ---

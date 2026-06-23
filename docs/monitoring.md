@@ -69,12 +69,13 @@ betreibt zusätzlich zwei Metrik-Sources:
 | `prometheus_scrape` gegen `http://127.0.0.1:8080/api/metrics` (Bearer `METRICS_TOKEN`) | alle `teamwerk_*`-Metriken | Better Stack → Telemetry-Source `teamwerk_app` |
 
 Beide Streams gehen in den **austauschbaren** Sink `betterstack_metrics`
-(`prometheus_remote_write` → `https://in.metrics.betterstack.com`). Konkrete
-Endpoint-URL und Token-Format werden in Better Stack beim Anlegen der
-Telemetry-Source im UI generiert; die Vector-Konfig in
-[`deploy/setup-vps.sh`](../deploy/setup-vps.sh) referenziert sie über zwei
-Token-Files (`/etc/teamwerk/betterstack-logs-token`,
-`/etc/teamwerk/betterstack-metrics-token`).
+(`prometheus_remote_write`). Der konkrete Ingesting-Host wird pro Better-Stack-
+Telemetry-Source in deren UI vergeben (Beispiel:
+`s12345.eu-fsn-3.betterstackdata.com`); die Vector-Konfig in
+[`deploy/setup-vps.sh`](../deploy/setup-vps.sh) referenziert ihn — wie den
+Token — über ein Daten-File: `/etc/teamwerk/betterstack-logs-token`,
+`/etc/teamwerk/betterstack-metrics-token`,
+`/etc/teamwerk/betterstack-metrics-endpoint`.
 
 **Konsequenz für Sink-Wechsel:** Soll ein anderer Anbieter konsumieren (Grafana
 Cloud, eigenes Prometheus, …), wird nur der `[sinks.betterstack_metrics]`-Block

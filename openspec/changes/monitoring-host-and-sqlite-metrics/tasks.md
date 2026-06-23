@@ -43,6 +43,6 @@
 
 - [x] 7.1 `go build ./...`, `go vet ./...`, `go test -race ./...` grün (745 tests, 38 packages); `golangci-lint run ./internal/health/... ./internal/scheduler/... ./internal/db/...` 0 Findings; `gofmt -l` clean
 - [x] 7.2 `openspec validate monitoring-host-and-sqlite-metrics --strict` grün
-- [ ] 7.3 `/verify-change` durchlaufen (Build/Test/Lint + Projekt-Invarianten)
-- [ ] 7.4 Live-Verifikation nach Deploy (manuell, in Doku festhalten): (a) Vector startet ohne Fehler (`journalctl -u vector`), (b) `host_metrics` füllen Better-Stack-Charts, (c) `teamwerk_*`-Metriken erscheinen unter Vector-Source `teamwerk_app`, (d) künstlicher BUSY-Test (paralleler Schreibhammer) hebt `teamwerk_sqlite_busy_total` sichtbar
-- [ ] 7.5 Proposal archivieren (`openspec archive monitoring-host-and-sqlite-metrics`) — nach Live-Verifikation
+- [x] 7.3 `/verify-change` durchlaufen (Build/Test/Lint + Projekt-Invarianten)
+- [x] 7.4 Live-Verifikation nach Deploy (manuell, in Doku festhalten): (a) Vector startet ohne Fehler (`journalctl -u vector`), (b) `host_metrics` füllen Better-Stack-Charts, (c) `teamwerk_*`-Metriken erscheinen unter Vector-Source `teamwerk_app`, (d) künstlicher BUSY-Test (paralleler Schreibhammer) hebt `teamwerk_sqlite_busy_total` sichtbar
+- [x] 7.5 Proposal archivieren (`openspec archive monitoring-host-and-sqlite-metrics`) — nach Live-Verifikation
