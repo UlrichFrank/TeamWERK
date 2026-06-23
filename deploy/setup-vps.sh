@@ -206,11 +206,19 @@ auth.token = "$APP_METRICS_TOKEN"
 type = "internal_metrics"
 scrape_interval_secs = 30
 
-# Alle drei Metrik-Streams in den austauschbaren Better-Stack-Telemetry-Sink.
+# Alle drei Metrik-Streams in den Better-Stack-"Logs & Metrics"-Sink. Wichtig:
+# Vector-HTTP-Sink mit JSON-Encoding (NICHT prometheus_remote_write) — Better
+# Stacks Dashboard erwartet das native Vector-Metric-Event-Schema mit
+# Top-Level-Feld "name"; bei prometheus_remote_write käme der Metricname als
+# "__name__"-Label, und die Eligibility-Query (WHERE name IN (...)) träfe nicht.
+# Snippet-Quelle: https://betterstack.com/docs/logs/vector/?source=<id>
 [sinks.betterstack_metrics]
-type = "prometheus_remote_write"
+type = "http"
+method = "post"
 inputs = ["host", "teamwerk_app", "vector_internal"]
-endpoint = "https://$BS_METRICS_HOST"
+uri = "https://$BS_METRICS_HOST/"
+encoding.codec = "json"
+compression = "gzip"
 
 [sinks.betterstack_metrics.auth]
 strategy = "bearer"
