@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
@@ -33,6 +34,16 @@ func TestClub_SepaFelder_GetSet(t *testing.T) {
 	}
 	if res := testutil.Do(t, srv, http.MethodPut, "/api/club", tok, body); res.StatusCode != http.StatusNoContent {
 		t.Fatalf("PUT club: status %d", res.StatusCode)
+	}
+
+	// At-rest verschlüsselt: die DB-Spalten halten Ciphertext, nicht den Klartext.
+	var dbIBAN, dbBIC string
+	database.QueryRow(`SELECT iban, bic FROM clubs LIMIT 1`).Scan(&dbIBAN, &dbBIC)
+	if !crypto.IsEncryptedString(dbIBAN) || dbIBAN == "DE89370400440532013000" {
+		t.Errorf("clubs.iban nicht verschlüsselt: %q", dbIBAN)
+	}
+	if !crypto.IsEncryptedString(dbBIC) {
+		t.Errorf("clubs.bic nicht verschlüsselt: %q", dbBIC)
 	}
 
 	// Zurücklesen

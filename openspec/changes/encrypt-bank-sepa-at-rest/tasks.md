@@ -48,14 +48,14 @@
 
 ## 7. Tests pro Route (Happy + Fehlerfall)
 
-- [ ] 7.1 `bank-details`: 200 (vorstand/kassierer) · 403 (trainer) · gespeicherter Wert trägt `"v1:"`-Prefix
-- [ ] 7.2 `members.Get`: berechtigt → Klartext-IBAN · trainer/fremdes Mitglied → keine Bankdaten
-- [ ] 7.3 `profile/me`: Eigentümer → eigene IBAN entschlüsselt
-- [ ] 7.4 `profile/kind/{id}`: Elternteil → 200 mit IBAN · fremdes Kind → 403
-- [ ] 7.5 `fee-run/export`: erzeugt korrektes XML aus entschlüsselten Feldern
-- [ ] 7.6 `club` GET/PUT: Roundtrip mit Verschlüsselung, Validierung unverändert
-- [ ] 7.7 SEPA-Upload/Download: Upload speichert verschlüsselt, Download liefert Original-PDF
-- [ ] 7.8 Invarianten-Test: nicht-berechtigte Rolle erhält nie entschlüsselte Bankdaten; DB-Spalten enthalten nach Schreibzugriff nie den Klartext
+- [x] 7.1 `bank-details`: 200 (vorstand/kassierer) · 403 (trainer) · gespeicherter Wert trägt `"v1:"`-Prefix
+- [x] 7.2 `members.Get`: berechtigt → Klartext-IBAN · trainer/fremdes Mitglied → keine Bankdaten
+- [x] 7.3 `profile/me`: Eigentümer → eigene IBAN entschlüsselt
+- [x] 7.4 `profile/kind/{id}`: Elternteil → 200 mit IBAN · fremdes Kind → 403
+- [x] 7.5 `fee-run/export`: erzeugt korrektes XML aus entschlüsselten Feldern
+- [x] 7.6 `club` GET/PUT: Roundtrip mit Verschlüsselung, Validierung unverändert
+- [x] 7.7 SEPA-Upload/Download: Upload speichert verschlüsselt, Download liefert Original-PDF
+- [x] 7.8 Invarianten-Test: nicht-berechtigte Rolle erhält nie entschlüsselte Bankdaten; DB-Spalten enthalten nach Schreibzugriff nie den Klartext
 
 ## 8. SSE / Live-Updates
 
