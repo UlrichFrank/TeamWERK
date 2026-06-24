@@ -16,9 +16,10 @@
 #   6. Verifikation — Stichprobe zeigt "v1:"-Prefix.
 #
 # Verwendung:
-#   bash deploy/deploy-encryption.sh          # interaktiv (fragt an Risikopunkten)
+#   bash deploy/deploy-encryption.sh --dry-run # nur anzeigen, NICHTS ausführen (Test)
+#   bash deploy/deploy-encryption.sh           # interaktiv (fragt an Risikopunkten)
 #   bash deploy/deploy-encryption.sh --yes     # ohne Rückfragen (CI/automatisiert)
-#   make deploy-encrypted [YES=1]
+#   make deploy-encrypted [YES=1] [DRY=1]
 #
 set -euo pipefail
 
@@ -26,9 +27,11 @@ set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 ASSUME_YES=0
+DRY_RUN=0
 for arg in "$@"; do
 	case "$arg" in
 	-y | --yes) ASSUME_YES=1 ;;
+	-n | --dry-run) DRY_RUN=1 ;;
 	*)
 		echo "Unbekannte Option: $arg" >&2
 		exit 2
@@ -42,8 +45,11 @@ DB_PATH=/var/lib/teamwerk/teamwerk.db
 DATA_DIR=/var/lib/teamwerk
 BINARY=teamwerk
 
-REMOTE="$(grep -E '^REMOTE=' .env 2>/dev/null | cut -d= -f2-)"
-REMOTE_DIR="$(grep -E '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2-)"
+# Vorrang: explizit gesetzte Umgebungsvariable > .env. `|| true`: grep ohne
+# Treffer darf unter set -e/pipefail nicht abbrechen — der Preflight-Check unten
+# fängt ein leeres REMOTE freundlich ab.
+REMOTE="${REMOTE:-$(grep -E '^REMOTE=' .env 2>/dev/null | cut -d= -f2- || true)}"
+REMOTE_DIR="${REMOTE_DIR:-$(grep -E '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2- || true)}"
 REMOTE_DIR="${REMOTE_DIR:-/usr/local/bin}"
 
 log() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
@@ -54,20 +60,32 @@ die() {
 }
 
 confirm() {
-	[ "$ASSUME_YES" = 1 ] && return 0
+	{ [ "$ASSUME_YES" = 1 ] || [ "$DRY_RUN" = 1 ]; } && return 0
 	local reply
 	read -r -p "$1 [y/N] " reply
 	[[ "$reply" =~ ^[yYjJ]$ ]] || die "Abgebrochen."
 }
 
+# run führt ein Kommando aus — oder gibt es im Dry-Run nur aus (nichts wird verändert).
+run() {
+	if [ "$DRY_RUN" = 1 ]; then
+		printf '   \033[2m[dry-run] %s\033[0m\n' "$*"
+		return 0
+	fi
+	"$@"
+}
+
 # --- 1. Preflight ---------------------------------------------------------
 log "1/6 Preflight"
+[ "$DRY_RUN" = 1 ] && warn "DRY-RUN — es werden keine Befehle ausgeführt, nur angezeigt."
 [ -n "$REMOTE" ] || die "REMOTE ist nicht in .env gesetzt (z.B. REMOTE=vServer)."
 command -v ssh >/dev/null || die "ssh nicht gefunden."
-ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE" true 2>/dev/null ||
-	die "SSH zu '$REMOTE' nicht möglich."
-ssh "$REMOTE" "sudo test -f $ENV_FILE" ||
-	die "$ENV_FILE existiert nicht — zuerst 'make setup-vps' ausführen."
+if [ "$DRY_RUN" = 0 ]; then
+	ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE" true 2>/dev/null ||
+		die "SSH zu '$REMOTE' nicht möglich."
+	ssh "$REMOTE" "sudo test -f $ENV_FILE" ||
+		die "$ENV_FILE existiert nicht — zuerst 'make setup-vps' ausführen."
+fi
 
 echo "  Remote:  $REMOTE  (Binary: $REMOTE_DIR/$BINARY)"
 echo "  Deploy:  $(git rev-parse --abbrev-ref HEAD) @ $(git rev-parse --short HEAD)"
@@ -78,7 +96,9 @@ confirm "Mit diesem Stand deployen?"
 
 # --- 2. Schlüssel sicherstellen (VOR dem Restart) -------------------------
 log "2/6 FIELD_ENCRYPTION_KEY sicherstellen"
-if ssh "$REMOTE" "sudo grep -qE '^FIELD_ENCRYPTION_KEY=.+' $ENV_FILE"; then
+if [ "$DRY_RUN" = 1 ]; then
+	echo "   [dry-run] $ENV_FILE würde geprüft; fehlt der Key, via 'openssl rand -base64 32' erzeugen + anhängen."
+elif ssh "$REMOTE" "sudo grep -qE '^FIELD_ENCRYPTION_KEY=.+' $ENV_FILE"; then
 	echo "  Schlüssel bereits gesetzt — Generierung übersprungen (idempotent)."
 else
 	warn "Kein FIELD_ENCRYPTION_KEY gesetzt — erzeuge einen neuen 32-Byte-Schlüssel."
@@ -105,11 +125,11 @@ fi
 # --- 3. Deploy (Binary + Restart) -----------------------------------------
 log "3/6 Deploy (make deploy)"
 echo "  Ab dem Neustart verschlüsselt jeder neue Schreibvorgang automatisch."
-make deploy
+run make deploy
 
 # --- 4. Backup VOR encrypt-pii --------------------------------------------
 log "4/6 Backup (DB + Uploads) vor der Erstverschlüsselung"
-make backup
+run make backup
 
 # --- 5. Erstverschlüsselung des Bestands ----------------------------------
 log "5/6 Bestand verschlüsseln (encrypt-pii)"
@@ -117,18 +137,14 @@ echo "  Verschlüsselt bestehende DB-Zeilen + vorhandene SEPA-PDFs. Idempotent."
 confirm "encrypt-pii jetzt ausführen?"
 # Als root (liest das 0600-Env), danach Dateieigentum zurück auf www-data:
 # encrypt-pii schreibt PDFs via atomic rename und ggf. -wal/-shm neu.
-ssh "$REMOTE" "sudo sh -c '
-	set -a; . $ENV_FILE; set +a;
-	$REMOTE_DIR/$BINARY encrypt-pii
-'"
-ssh "$REMOTE" "sudo chown -R www-data:www-data $DATA_DIR"
-ssh "$REMOTE" "sudo systemctl restart $BINARY"
+run ssh "$REMOTE" "sudo sh -c 'set -a; . $ENV_FILE; set +a; $REMOTE_DIR/$BINARY encrypt-pii'"
+run ssh "$REMOTE" "sudo chown -R www-data:www-data $DATA_DIR"
+run ssh "$REMOTE" "sudo systemctl restart $BINARY"
 
 # --- 6. Verifikation ------------------------------------------------------
 log "6/6 Verifikation"
 echo "  Stichprobe members.iban (erwartet 'v1:'-Prefix):"
-ssh "$REMOTE" "sudo -u www-data sqlite3 $DB_PATH \
-	\"SELECT substr(iban,1,3) AS prefix, COUNT(*) FROM members WHERE iban IS NOT NULL GROUP BY 1;\"" ||
+run ssh "$REMOTE" "sudo -u www-data sqlite3 $DB_PATH \"SELECT substr(iban,1,3) AS prefix, COUNT(*) FROM members WHERE iban IS NOT NULL GROUP BY 1;\"" ||
 	warn "Stichprobe nicht möglich (sqlite3 fehlt?) — manuell prüfen."
 
 log "Fertig."
