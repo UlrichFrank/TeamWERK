@@ -17,9 +17,9 @@
 
 ## 3. Zentrale Autorisierung (`internal/policy`)
 
-- [ ] 3.1 `CanDecryptBankData(db, p *Principal, memberUserID int) bool` = `admin ∨ IsVorstandLike ∨ IsKassiererLike ∨ Eigentümer (p.UserID==memberUserID) ∨ isParentOf`
-- [ ] 3.2 Eltern-Prüfung gegen `family_links` (DB-gestützt, analog `FolderAccess`)
-- [ ] 3.3 Tests für jede Kombination: admin, vorstand, kassierer, Eigentümer, Elternteil → erlaubt; Trainer, fremdes Mitglied, fremdes Elternteil → verweigert
+- [x] 3.1 `CanDecryptBankData(db, p *Principal, memberUserID int) bool` = `admin ∨ IsVorstandLike ∨ IsKassiererLike ∨ Eigentümer (p.UserID==memberUserID) ∨ isParentOf`
+- [x] 3.2 Eltern-Prüfung gegen `family_links` (DB-gestützt, analog `FolderAccess`)
+- [x] 3.3 Tests für jede Kombination: admin, vorstand, kassierer, Eigentümer, Elternteil → erlaubt; Trainer, fremdes Mitglied, fremdes Elternteil → verweigert
 
 ## 4. Schreibpfade (Encrypt einziehen)
 
