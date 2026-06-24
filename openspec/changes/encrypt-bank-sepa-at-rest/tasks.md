@@ -1,11 +1,11 @@
 ## 1. Krypto-Kern (`internal/crypto`)
 
-- [ ] 1.1 Package `internal/crypto` anlegen: `Encrypt(plaintext string) (string, error)` → `"v1:" + base64(nonce ‖ ciphertext)` (AES-256-GCM, zufälliges 12-Byte-Nonce)
-- [ ] 1.2 `Decrypt(value string) (string, error)`: ohne `"v1:"`-Prefix unverändert zurückgeben; mit Prefix entschlüsseln; bei gebrochener GCM-Auth Fehler statt Klartext
-- [ ] 1.3 Datei-Varianten `EncryptBytes`/`DecryptBytes` mit Magic-Header für PDF-Inhalte (Erkennung „bereits verschlüsselt")
-- [ ] 1.4 Schlüssel-Laden aus `FIELD_ENCRYPTION_KEY` (base64, 32 Byte) + `MustLoadKey`/Validierung
-- [ ] 1.5 Unit-Tests: Roundtrip, falscher Schlüssel schlägt fehl, Klartext-Passthrough, manipulierter Ciphertext → Fehler, idempotenter Re-Encrypt-Skip, Datei-Roundtrip
-- [ ] 1.6 Architektur-Test (`internal/arch`): `internal/crypto` als Foundation klassifizieren (importiert keine Domain)
+- [x] 1.1 Package `internal/crypto` anlegen: `Encrypt(plaintext string) (string, error)` → `"v1:" + base64(nonce ‖ ciphertext)` (AES-256-GCM, zufälliges 12-Byte-Nonce)
+- [x] 1.2 `Decrypt(value string) (string, error)`: ohne `"v1:"`-Prefix unverändert zurückgeben; mit Prefix entschlüsseln; bei gebrochener GCM-Auth Fehler statt Klartext
+- [x] 1.3 Datei-Varianten `EncryptBytes`/`DecryptBytes` mit Magic-Header für PDF-Inhalte (Erkennung „bereits verschlüsselt")
+- [x] 1.4 Schlüssel-Laden aus `FIELD_ENCRYPTION_KEY` (base64, 32 Byte) + `MustLoadKey`/Validierung
+- [x] 1.5 Unit-Tests: Roundtrip, falscher Schlüssel schlägt fehl, Klartext-Passthrough, manipulierter Ciphertext → Fehler, idempotenter Re-Encrypt-Skip, Datei-Roundtrip
+- [x] 1.6 Architektur-Test (`internal/arch`): `internal/crypto` als Foundation klassifizieren (importiert keine Domain)
 
 ## 2. Subcommands & Startup (`cmd/teamwerk`)
 
