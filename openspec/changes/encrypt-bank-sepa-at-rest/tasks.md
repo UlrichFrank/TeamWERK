@@ -42,9 +42,9 @@
 
 ## 6. Frontend (Eigentümer-/Eltern-Lesen)
 
-- [ ] 6.1 Profilseite (`web/src/pages/ProfilePage.tsx`): eigene Bankdaten anzeigen (brand-Tokens, lucide-Icons)
-- [ ] 6.2 Kind-Profilseite: Bankdaten des Kindes für Eltern anzeigen
-- [ ] 6.3 `pnpm -C web build` + lint grün
+- [x] 6.1 Profilseite (`web/src/pages/ProfilePage.tsx`): eigene Bankdaten anzeigen (brand-Tokens, lucide-Icons)
+- [x] 6.2 Kind-Profilseite: Bankdaten des Kindes für Eltern anzeigen
+- [x] 6.3 `pnpm -C web build` + lint grün
 
 ## 7. Tests pro Route (Happy + Fehlerfall)
 
