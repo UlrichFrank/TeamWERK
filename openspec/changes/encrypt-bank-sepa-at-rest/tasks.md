@@ -59,13 +59,13 @@
 
 ## 8. SSE / Live-Updates
 
-- [ ] 8.1 Prüfen, dass berührte Mutations-Routen weiterhin `h.hub.Broadcast(...)` aufrufen (bank-details, club, change-request, sepa-upload) und Frontend-Seiten `useLiveUpdates` nutzen
+- [x] 8.1 Prüfen, dass berührte Mutations-Routen weiterhin `h.hub.Broadcast(...)` aufrufen (bank-details, club, change-request, sepa-upload) und Frontend-Seiten `useLiveUpdates` nutzen
 
 ## 9. Deployment & Doku
 
-- [ ] 9.1 `docs/agent/10-deployment.md`: `FIELD_ENCRYPTION_KEY` in `/etc/teamwerk/env` (chmod 600), Rollout-Sequenz (gen-key → deploy → encrypt-pii), Backup-Regel (Key ≠ DB-Backup; Schlüsselverlust = Datenverlust)
-- [ ] 9.2 `docs/agent/03-go.md` o.ä.: Hinweis „Bank-/SEPA-Felder immer via `internal/crypto` schreiben/lesen, Lesen nur hinter `policy.CanDecryptBankData`"
-- [ ] 9.3 `.env.example`/Setup-Skripte um `FIELD_ENCRYPTION_KEY` ergänzen
+- [x] 9.1 `docs/agent/10-deployment.md`: `FIELD_ENCRYPTION_KEY` in `/etc/teamwerk/env` (chmod 600), Rollout-Sequenz (gen-key → deploy → encrypt-pii), Backup-Regel (Key ≠ DB-Backup; Schlüsselverlust = Datenverlust)
+- [x] 9.2 `docs/agent/03-go.md` o.ä.: Hinweis „Bank-/SEPA-Felder immer via `internal/crypto` schreiben/lesen, Lesen nur hinter `policy.CanDecryptBankData`"
+- [x] 9.3 `.env.example`/Setup-Skripte um `FIELD_ENCRYPTION_KEY` ergänzen
 
 ## 10. Spec-Bereinigung & Abschluss
 

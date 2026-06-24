@@ -305,6 +305,9 @@ func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.hub != nil {
+		h.hub.Broadcast("members")
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"sepa_mandat_url": "/api/uploads/" + filename})
 }
