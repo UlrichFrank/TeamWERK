@@ -15,6 +15,8 @@ BEITRAGSLAUF_DIR_LOCAL   := ./storage/beitragslauf-protokolle
 EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
+TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
+BACKUP_DIR := ./backup/$(TS)
 
 .PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint coverage metrics metrics-gate
 
@@ -118,59 +120,62 @@ create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
 push-test-remote: ## Test-Push an User senden (USER=<id> TITLE=... BODY=... URL=...)
 	ssh $(REMOTE) "/usr/local/bin/teamwerk push-test --env=/etc/teamwerk/env --db=$(DB_PATH) --user=$(USER) --title='$(TITLE)' --body='$(BODY)' --url='$(or $(URL),/)'"
 
-backup: ## Prod-DB + Bilder (uploads) auf VPS sichern (./teamwerk-backup.db, ./backup/uploads/)
-	@echo "Erstelle DB-Backup auf VPS..."
+backup: ## Prod-DB + Bilder (uploads) auf VPS sichern (./backup/<timestamp>/)
+	@echo "Erstelle DB-Backup auf VPS → $(BACKUP_DIR)/"
+	@mkdir -p $(BACKUP_DIR)/uploads
 	ssh $(REMOTE) "sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-backup.db'"
-	scp $(REMOTE):/tmp/teamwerk-backup.db ./teamwerk-backup.db
+	scp $(REMOTE):/tmp/teamwerk-backup.db $(BACKUP_DIR)/teamwerk.db
 	ssh $(REMOTE) "rm -f /tmp/teamwerk-backup.db"
-	@echo "Synchronisiere Bilder..."
-	@mkdir -p ./backup/uploads
-	rsync -az $(REMOTE):$(UPLOAD_DIR_REMOTE)/ ./backup/uploads/
-	@echo "Backup gespeichert: ./teamwerk-backup.db, ./backup/uploads/"
+	rsync -az $(REMOTE):$(UPLOAD_DIR_REMOTE)/ $(BACKUP_DIR)/uploads/
+	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
-backup-files: ## Dokumente + Beitragslauf-Protokolle vom VPS sichern (./backup/files/, ./backup/beitragslauf-protokolle/)
-	@echo "Synchronisiere Dokumente..."
-	@mkdir -p ./backup/files
-	rsync -az $(REMOTE):$(FILES_DIR_REMOTE)/ ./backup/files/
-	@echo "Synchronisiere Beitragslauf-Protokolle..."
-	@mkdir -p ./backup/beitragslauf-protokolle
+backup-files: ## Dokumente + Beitragslauf-Protokolle vom VPS sichern (./backup/<timestamp>/)
+	@echo "Synchronisiere Dokumente + Protokolle → $(BACKUP_DIR)/"
+	@mkdir -p $(BACKUP_DIR)/files $(BACKUP_DIR)/beitragslauf-protokolle
+	rsync -az $(REMOTE):$(FILES_DIR_REMOTE)/ $(BACKUP_DIR)/files/
 	@if ssh $(REMOTE) "test -d $(BEITRAGSLAUF_DIR_REMOTE)"; then \
-		rsync -az $(REMOTE):$(BEITRAGSLAUF_DIR_REMOTE)/ ./backup/beitragslauf-protokolle/; \
+		rsync -az $(REMOTE):$(BEITRAGSLAUF_DIR_REMOTE)/ $(BACKUP_DIR)/beitragslauf-protokolle/; \
 	else \
-		echo "  (Remote-Verzeichnis $(BEITRAGSLAUF_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
+		echo "  ($(BEITRAGSLAUF_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
 	fi
-	@echo "Backup gespeichert: ./backup/files/, ./backup/beitragslauf-protokolle/"
+	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
-restore-local: ## Backup (DB + Bilder) lokal einspielen
-	@if [ ! -f ./teamwerk-backup.db ]; then echo "Fehler: teamwerk-backup.db nicht gefunden. Zuerst 'make backup' ausführen."; exit 1; fi
-	@echo "WARNUNG: ./teamwerk.db und $(UPLOAD_DIR_LOCAL) werden überschrieben."
-	@printf "Fortfahren? [y/N] "; \
+restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKUP=./backup/<timestamp>)
+	@RESTORE="$${BACKUP:-$$(ls -dt ./backup/20*/ 2>/dev/null | head -1)}"; \
+	if [ -z "$$RESTORE" ] || [ ! -f "$$RESTORE/teamwerk.db" ]; then \
+		echo "Fehler: kein Backup gefunden. Zuerst 'make backup' ausführen."; exit 1; \
+	fi; \
+	echo "WARNUNG: ./teamwerk.db und $(UPLOAD_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
+	printf "Fortfahren? [y/N] "; \
 	read ans; \
 	if [ "$$ans" = "y" ]; then \
-		cp ./teamwerk-backup.db ./teamwerk.db; \
+		cp "$$RESTORE/teamwerk.db" ./teamwerk.db; \
 		rm -f ./teamwerk.db-wal ./teamwerk.db-shm; \
-		if [ -d ./backup/uploads ]; then \
-			mkdir -p $(UPLOAD_DIR_LOCAL) && rsync -a --delete ./backup/uploads/ $(UPLOAD_DIR_LOCAL)/; \
+		if [ -d "$$RESTORE/uploads" ]; then \
+			mkdir -p $(UPLOAD_DIR_LOCAL) && rsync -a --delete "$$RESTORE/uploads/" $(UPLOAD_DIR_LOCAL)/; \
 		fi; \
-		echo "Restore abgeschlossen."; \
+		echo "Restore abgeschlossen aus $$RESTORE."; \
 	else \
 		echo "Abgebrochen."; \
 		exit 1; \
 	fi
 
-restore-local-files: ## Backup (Dokumente + Beitragslauf-Protokolle) lokal einspielen
-	@if [ ! -d ./backup/files ] && [ ! -d ./backup/beitragslauf-protokolle ]; then echo "Fehler: ./backup/files/ und ./backup/beitragslauf-protokolle/ nicht gefunden. Zuerst 'make backup-files' ausführen."; exit 1; fi
-	@echo "WARNUNG: $(FILES_DIR_LOCAL) und $(BEITRAGSLAUF_DIR_LOCAL) werden überschrieben."
-	@printf "Fortfahren? [y/N] "; \
+restore-local-files: ## Letztes Backup (Dokumente + Protokolle) lokal einspielen (optional: BACKUP=./backup/<timestamp>)
+	@RESTORE="$${BACKUP:-$$(ls -dt ./backup/20*/ 2>/dev/null | head -1)}"; \
+	if [ -z "$$RESTORE" ] || { [ ! -d "$$RESTORE/files" ] && [ ! -d "$$RESTORE/beitragslauf-protokolle" ]; }; then \
+		echo "Fehler: kein Backup gefunden. Zuerst 'make backup-files' ausführen."; exit 1; \
+	fi; \
+	echo "WARNUNG: $(FILES_DIR_LOCAL) und $(BEITRAGSLAUF_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
+	printf "Fortfahren? [y/N] "; \
 	read ans; \
 	if [ "$$ans" = "y" ]; then \
-		if [ -d ./backup/files ]; then \
-			mkdir -p $(FILES_DIR_LOCAL) && rsync -a --delete ./backup/files/ $(FILES_DIR_LOCAL)/; \
+		if [ -d "$$RESTORE/files" ]; then \
+			mkdir -p $(FILES_DIR_LOCAL) && rsync -a --delete "$$RESTORE/files/" $(FILES_DIR_LOCAL)/; \
 		fi; \
-		if [ -d ./backup/beitragslauf-protokolle ]; then \
-			mkdir -p $(BEITRAGSLAUF_DIR_LOCAL) && rsync -a --delete ./backup/beitragslauf-protokolle/ $(BEITRAGSLAUF_DIR_LOCAL)/; \
+		if [ -d "$$RESTORE/beitragslauf-protokolle" ]; then \
+			mkdir -p $(BEITRAGSLAUF_DIR_LOCAL) && rsync -a --delete "$$RESTORE/beitragslauf-protokolle/" $(BEITRAGSLAUF_DIR_LOCAL)/; \
 		fi; \
-		echo "Restore abgeschlossen."; \
+		echo "Restore abgeschlossen aus $$RESTORE."; \
 	else \
 		echo "Abgebrochen."; \
 		exit 1; \
