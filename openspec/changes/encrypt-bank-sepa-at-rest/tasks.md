@@ -9,11 +9,11 @@
 
 ## 2. Subcommands & Startup (`cmd/teamwerk`)
 
-- [ ] 2.1 Subcommand `gen-encryption-key`: gibt base64-kodierten 32-Byte-Schlüssel aus
-- [ ] 2.2 Startup-Check in `main.go`: fehlender/ungültiger `FIELD_ENCRYPTION_KEY` → Start abbrechen mit klarer Fehlermeldung
-- [ ] 2.3 Subcommand `encrypt-pii` (idempotent): verschlüsselt Bestand der vier Speicher (Werte ohne `"v1:"`-Prefix bzw. PDFs ohne Magic-Header), Dateien via atomic rename
-- [ ] 2.4 Spiegelbildliches `decrypt-pii` (Rollback/Rotation), ebenfalls idempotent
-- [ ] 2.5 Tests für `encrypt-pii`/`decrypt-pii`: Bestand wird verschlüsselt, zweiter Lauf ist idempotent, Roundtrip encrypt→decrypt stellt Klartext wieder her
+- [x] 2.1 Subcommand `gen-encryption-key`: gibt base64-kodierten 32-Byte-Schlüssel aus
+- [x] 2.2 Startup-Check in `main.go`: fehlender/ungültiger `FIELD_ENCRYPTION_KEY` → Start abbrechen mit klarer Fehlermeldung
+- [x] 2.3 Subcommand `encrypt-pii` (idempotent): verschlüsselt Bestand der vier Speicher (Werte ohne `"v1:"`-Prefix bzw. PDFs ohne Magic-Header), Dateien via atomic rename
+- [x] 2.4 Spiegelbildliches `decrypt-pii` (Rollback/Rotation), ebenfalls idempotent
+- [x] 2.5 Tests für `encrypt-pii`/`decrypt-pii`: Bestand wird verschlüsselt, zweiter Lauf ist idempotent, Roundtrip encrypt→decrypt stellt Klartext wieder her
 
 ## 3. Zentrale Autorisierung (`internal/policy`)
 
