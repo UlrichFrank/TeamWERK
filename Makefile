@@ -86,6 +86,9 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
 	@echo "Deployed successfully."
 	@git rev-parse --short HEAD > .deployed-hash
 
+deploy-encrypted: ## Voll-Rollout At-Rest-Verschlüsselung (Key + deploy + backup + encrypt-pii). YES=1 = ohne Rückfragen
+	bash deploy/deploy-encryption.sh $(if $(YES),--yes,)
+
 migrate-up: ## Migrationen lokal anwenden
 	$(GO) run ./cmd/teamwerk migrate up
 
