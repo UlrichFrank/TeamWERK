@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 )
 
 // Satz ist ein Beitragssatz mit Gültigkeitsbeginn (für die In-Memory-Auswahl).
@@ -92,6 +94,10 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 			&m.Street, &m.Zip, &m.City, &m.HomeClub, &hasHomeClub, &m.AccountHolder, &m.SepaMandatDate); err != nil {
 			return nil, err
 		}
+		// IBAN/Kontoinhaber liegen at-rest verschlüsselt vor; für IBAN-Validierung
+		// und SEPA-XML zur Laufzeit entschlüsseln (Fehler → leer → iban_fehlt).
+		m.IBAN = decBankOrEmpty(m.IBAN)
+		m.AccountHolder = decBankOrEmpty(m.AccountHolder)
 		m.Beitragsfrei = beitragsfrei != 0
 		m.SepaMandat = sepaMandat != 0
 		m.HasHomeClub = hasHomeClub != 0
@@ -101,6 +107,19 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		out = append(out, m)
 	}
 	return out, nil
+}
+
+// decBankOrEmpty entschlüsselt einen at-rest gespeicherten Bank-Wert; schlägt
+// das fehl, wird "" geliefert (downstream als fehlend behandelt).
+func decBankOrEmpty(v string) string {
+	if v == "" {
+		return ""
+	}
+	pt, err := crypto.Decrypt(v)
+	if err != nil {
+		return ""
+	}
+	return pt
 }
 
 // LookupBetragCent liefert den zum Stichtag (Saisonstart) gültigen Betrag:

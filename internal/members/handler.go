@@ -570,13 +570,15 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		base.WelcomeEmailSentAt = &welcomeEmailSentAt.String
 	}
 
-	// IBAN, account holder: admin only
-	if isAdmin {
-		if iban.Valid {
-			base.IBAN = &iban.String
+	// IBAN, account holder: nur an Berechtigte (admin/vorstand/kassierer/
+	// Eigentümer/Eltern) und at-rest entschlüsselt (zentrale Regel D5).
+	pBank := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
+	if policy.CanDecryptBankData(h.db, pBank, base.ID) {
+		if v := decBankField(iban); v != nil {
+			base.IBAN = v
 		}
-		if accountHolder.Valid {
-			base.AccountHolder = &accountHolder.String
+		if v := decBankField(accountHolder); v != nil {
+			base.AccountHolder = v
 		}
 	}
 	// SEPA document URL: admin, own member, parent, vorstand
@@ -748,9 +750,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	pu := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	if policy.IsVorstandLike(pu) {
-		ibanVal := any(nil)
-		if req.IBAN != "" {
-			ibanVal = req.IBAN
+		// IBAN/Kontoinhaber at-rest verschlüsseln. Leere IBAN ⇒ NULL ⇒ COALESCE
+		// behält den Bestandswert (Verschlüsselung inklusive).
+		ibanVal, err := encBankField(req.IBAN)
+		if err != nil {
+			http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
+			return
+		}
+		holderVal, err := encBankField(req.AccountHolder)
+		if err != nil {
+			http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
+			return
 		}
 		grundVal := nullableString(req.BeitragsfreiGrund)
 		if !req.Beitragsfrei {
@@ -764,7 +774,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 				sepa_mandat=?, sepa_mandat_date=?,
 				beitragsfrei=?, beitragsfrei_grund=?
 			WHERE id=?`,
-			nullableString(req.JoinDate), ibanVal, nullableString(req.AccountHolder),
+			nullableString(req.JoinDate), ibanVal, holderVal,
 			boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 			boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
 			boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
@@ -828,11 +838,23 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	if req.SepaMandat {
 		mandat = 1
 	}
+	// IBAN + Kontoinhaber werden at-rest verschlüsselt gespeichert (Validierung
+	// lief oben auf dem Klartext).
+	encIBAN, err := encBankField(req.IBAN)
+	if err != nil {
+		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
+		return
+	}
+	encHolder, err := encBankField(req.AccountHolder)
+	if err != nil {
+		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
+		return
+	}
 	// Beitragsfrei + Grund sind nur dann Teil des Updates, wenn beitragsfrei
 	// explizit mitgesendet wurde. Wenn beitragsfrei=false, MUSS der Grund auf
 	// NULL gehen (Kopplungs-Invariante, siehe Spec members::beitragsfrei_grund).
 	extra := ""
-	args := []any{nullStr(req.IBAN), mandat, nullStr(req.SepaMandatDate), nullStr(req.AccountHolder),
+	args := []any{encIBAN, mandat, nullStr(req.SepaMandatDate), encHolder,
 		nullStr(req.Street), nullStr(req.Zip), nullStr(req.City), time.Now()}
 	if req.Beitragsfrei != nil {
 		extra = ", beitragsfrei=?, beitragsfrei_grund=?"
@@ -1084,6 +1106,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		m, merr := h.getMember(ownMemberID)
 		if merr == nil {
+			decryptMemberBank(m) // Eigentümer darf eigene Bankdaten lesen
 			resp.OwnMember = m
 		}
 	}
@@ -1870,11 +1893,12 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			var ibanArg interface{}
 			if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" {
 				if ok, msg := validateIBAN(raw); ok {
-					ibanArg = raw
+					ibanArg, _ = encBankField(raw) // at-rest verschlüsselt
 				} else {
 					ibanWarn = "IBAN nicht gespeichert: " + msg
 				}
 			}
+			encAccountHolder, _ := encBankField(col(row, "Kontoinhaber"))
 
 			if !dryRun {
 				_, insErr := h.db.ExecContext(r.Context(),
@@ -1888,7 +1912,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 					jerseyArg, nullableString(col(row, "Position")), status, gender,
 					nullableString(col(row, "Stammverein")),
 					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
-					nullableString(joinDate), ibanArg, nullableString(col(row, "Kontoinhaber")),
+					nullableString(joinDate), ibanArg, encAccountHolder,
 					normalizeSepa(col(row, "SEPA Mandat")),
 					beitragsfreiVal, grundArg)
 				if insErr != nil {
@@ -2035,6 +2059,17 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		selected := applyLines == nil || applyLines[lineNum]
 
 		if len(setClauses) > 0 && !dryRun && selected {
+			// Bank-Felder at-rest verschlüsseln: das positionsgleiche setArg zur
+			// iban=?/account_holder=?-Klausel vor dem Schreiben verschlüsseln.
+			for i, clause := range setClauses {
+				if clause == "iban=?" || clause == "account_holder=?" {
+					if s, ok := setArgs[i].(string); ok {
+						if enc, encErr := encBankField(s); encErr == nil {
+							setArgs[i] = enc
+						}
+					}
+				}
+			}
 			setArgs = append(setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
 				"UPDATE members SET "+strings.Join(setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -2288,6 +2323,7 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	decryptMemberBank(m) // Elternteil darf Bankdaten des Kindes lesen (isParentOf oben geprüft)
 
 	type parentEntry struct {
 		ID    int    `json:"id"`
@@ -2583,9 +2619,19 @@ func (h *Handler) UpdateChildBank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	encIBAN, err := encBankField(req.IBAN)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	encHolder, err := encBankField(req.AccountHolder)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	_, err = h.db.ExecContext(r.Context(),
 		`UPDATE members SET iban=?, account_holder=?, updated_at=? WHERE id=?`,
-		nullableString(req.IBAN), nullableString(req.AccountHolder), time.Now(), memberID)
+		encIBAN, encHolder, time.Now(), memberID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

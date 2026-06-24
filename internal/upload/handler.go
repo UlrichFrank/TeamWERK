@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -11,9 +12,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
@@ -53,7 +56,7 @@ func sniffImageType(b []byte) string {
 }
 
 // saveFile reads a multipart upload, validates type/size, writes to uploadDir/subdir, returns filename.
-func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string, maxBytes int64) (string, error) {
+func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string, maxBytes int64, encrypt bool) (string, error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, maxBytes+1024)
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
 		return "", fmt.Errorf("too_large")
@@ -63,13 +66,15 @@ func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string
 		return "", fmt.Errorf("missing file field")
 	}
 	defer file.Close()
-	return h.persistMultipartFile(file, hdr, subdir, allowedTypes, maxBytes)
+	return h.persistMultipartFile(file, hdr, subdir, allowedTypes, maxBytes, encrypt)
 }
 
 // persistMultipartFile validates and persists a single multipart part. It is
 // shared between the single-file upload paths and BulkImportSepaMandate.
 // Size enforcement happens here: a part larger than maxBytes returns "too_large".
-func (h *Handler) persistMultipartFile(file multipart.File, hdr *multipart.FileHeader, subdir string, allowedTypes []string, maxBytes int64) (string, error) {
+// Mit encrypt=true wird der Dateiinhalt at-rest verschlüsselt abgelegt
+// (Magic-Header) — verwendet für SEPA-Mandat-PDFs.
+func (h *Handler) persistMultipartFile(file multipart.File, hdr *multipart.FileHeader, subdir string, allowedTypes []string, maxBytes int64, encrypt bool) (string, error) {
 	if hdr.Size > maxBytes {
 		return "", fmt.Errorf("too_large")
 	}
@@ -108,14 +113,30 @@ func (h *Handler) persistMultipartFile(file multipart.File, hdr *multipart.FileH
 		return "", fmt.Errorf("cannot create directory")
 	}
 
-	dst, err := os.Create(filepath.Join(dir, filename))
+	fullPath := filepath.Join(dir, filename)
+	dst, err := os.Create(fullPath)
 	if err != nil {
 		return "", fmt.Errorf("cannot create file")
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
-		os.Remove(filepath.Join(dir, filename))
+	if encrypt {
+		raw, err := io.ReadAll(file)
+		if err != nil {
+			os.Remove(fullPath)
+			return "", fmt.Errorf("cannot read file")
+		}
+		enc, err := crypto.EncryptBytes(raw)
+		if err != nil {
+			os.Remove(fullPath)
+			return "", fmt.Errorf("cannot encrypt file")
+		}
+		if _, err := dst.Write(enc); err != nil {
+			os.Remove(fullPath)
+			return "", fmt.Errorf("cannot write file")
+		}
+	} else if _, err := io.Copy(dst, file); err != nil {
+		os.Remove(fullPath)
 		return "", fmt.Errorf("cannot write file")
 	}
 
@@ -133,7 +154,7 @@ func (h *Handler) photoURL(path string) string {
 func (h *Handler) UploadMemberPhoto(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	filename, err := h.saveFile(r, "member-photos", imageTypes, maxPhotoBytes)
+	filename, err := h.saveFile(r, "member-photos", imageTypes, maxPhotoBytes, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -169,7 +190,7 @@ func (h *Handler) UploadChildPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename, err := h.saveFile(r, "member-photos", imageTypes, maxPhotoBytes)
+	filename, err := h.saveFile(r, "member-photos", imageTypes, maxPhotoBytes, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -195,7 +216,7 @@ func (h *Handler) UploadChildPhoto(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadUserPhoto(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 
-	filename, err := h.saveFile(r, "user-photos", imageTypes, maxPhotoBytes)
+	filename, err := h.saveFile(r, "user-photos", imageTypes, maxPhotoBytes, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -266,7 +287,7 @@ func (h *Handler) DeleteMemberPhoto(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	filename, err := h.saveFile(r, "sepa-mandats", pdfAndImageTypes, maxSepaBytes)
+	filename, err := h.saveFile(r, "sepa-mandats", pdfAndImageTypes, maxSepaBytes, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -345,7 +366,41 @@ func (h *Handler) SepaDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.ServeFile(w, r, filepath.Join(h.uploadDir, path.String))
+	h.serveFileMaybeDecrypt(w, r, filepath.Join(h.uploadDir, path.String), filepath.Base(path.String))
+}
+
+// serveFileMaybeDecrypt liefert eine Datei aus. Trägt sie den Verschlüsselungs-
+// Magic-Header, wird der Inhalt entschlüsselt ausgeliefert; sonst wird die Datei
+// direkt gestreamt (Range-Support, kein Voll-Read in den RAM).
+func (h *Handler) serveFileMaybeDecrypt(w http.ResponseWriter, r *http.Request, full, name string) {
+	f, err := os.Open(full)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+
+	head := make([]byte, 8)
+	n, _ := io.ReadFull(f, head)
+	if crypto.IsEncryptedBytes(head[:n]) {
+		rest, err := io.ReadAll(f)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		plain, err := crypto.DecryptBytes(append(head[:n], rest...))
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(plain))
+		return
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, name, time.Time{}, f)
 }
 
 // DELETE /api/members/{id}/sepa-mandat — authenticated
@@ -402,5 +457,5 @@ func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	http.ServeFile(w, r, filepath.Join(h.uploadDir, rawPath))
+	h.serveFileMaybeDecrypt(w, r, filepath.Join(h.uploadDir, rawPath), filepath.Base(rawPath))
 }

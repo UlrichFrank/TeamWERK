@@ -23,22 +23,22 @@
 
 ## 4. Schreibpfade (Encrypt einziehen)
 
-- [ ] 4.1 `members.UpdateBankdaten` (`PUT /api/members/{id}/bank-details`): `iban` + `account_holder` vor dem Schreiben verschlüsseln
-- [ ] 4.2 `members.UpdateChildBank` (`PUT /api/profile/kind/{id}/bank`): `iban` + `account_holder` verschlüsseln
-- [ ] 4.3 change-request-Create (`POST /api/members/{id}/change-request`, `field_name='bankdaten'`): `new_value` verschlüsselt ablegen
-- [ ] 4.4 `config.UpdateClub` (`PUT /api/club`): `iban`/`bic`/`glaeubiger_id`/`kontoinhaber` verschlüsseln (Validierung weiterhin auf dem Klartext **vor** dem Verschlüsseln)
-- [ ] 4.5 `upload`-SEPA-Upload (`POST /api/upload/sepa-mandat/{id}`): PDF-Inhalt verschlüsselt speichern
-- [ ] 4.6 `upload`-SEPA-Bulk-Import (`POST /api/members/sepa-mandates/import`): importierte PDFs verschlüsselt speichern
+- [x] 4.1 `members.UpdateBankdaten` (`PUT /api/members/{id}/bank-details`): `iban` + `account_holder` vor dem Schreiben verschlüsseln
+- [x] 4.2 `members.UpdateChildBank` (`PUT /api/profile/kind/{id}/bank`): `iban` + `account_holder` verschlüsseln
+- [x] 4.3 change-request-Create (`POST /api/members/{id}/change-request`, `field_name='bankdaten'`): `new_value` verschlüsselt ablegen
+- [x] 4.4 `config.UpdateClub` (`PUT /api/club`): `iban`/`bic`/`glaeubiger_id`/`kontoinhaber` verschlüsseln (Validierung weiterhin auf dem Klartext **vor** dem Verschlüsseln)
+- [x] 4.5 `upload`-SEPA-Upload (`POST /api/upload/sepa-mandat/{id}`): PDF-Inhalt verschlüsselt speichern
+- [x] 4.6 `upload`-SEPA-Bulk-Import (`POST /api/members/sepa-mandates/import`): importierte PDFs verschlüsselt speichern
 
 ## 5. Lesepfade (Decrypt hinter `CanDecryptBankData`)
 
-- [ ] 5.1 `members.Get` (`GET /api/members/{id}`): IBAN/Kontoinhaber entschlüsseln, nur wenn berechtigt
-- [ ] 5.2 `beitragslauf.Export` (`POST /api/fee-run/export`): Mitglieds- und Vereins-Felder zur Laufzeit entschlüsseln (XML-Builder unverändert)
-- [ ] 5.3 `config.GetClub` (`GET /api/club`): Vereins-SEPA-Felder entschlüsseln
-- [ ] 5.4 SEPA-Download (`GET /api/members/{id}/sepa-mandat/download`): PDF-Inhalt beim Ausliefern entschlüsseln
-- [ ] 5.5 change-drafts-Anzeige (`GET /api/members/{id}/change-drafts`): `bankdaten`-`new_value` entschlüsseln, nur wenn berechtigt
-- [ ] 5.6 NEU `members.GetProfile` (`GET /api/profile/me`): eigene IBAN/Kontoinhaber entschlüsselt zurückgeben
-- [ ] 5.7 NEU `members.GetChildProfile` (`GET /api/profile/kind/{id}`): IBAN/Kontoinhaber des Kindes entschlüsselt zurückgeben (403 bei fremdem Kind)
+- [x] 5.1 `members.Get` (`GET /api/members/{id}`): IBAN/Kontoinhaber entschlüsseln, nur wenn berechtigt
+- [x] 5.2 `beitragslauf.Export` (`POST /api/fee-run/export`): Mitglieds- und Vereins-Felder zur Laufzeit entschlüsseln (XML-Builder unverändert)
+- [x] 5.3 `config.GetClub` (`GET /api/club`): Vereins-SEPA-Felder entschlüsseln
+- [x] 5.4 SEPA-Download (`GET /api/members/{id}/sepa-mandat/download`): PDF-Inhalt beim Ausliefern entschlüsseln
+- [x] 5.5 change-drafts-Anzeige (`GET /api/members/{id}/change-drafts`): `bankdaten`-`new_value` entschlüsseln, nur wenn berechtigt
+- [x] 5.6 NEU `members.GetProfile` (`GET /api/profile/me`): eigene IBAN/Kontoinhaber entschlüsselt zurückgeben
+- [x] 5.7 NEU `members.GetChildProfile` (`GET /api/profile/kind/{id}`): IBAN/Kontoinhaber des Kindes entschlüsselt zurückgeben (403 bei fremdem Kind)
 
 ## 6. Frontend (Eigentümer-/Eltern-Lesen)
 
