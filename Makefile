@@ -3,20 +3,21 @@ BUILD_DIR  := bin
 # Prefer the system Go at /usr/local/go if present (matches go.mod toolchain).
 # Falls back to whatever 'go' is on PATH.
 GO         := $(or $(wildcard /usr/local/go/bin/go),go)
+REPO_ROOT  := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 REMOTE     := $(shell grep '^REMOTE=' .env 2>/dev/null | cut -d= -f2)
 REMOTE_DIR := $(shell grep '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2)
 DB_PATH        := /var/lib/teamwerk/teamwerk.db
 UPLOAD_DIR_REMOTE        := /var/lib/teamwerk/uploads
 FILES_DIR_REMOTE         := /var/lib/teamwerk/files
 BEITRAGSLAUF_DIR_REMOTE  := /var/lib/teamwerk/beitragslauf-protokolle
-UPLOAD_DIR_LOCAL         := ./storage/uploads
-FILES_DIR_LOCAL          := ./storage/files
-BEITRAGSLAUF_DIR_LOCAL   := ./storage/beitragslauf-protokolle
+UPLOAD_DIR_LOCAL         := $(REPO_ROOT)/storage/uploads
+FILES_DIR_LOCAL          := $(REPO_ROOT)/storage/files
+BEITRAGSLAUF_DIR_LOCAL   := $(REPO_ROOT)/storage/beitragslauf-protokolle
 EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
-BACKUP_DIR := ./backup/$(TS)
+BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
 .PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint coverage metrics metrics-gate
 
@@ -140,17 +141,17 @@ backup-files: ## Dokumente + Beitragslauf-Protokolle vom VPS sichern (./backup/<
 	fi
 	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
-restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKUP=./backup/<timestamp>)
-	@RESTORE="$${BACKUP:-$$(ls -dt ./backup/20*/ 2>/dev/null | head -1)}"; \
+restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
+	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
 	if [ -z "$$RESTORE" ] || [ ! -f "$$RESTORE/teamwerk.db" ]; then \
 		echo "Fehler: kein Backup gefunden. Zuerst 'make backup' ausführen."; exit 1; \
 	fi; \
-	echo "WARNUNG: ./teamwerk.db und $(UPLOAD_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
+	echo "WARNUNG: $(REPO_ROOT)/teamwerk.db und $(UPLOAD_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
 	printf "Fortfahren? [y/N] "; \
 	read ans; \
 	if [ "$$ans" = "y" ]; then \
-		cp "$$RESTORE/teamwerk.db" ./teamwerk.db; \
-		rm -f ./teamwerk.db-wal ./teamwerk.db-shm; \
+		cp "$$RESTORE/teamwerk.db" $(REPO_ROOT)/teamwerk.db; \
+		rm -f $(REPO_ROOT)/teamwerk.db-wal $(REPO_ROOT)/teamwerk.db-shm; \
 		if [ -d "$$RESTORE/uploads" ]; then \
 			mkdir -p $(UPLOAD_DIR_LOCAL) && rsync -a --delete "$$RESTORE/uploads/" $(UPLOAD_DIR_LOCAL)/; \
 		fi; \
@@ -160,8 +161,8 @@ restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKU
 		exit 1; \
 	fi
 
-restore-local-files: ## Letztes Backup (Dokumente + Protokolle) lokal einspielen (optional: BACKUP=./backup/<timestamp>)
-	@RESTORE="$${BACKUP:-$$(ls -dt ./backup/20*/ 2>/dev/null | head -1)}"; \
+restore-local-files: ## Letztes Backup (Dokumente + Protokolle) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
+	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
 	if [ -z "$$RESTORE" ] || { [ ! -d "$$RESTORE/files" ] && [ ! -d "$$RESTORE/beitragslauf-protokolle" ]; }; then \
 		echo "Fehler: kein Backup gefunden. Zuerst 'make backup-files' ausführen."; exit 1; \
 	fi; \
