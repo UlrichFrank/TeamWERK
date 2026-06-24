@@ -159,7 +159,7 @@ func (h *Handler) tryStoreForMember(r *http.Request, hdr *multipart.FileHeader, 
 	}
 	defer file.Close()
 
-	stored, err := h.persistMultipartFile(file, hdr, "sepa-mandats", pdfOnlyTypes, maxBulkSepaFileBytes)
+	stored, err := h.persistMultipartFile(file, hdr, "sepa-mandats", pdfOnlyTypes, maxBulkSepaFileBytes, true)
 	if err != nil {
 		reason := err.Error()
 		switch reason {

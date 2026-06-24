@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 // GetChangeRequestsHandler GET /api/members/{id}/change-drafts
@@ -26,6 +27,13 @@ func (h *Handler) GetChangeRequestsHandler(w http.ResponseWriter, r *http.Reques
 	if drafts == nil {
 		drafts = []ChangeDraft{}
 	}
+
+	// Bankdaten-Entwürfe liegen verschlüsselt vor: für Berechtigte entschlüsseln,
+	// sonst schwärzen (auch nötig, damit die Antwort gültiges JSON bleibt).
+	claims := auth.ClaimsFromCtx(r.Context())
+	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
+	revealBank := policy.CanDecryptBankData(h.db, p, memberID)
+	redactBankDrafts(drafts, revealBank)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string][]ChangeDraft{"drafts": drafts})
@@ -69,6 +77,7 @@ func (h *Handler) CreateChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	h.hub.Broadcast("members")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(draft)

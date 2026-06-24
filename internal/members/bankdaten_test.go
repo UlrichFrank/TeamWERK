@@ -5,9 +5,23 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
 )
+
+// assertEncryptedIBAN prüft, dass der gespeicherte Wert at-rest verschlüsselt ist
+// und auf den erwarteten Klartext entschlüsselt (Invariante: nie Klartext in DB).
+func assertEncryptedIBAN(t *testing.T, stored, wantPlain string) {
+	t.Helper()
+	if !crypto.IsEncryptedString(stored) {
+		t.Errorf("iban nicht verschlüsselt gespeichert: %q", stored)
+		return
+	}
+	if dec, _ := crypto.Decrypt(stored); dec != wantPlain {
+		t.Errorf("iban-Roundtrip falsch: entschlüsselt %q, want %q", dec, wantPlain)
+	}
+}
 
 func TestMembers_KassiererDarfLesen(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -47,9 +61,7 @@ func TestBankdaten_KassiererUpdatetNurBankfelder(t *testing.T) {
 	var beitragsfrei int
 	db.QueryRow(`SELECT iban, status, first_name, beitragsfrei FROM members WHERE id=?`, id).
 		Scan(&iban, &status, &first, &beitragsfrei)
-	if iban != "DE89370400440532013000" {
-		t.Errorf("iban nicht aktualisiert: %q", iban)
-	}
+	assertEncryptedIBAN(t, iban, "DE89370400440532013000")
 	if status != "aktiv" || first != "Vorname" || beitragsfrei != 1 {
 		t.Errorf("Nicht-Bankfelder verändert: status=%q first=%q beitragsfrei=%d", status, first, beitragsfrei)
 	}
@@ -114,9 +126,7 @@ func TestBankdaten_KassiererPflegtBeitragsfreiGrund(t *testing.T) {
 	db.QueryRow(
 		`SELECT iban, status, first_name, beitragsfrei, beitragsfrei_grund FROM members WHERE id=?`, id).
 		Scan(&iban, &status, &first, &beitragsfrei, &grund)
-	if iban != "DE89370400440532013000" {
-		t.Errorf("iban: got %q", iban)
-	}
+	assertEncryptedIBAN(t, iban, "DE89370400440532013000")
 	if beitragsfrei != 1 || !grund.Valid || grund.String != "kein aktiver Sportler mehr" {
 		t.Errorf("beitragsfrei/grund: got %d / %v %q, want 1 / true %q",
 			beitragsfrei, grund.Valid, grund.String, "kein aktiver Sportler mehr")

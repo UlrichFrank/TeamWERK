@@ -345,6 +345,11 @@ func (h *Handler) loadClubSepa(ctx context.Context) (clubSepa, error) {
 	err := h.db.QueryRowContext(ctx,
 		`SELECT name, COALESCE(glaeubiger_id,''), COALESCE(iban,''), COALESCE(bic,''), COALESCE(kontoinhaber,'') FROM clubs LIMIT 1`).
 		Scan(&name, &g, &i, &b, &k)
-	c.Name, c.GlaeubigerID, c.IBAN, c.BIC, c.Kontoinhaber = name, g.String, i.String, b.String, k.String
+	// Vereins-SEPA-Stammdaten liegen at-rest verschlüsselt vor → zur Laufzeit entschlüsseln.
+	c.Name = name
+	c.GlaeubigerID = decBankOrEmpty(g.String)
+	c.IBAN = decBankOrEmpty(i.String)
+	c.BIC = decBankOrEmpty(b.String)
+	c.Kontoinhaber = decBankOrEmpty(k.String)
 	return c, err
 }

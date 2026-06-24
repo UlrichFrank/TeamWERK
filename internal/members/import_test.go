@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
@@ -340,8 +341,10 @@ func TestImport_FieldsWhitelist_NurIBAN(t *testing.T) {
 
 	var iban sql.NullString
 	db.QueryRow(`SELECT iban FROM members WHERE first_name='Petra'`).Scan(&iban)
-	if iban.String != testIBAN {
-		t.Errorf("iban = %q, want %q", iban.String, testIBAN)
+	if !crypto.IsEncryptedString(iban.String) {
+		t.Errorf("iban nicht verschlüsselt gespeichert: %q", iban.String)
+	} else if dec, _ := crypto.Decrypt(iban.String); dec != testIBAN {
+		t.Errorf("iban-Roundtrip = %q, want %q", dec, testIBAN)
 	}
 	if got := statusOf(t, db, "Petra"); got != "aktiv" {
 		t.Errorf("status = %q, want unverändert %q (nicht in fields)", got, "aktiv")

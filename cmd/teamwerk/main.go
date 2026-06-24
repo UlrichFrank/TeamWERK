@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -28,6 +30,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
@@ -103,6 +106,14 @@ func main() {
 		runGenVapid()
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "gen-encryption-key" {
+		runGenEncryptionKey()
+		return
+	}
+	if len(os.Args) > 1 && (os.Args[1] == "encrypt-pii" || os.Args[1] == "decrypt-pii") {
+		runPIIMigration(os.Args[1] == "decrypt-pii")
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "push-test" {
 		runPushTest()
 		return
@@ -129,6 +140,12 @@ func serve() {
 	cfg, err := appconfig.Load()
 	if err != nil {
 		fatal("config load failed", "error", err)
+	}
+
+	// At-Rest-Verschlüsselung: ohne gültigen FIELD_ENCRYPTION_KEY nimmt der Server
+	// keine Requests an (sonst würden Bankdaten im Klartext geschrieben).
+	if err := crypto.InitFromEnv(); err != nil {
+		fatal("encryption key invalid", "error", err)
 	}
 
 	database, err := db.Open(cfg.DBPath)
@@ -180,6 +197,51 @@ func serve() {
 
 	slog.Info("listening", "port", cfg.Port)
 	fatal("http server stopped", "error", http.ListenAndServe(":"+cfg.Port, root))
+}
+
+// runGenEncryptionKey gibt einen zufälligen, base64-kodierten 32-Byte-Schlüssel
+// aus, der als FIELD_ENCRYPTION_KEY in /etc/teamwerk/env eingetragen wird.
+func runGenEncryptionKey() {
+	key := make([]byte, crypto.KeySize)
+	if _, err := rand.Read(key); err != nil {
+		fatal("gen-encryption-key failed", "error", err)
+	}
+	fmt.Printf("FIELD_ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(key))
+}
+
+// runPIIMigration verschlüsselt (bzw. entschlüsselt bei decrypt=true) den
+// Bestand der vier Bank-/SEPA-Speicher idempotent in-place.
+func runPIIMigration(decrypt bool) {
+	_ = godotenv.Load()
+	cfg, err := appconfig.Load()
+	if err != nil {
+		fatal("pii-migration: load config failed", "error", err)
+	}
+	if err := crypto.InitFromEnv(); err != nil {
+		fatal("pii-migration: encryption key invalid", "error", err)
+	}
+	database, err := db.Open(cfg.DBPath)
+	if err != nil {
+		fatal("pii-migration: open db failed", "error", err)
+	}
+	defer database.Close()
+
+	var rep crypto.PIIReport
+	if decrypt {
+		rep, err = crypto.DecryptPII(database, cfg.UploadDir)
+	} else {
+		rep, err = crypto.EncryptPII(database, cfg.UploadDir)
+	}
+	if err != nil {
+		fatal("pii-migration failed", "error", err)
+	}
+	verb := "verschlüsselt"
+	if decrypt {
+		verb = "entschlüsselt"
+	}
+	slog.Info("pii-migration done", "mode", verb,
+		"member_rows", rep.MemberRows, "club_rows", rep.ClubRows,
+		"drafts", rep.Drafts, "files", rep.Files)
 }
 
 func runGenVapid() {

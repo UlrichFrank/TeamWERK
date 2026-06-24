@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 )
 
 type ChangeRequest struct {
@@ -43,6 +45,54 @@ func (h *Handler) GetChangeDrafts(memberID int) ([]ChangeDraft, error) {
 		drafts = append(drafts, d)
 	}
 	return drafts, rows.Err()
+}
+
+// redactBankDrafts bereitet bankdaten-Entwürfe für die Anzeige auf: für
+// Berechtigte werden new_value (ganzer "v1:"-String) und old_value (pro Feld
+// verschlüsseltes JSON-Objekt) entschlüsselt; sonst auf null geschwärzt. Beides
+// ist nötig, damit der verschlüsselte new_value die JSON-Antwort nicht zerstört.
+func redactBankDrafts(drafts []ChangeDraft, reveal bool) {
+	for i := range drafts {
+		if drafts[i].FieldName != "bankdaten" {
+			continue
+		}
+		if !reveal {
+			drafts[i].NewValue = json.RawMessage("null")
+			drafts[i].OldValue = json.RawMessage("null")
+			continue
+		}
+		drafts[i].NewValue = decryptWholeBankValue(drafts[i].NewValue)
+		drafts[i].OldValue = decryptBankObjectFields(drafts[i].OldValue)
+	}
+}
+
+// decryptWholeBankValue entschlüsselt einen als ganzen String verschlüsselten
+// new_value zurück zum ursprünglichen JSON. Schlägt das fehl, wird null geliefert.
+func decryptWholeBankValue(raw json.RawMessage) json.RawMessage {
+	pt, err := crypto.Decrypt(string(raw))
+	if err != nil || !json.Valid([]byte(pt)) {
+		return json.RawMessage("null")
+	}
+	return json.RawMessage(pt)
+}
+
+// decryptBankObjectFields entschlüsselt die String-Werte eines JSON-Objekts
+// (old_value von bankdaten). Werte ohne "v1:"-Prefix bleiben unverändert.
+func decryptBankObjectFields(raw json.RawMessage) json.RawMessage {
+	var obj map[string]string
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return raw
+	}
+	for k, v := range obj {
+		if pt, err := crypto.Decrypt(v); err == nil {
+			obj[k] = pt
+		}
+	}
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return raw
+	}
+	return out
 }
 
 // getMember retrieves a member by ID from the database
@@ -147,6 +197,18 @@ func (h *Handler) CreateOrUpdateDraft(memberID, userID int, req ChangeRequest) (
 		return nil, err
 	}
 
+	// Bankdaten-Entwürfe werden at-rest verschlüsselt abgelegt (ganzer new_value
+	// als ein "v1:"-String). old_value enthält die — nach Migration ebenfalls
+	// verschlüsselten — Bestandswerte des Mitglieds, daher kein Klartext-Leak.
+	newValue := req.NewValue
+	if req.FieldName == "bankdaten" {
+		enc, encErr := crypto.Encrypt(string(req.NewValue))
+		if encErr != nil {
+			return nil, encErr
+		}
+		newValue = json.RawMessage(enc)
+	}
+
 	// UPSERT: Create or replace draft for this field
 	_, err = h.db.Exec(`
 		INSERT INTO member_change_drafts (member_id, field_name, old_value, new_value, created_by_user_id, created_at)
@@ -154,7 +216,7 @@ func (h *Handler) CreateOrUpdateDraft(memberID, userID int, req ChangeRequest) (
 		ON CONFLICT(member_id, field_name) DO UPDATE SET
 			new_value = excluded.new_value,
 			created_at = CURRENT_TIMESTAMP
-	`, memberID, req.FieldName, oldValue, req.NewValue, userID)
+	`, memberID, req.FieldName, oldValue, newValue, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +385,11 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 		if err := json.Unmarshal(newValue, &iban); err != nil {
 			return err
 		}
-		_, err := h.db.Exec(`UPDATE members SET iban = ? WHERE id = ?`, iban, memberID)
+		enc, err := encBankField(iban)
+		if err != nil {
+			return err
+		}
+		_, err = h.db.Exec(`UPDATE members SET iban = ? WHERE id = ?`, enc, memberID)
 		return err
 
 	case "account_holder":
@@ -331,7 +397,11 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 		if err := json.Unmarshal(newValue, &val); err != nil {
 			return err
 		}
-		_, err := h.db.Exec(`UPDATE members SET account_holder = ? WHERE id = ?`, val, memberID)
+		enc, err := encBankField(val)
+		if err != nil {
+			return err
+		}
+		_, err = h.db.Exec(`UPDATE members SET account_holder = ? WHERE id = ?`, enc, memberID)
 		return err
 
 	case "dsgvo":
@@ -373,16 +443,30 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 		return err
 
 	case "bankdaten":
+		// new_value liegt als ganzer "v1:"-String verschlüsselt vor (siehe
+		// CreateOrUpdateDraft) — erst entschlüsseln, dann das JSON parsen.
+		plain, err := crypto.Decrypt(string(newValue))
+		if err != nil {
+			return err
+		}
 		var data struct {
 			IBAN          string `json:"iban"`
 			AccountHolder string `json:"account_holder"`
 		}
-		if err := json.Unmarshal(newValue, &data); err != nil {
+		if err := json.Unmarshal([]byte(plain), &data); err != nil {
 			return err
 		}
-		_, err := h.db.Exec(
+		encIBAN, err := encBankField(data.IBAN)
+		if err != nil {
+			return err
+		}
+		encHolder, err := encBankField(data.AccountHolder)
+		if err != nil {
+			return err
+		}
+		_, err = h.db.Exec(
 			`UPDATE members SET iban=?, account_holder=? WHERE id=?`,
-			nullableString(data.IBAN), nullableString(data.AccountHolder), memberID)
+			encIBAN, encHolder, memberID)
 		return err
 
 	default:

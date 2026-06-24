@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/sepa"
 )
@@ -80,8 +81,8 @@ func (h *Handler) GetClub(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"id": id, "name": name, "logo_url": logoURL.String, "address": address.String,
-		"glaeubiger_id": glaeubigerID.String, "iban": iban.String,
-		"bic": bic.String, "kontoinhaber": kontoinhaber.String,
+		"glaeubiger_id": decClubField(glaeubigerID), "iban": decClubField(iban),
+		"bic": decClubField(bic), "kontoinhaber": decClubField(kontoinhaber),
 	})
 }
 
@@ -115,11 +116,22 @@ func (h *Handler) UpdateClub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SEPA-Stammdaten at-rest verschlüsseln (Validierung/Normalisierung lief oben
+	// auf dem Klartext).
+	encG, err1 := encClubField(req.GlaeubigerID)
+	encI, err2 := encClubField(req.IBAN)
+	encB, err3 := encClubField(req.BIC)
+	encK, err4 := encClubField(req.Kontoinhaber)
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
+		return
+	}
+
 	h.db.ExecContext(r.Context(),
 		`UPDATE clubs SET name=?, logo_url=?, address=?, glaeubiger_id=?, iban=?, bic=?, kontoinhaber=?, updated_at=?
 		 WHERE id=(SELECT id FROM clubs LIMIT 1)`,
 		req.Name, req.LogoURL, req.Address,
-		nullIfEmpty(req.GlaeubigerID), nullIfEmpty(req.IBAN), nullIfEmpty(req.BIC), nullIfEmpty(req.Kontoinhaber),
+		encG, encI, encB, encK,
 		time.Now())
 	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
@@ -129,11 +141,26 @@ func normalizeUpper(s string) string {
 	return strings.ToUpper(strings.Join(strings.Fields(s), ""))
 }
 
-func nullIfEmpty(s string) any {
+// encClubField verschlüsselt ein nicht-leeres Vereins-SEPA-Feld at-rest; leere
+// Werte werden zu NULL.
+func encClubField(s string) (any, error) {
 	if s == "" {
-		return nil
+		return nil, nil
 	}
-	return s
+	return crypto.Encrypt(s)
+}
+
+// decClubField entschlüsselt ein Vereins-SEPA-Feld; nicht entschlüsselbare Werte
+// ergeben "" (kein Klartext-Leak). Werte ohne "v1:"-Prefix sind Passthrough.
+func decClubField(ns sql.NullString) string {
+	if !ns.Valid {
+		return ""
+	}
+	pt, err := crypto.Decrypt(ns.String)
+	if err != nil {
+		return ""
+	}
+	return pt
 }
 
 // GET /api/admin/seasons
