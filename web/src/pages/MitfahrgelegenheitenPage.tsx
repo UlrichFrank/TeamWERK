@@ -117,8 +117,10 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
       (p.status === 'pending' || p.status === 'confirmed'))
 
   // Can a bieter invite this suche entry? Kein eigener Biete-Eintrag mehr nötig.
+  // Ein Gesuch darf nur eine aktive Paarung haben — deshalb reicht es, wenn
+  // irgendeine aktive Paarung für dieses Gesuch existiert (egal von wem).
   const canInviteAsSuche = typ === 'suche' && !entry.isOwn &&
-    !paarungen.some(p => p.sucheId === entry.id && (p.bieteIsOwn || p.sucheIsOwn) &&
+    !paarungen.some(p => p.sucheId === entry.id &&
       (p.status === 'pending' || p.status === 'confirmed'))
 
   return (
