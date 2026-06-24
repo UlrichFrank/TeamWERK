@@ -1,4 +1,7 @@
 ## 24.06.2026
+- [fix] lint: golangci-lint Go-1.25/1.26-Toolchain-Mismatch beheben
+- [feat] deploy: Dry-Run-Modus + robustere REMOTE-Auflösung im Verschlüsselungs-Skript
+- [feat] ?: At-Rest-Verschlüsselung der Bank-/SEPA-PII (AES-256-GCM) (#68)
 - [fix] carpooling: Einladen-Button nach bestätigter Paarung ausblenden (#67)
 - [fix] scheduler: Team-Name in Reminder-Texte, leere Trainingstitel und generische Events
 - [fix] members: SEPA-Bulk-Match — NFC-normalisieren vor Umlaut-Substitution
