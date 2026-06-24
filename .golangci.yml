@@ -49,6 +49,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - web/node_modules
 issues:
   max-issues-per-linter: 100
   max-same-issues: 10
@@ -59,3 +60,4 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - web/node_modules

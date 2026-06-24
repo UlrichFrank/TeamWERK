@@ -11,6 +11,12 @@ GO="$( [ -x /usr/local/go/bin/go ] && echo /usr/local/go/bin/go || echo go )"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# GOROOT + PATH explizit auf den aktiven Toolchain (1.26.x) setzen, damit
+# golangci-lint nicht /usr/local/go (1.25-Bootstrap) als Stdlib-Pfad und
+# Go-Binary verwendet (Mismatch "go1.25 does not match go tool version go1.26").
+export GOROOT="$("$GO" env GOROOT)"
+export PATH="$GOROOT/bin:$PATH"
+
 echo "▸ pre-push: go vet ./..."
 "$GO" vet ./...
 

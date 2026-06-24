@@ -133,7 +133,7 @@ func checkTools(repoRoot string) error {
 		cmd := exec.Command(c.name, c.args...)
 		cmd.Dir = c.dir
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("benötigtes Werkzeug %q nicht verfügbar (%v) — installieren mit: %s", c.name+" "+c.args[0], err, c.install)
+			return fmt.Errorf("benötigtes Werkzeug %q nicht verfügbar (%w) — installieren mit: %s", c.name+" "+c.args[0], err, c.install)
 		}
 	}
 	return nil
