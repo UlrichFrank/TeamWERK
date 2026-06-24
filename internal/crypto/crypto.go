@@ -62,7 +62,7 @@ func LoadKey(b64 string) ([]byte, error) {
 // Init setzt den app-weiten Schlüssel (für Tests und nach LoadKey).
 func Init(key []byte) error {
 	if len(key) != KeySize {
-		return fmt.Errorf("Schlüssel muss %d Byte sein (war %d)", KeySize, len(key))
+		return fmt.Errorf("crypto: Schlüssel muss %d Byte sein (war %d)", KeySize, len(key))
 	}
 	activeKey = key
 	return nil

@@ -69,6 +69,6 @@
 
 ## 10. Spec-Bereinigung & Abschluss
 
-- [ ] 10.1 `openspec validate encrypt-bank-sepa-at-rest --strict` grün
-- [ ] 10.2 Volles Gate (`/verify-change`): build/test/lint, Route→Tests, Mutation→Broadcast, brand-Tokens, lucide-Icons
+- [x] 10.1 `openspec validate encrypt-bank-sepa-at-rest --strict` grün
+- [x] 10.2 Volles Gate (`/verify-change`): build/test/lint, Route→Tests, Mutation→Broadcast, brand-Tokens, lucide-Icons
 - [ ] 10.3 Beim Archivieren: Specs `member-encryption` und `vorstand-vault` werden via Delta entfernt; neue Capability `bank-data-at-rest-encryption` übernommen
