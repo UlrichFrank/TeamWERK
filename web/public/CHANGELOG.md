@@ -1,4 +1,5 @@
 ## 24.06.2026
+- [fix] carpooling: Einladen-Button nach bestätigter Paarung ausblenden (#67)
 - [fix] scheduler: Team-Name in Reminder-Texte, leere Trainingstitel und generische Events
 - [fix] members: SEPA-Bulk-Match — NFC-normalisieren vor Umlaut-Substitution
 
