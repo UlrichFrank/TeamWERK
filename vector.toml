@@ -1,0 +1,69 @@
+# === Logs (bestehend) =====================================================
+[sources.teamwerk]
+type = "journald"
+include_units = ["teamwerk.service"]
+
+[sinks.betterstack]
+type = "http"
+inputs = ["teamwerk"]
+uri = "https://in.logs.betterstack.com"
+encoding.codec = "json"
+
+[sinks.betterstack.auth]
+strategy = "bearer"
+token = "BETTERSTACK_LOGS_TOKEN"  # Better Stack → Sources → dein Log-Source → Token
+
+# === Metrics (Host + App via Prometheus-Scrape) ===========================
+# Host-Telemetrie: füllt CPU/Memory/Network/Disk/Swap-Charts im Better-Stack-
+# "Host(Vector)"-Dashboard.
+[sources.host]
+type = "host_metrics"
+scrape_interval_secs = 30
+collectors = ["cpu", "memory", "disk", "network", "filesystem", "load"]
+
+# App-Metriken: scrapet teamwerk_* aus /api/metrics (Bearer-Token aus /etc/teamwerk/env).
+[sources.teamwerk_app]
+type = "prometheus_scrape"
+endpoints = ["http://127.0.0.1:8080/api/metrics"]
+scrape_interval_secs = 30
+auth.strategy = "bearer"
+auth.token = "METRICS_TOKEN"  # = METRICS_TOKEN aus /etc/teamwerk/env
+
+# Vector-Selbsttelemetrie: Better Stack's "Vector"-Dashboard erwartet
+# vector_component_received_events_total / vector_utilization als Marker für
+# eine kompatible Source. Ohne diese internal_metrics weigert sich das
+# Dashboard, gegen die Source zu laufen.
+[sources.vector_internal]
+type = "internal_metrics"
+scrape_interval_secs = 30
+
+# internal_metrics emittiert Namen wie "component_received_events_total" —
+# der vector_-Namespace wird beim http+json-Encoding NICHT in das name-Feld
+# gemergt. Better Stacks Eligibility-Query verlangt aber exakt
+# "vector_component_received_events_total". Diese Transform prependet den
+# Prefix nur für den vector_internal-Stream (host_/teamwerk_-Metriken bleiben
+# unverändert, weil sie ihre Prefixe schon mitbringen).
+[transforms.vector_internal_renamed]
+type = "remap"
+inputs = ["vector_internal"]
+source = '''
+  .name = "vector_" + string!(.name)
+'''
+
+# Alle drei Metrik-Streams in den Better-Stack-"Logs & Metrics"-Sink. Wichtig:
+# Vector-HTTP-Sink mit JSON-Encoding (NICHT prometheus_remote_write) — Better
+# Stacks Dashboard erwartet das native Vector-Metric-Event-Schema mit
+# Top-Level-Feld "name"; bei prometheus_remote_write käme der Metricname als
+# "__name__"-Label, und die Eligibility-Query (WHERE name IN (...)) träfe nicht.
+# Snippet-Quelle: https://betterstack.com/docs/logs/vector/?source=<id>
+[sinks.betterstack_metrics]
+type = "http"
+method = "post"
+inputs = ["host", "teamwerk_app", "vector_internal_renamed"]
+uri = "https://s2538387.eu-fsn-3.betterstackdata.com/metrics"
+encoding.codec = "json"
+compression = "gzip"
+
+[sinks.betterstack_metrics.auth]
+strategy = "bearer"
+token = "BETTERSTACK_METRICS_TOKEN"  # Better Stack → Sources → dein Metrics-Source → Token

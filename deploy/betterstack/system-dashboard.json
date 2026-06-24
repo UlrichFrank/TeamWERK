@@ -1,0 +1,84 @@
+{
+  "_comment": "Better-Stack-Dashboard für die Host-Telemetrie aus /etc/vector/vector.toml (source [sources.host], type=host_metrics). Anwenden mit ./apply.sh — siehe Skript-Kopf für Auth/Voraussetzungen. Annahme: Metriknamen in Better Stack tragen den 'host_'-Prefix (Vector host_metrics-Namespace 'host' wird beim Ingest mit dem Namen gemergt). Falls die Charts leer bleiben, prüfen mit: SELECT DISTINCT name FROM {{source}} WHERE name LIKE '%cpu%' LIMIT 20 — und die WHERE-Klauseln entsprechend anpassen (Prefix entfernen).",
+
+  "dashboard": {
+    "name": "TeamWERK – System (Host)",
+    "refresh_interval": 30,
+    "date_range_from": "now-3h",
+    "date_range_to": "now"
+  },
+
+  "charts": [
+    {
+      "name": "CPU – Auslastung pro mode (% einer CPU)",
+      "chart_type": "line_chart",
+      "x": 0, "y": 0, "w": 6, "h": 4,
+      "queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT {{time}} AS time, label('mode') AS series, avgMerge(rate_avg) * 100 AS value FROM {{source}} WHERE name = 'host_cpu_seconds_total' AND label('mode') IN ('user','system','iowait','nice','softirq') AND dt BETWEEN {{start_time}} AND {{end_time}} GROUP BY time, series ORDER BY time"
+        }
+      ]
+    },
+
+    {
+      "name": "Memory – used / available / free (Bytes)",
+      "chart_type": "line_chart",
+      "x": 6, "y": 0, "w": 6, "h": 4,
+      "queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT {{time}} AS time, name AS series, avgMerge(value_avg) AS value FROM {{source}} WHERE name IN ('host_memory_used_bytes','host_memory_available_bytes','host_memory_free_bytes') AND dt BETWEEN {{start_time}} AND {{end_time}} GROUP BY time, series ORDER BY time"
+        }
+      ]
+    },
+
+    {
+      "name": "Load Average (1 / 5 / 15 min)",
+      "chart_type": "line_chart",
+      "x": 0, "y": 4, "w": 6, "h": 4,
+      "queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT {{time}} AS time, name AS series, avgMerge(value_avg) AS value FROM {{source}} WHERE name IN ('host_load1','host_load5','host_load15') AND dt BETWEEN {{start_time}} AND {{end_time}} GROUP BY time, series ORDER BY time"
+        }
+      ]
+    },
+
+    {
+      "name": "Network – RX/TX Bytes/s pro Interface",
+      "chart_type": "line_chart",
+      "x": 6, "y": 4, "w": 6, "h": 4,
+      "queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT {{time}} AS time, concat(replaceOne(replaceOne(name, 'host_network_', ''), '_bytes_total', ''), ' ', label('device')) AS series, avgMerge(rate_avg) AS value FROM {{source}} WHERE name IN ('host_network_receive_bytes_total','host_network_transmit_bytes_total') AND label('device') NOT IN ('lo') AND dt BETWEEN {{start_time}} AND {{end_time}} GROUP BY time, series ORDER BY time"
+        }
+      ]
+    },
+
+    {
+      "name": "Disk I/O – Bytes/s pro Device",
+      "chart_type": "line_chart",
+      "x": 0, "y": 8, "w": 6, "h": 4,
+      "queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT {{time}} AS time, concat(if(name = 'host_disk_read_bytes_total', 'read', 'write'), ' ', label('device')) AS series, avgMerge(rate_avg) AS value FROM {{source}} WHERE name IN ('host_disk_read_bytes_total','host_disk_written_bytes_total') AND dt BETWEEN {{start_time}} AND {{end_time}} GROUP BY time, series ORDER BY time"
+        }
+      ]
+    },
+
+    {
+      "name": "Filesystem – belegt (Bytes) pro Mountpoint",
+      "chart_type": "line_chart",
+      "x": 6, "y": 8, "w": 6, "h": 4,
+      "queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT {{time}} AS time, label('mountpoint') AS series, avgMerge(value_avg) AS value FROM {{source}} WHERE name = 'host_filesystem_used_bytes' AND label('mountpoint') NOT LIKE '/proc%' AND label('mountpoint') NOT LIKE '/sys%' AND label('mountpoint') NOT LIKE '/run%' AND label('mountpoint') NOT LIKE '/dev%' AND dt BETWEEN {{start_time}} AND {{end_time}} GROUP BY time, series ORDER BY time"
+        }
+      ]
+    }
+  ]
+}
