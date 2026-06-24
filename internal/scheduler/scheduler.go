@@ -206,9 +206,10 @@ func (s *Scheduler) sendGameReminders() {
 	to := now.Add(28 * time.Hour).Format("2006-01-02")
 
 	rows, err := s.db.Query(`
-		SELECT g.id, g.opponent, g.date, g.time, gt.team_id
+		SELECT g.id, g.opponent, g.date, g.time, gt.team_id, t.name, g.event_type
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
+		JOIN teams t ON t.id = gt.team_id
 		WHERE g.date BETWEEN ? AND ?`, from, to)
 	if err != nil {
 		logIfBusy(err, "sendGameReminders.query")
@@ -218,16 +219,18 @@ func (s *Scheduler) sendGameReminders() {
 	defer rows.Close()
 
 	type gameRow struct {
-		id       int
-		opponent string
-		date     string
-		time     string
-		teamID   int
+		id        int
+		opponent  string
+		date      string
+		time      string
+		teamID    int
+		teamName  string
+		eventType string
 	}
 	var games []gameRow
 	for rows.Next() {
 		var g gameRow
-		rows.Scan(&g.id, &g.opponent, &g.date, &g.time, &g.teamID)
+		rows.Scan(&g.id, &g.opponent, &g.date, &g.time, &g.teamID, &g.teamName, &g.eventType)
 		games = append(games, g)
 	}
 
@@ -237,8 +240,13 @@ func (s *Scheduler) sendGameReminders() {
 		if len(uids) == 0 {
 			continue
 		}
+		title := "Spielerinnerung"
+		if g.eventType == "generisch" {
+			title = "Terminerinnerung"
+		}
+		body := g.teamName + ": " + g.opponent + " — morgen um " + g.time + " Uhr"
 		notify.Send(s.db, s.cfg, uids, "games",
-			"Spielerinnerung", g.opponent+" — morgen um "+g.time+" Uhr", fmt.Sprintf("/termine?focus=game-%d", g.id))
+			title, body, fmt.Sprintf("/termine?focus=game-%d", g.id))
 		for _, uid := range uids {
 			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 				uid, "game_reminder", g.id)
@@ -271,8 +279,9 @@ func (s *Scheduler) sendTrainingReminders() {
 	to := now.Add(28 * time.Hour).Format("2006-01-02")
 
 	rows, err := s.db.Query(`
-		SELECT ts.id, ts.team_id, COALESCE(ts.title,'Training'), ts.date, ts.start_time
+		SELECT ts.id, ts.team_id, COALESCE(NULLIF(ts.title,''),'Training'), ts.date, ts.start_time, t.name
 		FROM training_sessions ts
+		JOIN teams t ON t.id = ts.team_id
 		WHERE ts.date BETWEEN ? AND ?
 		  AND ts.status = 'active'`, from, to)
 	if err != nil {
@@ -288,11 +297,12 @@ func (s *Scheduler) sendTrainingReminders() {
 		title     string
 		date      string
 		startTime string
+		teamName  string
 	}
 	var sessions []sessionRow
 	for rows.Next() {
 		var s sessionRow
-		rows.Scan(&s.id, &s.teamID, &s.title, &s.date, &s.startTime)
+		rows.Scan(&s.id, &s.teamID, &s.title, &s.date, &s.startTime, &s.teamName)
 		sessions = append(sessions, s)
 	}
 
@@ -302,8 +312,9 @@ func (s *Scheduler) sendTrainingReminders() {
 		if len(uids) == 0 {
 			continue
 		}
+		body := sess.teamName + ": " + sess.title + " — morgen um " + sess.startTime + " Uhr"
 		notify.Send(s.db, s.cfg, uids, "trainings",
-			"Trainingserinnerung", sess.title+" — morgen um "+sess.startTime+" Uhr", fmt.Sprintf("/termine?focus=training-%d", sess.id))
+			"Trainingserinnerung", body, fmt.Sprintf("/termine?focus=training-%d", sess.id))
 		for _, uid := range uids {
 			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 				uid, "training_reminder", sess.id)
