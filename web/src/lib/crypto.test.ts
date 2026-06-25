@@ -14,6 +14,7 @@ import {
   encryptPrivateKey,
   decryptPrivateKey,
   generateVaultSetup,
+  rewrapPrivateKeyForRotation,
   verifyVaultPassphrase,
   generateSalt,
   encryptBytes,
@@ -120,6 +121,29 @@ describe('Tresor-Einrichtung & Key-Check (End-to-End)', () => {
   it('weist die falsche Passphrase ab', async () => {
     const setup = await generateVaultSetup('correct')
     expect(await verifyVaultPassphrase('falsch', setup.vorstandKdfSalt, setup.vorstandKeyCheck)).toBe(false)
+  })
+
+  it('Passphrase-Rotation: alte Passphrase wird wertlos, Bestand bleibt mit neuer lesbar', async () => {
+    const setup = await generateVaultSetup('alt')
+    // Ein Datensatz, der unter dem (unveränderten) öffentlichen Schlüssel verschlüsselt wurde.
+    const pub = await importPublicKey(setup.groupPublicKey)
+    const dek = await generateDEK()
+    const ciphertext = await encrypt({ iban: 'DE89' }, dek)
+    const dekEnc = await wrapDEK(dek, pub)
+
+    // Mit alter Passphrase entsperren → Privatschlüssel → unter neuer Passphrase neu wrappen.
+    const kekOld = await deriveKEK('alt', setup.vorstandKdfSalt)
+    const priv = await decryptPrivateKey(setup.groupPrivateKeyEnc, kekOld)
+    const rot = await rewrapPrivateKeyForRotation(priv, 'neu')
+
+    // Alte Passphrase ist jetzt wertlos, neue funktioniert.
+    expect(await verifyVaultPassphrase('alt', rot.vorstandKdfSalt, rot.vorstandKeyCheck)).toBe(false)
+    expect(await verifyVaultPassphrase('neu', rot.vorstandKdfSalt, rot.vorstandKeyCheck)).toBe(true)
+
+    // Bestand bleibt lesbar (gleicher privater Schlüssel, nur neu verschlüsselt).
+    const kekNew = await deriveKEK('neu', rot.vorstandKdfSalt)
+    const privNew = await decryptPrivateKey(rot.groupPrivateKeyEnc, kekNew)
+    expect(await decrypt(ciphertext, await unwrapDEK(dekEnc, privNew))).toEqual({ iban: 'DE89' })
   })
 })
 

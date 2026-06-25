@@ -27,9 +27,10 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 - [x] 2.4 Frontend `TresorPage` (`/tresor`): Einrichtung + Entsperren inkl. expliziter
   **Datenverlust-Warnung** (kein Recovery, Zwei-Personen-Regel); Route + Nav (RoleRoute +
   policy.NavItem + AppShell).
-- [ ] 2.5 Frontend Rotation: alle DEKs laden, mit neuer Passphrase re-wrappen, Batch posten;
-  `vk` aktualisieren. **Mit Sektion 3 umgesetzt** — braucht DEK-Bestand + DEK-Listen-Endpoint
-  (existiert erst, wenn Bankdaten verschlüsselt geschrieben werden).
+- [x] 2.5 Frontend Passphrase-Rotation in `TresorPage` (Modell B, O(1)): privaten Schlüssel
+  mit neuer Passphrase neu verschlüsseln (`rewrapPrivateKeyForRotation`) und `rotate-encryption`
+  posten — kein DEK-Listen-Endpoint nötig (DEKs/Public-Key unverändert). Keypair-Rotation (O(n))
+  vom Backend unterstützt, UI dafür bei Bedarf später.
 
 ## 3. Bankdaten-Schreib-/Lesepfade auf Envelope umstellen
 

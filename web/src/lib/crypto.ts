@@ -195,6 +195,21 @@ export async function generateVaultSetup(passphrase: string): Promise<VaultSetup
   }
 }
 
+// Passphrase-Rotation (O(1)): denselben privaten Schlüssel unter einer neuen Passphrase
+// neu verschlüsseln. Keypair (und damit alle DEKs) bleiben unverändert.
+export async function rewrapPrivateKeyForRotation(
+  priv: CryptoKey,
+  newPassphrase: string,
+): Promise<{ groupPrivateKeyEnc: string; vorstandKdfSalt: string; vorstandKeyCheck: string }> {
+  const saltB64 = generateSalt()
+  const kek = await deriveKEK(newPassphrase, saltB64)
+  return {
+    groupPrivateKeyEnc: await encryptPrivateKey(priv, kek),
+    vorstandKdfSalt: saltB64,
+    vorstandKeyCheck: await encryptString('ok', kek),
+  }
+}
+
 // --- Salt-Erzeugung ---
 
 export function generateSalt(): string {

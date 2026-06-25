@@ -3,7 +3,7 @@ import { ShieldCheck, Lock, LockOpen, AlertTriangle } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useVault } from '../../contexts/VaultContext'
 import { useLiveUpdates } from '../../hooks/useLiveUpdates'
-import { generateVaultSetup } from '../../lib/crypto'
+import { generateVaultSetup, rewrapPrivateKeyForRotation } from '../../lib/crypto'
 
 const INPUT =
   'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -14,10 +14,14 @@ const ALERT_ERR = 'p-3 bg-brand-danger-light border border-brand-danger/30 round
 const ALERT_INFO = 'p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text'
 
 export default function TresorPage() {
-  const { isUnlocked, unlock, lock } = useVault()
+  const { isUnlocked, privateKey, unlock, lock } = useVault()
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [pass, setPass] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [rotating, setRotating] = useState(false)
+  const [newPass, setNewPass] = useState('')
+  const [newConfirm, setNewConfirm] = useState('')
+  const [rotateMsg, setRotateMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -73,6 +77,39 @@ export default function TresorPage() {
     }
   }
 
+  async function handleRotate(e: FormEvent) {
+    e.preventDefault()
+    setRotateMsg(null)
+    if (!privateKey) return
+    if (newPass.length < 12) {
+      setRotateMsg('Die neue Passphrase muss mindestens 12 Zeichen lang sein.')
+      return
+    }
+    if (newPass !== newConfirm) {
+      setRotateMsg('Die neuen Passphrasen stimmen nicht überein.')
+      return
+    }
+    setBusy(true)
+    try {
+      // Passphrase-Rotation (O(1)): denselben privaten Schlüssel unter neuer Passphrase
+      // neu verschlüsseln — Keypair und DEKs bleiben unverändert.
+      const rot = await rewrapPrivateKeyForRotation(privateKey, newPass)
+      await api.put('/admin/rotate-encryption', {
+        group_private_key_enc: rot.groupPrivateKeyEnc,
+        vorstand_kdf_salt: rot.vorstandKdfSalt,
+        vorstand_key_check: rot.vorstandKeyCheck,
+      })
+      setNewPass('')
+      setNewConfirm('')
+      setRotating(false)
+      setRotateMsg('Passphrase rotiert. Gib die neue Passphrase an die übrigen Berechtigten weiter.')
+    } catch {
+      setRotateMsg('Rotation fehlgeschlagen.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="max-w-xl space-y-6">
       <div className="flex items-center gap-2">
@@ -95,11 +132,65 @@ export default function TresorPage() {
                 Bankdaten können in dieser Sitzung gelesen und geschrieben werden. Der Schlüssel wird nach
                 30 Minuten Inaktivität automatisch gesperrt.
               </p>
-              <button onClick={lock} className={BTN_PRIMARY}>
-                <span className="inline-flex items-center gap-2">
-                  <Lock className="w-4 h-4" /> Jetzt sperren
-                </span>
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={lock} className={BTN_PRIMARY}>
+                  <span className="inline-flex items-center gap-2">
+                    <Lock className="w-4 h-4" /> Jetzt sperren
+                  </span>
+                </button>
+                {!rotating && (
+                  <button
+                    onClick={() => {
+                      setRotating(true)
+                      setRotateMsg(null)
+                    }}
+                    className="rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-brand-text border border-brand-border hover:bg-brand-table-select transition-colors"
+                  >
+                    Passphrase ändern
+                  </button>
+                )}
+              </div>
+
+              {rotating && (
+                <form onSubmit={handleRotate} className="space-y-3 border-t border-brand-border-subtle pt-4">
+                  <p className="text-sm text-brand-text-muted">
+                    Neue gemeinsame Passphrase festlegen (z. B. nach Personalwechsel). Die Bankdaten bleiben
+                    erhalten; die alte Passphrase wird anschließend wertlos.
+                  </p>
+                  <input
+                    type="password"
+                    className={INPUT}
+                    placeholder="Neue Passphrase (min. 12 Zeichen)"
+                    value={newPass}
+                    onChange={e => setNewPass(e.target.value)}
+                  />
+                  <input
+                    type="password"
+                    className={INPUT}
+                    placeholder="Neue Passphrase bestätigen"
+                    value={newConfirm}
+                    onChange={e => setNewConfirm(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={busy || !newPass || !newConfirm} className={BTN_PRIMARY}>
+                      Passphrase rotieren
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRotating(false)
+                        setNewPass('')
+                        setNewConfirm('')
+                      }}
+                      className="rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-brand-text-muted hover:text-brand-text transition-colors"
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {rotateMsg && <div className={ALERT_INFO}>{rotateMsg}</div>}
             </div>
           ) : (
             <form onSubmit={handleUnlock} className="space-y-4">
