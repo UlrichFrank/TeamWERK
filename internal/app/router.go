@@ -27,6 +27,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/members"
+	"github.com/teamstuttgart/teamwerk/internal/migration"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
@@ -57,6 +58,7 @@ type Handlers struct {
 	Beitragssaetze *beitragssaetze.Handler
 	Beitragslauf   *beitragslauf.Handler
 	Stammvereine   *stammvereine.Handler
+	Migration      *migration.Handler
 	Calendar       *calendar.Handler
 	Health         *health.Handler
 	Hub            *hub.Handler
@@ -326,6 +328,11 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Get("/api/admin/encryption-config", h.Config.GetEncryptionConfig)
 			r.Put("/api/admin/encryption-config", h.Config.SetEncryptionConfig)
 			r.Put("/api/admin/rotate-encryption", h.Config.RotateEncryption)
+			// Temporäre Bestandsmigration (v1: → Envelope) über die Server-Brücke.
+			// data/upload nur verfügbar, solange FIELD_ENCRYPTION_KEY gesetzt ist (404 sonst).
+			r.Get("/api/admin/migrate-legacy/status", h.Migration.Status)
+			r.Get("/api/admin/migrate-legacy/data", h.Migration.Data)
+			r.Post("/api/admin/migrate-legacy/upload", h.Migration.Upload)
 			// Beitragsmatrix
 			r.Get("/api/fee-rates", h.Beitragssaetze.List)
 			r.Post("/api/fee-rates", h.Beitragssaetze.Create)

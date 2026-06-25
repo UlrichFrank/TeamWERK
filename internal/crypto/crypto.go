@@ -31,6 +31,11 @@ const KeySize = 32
 // EnvKeyName ist die Umgebungsvariable, aus der der Schlüssel geladen wird.
 const EnvKeyName = "FIELD_ENCRYPTION_KEY"
 
+// ErrNoKey signalisiert einen NICHT gesetzten Brücken-Schlüssel. Nach abgeschlossener
+// Bestandsmigration ist das der Normalzustand; der Serverstart behandelt ihn als Warnung,
+// nicht als Fehler (siehe InitFromEnv).
+var ErrNoKey = errors.New("FIELD_ENCRYPTION_KEY ist nicht gesetzt (Migrations-Brücke deaktiviert)")
+
 // prefix markiert einen verschlüsselten String-Wert.
 const prefix = "v1:"
 
@@ -80,10 +85,31 @@ func Init(key []byte) error {
 	return nil
 }
 
-// InitFromEnv lädt FIELD_ENCRYPTION_KEY und setzt den app-weiten Schlüssel.
-// Wird beim Serverstart aufgerufen; ein Fehler bricht den Start ab.
+// HasKey meldet, ob ein gültiger Brücken-Schlüssel geladen ist. Nach Abschluss der
+// Bestandsmigration läuft der Server ohne Schlüssel (HasKey()==false); dann ist der
+// serverseitige Migrations-/Decrypt-Pfad deaktiviert.
+func HasKey() bool {
+	return len(activeKey) == KeySize
+}
+
+// ClearKey entfernt den app-weiten Schlüssel (HasKey()==false). Spiegelt im Test den
+// Zustand „Server läuft ohne FIELD_ENCRYPTION_KEY" (Brücke deaktiviert).
+func ClearKey() {
+	activeKey = nil
+}
+
+// InitFromEnv lädt FIELD_ENCRYPTION_KEY (Migrations-Brücke) und setzt den app-weiten
+// Schlüssel. Tolerant gegenüber einem FEHLENDEN Schlüssel: nach der Migration startet der
+// Server ohne ihn (ErrNoKey, vom Aufrufer als Warnung behandelt) — dann sind nur der
+// Migrationspfad und das Entschlüsseln von Legacy-`v1:`-Bestand deaktiviert; alle regulären
+// Routen sind envelope-only. Ein GESETZTER, aber ungültiger Schlüssel bleibt ein harter
+// Fehler (sonst liefe der Server mit einer Fehlkonfiguration).
 func InitFromEnv() error {
-	key, err := LoadKey(os.Getenv(EnvKeyName))
+	raw := strings.TrimSpace(os.Getenv(EnvKeyName))
+	if raw == "" {
+		return ErrNoKey
+	}
+	key, err := LoadKey(raw)
 	if err != nil {
 		return err
 	}

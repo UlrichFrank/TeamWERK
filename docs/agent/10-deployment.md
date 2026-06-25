@@ -26,18 +26,27 @@ Schlüssel und **besitzt keinen Entschlüsselungsschlüssel**:
   `group_public_key` + `group_private_key_enc` + Salt + Key-Check werden gespeichert. Die
   Passphrase verlässt den Browser nie.
 
-**Rollout-Sequenz (geplant, Sektion 6 — noch offen):**
+**Rollout-Sequenz (zwei entkoppelte Deploys — minimales Brücken-Fenster):**
+
+Das kritische, irreversible Fenster (Server hält gleichzeitig Brücken-Schlüssel **und**
+liefert v1-Klartext aus) wird minimiert, indem die Startup-Toleranz (Server startet auch ohne
+Schlüssel) bereits in Branch A enthalten ist. Der irreversible Moment ist dann nur noch eine
+skriptbare Ops-Aktion, kein Code-Deploy.
 
 ```bash
-# Vorbedingung: feat/zero-knowledge-bank-vault deployt; FIELD_ENCRYPTION_KEY noch gesetzt
-#   (Migrations-Brücke). DB-Backup ziehen (kritisch, irreversibel ab Schritt 3).
+# Branch A (feat/zk-migrate-bestand): Migrations-Endpoint + UI + tolerant startup.
+#   FIELD_ENCRYPTION_KEY bleibt gesetzt (Brücke). Voll reversibel.
+make deploy                          # Branch A ausrollen
 # 1. Vorstand/Kassierer richtet den Tresor ein (UI „Tresor") und prüft alle Bank-Flows
 #    im Browser (Member-Bank, Vereins-SEPA, Mandat-PDF, Fee-Run).
-# 2. Einmaliger Migrationslauf: der Browser eines Tresor-Inhabers entschlüsselt den
-#    v1-Altbestand über die Server-Brücke, re-verschlüsselt clientseitig an den
-#    Gruppen-Public-Key und lädt die Envelopes hoch.
-# 3. FIELD_ENCRYPTION_KEY aus /etc/teamwerk/env entfernen + Server-Neustart — ab jetzt
-#    kann der Server Bank-/SEPA-PII prinzipiell nicht mehr entschlüsseln.
+make backup                          # DB-Backup (kritisch, irreversibel ab Schritt 3)
+# 2. Migrationslauf im Browser: UI „Datenmigration" (/migration) — lädt v1-Altbestand über
+#    die Brücke, re-verschlüsselt clientseitig an den Gruppen-Public-Key, lädt hoch.
+#    Idempotent; offene bankdaten-Anträge (Drafts) vorher annehmen/ablehnen.
+# 3. Brücken-Schlüssel entfernen (sekundenschnell, kein Deploy):
+make zk-finalize-remote              # prüft complete; entfernt FIELD_ENCRYPTION_KEY + Restart
+# Branch B (feat/zk-remove-bridge): Migrations-Endpoint + Brücken-Code + Legacy-Spalten weg.
+make deploy                          # Branch B als Hygiene, jederzeit später
 ```
 
 **Modellgrenze (ehrlich):** schützt gegen passive Kompromittierung (geleaktes DB-Backup,

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -42,6 +44,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/metrics"
+	"github.com/teamstuttgart/teamwerk/internal/migration"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
@@ -114,6 +117,10 @@ func main() {
 		runPIIMigration(os.Args[1] == "decrypt-pii")
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate-legacy-status" {
+		runMigrateLegacyStatus()
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "push-test" {
 		runPushTest()
 		return
@@ -142,9 +149,14 @@ func serve() {
 		fatal("config load failed", "error", err)
 	}
 
-	// At-Rest-Verschlüsselung: ohne gültigen FIELD_ENCRYPTION_KEY nimmt der Server
-	// keine Requests an (sonst würden Bankdaten im Klartext geschrieben).
-	if err := crypto.InitFromEnv(); err != nil {
+	// Migrations-Brücke (FIELD_ENCRYPTION_KEY): Der Server startet mit UND ohne Schlüssel.
+	// Fehlt er, ist das nach abgeschlossener Bestandsmigration der Normalzustand — nur der
+	// serverseitige Migrationspfad (v1:-Decrypt) ist dann deaktiviert; alle regulären Routen
+	// sind envelope-only. Ein GESETZTER, aber ungültiger Schlüssel bleibt ein harter Fehler.
+	switch err := crypto.InitFromEnv(); {
+	case errors.Is(err, crypto.ErrNoKey):
+		slog.Warn("FIELD_ENCRYPTION_KEY nicht gesetzt — Migrations-Brücke deaktiviert (envelope-only)")
+	case err != nil:
 		fatal("encryption key invalid", "error", err)
 	}
 
@@ -177,6 +189,7 @@ func serve() {
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, cfg.BeitragslaufDir),
 		Stammvereine:   stammvereine.NewHandler(database, hubInstance),
+		Migration:      migration.NewHandler(database, hubInstance, cfg.UploadDir),
 		Calendar:       calendar.NewHandler(database),
 		Health:         health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
 		Hub:            hub.NewHandler(hubInstance, buildHash),
@@ -428,6 +441,33 @@ func runMigrate() {
 		fatal("migrate failed", "error", err)
 	}
 	slog.Info("migrations applied")
+}
+
+// runMigrateLegacyStatus prüft den verbleibenden v1:-Altbestand und ist das auth-freie
+// Done-Gate für `make zk-finalize-remote`: Exit 0 nur, wenn KEIN Altbestand mehr existiert
+// (Migration vollständig); sonst Exit 1. Schreibt die Zählung nach stderr.
+func runMigrateLegacyStatus() {
+	_ = godotenv.Load()
+	dbPath := getEnvOrDefault("DB_PATH", "./teamwerk.db")
+	for i, arg := range os.Args {
+		if arg == "--db" && i+1 < len(os.Args) {
+			dbPath = os.Args[i+1]
+		}
+	}
+	database, err := db.Open(dbPath)
+	if err != nil {
+		fatal("migrate-legacy-status: open db failed", "error", err)
+	}
+	defer database.Close()
+	p, err := migration.Pending(context.Background(), database)
+	if err != nil {
+		fatal("migrate-legacy-status: query failed", "error", err)
+	}
+	fmt.Fprintf(os.Stderr, "Altbestand: members=%d club=%t mandates=%d drafts=%d → complete=%t\n",
+		p.Members, p.Club, p.Mandates, p.Drafts, p.Complete())
+	if !p.Complete() {
+		os.Exit(1)
+	}
 }
 
 func getEnvOrDefault(key, fallback string) string {

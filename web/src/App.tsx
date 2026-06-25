@@ -19,6 +19,7 @@ import DutyPage from './pages/DutyPage'
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import BeitragslaufPage from './pages/admin/BeitragslaufPage'
 import TresorPage from './pages/admin/TresorPage'
+import MigrationPage from './pages/admin/MigrationPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
@@ -91,6 +92,7 @@ export default function App() {
               <Route path="einstellungen" element={<RoleRoute roles={['admin','vorstand','kassierer']}><AdminSettingsPage /></RoleRoute>} />
               <Route path="beitragslauf" element={<RoleRoute roles={['admin','vorstand','kassierer']}><BeitragslaufPage /></RoleRoute>} />
               <Route path="tresor" element={<RoleRoute roles={['admin','vorstand','kassierer']}><TresorPage /></RoleRoute>} />
+              <Route path="migration" element={<RoleRoute roles={['admin','vorstand','kassierer']}><MigrationPage /></RoleRoute>} />
               <Route path="kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
               <Route path="nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />

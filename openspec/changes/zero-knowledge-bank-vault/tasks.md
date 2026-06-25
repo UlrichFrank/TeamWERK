@@ -114,12 +114,12 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
 
 ### Branch A — `feat/zk-migrate-bestand` (von `feat/zero-knowledge-bank-vault`, reversibel)
 
-- [ ] 6.1 **Startup-Toleranz vorziehen** (`refactor(crypto)`): `crypto.HasKey()`;
+- [x] 6.1 **Startup-Toleranz vorziehen** (`refactor(crypto)`): `crypto.HasKey()`;
   `cmd/teamwerk/main.go` startet mit **und ohne** `FIELD_ENCRYPTION_KEY` (`slog.Warn` statt
   `fatal` bei fehlendem Key — Brücke/Migration dann deaktiviert; `fatal` nur noch bei
   **gesetztem, aber ungültigem** Key). Sicher, da alle regulären Routen envelope-only sind.
   Test: Start ohne Key OK; Start mit ungültigem Key bricht weiter ab.
-- [ ] 6.2 **Gegateter Brücken-Endpoint** — neues Package `internal/migration` (importiert nur
+- [x] 6.2 **Gegateter Brücken-Endpoint** — neues Package `internal/migration` (importiert nur
   `database/sql` + `internal/crypto` + Upload-Dir → arch-test-konform; in `arch_test.go`
   klassifizieren). Routen in der Finance-Gruppe (`router.go`, vorstand/kassierer):
   - `GET /api/admin/migrate-legacy/status` → `{bridge_available, pending_members, pending_club,
@@ -135,14 +135,19 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
   - Tests: Trainer-403 (Gate); `data`/`upload` 404 wenn `!HasKey()` („nur wenn Bridge");
     `data` liefert entschlüsselten `v1:`-Klartext; `upload` schreibt Envelope **und** nullt die
     Legacy-Spalte; Re-Run idempotent (`status.complete`, leeres `data`).
-- [ ] 6.3 **Frontend-Migrationsseite** (`/admin/migration`, RoleRoute vorstand/kassierer,
+  - **Scope-Entscheidung Drafts:** Die Migration verschlüsselt die **drei At-Rest-Speicher**
+    (Member-Bank, Vereins-SEPA, Mandat-PDF). Legacy-`bankdaten`-**Drafts** (v1) werden im
+    `status` nur **gezählt** (`pending_drafts` → blockiert `complete`), aber nicht automatisch
+    transformiert — sie sind transiente, unbestätigte Anträge. **Betriebsregel:** vor Abschluss
+    bearbeiten (annehmen/ablehnen), bis `pending_drafts == 0`.
+- [x] 6.3 **Frontend-Migrationsseite** (`/admin/migration`, RoleRoute vorstand/kassierer,
   `policy.NavItem` + AppShell-Nav, `useLiveUpdates`): **erfordert entsperrten Tresor**
   (Safety-Gate — Passphrase muss vor dem Brücken-Abbau nachweislich funktionieren). Flow:
   `status` → `data` → je Datensatz clientseitig Envelope (`bankCrypto.ts`/`crypto.ts`,
   Wrap an Group-Public-Key; Mandate via `encryptFile`) → Batch-`upload`; **Fortschrittsanzeige**;
   idempotent (Re-Run lädt nur den Rest); Auto-Fertig bei `status.complete`. tsc/lint grün,
   Browser-Verifikation offen (wie übrige ZK-Flows).
-- [ ] 6.4 **Ops-Automation** `make zk-finalize-remote`: ruft `…/migrate-legacy/status` und
+- [x] 6.4 **Ops-Automation** `make zk-finalize-remote`: ruft `…/migrate-legacy/status` und
   **bricht ab, wenn nicht `complete`**; entfernt dann die `FIELD_ENCRYPTION_KEY`-Zeile aus
   `/etc/teamwerk/env` und `systemctl restart teamwerk` (Muster wie bestehende `*-remote`-
   Targets). **DB-Backup als Vorbedingung** (irreversibel ab dem Spalten-Nullen in 6.2).
