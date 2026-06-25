@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"slices"
 	"strconv"
@@ -1512,36 +1511,6 @@ func normalizeDateAt(s string, currentYear int) string {
 	return year + "-" + month + "-" + day
 }
 
-// validateIBAN checks the MOD-97 checksum and length (22 chars for DE IBANs).
-// Returns (true, "") on success or (false, reason) on failure.
-func validateIBAN(s string) (bool, string) {
-	s = strings.ToUpper(strings.ReplaceAll(s, " ", ""))
-	if len(s) < 4 {
-		return false, "zu kurz"
-	}
-	if strings.HasPrefix(s, "DE") && len(s) != 22 {
-		return false, fmt.Sprintf("DE-IBAN muss 22 Zeichen haben, hat %d", len(s))
-	}
-	rearranged := s[4:] + s[:4]
-	var sb strings.Builder
-	for _, c := range rearranged {
-		switch {
-		case c >= '0' && c <= '9':
-			sb.WriteRune(c)
-		case c >= 'A' && c <= 'Z':
-			sb.WriteString(strconv.Itoa(int(c-'A') + 10))
-		default:
-			return false, fmt.Sprintf("ungültiges Zeichen: %q", c)
-		}
-	}
-	n := new(big.Int)
-	n.SetString(sb.String(), 10)
-	if new(big.Int).Mod(n, big.NewInt(97)).Int64() != 1 {
-		return false, "Prüfziffer falsch"
-	}
-	return true, ""
-}
-
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
@@ -1798,7 +1767,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		query := `SELECT id, member_number, COALESCE(date_of_birth,''),
 		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
 		                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
-		                 COALESCE(join_date,''), COALESCE(iban,''), COALESCE(account_holder,''),
+		                 COALESCE(join_date,''),
 		                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0), COALESCE(beitragsfrei_grund,'')
 		          FROM members
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
@@ -1851,23 +1820,23 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		query += ` LIMIT 1`
 
 		var (
-			existingID                          int
-			dbMemberNum, dbPassNum, dbPosition  sql.NullString
-			dbDOB, dbGender, dbStatus           string
-			dbJerseyNum                         sql.NullInt64
-			dbUserID                            sql.NullInt64
-			dbHomeClub                          sql.NullString
-			dbStreet, dbZip, dbCity             string
-			dbJoinDate, dbIBAN, dbAccountHolder string
-			dbSepaMandat                        int
-			dbBeitragsfrei                      int
-			dbBeitragsfreiGrund                 string
+			existingID                         int
+			dbMemberNum, dbPassNum, dbPosition sql.NullString
+			dbDOB, dbGender, dbStatus          string
+			dbJerseyNum                        sql.NullInt64
+			dbUserID                           sql.NullInt64
+			dbHomeClub                         sql.NullString
+			dbStreet, dbZip, dbCity            string
+			dbJoinDate                         string
+			dbSepaMandat                       int
+			dbBeitragsfrei                     int
+			dbBeitragsfreiGrund                string
 		)
 		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
 			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
 				&dbStatus, &dbGender, &dbUserID, &dbHomeClub,
 				&dbStreet, &dbZip, &dbCity,
-				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat, &dbBeitragsfrei, &dbBeitragsfreiGrund)
+				&dbJoinDate, &dbSepaMandat, &dbBeitragsfrei, &dbBeitragsfreiGrund)
 
 		if scanErr == sql.ErrNoRows {
 			if mode == "enrich" {
@@ -1896,30 +1865,27 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
 			joinDate := normalizeDate(col(row, "join_date"))
 
+			// Zero-Knowledge (Modell B): Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT
+			// importiert — der Server kann sie nicht verschlüsseln. Sie werden pro Mitglied
+			// im Tresor erfasst. Vorhandene CSV-Bankspalten lösen nur einen Hinweis aus.
 			var ibanWarn string
-			var ibanArg interface{}
-			if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" {
-				if ok, msg := validateIBAN(raw); ok {
-					ibanArg, _ = encBankField(raw) // at-rest verschlüsselt
-				} else {
-					ibanWarn = "IBAN nicht gespeichert: " + msg
-				}
+			if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+				ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
 			}
-			encAccountHolder, _ := encBankField(col(row, "Kontoinhaber"))
 
 			if !dryRun {
 				_, insErr := h.db.ExecContext(r.Context(),
 					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
 					                      pass_number, jersey_number, position, status, gender, home_club,
-					                      street, zip, city, join_date, iban, account_holder, sepa_mandat,
+					                      street, zip, city, join_date, sepa_mandat,
 					                      beitragsfrei, beitragsfrei_grund)
-					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 					nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
 					nullableString(dob), nullableString(col(row, "Passnummer")),
 					jerseyArg, nullableString(col(row, "Position")), status, gender,
 					nullableString(col(row, "Stammverein")),
 					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
-					nullableString(joinDate), ibanArg, encAccountHolder,
+					nullableString(joinDate),
 					normalizeSepa(col(row, "SEPA Mandat")),
 					beitragsfreiVal, grundArg)
 				if insErr != nil {
@@ -2011,13 +1977,13 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// New fields: address, join_date, account_holder, sepa_mandat
+		// New fields: address, join_date, sepa_mandat. Bankdaten (IBAN/Kontoinhaber)
+		// werden per CSV NICHT importiert (Zero-Knowledge, Modell B — separat im Tresor).
 		joinDate := normalizeDate(col(row, "join_date"))
 		addChange(col(row, "Adresse"), dbStreet, "Adresse", "street")
 		addChange(col(row, "PLZ"), dbZip, "PLZ", "zip")
 		addChange(col(row, "Ort"), dbCity, "Ort", "city")
 		addChange(joinDate, dbJoinDate, "Mitglied seit", "join_date")
-		addChange(col(row, "Kontoinhaber"), dbAccountHolder, "Kontoinhaber", "account_holder")
 
 		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly && fieldAllowed("sepa_mandat") {
 			sepaVal := normalizeSepa(sepaRaw)
@@ -2048,35 +2014,17 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// IBAN with MOD-97 validation; in enrich mode only fill if DB field is empty.
+		// Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT aktualisiert; vorhandene
+		// CSV-Bankspalten lösen nur einen Hinweis aus (separat im Tresor erfassen).
 		var ibanWarn string
-		if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" && fieldAllowed("iban") {
-			if ok, msg := validateIBAN(raw); ok {
-				if raw != dbIBAN && (!enrichOnly || dbIBAN == "") {
-					setClauses = append(setClauses, "iban=?")
-					setArgs = append(setArgs, raw)
-					changes = append(changes, fmt.Sprintf("IBAN: %q → %q", dbIBAN, raw))
-				}
-			} else if !enrichOnly || dbIBAN == "" {
-				ibanWarn = "IBAN nicht gespeichert: " + msg
-			}
+		if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+			ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
 		}
 
 		// Mitglieder-Auswahl: außerhalb des Dry-Runs nur ausgewählte Zeilen anwenden.
 		selected := applyLines == nil || applyLines[lineNum]
 
 		if len(setClauses) > 0 && !dryRun && selected {
-			// Bank-Felder at-rest verschlüsseln: das positionsgleiche setArg zur
-			// iban=?/account_holder=?-Klausel vor dem Schreiben verschlüsseln.
-			for i, clause := range setClauses {
-				if clause == "iban=?" || clause == "account_holder=?" {
-					if s, ok := setArgs[i].(string); ok {
-						if enc, encErr := encBankField(s); encErr == nil {
-							setArgs[i] = enc
-						}
-					}
-				}
-			}
 			setArgs = append(setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
 				"UPDATE members SET "+strings.Join(setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
