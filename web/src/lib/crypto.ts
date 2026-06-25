@@ -20,7 +20,15 @@ const RSA_MODULUS = 2048
 // --- Base64-Helfer ---
 
 export function bufToB64(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+  // In Blöcken kodieren: String.fromCharCode(...) mit einem großen Spread (z. B. ein
+  // mehrere MB großes SEPA-Mandat-PDF) sprengt sonst den Call-Stack.
+  const bytes = new Uint8Array(buf)
+  const chunk = 0x8000 // 32 KiB
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
 }
 
 export function b64ToBuf(b64: string): ArrayBuffer {
