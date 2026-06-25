@@ -48,8 +48,9 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 - [x] 3.3 (Backend) `internal/config`: Vereins-SEPA als **ein** Envelope
   (`clubs.sepa_ciphertext/sepa_dek_enc`); UpdateClub/GetClub speichern/liefern den Envelope,
   lehnen Klartext-SEPA mit 400 ab; kein Server-Decrypt (encClubField/decClubField + Regex-
-  Validierung entfernt → clientseitig). Test umgestellt. **Offen (Browser):** VereinTab
-  ver-/entschlüsselt SEPA.
+  Validierung entfernt → clientseitig). Test umgestellt. **Frontend:** VereinTab ver-/
+  entschlüsselt SEPA (Tresor entsperrt), sperrt SEPA-Felder ohne Tresor (tsc/lint grün;
+  Browser-Verifikation offen).
 - [ ] 3.4 `internal/upload`: SEPA-Mandat-PDF als clientseitig verschlüsselter Blob
   hochladen/ausliefern (keine Server-`DecryptBytes`). Tests.
 - [~] 3.5 Frontend Bankdaten-Eingabe — **MemberDetailPage erledigt** (`bankCrypto.ts`:
@@ -68,9 +69,11 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 - [x] 4.3 Backend `POST /api/fee-run/export-data` (nur Ciphertext + Wraps + nicht-geheime
   Felder; **keine** Klartext-IBAN). Alter `POST /export` entfernt. Tests: 200 (nur Envelope),
   400 (ohne Vereins-SEPA).
-- [ ] 4.4 Frontend Fee-Run-Seite (`BeitragslaufPage`): export-data laden, Envelopes mit Tresor
-  entschlüsseln, IBANs clientseitig validieren (`iban_ungueltig` ergänzen), `buildPainXML`
-  → lokaler Download. `confirm`/`protocol` unverändert. **Browser-Verifikation nötig.**
+- [x] 4.4 Frontend Fee-Run-Seite (`BeitragslaufPage`): XML-Download holt `export-data`,
+  entschlüsselt Vereins-SEPA + Mitglieds-Envelopes mit dem Tresor-Schlüssel, validiert IBANs
+  clientseitig (ungültige übersprungen + gemeldet), `buildPainXML` → lokaler Download;
+  erfordert entsperrten Tresor. `confirm`/`protocol` unverändert. tsc/lint grün;
+  **Browser-Verifikation offen**.
 - [x] 4.5 `internal/beitragslauf` Server-XML-Builder (`xml.go`) + IBAN-/Club-Decrypt entfernt;
   `preview` liefert weiterhin Nicht-IBAN-Ausschlüsse (+ `iban_fehlt` bei fehlendem Envelope).
 
