@@ -5,7 +5,7 @@ import { api } from '../../lib/api'
 import { errorMessage } from '../../lib/errors'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVault } from '../../contexts/VaultContext'
-import { encryptFile, decryptFile } from '../../lib/bankCrypto'
+import { encryptFile, decryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -58,6 +58,19 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
   const { privateKey } = useVault()
   const bankdatenDraft = drafts.find(d => d.field_name === 'bankdaten') ?? null
   const sepaDraft = drafts.find(d => d.field_name === 'sepa_mandat') ?? null
+
+  const [decryptedDraft, setDecryptedDraft] = useState<{ iban: string; account_holder: string } | null>(null)
+
+  useEffect(() => {
+    if (!bankdatenDraft || !privateKey) { setDecryptedDraft(null); return }
+    const env = bankdatenDraft.new_value as unknown as BankEnvelope
+    if (!env?.bank_ciphertext || !env?.bank_dek_enc) { setDecryptedDraft(null); return }
+    let cancelled = false
+    decryptBankData(env, privateKey)
+      .then(d => { if (!cancelled) setDecryptedDraft(d) })
+      .catch(() => { if (!cancelled) setDecryptedDraft(null) })
+    return () => { cancelled = true }
+  }, [privateKey, bankdatenDraft])
 
   const [ibanDisplay, setIbanDisplay] = useState(formatIBAN(form.iban || ''))
   const [ibanError, setIbanError] = useState('')
@@ -173,23 +186,42 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
 
-        {bankdatenDraft && (
+        {bankdatenDraft && !privateKey && (
+          <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p>Bankdaten-Antrag liegt vor — Tresor entsperren um einzusehen und anzunehmen (Menü „Tresor").</p>
+              <button
+                onClick={() => onDraftReject(bankdatenDraft.id)}
+                className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 text-xs font-medium shrink-0"
+              >
+                Ablehnen
+              </button>
+            </div>
+          </div>
+        )}
+
+        {bankdatenDraft && privateKey && (
           <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <div className="space-y-1">
                 <p className="font-medium mb-1">Angeforderte Bankdaten:</p>
-                {bankdatenDraft.new_value?.account_holder && (
-                  <p className="text-xs">
-                    <span className="text-brand-text-muted">Kontoinhaber:</span>{' '}
-                    {bankdatenDraft.new_value.account_holder}
-                  </p>
-                )}
-                {bankdatenDraft.new_value?.iban && (
-                  <p className="text-xs font-mono">
-                    <span className="text-brand-text-muted not-italic">IBAN:</span>{' '}
-                    {formatIBAN(bankdatenDraft.new_value.iban)}
-                  </p>
-                )}
+                {decryptedDraft
+                  ? <>
+                      {decryptedDraft.account_holder && (
+                        <p className="text-xs">
+                          <span className="text-brand-text-muted">Kontoinhaber:</span>{' '}
+                          {decryptedDraft.account_holder}
+                        </p>
+                      )}
+                      {decryptedDraft.iban && (
+                        <p className="text-xs font-mono">
+                          <span className="text-brand-text-muted not-italic">IBAN:</span>{' '}
+                          {formatIBAN(decryptedDraft.iban)}
+                        </p>
+                      )}
+                    </>
+                  : <p className="text-xs text-brand-text-subtle">Wird entschlüsselt…</p>
+                }
               </div>
               <div className="flex gap-2 shrink-0">
                 <button

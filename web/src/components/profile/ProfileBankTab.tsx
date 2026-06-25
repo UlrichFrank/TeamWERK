@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
+import { encryptBankData } from '../../lib/bankCrypto'
 import { Member, ChangeDraft } from '../../pages/ProfilePage'
 
 interface Props {
   ownMember: Member | null
-  onSaveDirectly?: (iban: string, accountHolder: string) => Promise<void>
 }
 
-export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
+export default function ProfileBankTab({ ownMember }: Props) {
   const [bankdatenDraft, setBankdatenDraft] = useState<ChangeDraft | null>(null)
   const [iban, setIban] = useState('')
   const [accountHolder, setAccountHolder] = useState('')
@@ -19,48 +19,37 @@ export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
   const loadDrafts = (memberId: number) =>
     api.get(`/members/${memberId}/change-drafts`).then(r => {
       const list: ChangeDraft[] = r.data?.drafts ?? []
-      const draft = list.find(d => d.field_name === 'bankdaten') ?? null
-      setBankdatenDraft(draft)
-      if (draft) {
-        setIban(draft.new_value?.iban ?? '')
-        setAccountHolder(draft.new_value?.account_holder ?? '')
-      }
+      setBankdatenDraft(list.find(d => d.field_name === 'bankdaten') ?? null)
     }).catch(() => {})
 
   useEffect(() => {
     if (!ownMember) return
-    setIban(ownMember.iban ?? '')
-    setAccountHolder(ownMember.account_holder ?? '')
-    if (!onSaveDirectly) loadDrafts(ownMember.id)
-    // Felder/Drafts nur bei Wechsel des Members neu initialisieren
+    loadDrafts(ownMember.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownMember?.id])
 
   if (!ownMember) return null
 
-  const ibanChanged = iban.replace(/\s/g, '') !== (ownMember.iban ?? '').replace(/\s/g, '')
-  const ahChanged = accountHolder !== (ownMember.account_holder ?? '')
-  const canSave = ibanChanged || ahChanged
+  const canSave = iban.trim() !== '' || accountHolder.trim() !== ''
 
   const handleSave = async () => {
     setSaving(true)
     setError('')
     try {
       const raw = iban.replace(/\s/g, '').toUpperCase()
-      if (onSaveDirectly) {
-        await onSaveDirectly(raw, accountHolder)
-      } else {
-        if (ibanChanged && !raw) { setError('IBAN darf nicht leer sein.'); setSaving(false); return }
-        await api.post(`/members/${ownMember.id}/change-request`, {
-          field_name: 'bankdaten',
-          new_value: { iban: raw || (ownMember.iban ?? ''), account_holder: accountHolder },
-        })
-        await loadDrafts(ownMember.id)
-      }
+      if (!raw) { setError('IBAN darf nicht leer sein.'); setSaving(false); return }
+      const env = await encryptBankData({ iban: raw, account_holder: accountHolder })
+      await api.post(`/members/${ownMember.id}/change-request`, {
+        field_name: 'bankdaten',
+        new_value: env,
+      })
+      setIban('')
+      setAccountHolder('')
+      await loadDrafts(ownMember.id)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch {
-      setError(onSaveDirectly ? 'Fehler beim Speichern.' : 'Fehler beim Senden der Änderungsanfrage.')
+      setError('Fehler beim Senden der Änderungsanfrage.')
     } finally {
       setSaving(false)
     }
@@ -72,11 +61,15 @@ export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
     try {
       await api.delete(`/members/${ownMember.id}/change-drafts/${bankdatenDraft.id}`)
       setBankdatenDraft(null)
-      setIban(ownMember.iban ?? '')
-      setAccountHolder(ownMember.account_holder ?? '')
     } catch {
       setCancelError('Fehler beim Zurückziehen.')
     }
+  }
+
+  const formatDate = (iso: string | undefined) => {
+    if (!iso) return ''
+    const [y, m, day] = iso.slice(0, 10).split('-')
+    return `${day}.${m}.${y}`
   }
 
   return (
@@ -84,9 +77,30 @@ export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
 
-        {!onSaveDirectly && bankdatenDraft && (
+        {/* Statusanzeige */}
+        <div className="space-y-2 mb-6">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-brand-text-muted w-36">Bankverbindung:</span>
+            {ownMember.has_bank_data
+              ? <span className="text-green-700 font-medium">hinterlegt</span>
+              : <span className="text-brand-text-subtle">nicht hinterlegt</span>
+            }
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-brand-text-muted w-36">SEPA-Mandat:</span>
+            {ownMember.sepa_mandat
+              ? <span className="text-green-700 font-medium">
+                  hinterlegt{ownMember.sepa_mandat_date ? ` (${formatDate(ownMember.sepa_mandat_date)})` : ''}
+                </span>
+              : <span className="text-brand-text-subtle">nicht hinterlegt</span>
+            }
+          </div>
+        </div>
+
+        {/* Pending-Draft-Hinweis */}
+        {bankdatenDraft && (
           <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
-            Änderungsanfrage ausstehend — wird beim Speichern aktualisiert.{' '}
+            Änderungsanfrage ausstehend — wird vom Verein geprüft.{' '}
             <button onClick={handleCancel} className="text-brand-danger hover:underline">
               Zurückziehen
             </button>
@@ -94,19 +108,20 @@ export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
           </div>
         )}
 
+        {/* Änderungsformular */}
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Neuer Kontoinhaber</label>
             <input
               type="text"
               value={accountHolder}
               onChange={e => setAccountHolder(e.target.value)}
-              placeholder="Nicht hinterlegt"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              placeholder="Vor- und Nachname"
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-1">Neue IBAN</label>
             <input
               type="text"
               value={iban}
@@ -115,11 +130,9 @@ export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
                 if (raw.length <= 22) setIban(raw)
               }}
               placeholder="DE89 3704 0044 0532 0130 00"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text font-mono tracking-wider placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
-            {!onSaveDirectly && (
-              <p className="text-xs text-brand-text-subtle mt-1">Bankdaten-Änderungen müssen vom Verein übernommen werden.</p>
-            )}
+            <p className="text-xs text-brand-text-subtle mt-1">Bankdaten-Änderungen müssen vom Verein übernommen werden.</p>
           </div>
         </div>
 
@@ -130,9 +143,9 @@ export default function ProfileBankTab({ ownMember, onSaveDirectly }: Props) {
               disabled={saving}
               className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {saving ? (onSaveDirectly ? 'Speichern…' : 'Senden…') : (onSaveDirectly ? 'Speichern' : 'Änderung anfordern')}
+              {saving ? 'Senden…' : 'Änderung anfordern'}
             </button>
-            {saved && <span className="text-sm text-green-600">{onSaveDirectly ? 'Gespeichert' : 'Anfrage gesendet'}</span>}
+            {saved && <span className="text-sm text-green-600">Anfrage gesendet</span>}
             {error && <span className="text-sm text-brand-danger">{error}</span>}
           </div>
         )}

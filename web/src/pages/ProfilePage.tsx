@@ -28,6 +28,9 @@ export interface Member {
   dsgvo_verarbeitung_date?: string
   dsgvo_weitergabe?: boolean
   dsgvo_weitergabe_date?: string
+  has_bank_data?: boolean
+  sepa_mandat?: boolean
+  sepa_mandat_date?: string
 }
 
 export interface Parent {

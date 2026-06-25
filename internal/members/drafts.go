@@ -78,7 +78,9 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       COALESCE(m.absences_public,0),
 		       COALESCE(m.cross_team_visible,0),
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
-		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date
+		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
+		       COALESCE(m.sepa_mandat,0), m.sepa_mandat_date,
+		       (SELECT COUNT(*) FROM member_sensitive WHERE member_id=m.id)
 		FROM members m
 		WHERE m.id=?`, memberID)
 
@@ -89,6 +91,9 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	var photoVisible, phonesVisible, addressVisible, emailVisible int64
 	var crossTeamVisible, dsgvoVerarbeitung, dsgvoWeitergabe int64
 	var dsgvoVerarbDate, dsgvoWeiterDate sql.NullString
+	var sepaMandat int64
+	var sepaMandatDate sql.NullString
+	var hasBankData int64
 
 	err := row.Scan(
 		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
@@ -101,6 +106,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		&crossTeamVisible,
 		&dsgvoVerarbeitung, &dsgvoVerarbDate,
 		&dsgvoWeitergabe, &dsgvoWeiterDate,
+		&sepaMandat, &sepaMandatDate,
+		&hasBankData,
 	)
 	if err != nil {
 		return nil, err
@@ -144,6 +151,11 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	if dsgvoWeiterDate.Valid {
 		m.DsgvoWeitergabeDate = &dsgvoWeiterDate.String
 	}
+	m.SepaMandat = sepaMandat != 0
+	if sepaMandatDate.Valid {
+		m.SepaMandatDate = &sepaMandatDate.String
+	}
+	m.HasBankData = hasBankData != 0
 
 	return &m, nil
 }

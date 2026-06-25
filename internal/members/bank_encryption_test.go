@@ -137,6 +137,85 @@ func TestProfileKind_FremdesKind403(t *testing.T) {
 	}
 }
 
+// has_bank_data: true wenn member_sensitive-Row vorhanden.
+func TestGetProfile_HasBankDataFlag(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand) VALUES (?,?,?)`,
+		memberID, testCiphertext, testDekEnc)
+	srv := prodserver.New(t, db)
+	tok := testutil.Token(t, userID, "standard", nil)
+
+	res := testutil.Get(t, srv, "/api/profile/me", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("GET profile/me: status %d", res.StatusCode)
+	}
+	var resp struct {
+		OwnMember struct {
+			HasBankData bool `json:"has_bank_data"`
+		} `json:"own_member"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+	if !resp.OwnMember.HasBankData {
+		t.Error("has_bank_data sollte true sein wenn member_sensitive-Row vorhanden")
+	}
+}
+
+// has_bank_data: false wenn keine member_sensitive-Row.
+func TestGetProfile_NoBankData(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, userID)
+	srv := prodserver.New(t, db)
+	tok := testutil.Token(t, userID, "standard", nil)
+
+	res := testutil.Get(t, srv, "/api/profile/me", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("GET profile/me: status %d", res.StatusCode)
+	}
+	var resp struct {
+		OwnMember struct {
+			HasBankData bool `json:"has_bank_data"`
+		} `json:"own_member"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+	if resp.OwnMember.HasBankData {
+		t.Error("has_bank_data sollte false sein wenn keine member_sensitive-Row vorhanden")
+	}
+}
+
+// sepa_mandat und sepa_mandat_date werden im Profil korrekt ausgeliefert.
+func TestGetProfile_SepaMandatFields(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`UPDATE members SET sepa_mandat=1, sepa_mandat_date='2024-03-01' WHERE id=?`, memberID)
+	srv := prodserver.New(t, db)
+	tok := testutil.Token(t, userID, "standard", nil)
+
+	res := testutil.Get(t, srv, "/api/profile/me", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("GET profile/me: status %d", res.StatusCode)
+	}
+	var resp struct {
+		OwnMember struct {
+			SepaMandat     bool   `json:"sepa_mandat"`
+			SepaMandatDate string `json:"sepa_mandat_date"`
+		} `json:"own_member"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+	if !resp.OwnMember.SepaMandat {
+		t.Error("sepa_mandat sollte true sein")
+	}
+	if resp.OwnMember.SepaMandatDate == "" {
+		t.Error("sepa_mandat_date sollte befüllt sein")
+	}
+}
+
 // (Invariante) Schreiben legt den Envelope in member_sensitive ab; der Server sieht nie
 // Klartext und Klartext-Felder werden mit 400 abgewiesen.
 func TestBankdaten_EnvelopeGespeichert_KlartextAbgelehnt(t *testing.T) {

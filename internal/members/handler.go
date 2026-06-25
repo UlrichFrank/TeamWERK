@@ -79,6 +79,7 @@ type Member struct {
 
 	HasPendingProfilDraft bool `json:"has_pending_profil_draft,omitempty"`
 	HasPendingBankDraft   bool `json:"has_pending_bank_draft,omitempty"`
+	HasBankData           bool `json:"has_bank_data,omitempty"`
 
 	AbsencesPublic int `json:"absences_public"`
 
