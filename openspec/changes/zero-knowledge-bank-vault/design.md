@@ -193,69 +193,85 @@ Key-Check. `vorstand_key = PBKDF2(passphrase, salt)` wrappt jeden Mitglieds-DEK
 `lib/crypto.ts` und das Schema-/Spec-Muster sind wiederverwendbar**, das umgebende
 Frontend/Backend muss an den heutigen `main`-Stand portiert werden.
 
-## Gelockte Entscheidungen (Antworten 2026-06-24)
+## Gelockte Entscheidungen (Antworten 2026-06-24/25)
 
-- **G1 — Geteilte Finance-Gruppen-Passphrase** (statt Pro-Person-Keypairs). Eine
-  gemeinsame Tresor-Passphrase für `vorstand`/`kassierer`, separat vom Login, nie an den
-  Server; `vorstand_key = PBKDF2(passphrase, salt)` als AES-KW-Wrapping-Key. Branch-Modell,
-  proportional für 2–3 Personen.
-- **G2 — Kein Eigentümer-Selbstlesen.** Es liest ausschließlich die Finance-Gruppe; kein
-  `dek_enc_member`, kein `member_salt`. Krypto vollständig vom Login/Passwort-Reset
-  entkoppelt → **kein Auth-Umbau**, kein Change-Password-Re-Wrap. (Bewusste Aufweichung
-  des ursprünglichen „Eigentümer liest eigenes".)
+- **G1 — Asymmetrisches Finance-Gruppen-Keypair (Modell B, gewählt 2026-06-25).** Ein
+  Vereins-RSA-OAEP-Keypair. Der **öffentliche** Schlüssel (`group_public_key`) ist nicht
+  geheim, wird an jeden Client ausgeliefert und erlaubt **jedem** (Mitglied, Elternteil,
+  öffentliches Beitritts-Formular) das Verschlüsseln eines DEK an die Gruppe
+  (`dek_enc_vorstand = RSA-OAEP(DEK, group_public_key)`). Der **private** Schlüssel
+  (`GroupPriv`, PKCS8) liegt serverseitig als `group_private_key_enc = AES-GCM(GroupPriv,
+  PBKDF2(passphrase, salt))` — entschlüsselbar nur mit der **einen geteilten Passphrase**,
+  die `vorstand`/`kassierer` kennen und die den Browser nie verlässt. **Genau ein
+  Menschen-Secret** (die Passphrase), identisch zur symmetrischen Variante; das Keypair ist
+  passphrase-geschützte Maschinerie.
+  **Warum B statt symmetrisch (A):** B erhält die **Self-Service-Schreibpfade**
+  (Beitrittsantrag mit IBAN, Profil-/Eltern-Eingabe, Bankdaten-Draft), weil Schreiben nur
+  den öffentlichen Schlüssel braucht. Lesen bleibt streng passphrase-gated (nur
+  Vorstand/Kassierer). Verworfen A: dort kann nur ein Passphrase-Inhaber schreiben →
+  Bankdaten würden 100 % Backoffice, bestehende Flows entfielen.
+- **G2 — Kein Eigentümer-Selbstlesen (bleibt).** Es **liest** ausschließlich die
+  Finance-Gruppe. Mitglieder/Eltern **schreiben** (per öffentlichem Schlüssel), können aber
+  **nicht zurücklesen** (kein `GroupPriv`). Kein `dek_enc_member`. Krypto vollständig vom
+  Login/Passwort-Reset entkoppelt → **kein Auth-Umbau**.
 - **G3 — Kein serverseitiges Recovery.** Zwei-Personen-Regel + Warnung bei Einrichtung;
-  Passphrase-Verlust = Datenverlust (akzeptiert).
-- **G4 — Krypto-Core portieren, UI neu.** `web/src/lib/crypto.ts` aus `origin/encryption`
-  übernehmen (um binäre Blobs für PDFs erweitern); Vault-UI/Flows frisch gegen heutige
-  Komponenten-Standards bauen.
+  Passphrase-Verlust = `GroupPriv` unentschlüsselbar = Datenverlust (akzeptiert).
+- **G4 — Krypto-Core portieren, UI neu.** WebCrypto-Basis (AES-GCM/PBKDF2/Salt/Key-Check)
+  aus `origin/encryption` übernommen; AES-KW-Gruppen-Wrapping **ersetzt durch RSA-OAEP**
+  (Keypair-Modell); Vault-UI frisch.
+- **G5 — CSV-Bankimport clientseitig.** Der Browser parst die CSV, validiert + verschlüsselt
+  IBANs lokal (per öffentlichem Schlüssel), lädt Envelopes hoch. Serverseitiger CSV-
+  Bankimport entfällt.
 
-Damit entfallen aus dem ursprünglichen Entwurf: D3 (Split-Key-Derivation), Pro-Person-
-Keypairs, Group-Keypair-Re-Wrap-Zeremonie, Recovery-Blobs, `dek_enc_member`/`member_salt`.
-Schema reduziert sich auf `member_sensitive(member_id, ciphertext, dek_enc_vorstand)` +
+Damit entfallen: D3 (Split-Key-Derivation), Pro-Person-Keypairs, Recovery-Blobs,
+`dek_enc_member`/`member_salt`. **Schema:** `member_sensitive(member_id, ciphertext,
+dek_enc_vorstand)` + `clubs.group_public_key`, `clubs.group_private_key_enc`,
 `clubs.vorstand_kdf_salt`, `clubs.vorstand_key_check`.
 
-## Ablauf Passphrase-Rotation (Detail)
+**Krypto-Primitive (Modell B):**
+- Keypair: RSA-OAEP (SHA-256), 2048 bit. `wrapKey('raw', DEK, GroupPub, 'RSA-OAEP')` /
+  `unwrapKey(..., GroupPriv, 'RSA-OAEP', 'AES-GCM')`.
+- DEK: AES-GCM-256, Daten = AES-GCM(payload, DEK), IV prepended (unverändert).
+- `GroupPriv`-Schutz: `KEK = PBKDF2(passphrase, salt, 600k, SHA-256)`; `group_private_key_enc
+  = AES-GCM(PKCS8(GroupPriv), KEK)`. `vorstand_key_check = AES-GCM("ok", KEK)`.
 
-Rotation erfolgt beim **Ausscheiden** eines `vorstand`/`kassierer` (oder bei Leak-Verdacht)
-— **nicht** bei Aufnahme (dort wird die bestehende Passphrase nur out-of-band
-weitergegeben). Der Hebel ist die **DEK-Schicht**: nur die kleinen Data-Key-Wraps werden
-neu gewickelt, die Bank-Blobs (`AES-GCM(bankdaten, DEK_m)`) bleiben unangetastet.
+## Ablauf Key-Wechsel (Modell B — zwei Stufen)
 
-Ausgangslage pro Mitglied:
+Modell B trennt zwei Fälle, die im symmetrischen Modell verschmolzen wären:
+
+**(a) Passphrase-Rotation — Normalfall (Ausscheiden / Leak-Verdacht der Passphrase) — O(1):**
 ```
-ciphertext       = AES-GCM(bankdaten, DEK_m)        ← bleibt unverändert
-dek_enc_vorstand = AES-KW(DEK_m, vorstand_key_ALT)  ← wird ausgetauscht
-vorstand_key_ALT = PBKDF2(passphrase_ALT, salt_ALT)
+GroupPriv mit ALTER Passphrase entschlüsseln (KEK_ALT = PBKDF2(pw_ALT, salt_ALT))
+   → mit KEK_NEU = PBKDF2(pw_NEU, salt_NEU) neu verschlüsseln
+   → group_private_key_enc, vorstand_kdf_salt, vorstand_key_check ersetzen
+Die Mitglieds-DEKs/Blobs UND group_public_key bleiben UNANGETASTET.
 ```
+Ablauf (Browser eines aktuellen Halters): Tresor mit alter Passphrase entsperren →
+`GroupPriv` im RAM → neue Passphrase wählen → `GroupPriv` unter `KEK_NEU` neu verschlüsseln
+→ `PUT /api/admin/rotate-encryption {vorstand_kdf_salt, vorstand_key_check,
+group_private_key_enc}`. **Kein** DEK-Batch nötig — daher O(1), unabhängig von der
+Mitgliederzahl (günstiger als das symmetrische Modell, wo jeder DEK neu gewrappt werden
+müsste).
 
-Ablauf (vollständig im Browser eines aktuellen Halters):
-1. Tresor mit **alter** Passphrase entsperren → `vorstand_key_ALT` im RAM.
-2. Neue Passphrase wählen → neuer Zufalls-Salt → `vorstand_key_NEU = PBKDF2(pw_NEU, salt_NEU)`.
-3. Alle `{member_id, dek_enc_vorstand}` laden.
-4. Pro Mitglied (reine AES-KW-Ops): `DEK_m = unwrap(dek_enc_vorstand, key_ALT)` →
-   `dek_enc_vorstand_NEU = wrap(DEK_m, key_NEU)`.
-5. `key_check_NEU = AES-GCM("ok", key_NEU)`.
-6. Batch **atomar** an `PUT /api/admin/rotate-encryption`: `{salt_NEU, key_check_NEU,
-   [{member_id, dek_enc_vorstand_NEU}, …]}`.
-7. `sessionStorage['vk']` auf `key_NEU` aktualisieren (Session bleibt aktiv).
-8. Neue Passphrase out-of-band an verbleibende Halter.
+**(b) Keypair-Rotation — Ausnahmefall (`GroupPriv` selbst kompromittiert) — O(n):**
+```
+neues Keypair erzeugen → alle DEKs mit altem GroupPriv entschlüsseln
+   → mit neuem GroupPub neu wrappen (dek_enc_vorstand) → Batch + neuer pub/priv schreiben
+```
+Nur nötig, wenn der private Schlüssel selbst geleakt ist (er liegt nur nach Entsperren im
+Browser-RAM). `rotate-encryption` akzeptiert dafür optional einen `wraps`-Batch +
+`group_public_key`.
 
-Der Server sieht **weder** alte **noch** neue Passphrase — nur Salt, `"ok"`-Prüfwert und
-neu gewickelte DEKs.
+Der Server sieht in **keinem** Fall die Passphrase oder `GroupPriv` im Klartext.
 
 Eigenschaften & Fallstricke:
-- **Atomar (alles-oder-nichts):** Server schreibt die Batch in **einer** Transaktion; sonst
-  entsteht ein Mischbestand aus ALT-/NEU-Wraps → unlesbar mit beiden Passphrasen.
-- **Beide Schlüssel nur gleichzeitig im Browser:** `key_ALT` bleibt im RAM, bis die NEU-Batch
-  bestätigt ist; bricht der Vorgang ab, wurde nichts geschrieben → wiederholbar.
-- **Abbruch statt Teilschreiben:** Lässt sich ein einzelner DEK nicht entwrappen
-  (Korruption/falsche Passphrase), bricht die Rotation ab, ohne zu schreiben.
-- **Forward-Secrecy-Grenze (ehrlich):** Rotation sperrt die ausgeschiedene Person aus
-  *künftigem* Zugriff aus; sie macht **nicht** ungeschehen, was diese Person während ihrer
-  aktiven Zeit bereits gesehen/kopiert hat. Inhärent, kein Krypto-Schema löst das.
+- **Atomar:** Server schreibt clubs-Felder (+ ggf. DEK-Batch) in **einer** Transaktion.
+- **Forward-Secrecy-Grenze (ehrlich):** Passphrase-Rotation (a) sperrt eine Person aus, die
+  **nur** die Passphrase kannte. Hat sie `GroupPriv` aktiv aus dem Browser-RAM kopiert, hilft
+  nur Keypair-Rotation (b). Für den Zielangreifer (passiv: Backup/Hoster/Admin) ist (a)
+  ausreichend.
 - **Abgrenzung:** Dies ist **nicht** das serverseitige `rotate-key`/`"v2:"` aus dem
-  verworfenen `harden-field-encryption-key` (das server-seitig entschlüsselt). Hier rein
-  clientseitig, Server hält keinen Schlüssel.
+  verworfenen `harden-field-encryption-key` (server-seitig). Hier rein clientseitig.
 
 ## Risks / Trade-offs
 

@@ -64,43 +64,50 @@ Elternteils** — und nicht der Server SHALL die Daten entschlüsseln können.
 
 ### Requirement: Einrichtung des Finance-Gruppen-Schlüssels (einmalig)
 
-Bevor Bankdaten geschrieben werden können, SHALL die Finance-Gruppe einmalig einen
-Gruppen-Schlüssel einrichten. Bei der Einrichtung SHALL clientseitig ein Salt und ein
-Key-Check-Wert erzeugt und auf dem Server gespeichert werden; das Gruppen-Secret selbst
-SHALL den Browser nie verlassen. Eine erneute Einrichtung bei bereits vorhandener
-Konfiguration SHALL mit HTTP 409 abgewiesen werden (stattdessen Rotation).
+Bevor Bankdaten geschrieben werden können, SHALL die Finance-Gruppe einmalig ein
+asymmetrisches Gruppen-Keypair einrichten. Bei der Einrichtung SHALL clientseitig ein
+Keypair erzeugt werden; gespeichert werden der **öffentliche** Schlüssel (im Klartext,
+nicht geheim), der mit `PBKDF2(passphrase, salt)` **verschlüsselte private** Schlüssel, der
+Salt und ein Key-Check-Wert. Die Passphrase und der private Schlüssel im Klartext SHALL den
+Browser nie verlassen. Eine erneute Einrichtung bei bereits vorhandener Konfiguration SHALL
+mit HTTP 409 abgewiesen werden (stattdessen Rotation).
 
-#### Scenario: Einrichtung speichert Salt und Key-Check
+#### Scenario: Einrichtung speichert öffentlichen + verschlüsselten privaten Schlüssel
 - **WHEN** ein berechtigter Nutzer die Einrichtung abschließt
-- **THEN** werden Salt und ein verschlüsselter Key-Check-Wert gespeichert; das Secret nicht
+- **THEN** werden der öffentliche Schlüssel, der passphrase-verschlüsselte private Schlüssel,
+  Salt und Key-Check gespeichert; Passphrase und Klartext-Privatschlüssel nicht
 
 #### Scenario: Doppelte Einrichtung abgewiesen
 - **WHEN** bereits eine Gruppen-Konfiguration existiert
 - **THEN** antwortet der Einrichtungs-Endpoint mit HTTP 409 und verweist auf die Rotation
 
-### Requirement: Passphrase-Rotation bei Rollenwechsel
+### Requirement: Passphrase- und Keypair-Rotation bei Rollenwechsel
 
 Da alle `vorstand`/`kassierer` dieselbe Tresor-Passphrase teilen, SHALL die Aufnahme einer
 neuen Person ohne Server-/Krypto-Operation erfolgen (Weitergabe der Passphrase
 out-of-band). Beim Ausscheiden einer Person SHALL ein **aktueller** Halter die Passphrase
-**rotieren** können: clientseitig neuen Salt + Key-Check erzeugen, alle DEKs vom alten auf
-den neuen Schlüssel re-wrappen und die Batch zusammen mit Salt + Key-Check an den Server
-schreiben — der Server erfährt **weder** die alte **noch** die neue Passphrase. Nach der
-Rotation SHALL der Bestand vollständig mit der neuen Passphrase lesbar und mit der alten
-**nicht** mehr lesbar sein.
+**rotieren** können: clientseitig den privaten Schlüssel mit der alten Passphrase
+entschlüsseln, mit der neuen Passphrase (+ neuem Salt + Key-Check) neu verschlüsseln und an
+den Server schreiben — **ohne** die Mitglieds-DEKs anzufassen (öffentlicher Schlüssel
+unverändert). Der Server erfährt **weder** alte **noch** neue Passphrase. Zusätzlich SHALL
+bei Kompromittierung des privaten Schlüssels eine **Keypair-Rotation** möglich sein (neues
+Keypair, alle DEKs neu wrappen). Nach jeder Rotation SHALL der Bestand vollständig lesbar
+bleiben und mit der alten Passphrase **nicht** mehr entschlüsselbar sein.
 
 #### Scenario: Aufnahme ohne Krypto-Operation
 - **WHEN** eine neue `kassierer`-Person aufgenommen wird
 - **THEN** genügt die Weitergabe der bestehenden Passphrase; es erfolgt keine Server-Änderung
 
-#### Scenario: Rotation re-wrappt alle DEKs
+#### Scenario: Passphrase-Rotation lässt DEKs unangetastet
 - **WHEN** ein aktueller Halter mit entsperrtem Tresor eine neue Passphrase bestätigt
-- **THEN** werden alle DEKs clientseitig neu gewrappt und mit neuem Salt + Key-Check
-  gespeichert; der Server sieht keine Passphrase
+- **THEN** wird nur der verschlüsselte private Schlüssel (+ Salt + Key-Check) ersetzt; die
+  Mitglieds-DEKs und der öffentliche Schlüssel bleiben unverändert; der Server sieht keine
+  Passphrase
 
 #### Scenario: Alte Passphrase nach Rotation wertlos
 - **WHEN** nach einer Rotation die alte Passphrase eingegeben wird
-- **THEN** schlägt die Key-Check-Entschlüsselung fehl und kein DEK lässt sich mehr unwrappen
+- **THEN** schlägt die Key-Check-Entschlüsselung fehl und der private Schlüssel lässt sich
+  nicht mehr entschlüsseln
 
 ### Requirement: Sitzungsgebundenes Schlüssel-Caching im Browser
 
