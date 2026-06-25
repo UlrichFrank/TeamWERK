@@ -86,10 +86,13 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 
 ## 5. Serverseitigen Decrypt abbauen
 
-- [ ] 5.1 `internal/policy/bankdata.go` (`CanDecryptBankData`) + alle Aufrufer entfernen;
-  Architektur-/Build-Tests grün.
-- [ ] 5.2 `internal/crypto`: Bank-/SEPA-Decrypt-Pfade aus regulären Routen entfernen; nur
-  noch Migrations-Brücke (Abschnitt 6) nutzt den Schlüssel.
+- [x] 5.1 `policy.CanDecryptBankData` + `bankdata.go`/-test entfernt; einziger Aufrufer
+  (Draft-Reveal) gated inline auf die Finance-Gruppe. Tote `iban`/`account_holder`-Draft-
+  Cases + `encBankField` (schrieben in die tote `members.iban`) entfernt. Build/Test/Lint grün.
+- [x] 5.2 Keine regulären Routen entschlüsseln mehr Bank-/SEPA-PII server-seitig (members,
+  config, beitragslauf, drafts auf Envelope umgestellt). `internal/crypto`
+  (`Decrypt`/`DecryptBytes`, `FIELD_ENCRYPTION_KEY`) bleibt **nur** für die Migrations-Brücke
+  (Sektion 6) + Auslieferung von Legacy-server-verschlüsselten Mandat-Dateien bis zur Migration.
 
 ## 6. Migration des Bestands
 
@@ -103,9 +106,11 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 
 ## 7. SSE, Doku, Verifikation
 
-- [ ] 7.1 Mutations-Routen (encryption-config, rotate, bank-details, club, mandat) rufen
-  `h.hub.Broadcast(...)`; betroffene Seiten abonnieren `useLiveUpdates`.
-- [ ] 7.2 `docs/agent/03-go.md` + `10-deployment.md` aktualisieren (Zero-Knowledge-Modell,
-  Tresor-Einrichtung/Rotation, kein `FIELD_ENCRYPTION_KEY` mehr nach Migration,
-  Bedrohungsmodell-Grenze, kein Recovery).
-- [ ] 7.3 `/verify-change` + `openspec validate --strict`; Proposal nach Apply archivieren.
+- [x] 7.1 Mutations-Routen rufen `h.hub.Broadcast(...)`: encryption-config/rotate/club →
+  `"settings"` (TresorPage/VereinTab abonnieren), bank-details/child-bank/mandat →
+  `"members"`. Verifiziert.
+- [x] 7.2 `docs/agent/03-go.md`, `10-deployment.md`, `06-gotchas.md` auf das Zero-Knowledge-
+  Modell aktualisiert (Keypair/Tresor, kein Server-Decrypt, Bedrohungsmodell-Grenze, kein
+  Recovery, Migration als geplanter Rollout-Schritt, `export-data`/clientseitiger Fee-Run).
+- [ ] 7.3 `openspec validate --strict` grün; `/verify-change` + Archivierung **nach** Apply/
+  Migration (Sektion 6).
