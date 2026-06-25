@@ -43,49 +43,57 @@ export default function MigrationPage() {
     if (event === 'members' || event === 'settings') load()
   })
 
+  // Mandate werden seitenweise migriert, damit nie mehr als MANDAT_BATCH PDFs gleichzeitig im
+  // Speicher liegen (1-GB-VPS). Mitglieds-Bankdaten + Vereins-SEPA sind klein → ein Request.
+  const MANDAT_BATCH = 5
+
   async function runMigration() {
     setError(null)
     setRunning(true)
     try {
-      // 1. Klartext-Altbestand über die Server-Brücke laden (nur solange Schlüssel gesetzt).
-      setProgress('Lade Altbestand…')
-      const { data } = await api.get<LegacyData>('/admin/migrate-legacy/data')
-
-      // 2. Clientseitig zu Envelopes re-verschlüsseln (an den Gruppen-Public-Key).
-      const total = data.members.length + (data.club ? 1 : 0) + data.mandates.length
-      let n = 0
-      const tick = (label: string) => setProgress(`${label} (${++n}/${total})`)
-
+      // 1. Kern (Mitglieds-Bankdaten + Vereins-SEPA) — klein, ein Request.
+      setProgress('Lade Mitglieds-/Vereinsdaten…')
+      const { data: core } = await api.get<LegacyData>('/admin/migrate-legacy/data?kind=core')
       const members = []
-      for (const m of data.members) {
+      for (const m of core.members) {
         const env = await encryptBankData({ iban: m.iban, account_holder: m.account_holder })
         members.push({ member_id: m.member_id, bank_ciphertext: env.bank_ciphertext, bank_dek_enc: env.bank_dek_enc })
-        tick('Mitglieds-Bankdaten')
       }
-
       let club = null
-      if (data.club) {
-        const env = await encryptClubSepa(data.club)
+      if (core.club) {
+        const env = await encryptClubSepa(core.club)
         club = { sepa_ciphertext: env.sepa_ciphertext, sepa_dek_enc: env.sepa_dek_enc }
-        tick('Vereins-SEPA')
+      }
+      if (members.length || club) {
+        await api.post('/admin/migrate-legacy/upload', { members, club, mandates: [] })
       }
 
-      const mandates = []
-      for (const md of data.mandates) {
-        const { blob, dekEnc } = await encryptFile(new Uint8Array(b64ToBuf(md.pdf_base64)))
-        mandates.push({ member_id: md.member_id, blob_base64: bufToB64(blob.buffer as ArrayBuffer), dek_enc: dekEnc })
-        tick('SEPA-Mandat-PDF')
+      // 2. SEPA-Mandat-PDFs seitenweise (self-advancing: migrierte fallen aus der Auswahl).
+      const totalMandates = status?.pending_mandates ?? 0
+      let migrated = 0
+      for (;;) {
+        const { data: page } = await api.get<LegacyData>(
+          `/admin/migrate-legacy/data?kind=mandates&limit=${MANDAT_BATCH}`,
+        )
+        if (!page.mandates.length) break
+        const mandates = []
+        for (const md of page.mandates) {
+          const { blob, dekEnc } = await encryptFile(new Uint8Array(b64ToBuf(md.pdf_base64)))
+          mandates.push({ member_id: md.member_id, blob_base64: bufToB64(blob.buffer as ArrayBuffer), dek_enc: dekEnc })
+        }
+        await api.post('/admin/migrate-legacy/upload', { members: [], club: null, mandates })
+        migrated += page.mandates.length
+        setProgress(`SEPA-Mandate: ${migrated}/${totalMandates || migrated}`)
       }
-
-      // 3. Envelopes hochladen (Server nullt die Legacy-Spalten in einer Transaktion).
-      setProgress('Lade Envelopes hoch…')
-      await api.post('/admin/migrate-legacy/upload', { members, club, mandates })
 
       setDone(true)
       setProgress('')
       load()
-    } catch {
-      setError('Migration fehlgeschlagen. Ist der Tresor entsperrt und der Brücken-Schlüssel gesetzt? Der Lauf ist idempotent und kann wiederholt werden.')
+    } catch (e) {
+      const detail = (e as { response?: { data?: string } })?.response?.data
+      setError(
+        `Migration fehlgeschlagen${detail ? `: ${detail}` : ''}. Tresor entsperrt und Brücken-Schlüssel gesetzt? Der Lauf ist idempotent und kann wiederholt werden.`,
+      )
     } finally {
       setRunning(false)
     }

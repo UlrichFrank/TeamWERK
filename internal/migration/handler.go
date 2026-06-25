@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -143,15 +144,35 @@ type dataResp struct {
 // Data liefert den über die Brücke entschlüsselten Altbestand (Klartext über TLS) zur
 // clientseitigen Re-Verschlüsselung. Nur verfügbar, solange die Brücke aktiv ist (404 sonst,
 // „nur wenn Bridge"). Liefert ausschließlich noch nicht migrierte Datensätze.
+//
+// Batching (1-GB-VPS): die SEPA-Mandat-PDFs können zusammen hunderte MB groß sein und dürfen
+// nicht in einer Antwort im RAM liegen. Daher zwei Modi über `?kind=`:
+//   - `core` (Default): Mitglieds-Bankdaten + Vereins-SEPA (klein, ein Request).
+//   - `mandates&limit=N`: die nächsten ≤N noch unmigrierten Mandat-PDFs (self-advancing —
+//     migrierte tragen einen dek_enc und fallen aus der Auswahl).
 func (h *Handler) Data(w http.ResponseWriter, r *http.Request) {
 	if !crypto.HasKey() {
 		http.Error(w, "Migrations-Brücke nicht verfügbar (FIELD_ENCRYPTION_KEY nicht gesetzt)", http.StatusNotFound)
 		return
 	}
 	ctx := r.Context()
-	out := dataResp{Members: []memberPlain{}, Mandates: []mandatePlain{}}
 
-	// Mitglieds-Bankdaten.
+	if r.URL.Query().Get("kind") == "mandates" {
+		limit := 10
+		if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 && v <= 50 {
+			limit = v
+		}
+		mandates, status, msg := h.collectMandates(ctx, limit)
+		if status != 0 {
+			http.Error(w, msg, status)
+			return
+		}
+		writeJSON(w, dataResp{Members: []memberPlain{}, Mandates: mandates})
+		return
+	}
+
+	// kind=core (Default): Mitglieds-Bankdaten + Vereins-SEPA.
+	out := dataResp{Members: []memberPlain{}, Mandates: []mandatePlain{}}
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT id, iban, account_holder FROM members WHERE iban IS NOT NULL OR account_holder IS NOT NULL`)
 	if err != nil {
@@ -177,7 +198,6 @@ func (h *Handler) Data(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	// Vereins-SEPA-Stammdaten.
 	var g, i, b, k sql.NullString
 	h.db.QueryRowContext(ctx, `SELECT glaeubiger_id, iban, bic, kontoinhaber FROM clubs LIMIT 1`).
 		Scan(&g, &i, &b, &k)
@@ -193,13 +213,17 @@ func (h *Handler) Data(w http.ResponseWriter, r *http.Request) {
 		out.Club = &clubPlain{GlaeubigerID: pg, IBAN: pi, BIC: pb, Kontoinhaber: pk}
 	}
 
-	// SEPA-Mandat-PDFs (noch ohne dek_enc → unmigriert).
+	writeJSON(w, out)
+}
+
+// collectMandates entschlüsselt bis zu `limit` noch unmigrierte Mandat-PDFs über die Brücke.
+// Liefert (mandates, httpStatus, msg); status==0 heißt Erfolg.
+func (h *Handler) collectMandates(ctx context.Context, limit int) ([]mandatePlain, int, string) {
 	mrows, err := h.db.QueryContext(ctx,
 		`SELECT id, sepa_mandat_path FROM members WHERE sepa_mandat_path IS NOT NULL AND sepa_mandat_path <> ''
-		 AND (sepa_mandat_dek_enc IS NULL OR sepa_mandat_dek_enc = '')`)
+		 AND (sepa_mandat_dek_enc IS NULL OR sepa_mandat_dek_enc = '') ORDER BY id LIMIT ?`, limit)
 	if err != nil {
-		http.Error(w, "DB-Fehler", http.StatusInternalServerError)
-		return
+		return nil, http.StatusInternalServerError, "DB-Fehler"
 	}
 	type mandRow struct {
 		id   int
@@ -210,36 +234,33 @@ func (h *Handler) Data(w http.ResponseWriter, r *http.Request) {
 		var mr mandRow
 		if err := mrows.Scan(&mr.id, &mr.path); err != nil {
 			mrows.Close()
-			http.Error(w, "DB-Fehler", http.StatusInternalServerError)
-			return
+			return nil, http.StatusInternalServerError, "DB-Fehler"
 		}
 		mands = append(mands, mr)
 	}
 	mrows.Close()
+
+	out := []mandatePlain{}
 	for _, mr := range mands {
 		raw, err := os.ReadFile(filepath.Join(h.uploadDir, mr.path))
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue // verwaister Pfad — überspringen
 			}
-			http.Error(w, "Datei-Lesefehler", http.StatusInternalServerError)
-			return
+			return nil, http.StatusInternalServerError, "Datei-Lesefehler"
 		}
 		// Bereits clientseitig verschlüsselt (Client-Magic) heißt: kein Brücken-Decrypt möglich
 		// — sollte mit dem retry-sicheren Upload (neue Datei erst bei Commit) nicht auftreten.
 		if crypto.IsClientEncryptedBytes(raw) {
-			http.Error(w, "Mandat-Datei bereits clientseitig verschlüsselt, aber dek_enc fehlt", http.StatusConflict)
-			return
+			return nil, http.StatusConflict, "Mandat-Datei bereits clientseitig verschlüsselt, aber dek_enc fehlt"
 		}
 		pdf, err := crypto.DecryptBytes(raw)
 		if err != nil {
-			http.Error(w, "Entschlüsselung fehlgeschlagen (mandat)", http.StatusInternalServerError)
-			return
+			return nil, http.StatusInternalServerError, "Entschlüsselung fehlgeschlagen (mandat)"
 		}
-		out.Mandates = append(out.Mandates, mandatePlain{MemberID: mr.id, PDFBase64: base64.StdEncoding.EncodeToString(pdf)})
+		out = append(out, mandatePlain{MemberID: mr.id, PDFBase64: base64.StdEncoding.EncodeToString(pdf)})
 	}
-
-	writeJSON(w, out)
+	return out, 0, ""
 }
 
 // ---- POST /api/admin/migrate-legacy/upload ----

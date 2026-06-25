@@ -114,12 +114,7 @@ func TestMigration_HappyPath(t *testing.T) {
 	})
 	tok := testutil.Token(t, 1, "admin", []string{"kassierer"})
 
-	// data liefert den entschlüsselten Altbestand.
-	res := testutil.Get(t, srv, "/api/admin/migrate-legacy/data", tok)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("data: status %d, want 200", res.StatusCode)
-	}
-	var data struct {
+	type dataResp struct {
 		Members []struct {
 			MemberID      int    `json:"member_id"`
 			IBAN          string `json:"iban"`
@@ -134,6 +129,13 @@ func TestMigration_HappyPath(t *testing.T) {
 			PDFBase64 string `json:"pdf_base64"`
 		} `json:"mandates"`
 	}
+
+	// kind=core: Mitglieds-Bankdaten + Vereins-SEPA, KEINE Mandate.
+	res := testutil.Get(t, srv, "/api/admin/migrate-legacy/data?kind=core", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("data core: status %d, want 200", res.StatusCode)
+	}
+	var data dataResp
 	json.NewDecoder(res.Body).Decode(&data)
 	if len(data.Members) != 1 || data.Members[0].IBAN != "DE89370400440532013000" || data.Members[0].AccountHolder != "Max Mustermann" {
 		t.Fatalf("member-Klartext falsch: %+v", data.Members)
@@ -141,10 +143,21 @@ func TestMigration_HappyPath(t *testing.T) {
 	if data.Club == nil || data.Club.GlaeubigerID != "DE98ZZZ09999999999" {
 		t.Fatalf("club-Klartext falsch: %+v", data.Club)
 	}
-	if len(data.Mandates) != 1 {
-		t.Fatalf("mandate fehlt: %+v", data.Mandates)
+	if len(data.Mandates) != 0 {
+		t.Fatalf("core darf keine Mandate liefern: %+v", data.Mandates)
 	}
-	pdf, _ := base64.StdEncoding.DecodeString(data.Mandates[0].PDFBase64)
+
+	// kind=mandates: seitenweise die unmigrierten Mandat-PDFs.
+	res = testutil.Get(t, srv, "/api/admin/migrate-legacy/data?kind=mandates&limit=5", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("data mandates: status %d, want 200", res.StatusCode)
+	}
+	var mdata dataResp
+	json.NewDecoder(res.Body).Decode(&mdata)
+	if len(mdata.Mandates) != 1 {
+		t.Fatalf("mandate fehlt: %+v", mdata.Mandates)
+	}
+	pdf, _ := base64.StdEncoding.DecodeString(mdata.Mandates[0].PDFBase64)
 	if string(pdf) != "%PDF-1.4 fake mandate" {
 		t.Fatalf("mandat-PDF-Klartext falsch: %q", pdf)
 	}
@@ -207,10 +220,17 @@ func TestMigration_HappyPath(t *testing.T) {
 	if !st.Complete || st.PendingMembers != 0 || st.PendingClub || st.PendingMandates != 0 {
 		t.Errorf("status nach Migration nicht complete: %+v", st)
 	}
-	res = testutil.Get(t, srv, "/api/admin/migrate-legacy/data", tok)
-	json.NewDecoder(res.Body).Decode(&data)
-	if len(data.Members) != 0 || data.Club != nil || len(data.Mandates) != 0 {
-		t.Errorf("data nach Migration nicht leer: %+v", data)
+	res = testutil.Get(t, srv, "/api/admin/migrate-legacy/data?kind=core", tok)
+	var coreAfter dataResp
+	json.NewDecoder(res.Body).Decode(&coreAfter)
+	if len(coreAfter.Members) != 0 || coreAfter.Club != nil {
+		t.Errorf("core nach Migration nicht leer: %+v", coreAfter)
+	}
+	res = testutil.Get(t, srv, "/api/admin/migrate-legacy/data?kind=mandates&limit=5", tok)
+	var mandAfter dataResp
+	json.NewDecoder(res.Body).Decode(&mandAfter)
+	if len(mandAfter.Mandates) != 0 {
+		t.Errorf("mandates nach Migration nicht leer: %+v", mandAfter.Mandates)
 	}
 }
 
