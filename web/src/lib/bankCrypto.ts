@@ -1,5 +1,14 @@
 import { api } from './api'
-import { generateDEK, encrypt, decrypt, wrapDEK, unwrapDEK, importPublicKey } from './crypto'
+import {
+  generateDEK,
+  encrypt,
+  decrypt,
+  encryptBytes,
+  decryptBytes,
+  wrapDEK,
+  unwrapDEK,
+  importPublicKey,
+} from './crypto'
 
 // Envelope-Krypto (Modell B): clientseitige Ver-/Entschlüsselung von Bank-/SEPA-PII.
 // Schreiben braucht nur den öffentlichen Gruppen-Schlüssel (kein Tresor-Entsperren); Lesen
@@ -7,15 +16,20 @@ import { generateDEK, encrypt, decrypt, wrapDEK, unwrapDEK, importPublicKey } fr
 
 // --- Generischer Kern ---
 
-// Verschlüsselt ein Objekt an den öffentlichen Gruppen-Schlüssel → {ciphertext, dekEnc}.
-async function encryptToGroup(obj: object): Promise<{ ciphertext: string; dekEnc: string }> {
+// Lädt den öffentlichen Gruppen-Schlüssel; wirft, wenn der Tresor nicht eingerichtet ist.
+async function fetchGroupPublicKey(): Promise<CryptoKey> {
   const { data: cfg } = await api.get<{ configured: boolean; group_public_key: string }>(
     '/encryption-pubkey',
   )
   if (!cfg.configured || !cfg.group_public_key) {
     throw new Error('Bankdaten-Tresor ist noch nicht eingerichtet.')
   }
-  const pub = await importPublicKey(cfg.group_public_key)
+  return importPublicKey(cfg.group_public_key)
+}
+
+// Verschlüsselt ein Objekt an den öffentlichen Gruppen-Schlüssel → {ciphertext, dekEnc}.
+async function encryptToGroup(obj: object): Promise<{ ciphertext: string; dekEnc: string }> {
+  const pub = await fetchGroupPublicKey()
   const dek = await generateDEK()
   return { ciphertext: await encrypt(obj, dek), dekEnc: await wrapDEK(dek, pub) }
 }
@@ -23,6 +37,21 @@ async function encryptToGroup(obj: object): Promise<{ ciphertext: string; dekEnc
 async function decryptFromGroup<T>(ciphertext: string, dekEnc: string, privateKey: CryptoKey): Promise<T> {
   const dek = await unwrapDEK(dekEnc, privateKey)
   return (await decrypt(ciphertext, dek)) as T
+}
+
+// --- Datei-Blobs (SEPA-Mandat-PDFs) ---
+
+// Verschlüsselt Datei-Bytes an den Gruppen-Schlüssel → {blob (Ciphertext mit Magic), dekEnc}.
+export async function encryptFile(bytes: Uint8Array): Promise<{ blob: Uint8Array; dekEnc: string }> {
+  const pub = await fetchGroupPublicKey()
+  const dek = await generateDEK()
+  return { blob: await encryptBytes(bytes, dek), dekEnc: await wrapDEK(dek, pub) }
+}
+
+// Entschlüsselt einen Datei-Blob mit dem privaten Gruppen-Schlüssel (Tresor entsperrt).
+export async function decryptFile(blob: Uint8Array, dekEnc: string, privateKey: CryptoKey): Promise<Uint8Array> {
+  const dek = await unwrapDEK(dekEnc, privateKey)
+  return decryptBytes(blob, dek)
 }
 
 // --- Mitglieds-Bankdaten ---

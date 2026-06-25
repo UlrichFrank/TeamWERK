@@ -4,8 +4,12 @@
 CREATE TABLE member_sensitive (
     member_id        INTEGER PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
     ciphertext       TEXT NOT NULL,   -- base64(IV ‖ AES-GCM(payload, DEK))
-    dek_enc_vorstand TEXT NOT NULL    -- base64(AES-KW(DEK, vorstand_key))
+    dek_enc_vorstand TEXT NOT NULL    -- RSA-OAEP(DEK, group_public_key)
 );
+
+-- Gewrappter DEK des clientseitig verschlüsselten SEPA-Mandat-PDFs (Datei-Blob liegt
+-- unter members.sepa_mandat_path, der Wrap hier). Server entschlüsselt das PDF nie.
+ALTER TABLE members ADD COLUMN sepa_mandat_dek_enc TEXT; -- RSA-OAEP(DEK, group_public_key)
 
 -- Tresor (Modell B — asymmetrisches Gruppen-Keypair). Gespeichert werden nur:
 --   - der öffentliche Schlüssel (nicht geheim, erlaubt jedem das Schreiben),

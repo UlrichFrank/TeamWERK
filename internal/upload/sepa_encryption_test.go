@@ -13,25 +13,28 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 )
 
-// postSingleFile lädt eine Datei unter dem Formularfeld "file" hoch.
-func postSingleFile(t *testing.T, url, token, filename string, body []byte) *http.Response {
+// postSepaMandat lädt einen (clientseitig verschlüsselten) Blob unter "file" hoch und
+// setzt optional das Feld dek_enc.
+func postSepaMandat(t *testing.T, url, token, filename string, body []byte, dekEnc string) *http.Response {
 	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	h := make(textproto.MIMEHeader)
 	h.Set("Content-Disposition", `form-data; name="file"; filename="`+filename+`"`)
-	h.Set("Content-Type", "application/pdf")
+	h.Set("Content-Type", "application/octet-stream")
 	fw, err := mw.CreatePart(h)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fw.Write(body)
+	if dekEnc != "" {
+		mw.WriteField("dek_enc", dekEnc)
+	}
 	mw.Close()
 	req, _ := http.NewRequest(http.MethodPost, url, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
@@ -43,9 +46,9 @@ func postSingleFile(t *testing.T, url, token, filename string, body []byte) *htt
 	return res
 }
 
-// TestSepaUploadDownload_EncryptedAtRest (7.7): Upload speichert das PDF
-// verschlüsselt auf der Platte; der Download liefert das Original zurück.
-func TestSepaUploadDownload_EncryptedAtRest(t *testing.T) {
+// Modell B: Upload speichert den clientseitig verschlüsselten Blob roh + den gewrappten
+// DEK; der Download liefert den Ciphertext-Blob unverändert (Server entschlüsselt nie).
+func TestSepaUploadDownload_ZeroKnowledge(t *testing.T) {
 	db := testutil.NewDB(t)
 	id := testutil.CreateMember(t, db, 0)
 	dir := t.TempDir()
@@ -57,46 +60,62 @@ func TestSepaUploadDownload_EncryptedAtRest(t *testing.T) {
 	})
 	tok := testutil.Token(t, 1, "admin", nil)
 
-	original := []byte("%PDF-1.4\nMandat Originalinhalt\n%%EOF")
-	res := postSingleFile(t, srv.URL+"/api/upload/sepa-mandat/"+strconv.Itoa(id), tok, "mandat.pdf", original)
+	// Clientseitig verschlüsselter Blob (Magic "TWENC1\n" ‖ Ciphertext) + gewrappter DEK.
+	clientBlob := append([]byte("TWENC1\n"), []byte("\x00\x01verschluesselter mandatsinhalt")...)
+	const dekEnc = "d3JhcHBlZERFSw=="
+
+	// Klartext-PDF (ohne Client-Magic) wird abgelehnt.
+	plain := []byte("%PDF-1.4\nKlartext\n%%EOF")
+	if res := postSepaMandat(t, srv.URL+"/api/upload/sepa-mandat/"+strconv.Itoa(id), tok, "m.pdf", plain, dekEnc); res.StatusCode != http.StatusBadRequest {
+		res.Body.Close()
+		t.Fatalf("Klartext-Upload: status %d, want 400", res.StatusCode)
+	}
+	// Fehlender dek_enc wird abgelehnt.
+	if res := postSepaMandat(t, srv.URL+"/api/upload/sepa-mandat/"+strconv.Itoa(id), tok, "m.bin", clientBlob, ""); res.StatusCode != http.StatusBadRequest {
+		res.Body.Close()
+		t.Fatalf("ohne dek_enc: status %d, want 400", res.StatusCode)
+	}
+
+	// Gültiger Upload.
+	res := postSepaMandat(t, srv.URL+"/api/upload/sepa-mandat/"+strconv.Itoa(id), tok, "m.bin", clientBlob, dekEnc)
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
 		t.Fatalf("upload status %d: %s", res.StatusCode, body)
 	}
 	res.Body.Close()
 
-	// Datei auf der Platte ist verschlüsselt (Magic-Header), nicht das Klartext-PDF.
-	var rel string
-	db.QueryRow(`SELECT sepa_mandat_path FROM members WHERE id=?`, id).Scan(&rel)
+	// Datei auf der Platte == hochgeladener Ciphertext (Server hat nichts ver-/entschlüsselt);
+	// dek_enc ist gespeichert.
+	var rel, dbDek string
+	db.QueryRow(`SELECT sepa_mandat_path, COALESCE(sepa_mandat_dek_enc,'') FROM members WHERE id=?`, id).Scan(&rel, &dbDek)
 	onDisk, err := os.ReadFile(filepath.Join(dir, rel))
 	if err != nil {
 		t.Fatalf("read stored file: %v", err)
 	}
-	if !crypto.IsEncryptedBytes(onDisk) {
-		t.Errorf("gespeicherte Datei nicht verschlüsselt")
+	if !bytes.Equal(onDisk, clientBlob) {
+		t.Errorf("gespeicherte Datei != hochgeladener Blob")
 	}
-	if bytes.HasPrefix(onDisk, []byte("%PDF")) {
-		t.Errorf("gespeicherte Datei beginnt mit %%PDF (Klartext)")
+	if dbDek != dekEnc {
+		t.Errorf("dek_enc nicht gespeichert: %q", dbDek)
 	}
 
-	// Download liefert das Original-PDF (entschlüsselt).
+	// Download-Token liefert token + dek_enc.
 	tokRes := testutil.Get(t, srv, "/api/members/"+strconv.Itoa(id)+"/sepa-mandat/download-token", tok)
 	var td struct {
-		Token string `json:"token"`
+		Token  string `json:"token"`
+		DekEnc string `json:"dek_enc"`
 	}
 	json.NewDecoder(tokRes.Body).Decode(&td)
 	tokRes.Body.Close()
-	if td.Token == "" {
-		t.Fatal("kein Download-Token erhalten")
+	if td.Token == "" || td.DekEnc != dekEnc {
+		t.Fatalf("download-token: token=%q dek_enc=%q", td.Token, td.DekEnc)
 	}
 
-	// In Produktion ist die Download-Route public; im Test umschließt
-	// testutil.NewServer alle Routen mit auth.Middleware, daher ein gültiger
-	// Bearer zusätzlich zum Query-Token (den der Handler prüft).
+	// Download liefert den Ciphertext-Blob unverändert (kein Server-Decrypt).
 	dl := testutil.Get(t, srv, "/api/members/"+strconv.Itoa(id)+"/sepa-mandat/download?token="+td.Token, tok)
 	got, _ := io.ReadAll(dl.Body)
 	dl.Body.Close()
-	if !bytes.Equal(got, original) {
-		t.Errorf("Download liefert nicht das Original-PDF:\n got %q\nwant %q", got, original)
+	if !bytes.Equal(got, clientBlob) {
+		t.Errorf("Download liefert nicht den Ciphertext-Blob")
 	}
 }
