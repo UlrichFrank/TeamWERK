@@ -18,17 +18,18 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 
 ## 2. Tresor-Einrichtung & Rotation
 
-- [ ] 2.1 Backend `PUT /api/admin/encryption-config` (Salt + Key-Check speichern; 409 bei
-  bereits vorhandener Config; Gate vorstand/kassierer/admin). Tests: 200, 409, 403.
-- [ ] 2.2 Backend `PUT /api/admin/rotate-encryption` (neuer Salt + Key-Check + Batch
-  re-gewrappter DEKs atomar schreiben). Tests: 200 (Bestand bleibt lesbar), 403.
-- [ ] 2.3 Frontend `VaultContext` (sessionStorage `vk`, 30-min-Inaktivität, Key-Caching)
-  + `VaultPassphraseDialog` + `VaultGate` — **neu** gegen heutige Komponenten-Standards
-  (brand-Tokens, lucide-Icons).
-- [ ] 2.4 Frontend Einrichtungs-Seite (`/admin/tresor-einrichten`) inkl. expliziter
-  **Datenverlust-Warnung** (kein Recovery, Zwei-Personen-Regel).
-- [ ] 2.5 Frontend Rotations-Seite (`/admin/tresor-verwaltung`): alle DEKs laden, mit neuer
-  Passphrase re-wrappen, Batch posten; `vk` auf neuen Schlüssel aktualisieren.
+- [x] 2.1 Backend `GET/PUT /api/admin/encryption-config` (Salt + Key-Check speichern; 409 bei
+  bereits vorhandener Config; Gate vorstand/kassierer/admin). Tests: 204, 409, 400, 403.
+- [x] 2.2 Backend `PUT /api/admin/rotate-encryption` (neuer Salt + Key-Check + Batch
+  re-gewrappter DEKs atomar schreiben). Tests: 204 (Bestand bleibt lesbar), Rotation.
+- [x] 2.3 Frontend `VaultContext` (sessionStorage `vk`, 30-min-Inaktivität, Key-Caching;
+  hält nur den AES-KW-Wrapping-Key) — **neu** gegen heutige Standards.
+- [x] 2.4 Frontend `TresorPage` (`/tresor`): Einrichtung + Entsperren inkl. expliziter
+  **Datenverlust-Warnung** (kein Recovery, Zwei-Personen-Regel); Route + Nav (RoleRoute +
+  policy.NavItem + AppShell).
+- [ ] 2.5 Frontend Rotation: alle DEKs laden, mit neuer Passphrase re-wrappen, Batch posten;
+  `vk` aktualisieren. **Mit Sektion 3 umgesetzt** — braucht DEK-Bestand + DEK-Listen-Endpoint
+  (existiert erst, wenn Bankdaten verschlüsselt geschrieben werden).
 
 ## 3. Bankdaten-Schreib-/Lesepfade auf Envelope umstellen
 

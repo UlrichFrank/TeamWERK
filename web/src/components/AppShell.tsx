@@ -60,6 +60,7 @@ const navModules: NavModule[] = [
       { to: '/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen' },
       { to: '/veranstaltungsorte', label: 'Veranstaltungsorte' },
       { to: '/beitragslauf', label: 'Beitragslauf' },
+      { to: '/tresor', label: 'Tresor' },
       { to: '/einstellungen', label: 'Einstellungen' },
     ],
   },
