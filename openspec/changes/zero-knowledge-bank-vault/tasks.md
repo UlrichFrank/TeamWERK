@@ -140,7 +140,7 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
     `status` nur **gezählt** (`pending_drafts` → blockiert `complete`), aber nicht automatisch
     transformiert — sie sind transiente, unbestätigte Anträge. **Betriebsregel:** vor Abschluss
     bearbeiten (annehmen/ablehnen), bis `pending_drafts == 0`.
-- [ ] 6.3 **Frontend-Migrationsseite** (`/admin/migration`, RoleRoute vorstand/kassierer,
+- [x] 6.3 **Frontend-Migrationsseite** (`/admin/migration`, RoleRoute vorstand/kassierer,
   `policy.NavItem` + AppShell-Nav, `useLiveUpdates`): **erfordert entsperrten Tresor**
   (Safety-Gate — Passphrase muss vor dem Brücken-Abbau nachweislich funktionieren). Flow:
   `status` → `data` → je Datensatz clientseitig Envelope (`bankCrypto.ts`/`crypto.ts`,

@@ -259,6 +259,7 @@ func NavFor(p *Principal) []NavItem {
 	if IsKassiererLike(p) {
 		nav = append(nav, NavItem{"Beitragslauf", "/beitragslauf"})
 		nav = append(nav, NavItem{"Tresor", "/tresor"})
+		nav = append(nav, NavItem{"Datenmigration", "/migration"})
 		nav = append(nav, NavItem{"Einstellungen", "/einstellungen"})
 	}
 
