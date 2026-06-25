@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Ban, CheckSquare, X } from 'lucide-react'
 import { api } from '../../lib/api'
+import { useVault } from '../../contexts/VaultContext'
 import { useLiveUpdates } from '../../hooks/useLiveUpdates'
-import { formatBetrag } from '../../lib/sepa'
+import { formatBetrag, isValidIBAN, normalizeIBAN } from '../../lib/sepa'
+import { decryptBankData, decryptClubSepa } from '../../lib/bankCrypto'
+import { buildPainXML, saisonStamp, type SepaItem } from '../../lib/sepaXml'
 
 const BTN_PRIMARY = 'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 const BTN_SECONDARY = 'border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-table-select transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -67,6 +70,7 @@ const HINWEIS_OPTIONS: Array<{ value: string; label: string }> = [
 ]
 
 export default function BeitragslaufPage() {
+  const { privateKey } = useVault()
   const [seasons, setSeasons] = useState<Season[]>([])
   const [saisonId, setSaisonId] = useState<number | null>(null)
   const [preview, setPreview] = useState<PreviewResp | null>(null)
@@ -154,19 +158,87 @@ export default function BeitragslaufPage() {
       .map(it => it.member_id)
   }
 
+  // Zero-Knowledge-Fee-Run (Modell B): Der Server liefert nur Ciphertext + Wraps; die
+  // pain.008-Datei wird hier im Browser erzeugt. Erfordert einen entsperrten Tresor.
   const downloadXML = async (scope: Set<Kategorie>) => {
     if (!saisonId) return
+    if (!privateKey) {
+      setToast('Bitte zuerst den Bankdaten-Tresor entsperren (Menü „Tresor").')
+      return
+    }
     const ids = memberIDsForScope(scope)
     if (ids.length === 0) return
-    const res = await api.post('/fee-run/export',
-      { saison_id: saisonId, member_ids: ids },
-      { responseType: 'blob' })
-    const url = URL.createObjectURL(res.data)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `beitragslauf_${preview?.saison_label.replace('/', '-')}.xml`
-    a.click()
-    URL.revokeObjectURL(url)
+
+    interface ExportDataItem {
+      name: string; member_number: string; betrag_cent: number
+      street: string; zip: string; city: string; mandat_datum: string
+      bank_ciphertext: string; bank_dek_enc: string
+    }
+    interface ExportData {
+      saison_kurz: string; faelligkeit: string; club_name: string
+      club_sepa: { ciphertext: string; dek_enc: string }
+      items: ExportDataItem[]
+    }
+
+    try {
+      const { data } = await api.post<ExportData>('/fee-run/export-data', {
+        saison_id: saisonId, member_ids: ids,
+      })
+
+      const club = await decryptClubSepa(
+        { sepa_ciphertext: data.club_sepa.ciphertext, sepa_dek_enc: data.club_sepa.dek_enc },
+        privateKey,
+      )
+
+      const items: SepaItem[] = []
+      const skipped: string[] = []
+      for (const it of data.items) {
+        const bank = await decryptBankData(
+          { bank_ciphertext: it.bank_ciphertext, bank_dek_enc: it.bank_dek_enc },
+          privateKey,
+        )
+        const iban = normalizeIBAN(bank.iban)
+        if (!isValidIBAN(iban)) {
+          skipped.push(`${it.name} (${it.member_number})`)
+          continue
+        }
+        items.push({
+          name: bank.account_holder || it.name,
+          street: it.street, zip: it.zip, city: it.city,
+          iban, betragCent: it.betrag_cent,
+          mandatRef: it.member_number, mandatDatum: it.mandat_datum, memberNumber: it.member_number,
+        })
+      }
+      if (items.length === 0) {
+        setToast('Keine gültige IBAN in der Auswahl — es wurde keine Datei erzeugt.')
+        return
+      }
+
+      const xml = buildPainXML({
+        saisonKurz: data.saison_kurz,
+        clubName: data.club_name,
+        glaeubigerId: club.glaeubiger_id,
+        clubIban: normalizeIBAN(club.iban),
+        bic: normalizeIBAN(club.bic),
+        kontoinhaber: club.kontoinhaber,
+        faelligkeit: data.faelligkeit,
+        createdAt: new Date(),
+        items,
+      })
+
+      const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `beitragslauf_${saisonStamp(data.saison_kurz)}.xml`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      if (skipped.length > 0) {
+        setToast(`${skipped.length} Mitglied(er) mit ungültiger IBAN übersprungen: ${skipped.join(', ')}`)
+      }
+    } catch {
+      setToast('Export fehlgeschlagen — Tresor entsperrt? Vereins-SEPA-Stammdaten gepflegt?')
+    }
   }
 
   const openProtocol = async () => {
