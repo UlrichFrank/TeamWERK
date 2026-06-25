@@ -319,6 +319,10 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			// Vereins-Stammdaten (Verein-Tab: Name/Adresse + SEPA) — Kassierer pflegt SEPA-Daten für den Beitragslauf
 			r.Get("/api/club", h.Config.GetClub)
 			r.Put("/api/club", h.Config.UpdateClub)
+			// Zero-Knowledge-Tresor: Salt/Key-Check (Einrichtung) + Passphrase-Rotation
+			r.Get("/api/admin/encryption-config", h.Config.GetEncryptionConfig)
+			r.Put("/api/admin/encryption-config", h.Config.SetEncryptionConfig)
+			r.Put("/api/admin/rotate-encryption", h.Config.RotateEncryption)
 			// Beitragsmatrix
 			r.Get("/api/fee-rates", h.Beitragssaetze.List)
 			r.Post("/api/fee-rates", h.Beitragssaetze.Create)
