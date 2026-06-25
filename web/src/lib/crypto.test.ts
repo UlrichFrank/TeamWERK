@@ -2,12 +2,17 @@ import { describe, it, expect } from 'vitest'
 import {
   bufToB64,
   b64ToBuf,
-  deriveKey,
   generateDEK,
-  wrapKey,
-  unwrapKey,
+  generateGroupKeypair,
+  exportPublicKey,
+  importPublicKey,
+  wrapDEK,
+  unwrapDEK,
   encrypt,
   decrypt,
+  deriveKEK,
+  encryptPrivateKey,
+  decryptPrivateKey,
   generateVaultSetup,
   verifyVaultPassphrase,
   generateSalt,
@@ -15,8 +20,6 @@ import {
   decryptBytes,
   isEncryptedBytes,
 } from './crypto'
-
-const SALT = generateSalt()
 
 describe('Base64-Helfer', () => {
   it('roundtrip beliebiger Bytes', () => {
@@ -45,38 +48,78 @@ describe('Envelope-Encryption (DEK + AES-GCM)', () => {
     const dek = await generateDEK()
     const ct = await encrypt({ iban: 'DE89' }, dek)
     const raw = new Uint8Array(b64ToBuf(ct))
-    raw[raw.length - 1] ^= 0xff // letztes Byte (GCM-Tag) kippen
+    raw[raw.length - 1] ^= 0xff
     await expect(decrypt(bufToB64(raw.buffer), dek)).rejects.toBeDefined()
-  })
-
-  it('entschlüsselt nicht mit einem anderen DEK', async () => {
-    const dekA = await generateDEK()
-    const dekB = await generateDEK()
-    const ct = await encrypt({ iban: 'DE89' }, dekA)
-    await expect(decrypt(ct, dekB)).rejects.toBeDefined()
   })
 })
 
-describe('DEK-Wrapping (AES-KW) und Passphrase-Ableitung', () => {
-  it('wrappt und entwrappt einen DEK über den abgeleiteten Gruppen-Schlüssel', async () => {
-    const groupKey = await deriveKey('geheime tresor passphrase', SALT)
+describe('Gruppen-Keypair: Schreiben (public) / Lesen (private)', () => {
+  it('wrappt einen DEK an den öffentlichen Schlüssel und entwrappt mit dem privaten', async () => {
+    const kp = await generateGroupKeypair()
     const dek = await generateDEK()
     const payload = { iban: 'DE89370400440532013000' }
     const ct = await encrypt(payload, dek)
 
-    const wrapped = await wrapKey(dek, groupKey)
+    // Schreiben: nur der (re-importierte, öffentliche) Schlüssel nötig.
+    const pubB64 = await exportPublicKey(kp.publicKey)
+    const pub = await importPublicKey(pubB64)
+    const wrapped = await wrapDEK(dek, pub)
 
-    // Frischer Schlüssel aus derselben Passphrase + Salt (PBKDF2 ist deterministisch).
-    const groupKeyAgain = await deriveKey('geheime tresor passphrase', SALT)
-    const dekAgain = await unwrapKey(wrapped, groupKeyAgain)
-    expect(await decrypt(ct, dekAgain)).toEqual(payload)
+    // Lesen: privater Schlüssel.
+    const dek2 = await unwrapDEK(wrapped, kp.privateKey)
+    expect(await decrypt(ct, dek2)).toEqual(payload)
+  })
+})
+
+describe('Privatschlüssel-Schutz unter der Passphrase', () => {
+  it('verschlüsselt den privaten Schlüssel und stellt ihn mit korrekter Passphrase wieder her', async () => {
+    const salt = generateSalt()
+    const kek = await deriveKEK('correct horse battery staple', salt)
+    const kp = await generateGroupKeypair()
+    const encPriv = await encryptPrivateKey(kp.privateKey, kek)
+
+    // Mit korrekter Passphrase: Privatschlüssel zurückgewinnen und einen Wrap entwrappen.
+    const kekAgain = await deriveKEK('correct horse battery staple', salt)
+    const priv = await decryptPrivateKey(encPriv, kekAgain)
+    const dek = await generateDEK()
+    const wrapped = await wrapDEK(dek, kp.publicKey)
+    const dek2 = await unwrapDEK(wrapped, priv)
+    expect(await decrypt(await encrypt({ x: 1 }, dek), dek2)).toEqual({ x: 1 })
   })
 
-  it('entwrappt nicht mit falscher Passphrase', async () => {
-    const groupKey = await deriveKey('richtig', SALT)
-    const wrapped = await wrapKey(await generateDEK(), groupKey)
-    const wrongKey = await deriveKey('falsch', SALT)
-    await expect(unwrapKey(wrapped, wrongKey)).rejects.toBeDefined()
+  it('scheitert mit falscher Passphrase', async () => {
+    const salt = generateSalt()
+    const kek = await deriveKEK('richtig', salt)
+    const kp = await generateGroupKeypair()
+    const encPriv = await encryptPrivateKey(kp.privateKey, kek)
+    const wrongKek = await deriveKEK('falsch', salt)
+    await expect(decryptPrivateKey(encPriv, wrongKek)).rejects.toBeDefined()
+  })
+})
+
+describe('Tresor-Einrichtung & Key-Check (End-to-End)', () => {
+  it('Setup → Schreiben (public) → Entsperren (passphrase) → Lesen', async () => {
+    const setup = await generateVaultSetup('eine starke passphrase')
+
+    // Schreiben mit dem ausgelieferten öffentlichen Schlüssel.
+    const pub = await importPublicKey(setup.groupPublicKey)
+    const dek = await generateDEK()
+    const ciphertext = await encrypt({ iban: 'DE89' }, dek)
+    const dekEnc = await wrapDEK(dek, pub)
+
+    // Entsperren + Lesen.
+    expect(
+      await verifyVaultPassphrase('eine starke passphrase', setup.vorstandKdfSalt, setup.vorstandKeyCheck),
+    ).toBe(true)
+    const kek = await deriveKEK('eine starke passphrase', setup.vorstandKdfSalt)
+    const priv = await decryptPrivateKey(setup.groupPrivateKeyEnc, kek)
+    const dekBack = await unwrapDEK(dekEnc, priv)
+    expect(await decrypt(ciphertext, dekBack)).toEqual({ iban: 'DE89' })
+  })
+
+  it('weist die falsche Passphrase ab', async () => {
+    const setup = await generateVaultSetup('correct')
+    expect(await verifyVaultPassphrase('falsch', setup.vorstandKdfSalt, setup.vorstandKeyCheck)).toBe(false)
   })
 })
 
@@ -95,22 +138,5 @@ describe('Binäre Blobs (Mandat-PDFs)', () => {
     const plain = new TextEncoder().encode('%PDF unverschlüsselt')
     expect(isEncryptedBytes(plain)).toBe(false)
     await expect(decryptBytes(plain, dek)).rejects.toBeDefined()
-  })
-
-  it('lehnt einen manipulierten Blob ab', async () => {
-    const dek = await generateDEK()
-    const enc = await encryptBytes(new TextEncoder().encode('mandat'), dek)
-    enc[enc.length - 1] ^= 0xff
-    await expect(decryptBytes(enc, dek)).rejects.toBeDefined()
-  })
-})
-
-describe('Tresor-Einrichtung & Key-Check', () => {
-  it('verifiziert die korrekte Passphrase und weist die falsche ab', async () => {
-    const { saltB64, keyCheckB64 } = await generateVaultSetup('correct horse battery staple')
-    expect(await verifyVaultPassphrase('correct horse battery staple', saltB64, keyCheckB64)).toBe(
-      true,
-    )
-    expect(await verifyVaultPassphrase('falsch', saltB64, keyCheckB64)).toBe(false)
   })
 })

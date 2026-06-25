@@ -1,18 +1,21 @@
-// Clientseitige Envelope-Verschlüsselung der Bank-/SEPA-PII (Zero-Knowledge "at rest").
-// Alle Schlüssel werden im Browser abgeleitet/verwendet; der Server sieht nur Ciphertext.
+// Clientseitige Envelope-Verschlüsselung der Bank-/SEPA-PII (Zero-Knowledge "at rest",
+// Modell B — asymmetrisches Gruppen-Keypair). Alle Schlüssel werden im Browser
+// abgeleitet/verwendet; der Server sieht nur Ciphertext.
 //
-// Primitive (reine WebCrypto, kein WASM / keine npm-Abhängigkeit):
-//   PBKDF2(SHA-256, 600 000 Iter.)  → Ableitung des Gruppen-Schlüssels aus der Passphrase
-//   AES-KW 256                       → Wrapping der Data-Keys (DEK)
-//   AES-GCM 256 (12-Byte-IV)         → Verschlüsselung der Daten (IV prepended)
-//
-// Modell: pro Mitglied ein zufälliger DEK; Daten = AES-GCM(payload, DEK); der DEK wird mit
-// dem Gruppen-Schlüssel gewrappt (dek_enc_vorstand). Rotation = DEKs neu wrappen, ohne die
-// Daten-Blobs anzufassen (siehe design.md). Es gibt bewusst keinen Eigentümer-Wrap.
+// Modell:
+//   - Gruppen-Keypair (RSA-OAEP, SHA-256, 2048 bit): der ÖFFENTLICHE Schlüssel ist nicht
+//     geheim und erlaubt JEDEM das Verschlüsseln (Schreiben); der PRIVATE Schlüssel liegt
+//     mit der geteilten Tresor-Passphrase verschlüsselt vor und erlaubt nur Vorstand/
+//     Kassierer das Lesen.
+//   - Pro Mitglied ein zufälliger DEK (AES-GCM-256); Daten = AES-GCM(payload, DEK), IV
+//     prepended. Der DEK wird per RSA-OAEP an den öffentlichen Gruppen-Schlüssel gewrappt.
+//   - Schutz des privaten Schlüssels: KEK = PBKDF2(passphrase, salt, 600k, SHA-256);
+//     group_private_key_enc = AES-GCM(PKCS8(GroupPriv), KEK); Key-Check = AES-GCM("ok", KEK).
 
 const PBKDF2_ITERATIONS = 600_000
 const SALT_BYTES = 32
 const IV_BYTES = 12
+const RSA_MODULUS = 2048
 
 // --- Base64-Helfer ---
 
@@ -27,24 +30,9 @@ export function b64ToBuf(b64: string): ArrayBuffer {
   return buf.buffer
 }
 
-// --- Schlüsselableitung aus der Tresor-Passphrase ---
+// --- KEK-Ableitung aus der Tresor-Passphrase (AES-GCM, für Privatschlüssel + Key-Check) ---
 
-// Leitet den Gruppen-Schlüssel als AES-KW-Wrapping-Key ab (zum Wrappen/Unwrappen der DEKs).
-export async function deriveKey(passphrase: string, saltB64: string): Promise<CryptoKey> {
-  const salt = b64ToBuf(saltB64)
-  const raw = new TextEncoder().encode(passphrase)
-  const base = await crypto.subtle.importKey('raw', raw, 'PBKDF2', false, ['deriveKey'])
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITERATIONS },
-    base,
-    { name: 'AES-KW', length: 256 },
-    true,
-    ['wrapKey', 'unwrapKey'],
-  )
-}
-
-// Leitet aus derselben Passphrase einen AES-GCM-Schlüssel ab — nur für den Key-Check-Wert.
-export async function deriveKeyAsGCM(passphrase: string, saltB64: string): Promise<CryptoKey> {
+export async function deriveKEK(passphrase: string, saltB64: string): Promise<CryptoKey> {
   const salt = b64ToBuf(saltB64)
   const raw = new TextEncoder().encode(passphrase)
   const base = await crypto.subtle.importKey('raw', raw, 'PBKDF2', false, ['deriveKey'])
@@ -57,26 +45,74 @@ export async function deriveKeyAsGCM(passphrase: string, saltB64: string): Promi
   )
 }
 
-// --- DEK-Erzeugung ---
+// --- Gruppen-Keypair (RSA-OAEP) ---
+
+export async function generateGroupKeypair(): Promise<CryptoKeyPair> {
+  return crypto.subtle.generateKey(
+    {
+      name: 'RSA-OAEP',
+      modulusLength: RSA_MODULUS,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
+    true,
+    ['wrapKey', 'unwrapKey'],
+  )
+}
+
+export async function exportPublicKey(pub: CryptoKey): Promise<string> {
+  return bufToB64(await crypto.subtle.exportKey('spki', pub))
+}
+
+export async function importPublicKey(spkiB64: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'spki',
+    b64ToBuf(spkiB64),
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    true,
+    ['wrapKey'],
+  )
+}
+
+// Privatschlüssel mit der KEK verschlüsseln (PKCS8 ‖ IV prepended) bzw. wieder importieren.
+export async function encryptPrivateKey(priv: CryptoKey, kek: CryptoKey): Promise<string> {
+  const pkcs8 = await crypto.subtle.exportKey('pkcs8', priv)
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, pkcs8)
+  const out = new Uint8Array(IV_BYTES + ct.byteLength)
+  out.set(iv, 0)
+  out.set(new Uint8Array(ct), IV_BYTES)
+  return bufToB64(out.buffer)
+}
+
+export async function decryptPrivateKey(encB64: string, kek: CryptoKey): Promise<CryptoKey> {
+  const buf = new Uint8Array(b64ToBuf(encB64))
+  const iv = buf.slice(0, IV_BYTES) as BufferSource
+  const data = buf.slice(IV_BYTES) as BufferSource
+  const pkcs8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, kek, data)
+  return crypto.subtle.importKey('pkcs8', pkcs8, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, [
+    'unwrapKey',
+  ])
+}
+
+// --- DEK-Erzeugung + Wrapping an das Gruppen-Keypair ---
 
 export async function generateDEK(): Promise<CryptoKey> {
   return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'])
 }
 
-// --- DEK wrappen/entwrappen (AES-KW) ---
-
-export async function wrapKey(dek: CryptoKey, wrappingKey: CryptoKey): Promise<string> {
-  const wrapped = await crypto.subtle.wrapKey('raw', dek, wrappingKey, 'AES-KW')
-  return bufToB64(wrapped)
+// Wrappt einen DEK an den öffentlichen Gruppen-Schlüssel (Schreiben — kein Secret nötig).
+export async function wrapDEK(dek: CryptoKey, groupPub: CryptoKey): Promise<string> {
+  return bufToB64(await crypto.subtle.wrapKey('raw', dek, groupPub, { name: 'RSA-OAEP' }))
 }
 
-export async function unwrapKey(wrappedB64: string, wrappingKey: CryptoKey): Promise<CryptoKey> {
-  const wrapped = b64ToBuf(wrappedB64)
+// Entwrappt einen DEK mit dem privaten Gruppen-Schlüssel (Lesen — nur Passphrase-Inhaber).
+export async function unwrapDEK(wrappedB64: string, groupPriv: CryptoKey): Promise<CryptoKey> {
   return crypto.subtle.unwrapKey(
     'raw',
-    wrapped,
-    wrappingKey,
-    'AES-KW',
+    b64ToBuf(wrappedB64),
+    groupPriv,
+    { name: 'RSA-OAEP' },
     { name: 'AES-GCM', length: 256 },
     true,
     ['encrypt', 'decrypt'],
@@ -97,8 +133,8 @@ export async function encrypt(payload: object, dek: CryptoKey): Promise<string> 
 
 export async function decrypt(ciphertextB64: string, dek: CryptoKey): Promise<object> {
   const buf = new Uint8Array(b64ToBuf(ciphertextB64))
-  const iv = buf.slice(0, IV_BYTES)
-  const data = buf.slice(IV_BYTES)
+  const iv = buf.slice(0, IV_BYTES) as BufferSource
+  const data = buf.slice(IV_BYTES) as BufferSource
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, dek, data)
   return JSON.parse(new TextDecoder().decode(plain))
 }
@@ -117,42 +153,46 @@ async function encryptString(plain: string, key: CryptoKey): Promise<string> {
 
 async function decryptString(ciphertextB64: string, key: CryptoKey): Promise<string> {
   const buf = new Uint8Array(b64ToBuf(ciphertextB64))
-  const iv = buf.slice(0, IV_BYTES)
-  const data = buf.slice(IV_BYTES)
+  const iv = buf.slice(0, IV_BYTES) as BufferSource
+  const data = buf.slice(IV_BYTES) as BufferSource
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data)
   return new TextDecoder().decode(plain)
 }
 
 // --- Tresor-Passphrase verifizieren (Key-Check) ---
 
-// Prüft clientseitig, ob die eingegebene Passphrase korrekt ist, ohne sie zu speichern oder
-// einen Server-Request auszulösen: der abgeleitete Schlüssel muss den Key-Check zu "ok"
-// entschlüsseln.
 export async function verifyVaultPassphrase(
   passphrase: string,
   saltB64: string,
   keyCheckB64: string,
 ): Promise<boolean> {
   try {
-    const gcmKey = await deriveKeyAsGCM(passphrase, saltB64)
-    return (await decryptString(keyCheckB64, gcmKey)) === 'ok'
+    const kek = await deriveKEK(passphrase, saltB64)
+    return (await decryptString(keyCheckB64, kek)) === 'ok'
   } catch {
     return false
   }
 }
 
-// --- Einrichtung: Salt + Key-Check erzeugen ---
+// --- Einrichtung: Keypair erzeugen, privaten Schlüssel + Key-Check unter der Passphrase ---
 
-// Erzeugt die serverseitig zu speichernden, nicht-zurückrechenbaren Hilfswerte. Die
-// Passphrase selbst verlässt den Browser nie.
-export async function generateVaultSetup(
-  passphrase: string,
-): Promise<{ saltB64: string; keyCheckB64: string }> {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES))
-  const saltB64 = bufToB64(salt.buffer)
-  const gcmKey = await deriveKeyAsGCM(passphrase, saltB64)
-  const keyCheckB64 = await encryptString('ok', gcmKey)
-  return { saltB64, keyCheckB64 }
+export interface VaultSetup {
+  groupPublicKey: string // SPKI base64 — nicht geheim
+  groupPrivateKeyEnc: string // AES-GCM(PKCS8, KEK) base64
+  vorstandKdfSalt: string
+  vorstandKeyCheck: string
+}
+
+export async function generateVaultSetup(passphrase: string): Promise<VaultSetup> {
+  const saltB64 = generateSalt()
+  const kek = await deriveKEK(passphrase, saltB64)
+  const keypair = await generateGroupKeypair()
+  return {
+    groupPublicKey: await exportPublicKey(keypair.publicKey),
+    groupPrivateKeyEnc: await encryptPrivateKey(keypair.privateKey, kek),
+    vorstandKdfSalt: saltB64,
+    vorstandKeyCheck: await encryptString('ok', kek),
+  }
 }
 
 // --- Salt-Erzeugung ---
@@ -176,14 +216,13 @@ function startsWithMagic(blob: Uint8Array): boolean {
   return true
 }
 
-// Meldet, ob ein Blob bereits verschlüsselt ist (trägt den Magic-Header).
 export function isEncryptedBytes(blob: Uint8Array): boolean {
   return startsWithMagic(blob)
 }
 
 export async function encryptBytes(content: Uint8Array, dek: CryptoKey): Promise<Uint8Array> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, dek, content)
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, dek, content as BufferSource)
   const out = new Uint8Array(BLOB_MAGIC.length + IV_BYTES + ciphertext.byteLength)
   out.set(BLOB_MAGIC, 0)
   out.set(iv, BLOB_MAGIC.length)
@@ -195,8 +234,8 @@ export async function decryptBytes(blob: Uint8Array, dek: CryptoKey): Promise<Ui
   if (!startsWithMagic(blob)) {
     throw new Error('decryptBytes: kein verschlüsselter Blob (Magic-Header fehlt)')
   }
-  const iv = blob.slice(BLOB_MAGIC.length, BLOB_MAGIC.length + IV_BYTES)
-  const data = blob.slice(BLOB_MAGIC.length + IV_BYTES)
+  const iv = blob.slice(BLOB_MAGIC.length, BLOB_MAGIC.length + IV_BYTES) as BufferSource
+  const data = blob.slice(BLOB_MAGIC.length + IV_BYTES) as BufferSource
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, dek, data)
   return new Uint8Array(plain)
 }

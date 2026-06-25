@@ -104,6 +104,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Get("/api/profile/email/confirm", h.Auth.ConfirmEmailChange)
 	r.Get("/api/profile/recovery-email/confirm", h.Auth.ConfirmRecoveryEmailChange)
 	r.Get("/api/calendar/feed/{token}", h.Calendar.Feed)
+	// Öffentlicher Gruppen-Schlüssel zum Verschlüsseln von Bankdaten (nicht geheim;
+	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).
+	r.Get("/api/encryption-pubkey", h.Config.GetGroupPublicKey)
 
 	// SSE — cookie-authenticated (EventSource cannot send headers)
 	r.Group(func(r chi.Router) {

@@ -7,6 +7,11 @@ CREATE TABLE member_sensitive (
     dek_enc_vorstand TEXT NOT NULL    -- base64(AES-KW(DEK, vorstand_key))
 );
 
--- Tresor-Hilfswerte: Salt + Key-Check. Die Passphrase selbst wird nie gespeichert.
-ALTER TABLE clubs ADD COLUMN vorstand_kdf_salt TEXT;   -- base64, PBKDF2-Salt
-ALTER TABLE clubs ADD COLUMN vorstand_key_check TEXT;  -- base64(IV ‖ AES-GCM("ok", vorstand_key))
+-- Tresor (Modell B — asymmetrisches Gruppen-Keypair). Gespeichert werden nur:
+--   - der öffentliche Schlüssel (nicht geheim, erlaubt jedem das Schreiben),
+--   - der mit PBKDF2(passphrase) verschlüsselte private Schlüssel (zum Lesen),
+--   - Salt + Key-Check zur Passphrase-Verifikation. Die Passphrase selbst nie.
+ALTER TABLE clubs ADD COLUMN group_public_key TEXT;       -- SPKI base64 (öffentlich)
+ALTER TABLE clubs ADD COLUMN group_private_key_enc TEXT;  -- base64(IV ‖ AES-GCM(PKCS8, KEK))
+ALTER TABLE clubs ADD COLUMN vorstand_kdf_salt TEXT;      -- base64, PBKDF2-Salt
+ALTER TABLE clubs ADD COLUMN vorstand_key_check TEXT;     -- base64(IV ‖ AES-GCM("ok", KEK))

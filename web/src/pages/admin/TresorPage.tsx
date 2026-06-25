@@ -42,10 +42,12 @@ export default function TresorPage() {
     }
     setBusy(true)
     try {
-      const { saltB64, keyCheckB64 } = await generateVaultSetup(pass)
+      const setup = await generateVaultSetup(pass)
       await api.put('/admin/encryption-config', {
-        vorstand_kdf_salt: saltB64,
-        vorstand_key_check: keyCheckB64,
+        group_public_key: setup.groupPublicKey,
+        group_private_key_enc: setup.groupPrivateKeyEnc,
+        vorstand_kdf_salt: setup.vorstandKdfSalt,
+        vorstand_key_check: setup.vorstandKeyCheck,
       })
       await unlock(pass)
       setPass('')
