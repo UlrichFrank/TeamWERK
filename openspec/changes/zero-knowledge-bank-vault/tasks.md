@@ -51,12 +51,20 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
   Validierung entfernt → clientseitig). Test umgestellt. **Frontend:** VereinTab ver-/
   entschlüsselt SEPA (Tresor entsperrt), sperrt SEPA-Felder ohne Tresor (tsc/lint grün;
   Browser-Verifikation offen).
-- [ ] 3.4 `internal/upload`: SEPA-Mandat-PDF als clientseitig verschlüsselter Blob
-  hochladen/ausliefern (keine Server-`DecryptBytes`). Tests.
-- [~] 3.5 Frontend Bankdaten-Eingabe — **MemberDetailPage erledigt** (`bankCrypto.ts`:
-  encrypt an Public-Key / decrypt mit Tresor-Privatschlüssel; Laden entschlüsselt bei
-  entsperrtem Tresor, Speichern verschlüsselt; Voll-Endpoint sendet keine Klartext-Bankdaten).
-  **Offen:** Beitritts-Formular (Public-Key-Eingabe), CSV-Bankimport clientseitig (G5).
+- [x] 3.4 `internal/upload`: SEPA-Mandat-PDF clientseitig verschlüsselt. Upload nimmt
+  Ciphertext-Blob (`crypto.IsClientEncryptedBytes`-Magic) + gewrappten `dek_enc`,
+  speichert beides roh; Download-Token liefert `dek_enc`, Download streamt den Blob (kein
+  Server-Decrypt). Migration `members.sepa_mandat_dek_enc`. Frontend (`MemberKontaktTab`):
+  `encryptFile`/`decryptFile`, Öffnen braucht entsperrten Tresor. Go-Test umgestellt;
+  tsc/lint grün; Browser-Verifikation offen.
+- [~] 3.5 Frontend Bankdaten-Eingabe — **MemberDetailPage + MemberKontaktTab (PDF) erledigt**;
+  Beitritts-Formular **entfällt** (RequestMembership erfasst keine Bankdaten).
+  **Offen — bewusst zurückgestellt:** CSV-Bankimport clientseitig (G5) ist ein eigenständiges
+  Feature auf dem komplexen member-csv-Subsystem (Browser parst CSV → IBANs verschlüsseln →
+  Mitglied-Matching → Envelope pro Mitglied hochladen). Serverseitiger CSV-Bankschreibpfad
+  ist aktuell ein No-Op (schreibt in die tote `members.iban`-Spalte, wird beim Lesen
+  ignoriert) — kein Leak, aber CSV importiert derzeit keine nutzbaren Bankdaten. Per-Member-
+  Eingabe deckt Bankdaten ab; Bulk-CSV-Bank als fokussierter Folgeschritt + Browser-Verifikation.
   Frontend-Crypto-Flows brauchen Browser-Verifikation.
 
 ## 4. Fee-Run clientseitig
