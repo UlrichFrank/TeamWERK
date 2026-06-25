@@ -104,6 +104,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Get("/api/profile/email/confirm", h.Auth.ConfirmEmailChange)
 	r.Get("/api/profile/recovery-email/confirm", h.Auth.ConfirmRecoveryEmailChange)
 	r.Get("/api/calendar/feed/{token}", h.Calendar.Feed)
+	// Öffentlicher Gruppen-Schlüssel zum Verschlüsseln von Bankdaten (nicht geheim;
+	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).
+	r.Get("/api/encryption-pubkey", h.Config.GetGroupPublicKey)
 
 	// SSE — cookie-authenticated (EventSource cannot send headers)
 	r.Group(func(r chi.Router) {
@@ -319,12 +322,16 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			// Vereins-Stammdaten (Verein-Tab: Name/Adresse + SEPA) — Kassierer pflegt SEPA-Daten für den Beitragslauf
 			r.Get("/api/club", h.Config.GetClub)
 			r.Put("/api/club", h.Config.UpdateClub)
+			// Zero-Knowledge-Tresor: Salt/Key-Check (Einrichtung) + Passphrase-Rotation
+			r.Get("/api/admin/encryption-config", h.Config.GetEncryptionConfig)
+			r.Put("/api/admin/encryption-config", h.Config.SetEncryptionConfig)
+			r.Put("/api/admin/rotate-encryption", h.Config.RotateEncryption)
 			// Beitragsmatrix
 			r.Get("/api/fee-rates", h.Beitragssaetze.List)
 			r.Post("/api/fee-rates", h.Beitragssaetze.Create)
 			// Beitragslauf
 			r.Get("/api/fee-run/preview", h.Beitragslauf.Preview)
-			r.Post("/api/fee-run/export", h.Beitragslauf.Export)
+			r.Post("/api/fee-run/export-data", h.Beitragslauf.ExportData)
 			r.Post("/api/fee-run/confirm", h.Beitragslauf.Confirm)
 			r.Get("/api/fee-run/protocol", h.Beitragslauf.Protocol)
 		})

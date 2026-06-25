@@ -3,7 +3,10 @@ import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useVault } from '../contexts/VaultContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { encryptClubSepa, decryptClubSepa } from '../lib/bankCrypto'
+import { isValidIBAN } from '../lib/sepa'
 import EditModal from '../components/EditModal'
 import MobileCard from '../components/MobileCard'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -23,6 +26,7 @@ const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs f
 const GLAEUBIGER_RE = /^DE\d{2}[A-Z0-9]{3}\d{11}$/
 
 function VereinTab() {
+  const { isUnlocked, privateKey } = useVault()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [glaeubigerId, setGlaeubigerId] = useState('')
@@ -32,19 +36,41 @@ function VereinTab() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
+  // Vereins-SEPA liegt als Zero-Knowledge-Envelope vor; nur bei entsperrtem Tresor
+  // entschlüsselt und editierbar.
+  const [sepaEnv, setSepaEnv] = useState<{ sepa_ciphertext: string; sepa_dek_enc: string } | null>(null)
 
   useEffect(() => {
     if (loaded) return
     api.get('/club').then(r => {
       setName(r.data.name ?? '')
       setAddress(r.data.address ?? '')
-      setGlaeubigerId(r.data.glaeubiger_id ?? '')
-      setIban(r.data.iban ?? '')
-      setBic(r.data.bic ?? '')
-      setKontoinhaber(r.data.kontoinhaber ?? '')
+      setSepaEnv(
+        r.data.sepa_ciphertext
+          ? { sepa_ciphertext: r.data.sepa_ciphertext, sepa_dek_enc: r.data.sepa_dek_enc ?? '' }
+          : null,
+      )
       setLoaded(true)
     })
   }, [loaded])
+
+  // Bei entsperrtem Tresor die SEPA-Stammdaten clientseitig entschlüsseln.
+  useEffect(() => {
+    if (!privateKey || !sepaEnv) return
+    let cancelled = false
+    decryptClubSepa(sepaEnv, privateKey)
+      .then(d => {
+        if (cancelled) return
+        setGlaeubigerId(d.glaeubiger_id ?? '')
+        setIban(d.iban ?? '')
+        setBic(d.bic ?? '')
+        setKontoinhaber(d.kontoinhaber ?? '')
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [privateKey, sepaEnv])
 
   useLiveUpdates(event => { if (event === 'settings') setLoaded(false) })
 
@@ -52,22 +78,39 @@ function VereinTab() {
     e.preventDefault()
     setError(null)
     const gid = glaeubigerId.replace(/\s/g, '').toUpperCase()
-    if (gid && !GLAEUBIGER_RE.test(gid)) {
-      setError('Gläubiger-ID hat ein ungültiges Format (z. B. DE98ZZZ09999999999).')
-      return
-    }
+    const ibanNorm = iban.replace(/\s/g, '').toUpperCase()
     try {
-      await api.put('/club', {
-        name, address,
-        glaeubiger_id: gid,
-        iban: iban.replace(/\s/g, '').toUpperCase(),
-        bic: bic.replace(/\s/g, '').toUpperCase(),
-        kontoinhaber,
-      })
+      const body: Record<string, unknown> = { name, address }
+      // SEPA nur bei entsperrtem Tresor ändern (sonst Stammdaten unangetastet lassen,
+      // um den vorhandenen Envelope nicht versehentlich zu überschreiben).
+      if (isUnlocked) {
+        if (gid && !GLAEUBIGER_RE.test(gid)) {
+          setError('Gläubiger-ID hat ein ungültiges Format (z. B. DE98ZZZ09999999999).')
+          return
+        }
+        if (ibanNorm && !isValidIBAN(ibanNorm)) {
+          setError('Die IBAN ist ungültig (Prüfsumme/Länge).')
+          return
+        }
+        const hasSepa = !!(gid || ibanNorm || bic || kontoinhaber)
+        if (hasSepa) {
+          const env = await encryptClubSepa({
+            glaeubiger_id: gid,
+            iban: ibanNorm,
+            bic: bic.replace(/\s/g, '').toUpperCase(),
+            kontoinhaber,
+          })
+          body.sepa_ciphertext = env.sepa_ciphertext
+          body.sepa_dek_enc = env.sepa_dek_enc
+        } else {
+          body.sepa_ciphertext = '' // löschen
+        }
+      }
+      await api.put('/club', body)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch {
-      setError('Speichern fehlgeschlagen – bitte IBAN/BIC/Gläubiger-ID prüfen.')
+      setError('Speichern fehlgeschlagen – bitte Eingaben prüfen.')
     }
   }
 
@@ -85,22 +128,29 @@ function VereinTab() {
 
         <div className="pt-2 border-t border-brand-border-subtle">
           <h3 className="text-sm font-semibold text-brand-text mb-3">SEPA-Stammdaten</h3>
+          {!isUnlocked && (
+            <div className="mb-3 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+              {sepaEnv
+                ? 'SEPA-Stammdaten sind verschlüsselt. Zum Anzeigen/Ändern den Bankdaten-Tresor entsperren (Tresor-Seite). Name/Adresse lassen sich auch ohne Tresor speichern.'
+                : 'Zum Erfassen der SEPA-Stammdaten den Bankdaten-Tresor entsperren (Tresor-Seite).'}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-brand-text-muted mb-1">Gläubiger-ID</label>
-              <input value={glaeubigerId} onChange={e => setGlaeubigerId(e.target.value)} placeholder="DE98ZZZ09999999999" className={INPUT} />
+              <input value={glaeubigerId} onChange={e => setGlaeubigerId(e.target.value)} disabled={!isUnlocked} placeholder="DE98ZZZ09999999999" className={INPUT} />
             </div>
             <div>
               <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
-              <input value={kontoinhaber} onChange={e => setKontoinhaber(e.target.value)} className={INPUT} />
+              <input value={kontoinhaber} onChange={e => setKontoinhaber(e.target.value)} disabled={!isUnlocked} className={INPUT} />
             </div>
             <div>
               <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
-              <input value={iban} onChange={e => setIban(e.target.value)} placeholder="DE.." className={INPUT} />
+              <input value={iban} onChange={e => setIban(e.target.value)} disabled={!isUnlocked} placeholder="DE.." className={INPUT} />
             </div>
             <div>
               <label className="block text-sm font-medium text-brand-text-muted mb-1">BIC</label>
-              <input value={bic} onChange={e => setBic(e.target.value)} className={INPUT} />
+              <input value={bic} onChange={e => setBic(e.target.value)} disabled={!isUnlocked} className={INPUT} />
             </div>
           </div>
         </div>

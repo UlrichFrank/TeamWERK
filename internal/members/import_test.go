@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
@@ -325,8 +324,10 @@ func TestImport_EnrichAmbiguousNoDOB_NichtBefuellt(t *testing.T) {
 	}
 }
 
-// Feld-Whitelist: fields=iban aktualisiert nur die IBAN, nicht den Status.
-func TestImport_FieldsWhitelist_NurIBAN(t *testing.T) {
+// Modell B: Bankdaten werden per CSV NICHT importiert (Zero-Knowledge — der Server kann sie
+// nicht verschlüsseln). Eine CSV-IBAN landet weder in members.iban noch in member_sensitive;
+// die Feld-Whitelist (fields=iban) greift somit auf nichts und lässt den Status unverändert.
+func TestImport_CSV_IgnoriertBankdaten(t *testing.T) {
 	db := testutil.NewDB(t)
 	srv := newMembersServer(t, db)
 	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
@@ -341,10 +342,13 @@ func TestImport_FieldsWhitelist_NurIBAN(t *testing.T) {
 
 	var iban sql.NullString
 	db.QueryRow(`SELECT iban FROM members WHERE first_name='Petra'`).Scan(&iban)
-	if !crypto.IsEncryptedString(iban.String) {
-		t.Errorf("iban nicht verschlüsselt gespeichert: %q", iban.String)
-	} else if dec, _ := crypto.Decrypt(iban.String); dec != testIBAN {
-		t.Errorf("iban-Roundtrip = %q, want %q", dec, testIBAN)
+	if iban.Valid && iban.String != "" {
+		t.Errorf("CSV-IBAN gespeichert (%q) — darf nicht (kein Server-Bankimport)", iban.String)
+	}
+	var cnt int
+	db.QueryRow(`SELECT COUNT(*) FROM member_sensitive WHERE member_id=(SELECT id FROM members WHERE first_name='Petra')`).Scan(&cnt)
+	if cnt != 0 {
+		t.Errorf("member_sensitive angelegt (%d) — CSV importiert keine Bankdaten", cnt)
 	}
 	if got := statusOf(t, db, "Petra"); got != "aktiv" {
 		t.Errorf("status = %q, want unverändert %q (nicht in fields)", got, "aktiv")

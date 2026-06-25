@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"time"
-
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 )
 
 // Satz ist ein Beitragssatz mit Gültigkeitsbeginn (für die In-Memory-Auswahl).
@@ -47,6 +45,8 @@ func LoadSaetzeMap(db *sql.DB) (map[string][]Satz, error) {
 }
 
 // MemberRow sind die für den Beitragslauf relevanten Felder eines Mitglieds.
+// Bankdaten (IBAN/Kontoinhaber) liegen als Zero-Knowledge-Envelope vor; der Server
+// liefert nur Ciphertext + Wrap aus (Entschlüsselung + IBAN-Validierung clientseitig).
 type MemberRow struct {
 	ID             int
 	FirstName      string
@@ -54,7 +54,6 @@ type MemberRow struct {
 	Status         string
 	Beitragsfrei   bool
 	SepaMandat     bool
-	IBAN           string
 	SepaMandatPath string
 	MemberNumber   string
 	Street         string
@@ -62,8 +61,10 @@ type MemberRow struct {
 	City           string
 	HomeClub       string // Freitext (Audit-Spur); für die Kategorie irrelevant
 	HasHomeClub    bool   // home_club_id IS NOT NULL → bestimmt aktiv_mit/aktiv_ohne
-	AccountHolder  string
 	SepaMandatDate string
+	HasBank        bool   // member_sensitive-Zeile vorhanden
+	BankCiphertext string // base64(IV ‖ AES-GCM(payload, DEK))
+	BankDekEnc     string // RSA-OAEP(DEK, group_public_key)
 }
 
 // LoadMembersForLauf lädt alle für den Beitragslauf relevanten Mitglieder.
@@ -74,13 +75,15 @@ type MemberRow struct {
 // passiert im Compute.
 func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 	rows, err := db.Query(`
-		SELECT id, first_name, last_name, status,
-		       COALESCE(beitragsfrei,0), COALESCE(sepa_mandat,0),
-		       COALESCE(iban,''), COALESCE(sepa_mandat_path,''), COALESCE(member_number,''),
-		       COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
-		       COALESCE(home_club,''), (home_club_id IS NOT NULL), COALESCE(account_holder,''), COALESCE(sepa_mandat_date,'')
-		FROM members
-		WHERE status NOT IN ('ausgetreten','honorar','anwaerter')`)
+		SELECT m.id, m.first_name, m.last_name, m.status,
+		       COALESCE(m.beitragsfrei,0), COALESCE(m.sepa_mandat,0),
+		       COALESCE(m.sepa_mandat_path,''), COALESCE(m.member_number,''),
+		       COALESCE(m.street,''), COALESCE(m.zip,''), COALESCE(m.city,''),
+		       COALESCE(m.home_club,''), (m.home_club_id IS NOT NULL), COALESCE(m.sepa_mandat_date,''),
+		       COALESCE(ms.ciphertext,''), COALESCE(ms.dek_enc_vorstand,'')
+		FROM members m
+		LEFT JOIN member_sensitive ms ON ms.member_id = m.id
+		WHERE m.status NOT IN ('ausgetreten','honorar','anwaerter')`)
 	if err != nil {
 		return nil, err
 	}
@@ -90,36 +93,21 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		var m MemberRow
 		var beitragsfrei, sepaMandat, hasHomeClub int
 		if err := rows.Scan(&m.ID, &m.FirstName, &m.LastName, &m.Status,
-			&beitragsfrei, &sepaMandat, &m.IBAN, &m.SepaMandatPath, &m.MemberNumber,
-			&m.Street, &m.Zip, &m.City, &m.HomeClub, &hasHomeClub, &m.AccountHolder, &m.SepaMandatDate); err != nil {
+			&beitragsfrei, &sepaMandat, &m.SepaMandatPath, &m.MemberNumber,
+			&m.Street, &m.Zip, &m.City, &m.HomeClub, &hasHomeClub, &m.SepaMandatDate,
+			&m.BankCiphertext, &m.BankDekEnc); err != nil {
 			return nil, err
 		}
-		// IBAN/Kontoinhaber liegen at-rest verschlüsselt vor; für IBAN-Validierung
-		// und SEPA-XML zur Laufzeit entschlüsseln (Fehler → leer → iban_fehlt).
-		m.IBAN = decBankOrEmpty(m.IBAN)
-		m.AccountHolder = decBankOrEmpty(m.AccountHolder)
 		m.Beitragsfrei = beitragsfrei != 0
 		m.SepaMandat = sepaMandat != 0
 		m.HasHomeClub = hasHomeClub != 0
+		m.HasBank = m.BankCiphertext != ""
 		if len(m.SepaMandatDate) > 10 {
 			m.SepaMandatDate = m.SepaMandatDate[:10]
 		}
 		out = append(out, m)
 	}
 	return out, nil
-}
-
-// decBankOrEmpty entschlüsselt einen at-rest gespeicherten Bank-Wert; schlägt
-// das fehl, wird "" geliefert (downstream als fehlend behandelt).
-func decBankOrEmpty(v string) string {
-	if v == "" {
-		return ""
-	}
-	pt, err := crypto.Decrypt(v)
-	if err != nil {
-		return ""
-	}
-	return pt
 }
 
 // LookupBetragCent liefert den zum Stichtag (Saisonstart) gültigen Betrag:

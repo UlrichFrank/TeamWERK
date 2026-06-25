@@ -11,7 +11,6 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
-	"github.com/teamstuttgart/teamwerk/internal/sepa"
 )
 
 // Exclusion-/Warnungs-Codes
@@ -20,7 +19,6 @@ const (
 	exclBeitragsfrei  = "beitragsfrei"
 	exclKeinMandat    = "kein_sepa_mandat"
 	exclIBANFehlt     = "iban_fehlt"
-	exclIBANUngueltig = "iban_ungueltig"
 	exclKeineMitglNr  = "mitgliedsnummer_fehlt"
 	exclAdresse       = "adresse_unvollstaendig"
 	exclKeinSatz      = "kein_beitragssatz"
@@ -129,10 +127,10 @@ func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) P
 	if !m.SepaMandat || m.SepaMandatPath == "" {
 		it.Exclusions = append(it.Exclusions, exclKeinMandat)
 	}
-	if m.IBAN == "" {
+	// Server kennt nur, OB Bankdaten vorliegen (Envelope vorhanden). Die IBAN-Gültigkeit
+	// (exclIBANUngueltig) prüft der Client nach dem Entschlüsseln.
+	if !m.HasBank {
 		it.Exclusions = append(it.Exclusions, exclIBANFehlt)
-	} else if !sepa.IsValidIBAN(m.IBAN) {
-		it.Exclusions = append(it.Exclusions, exclIBANUngueltig)
 	}
 	if m.Street == "" || m.Zip == "" || m.City == "" {
 		it.Exclusions = append(it.Exclusions, exclAdresse)
@@ -199,8 +197,12 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /api/fee-run/export  {saison_id, member_ids}
-func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
+// POST /api/fee-run/export-data  {saison_id, member_ids}
+//
+// Liefert die für die clientseitige pain.008-Erzeugung nötigen Daten: NUR Ciphertext +
+// Wraps (Mitglieds-Bankdaten + Vereins-SEPA) sowie nicht-geheime Felder. Der Server sieht
+// keine Klartext-IBAN; das XML wird im Browser des Kassierers gebaut (Zero-Knowledge).
+func (h *Handler) ExportData(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SaisonID  int   `json:"saison_id"`
 		MemberIDs []int `json:"member_ids"`
@@ -210,8 +212,8 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	club, err := h.loadClubSepa(r.Context())
-	if err != nil || club.GlaeubigerID == "" || club.IBAN == "" || club.BIC == "" || club.Kontoinhaber == "" {
-		http.Error(w, "Vereins-SEPA-Stammdaten unvollständig", http.StatusBadRequest)
+	if err != nil || club.Ciphertext == "" {
+		http.Error(w, "Vereins-SEPA-Stammdaten nicht eingerichtet", http.StatusBadRequest)
 		return
 	}
 	pr, err := h.buildPreview(r.Context(), req.SaisonID)
@@ -223,37 +225,40 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	for _, it := range pr.Items {
 		byID[it.MemberID] = it
 	}
-	items := make([]ExportItem, 0, len(req.MemberIDs))
+	type exportDataItem struct {
+		MemberID       int    `json:"member_id"`
+		Name           string `json:"name"`
+		MemberNumber   string `json:"member_number"`
+		BetragCent     int    `json:"betrag_cent"`
+		Street         string `json:"street"`
+		Zip            string `json:"zip"`
+		City           string `json:"city"`
+		MandatDatum    string `json:"mandat_datum"`
+		BankCiphertext string `json:"bank_ciphertext"`
+		BankDekEnc     string `json:"bank_dek_enc"`
+	}
+	items := make([]exportDataItem, 0, len(req.MemberIDs))
 	for _, id := range req.MemberIDs {
 		it, ok := byID[id]
 		if !ok || !it.Included {
 			http.Error(w, fmt.Sprintf("Mitglied %d ist ausgeschlossen oder unbekannt", id), http.StatusBadRequest)
 			return
 		}
-		name := it.row.AccountHolder
-		if name == "" {
-			name = it.Name
-		}
-		items = append(items, ExportItem{
-			MemberID: it.MemberID, Name: name,
-			Street: it.row.Street, Zip: it.row.Zip, City: it.row.City,
-			IBAN: sepa.NormalizeIBAN(it.row.IBAN), BetragCent: it.BetragCent,
-			MandatRef: it.row.MemberNumber, MandatDatum: it.row.SepaMandatDate, MemberNumber: it.row.MemberNumber,
+		items = append(items, exportDataItem{
+			MemberID: it.MemberID, Name: it.Name, MemberNumber: it.row.MemberNumber,
+			BetragCent: it.BetragCent, Street: it.row.Street, Zip: it.row.Zip, City: it.row.City,
+			MandatDatum:    it.row.SepaMandatDate,
+			BankCiphertext: it.row.BankCiphertext, BankDekEnc: it.row.BankDekEnc,
 		})
 	}
-	xmlBytes, err := BuildXML(BuildInput{
-		SaisonKurz: pr.SaisonKurz, ClubName: club.Name, GlaeubigerID: club.GlaeubigerID,
-		ClubIBAN: club.IBAN, BIC: club.BIC, Kontoinhaber: club.Kontoinhaber,
-		Faelligkeit: nextBusinessDay(pr.Faelligkeit), CreatedAt: time.Now(), Items: items,
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"saison_kurz": pr.SaisonKurz,
+		"faelligkeit": pr.Faelligkeit.Format("2006-01-02"),
+		"club_name":   club.Name,
+		"club_sepa":   map[string]string{"ciphertext": club.Ciphertext, "dek_enc": club.DekEnc},
+		"items":       items,
 	})
-	if err != nil {
-		http.Error(w, "XML-Erzeugung fehlgeschlagen", http.StatusInternalServerError)
-		return
-	}
-	filename := "beitragslauf_" + saisonStamp(pr.SaisonKurz) + ".xml"
-	w.Header().Set("Content-Type", "application/xml")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
-	w.Write(xmlBytes)
 }
 
 // POST /api/fee-run/confirm  {saison_id, results}
@@ -330,26 +335,21 @@ func (h *Handler) Protocol(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// clubSepa hält Vereinsname (Klartext) + den Zero-Knowledge-Envelope der SEPA-Stammdaten
+// (glaeubiger_id/iban/bic/kontoinhaber). Der Server entschlüsselt nicht.
 type clubSepa struct {
-	Name         string
-	GlaeubigerID string
-	IBAN         string
-	BIC          string
-	Kontoinhaber string
+	Name       string
+	Ciphertext string
+	DekEnc     string
 }
 
 func (h *Handler) loadClubSepa(ctx context.Context) (clubSepa, error) {
 	var c clubSepa
-	var name string
-	var g, i, b, k sql.NullString
+	var ct, dek sql.NullString
 	err := h.db.QueryRowContext(ctx,
-		`SELECT name, COALESCE(glaeubiger_id,''), COALESCE(iban,''), COALESCE(bic,''), COALESCE(kontoinhaber,'') FROM clubs LIMIT 1`).
-		Scan(&name, &g, &i, &b, &k)
-	// Vereins-SEPA-Stammdaten liegen at-rest verschlüsselt vor → zur Laufzeit entschlüsseln.
-	c.Name = name
-	c.GlaeubigerID = decBankOrEmpty(g.String)
-	c.IBAN = decBankOrEmpty(i.String)
-	c.BIC = decBankOrEmpty(b.String)
-	c.Kontoinhaber = decBankOrEmpty(k.String)
+		`SELECT name, COALESCE(sepa_ciphertext,''), COALESCE(sepa_dek_enc,'') FROM clubs LIMIT 1`).
+		Scan(&c.Name, &ct, &dek)
+	c.Ciphertext = ct.String
+	c.DekEnc = dek.String
 	return c, err
 }

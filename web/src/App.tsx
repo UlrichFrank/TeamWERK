@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
 import { VersionProvider } from './contexts/VersionContext'
+import { VaultProvider } from './contexts/VaultContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import RequestMembershipPage from './pages/RequestMembershipPage'
@@ -17,6 +18,7 @@ import ChildProfilePage from './pages/ChildProfilePage'
 import DutyPage from './pages/DutyPage'
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import BeitragslaufPage from './pages/admin/BeitragslaufPage'
+import TresorPage from './pages/admin/TresorPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
@@ -62,6 +64,7 @@ export default function App() {
     <AuthProvider>
       <VersionProvider>
         <PersonContactProvider>
+          <VaultProvider>
           <BrowserRouter>
           <Routes>
             {/* Public */}
@@ -87,6 +90,7 @@ export default function App() {
               <Route path="anfragen" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="einstellungen" element={<RoleRoute roles={['admin','vorstand','kassierer']}><AdminSettingsPage /></RoleRoute>} />
               <Route path="beitragslauf" element={<RoleRoute roles={['admin','vorstand','kassierer']}><BeitragslaufPage /></RoleRoute>} />
+              <Route path="tresor" element={<RoleRoute roles={['admin','vorstand','kassierer']}><TresorPage /></RoleRoute>} />
               <Route path="kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
               <Route path="nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
@@ -105,6 +109,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
+          </VaultProvider>
         </PersonContactProvider>
       </VersionProvider>
     </AuthProvider>

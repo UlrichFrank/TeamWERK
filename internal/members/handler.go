@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"slices"
 	"strconv"
@@ -18,7 +17,6 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
-	"github.com/teamstuttgart/teamwerk/internal/sepa"
 )
 
 type Handler struct {
@@ -44,15 +42,19 @@ type Member struct {
 	ClubFunctions []string `json:"club_functions"`
 
 	// Extended fields (populated by GetMember)
-	Street           *string `json:"street,omitempty"`
-	Zip              *string `json:"zip,omitempty"`
-	City             *string `json:"city,omitempty"`
-	HomeClub         *string `json:"home_club,omitempty"`
-	HomeClubID       *int    `json:"home_club_id,omitempty"`
-	HomeClubName     *string `json:"home_club_name,omitempty"`
-	JoinDate         *string `json:"join_date,omitempty"`
-	IBAN             *string `json:"iban,omitempty"`
-	AccountHolder    *string `json:"account_holder,omitempty"`
+	Street        *string `json:"street,omitempty"`
+	Zip           *string `json:"zip,omitempty"`
+	City          *string `json:"city,omitempty"`
+	HomeClub      *string `json:"home_club,omitempty"`
+	HomeClubID    *int    `json:"home_club_id,omitempty"`
+	HomeClubName  *string `json:"home_club_name,omitempty"`
+	JoinDate      *string `json:"join_date,omitempty"`
+	IBAN          *string `json:"iban,omitempty"`
+	AccountHolder *string `json:"account_holder,omitempty"`
+	// Zero-Knowledge-Envelope (Modell B): clientseitig verschlüsselte Bankdaten. Nur an
+	// vorstand/kassierer/admin ausgeliefert; entschlüsselt wird ausschließlich im Browser.
+	BankCiphertext   *string `json:"bank_ciphertext,omitempty"`
+	BankDekEnc       *string `json:"bank_dek_enc,omitempty"`
 	PhotoURL         *string `json:"photo_url,omitempty"`
 	PhotoVisible     bool    `json:"photo_visible,omitempty"`
 	PhonesVisible    bool    `json:"phones_visible,omitempty"`
@@ -570,15 +572,17 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		base.WelcomeEmailSentAt = &welcomeEmailSentAt.String
 	}
 
-	// IBAN, account holder: nur an Berechtigte (admin/vorstand/kassierer/
-	// Eigentümer/Eltern) und at-rest entschlüsselt (zentrale Regel D5).
-	pBank := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
-	if policy.CanDecryptBankData(h.db, pBank, base.ID) {
-		if v := decBankField(iban); v != nil {
-			base.IBAN = v
-		}
-		if v := decBankField(accountHolder); v != nil {
-			base.AccountHolder = v
+	// Bankdaten: Zero-Knowledge-Envelope (Modell B). Der Server entschlüsselt nicht; er
+	// liefert Ciphertext + gewrappten DEK nur an die Finance-Gruppe (admin/vorstand/
+	// kassierer) aus, die ihn clientseitig mit dem Tresor-Schlüssel entschlüsselt.
+	if isAdmin || claims.HasFunction("vorstand") || claims.HasFunction("kassierer") {
+		var ct, dekEnc sql.NullString
+		h.db.QueryRowContext(r.Context(),
+			`SELECT ciphertext, dek_enc_vorstand FROM member_sensitive WHERE member_id=?`, base.ID).
+			Scan(&ct, &dekEnc)
+		if ct.Valid && ct.String != "" {
+			base.BankCiphertext = &ct.String
+			base.BankDekEnc = &dekEnc.String
 		}
 	}
 	// SEPA document URL: admin, own member, parent, vorstand
@@ -750,31 +754,22 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	pu := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	if policy.IsVorstandLike(pu) {
-		// IBAN/Kontoinhaber at-rest verschlüsseln. Leere IBAN ⇒ NULL ⇒ COALESCE
-		// behält den Bestandswert (Verschlüsselung inklusive).
-		ibanVal, err := encBankField(req.IBAN)
-		if err != nil {
-			http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-			return
-		}
-		holderVal, err := encBankField(req.AccountHolder)
-		if err != nil {
-			http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-			return
-		}
+		// Bankdaten (IBAN/Kontoinhaber) werden hier NICHT geschrieben — sie laufen
+		// ausschließlich clientseitig verschlüsselt über PUT /members/{id}/bank-details
+		// (Zero-Knowledge, Modell B). Hier nur Nicht-Bank-Felder.
 		grundVal := nullableString(req.BeitragsfreiGrund)
 		if !req.Beitragsfrei {
 			grundVal = nil
 		}
 		h.db.ExecContext(r.Context(),
 			`UPDATE members SET
-				join_date=?, iban=COALESCE(?, iban), account_holder=?,
+				join_date=?,
 				dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
 				dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
 				sepa_mandat=?, sepa_mandat_date=?,
 				beitragsfrei=?, beitragsfrei_grund=?
 			WHERE id=?`,
-			nullableString(req.JoinDate), ibanVal, holderVal,
+			nullableString(req.JoinDate),
 			boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 			boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
 			boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
@@ -815,10 +810,15 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
+		// Zero-Knowledge-Envelope (Modell B): clientseitig verschlüsselte Bankdaten.
+		// nil = unverändert; "" = löschen; gesetzt = speichern.
+		BankCiphertext *string `json:"bank_ciphertext"`
+		BankDekEnc     *string `json:"bank_dek_enc"`
+		// Legacy-Klartextfelder werden NICHT mehr akzeptiert (Server sieht keine IBAN).
 		IBAN              string  `json:"iban"`
+		AccountHolder     string  `json:"account_holder"`
 		SepaMandat        bool    `json:"sepa_mandat"`
 		SepaMandatDate    string  `json:"sepa_mandat_date"`
-		AccountHolder     string  `json:"account_holder"`
 		Street            string  `json:"street"`
 		Zip               string  `json:"zip"`
 		City              string  `json:"city"`
@@ -829,32 +829,24 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ungültiger Body", http.StatusBadRequest)
 		return
 	}
-	req.IBAN = sepa.NormalizeIBAN(req.IBAN)
-	if req.IBAN != "" && !sepa.IsValidIBAN(req.IBAN) {
-		http.Error(w, "ungültige IBAN", http.StatusBadRequest)
+	// Klartext-Bankdaten ablehnen — IBAN/Kontoinhaber müssen clientseitig verschlüsselt
+	// als Envelope kommen (Zero-Knowledge).
+	if req.IBAN != "" || req.AccountHolder != "" {
+		http.Error(w, "Klartext-Bankdaten werden nicht akzeptiert (clientseitig verschlüsseln)", http.StatusBadRequest)
+		return
+	}
+	if req.BankCiphertext != nil && *req.BankCiphertext != "" && (req.BankDekEnc == nil || *req.BankDekEnc == "") {
+		http.Error(w, "Envelope unvollständig: dek_enc fehlt", http.StatusBadRequest)
 		return
 	}
 	mandat := 0
 	if req.SepaMandat {
 		mandat = 1
 	}
-	// IBAN + Kontoinhaber werden at-rest verschlüsselt gespeichert (Validierung
-	// lief oben auf dem Klartext).
-	encIBAN, err := encBankField(req.IBAN)
-	if err != nil {
-		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-		return
-	}
-	encHolder, err := encBankField(req.AccountHolder)
-	if err != nil {
-		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-		return
-	}
-	// Beitragsfrei + Grund sind nur dann Teil des Updates, wenn beitragsfrei
-	// explizit mitgesendet wurde. Wenn beitragsfrei=false, MUSS der Grund auf
-	// NULL gehen (Kopplungs-Invariante, siehe Spec members::beitragsfrei_grund).
+	// Nicht-geheime Felder (SEPA-Flag/Datum, Adresse, beitragsfrei) bleiben im Klartext
+	// in members. Beitragsfrei + Grund nur bei explizitem Mitsenden (Kopplungs-Invariante).
 	extra := ""
-	args := []any{encIBAN, mandat, nullStr(req.SepaMandatDate), encHolder,
+	args := []any{mandat, nullStr(req.SepaMandatDate),
 		nullStr(req.Street), nullStr(req.Zip), nullStr(req.City), time.Now()}
 	if req.Beitragsfrei != nil {
 		extra = ", beitragsfrei=?, beitragsfrei_grund=?"
@@ -866,7 +858,7 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	}
 	args = append(args, id)
 	res, err := h.db.ExecContext(r.Context(),
-		`UPDATE members SET iban=?, sepa_mandat=?, sepa_mandat_date=?, account_holder=?, street=?, zip=?, city=?, updated_at=?`+extra+`
+		`UPDATE members SET sepa_mandat=?, sepa_mandat_date=?, street=?, zip=?, city=?, updated_at=?`+extra+`
 		 WHERE id=?`,
 		args...)
 	if err != nil {
@@ -876,6 +868,20 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	if n, _ := res.RowsAffected(); n == 0 {
 		http.Error(w, "Mitglied nicht gefunden", http.StatusNotFound)
 		return
+	}
+	// Bankdaten-Envelope: nil = unverändert, "" = löschen, gesetzt = upsert.
+	if req.BankCiphertext != nil {
+		if *req.BankCiphertext == "" {
+			h.db.ExecContext(r.Context(), `DELETE FROM member_sensitive WHERE member_id=?`, id)
+		} else {
+			if _, err := h.db.ExecContext(r.Context(),
+				`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand) VALUES (?, ?, ?)
+				 ON CONFLICT(member_id) DO UPDATE SET ciphertext=excluded.ciphertext, dek_enc_vorstand=excluded.dek_enc_vorstand`,
+				id, *req.BankCiphertext, *req.BankDekEnc); err != nil {
+				http.Error(w, "DB-Fehler", http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
@@ -1106,7 +1112,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		m, merr := h.getMember(ownMemberID)
 		if merr == nil {
-			decryptMemberBank(m) // Eigentümer darf eigene Bankdaten lesen
+			clearMemberBank(m) // Modell B/G2: Eigentümer liest eigene Bankdaten NICHT
 			resp.OwnMember = m
 		}
 	}
@@ -1505,36 +1511,6 @@ func normalizeDateAt(s string, currentYear int) string {
 	return year + "-" + month + "-" + day
 }
 
-// validateIBAN checks the MOD-97 checksum and length (22 chars for DE IBANs).
-// Returns (true, "") on success or (false, reason) on failure.
-func validateIBAN(s string) (bool, string) {
-	s = strings.ToUpper(strings.ReplaceAll(s, " ", ""))
-	if len(s) < 4 {
-		return false, "zu kurz"
-	}
-	if strings.HasPrefix(s, "DE") && len(s) != 22 {
-		return false, fmt.Sprintf("DE-IBAN muss 22 Zeichen haben, hat %d", len(s))
-	}
-	rearranged := s[4:] + s[:4]
-	var sb strings.Builder
-	for _, c := range rearranged {
-		switch {
-		case c >= '0' && c <= '9':
-			sb.WriteRune(c)
-		case c >= 'A' && c <= 'Z':
-			sb.WriteString(strconv.Itoa(int(c-'A') + 10))
-		default:
-			return false, fmt.Sprintf("ungültiges Zeichen: %q", c)
-		}
-	}
-	n := new(big.Int)
-	n.SetString(sb.String(), 10)
-	if new(big.Int).Mod(n, big.NewInt(97)).Int64() != 1 {
-		return false, "Prüfziffer falsch"
-	}
-	return true, ""
-}
-
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
@@ -1791,7 +1767,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		query := `SELECT id, member_number, COALESCE(date_of_birth,''),
 		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
 		                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
-		                 COALESCE(join_date,''), COALESCE(iban,''), COALESCE(account_holder,''),
+		                 COALESCE(join_date,''),
 		                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0), COALESCE(beitragsfrei_grund,'')
 		          FROM members
 		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
@@ -1844,23 +1820,23 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		query += ` LIMIT 1`
 
 		var (
-			existingID                          int
-			dbMemberNum, dbPassNum, dbPosition  sql.NullString
-			dbDOB, dbGender, dbStatus           string
-			dbJerseyNum                         sql.NullInt64
-			dbUserID                            sql.NullInt64
-			dbHomeClub                          sql.NullString
-			dbStreet, dbZip, dbCity             string
-			dbJoinDate, dbIBAN, dbAccountHolder string
-			dbSepaMandat                        int
-			dbBeitragsfrei                      int
-			dbBeitragsfreiGrund                 string
+			existingID                         int
+			dbMemberNum, dbPassNum, dbPosition sql.NullString
+			dbDOB, dbGender, dbStatus          string
+			dbJerseyNum                        sql.NullInt64
+			dbUserID                           sql.NullInt64
+			dbHomeClub                         sql.NullString
+			dbStreet, dbZip, dbCity            string
+			dbJoinDate                         string
+			dbSepaMandat                       int
+			dbBeitragsfrei                     int
+			dbBeitragsfreiGrund                string
 		)
 		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
 			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
 				&dbStatus, &dbGender, &dbUserID, &dbHomeClub,
 				&dbStreet, &dbZip, &dbCity,
-				&dbJoinDate, &dbIBAN, &dbAccountHolder, &dbSepaMandat, &dbBeitragsfrei, &dbBeitragsfreiGrund)
+				&dbJoinDate, &dbSepaMandat, &dbBeitragsfrei, &dbBeitragsfreiGrund)
 
 		if scanErr == sql.ErrNoRows {
 			if mode == "enrich" {
@@ -1889,30 +1865,27 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
 			joinDate := normalizeDate(col(row, "join_date"))
 
+			// Zero-Knowledge (Modell B): Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT
+			// importiert — der Server kann sie nicht verschlüsseln. Sie werden pro Mitglied
+			// im Tresor erfasst. Vorhandene CSV-Bankspalten lösen nur einen Hinweis aus.
 			var ibanWarn string
-			var ibanArg interface{}
-			if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" {
-				if ok, msg := validateIBAN(raw); ok {
-					ibanArg, _ = encBankField(raw) // at-rest verschlüsselt
-				} else {
-					ibanWarn = "IBAN nicht gespeichert: " + msg
-				}
+			if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+				ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
 			}
-			encAccountHolder, _ := encBankField(col(row, "Kontoinhaber"))
 
 			if !dryRun {
 				_, insErr := h.db.ExecContext(r.Context(),
 					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
 					                      pass_number, jersey_number, position, status, gender, home_club,
-					                      street, zip, city, join_date, iban, account_holder, sepa_mandat,
+					                      street, zip, city, join_date, sepa_mandat,
 					                      beitragsfrei, beitragsfrei_grund)
-					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 					nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
 					nullableString(dob), nullableString(col(row, "Passnummer")),
 					jerseyArg, nullableString(col(row, "Position")), status, gender,
 					nullableString(col(row, "Stammverein")),
 					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
-					nullableString(joinDate), ibanArg, encAccountHolder,
+					nullableString(joinDate),
 					normalizeSepa(col(row, "SEPA Mandat")),
 					beitragsfreiVal, grundArg)
 				if insErr != nil {
@@ -2004,13 +1977,13 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// New fields: address, join_date, account_holder, sepa_mandat
+		// New fields: address, join_date, sepa_mandat. Bankdaten (IBAN/Kontoinhaber)
+		// werden per CSV NICHT importiert (Zero-Knowledge, Modell B — separat im Tresor).
 		joinDate := normalizeDate(col(row, "join_date"))
 		addChange(col(row, "Adresse"), dbStreet, "Adresse", "street")
 		addChange(col(row, "PLZ"), dbZip, "PLZ", "zip")
 		addChange(col(row, "Ort"), dbCity, "Ort", "city")
 		addChange(joinDate, dbJoinDate, "Mitglied seit", "join_date")
-		addChange(col(row, "Kontoinhaber"), dbAccountHolder, "Kontoinhaber", "account_holder")
 
 		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly && fieldAllowed("sepa_mandat") {
 			sepaVal := normalizeSepa(sepaRaw)
@@ -2041,35 +2014,17 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// IBAN with MOD-97 validation; in enrich mode only fill if DB field is empty.
+		// Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT aktualisiert; vorhandene
+		// CSV-Bankspalten lösen nur einen Hinweis aus (separat im Tresor erfassen).
 		var ibanWarn string
-		if raw := strings.ToUpper(strings.ReplaceAll(col(row, "IBAN"), " ", "")); raw != "" && fieldAllowed("iban") {
-			if ok, msg := validateIBAN(raw); ok {
-				if raw != dbIBAN && (!enrichOnly || dbIBAN == "") {
-					setClauses = append(setClauses, "iban=?")
-					setArgs = append(setArgs, raw)
-					changes = append(changes, fmt.Sprintf("IBAN: %q → %q", dbIBAN, raw))
-				}
-			} else if !enrichOnly || dbIBAN == "" {
-				ibanWarn = "IBAN nicht gespeichert: " + msg
-			}
+		if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+			ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
 		}
 
 		// Mitglieder-Auswahl: außerhalb des Dry-Runs nur ausgewählte Zeilen anwenden.
 		selected := applyLines == nil || applyLines[lineNum]
 
 		if len(setClauses) > 0 && !dryRun && selected {
-			// Bank-Felder at-rest verschlüsseln: das positionsgleiche setArg zur
-			// iban=?/account_holder=?-Klausel vor dem Schreiben verschlüsseln.
-			for i, clause := range setClauses {
-				if clause == "iban=?" || clause == "account_holder=?" {
-					if s, ok := setArgs[i].(string); ok {
-						if enc, encErr := encBankField(s); encErr == nil {
-							setArgs[i] = enc
-						}
-					}
-				}
-			}
 			setArgs = append(setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
 				"UPDATE members SET "+strings.Join(setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -2323,7 +2278,7 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	decryptMemberBank(m) // Elternteil darf Bankdaten des Kindes lesen (isParentOf oben geprüft)
+	clearMemberBank(m) // Modell B/G2: Elternteil liest Kind-Bankdaten NICHT
 
 	type parentEntry struct {
 		ID    int    `json:"id"`
@@ -2611,28 +2566,41 @@ func (h *Handler) UpdateChildBank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	// Zero-Knowledge-Envelope (Modell B): das Elternteil verschlüsselt die Bankdaten des
+	// Kindes clientseitig an den öffentlichen Gruppen-Schlüssel und kann sie nicht
+	// zurücklesen. Klartext wird abgelehnt. nil = unverändert; "" = löschen.
 	var req struct {
-		IBAN          string `json:"iban"`
-		AccountHolder string `json:"account_holder"`
+		BankCiphertext *string `json:"bank_ciphertext"`
+		BankDekEnc     *string `json:"bank_dek_enc"`
+		IBAN           string  `json:"iban"`
+		AccountHolder  string  `json:"account_holder"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	encIBAN, err := encBankField(req.IBAN)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	if req.IBAN != "" || req.AccountHolder != "" {
+		http.Error(w, "Klartext-Bankdaten werden nicht akzeptiert (clientseitig verschlüsseln)", http.StatusBadRequest)
 		return
 	}
-	encHolder, err := encBankField(req.AccountHolder)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	if req.BankCiphertext == nil {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	_, err = h.db.ExecContext(r.Context(),
-		`UPDATE members SET iban=?, account_holder=?, updated_at=? WHERE id=?`,
-		encIBAN, encHolder, time.Now(), memberID)
-	if err != nil {
+	if *req.BankCiphertext == "" {
+		h.db.ExecContext(r.Context(), `DELETE FROM member_sensitive WHERE member_id=?`, memberID)
+		h.hub.Broadcast("members")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if req.BankDekEnc == nil || *req.BankDekEnc == "" {
+		http.Error(w, "Envelope unvollständig: dek_enc fehlt", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand) VALUES (?, ?, ?)
+		 ON CONFLICT(member_id) DO UPDATE SET ciphertext=excluded.ciphertext, dek_enc_vorstand=excluded.dek_enc_vorstand`,
+		memberID, *req.BankCiphertext, *req.BankDekEnc); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

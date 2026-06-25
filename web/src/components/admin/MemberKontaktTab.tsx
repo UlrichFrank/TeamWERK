@@ -4,6 +4,8 @@ import { ExternalLink, Trash2, AlertTriangle } from 'lucide-react'
 import { api } from '../../lib/api'
 import { errorMessage } from '../../lib/errors'
 import { useAuth } from '../../contexts/AuthContext'
+import { useVault } from '../../contexts/VaultContext'
+import { encryptFile, decryptFile } from '../../lib/bankCrypto'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -53,6 +55,7 @@ interface Props {
 
 export default function MemberKontaktTab({ memberId, form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
   const { user, hasCapability } = useAuth()
+  const { privateKey } = useVault()
   const bankdatenDraft = drafts.find(d => d.field_name === 'bankdaten') ?? null
   const sepaDraft = drafts.find(d => d.field_name === 'sepa_mandat') ?? null
 
@@ -98,8 +101,13 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
     setSepaUploading(true)
     setSepaUploadError('')
     try {
+      // Zero-Knowledge: PDF clientseitig an den Gruppen-Schlüssel verschlüsseln und als
+      // Blob + gewrappten DEK hochladen. Der Server sieht das Dokument nie im Klartext.
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const { blob, dekEnc } = await encryptFile(bytes)
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', new Blob([blob as BlobPart], { type: 'application/octet-stream' }), 'mandat.bin')
+      formData.append('dek_enc', dekEnc)
       const { data } = await api.post<{ sepa_mandat_url: string }>(
         `/upload/sepa-mandat/${memberId}`,
         formData,
@@ -111,7 +119,9 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
       setSepaUploadError(
         msg.includes('too_large')
           ? 'Die Datei ist zu groß. Maximal erlaubt sind 2 MB.'
-          : 'Hochladen fehlgeschlagen.'
+          : msg.includes('eingerichtet')
+            ? 'Bankdaten-Tresor ist noch nicht eingerichtet.'
+            : 'Hochladen fehlgeschlagen.'
       )
     } finally {
       setSepaUploading(false)
@@ -119,16 +129,28 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
     }
   }
 
+  // Mandat clientseitig entschlüsseln und anzeigen — braucht den entsperrten Tresor.
   const openSepaMandat = async () => {
     if (!memberId) return
     setOpenError('')
-    const tab = window.open('about:blank', '_blank')
+    if (!privateKey) {
+      setOpenError('Zum Öffnen den Bankdaten-Tresor entsperren (Menü „Tresor").')
+      return
+    }
     try {
-      const { data } = await api.get<{ token: string }>(`/members/${memberId}/sepa-mandat/download-token`)
-      if (tab) tab.location.href = `/api/members/${memberId}/sepa-mandat/download?token=${data.token}`
+      const { data } = await api.get<{ token: string; dek_enc: string }>(
+        `/members/${memberId}/sepa-mandat/download-token`,
+      )
+      const res = await api.get<ArrayBuffer>(
+        `/members/${memberId}/sepa-mandat/download?token=${data.token}`,
+        { responseType: 'arraybuffer' },
+      )
+      const plain = await decryptFile(new Uint8Array(res.data), data.dek_enc, privateKey)
+      const url = URL.createObjectURL(new Blob([plain as BlobPart], { type: 'application/pdf' }))
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch {
-      if (tab) tab.close()
-      setOpenError('Dokument konnte nicht geöffnet werden.')
+      setOpenError('Dokument konnte nicht geöffnet/entschlüsselt werden.')
     }
   }
 

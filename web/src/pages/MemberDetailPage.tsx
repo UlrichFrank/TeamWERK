@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useVault } from '../contexts/VaultContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { encryptBankData, decryptBankData } from '../lib/bankCrypto'
 import MemberStammdatenTab from '../components/admin/MemberStammdatenTab'
 import MemberKontaktTab from '../components/admin/MemberKontaktTab'
 import MemberDatenschutzTab from '../components/admin/MemberDatenschutzTab'
@@ -31,6 +33,8 @@ interface Member {
   join_date?: string
   iban?: string
   account_holder?: string
+  bank_ciphertext?: string
+  bank_dek_enc?: string
   photo_url?: string
   photo_visible?: boolean
   cross_team_visible?: boolean
@@ -55,11 +59,10 @@ type TabName = 'stammdaten' | 'kontakt' | 'datenschutz' | 'familie' | 'admin'
 export default function MemberDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { loading: authLoading, hasCapability, user } = useAuth()
+  const { loading: authLoading, hasCapability } = useAuth()
+  const { privateKey } = useVault()
   const isNew = id === 'neu'
   const isAdmin = hasCapability('manage_members')
-  // Kassierer ohne volle Mitgliederverwaltung: nur Bankdaten editierbar.
-  const canEditBankOnly = !isAdmin && (user?.clubFunctions?.includes('kassierer') ?? false)
 
   const [activeTab, setActiveTab] = useState<TabName>(() => {
     const saved = localStorage.getItem('memberDetailTab')
@@ -88,6 +91,9 @@ export default function MemberDetailPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  // Bankdaten-Envelope (Modell B): wird beim Laden gemerkt und nur bei entsperrtem
+  // Tresor (privateKey) clientseitig entschlüsselt ins Formular übernommen.
+  const [bankEnv, setBankEnv] = useState<{ bank_ciphertext: string; bank_dek_enc: string } | null>(null)
   type DraftValue = {
     verarbeitung?: boolean; weitergabe?: boolean
     account_holder?: string; iban?: string
@@ -122,8 +128,8 @@ export default function MemberDetailPage() {
       home_club_id: m.home_club_id ?? null,
       street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
       join_date: m.join_date?.slice(0, 10) ?? '',
-      iban: m.iban ?? '',
-      account_holder: m.account_holder ?? '',
+      iban: '',
+      account_holder: '',
       photo_url: m.photo_url ?? '',
       photo_visible: m.photo_visible ?? false,
       cross_team_visible: m.cross_team_visible ?? false,
@@ -140,7 +146,27 @@ export default function MemberDetailPage() {
     })
     setCurrentUserID(m.user_id ?? null)
     setWelcomeEmailSentAt(m.welcome_email_sent_at ?? null)
+    setBankEnv(
+      m.bank_ciphertext
+        ? { bank_ciphertext: m.bank_ciphertext, bank_dek_enc: m.bank_dek_enc ?? '' }
+        : null,
+    )
   }
+
+  // Bei entsperrtem Tresor den Bankdaten-Envelope clientseitig entschlüsseln und ins
+  // Formular übernehmen (nur lesbar für vorstand/kassierer mit Tresor-Schlüssel).
+  useEffect(() => {
+    if (!privateKey || !bankEnv) return
+    let cancelled = false
+    decryptBankData(bankEnv, privateKey)
+      .then(d => {
+        if (!cancelled) setForm(prev => ({ ...prev, iban: d.iban, account_holder: d.account_holder }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [privateKey, bankEnv])
 
   const handleDraftAccept = async (draftId: number) => {
     if (!id) return
@@ -194,8 +220,14 @@ export default function MemberDetailPage() {
   const handleSave = async () => {
     setSaving(true); setError('')
     try {
+      // Bankdaten werden NICHT über den Member-Voll-Endpoint geschrieben (Zero-Knowledge):
+      // sie laufen ausschließlich clientseitig verschlüsselt über den Bankdaten-Tab
+      // (handleSaveBank → /bank-details). Hier herausnehmen, damit kein Klartext zum Server geht.
+      const { iban: _iban, account_holder: _ah, ...rest } = form
+      void _iban
+      void _ah
       const body = {
-        ...form,
+        ...rest,
         jersey_number: form.jersey_number ? Number(form.jersey_number) : null,
         club_functions: form.club_functions ?? [],
       }
@@ -226,11 +258,17 @@ export default function MemberDetailPage() {
     if (!id) return
     setSaving(true); setError('')
     try {
+      // Bankdaten clientseitig an den öffentlichen Gruppen-Schlüssel verschlüsseln; ""
+      // löscht den Envelope. Server sieht nie Klartext-IBAN.
+      const hasBank = (form.iban ?? '') !== '' || (form.account_holder ?? '') !== ''
+      const env = hasBank
+        ? await encryptBankData({ iban: form.iban ?? '', account_holder: form.account_holder ?? '' })
+        : { bank_ciphertext: '', bank_dek_enc: '' }
       await api.put(`/members/${id}/bank-details`, {
-        iban: form.iban ?? '',
+        bank_ciphertext: env.bank_ciphertext,
+        bank_dek_enc: env.bank_dek_enc,
         sepa_mandat: !!form.sepa_mandat,
         sepa_mandat_date: form.sepa_mandat_date ?? '',
-        account_holder: form.account_holder ?? '',
         street: form.street ?? '',
         zip: form.zip ?? '',
         city: form.city ?? '',
@@ -357,7 +395,7 @@ export default function MemberDetailPage() {
           onFormChange={updates => setForm(f => ({ ...f, ...updates }))}
           onDraftAccept={handleDraftAccept}
           onDraftReject={handleDraftReject}
-          onSave={canEditBankOnly ? handleSaveBank : handleSave}
+          onSave={handleSaveBank}
           saving={saving}
           saved={saved}
           error={error}

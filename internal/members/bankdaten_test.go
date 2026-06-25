@@ -5,23 +5,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
 )
-
-// assertEncryptedIBAN prüft, dass der gespeicherte Wert at-rest verschlüsselt ist
-// und auf den erwarteten Klartext entschlüsselt (Invariante: nie Klartext in DB).
-func assertEncryptedIBAN(t *testing.T, stored, wantPlain string) {
-	t.Helper()
-	if !crypto.IsEncryptedString(stored) {
-		t.Errorf("iban nicht verschlüsselt gespeichert: %q", stored)
-		return
-	}
-	if dec, _ := crypto.Decrypt(stored); dec != wantPlain {
-		t.Errorf("iban-Roundtrip falsch: entschlüsselt %q, want %q", dec, wantPlain)
-	}
-}
 
 func TestMembers_KassiererDarfLesen(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -42,7 +28,8 @@ func TestMembers_SpielerVerboten(t *testing.T) {
 	}
 }
 
-func TestBankdaten_KassiererUpdatetNurBankfelder(t *testing.T) {
+// Bankdaten-Envelope + Nicht-Bankfelder werden gespeichert, ohne Stammdaten zu verändern.
+func TestBankdaten_KassiererUpdatetEnvelopeUndNebenfelder(t *testing.T) {
 	db := testutil.NewDB(t)
 	id := testutil.CreateMember(t, db, 0)
 	db.Exec(`UPDATE members SET status='aktiv', beitragsfrei=1, first_name='Vorname', last_name='Nachname' WHERE id=?`, id)
@@ -50,32 +37,24 @@ func TestBankdaten_KassiererUpdatetNurBankfelder(t *testing.T) {
 	tok := testutil.Token(t, 5, "standard", []string{"kassierer"})
 
 	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bank-details", tok, map[string]any{
-		"iban": "DE89370400440532013000", "sepa_mandat": true, "sepa_mandat_date": "2026-05-01",
-		"account_holder": "Vorname Nachname", "street": "Neue Str. 5", "zip": "70000", "city": "Stuttgart",
+		"bank_ciphertext": testCiphertext, "bank_dek_enc": testDekEnc,
+		"sepa_mandat": true, "sepa_mandat_date": "2026-05-01",
+		"street": "Neue Str. 5", "zip": "70000", "city": "Stuttgart",
 	})
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("PUT bankdaten: status %d", res.StatusCode)
 	}
 
-	var iban, status, first string
+	var ct, status, first string
 	var beitragsfrei int
-	db.QueryRow(`SELECT iban, status, first_name, beitragsfrei FROM members WHERE id=?`, id).
-		Scan(&iban, &status, &first, &beitragsfrei)
-	assertEncryptedIBAN(t, iban, "DE89370400440532013000")
+	db.QueryRow(`SELECT ms.ciphertext, m.status, m.first_name, m.beitragsfrei
+	             FROM members m JOIN member_sensitive ms ON ms.member_id=m.id WHERE m.id=?`, id).
+		Scan(&ct, &status, &first, &beitragsfrei)
+	if ct != testCiphertext {
+		t.Errorf("Envelope nicht gespeichert: %q", ct)
+	}
 	if status != "aktiv" || first != "Vorname" || beitragsfrei != 1 {
 		t.Errorf("Nicht-Bankfelder verändert: status=%q first=%q beitragsfrei=%d", status, first, beitragsfrei)
-	}
-}
-
-func TestBankdaten_UngueltigeIBAN400(t *testing.T) {
-	db := testutil.NewDB(t)
-	id := testutil.CreateMember(t, db, 0)
-	srv := prodserver.New(t, db)
-	tok := testutil.Token(t, 5, "standard", []string{"kassierer"})
-	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bank-details", tok,
-		map[string]any{"iban": "DE88370400440532013000"})
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("status %d, want 400", res.StatusCode)
 	}
 }
 
@@ -85,7 +64,7 @@ func TestBankdaten_Forbidden(t *testing.T) {
 	srv := prodserver.New(t, db)
 	tok := testutil.Token(t, 9, "standard", []string{"spieler"})
 	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bank-details", tok,
-		map[string]any{"iban": "DE89370400440532013000"})
+		map[string]any{"bank_ciphertext": testCiphertext, "bank_dek_enc": testDekEnc})
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status %d, want 403", res.StatusCode)
 	}
@@ -112,7 +91,6 @@ func TestBankdaten_KassiererPflegtBeitragsfreiGrund(t *testing.T) {
 
 	res := testutil.Do(t, srv, http.MethodPut, "/api/members/"+itoaTest(id)+"/bank-details", tok,
 		map[string]any{
-			"iban":               "DE89370400440532013000",
 			"beitragsfrei":       true,
 			"beitragsfrei_grund": "kein aktiver Sportler mehr",
 		})
@@ -120,18 +98,16 @@ func TestBankdaten_KassiererPflegtBeitragsfreiGrund(t *testing.T) {
 		t.Fatalf("PUT bankdaten: status %d", res.StatusCode)
 	}
 
-	var iban, status, first string
+	var status, first string
 	var beitragsfrei int
 	var grund sql.NullString
 	db.QueryRow(
-		`SELECT iban, status, first_name, beitragsfrei, beitragsfrei_grund FROM members WHERE id=?`, id).
-		Scan(&iban, &status, &first, &beitragsfrei, &grund)
-	assertEncryptedIBAN(t, iban, "DE89370400440532013000")
+		`SELECT status, first_name, beitragsfrei, beitragsfrei_grund FROM members WHERE id=?`, id).
+		Scan(&status, &first, &beitragsfrei, &grund)
 	if beitragsfrei != 1 || !grund.Valid || grund.String != "kein aktiver Sportler mehr" {
 		t.Errorf("beitragsfrei/grund: got %d / %v %q, want 1 / true %q",
 			beitragsfrei, grund.Valid, grund.String, "kein aktiver Sportler mehr")
 	}
-	// Stammdaten unverändert
 	if status != "aktiv" || first != "Vorname" {
 		t.Errorf("Stammdaten verändert: status=%q first=%q", status, first)
 	}

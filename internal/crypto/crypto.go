@@ -39,6 +39,18 @@ const prefix = "v1:"
 // erkannt werden.
 var fileMagic = []byte("TWENC1\x00")
 
+// clientFileMagic markiert einen CLIENTseitig (Zero-Knowledge, Modell B) verschlüsselten
+// Blob — bewusst anders als fileMagic (\n statt \x00), damit der Server ihn nie als
+// serverseitig entschlüsselbar behandelt (er besitzt den DEK nicht). Muss mit dem
+// BLOB_MAGIC in web/src/lib/crypto.ts übereinstimmen.
+var clientFileMagic = []byte("TWENC1\n")
+
+// IsClientEncryptedBytes meldet, ob ein Blob den Client-Magic-Header trägt (also clientseitig
+// verschlüsselt wurde). Dient dem Upload-Pfad als Schutz gegen versehentlichen Klartext.
+func IsClientEncryptedBytes(blob []byte) bool {
+	return bytes.HasPrefix(blob, clientFileMagic)
+}
+
 // activeKey ist der app-weite Schlüssel. Wird beim Start via InitFromEnv bzw.
 // in Tests via Init gesetzt.
 var activeKey []byte

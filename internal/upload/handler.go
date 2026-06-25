@@ -21,7 +21,6 @@ import (
 )
 
 var imageTypes = []string{"image/jpeg", "image/jpg", "image/png", "image/webp"}
-var pdfAndImageTypes = []string{"application/pdf", "image/jpeg", "image/png", "image/webp"}
 var pdfOnlyTypes = []string{"application/pdf"}
 
 const (
@@ -284,12 +283,22 @@ func (h *Handler) DeleteMemberPhoto(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/upload/sepa-mandat/{id} — Admin only
+//
+// Zero-Knowledge (Modell B): Das PDF kommt bereits clientseitig verschlüsselt an
+// (Datei-Feld = Ciphertext-Blob mit "TWENC1"-Magic), der gewrappte DEK im Feld `dek_enc`.
+// Der Server speichert beides unverändert und entschlüsselt nie.
 func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	filename, err := h.saveFile(r, "sepa-mandats", pdfAndImageTypes, maxSepaBytes, true)
+	filename, err := h.saveEncryptedBlob(r, "sepa-mandats", maxSepaBytes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	dekEnc := r.FormValue("dek_enc")
+	if dekEnc == "" {
+		os.Remove(filepath.Join(h.uploadDir, filename))
+		http.Error(w, "dek_enc fehlt (clientseitig verschlüsseln)", http.StatusBadRequest)
 		return
 	}
 
@@ -299,7 +308,8 @@ func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(h.uploadDir, oldPath.String))
 	}
 
-	if _, err := h.db.ExecContext(r.Context(), `UPDATE members SET sepa_mandat_path=? WHERE id=?`, filename, id); err != nil {
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE members SET sepa_mandat_path=?, sepa_mandat_dek_enc=? WHERE id=?`, filename, dekEnc, id); err != nil {
 		os.Remove(filepath.Join(h.uploadDir, filename))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -310,6 +320,37 @@ func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"sepa_mandat_url": "/api/uploads/" + filename})
+}
+
+// saveEncryptedBlob speichert einen bereits clientseitig verschlüsselten Datei-Blob roh
+// (keine Typ-Prüfung — Ciphertext ist kein PDF; keine Server-Verschlüsselung). Verlangt
+// den Client-Magic-Header, damit kein Klartext-PDF durchrutscht.
+func (h *Handler) saveEncryptedBlob(r *http.Request, subdir string, maxBytes int64) (string, error) {
+	r.Body = http.MaxBytesReader(nil, r.Body, maxBytes+4096)
+	if err := r.ParseMultipartForm(maxBytes); err != nil {
+		return "", fmt.Errorf("too_large")
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		return "", fmt.Errorf("missing file field")
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(file)
+	if err != nil {
+		return "", fmt.Errorf("cannot read file")
+	}
+	if !crypto.IsClientEncryptedBytes(raw) {
+		return "", fmt.Errorf("kein clientseitig verschlüsselter Blob")
+	}
+	dir := filepath.Join(h.uploadDir, subdir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("cannot create directory")
+	}
+	filename := uuid.NewString() + ".bin"
+	if err := os.WriteFile(filepath.Join(dir, filename), raw, 0644); err != nil {
+		return "", fmt.Errorf("cannot write file")
+	}
+	return filepath.Join(subdir, filename), nil
 }
 
 // GET /api/members/{id}/sepa-mandat/download-token — authenticated
@@ -331,16 +372,19 @@ func (h *Handler) SepaDownloadToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var path sql.NullString
-	h.db.QueryRowContext(r.Context(), `SELECT sepa_mandat_path FROM members WHERE id=?`, memberID).Scan(&path)
+	var path, dekEnc sql.NullString
+	h.db.QueryRowContext(r.Context(),
+		`SELECT sepa_mandat_path, sepa_mandat_dek_enc FROM members WHERE id=?`, memberID).Scan(&path, &dekEnc)
 	if !path.Valid || path.String == "" {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
+	// dek_enc mitliefern, damit der Client den heruntergeladenen Ciphertext-Blob mit dem
+	// Tresor-Schlüssel entschlüsseln kann (Server entschlüsselt das PDF nicht).
 	token := generateSepaToken(memberID, claims.UserID, h.secret)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+	json.NewEncoder(w).Encode(map[string]string{"token": token, "dek_enc": dekEnc.String})
 }
 
 // GET /api/members/{id}/sepa-mandat/download?token=... — public (token-auth internally)
