@@ -59,12 +59,11 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
   tsc/lint grün; Browser-Verifikation offen.
 - [~] 3.5 Frontend Bankdaten-Eingabe — **MemberDetailPage + MemberKontaktTab (PDF) erledigt**;
   Beitritts-Formular **entfällt** (RequestMembership erfasst keine Bankdaten).
-  **Offen — bewusst zurückgestellt:** CSV-Bankimport clientseitig (G5) ist ein eigenständiges
-  Feature auf dem komplexen member-csv-Subsystem (Browser parst CSV → IBANs verschlüsseln →
-  Mitglied-Matching → Envelope pro Mitglied hochladen). Serverseitiger CSV-Bankschreibpfad
-  ist aktuell ein No-Op (schreibt in die tote `members.iban`-Spalte, wird beim Lesen
-  ignoriert) — kein Leak, aber CSV importiert derzeit keine nutzbaren Bankdaten. Per-Member-
-  Eingabe deckt Bankdaten ab; Bulk-CSV-Bank als fokussierter Folgeschritt + Browser-Verifikation.
+  **CSV-Bereinigung erledigt:** Der serverseitige CSV-Import schreibt keine Bankdaten mehr
+  (kein toter-Spalten-Schreibpfad); IBAN/Kontoinhaber-Spalten lösen nur einen Hinweis aus,
+  Bankdaten werden pro Mitglied im Tresor erfasst. **Bewusst zurückgestellt:** voller
+  client-seitiger CSV-Bank-Bulk-Import (G5, Browser parst CSV → verschlüsseln → Matching →
+  Envelope-Upload) als fokussierter Folgeschritt + Browser-Verifikation.
   Frontend-Crypto-Flows brauchen Browser-Verifikation.
 
 ## 4. Fee-Run clientseitig
