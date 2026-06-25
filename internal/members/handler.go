@@ -755,31 +755,22 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	pu := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	if policy.IsVorstandLike(pu) {
-		// IBAN/Kontoinhaber at-rest verschlüsseln. Leere IBAN ⇒ NULL ⇒ COALESCE
-		// behält den Bestandswert (Verschlüsselung inklusive).
-		ibanVal, err := encBankField(req.IBAN)
-		if err != nil {
-			http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-			return
-		}
-		holderVal, err := encBankField(req.AccountHolder)
-		if err != nil {
-			http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-			return
-		}
+		// Bankdaten (IBAN/Kontoinhaber) werden hier NICHT geschrieben — sie laufen
+		// ausschließlich clientseitig verschlüsselt über PUT /members/{id}/bank-details
+		// (Zero-Knowledge, Modell B). Hier nur Nicht-Bank-Felder.
 		grundVal := nullableString(req.BeitragsfreiGrund)
 		if !req.Beitragsfrei {
 			grundVal = nil
 		}
 		h.db.ExecContext(r.Context(),
 			`UPDATE members SET
-				join_date=?, iban=COALESCE(?, iban), account_holder=?,
+				join_date=?,
 				dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
 				dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
 				sepa_mandat=?, sepa_mandat_date=?,
 				beitragsfrei=?, beitragsfrei_grund=?
 			WHERE id=?`,
-			nullableString(req.JoinDate), ibanVal, holderVal,
+			nullableString(req.JoinDate),
 			boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 			boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
 			boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
@@ -2627,28 +2618,41 @@ func (h *Handler) UpdateChildBank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	// Zero-Knowledge-Envelope (Modell B): das Elternteil verschlüsselt die Bankdaten des
+	// Kindes clientseitig an den öffentlichen Gruppen-Schlüssel und kann sie nicht
+	// zurücklesen. Klartext wird abgelehnt. nil = unverändert; "" = löschen.
 	var req struct {
-		IBAN          string `json:"iban"`
-		AccountHolder string `json:"account_holder"`
+		BankCiphertext *string `json:"bank_ciphertext"`
+		BankDekEnc     *string `json:"bank_dek_enc"`
+		IBAN           string  `json:"iban"`
+		AccountHolder  string  `json:"account_holder"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	encIBAN, err := encBankField(req.IBAN)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	if req.IBAN != "" || req.AccountHolder != "" {
+		http.Error(w, "Klartext-Bankdaten werden nicht akzeptiert (clientseitig verschlüsseln)", http.StatusBadRequest)
 		return
 	}
-	encHolder, err := encBankField(req.AccountHolder)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	if req.BankCiphertext == nil {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	_, err = h.db.ExecContext(r.Context(),
-		`UPDATE members SET iban=?, account_holder=?, updated_at=? WHERE id=?`,
-		encIBAN, encHolder, time.Now(), memberID)
-	if err != nil {
+	if *req.BankCiphertext == "" {
+		h.db.ExecContext(r.Context(), `DELETE FROM member_sensitive WHERE member_id=?`, memberID)
+		h.hub.Broadcast("members")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if req.BankDekEnc == nil || *req.BankDekEnc == "" {
+		http.Error(w, "Envelope unvollständig: dek_enc fehlt", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand) VALUES (?, ?, ?)
+		 ON CONFLICT(member_id) DO UPDATE SET ciphertext=excluded.ciphertext, dek_enc_vorstand=excluded.dek_enc_vorstand`,
+		memberID, *req.BankCiphertext, *req.BankDekEnc); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
