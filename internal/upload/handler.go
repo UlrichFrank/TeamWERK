@@ -21,7 +21,6 @@ import (
 )
 
 var imageTypes = []string{"image/jpeg", "image/jpg", "image/png", "image/webp"}
-var pdfAndImageTypes = []string{"application/pdf", "image/jpeg", "image/png", "image/webp"}
 var pdfOnlyTypes = []string{"application/pdf"}
 
 const (

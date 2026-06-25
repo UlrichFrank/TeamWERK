@@ -14,9 +14,13 @@ cmd/teamwerk/web/dist/
 # Lokale Backups und Uploads
 teamwerk-backup.db
 backup/
+backup.*/
 storage/
 *.db-shm
 *.db-wal
+
+# SQL-Dumps (PII)
+/*.sql
 
 # Environment
 .env
