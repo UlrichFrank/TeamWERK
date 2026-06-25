@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -142,9 +143,14 @@ func serve() {
 		fatal("config load failed", "error", err)
 	}
 
-	// At-Rest-Verschlüsselung: ohne gültigen FIELD_ENCRYPTION_KEY nimmt der Server
-	// keine Requests an (sonst würden Bankdaten im Klartext geschrieben).
-	if err := crypto.InitFromEnv(); err != nil {
+	// Migrations-Brücke (FIELD_ENCRYPTION_KEY): Der Server startet mit UND ohne Schlüssel.
+	// Fehlt er, ist das nach abgeschlossener Bestandsmigration der Normalzustand — nur der
+	// serverseitige Migrationspfad (v1:-Decrypt) ist dann deaktiviert; alle regulären Routen
+	// sind envelope-only. Ein GESETZTER, aber ungültiger Schlüssel bleibt ein harter Fehler.
+	switch err := crypto.InitFromEnv(); {
+	case errors.Is(err, crypto.ErrNoKey):
+		slog.Warn("FIELD_ENCRYPTION_KEY nicht gesetzt — Migrations-Brücke deaktiviert (envelope-only)")
+	case err != nil:
 		fatal("encryption key invalid", "error", err)
 	}
 

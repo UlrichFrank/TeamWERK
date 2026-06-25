@@ -114,7 +114,7 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
 
 ### Branch A — `feat/zk-migrate-bestand` (von `feat/zero-knowledge-bank-vault`, reversibel)
 
-- [ ] 6.1 **Startup-Toleranz vorziehen** (`refactor(crypto)`): `crypto.HasKey()`;
+- [x] 6.1 **Startup-Toleranz vorziehen** (`refactor(crypto)`): `crypto.HasKey()`;
   `cmd/teamwerk/main.go` startet mit **und ohne** `FIELD_ENCRYPTION_KEY` (`slog.Warn` statt
   `fatal` bei fehlendem Key — Brücke/Migration dann deaktiviert; `fatal` nur noch bei
   **gesetztem, aber ungültigem** Key). Sicher, da alle regulären Routen envelope-only sind.

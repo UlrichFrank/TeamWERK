@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -165,4 +166,47 @@ func TestLoadKey_Validation(t *testing.T) {
 			t.Errorf("LoadKey(%s) lieferte keinen Fehler", name)
 		}
 	}
+}
+
+// TestInitFromEnv_Tolerance prüft die Migrations-Brücken-Semantik: fehlender Schlüssel ist
+// kein harter Fehler (ErrNoKey → Serverstart läuft als Warnung weiter), ein gesetzter aber
+// ungültiger Schlüssel bleibt ein Fehler, ein gültiger Schlüssel aktiviert die Brücke.
+func TestInitFromEnv_Tolerance(t *testing.T) {
+	// Paketweiten Schlüssel für diesen Test isolieren und danach zurücksetzen.
+	saved := activeKey
+	t.Cleanup(func() { activeKey = saved })
+
+	t.Run("fehlender Schlüssel → ErrNoKey, HasKey()==false", func(t *testing.T) {
+		activeKey = nil
+		t.Setenv(EnvKeyName, "")
+		if err := InitFromEnv(); !errors.Is(err, ErrNoKey) {
+			t.Fatalf("InitFromEnv ohne Key: erwartet ErrNoKey, war %v", err)
+		}
+		if HasKey() {
+			t.Error("HasKey() sollte ohne Schlüssel false sein")
+		}
+	})
+
+	t.Run("ungültiger Schlüssel → harter Fehler", func(t *testing.T) {
+		activeKey = nil
+		t.Setenv(EnvKeyName, base64.StdEncoding.EncodeToString(make([]byte, 16)))
+		err := InitFromEnv()
+		if err == nil || errors.Is(err, ErrNoKey) {
+			t.Fatalf("InitFromEnv mit ungültigem Key: erwartet harten Fehler, war %v", err)
+		}
+		if HasKey() {
+			t.Error("HasKey() sollte nach ungültigem Schlüssel false sein")
+		}
+	})
+
+	t.Run("gültiger Schlüssel → Brücke aktiv", func(t *testing.T) {
+		activeKey = nil
+		t.Setenv(EnvKeyName, base64.StdEncoding.EncodeToString(make([]byte, KeySize)))
+		if err := InitFromEnv(); err != nil {
+			t.Fatalf("InitFromEnv mit gültigem Key: %v", err)
+		}
+		if !HasKey() {
+			t.Error("HasKey() sollte mit gültigem Schlüssel true sein")
+		}
+	})
 }
