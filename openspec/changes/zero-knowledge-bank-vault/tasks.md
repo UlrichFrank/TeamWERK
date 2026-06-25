@@ -46,8 +46,11 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
   kontoinhaber` als **ein** Group-Blob speichern/ausliefern (kein Server-Decrypt). Tests.
 - [ ] 3.4 `internal/upload`: SEPA-Mandat-PDF als clientseitig verschlüsselter Blob
   hochladen/ausliefern (keine Server-`DecryptBytes`). Tests.
-- [ ] 3.5 Frontend Bankdaten-Eingabe (Profil/Mitglied/Verein/Mandat-Upload): vor dem Senden
-  clientseitig verschlüsseln; entsperrter Tresor erforderlich (sonst Dialog).
+- [~] 3.5 Frontend Bankdaten-Eingabe — **MemberDetailPage erledigt** (`bankCrypto.ts`:
+  encrypt an Public-Key / decrypt mit Tresor-Privatschlüssel; Laden entschlüsselt bei
+  entsperrtem Tresor, Speichern verschlüsselt; Voll-Endpoint sendet keine Klartext-Bankdaten).
+  **Offen:** Beitritts-Formular (Public-Key-Eingabe), CSV-Bankimport clientseitig (G5).
+  Frontend-Crypto-Flows brauchen Browser-Verifikation.
 
 ## 4. Fee-Run clientseitig
 
