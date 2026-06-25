@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
-	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 // GetChangeRequestsHandler GET /api/members/{id}/change-drafts
@@ -28,11 +27,12 @@ func (h *Handler) GetChangeRequestsHandler(w http.ResponseWriter, r *http.Reques
 		drafts = []ChangeDraft{}
 	}
 
-	// Bankdaten-Entwürfe liegen verschlüsselt vor: für Berechtigte entschlüsseln,
-	// sonst schwärzen (auch nötig, damit die Antwort gültiges JSON bleibt).
+	// Bankdaten-Entwürfe sind clientseitige Envelopes: Der Server entschlüsselt nicht; er
+	// reicht den Envelope nur an die Finance-Gruppe durch (admin/vorstand/kassierer) und
+	// schwärzt ihn sonst (G2 — Eigentümer/Eltern lesen Bankdaten nicht). Die eigentliche
+	// Entschlüsselung passiert clientseitig mit dem Tresor-Schlüssel.
 	claims := auth.ClaimsFromCtx(r.Context())
-	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
-	revealBank := policy.CanDecryptBankData(h.db, p, memberID)
+	revealBank := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("kassierer")
 	redactBankDrafts(drafts, revealBank)
 
 	w.Header().Set("Content-Type", "application/json")
