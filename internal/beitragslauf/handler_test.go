@@ -52,6 +52,13 @@ func insertMember(t *testing.T, db *sql.DB, first string, m memberSpec) int {
 		t.Fatalf("insertMember: %v", err)
 	}
 	id, _ := res.LastInsertId()
+	// Modell B: Bankdaten liegen im member_sensitive-Envelope. Eine "vorhandene IBAN" im
+	// Spec bedeutet einen vorhandenen Envelope (HasBank=true); der Server entschlüsselt nicht.
+	if m.iban != "" {
+		if _, err := db.Exec(`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand) VALUES (?, 'CT', 'DEK')`, id); err != nil {
+			t.Fatalf("insertMember sensitive: %v", err)
+		}
+	}
 	return int(id)
 }
 
@@ -81,15 +88,16 @@ func insertSeason2026(t *testing.T, db *sql.DB) int {
 func setupSrv(t *testing.T) (*httptest.Server, *sql.DB, string) {
 	t.Helper()
 	db := testutil.NewDB(t)
-	db.Exec(`INSERT INTO clubs (name, glaeubiger_id, iban, bic, kontoinhaber)
-		VALUES ('Team Stuttgart','DE98ZZZ09999999999',?, 'GENODEF1S02','Team Stuttgart e.V.')`, validIBAN)
+	// Modell B: Vereins-SEPA als Envelope (Server entschlüsselt nicht).
+	db.Exec(`INSERT INTO clubs (name, sepa_ciphertext, sepa_dek_enc)
+		VALUES ('Team Stuttgart','CLUBCT','CLUBDEK')`)
 	dir := t.TempDir()
 	h := beitragslauf.NewHandler(db, hub.NewHub(), dir)
 	srv := testutil.NewServer(t, func(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "kassierer"))
 			r.Get("/api/fee-run/preview", h.Preview)
-			r.Post("/api/fee-run/export", h.Export)
+			r.Post("/api/fee-run/export-data", h.ExportData)
 			r.Post("/api/fee-run/confirm", h.Confirm)
 			r.Get("/api/fee-run/protocol", h.Protocol)
 		})
@@ -244,14 +252,18 @@ func TestPreview_AusschlussOhneIBAN(t *testing.T) {
 	}
 }
 
-func TestPreview_AusschlussUngueltigeIBAN(t *testing.T) {
+// Hinweis: Die IBAN-Gültigkeitsprüfung (iban_ungueltig) ist unter Modell B clientseitig
+// (der Server kann die verschlüsselte IBAN nicht prüfen). Abgedeckt durch
+// web/src/lib/sepa.test.ts (isValidIBAN, Parität zu internal/sepa/iban.go). Der Server
+// schließt nur "keine Bankdaten" aus (iban_fehlt) — siehe TestPreview_AusschlussOhneBankdaten.
+func TestPreview_AusschlussOhneBankdaten(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	m := defaultMember()
-	m.iban = "DE88370400440532013000" // falsche Prüfsumme
-	id := insertMember(t, db, "BadIban", m)
+	m.iban = "" // kein member_sensitive-Envelope → HasBank=false
+	id := insertMember(t, db, "NoBank", m)
 	it, _ := itemFor(getPreview(t, srv, s), id)
-	if it.Included || !contains(it.Exclusions, "iban_ungueltig") {
+	if it.Included || !contains(it.Exclusions, "iban_fehlt") {
 		t.Errorf("got %+v", it)
 	}
 }

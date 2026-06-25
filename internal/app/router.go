@@ -331,7 +331,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/fee-rates", h.Beitragssaetze.Create)
 			// Beitragslauf
 			r.Get("/api/fee-run/preview", h.Beitragslauf.Preview)
-			r.Post("/api/fee-run/export", h.Beitragslauf.Export)
+			r.Post("/api/fee-run/export-data", h.Beitragslauf.ExportData)
 			r.Post("/api/fee-run/confirm", h.Beitragslauf.Confirm)
 			r.Get("/api/fee-run/protocol", h.Beitragslauf.Protocol)
 		})

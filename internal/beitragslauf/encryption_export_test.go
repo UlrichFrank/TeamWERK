@@ -1,56 +1,67 @@
 package beitragslauf_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
-// TestExport_EntschluesseltVerschluesselteFelder (7.5): bei at-rest
-// verschlüsselten Mitglieds- und Vereinsfeldern erzeugt der Export trotzdem
-// korrektes SEPA-XML mit den Klartext-Werten.
-func TestExport_EntschluesseltVerschluesselteFelder(t *testing.T) {
+// Modell B: export-data liefert ausschließlich Ciphertext + Wraps (Mitglieds-Bankdaten und
+// Vereins-SEPA) sowie nicht-geheime Felder — niemals eine Klartext-IBAN. Das pain.008-XML
+// entsteht clientseitig.
+func TestExportData_LiefertNurEnvelopes(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
-	id := insertMember(t, db, "Max", defaultMember())
+	id := insertMember(t, db, "Max", defaultMember()) // legt member_sensitive 'CT'/'DEK' an
 
-	enc := func(v string) string {
-		e, err := crypto.Encrypt(v)
-		if err != nil {
-			t.Fatalf("encrypt: %v", err)
-		}
-		return e
-	}
-	// Mitglieds- und Vereins-SEPA-Felder verschlüsseln (wie nach encrypt-pii).
-	if _, err := db.Exec(`UPDATE members SET iban=?, account_holder=? WHERE id=?`,
-		enc(validIBAN), enc("Max Test"), id); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`UPDATE clubs SET glaeubiger_id=?, iban=?, bic=?, kontoinhaber=?`,
-		enc("DE98ZZZ09999999999"), enc(validIBAN), enc("GENODEF1S02"), enc("Team Stuttgart e.V.")); err != nil {
-		t.Fatal(err)
-	}
-
-	res := testutil.Post(t, srv, "/api/fee-run/export", tok(t),
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
 		map[string]any{"saison_id": s, "member_ids": []int{id}})
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("export status %d", res.StatusCode)
+		t.Fatalf("export-data status %d", res.StatusCode)
 	}
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
-	str := string(body)
 
-	if !strings.Contains(str, validIBAN) {
-		t.Errorf("XML enthält die entschlüsselte Mitglieds-IBAN nicht:\n%s", str)
+	// Keine Klartext-IBAN im Response.
+	if strings.Contains(string(body), validIBAN) {
+		t.Errorf("export-data enthält Klartext-IBAN (darf nie passieren):\n%s", body)
 	}
-	if !strings.Contains(str, "DE98ZZZ09999999999") {
-		t.Errorf("XML enthält die entschlüsselte Gläubiger-ID nicht")
+
+	var resp struct {
+		ClubSepa struct {
+			Ciphertext string `json:"ciphertext"`
+			DekEnc     string `json:"dek_enc"`
+		} `json:"club_sepa"`
+		Items []struct {
+			BankCiphertext string `json:"bank_ciphertext"`
+			BankDekEnc     string `json:"bank_dek_enc"`
+		} `json:"items"`
 	}
-	if strings.Contains(str, "v1:") {
-		t.Errorf("XML enthält rohen Ciphertext (v1:) — Entschlüsselung fehlt")
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.ClubSepa.Ciphertext != "CLUBCT" || resp.ClubSepa.DekEnc != "CLUBDEK" {
+		t.Errorf("club_sepa-Envelope fehlt: %+v", resp.ClubSepa)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].BankCiphertext != "CT" || resp.Items[0].BankDekEnc != "DEK" {
+		t.Errorf("Mitglieds-Envelope fehlt: %+v", resp.Items)
+	}
+}
+
+// Ohne eingerichtete Vereins-SEPA (kein Envelope) → 400.
+func TestExportData_OhneVereinsSepa400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	db.Exec(`UPDATE clubs SET sepa_ciphertext=NULL, sepa_dek_enc=NULL`)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{id}})
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("ohne Vereins-SEPA: status %d, want 400", res.StatusCode)
 	}
 }

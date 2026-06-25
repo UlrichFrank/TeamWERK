@@ -7,12 +7,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/config"
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
-func TestClub_SepaFelder_GetSet(t *testing.T) {
+// Modell B: Vereins-SEPA-Stammdaten als clientseitiger Envelope; der Server speichert nur
+// Ciphertext + Wrap und lehnt Klartext-SEPA-Felder ab.
+func TestClub_SepaEnvelope_GetSet(t *testing.T) {
 	database := testutil.NewDB(t)
 	if _, err := database.Exec(`INSERT INTO clubs (name) VALUES ('Team Stuttgart')`); err != nil {
 		t.Fatalf("seed club: %v", err)
@@ -24,57 +25,48 @@ func TestClub_SepaFelder_GetSet(t *testing.T) {
 	})
 	tok := testutil.Token(t, 1, "admin", []string{"vorstand"})
 
-	// Gültige SEPA-Stammdaten setzen
+	const ct = "ZW52ZWxvcGU="
+	const dek = "d3JhcA=="
+
+	// SEPA-Envelope + Stammdaten setzen
 	body := map[string]any{
-		"name":          "Team Stuttgart",
-		"glaeubiger_id": "DE98ZZZ09999999999",
-		"iban":          "DE89370400440532013000",
-		"bic":           "GENODEF1S02",
-		"kontoinhaber":  "Team Stuttgart e.V.",
+		"name":            "Team Stuttgart",
+		"address":         "Musterweg 1",
+		"sepa_ciphertext": ct,
+		"sepa_dek_enc":    dek,
 	}
 	if res := testutil.Do(t, srv, http.MethodPut, "/api/club", tok, body); res.StatusCode != http.StatusNoContent {
 		t.Fatalf("PUT club: status %d", res.StatusCode)
 	}
 
-	// At-rest verschlüsselt: die DB-Spalten halten Ciphertext, nicht den Klartext.
-	var dbIBAN, dbBIC string
-	database.QueryRow(`SELECT iban, bic FROM clubs LIMIT 1`).Scan(&dbIBAN, &dbBIC)
-	if !crypto.IsEncryptedString(dbIBAN) || dbIBAN == "DE89370400440532013000" {
-		t.Errorf("clubs.iban nicht verschlüsselt: %q", dbIBAN)
-	}
-	if !crypto.IsEncryptedString(dbBIC) {
-		t.Errorf("clubs.bic nicht verschlüsselt: %q", dbBIC)
+	// DB hält den Envelope, kein Klartext.
+	var dbCt, dbDek string
+	database.QueryRow(`SELECT sepa_ciphertext, sepa_dek_enc FROM clubs LIMIT 1`).Scan(&dbCt, &dbDek)
+	if dbCt != ct || dbDek != dek {
+		t.Errorf("Envelope nicht gespeichert: ct=%q dek=%q", dbCt, dbDek)
 	}
 
-	// Zurücklesen
+	// Zurücklesen liefert den Envelope (nicht entschlüsselt)
 	res := testutil.Get(t, srv, "/api/club", tok)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("GET club: status %d", res.StatusCode)
 	}
 	var got map[string]any
 	json.NewDecoder(res.Body).Decode(&got)
-	if got["glaeubiger_id"] != "DE98ZZZ09999999999" {
-		t.Errorf("glaeubiger_id = %v", got["glaeubiger_id"])
+	if got["sepa_ciphertext"] != ct || got["sepa_dek_enc"] != dek {
+		t.Errorf("GET club Envelope falsch: %v / %v", got["sepa_ciphertext"], got["sepa_dek_enc"])
 	}
-	if got["iban"] != "DE89370400440532013000" {
-		t.Errorf("iban = %v", got["iban"])
-	}
-	if got["bic"] != "GENODEF1S02" {
-		t.Errorf("bic = %v", got["bic"])
-	}
-	if got["kontoinhaber"] != "Team Stuttgart e.V." {
-		t.Errorf("kontoinhaber = %v", got["kontoinhaber"])
+	if got["name"] != "Team Stuttgart" || got["address"] != "Musterweg 1" {
+		t.Errorf("Stammdaten falsch: %v / %v", got["name"], got["address"])
 	}
 
-	// Ungültige Gläubiger-ID → 400
-	bad := map[string]any{"name": "x", "glaeubiger_id": "INVALID"}
+	// Klartext-SEPA-Feld → 400
+	bad := map[string]any{"name": "x", "iban": "DE89370400440532013000"}
 	if res := testutil.Do(t, srv, http.MethodPut, "/api/club", tok, bad); res.StatusCode != http.StatusBadRequest {
-		t.Errorf("ungültige Gläubiger-ID: status %d, want 400", res.StatusCode)
+		t.Errorf("Klartext-IBAN: status %d, want 400", res.StatusCode)
 	}
-
-	// Ungültige IBAN → 400
-	bad2 := map[string]any{"name": "x", "iban": "DE88370400440532013000"}
+	bad2 := map[string]any{"name": "x", "glaeubiger_id": "DE98ZZZ09999999999"}
 	if res := testutil.Do(t, srv, http.MethodPut, "/api/club", tok, bad2); res.StatusCode != http.StatusBadRequest {
-		t.Errorf("ungültige IBAN: status %d, want 400", res.StatusCode)
+		t.Errorf("Klartext-Gläubiger-ID: status %d, want 400", res.StatusCode)
 	}
 }

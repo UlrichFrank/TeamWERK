@@ -5,18 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
 
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
-	"github.com/teamstuttgart/teamwerk/internal/sepa"
-)
-
-var (
-	glaeubigerIDRegex = regexp.MustCompile(`^DE\d{2}[A-Z0-9]{3}\d{11}$`)
-	bicRegex          = regexp.MustCompile(`^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$`)
 )
 
 type AgeClassRule struct {
@@ -74,24 +65,28 @@ func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, 
 func (h *Handler) GetClub(w http.ResponseWriter, r *http.Request) {
 	var id int
 	var name string
-	var logoURL, address, glaeubigerID, iban, bic, kontoinhaber sql.NullString
+	var logoURL, address, sepaCiphertext, sepaDekEnc sql.NullString
 	h.db.QueryRowContext(r.Context(),
-		`SELECT id, name, logo_url, address, glaeubiger_id, iban, bic, kontoinhaber FROM clubs LIMIT 1`).
-		Scan(&id, &name, &logoURL, &address, &glaeubigerID, &iban, &bic, &kontoinhaber)
+		`SELECT id, name, logo_url, address, sepa_ciphertext, sepa_dek_enc FROM clubs LIMIT 1`).
+		Scan(&id, &name, &logoURL, &address, &sepaCiphertext, &sepaDekEnc)
 	w.Header().Set("Content-Type", "application/json")
+	// Vereins-SEPA-Stammdaten als Zero-Knowledge-Envelope; der Server entschlüsselt nicht
+	// (Modell B). Validierung/Normalisierung der SEPA-Felder erfolgt clientseitig.
 	json.NewEncoder(w).Encode(map[string]any{
 		"id": id, "name": name, "logo_url": logoURL.String, "address": address.String,
-		"glaeubiger_id": decClubField(glaeubigerID), "iban": decClubField(iban),
-		"bic": decClubField(bic), "kontoinhaber": decClubField(kontoinhaber),
+		"sepa_ciphertext": sepaCiphertext.String, "sepa_dek_enc": sepaDekEnc.String,
 	})
 }
 
 // PUT /api/admin/club
 func (h *Handler) UpdateClub(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name         string `json:"name"`
-		LogoURL      string `json:"logo_url"`
-		Address      string `json:"address"`
+		Name           string  `json:"name"`
+		LogoURL        string  `json:"logo_url"`
+		Address        string  `json:"address"`
+		SepaCiphertext *string `json:"sepa_ciphertext"`
+		SepaDekEnc     *string `json:"sepa_dek_enc"`
+		// Legacy-Klartext-SEPA-Felder werden nicht mehr akzeptiert.
 		GlaeubigerID string `json:"glaeubiger_id"`
 		IBAN         string `json:"iban"`
 		BIC          string `json:"bic"`
@@ -99,68 +94,33 @@ func (h *Handler) UpdateClub(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
-	// Normalisieren + validieren (leere Werte sind erlaubt = noch nicht gepflegt).
-	req.IBAN = sepa.NormalizeIBAN(req.IBAN)
-	req.BIC = normalizeUpper(req.BIC)
-	req.GlaeubigerID = normalizeUpper(req.GlaeubigerID)
-	if req.GlaeubigerID != "" && !glaeubigerIDRegex.MatchString(req.GlaeubigerID) {
-		http.Error(w, "ungültige Gläubiger-ID", http.StatusBadRequest)
+	if req.GlaeubigerID != "" || req.IBAN != "" || req.BIC != "" || req.Kontoinhaber != "" {
+		http.Error(w, "Klartext-SEPA-Daten werden nicht akzeptiert (clientseitig verschlüsseln)", http.StatusBadRequest)
 		return
 	}
-	if req.IBAN != "" && !sepa.IsValidIBAN(req.IBAN) {
-		http.Error(w, "ungültige IBAN", http.StatusBadRequest)
-		return
-	}
-	if req.BIC != "" && !bicRegex.MatchString(req.BIC) {
-		http.Error(w, "ungültige BIC", http.StatusBadRequest)
+	if req.SepaCiphertext != nil && *req.SepaCiphertext != "" && (req.SepaDekEnc == nil || *req.SepaDekEnc == "") {
+		http.Error(w, "Envelope unvollständig: sepa_dek_enc fehlt", http.StatusBadRequest)
 		return
 	}
 
-	// SEPA-Stammdaten at-rest verschlüsseln (Validierung/Normalisierung lief oben
-	// auf dem Klartext).
-	encG, err1 := encClubField(req.GlaeubigerID)
-	encI, err2 := encClubField(req.IBAN)
-	encB, err3 := encClubField(req.BIC)
-	encK, err4 := encClubField(req.Kontoinhaber)
-	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-		return
-	}
-
+	// Name/Logo/Adresse (nicht geheim) immer aktualisieren.
 	h.db.ExecContext(r.Context(),
-		`UPDATE clubs SET name=?, logo_url=?, address=?, glaeubiger_id=?, iban=?, bic=?, kontoinhaber=?, updated_at=?
-		 WHERE id=(SELECT id FROM clubs LIMIT 1)`,
-		req.Name, req.LogoURL, req.Address,
-		encG, encI, encB, encK,
-		time.Now())
+		`UPDATE clubs SET name=?, logo_url=?, address=?, updated_at=? WHERE id=(SELECT id FROM clubs LIMIT 1)`,
+		req.Name, req.LogoURL, req.Address, time.Now())
+
+	// SEPA-Envelope: nil = unverändert, "" = löschen, gesetzt = speichern.
+	if req.SepaCiphertext != nil {
+		if *req.SepaCiphertext == "" {
+			h.db.ExecContext(r.Context(),
+				`UPDATE clubs SET sepa_ciphertext=NULL, sepa_dek_enc=NULL WHERE id=(SELECT id FROM clubs LIMIT 1)`)
+		} else {
+			h.db.ExecContext(r.Context(),
+				`UPDATE clubs SET sepa_ciphertext=?, sepa_dek_enc=? WHERE id=(SELECT id FROM clubs LIMIT 1)`,
+				*req.SepaCiphertext, *req.SepaDekEnc)
+		}
+	}
 	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func normalizeUpper(s string) string {
-	return strings.ToUpper(strings.Join(strings.Fields(s), ""))
-}
-
-// encClubField verschlüsselt ein nicht-leeres Vereins-SEPA-Feld at-rest; leere
-// Werte werden zu NULL.
-func encClubField(s string) (any, error) {
-	if s == "" {
-		return nil, nil
-	}
-	return crypto.Encrypt(s)
-}
-
-// decClubField entschlüsselt ein Vereins-SEPA-Feld; nicht entschlüsselbare Werte
-// ergeben "" (kein Klartext-Leak). Werte ohne "v1:"-Prefix sind Passthrough.
-func decClubField(ns sql.NullString) string {
-	if !ns.Valid {
-		return ""
-	}
-	pt, err := crypto.Decrypt(ns.String)
-	if err != nil {
-		return ""
-	}
-	return pt
 }
 
 // GET /api/admin/seasons

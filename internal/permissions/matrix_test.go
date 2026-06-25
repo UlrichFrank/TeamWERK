@@ -404,7 +404,7 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/fee-rates", expected: exVorstandKassierer},
 	{method: "POST", path: "/api/fee-rates", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/fee-run/preview", expected: exVorstandKassierer},
-	{method: "POST", path: "/api/fee-run/export", expected: exVorstandKassierer},
+	{method: "POST", path: "/api/fee-run/export-data", expected: exVorstandKassierer},
 	{method: "POST", path: "/api/fee-run/confirm", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/fee-run/protocol", expected: exVorstandKassierer},
 

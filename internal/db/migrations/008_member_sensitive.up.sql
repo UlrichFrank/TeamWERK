@@ -15,3 +15,8 @@ ALTER TABLE clubs ADD COLUMN group_public_key TEXT;       -- SPKI base64 (öffen
 ALTER TABLE clubs ADD COLUMN group_private_key_enc TEXT;  -- base64(IV ‖ AES-GCM(PKCS8, KEK))
 ALTER TABLE clubs ADD COLUMN vorstand_kdf_salt TEXT;      -- base64, PBKDF2-Salt
 ALTER TABLE clubs ADD COLUMN vorstand_key_check TEXT;     -- base64(IV ‖ AES-GCM("ok", KEK))
+
+-- Vereins-SEPA-Stammdaten als clientseitiger Envelope (glaeubiger_id/iban/bic/kontoinhaber
+-- in einem JSON-Blob, an den Gruppen-Public-Key verschlüsselt). Ersetzt die alten v1-Felder.
+ALTER TABLE clubs ADD COLUMN sepa_ciphertext TEXT;        -- base64(IV ‖ AES-GCM(JSON, DEK))
+ALTER TABLE clubs ADD COLUMN sepa_dek_enc TEXT;           -- RSA-OAEP(DEK, group_public_key)
