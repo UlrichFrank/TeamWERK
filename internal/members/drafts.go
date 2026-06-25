@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
-
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 )
 
 type ChangeRequest struct {
@@ -61,38 +59,10 @@ func redactBankDrafts(drafts []ChangeDraft, reveal bool) {
 			drafts[i].OldValue = json.RawMessage("null")
 			continue
 		}
-		drafts[i].NewValue = decryptWholeBankValue(drafts[i].NewValue)
-		drafts[i].OldValue = decryptBankObjectFields(drafts[i].OldValue)
+		// Modell B: new_value ist ein clientseitig erzeugter Envelope (opak). Der Server
+		// entschlüsselt nicht — er reicht ihn durch; das Frontend entschlüsselt mit dem
+		// Tresor-Schlüssel. old_value ist null (Vorschlagender kennt den Altwert nicht).
 	}
-}
-
-// decryptWholeBankValue entschlüsselt einen als ganzen String verschlüsselten
-// new_value zurück zum ursprünglichen JSON. Schlägt das fehl, wird null geliefert.
-func decryptWholeBankValue(raw json.RawMessage) json.RawMessage {
-	pt, err := crypto.Decrypt(string(raw))
-	if err != nil || !json.Valid([]byte(pt)) {
-		return json.RawMessage("null")
-	}
-	return json.RawMessage(pt)
-}
-
-// decryptBankObjectFields entschlüsselt die String-Werte eines JSON-Objekts
-// (old_value von bankdaten). Werte ohne "v1:"-Prefix bleiben unverändert.
-func decryptBankObjectFields(raw json.RawMessage) json.RawMessage {
-	var obj map[string]string
-	if err := json.Unmarshal(raw, &obj); err != nil {
-		return raw
-	}
-	for k, v := range obj {
-		if pt, err := crypto.Decrypt(v); err == nil {
-			obj[k] = pt
-		}
-	}
-	out, err := json.Marshal(obj)
-	if err != nil {
-		return raw
-	}
-	return out
 }
 
 // getMember retrieves a member by ID from the database
@@ -197,16 +167,13 @@ func (h *Handler) CreateOrUpdateDraft(memberID, userID int, req ChangeRequest) (
 		return nil, err
 	}
 
-	// Bankdaten-Entwürfe werden at-rest verschlüsselt abgelegt (ganzer new_value
-	// als ein "v1:"-String). old_value enthält die — nach Migration ebenfalls
-	// verschlüsselten — Bestandswerte des Mitglieds, daher kein Klartext-Leak.
+	// Modell B: Bankdaten-Entwürfe kommen bereits als clientseitig erzeugter Envelope
+	// ({bank_ciphertext, bank_dek_enc}) — der Server verschlüsselt nichts und speichert
+	// new_value unverändert. old_value wird auf null gesetzt (der Vorschlagende kennt den
+	// Altwert nicht; der Server kann ihn nicht entschlüsseln).
 	newValue := req.NewValue
 	if req.FieldName == "bankdaten" {
-		enc, encErr := crypto.Encrypt(string(req.NewValue))
-		if encErr != nil {
-			return nil, encErr
-		}
-		newValue = json.RawMessage(enc)
+		oldValue = json.RawMessage("null")
 	}
 
 	// UPSERT: Create or replace draft for this field
@@ -443,30 +410,22 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 		return err
 
 	case "bankdaten":
-		// new_value liegt als ganzer "v1:"-String verschlüsselt vor (siehe
-		// CreateOrUpdateDraft) — erst entschlüsseln, dann das JSON parsen.
-		plain, err := crypto.Decrypt(string(newValue))
-		if err != nil {
+		// Modell B: new_value ist der clientseitige Envelope {bank_ciphertext, bank_dek_enc};
+		// beim Annehmen unverändert in member_sensitive übernehmen (kein Server-Crypto).
+		var env struct {
+			BankCiphertext string `json:"bank_ciphertext"`
+			BankDekEnc     string `json:"bank_dek_enc"`
+		}
+		if err := json.Unmarshal(newValue, &env); err != nil {
 			return err
 		}
-		var data struct {
-			IBAN          string `json:"iban"`
-			AccountHolder string `json:"account_holder"`
+		if env.BankCiphertext == "" || env.BankDekEnc == "" {
+			return nil
 		}
-		if err := json.Unmarshal([]byte(plain), &data); err != nil {
-			return err
-		}
-		encIBAN, err := encBankField(data.IBAN)
-		if err != nil {
-			return err
-		}
-		encHolder, err := encBankField(data.AccountHolder)
-		if err != nil {
-			return err
-		}
-		_, err = h.db.Exec(
-			`UPDATE members SET iban=?, account_holder=? WHERE id=?`,
-			encIBAN, encHolder, memberID)
+		_, err := h.db.Exec(
+			`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand) VALUES (?, ?, ?)
+			 ON CONFLICT(member_id) DO UPDATE SET ciphertext=excluded.ciphertext, dek_enc_vorstand=excluded.dek_enc_vorstand`,
+			memberID, env.BankCiphertext, env.BankDekEnc)
 		return err
 
 	default:

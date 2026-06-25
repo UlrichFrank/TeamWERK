@@ -40,8 +40,11 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
   vorstand/kassierer/admin (kein Server-Decrypt). Profil/Kind-Profil liefern G2-konform
   KEINE Bankdaten mehr (`clearMemberBank`). Tests: Envelope-Speicherung, Klartext-400,
   Trainer-403, Eigentümer/Eltern lesen nichts. Permission-Matrix ergänzt.
-- [ ] 3.2 `internal/members/drafts.go`: `member_change_drafts(field_name='bankdaten')` als
-  Group-Blob (kein Server-Decrypt). Tests Happy/Fehlerfall.
+- [x] 3.2 `internal/members/drafts.go` (Backend): `bankdaten`-Draft trägt den clientseitigen
+  Envelope; Server ver-/entschlüsselt nicht mehr (kein crypto.Encrypt/Decrypt), `old_value`
+  = null, Reveal reicht den Envelope durch, Annehmen schreibt nach `member_sensitive`. Test:
+  Draft→Accept→member_sensitive. **Offen (Browser):** ProfileBankTab/MemberKontaktTab
+  (Envelope erzeugen/anzeigen).
 - [ ] 3.3 `internal/config` (Vereins-SEPA-Stammdaten): `clubs.iban/bic/glaeubiger_id/
   kontoinhaber` als **ein** Group-Blob speichern/ausliefern (kein Server-Decrypt). Tests.
 - [ ] 3.4 `internal/upload`: SEPA-Mandat-PDF als clientseitig verschlüsselter Blob
