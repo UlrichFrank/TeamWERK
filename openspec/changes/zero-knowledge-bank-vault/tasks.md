@@ -45,8 +45,11 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
   = null, Reveal reicht den Envelope durch, Annehmen schreibt nach `member_sensitive`. Test:
   Draft→Accept→member_sensitive. **Offen (Browser):** ProfileBankTab/MemberKontaktTab
   (Envelope erzeugen/anzeigen).
-- [ ] 3.3 `internal/config` (Vereins-SEPA-Stammdaten): `clubs.iban/bic/glaeubiger_id/
-  kontoinhaber` als **ein** Group-Blob speichern/ausliefern (kein Server-Decrypt). Tests.
+- [x] 3.3 (Backend) `internal/config`: Vereins-SEPA als **ein** Envelope
+  (`clubs.sepa_ciphertext/sepa_dek_enc`); UpdateClub/GetClub speichern/liefern den Envelope,
+  lehnen Klartext-SEPA mit 400 ab; kein Server-Decrypt (encClubField/decClubField + Regex-
+  Validierung entfernt → clientseitig). Test umgestellt. **Offen (Browser):** VereinTab
+  ver-/entschlüsselt SEPA.
 - [ ] 3.4 `internal/upload`: SEPA-Mandat-PDF als clientseitig verschlüsselter Blob
   hochladen/ausliefern (keine Server-`DecryptBytes`). Tests.
 - [~] 3.5 Frontend Bankdaten-Eingabe — **MemberDetailPage erledigt** (`bankCrypto.ts`:
@@ -57,18 +60,19 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 
 ## 4. Fee-Run clientseitig
 
-- [ ] 4.1 `sepa/iban.go`-Logik nach TS portieren (`web/src/lib/iban.ts`) inkl. mod97;
-  Tests mit denselben Vektoren wie Go.
-- [ ] 4.2 Clientseitiger `pain.008.001.08`-Builder in TS; Goldfile-Test gegen die heutige
-  Go-XML-Ausgabe (fachliche Parität: ein PmtInf, RCUR, ReqdColltnDt, Verwendungszweck).
-- [ ] 4.3 Backend `POST /api/fee-run/export-data` (Ciphertext + Group-Wraps + Beträge +
-  Verwendungszweck-Bausteine; **keine** Klartext-IBAN). Alter `POST /export` (Server-XML)
-  entfällt. Tests: 200 (nur Ciphertext), 403.
-- [ ] 4.4 Frontend Fee-Run-Seite: Blobs entschlüsseln, IBANs validieren, `iban_fehlt`/
-  `iban_ungueltig` clientseitig ergänzen, XML lokal zum Download. `confirm`/`protocol`
-  bleiben unverändert (keine IBANs).
-- [ ] 4.5 `internal/beitragslauf` server-seitigen XML-Builder + IBAN-Decrypt entfernen;
-  `preview` liefert weiterhin Nicht-IBAN-Ausschlüsse.
+- [x] 4.1 IBAN-Logik nach TS portiert (`web/src/lib/sepa.ts`: normalizeIBAN/isValidIBAN, mod97);
+  Test spiegelt die Go-Vektoren (`sepa.test.ts`).
+- [x] 4.2 Clientseitiger `pain.008.001.08`-Builder (`web/src/lib/sepaXml.ts`); Ausgabe
+  **byte-identisch** zur Go-Implementierung verifiziert (diff gegen sampleInput); Tests in
+  `sepaXml.test.ts` (ein PmtInf, RCUR, ReqdColltnDt, Verwendungszweck, IBANs).
+- [x] 4.3 Backend `POST /api/fee-run/export-data` (nur Ciphertext + Wraps + nicht-geheime
+  Felder; **keine** Klartext-IBAN). Alter `POST /export` entfernt. Tests: 200 (nur Envelope),
+  400 (ohne Vereins-SEPA).
+- [ ] 4.4 Frontend Fee-Run-Seite (`BeitragslaufPage`): export-data laden, Envelopes mit Tresor
+  entschlüsseln, IBANs clientseitig validieren (`iban_ungueltig` ergänzen), `buildPainXML`
+  → lokaler Download. `confirm`/`protocol` unverändert. **Browser-Verifikation nötig.**
+- [x] 4.5 `internal/beitragslauf` Server-XML-Builder (`xml.go`) + IBAN-/Club-Decrypt entfernt;
+  `preview` liefert weiterhin Nicht-IBAN-Ausschlüsse (+ `iban_fehlt` bei fehlendem Envelope).
 
 ## 5. Serverseitigen Decrypt abbauen
 
