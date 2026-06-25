@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"embed"
 	"encoding/base64"
@@ -114,6 +115,10 @@ func main() {
 	}
 	if len(os.Args) > 1 && (os.Args[1] == "encrypt-pii" || os.Args[1] == "decrypt-pii") {
 		runPIIMigration(os.Args[1] == "decrypt-pii")
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate-legacy-status" {
+		runMigrateLegacyStatus()
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "push-test" {
@@ -436,6 +441,33 @@ func runMigrate() {
 		fatal("migrate failed", "error", err)
 	}
 	slog.Info("migrations applied")
+}
+
+// runMigrateLegacyStatus prüft den verbleibenden v1:-Altbestand und ist das auth-freie
+// Done-Gate für `make zk-finalize-remote`: Exit 0 nur, wenn KEIN Altbestand mehr existiert
+// (Migration vollständig); sonst Exit 1. Schreibt die Zählung nach stderr.
+func runMigrateLegacyStatus() {
+	_ = godotenv.Load()
+	dbPath := getEnvOrDefault("DB_PATH", "./teamwerk.db")
+	for i, arg := range os.Args {
+		if arg == "--db" && i+1 < len(os.Args) {
+			dbPath = os.Args[i+1]
+		}
+	}
+	database, err := db.Open(dbPath)
+	if err != nil {
+		fatal("migrate-legacy-status: open db failed", "error", err)
+	}
+	defer database.Close()
+	p, err := migration.Pending(context.Background(), database)
+	if err != nil {
+		fatal("migrate-legacy-status: query failed", "error", err)
+	}
+	fmt.Fprintf(os.Stderr, "Altbestand: members=%d club=%t mandates=%d drafts=%d → complete=%t\n",
+		p.Members, p.Club, p.Mandates, p.Drafts, p.Complete())
+	if !p.Complete() {
+		os.Exit(1)
+	}
 }
 
 func getEnvOrDefault(key, fallback string) string {

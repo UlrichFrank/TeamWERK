@@ -147,7 +147,7 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
   Wrap an Group-Public-Key; Mandate via `encryptFile`) → Batch-`upload`; **Fortschrittsanzeige**;
   idempotent (Re-Run lädt nur den Rest); Auto-Fertig bei `status.complete`. tsc/lint grün,
   Browser-Verifikation offen (wie übrige ZK-Flows).
-- [ ] 6.4 **Ops-Automation** `make zk-finalize-remote`: ruft `…/migrate-legacy/status` und
+- [x] 6.4 **Ops-Automation** `make zk-finalize-remote`: ruft `…/migrate-legacy/status` und
   **bricht ab, wenn nicht `complete`**; entfernt dann die `FIELD_ENCRYPTION_KEY`-Zeile aus
   `/etc/teamwerk/env` und `systemctl restart teamwerk` (Muster wie bestehende `*-remote`-
   Targets). **DB-Backup als Vorbedingung** (irreversibel ab dem Spalten-Nullen in 6.2).

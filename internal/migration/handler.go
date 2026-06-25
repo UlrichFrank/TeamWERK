@@ -13,6 +13,7 @@
 package migration
 
 import (
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -41,6 +42,51 @@ func NewHandler(db *sql.DB, h *hub.EventHub, uploadDir string) *Handler {
 
 // ---- GET /api/admin/migrate-legacy/status ----
 
+// PendingReport zählt den verbleibenden Altbestand je Legacy-Speicher. `Complete` ist genau
+// dann true, wenn in keinem der vier Speicher (Member-Bank, Vereins-SEPA, Mandat-PDFs,
+// Bankdaten-Drafts) noch `v1:`-/Klartext-Altbestand existiert.
+type PendingReport struct {
+	Members  int  `json:"pending_members"`
+	Club     bool `json:"pending_club"`
+	Mandates int  `json:"pending_mandates"`
+	Drafts   int  `json:"pending_drafts"`
+}
+
+// Complete meldet, ob kein Altbestand mehr existiert.
+func (p PendingReport) Complete() bool {
+	return p.Members == 0 && !p.Club && p.Mandates == 0 && p.Drafts == 0
+}
+
+// Pending erhebt den verbleibenden Altbestand rein über SQL (keine Dateizugriffe, keine
+// Brücke nötig). Wird vom Status-Endpoint UND vom `migrate-legacy-status`-Subcommand
+// (Ops-Gate in `make zk-finalize-remote`) genutzt.
+func Pending(ctx context.Context, db *sql.DB) (PendingReport, error) {
+	var p PendingReport
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM members WHERE iban IS NOT NULL OR account_holder IS NOT NULL`).
+		Scan(&p.Members); err != nil {
+		return p, err
+	}
+	var g, i, b, k sql.NullString
+	if err := db.QueryRowContext(ctx, `SELECT glaeubiger_id, iban, bic, kontoinhaber FROM clubs LIMIT 1`).
+		Scan(&g, &i, &b, &k); err != nil && err != sql.ErrNoRows {
+		return p, err
+	}
+	p.Club = g.String != "" || i.String != "" || b.String != "" || k.String != ""
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM members WHERE sepa_mandat_path IS NOT NULL AND sepa_mandat_path <> ''
+		 AND (sepa_mandat_dek_enc IS NULL OR sepa_mandat_dek_enc = '')`).
+		Scan(&p.Mandates); err != nil {
+		return p, err
+	}
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM member_change_drafts WHERE field_name='bankdaten' AND new_value LIKE 'v1:%'`).
+		Scan(&p.Drafts); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
 type statusResp struct {
 	BridgeAvailable bool `json:"bridge_available"`
 	PendingMembers  int  `json:"pending_members"`
@@ -50,37 +96,22 @@ type statusResp struct {
 	Complete        bool `json:"complete"`
 }
 
-// Status meldet den Migrationsfortschritt. `complete` ist genau dann true, wenn in keinem der
-// vier Legacy-Speicher (Member-Bank, Vereins-SEPA, Mandat-PDFs, Bankdaten-Drafts) noch
-// Altbestand existiert. `bridge_available` spiegelt, ob der Server überhaupt noch
-// entschlüsseln kann (FIELD_ENCRYPTION_KEY gesetzt).
+// Status meldet den Migrationsfortschritt. `bridge_available` spiegelt, ob der Server
+// überhaupt noch entschlüsseln kann (FIELD_ENCRYPTION_KEY gesetzt).
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	var resp statusResp
-	resp.BridgeAvailable = crypto.HasKey()
-
-	h.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM members WHERE iban IS NOT NULL OR account_holder IS NOT NULL`).
-		Scan(&resp.PendingMembers)
-
-	var g, i, b, k sql.NullString
-	h.db.QueryRowContext(ctx, `SELECT glaeubiger_id, iban, bic, kontoinhaber FROM clubs LIMIT 1`).
-		Scan(&g, &i, &b, &k)
-	resp.PendingClub = g.String != "" || i.String != "" || b.String != "" || k.String != ""
-
-	h.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM members WHERE sepa_mandat_path IS NOT NULL AND sepa_mandat_path <> ''
-		 AND (sepa_mandat_dek_enc IS NULL OR sepa_mandat_dek_enc = '')`).
-		Scan(&resp.PendingMandates)
-
-	h.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM member_change_drafts WHERE field_name='bankdaten' AND new_value LIKE 'v1:%'`).
-		Scan(&resp.PendingDrafts)
-
-	resp.Complete = resp.PendingMembers == 0 && !resp.PendingClub &&
-		resp.PendingMandates == 0 && resp.PendingDrafts == 0
-
-	writeJSON(w, resp)
+	p, err := Pending(r.Context(), h.db)
+	if err != nil {
+		http.Error(w, "DB-Fehler", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, statusResp{
+		BridgeAvailable: crypto.HasKey(),
+		PendingMembers:  p.Members,
+		PendingClub:     p.Club,
+		PendingMandates: p.Mandates,
+		PendingDrafts:   p.Drafts,
+		Complete:        p.Complete(),
+	})
 }
 
 // ---- GET /api/admin/migrate-legacy/data ----
