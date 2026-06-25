@@ -18,7 +18,6 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
-	"github.com/teamstuttgart/teamwerk/internal/sepa"
 )
 
 type Handler struct {
@@ -44,15 +43,19 @@ type Member struct {
 	ClubFunctions []string `json:"club_functions"`
 
 	// Extended fields (populated by GetMember)
-	Street           *string `json:"street,omitempty"`
-	Zip              *string `json:"zip,omitempty"`
-	City             *string `json:"city,omitempty"`
-	HomeClub         *string `json:"home_club,omitempty"`
-	HomeClubID       *int    `json:"home_club_id,omitempty"`
-	HomeClubName     *string `json:"home_club_name,omitempty"`
-	JoinDate         *string `json:"join_date,omitempty"`
-	IBAN             *string `json:"iban,omitempty"`
-	AccountHolder    *string `json:"account_holder,omitempty"`
+	Street        *string `json:"street,omitempty"`
+	Zip           *string `json:"zip,omitempty"`
+	City          *string `json:"city,omitempty"`
+	HomeClub      *string `json:"home_club,omitempty"`
+	HomeClubID    *int    `json:"home_club_id,omitempty"`
+	HomeClubName  *string `json:"home_club_name,omitempty"`
+	JoinDate      *string `json:"join_date,omitempty"`
+	IBAN          *string `json:"iban,omitempty"`
+	AccountHolder *string `json:"account_holder,omitempty"`
+	// Zero-Knowledge-Envelope (Modell B): clientseitig verschlüsselte Bankdaten. Nur an
+	// vorstand/kassierer/admin ausgeliefert; entschlüsselt wird ausschließlich im Browser.
+	BankCiphertext   *string `json:"bank_ciphertext,omitempty"`
+	BankDekEnc       *string `json:"bank_dek_enc,omitempty"`
 	PhotoURL         *string `json:"photo_url,omitempty"`
 	PhotoVisible     bool    `json:"photo_visible,omitempty"`
 	PhonesVisible    bool    `json:"phones_visible,omitempty"`
@@ -570,15 +573,17 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		base.WelcomeEmailSentAt = &welcomeEmailSentAt.String
 	}
 
-	// IBAN, account holder: nur an Berechtigte (admin/vorstand/kassierer/
-	// Eigentümer/Eltern) und at-rest entschlüsselt (zentrale Regel D5).
-	pBank := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
-	if policy.CanDecryptBankData(h.db, pBank, base.ID) {
-		if v := decBankField(iban); v != nil {
-			base.IBAN = v
-		}
-		if v := decBankField(accountHolder); v != nil {
-			base.AccountHolder = v
+	// Bankdaten: Zero-Knowledge-Envelope (Modell B). Der Server entschlüsselt nicht; er
+	// liefert Ciphertext + gewrappten DEK nur an die Finance-Gruppe (admin/vorstand/
+	// kassierer) aus, die ihn clientseitig mit dem Tresor-Schlüssel entschlüsselt.
+	if isAdmin || claims.HasFunction("vorstand") || claims.HasFunction("kassierer") {
+		var ct, dekEnc sql.NullString
+		h.db.QueryRowContext(r.Context(),
+			`SELECT ciphertext, dek_enc_vorstand FROM member_sensitive WHERE member_id=?`, base.ID).
+			Scan(&ct, &dekEnc)
+		if ct.Valid && ct.String != "" {
+			base.BankCiphertext = &ct.String
+			base.BankDekEnc = &dekEnc.String
 		}
 	}
 	// SEPA document URL: admin, own member, parent, vorstand
@@ -815,10 +820,15 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
+		// Zero-Knowledge-Envelope (Modell B): clientseitig verschlüsselte Bankdaten.
+		// nil = unverändert; "" = löschen; gesetzt = speichern.
+		BankCiphertext *string `json:"bank_ciphertext"`
+		BankDekEnc     *string `json:"bank_dek_enc"`
+		// Legacy-Klartextfelder werden NICHT mehr akzeptiert (Server sieht keine IBAN).
 		IBAN              string  `json:"iban"`
+		AccountHolder     string  `json:"account_holder"`
 		SepaMandat        bool    `json:"sepa_mandat"`
 		SepaMandatDate    string  `json:"sepa_mandat_date"`
-		AccountHolder     string  `json:"account_holder"`
 		Street            string  `json:"street"`
 		Zip               string  `json:"zip"`
 		City              string  `json:"city"`
@@ -829,32 +839,24 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ungültiger Body", http.StatusBadRequest)
 		return
 	}
-	req.IBAN = sepa.NormalizeIBAN(req.IBAN)
-	if req.IBAN != "" && !sepa.IsValidIBAN(req.IBAN) {
-		http.Error(w, "ungültige IBAN", http.StatusBadRequest)
+	// Klartext-Bankdaten ablehnen — IBAN/Kontoinhaber müssen clientseitig verschlüsselt
+	// als Envelope kommen (Zero-Knowledge).
+	if req.IBAN != "" || req.AccountHolder != "" {
+		http.Error(w, "Klartext-Bankdaten werden nicht akzeptiert (clientseitig verschlüsseln)", http.StatusBadRequest)
+		return
+	}
+	if req.BankCiphertext != nil && *req.BankCiphertext != "" && (req.BankDekEnc == nil || *req.BankDekEnc == "") {
+		http.Error(w, "Envelope unvollständig: dek_enc fehlt", http.StatusBadRequest)
 		return
 	}
 	mandat := 0
 	if req.SepaMandat {
 		mandat = 1
 	}
-	// IBAN + Kontoinhaber werden at-rest verschlüsselt gespeichert (Validierung
-	// lief oben auf dem Klartext).
-	encIBAN, err := encBankField(req.IBAN)
-	if err != nil {
-		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-		return
-	}
-	encHolder, err := encBankField(req.AccountHolder)
-	if err != nil {
-		http.Error(w, "Verschlüsselungsfehler", http.StatusInternalServerError)
-		return
-	}
-	// Beitragsfrei + Grund sind nur dann Teil des Updates, wenn beitragsfrei
-	// explizit mitgesendet wurde. Wenn beitragsfrei=false, MUSS der Grund auf
-	// NULL gehen (Kopplungs-Invariante, siehe Spec members::beitragsfrei_grund).
+	// Nicht-geheime Felder (SEPA-Flag/Datum, Adresse, beitragsfrei) bleiben im Klartext
+	// in members. Beitragsfrei + Grund nur bei explizitem Mitsenden (Kopplungs-Invariante).
 	extra := ""
-	args := []any{encIBAN, mandat, nullStr(req.SepaMandatDate), encHolder,
+	args := []any{mandat, nullStr(req.SepaMandatDate),
 		nullStr(req.Street), nullStr(req.Zip), nullStr(req.City), time.Now()}
 	if req.Beitragsfrei != nil {
 		extra = ", beitragsfrei=?, beitragsfrei_grund=?"
@@ -866,7 +868,7 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	}
 	args = append(args, id)
 	res, err := h.db.ExecContext(r.Context(),
-		`UPDATE members SET iban=?, sepa_mandat=?, sepa_mandat_date=?, account_holder=?, street=?, zip=?, city=?, updated_at=?`+extra+`
+		`UPDATE members SET sepa_mandat=?, sepa_mandat_date=?, street=?, zip=?, city=?, updated_at=?`+extra+`
 		 WHERE id=?`,
 		args...)
 	if err != nil {
@@ -876,6 +878,20 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 	if n, _ := res.RowsAffected(); n == 0 {
 		http.Error(w, "Mitglied nicht gefunden", http.StatusNotFound)
 		return
+	}
+	// Bankdaten-Envelope: nil = unverändert, "" = löschen, gesetzt = upsert.
+	if req.BankCiphertext != nil {
+		if *req.BankCiphertext == "" {
+			h.db.ExecContext(r.Context(), `DELETE FROM member_sensitive WHERE member_id=?`, id)
+		} else {
+			if _, err := h.db.ExecContext(r.Context(),
+				`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand) VALUES (?, ?, ?)
+				 ON CONFLICT(member_id) DO UPDATE SET ciphertext=excluded.ciphertext, dek_enc_vorstand=excluded.dek_enc_vorstand`,
+				id, *req.BankCiphertext, *req.BankDekEnc); err != nil {
+				http.Error(w, "DB-Fehler", http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 	h.hub.Broadcast("members")
 	w.WriteHeader(http.StatusNoContent)
@@ -1106,7 +1122,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		m, merr := h.getMember(ownMemberID)
 		if merr == nil {
-			decryptMemberBank(m) // Eigentümer darf eigene Bankdaten lesen
+			clearMemberBank(m) // Modell B/G2: Eigentümer liest eigene Bankdaten NICHT
 			resp.OwnMember = m
 		}
 	}
@@ -2323,7 +2339,7 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	decryptMemberBank(m) // Elternteil darf Bankdaten des Kindes lesen (isParentOf oben geprüft)
+	clearMemberBank(m) // Modell B/G2: Elternteil liest Kind-Bankdaten NICHT
 
 	type parentEntry struct {
 		ID    int    `json:"id"`

@@ -34,10 +34,12 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
 
 ## 3. Bankdaten-Schreib-/Lesepfade auf Envelope umstellen
 
-- [ ] 3.1 `internal/members` (`bank_crypto.go`, `handler.go`): `PUT /members/{id}/bank-details`
-  nimmt Ciphertext + `dek_enc_vorstand` entgegen, lehnt Klartext/fehlenden Wrap mit 400 ab;
-  Lesepfade liefern nur Blob + Wrap. Server-`crypto.Decrypt`-Aufrufe entfernen. Tests:
-  200 (Envelope), 400 (Klartext), 403 (unberechtigt).
+- [x] 3.1 `internal/members`: `PUT /members/{id}/bank-details` nimmt Envelope
+  (`bank_ciphertext` + `bank_dek_enc`) → `member_sensitive` (Upsert/Delete), lehnt
+  Klartext-IBAN mit 400 ab; `GET /members/{id}` liefert den Envelope nur an
+  vorstand/kassierer/admin (kein Server-Decrypt). Profil/Kind-Profil liefern G2-konform
+  KEINE Bankdaten mehr (`clearMemberBank`). Tests: Envelope-Speicherung, Klartext-400,
+  Trainer-403, Eigentümer/Eltern lesen nichts. Permission-Matrix ergänzt.
 - [ ] 3.2 `internal/members/drafts.go`: `member_change_drafts(field_name='bankdaten')` als
   Group-Blob (kein Server-Decrypt). Tests Happy/Fehlerfall.
 - [ ] 3.3 `internal/config` (Vereins-SEPA-Stammdaten): `clubs.iban/bic/glaeubiger_id/

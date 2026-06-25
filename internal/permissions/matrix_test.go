@@ -160,6 +160,7 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/files/{id}/download", expected: exPublic},
 	// sepa-mandat/download ist öffentlich, nutzt aber Query-Token-Check → httpAnyOK
 	{method: "GET", path: "/api/members/{id}/sepa-mandat/download", expected: exPublic},
+	{method: "GET", path: "/api/encryption-pubkey", expected: exPublic},
 	{method: "POST", path: "/api/auth/login", expected: exPublic},
 	// refresh nutzt Cookie-Auth, kein Bearer → 401 ohne Cookie ist korrekt → exPublic
 	{method: "POST", path: "/api/auth/refresh", expected: exPublic},
@@ -397,6 +398,9 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/members/{id}/bank-details", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/club", expected: exVorstandKassierer},
 	{method: "PUT", path: "/api/club", expected: exVorstandKassierer},
+	{method: "GET", path: "/api/admin/encryption-config", expected: exVorstandKassierer},
+	{method: "PUT", path: "/api/admin/encryption-config", expected: exVorstandKassierer},
+	{method: "PUT", path: "/api/admin/rotate-encryption", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/fee-rates", expected: exVorstandKassierer},
 	{method: "POST", path: "/api/fee-rates", expected: exVorstandKassierer},
 	{method: "GET", path: "/api/fee-run/preview", expected: exVorstandKassierer},
