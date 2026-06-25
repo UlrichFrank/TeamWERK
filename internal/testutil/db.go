@@ -9,22 +9,10 @@ import (
 	// Importiert das db-Package, damit init() den Wrapping-Driver
 	// "sqlite-busy-counting" registriert. Tests gehen so durch denselben Pfad
 	// wie Produktion, inklusive teamwerk_sqlite_busy_total-Counter.
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 )
 
 var dbCounter atomic.Uint64
-
-// init setzt einen deterministischen Test-Schlüssel für die At-Rest-
-// Verschlüsselung, damit Encrypt/Decrypt in allen Tests funktioniert, die über
-// testutil einen Server/DB aufbauen. Crypto-Unit-Tests setzen ihren eigenen Key.
-func init() {
-	key := make([]byte, crypto.KeySize)
-	for i := range key {
-		key[i] = byte(i)
-	}
-	_ = crypto.Init(key)
-}
 
 // NewDB opens a fresh in-memory SQLite database with all migrations applied.
 // Each test gets its own named shared-cache database so that multiple goroutines

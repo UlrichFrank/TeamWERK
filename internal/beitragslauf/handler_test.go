@@ -17,19 +17,18 @@ import (
 const validIBAN = "DE89370400440532013000"
 
 type memberSpec struct {
-	status        string
-	memberNumber  string
-	iban          string
-	sepaMandat    int
-	mandatPath    string
-	mandatDate    string
-	street        string
-	zip           string
-	city          string
-	homeClub      string
-	homeClubID    *int
-	beitragsfrei  int
-	accountHolder string
+	status       string
+	memberNumber string
+	iban         string
+	sepaMandat   int
+	mandatPath   string
+	mandatDate   string
+	street       string
+	zip          string
+	city         string
+	homeClub     string
+	homeClubID   *int
+	beitragsfrei int
 }
 
 func defaultMember() memberSpec {
@@ -43,11 +42,11 @@ func defaultMember() memberSpec {
 func insertMember(t *testing.T, db *sql.DB, first string, m memberSpec) int {
 	t.Helper()
 	res, err := db.Exec(`INSERT INTO members
-		(first_name, last_name, status, member_number, iban, sepa_mandat, sepa_mandat_path,
-		 sepa_mandat_date, street, zip, city, home_club, home_club_id, beitragsfrei, account_holder)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		first, "Test", m.status, m.memberNumber, m.iban, m.sepaMandat, m.mandatPath,
-		m.mandatDate, m.street, m.zip, m.city, m.homeClub, m.homeClubID, m.beitragsfrei, m.accountHolder)
+		(first_name, last_name, status, member_number, sepa_mandat, sepa_mandat_path,
+		 sepa_mandat_date, street, zip, city, home_club, home_club_id, beitragsfrei)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		first, "Test", m.status, m.memberNumber, m.sepaMandat, m.mandatPath,
+		m.mandatDate, m.street, m.zip, m.city, m.homeClub, m.homeClubID, m.beitragsfrei)
 	if err != nil {
 		t.Fatalf("insertMember: %v", err)
 	}

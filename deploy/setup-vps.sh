@@ -26,9 +26,8 @@ if [ ! -f /etc/teamwerk/env ]; then
     mkdir -p /etc/teamwerk
     JWT_SECRET=$(openssl rand -hex 32)
     METRICS_TOKEN=$(openssl rand -hex 32)
-    # 32-Byte-base64-Schlüssel für die At-Rest-Verschlüsselung der Bank-/SEPA-PII.
-    # SEPARAT vom DB-Backup sichern — Schlüsselverlust = Datenverlust!
-    FIELD_ENCRYPTION_KEY=$(openssl rand -base64 32)
+    # Zero-Knowledge (Modell B): Bank-/SEPA-PII wird ausschließlich clientseitig ver-/
+    # entschlüsselt. Der Server hält KEINEN Entschlüsselungsschlüssel (kein FIELD_ENCRYPTION_KEY).
     cat > /etc/teamwerk/env <<EOF
 PORT=8080
 BASE_URL=https://REPLACE_WITH_DOMAIN
@@ -36,7 +35,6 @@ DB_PATH=/var/lib/teamwerk/teamwerk.db
 UPLOAD_DIR=/var/lib/teamwerk/uploads
 FILES_DIR=/var/lib/teamwerk/files
 JWT_SECRET=$JWT_SECRET
-FIELD_ENCRYPTION_KEY=$FIELD_ENCRYPTION_KEY
 SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587
 SMTP_USER=REPLACE_WITH_SMTP_USER

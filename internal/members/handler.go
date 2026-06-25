@@ -42,15 +42,13 @@ type Member struct {
 	ClubFunctions []string `json:"club_functions"`
 
 	// Extended fields (populated by GetMember)
-	Street        *string `json:"street,omitempty"`
-	Zip           *string `json:"zip,omitempty"`
-	City          *string `json:"city,omitempty"`
-	HomeClub      *string `json:"home_club,omitempty"`
-	HomeClubID    *int    `json:"home_club_id,omitempty"`
-	HomeClubName  *string `json:"home_club_name,omitempty"`
-	JoinDate      *string `json:"join_date,omitempty"`
-	IBAN          *string `json:"iban,omitempty"`
-	AccountHolder *string `json:"account_holder,omitempty"`
+	Street       *string `json:"street,omitempty"`
+	Zip          *string `json:"zip,omitempty"`
+	City         *string `json:"city,omitempty"`
+	HomeClub     *string `json:"home_club,omitempty"`
+	HomeClubID   *int    `json:"home_club_id,omitempty"`
+	HomeClubName *string `json:"home_club_name,omitempty"`
+	JoinDate     *string `json:"join_date,omitempty"`
 	// Zero-Knowledge-Envelope (Modell B): clientseitig verschlüsselte Bankdaten. Nur an
 	// vorstand/kassierer/admin ausgeliefert; entschlüsselt wird ausschließlich im Browser.
 	BankCiphertext   *string `json:"bank_ciphertext,omitempty"`
@@ -457,7 +455,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
-		       m.street, m.zip, m.city, m.home_club, m.home_club_id, COALESCE(sv.name,''), m.join_date, m.iban, m.account_holder,
+		       m.street, m.zip, m.city, m.home_club, m.home_club_id, COALESCE(sv.name,''), m.join_date,
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
@@ -473,7 +471,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var jerseyNum, userID, homeClubID sql.NullInt64
 	var clubFunctionsStr string
 	var mStreet, mZip, mCity, mHomeClub, mHomeClubName sql.NullString
-	var joinDate, iban, accountHolder sql.NullString
+	var joinDate sql.NullString
 	var photoPath sql.NullString
 	var photoVisible int64
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
@@ -486,7 +484,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
 		&base.MemberNumber, &base.PassNumber,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunctionsStr,
-		&mStreet, &mZip, &mCity, &mHomeClub, &homeClubID, &mHomeClubName, &joinDate, &iban, &accountHolder,
+		&mStreet, &mZip, &mCity, &mHomeClub, &homeClubID, &mHomeClubName, &joinDate,
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
