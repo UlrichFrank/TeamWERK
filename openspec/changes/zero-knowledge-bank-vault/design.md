@@ -109,16 +109,46 @@ Betreiber" ist also faktisch „bereits gerooteter eigener Host".
 **Re-Evaluierung**, falls „der Hoster muss kryptografisch ausgeschlossen sein" zur
 harten (z. B. vertraglichen) Anforderung wird.
 
-### D7 — Migration über den Kassierer-Browser (LOCKED, Detail offen)
-Da alles mindestens an `FinanceGroupPub` gewrappt wird und der Kassierer
-`FinanceGroupPriv` hält, migriert dessen Browser den gesamten `v1:`-Bestand in einem
-Lauf: über die noch vorhandene Server-Brücke (`FIELD_ENCRYPTION_KEY`) entschlüsseln
-→ an Group (und vorhandene Owner-Pubkeys) re-wrappen → hochladen. Danach wird
-`FIELD_ENCRYPTION_KEY` entfernt; Owner-Wraps für Mitglieder ohne Pubkey werden
-lazily ergänzt, sobald sie sich anmelden.
-**Reihenfolge:** (1) Schlüsselpaare/Group-Key ausrollen, (2) Mitglieder erzeugen
-Pubkeys (oder bleiben group-only), (3) Kassierer-Migrationslauf, (4) Server-Schlüssel
-löschen + serverseitige Decrypt-Pfade entfernen.
+### D7 — Migration über den Kassierer-Browser (LOCKED)
+Da alles an `group_public_key` gewrappt wird und der Tresor-Inhaber die Passphrase (und
+damit `GroupPriv`) hält, migriert dessen Browser den gesamten `v1:`-Bestand in einem Lauf:
+über die noch vorhandene Server-Brücke (`FIELD_ENCRYPTION_KEY`) entschlüsseln → clientseitig
+zu Envelope re-verschlüsseln (Wrap an `group_public_key`) → hochladen. Danach wird
+`FIELD_ENCRYPTION_KEY` entfernt.
+
+**D7.1 — Zwei-Deploy-Strategie für ein minimales Brücken-Fenster (LOCKED 2026-06-25).**
+Das sicherheitskritische, irreversible Fenster ist die Zeit, in der der Server gleichzeitig
+den Brücken-Schlüssel **und** einen `v1:`-Klartext über TLS ausliefernden Endpoint hält.
+Statt es per zweitem Build+Deploy zu schließen (Fenster = ganzer Deploy-Zyklus *nach* der
+Migration), wird die **nicht-destruktive Startup-Toleranz vorgezogen**: Branch A macht den
+Server lauffähig **mit und ohne** Schlüssel. Der kritische Moment ist dann eine
+sekundenschnelle, skriptbare Ops-Aktion (`make zk-finalize-remote`: Schlüssel aus `env`
+entfernen + Restart) — **kein Code-Deploy**. Der eigentliche Code-/Spalten-Abbau (Branch B)
+ist reine Hygiene und folgt zeitlich entkoppelt.
+
+```
+Branch A (feat/zk-migrate-bestand)  →  deploy  [reversibel; FIELD_ENCRYPTION_KEY bleibt]
+   ├─ Startup tolerant ggü. fehlendem Key (vorgezogen aus dem alten 6.3)
+   ├─ gegateter Brücken-Endpoint  /api/admin/migrate-legacy/{status,data,upload}
+   └─ Frontend  /admin/migration  (entsperrter Tresor erforderlich)
+        ↓ Tresor-Inhaber migriert im Browser (Minuten)
+make zk-finalize-remote  →  status==complete? → Key aus env entfernen → restart  [kritisch, ~Sek.]
+        ↓
+Branch B (feat/zk-remove-bridge)  →  deploy  [Hygiene, jederzeit]
+   ├─ internal/migration + Brücke (crypto.Decrypt/…) entfernen, InitFromEnv-Aufruf streichen
+   └─ Migration 009: Legacy-Spalten droppen
+```
+
+**Idempotenz & Self-Disable:** `migrate-legacy/upload` schreibt pro Datensatz in **einer
+Transaktion** den Envelope **und** nullt die Legacy-`v1:`-Spalte (Mandat: Datei auf
+Client-Magic umschreiben). `migrate-legacy/data` liefert nur noch nicht-migrierte Datensätze;
+`status.complete` wird true, sobald kein `v1:`-Bestand mehr existiert — der Endpoint
+deaktiviert sich damit faktisch selbst, noch bevor Branch B ihn entfernt. Der `data`/`upload`-
+Pfad ist zusätzlich an `crypto.HasKey()` gebunden (404 „nur wenn Bridge").
+
+**Reihenfolge (gesamt):** (1) Tresor einrichten + alle Bank-Flows im Browser prüfen, (2)
+Branch A deployen, (3) DB-Backup ziehen, (4) Browser-Migrationslauf, (5)
+`make zk-finalize-remote`, (6) Branch B deployen.
 
 ## Offene Design-Fragen (für Spec-Phase)
 

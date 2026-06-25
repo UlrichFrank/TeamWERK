@@ -57,7 +57,13 @@ aus einem Store) wurde geprüft und als unverhältnismäßig verworfen (siehe `d
 - **Migration:** Da alles mindestens an den Group-Key gewrappt wird und der
   Kassierer diesen hält, migriert **der Browser des Kassierers** den gesamten
   `v1:`-Bestand in einem Lauf (entschlüsseln über die noch vorhandene Server-Brücke
-  → an Group re-wrappen → hochladen → Server-Schlüssel löschen).
+  → an Group re-wrappen → hochladen → Server-Schlüssel löschen). Ausgeführt als
+  **zwei entkoppelte Deploys** (Design D7.1), damit das Brücken-Fenster minimal bleibt:
+  Branch A bringt den gegateten Brücken-Endpoint, die Migrationsseite **und** die
+  vorgezogene Startup-Toleranz (Server läuft mit *und ohne* Schlüssel); der
+  irreversible Moment ist danach nur noch eine skriptbare Ops-Aktion
+  (`make zk-finalize-remote`: Key entfernen + Restart), kein Code-Deploy. Branch B
+  (Brücken-Code + Legacy-Spalten entfernen) folgt als Hygiene jederzeit später.
 
 ## Capabilities
 

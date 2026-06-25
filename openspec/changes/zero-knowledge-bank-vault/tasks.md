@@ -94,15 +94,70 @@ Entfernen des serverseitigen Decrypts und `FIELD_ENCRYPTION_KEY`. Ein Commit pro
   (`Decrypt`/`DecryptBytes`, `FIELD_ENCRYPTION_KEY`) bleibt **nur** für die Migrations-Brücke
   (Sektion 6) + Auslieferung von Legacy-server-verschlüsselten Mandat-Dateien bis zur Migration.
 
-## 6. Migration des Bestands
+## 6. Migration des Bestands (zwei Deploys, minimales Brücken-Fenster)
 
-- [ ] 6.1 Temporärer, gegateter Migrations-Endpoint, der `v1:`-/Klartext-Bestand über die
-  Brücke (`FIELD_ENCRYPTION_KEY`) entschlüsselt und dem Kassierer-Browser über TLS
-  ausliefert (nur bei gesetztem Brücken-Schlüssel verfügbar). Tests: Gate, „nur wenn Bridge".
-- [ ] 6.2 Frontend Migrations-Seite: Bestand laden, clientseitig zu Envelope verschlüsseln,
-  hochladen; idempotent (bereits migrierte überspringen), Fortschrittsanzeige.
-- [ ] 6.3 Nach Vollmigration: Migrations-Endpoint + `FIELD_ENCRYPTION_KEY` entfernen;
-  Startup-Check anpassen (Server startet ohne Schlüssel). Test: Start ohne Key OK.
+**Strategie (siehe Design D7):** Das sicherheitskritische, irreversible Fenster ist die Zeit,
+in der der Server gleichzeitig den Brücken-Schlüssel (`FIELD_ENCRYPTION_KEY`) **und** einen
+`v1:`-Klartext über TLS ausliefernden Endpoint hält. Um es zeitlich minimal und maximal
+automatisiert zu halten, wird die **nicht-destruktive Startup-Toleranz** (Server startet auch
+ohne Schlüssel) in den **ersten** Deploy (Branch A) **vorgezogen**. Der kritische Moment ist
+dann kein Build+Deploy-Zyklus mehr, sondern eine sekundenschnelle, skriptbare Ops-Aktion
+(`make zk-finalize-remote`: Schlüssel aus `env` entfernen + Restart). Der eigentliche
+Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
+
+```
+1. Branch A deployen (make deploy). FIELD_ENCRYPTION_KEY bleibt gesetzt.   [reversibel]
+2. Tresor-Inhaber: /admin/migration im Browser → Migration läuft (Minuten).
+3. make zk-finalize-remote → prüft complete, entfernt Key, Restart.        [kritisch, ~Sek.]
+4. Branch B deployen — Endpoint/Brücke/Legacy-Spalten weg.                 [Hygiene, jederzeit]
+```
+
+### Branch A — `feat/zk-migrate-bestand` (von `feat/zero-knowledge-bank-vault`, reversibel)
+
+- [ ] 6.1 **Startup-Toleranz vorziehen** (`refactor(crypto)`): `crypto.HasKey()`;
+  `cmd/teamwerk/main.go` startet mit **und ohne** `FIELD_ENCRYPTION_KEY` (`slog.Warn` statt
+  `fatal` bei fehlendem Key — Brücke/Migration dann deaktiviert; `fatal` nur noch bei
+  **gesetztem, aber ungültigem** Key). Sicher, da alle regulären Routen envelope-only sind.
+  Test: Start ohne Key OK; Start mit ungültigem Key bricht weiter ab.
+- [ ] 6.2 **Gegateter Brücken-Endpoint** — neues Package `internal/migration` (importiert nur
+  `database/sql` + `internal/crypto` + Upload-Dir → arch-test-konform; in `arch_test.go`
+  klassifizieren). Routen in der Finance-Gruppe (`router.go`, vorstand/kassierer):
+  - `GET /api/admin/migrate-legacy/status` → `{bridge_available, pending_members, pending_club,
+    pending_mandates, complete}` (`bridge_available = crypto.HasKey()`).
+  - `GET /api/admin/migrate-legacy/data` → entschlüsselt über die Brücke **nur noch
+    nicht-migrierte** Datensätze (`members.iban/account_holder`, `clubs.*`-SEPA falls noch
+    `v1:`, Mandat-PDF-Bytes); **404, wenn `!HasKey()`** („nur wenn Bridge").
+  - `POST /api/admin/migrate-legacy/upload` → nimmt Envelopes; **pro Datensatz in einer
+    Transaktion**: Envelope-Spalte(n) schreiben **und** Legacy-`v1:`-Spalte nullen (Mandat:
+    Datei auf Client-Magic `TWENC1\n` umschreiben + `members.sepa_mandat_dek_enc` setzen) →
+    idempotent + self-disabling; Mandat-Blob via `crypto.IsClientEncryptedBytes` erzwungen.
+    `h.hub.Broadcast("members")`/`"settings"`.
+  - Tests: Trainer-403 (Gate); `data`/`upload` 404 wenn `!HasKey()` („nur wenn Bridge");
+    `data` liefert entschlüsselten `v1:`-Klartext; `upload` schreibt Envelope **und** nullt die
+    Legacy-Spalte; Re-Run idempotent (`status.complete`, leeres `data`).
+- [ ] 6.3 **Frontend-Migrationsseite** (`/admin/migration`, RoleRoute vorstand/kassierer,
+  `policy.NavItem` + AppShell-Nav, `useLiveUpdates`): **erfordert entsperrten Tresor**
+  (Safety-Gate — Passphrase muss vor dem Brücken-Abbau nachweislich funktionieren). Flow:
+  `status` → `data` → je Datensatz clientseitig Envelope (`bankCrypto.ts`/`crypto.ts`,
+  Wrap an Group-Public-Key; Mandate via `encryptFile`) → Batch-`upload`; **Fortschrittsanzeige**;
+  idempotent (Re-Run lädt nur den Rest); Auto-Fertig bei `status.complete`. tsc/lint grün,
+  Browser-Verifikation offen (wie übrige ZK-Flows).
+- [ ] 6.4 **Ops-Automation** `make zk-finalize-remote`: ruft `…/migrate-legacy/status` und
+  **bricht ab, wenn nicht `complete`**; entfernt dann die `FIELD_ENCRYPTION_KEY`-Zeile aus
+  `/etc/teamwerk/env` und `systemctl restart teamwerk` (Muster wie bestehende `*-remote`-
+  Targets). **DB-Backup als Vorbedingung** (irreversibel ab dem Spalten-Nullen in 6.2).
+
+### Branch B — `feat/zk-remove-bridge` (von Branch A, Hygiene NACH erfolgter Migration)
+
+- [ ] 6.5 **Brücke + Endpoint abbauen**: `internal/migration` + Routen + main.go-Verdrahtung
+  entfernen; `internal/crypto` auf `IsClientEncryptedBytes`/`clientFileMagic` reduzieren
+  (`Decrypt`/`DecryptBytes`/`Encrypt`/`EncryptBytes`/`InitFromEnv`/`activeKey` weg);
+  `crypto.InitFromEnv()`-Aufruf aus `main.go` streichen; Legacy-Mandat-Download auf reines
+  Streamen umstellen. Test: Server startet ohne `FIELD_ENCRYPTION_KEY`.
+- [ ] 6.6 **Legacy-Spalten droppen**: Migration `009_drop_legacy_bank_columns.{up,down}.sql`
+  (nächste freie Nummer nach 008) — `members.iban/account_holder`,
+  `clubs.glaeubiger_id/iban/bic/kontoinhaber` droppen; `down` legt sie als nullable `TEXT`
+  wieder an (Daten **nicht** wiederherstellbar — dokumentieren).
 
 ## 7. SSE, Doku, Verifikation
 
