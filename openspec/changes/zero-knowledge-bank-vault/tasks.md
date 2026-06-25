@@ -119,7 +119,7 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
   `fatal` bei fehlendem Key — Brücke/Migration dann deaktiviert; `fatal` nur noch bei
   **gesetztem, aber ungültigem** Key). Sicher, da alle regulären Routen envelope-only sind.
   Test: Start ohne Key OK; Start mit ungültigem Key bricht weiter ab.
-- [ ] 6.2 **Gegateter Brücken-Endpoint** — neues Package `internal/migration` (importiert nur
+- [x] 6.2 **Gegateter Brücken-Endpoint** — neues Package `internal/migration` (importiert nur
   `database/sql` + `internal/crypto` + Upload-Dir → arch-test-konform; in `arch_test.go`
   klassifizieren). Routen in der Finance-Gruppe (`router.go`, vorstand/kassierer):
   - `GET /api/admin/migrate-legacy/status` → `{bridge_available, pending_members, pending_club,
@@ -135,6 +135,11 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
   - Tests: Trainer-403 (Gate); `data`/`upload` 404 wenn `!HasKey()` („nur wenn Bridge");
     `data` liefert entschlüsselten `v1:`-Klartext; `upload` schreibt Envelope **und** nullt die
     Legacy-Spalte; Re-Run idempotent (`status.complete`, leeres `data`).
+  - **Scope-Entscheidung Drafts:** Die Migration verschlüsselt die **drei At-Rest-Speicher**
+    (Member-Bank, Vereins-SEPA, Mandat-PDF). Legacy-`bankdaten`-**Drafts** (v1) werden im
+    `status` nur **gezählt** (`pending_drafts` → blockiert `complete`), aber nicht automatisch
+    transformiert — sie sind transiente, unbestätigte Anträge. **Betriebsregel:** vor Abschluss
+    bearbeiten (annehmen/ablehnen), bis `pending_drafts == 0`.
 - [ ] 6.3 **Frontend-Migrationsseite** (`/admin/migration`, RoleRoute vorstand/kassierer,
   `policy.NavItem` + AppShell-Nav, `useLiveUpdates`): **erfordert entsperrten Tresor**
   (Safety-Gate — Passphrase muss vor dem Brücken-Abbau nachweislich funktionieren). Flow:

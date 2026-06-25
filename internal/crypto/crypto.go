@@ -92,6 +92,12 @@ func HasKey() bool {
 	return len(activeKey) == KeySize
 }
 
+// ClearKey entfernt den app-weiten Schlüssel (HasKey()==false). Spiegelt im Test den
+// Zustand „Server läuft ohne FIELD_ENCRYPTION_KEY" (Brücke deaktiviert).
+func ClearKey() {
+	activeKey = nil
+}
+
 // InitFromEnv lädt FIELD_ENCRYPTION_KEY (Migrations-Brücke) und setzt den app-weiten
 // Schlüssel. Tolerant gegenüber einem FEHLENDEN Schlüssel: nach der Migration startet der
 // Server ohne ihn (ErrNoKey, vom Aufrufer als Warnung behandelt) — dann sind nur der
