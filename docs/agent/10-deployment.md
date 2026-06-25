@@ -1,6 +1,6 @@
 # Deployment & VPS
 
-IONOS VPS Linux XS · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, FIELD_ENCRYPTION_KEY, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN). DB `/var/lib/teamwerk/teamwerk.db`. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
+IONOS VPS Linux XS · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN — **kein** `FIELD_ENCRYPTION_KEY` mehr, Zero-Knowledge). DB `/var/lib/teamwerk/teamwerk.db`. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
 
 SSH-Alias `vServer` (in `.env`), direkt `https://217.160.118.39`. Domain + Certbot-Zertifikat noch ausstehend.
 
@@ -11,13 +11,10 @@ make create-admin-remote EMAIL=… PASSWORD=… NAME=…   # Admin anlegen
 
 ## Zero-Knowledge-Verschlüsselung der Bank-/SEPA-PII (Modell B)
 
-> **Status:** Das Zero-Knowledge-Modell ist auf `feat/zero-knowledge-bank-vault`
-> implementiert, aber **noch nicht in Produktion migriert**. Produktion läuft bis zur
-> Migration (siehe unten) auf dem alten serverseitigen `FIELD_ENCRYPTION_KEY`-Modell.
-
 Bank-/SEPA-Felder werden **clientseitig** verschlüsselt (`internal/crypto` ist serverseitig
-nicht mehr am Lese-/Schreibpfad beteiligt). Der Server speichert nur Ciphertext + gewrappte
-Schlüssel und **besitzt keinen Entschlüsselungsschlüssel**:
+nicht mehr am Lese-/Schreibpfad beteiligt; nur noch Client-Magic-Erkennung beim Upload). Der
+Server speichert nur Ciphertext + gewrappte Schlüssel und **besitzt keinen
+Entschlüsselungsschlüssel**:
 - Vereins-**Keypair** (RSA-OAEP): öffentlicher Schlüssel `clubs.group_public_key` (nicht
   geheim) zum Schreiben; privater Schlüssel `clubs.group_private_key_enc` =
   `AES-GCM(PKCS8, PBKDF2(passphrase))`, entschlüsselbar nur mit der geteilten
@@ -26,28 +23,13 @@ Schlüssel und **besitzt keinen Entschlüsselungsschlüssel**:
   `group_public_key` + `group_private_key_enc` + Salt + Key-Check werden gespeichert. Die
   Passphrase verlässt den Browser nie.
 
-**Rollout-Sequenz (zwei entkoppelte Deploys — minimales Brücken-Fenster):**
-
-Das kritische, irreversible Fenster (Server hält gleichzeitig Brücken-Schlüssel **und**
-liefert v1-Klartext aus) wird minimiert, indem die Startup-Toleranz (Server startet auch ohne
-Schlüssel) bereits in Branch A enthalten ist. Der irreversible Moment ist dann nur noch eine
-skriptbare Ops-Aktion, kein Code-Deploy.
-
-```bash
-# Branch A (feat/zk-migrate-bestand): Migrations-Endpoint + UI + tolerant startup.
-#   FIELD_ENCRYPTION_KEY bleibt gesetzt (Brücke). Voll reversibel.
-make deploy                          # Branch A ausrollen
-# 1. Vorstand/Kassierer richtet den Tresor ein (UI „Tresor") und prüft alle Bank-Flows
-#    im Browser (Member-Bank, Vereins-SEPA, Mandat-PDF, Fee-Run).
-make backup                          # DB-Backup (kritisch, irreversibel ab Schritt 3)
-# 2. Migrationslauf im Browser: UI „Datenmigration" (/migration) — lädt v1-Altbestand über
-#    die Brücke, re-verschlüsselt clientseitig an den Gruppen-Public-Key, lädt hoch.
-#    Idempotent; offene bankdaten-Anträge (Drafts) vorher annehmen/ablehnen.
-# 3. Brücken-Schlüssel entfernen (sekundenschnell, kein Deploy):
-make zk-finalize-remote              # prüft complete; entfernt FIELD_ENCRYPTION_KEY + Restart
-# Branch B (feat/zk-remove-bridge): Migrations-Endpoint + Brücken-Code + Legacy-Spalten weg.
-make deploy                          # Branch B als Hygiene, jederzeit später
-```
+**Bestandsmigration: abgeschlossen.** Der einmalige `v1:`-Altbestand wurde über eine
+temporäre Server-Brücke (`FIELD_ENCRYPTION_KEY`) im Browser eines Tresor-Inhabers nach
+Modell B re-verschlüsselt; danach wurden der Schlüssel aus der Umgebung entfernt und die
+Brücke (`internal/crypto`-Decrypt, Migrations-Endpoint, Legacy-Spalten `members.iban/
+account_holder`, `clubs.glaeubiger_id/iban/bic/kontoinhaber`) per Migration `009` entfernt.
+Der Server startet und läuft seitdem **ohne** Entschlüsselungsschlüssel (envelope-only). Das
+Migrations-Werkzeug (Endpoint + UI + `make zk-finalize-remote`) existiert nicht mehr.
 
 **Modellgrenze (ehrlich):** schützt gegen passive Kompromittierung (geleaktes DB-Backup,
 Disk-Snapshot, neugieriger Hoster, lesender App-Admin), **nicht** gegen einen aktiv

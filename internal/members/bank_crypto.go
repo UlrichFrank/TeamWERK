@@ -7,8 +7,6 @@ func clearMemberBank(m *Member) {
 	if m == nil {
 		return
 	}
-	m.IBAN = nil
-	m.AccountHolder = nil
 	m.BankCiphertext = nil
 	m.BankDekEnc = nil
 }

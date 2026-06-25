@@ -1,12 +1,8 @@
 package main
 
 import (
-	"context"
-	"crypto/rand"
 	"embed"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -32,7 +28,6 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
-	"github.com/teamstuttgart/teamwerk/internal/crypto"
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
@@ -44,7 +39,6 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/metrics"
-	"github.com/teamstuttgart/teamwerk/internal/migration"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
@@ -109,18 +103,6 @@ func main() {
 		runGenVapid()
 		return
 	}
-	if len(os.Args) > 1 && os.Args[1] == "gen-encryption-key" {
-		runGenEncryptionKey()
-		return
-	}
-	if len(os.Args) > 1 && (os.Args[1] == "encrypt-pii" || os.Args[1] == "decrypt-pii") {
-		runPIIMigration(os.Args[1] == "decrypt-pii")
-		return
-	}
-	if len(os.Args) > 1 && os.Args[1] == "migrate-legacy-status" {
-		runMigrateLegacyStatus()
-		return
-	}
 	if len(os.Args) > 1 && os.Args[1] == "push-test" {
 		runPushTest()
 		return
@@ -149,17 +131,9 @@ func serve() {
 		fatal("config load failed", "error", err)
 	}
 
-	// Migrations-Brücke (FIELD_ENCRYPTION_KEY): Der Server startet mit UND ohne Schlüssel.
-	// Fehlt er, ist das nach abgeschlossener Bestandsmigration der Normalzustand — nur der
-	// serverseitige Migrationspfad (v1:-Decrypt) ist dann deaktiviert; alle regulären Routen
-	// sind envelope-only. Ein GESETZTER, aber ungültiger Schlüssel bleibt ein harter Fehler.
-	switch err := crypto.InitFromEnv(); {
-	case errors.Is(err, crypto.ErrNoKey):
-		slog.Warn("FIELD_ENCRYPTION_KEY nicht gesetzt — Migrations-Brücke deaktiviert (envelope-only)")
-	case err != nil:
-		fatal("encryption key invalid", "error", err)
-	}
-
+	// Zero-Knowledge (Modell B): Der Server hält KEINEN Entschlüsselungsschlüssel mehr.
+	// Bank-/SEPA-PII wird ausschließlich clientseitig ver-/entschlüsselt; der Server speichert
+	// nur Ciphertext + gewrappte Schlüssel. Der frühere FIELD_ENCRYPTION_KEY entfällt.
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
 		fatal("open db failed", "error", err)
@@ -189,7 +163,6 @@ func serve() {
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, cfg.BeitragslaufDir),
 		Stammvereine:   stammvereine.NewHandler(database, hubInstance),
-		Migration:      migration.NewHandler(database, hubInstance, cfg.UploadDir),
 		Calendar:       calendar.NewHandler(database),
 		Health:         health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
 		Hub:            hub.NewHandler(hubInstance, buildHash),
@@ -210,51 +183,6 @@ func serve() {
 
 	slog.Info("listening", "port", cfg.Port)
 	fatal("http server stopped", "error", http.ListenAndServe(":"+cfg.Port, root))
-}
-
-// runGenEncryptionKey gibt einen zufälligen, base64-kodierten 32-Byte-Schlüssel
-// aus, der als FIELD_ENCRYPTION_KEY in /etc/teamwerk/env eingetragen wird.
-func runGenEncryptionKey() {
-	key := make([]byte, crypto.KeySize)
-	if _, err := rand.Read(key); err != nil {
-		fatal("gen-encryption-key failed", "error", err)
-	}
-	fmt.Printf("FIELD_ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(key))
-}
-
-// runPIIMigration verschlüsselt (bzw. entschlüsselt bei decrypt=true) den
-// Bestand der vier Bank-/SEPA-Speicher idempotent in-place.
-func runPIIMigration(decrypt bool) {
-	_ = godotenv.Load()
-	cfg, err := appconfig.Load()
-	if err != nil {
-		fatal("pii-migration: load config failed", "error", err)
-	}
-	if err := crypto.InitFromEnv(); err != nil {
-		fatal("pii-migration: encryption key invalid", "error", err)
-	}
-	database, err := db.Open(cfg.DBPath)
-	if err != nil {
-		fatal("pii-migration: open db failed", "error", err)
-	}
-	defer database.Close()
-
-	var rep crypto.PIIReport
-	if decrypt {
-		rep, err = crypto.DecryptPII(database, cfg.UploadDir)
-	} else {
-		rep, err = crypto.EncryptPII(database, cfg.UploadDir)
-	}
-	if err != nil {
-		fatal("pii-migration failed", "error", err)
-	}
-	verb := "verschlüsselt"
-	if decrypt {
-		verb = "entschlüsselt"
-	}
-	slog.Info("pii-migration done", "mode", verb,
-		"member_rows", rep.MemberRows, "club_rows", rep.ClubRows,
-		"drafts", rep.Drafts, "files", rep.Files)
 }
 
 func runGenVapid() {
@@ -441,33 +369,6 @@ func runMigrate() {
 		fatal("migrate failed", "error", err)
 	}
 	slog.Info("migrations applied")
-}
-
-// runMigrateLegacyStatus prüft den verbleibenden v1:-Altbestand und ist das auth-freie
-// Done-Gate für `make zk-finalize-remote`: Exit 0 nur, wenn KEIN Altbestand mehr existiert
-// (Migration vollständig); sonst Exit 1. Schreibt die Zählung nach stderr.
-func runMigrateLegacyStatus() {
-	_ = godotenv.Load()
-	dbPath := getEnvOrDefault("DB_PATH", "./teamwerk.db")
-	for i, arg := range os.Args {
-		if arg == "--db" && i+1 < len(os.Args) {
-			dbPath = os.Args[i+1]
-		}
-	}
-	database, err := db.Open(dbPath)
-	if err != nil {
-		fatal("migrate-legacy-status: open db failed", "error", err)
-	}
-	defer database.Close()
-	p, err := migration.Pending(context.Background(), database)
-	if err != nil {
-		fatal("migrate-legacy-status: query failed", "error", err)
-	}
-	fmt.Fprintf(os.Stderr, "Altbestand: members=%d club=%t mandates=%d drafts=%d → complete=%t\n",
-		p.Members, p.Club, p.Mandates, p.Drafts, p.Complete())
-	if !p.Complete() {
-		os.Exit(1)
-	}
 }
 
 func getEnvOrDefault(key, fallback string) string {

@@ -19,7 +19,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint coverage metrics metrics-gate zk-finalize-remote
+.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint coverage metrics metrics-gate
 
 .DEFAULT_GOAL := help
 
@@ -89,9 +89,6 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
 	@echo "Deployed successfully."
 	@git rev-parse --short HEAD > .deployed-hash
 
-deploy-encrypted: ## Voll-Rollout At-Rest-Verschlüsselung (Key + deploy + backup + encrypt-pii). YES=1 ohne Rückfragen, DRY=1 nur anzeigen
-	bash deploy/deploy-encryption.sh $(if $(YES),--yes,) $(if $(DRY),--dry-run,)
-
 migrate-up: ## Migrationen lokal anwenden
 	$(GO) run ./cmd/teamwerk migrate up
 
@@ -111,18 +108,6 @@ reset-migration-version: ## Migrationsversion lokal auf Baseline (v1) zurückset
 reset-migration-version-remote: ## Migrationsversion auf VPS auf Baseline (v1) zurücksetzen
 	ssh $(REMOTE) "sqlite3 $(DB_PATH) 'DELETE FROM schema_migrations; INSERT INTO schema_migrations (version, dirty) VALUES (1, 0);'"
 	@echo "VPS-DB auf Migration v1 (Baseline) gesetzt."
-
-zk-finalize-remote: ## Nach Vollmigration: prüft complete, entfernt FIELD_ENCRYPTION_KEY + Restart (VPS)
-	@echo "==> Prüfe Migrationsstatus auf dem VPS (Exit 1, falls noch Altbestand)…"
-	ssh $(REMOTE) "$(REMOTE_DIR)/$(BINARY) migrate-legacy-status --db $(DB_PATH)"
-	@echo ""
-	@echo "WARNUNG (irreversibel): entfernt FIELD_ENCRYPTION_KEY aus /etc/teamwerk/env und"
-	@echo "  startet teamwerk neu. Danach kann der Server Bank-/SEPA-PII NICHT mehr serverseitig"
-	@echo "  entschlüsseln. Stelle sicher, dass ein DB-Backup existiert (make backup)."
-	@printf "Fortfahren? [y/N] " && read ans && [ "$$ans" = "y" ] || { echo "Abgebrochen."; exit 1; }
-	@echo "==> Sichere env-Datei und entferne FIELD_ENCRYPTION_KEY…"
-	ssh $(REMOTE) "sudo cp /etc/teamwerk/env /etc/teamwerk/env.bak.\$$(date +%Y%m%d%H%M%S) && sudo sed -i '/^FIELD_ENCRYPTION_KEY=/d' /etc/teamwerk/env && sudo systemctl restart teamwerk"
-	@echo "==> Fertig. Server läuft jetzt envelope-only (ohne Brücken-Schlüssel)."
 
 create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
 	$(GO) run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)

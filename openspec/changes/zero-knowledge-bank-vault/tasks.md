@@ -154,15 +154,22 @@ Code-Abbau (Branch B) folgt als reine Hygiene jederzeit später.
 
 ### Branch B — `feat/zk-remove-bridge` (von Branch A, Hygiene NACH erfolgter Migration)
 
-- [ ] 6.5 **Brücke + Endpoint abbauen**: `internal/migration` + Routen + main.go-Verdrahtung
-  entfernen; `internal/crypto` auf `IsClientEncryptedBytes`/`clientFileMagic` reduzieren
-  (`Decrypt`/`DecryptBytes`/`Encrypt`/`EncryptBytes`/`InitFromEnv`/`activeKey` weg);
-  `crypto.InitFromEnv()`-Aufruf aus `main.go` streichen; Legacy-Mandat-Download auf reines
-  Streamen umstellen. Test: Server startet ohne `FIELD_ENCRYPTION_KEY`.
-- [ ] 6.6 **Legacy-Spalten droppen**: Migration `009_drop_legacy_bank_columns.{up,down}.sql`
-  (nächste freie Nummer nach 008) — `members.iban/account_holder`,
-  `clubs.glaeubiger_id/iban/bic/kontoinhaber` droppen; `down` legt sie als nullable `TEXT`
-  wieder an (Daten **nicht** wiederherstellbar — dokumentieren).
+- [x] 6.5 **Brücke + Endpoint abbauen**: `internal/migration` + Routen + main.go-Verdrahtung
+  entfernt; `internal/crypto` auf `IsClientEncryptedBytes`/`clientFileMagic` reduziert
+  (`Decrypt`/`DecryptBytes`/`Encrypt`/`EncryptBytes`/`InitFromEnv`/`activeKey`/`migrate.go` weg);
+  `crypto.InitFromEnv()`-Aufruf aus `main.go` gestrichen (Server startet ohne Schlüssel);
+  obsolete Subcommands `gen-encryption-key`/`encrypt-pii`/`decrypt-pii`/`migrate-legacy-status`
+  + `make zk-finalize-remote`/`deploy-encrypted` + `deploy/deploy-encryption.sh` entfernt;
+  `setup-vps.sh`/`.env.example`/Doku auf „kein Schlüssel" aktualisiert; Mandat-Download auf
+  reines Streamen umgestellt; Legacy-Reads (`members.iban/account_holder`) aus Get/getMember +
+  Member-Struct entfernt. **Bulk-SEPA-Import deaktiviert** (Route + Frontend-Trigger weg,
+  Handler/Matching dormant via `bulkImportDisabled`→410): server-seitiges Verschlüsseln von
+  Klartext-PDFs ist ZK-inkompatibel; clientseitige Variante als Folge-Change. Test:
+  `TestServesBankRoutesWithoutEncryptionKey` (Bank-Route ohne Schlüssel → Envelope).
+- [x] 6.6 **Legacy-Spalten droppen**: Migration `009_drop_legacy_bank_columns.{up,down}.sql` —
+  `members.iban/account_holder`, `clubs.glaeubiger_id/iban/bic/kontoinhaber` gedroppt; `down`
+  legt sie als nullable `TEXT` wieder an (Daten **nicht** wiederherstellbar — dokumentiert).
+  Up/Down/Up-Round-Trip verifiziert.
 
 ## 7. SSE, Doku, Verifikation
 

@@ -72,7 +72,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
-		       m.street, m.zip, m.city, m.join_date, m.iban, m.account_holder,
+		       m.street, m.zip, m.city, m.join_date,
 		       m.photo_visible, m.photo_path,
 		       COALESCE(m.phones_visible,0), COALESCE(m.address_visible,0), COALESCE(m.email_visible,0),
 		       COALESCE(m.absences_public,0),
@@ -85,7 +85,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	var m Member
 	var jerseyNum, userID sql.NullInt64
 	var clubFunctionsStr string
-	var street, zip, city, joinDate, iban, accountHolder, photoPath sql.NullString
+	var street, zip, city, joinDate, photoPath sql.NullString
 	var photoVisible, phonesVisible, addressVisible, emailVisible int64
 	var crossTeamVisible, dsgvoVerarbeitung, dsgvoWeitergabe int64
 	var dsgvoVerarbDate, dsgvoWeiterDate sql.NullString
@@ -94,7 +94,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
 		&m.MemberNumber, &m.PassNumber,
 		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunctionsStr,
-		&street, &zip, &city, &joinDate, &iban, &accountHolder,
+		&street, &zip, &city, &joinDate,
 		&photoVisible, &photoPath,
 		&phonesVisible, &addressVisible, &emailVisible,
 		&m.AbsencesPublic,
@@ -126,12 +126,6 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	}
 	if joinDate.Valid {
 		m.JoinDate = &joinDate.String
-	}
-	if iban.Valid {
-		m.IBAN = &iban.String
-	}
-	if accountHolder.Valid {
-		m.AccountHolder = &accountHolder.String
 	}
 	m.PhotoVisible = photoVisible != 0
 	if photoPath.Valid && photoPath.String != "" {
@@ -294,15 +288,8 @@ func (h *Handler) extractFieldValue(m *Member, fieldName string) (json.RawMessag
 			p["city"] = *m.City
 		}
 		return json.Marshal(p)
-	case "bankdaten":
-		b := map[string]interface{}{}
-		if m.IBAN != nil {
-			b["iban"] = *m.IBAN
-		}
-		if m.AccountHolder != nil {
-			b["account_holder"] = *m.AccountHolder
-		}
-		return json.Marshal(b)
+	// bankdaten: Modell B/G2 — old_value ist immer null (Server liest keine Bankdaten);
+	// fällt bewusst auf default (null).
 	default:
 		return json.Marshal(nil)
 	}

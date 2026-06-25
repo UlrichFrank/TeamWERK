@@ -216,8 +216,10 @@ export default function MembersPage() {
   const [showActionsMenu, setShowActionsMenu] = useState(false)
   const actionsMenuRef = useRef<HTMLDivElement>(null)
 
-  // Bulk-Import SEPA-Mandate (siehe openspec/changes/sepa-mandates-bulk-import).
-  const canBulkSepa = isAdmin || hasCapability('manage_fees')
+  // Bulk-Import SEPA-Mandate vorerst DEAKTIVIERT (Zero-Knowledge, Modell B): server-seitiges
+  // Verschlüsseln von Klartext-PDFs ist mit dem Zero-Knowledge-Modell unvereinbar (Route 410).
+  // UI ausgeblendet bis zur clientseitigen Variante; der Code bleibt als Grundlage erhalten.
+  const canBulkSepa = false
   const [showSepaBulk, setShowSepaBulk] = useState(false)
   const [sepaFiles, setSepaFiles] = useState<File[]>([])
   const [sepaImporting, setSepaImporting] = useState(false)

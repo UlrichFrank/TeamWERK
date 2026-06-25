@@ -39,7 +39,17 @@ type bulkImportReport struct {
 // exactly one member without an existing sepa_mandat_path are stored; the
 // member's sepa_mandat_path is set and sepa_mandat is flipped to 1. Existing
 // mandates are never overwritten; matchless and ambiguous files are reported.
+// bulkImportDisabled schaltet den server-seitigen Bulk-SEPA-Import ab. Er legte Klartext-PDFs
+// server-seitig verschlüsselt ab (ohne client-DEK) und ist mit Zero-Knowledge (Modell B)
+// unvereinbar. Die Route ist nicht gemountet; der Matching-Code unten bleibt als Grundlage für
+// einen späteren CLIENTseitigen Bulk-Import (Browser verschlüsselt jede PDF) erhalten.
+const bulkImportDisabled = true
+
 func (h *Handler) BulkImportSepaMandate(w http.ResponseWriter, r *http.Request) {
+	if bulkImportDisabled {
+		http.Error(w, "Bulk-Import deaktiviert (Zero-Knowledge) — Einzel-Upload verwenden", http.StatusGone)
+		return
+	}
 	r.Body = http.MaxBytesReader(nil, r.Body, maxBulkSepaBytes+1024)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -159,7 +169,7 @@ func (h *Handler) tryStoreForMember(r *http.Request, hdr *multipart.FileHeader, 
 	}
 	defer file.Close()
 
-	stored, err := h.persistMultipartFile(file, hdr, "sepa-mandats", pdfOnlyTypes, maxBulkSepaFileBytes, true)
+	stored, err := h.persistMultipartFile(file, hdr, "sepa-mandats", pdfOnlyTypes, maxBulkSepaFileBytes)
 	if err != nil {
 		reason := err.Error()
 		switch reason {
