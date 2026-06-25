@@ -294,6 +294,43 @@ func TestCalendarToken_Get_NotFound(t *testing.T) {
 	}
 }
 
+// TestCalendarFeed_TrainingLocation verifies that a training with a venue_id
+// shows the venue name and address in the LOCATION field of the iCal feed.
+func TestCalendarFeed_TrainingLocation(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team B")
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	var venueID int64
+	row := db.QueryRow(`INSERT INTO venues (name, street, postal_code, city, is_home_venue) VALUES (?, ?, ?, ?, 1) RETURNING id`,
+		"Sporthalle Vaihingen", "Rosenstraße 5", "70563", "Stuttgart")
+	row.Scan(&venueID)
+
+	db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, venue_id, status)
+	         VALUES (?, ?, ?, ?, ?, ?, 'active')`,
+		teamID, seasonID, "2026-08-20", "18:00", "20:00", venueID)
+
+	userToken := testutil.Token(t, userID, "standard", nil)
+	srv := prodserver.New(t, db)
+	tok := postToken(t, srv, userToken, allTogglesOn())
+	calToken := tok["token"].(string)
+
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+calToken, "")
+	defer res.Body.Close()
+	body := readBody(t, res.Body)
+
+	if !strings.Contains(body, "LOCATION:Sporthalle Vaihingen") {
+		t.Errorf("training LOCATION missing venue name, body:\n%s", body)
+	}
+	if !strings.Contains(body, "Rosenstra") {
+		t.Errorf("training LOCATION missing street, body:\n%s", body)
+	}
+}
+
 // TestCalendarToken_Unauthenticated returns 401.
 func TestCalendarToken_Unauthenticated(t *testing.T) {
 	db := testutil.NewDB(t)

@@ -287,12 +287,14 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT DISTINCT
 		    ts.id, ts.date, ts.start_time, ts.end_time,
-		    ts.location, COALESCE(t.name, '')
+		    COALESCE(t.name, ''),
+		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,'')
 		FROM training_sessions ts
 		JOIN teams t ON t.id = ts.team_id
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_members km ON km.kader_id = k.id
 		JOIN members m ON m.id = km.member_id
+		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE m.user_id = ? AND ts.status = 'active'
 		ORDER BY ts.date, ts.start_time`, userID)
 	if err != nil {
@@ -304,13 +306,26 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 	var events []calEvent
 	for rows.Next() {
 		var id int
-		var date, startTime, endTime, location, teamName string
-		if err := rows.Scan(&id, &date, &startTime, &endTime, &location, &teamName); err != nil {
+		var date, startTime, endTime, teamName string
+		var vName, vStreet, vPostal, vCity string
+		if err := rows.Scan(&id, &date, &startTime, &endTime, &teamName,
+			&vName, &vStreet, &vPostal, &vCity); err != nil {
 			continue
 		}
 		summary := "Training"
 		if teamName != "" {
 			summary = "Training: " + teamName
+		}
+		var location string
+		if vName != "" {
+			parts := []string{vName}
+			if vStreet != "" {
+				parts = append(parts, vStreet)
+			}
+			if vPostal != "" || vCity != "" {
+				parts = append(parts, strings.TrimSpace(vPostal+" "+vCity))
+			}
+			location = strings.Join(parts, ", ")
 		}
 		start := parseDT(date, startTime, loc)
 		end := parseDT(date, endTime, loc)
