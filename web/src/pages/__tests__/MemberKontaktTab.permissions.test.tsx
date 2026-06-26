@@ -14,7 +14,7 @@
 import { describe, test, expect } from 'vitest'
 import { screen } from '@testing-library/react'
 import MemberKontaktTab from '../../components/admin/MemberKontaktTab'
-import { renderAsPersonaNoRouter } from '../../test/renderAsPersona'
+import { renderAsPersona } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
 
 const FORM_WITH_SEPA = {
@@ -42,7 +42,7 @@ const CAN_DELETE_SEPA_IDS = [
 
 describe('MemberKontaktTab — canDeleteSepa-Gate: "Dokument löschen"-Button', () => {
   test.each(PERSONAS)('Persona $id', (persona) => {
-    renderAsPersonaNoRouter(
+    renderAsPersona(
       <MemberKontaktTab
         memberId={1}
         form={FORM_WITH_SEPA}
