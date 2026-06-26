@@ -469,9 +469,10 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 }
 
 // approveChildRequest legt für einen Kinderantrag (ohne E-Mail) in einer
-// Transaktion ein Kinder-Konto (login_name, can_login=0) und einen verknüpften
-// Member an und versendet einen Passwort-Setz-Link an die Eltern-Adresse.
-// Es wird KEIN family_link angelegt (reine Korrespondenz).
+// Transaktion ausschließlich ein Kinder-Konto (login_name, can_login=0) an
+// und versendet einen Passwort-Setz-Link an die Eltern-Adresse. Es wird
+// KEIN Member und KEIN family_link angelegt (reine Korrespondenz; das
+// Mitglied wird ggf. später separat über die Mitgliederverwaltung erfasst).
 func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, reqID, firstName, lastName, parentEmail string, handledBy int) {
 	ctx := r.Context()
 	tx, err := h.db.BeginTx(ctx, nil)
@@ -505,15 +506,6 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 	}
 	userID, _ := res.LastInsertId()
 
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO members (first_name, last_name, user_id) VALUES (?,?,?)`,
-		firstName, lastName, userID,
-	); err != nil {
-		slog.Error("approve membership child insert member failed", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
 	// Passwort-Setz-Token (48 h) — Eltern setzen das Passwort, das aktiviert das
 	// Konto (can_login=1, siehe ResetPassword).
 	plain, tokenHash, err := GenerateOpaqueToken()
@@ -545,7 +537,7 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 
 	// Ab hier sind die Daten committed: Mailfehler dürfen den Vorgang nicht zurückrollen.
 	if h.hub != nil {
-		h.hub.Broadcast("members")
+		h.hub.Broadcast("users")
 	}
 	link := fmt.Sprintf("%s/reset-password?token=%s", h.baseURL, plain)
 	body := fmt.Sprintf("Hallo,\n\nder Account für %s %s wurde angelegt.\n\nLogin-Name (zum Einloggen): %s\n\nBitte setze jetzt das Passwort:\n%s\n\nDer Link ist 48 Stunden gültig.",

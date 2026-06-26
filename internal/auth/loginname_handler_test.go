@@ -202,7 +202,7 @@ func createChildMembershipRequest(t *testing.T, db *sql.DB, firstName, lastName,
 	return int(id)
 }
 
-// TC-KID-APPROVE01: Kinder-Approve legt Konto + Member an, Status approved.
+// TC-KID-APPROVE01: Kinder-Approve legt nur das Konto an (kein Member), Status approved.
 func TestApproveMembershipRequest_Child(t *testing.T) {
 	db := testutil.NewDB(t)
 	reqID := createChildMembershipRequest(t, db, "Lena", "Schmidt", "mama@test.local")
@@ -232,14 +232,14 @@ func TestApproveMembershipRequest_Child(t *testing.T) {
 		t.Errorf("child user email should be NULL, got %q", email.String)
 	}
 
-	var memberUserID int
+	var memberCount int
 	if err := db.QueryRow(
-		`SELECT user_id FROM members WHERE first_name='Lena' AND last_name='Schmidt'`,
-	).Scan(&memberUserID); err != nil {
-		t.Fatalf("member not found: %v", err)
+		`SELECT COUNT(*) FROM members WHERE first_name='Lena' AND last_name='Schmidt'`,
+	).Scan(&memberCount); err != nil {
+		t.Fatalf("member count: %v", err)
 	}
-	if memberUserID != userID {
-		t.Errorf("member.user_id = %d, want %d", memberUserID, userID)
+	if memberCount != 0 {
+		t.Errorf("expected no member, got %d", memberCount)
 	}
 
 	var status string
