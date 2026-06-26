@@ -9,6 +9,8 @@ import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { CLUB_FUNCTION_OPTIONS } from '../lib/constants'
 import { errorMessage, errorStatus } from '../lib/errors'
+import { useMediaQuery } from '../lib/useMediaQuery'
+import { openBlobNatively } from '../lib/openFileNatively'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -523,6 +525,7 @@ export default function DocumentsPage() {
   const { folderId: folderIdParam } = useParams()
   const navigate = useNavigate()
   const { hasCapability } = useAuth()
+  const isMobile = useMediaQuery('(max-width: 639px)')
 
   const currentFolderId = folderIdParam ? parseInt(folderIdParam) : null
 
@@ -606,9 +609,27 @@ export default function DocumentsPage() {
     setTimeout(() => setLinkToast(''), 2500)
   }
 
-  function openFile(file: FileItem) {
+  async function openFile(file: FileItem) {
     setFileError('')
-    navigate(`/dokumente/anzeigen/${file.id}`)
+    // Desktop: In-App-Viewer (Render-Qualität ist auf großem Schirm gut).
+    if (!isMobile) {
+      navigate(`/dokumente/anzeigen/${file.id}`)
+      return
+    }
+    // Mobile: den schwachen In-App-Render überspringen und die Datei direkt im
+    // nativen Viewer öffnen (zoomen/scrollen/schließen).
+    try {
+      const { data } = await api.get<{ token: string }>(`/files/${file.id}/download-token`)
+      const res = await api.get<Blob>(`/files/${file.id}/download?token=${data.token}`, {
+        responseType: 'blob',
+      })
+      openBlobNatively(res.data, file.name)
+    } catch (e) {
+      const status = errorStatus(e)
+      if (status === 403) setFileError('Du hast keinen Zugriff auf diese Datei.')
+      else if (status === 404) setFileError('Datei nicht gefunden.')
+      else setFileError('Datei konnte nicht geöffnet werden.')
+    }
   }
 
   async function deleteItem(type: 'folder' | 'file', id: number) {
