@@ -40,6 +40,9 @@ type Config struct {
 	// PasswordMinLength: serverseitig erzwungene Mindestlänge für neue Passwörter
 	// (Register/Reset/Change). <=0 wird als Default 12 behandelt.
 	PasswordMinLength int
+	// HSTSEnabled steuert den Strict-Transport-Security-Header. Default false —
+	// erst nach Live-Zertifikat aktivieren (sonst Aussperrung bei fehlendem TLS).
+	HSTSEnabled bool
 }
 
 type SMTPConfig struct {
@@ -79,6 +82,7 @@ func Load() (*Config, error) {
 		LoginLockMinutes:          getEnvInt("LOGIN_LOCK_MINUTES", 15),
 		ForgotPasswordCooldownSec: getEnvInt("FORGOT_PASSWORD_COOLDOWN_SEC", 60),
 		PasswordMinLength:         getEnvInt("PASSWORD_MIN_LENGTH", 12),
+		HSTSEnabled:               os.Getenv("HSTS_ENABLED") == "true",
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")

@@ -171,6 +171,7 @@ func serve() {
 		BaseURL:             cfg.BaseURL,
 		BuildHash:           buildHash,
 		AuthRateLimitPerMin: cfg.AuthRateLimitPerMin,
+		HSTSEnabled:         cfg.HSTSEnabled,
 	}
 
 	distFS, err := fs.Sub(webFS, "web/dist")

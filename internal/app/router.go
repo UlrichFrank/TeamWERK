@@ -73,6 +73,8 @@ type Handlers struct {
 	// routes (login/refresh/forgot-password/reset-password). 0 disables the limiter
 	// (e.g. in tests).
 	AuthRateLimitPerMin int
+	// HSTSEnabled adds the Strict-Transport-Security header (only after TLS is live).
+	HSTSEnabled bool
 }
 
 // BuildRouter wires all routes, middleware, and handlers.
@@ -87,6 +89,8 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	// loggt strukturiert (event="panic") — ohne anbieter-spezifisches Alerting.
 	r.Use(health.Recoverer)
 	r.Use(middleware.CleanPath)
+	// Browser-Härtungsheader auf allen Antworten (Clickjacking/CSP/Referrer/Sniffing).
+	r.Use(securityHeaders(h.HSTSEnabled))
 	if h.BaseURL != "" {
 		r.Use(corsMiddleware(h.BaseURL))
 	}
