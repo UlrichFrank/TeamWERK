@@ -93,6 +93,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
+  const draftsRef = useRef<Map<number, string>>(new Map())
 
   useEffect(() => {
     const el = inputRef.current
@@ -231,11 +232,19 @@ export default function ChatPage() {
   }
 
   const openConversation = async (conv: Conversation) => {
+    // Aktuellen Entwurf für die bisherige Konversation sichern, damit er beim
+    // Zurückwechseln erhalten bleibt. Während einer Edit-Session enthält
+    // msgInput den bearbeiteten Nachrichtentext, nicht den Entwurf → nicht
+    // überschreiben.
+    if (activeConv && activeConv.id !== conv.id && !editingMessage) {
+      if (msgInput) draftsRef.current.set(activeConv.id, msgInput)
+      else draftsRef.current.delete(activeConv.id)
+    }
     setActiveConv(conv)
     setMobileShowChat(true)
     setReplyTo(null)
     setEditingMessage(null)
-    setMsgInput('')
+    setMsgInput(draftsRef.current.get(conv.id) ?? '')
     await loadMessages(conv.id)
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
@@ -287,6 +296,7 @@ export default function ChatPage() {
         setReplyTo(null)
       }
       setMsgInput('')
+      draftsRef.current.delete(activeConv.id)
       await loadMessages(activeConv.id)
     } catch {} finally {
       setSending(false)
