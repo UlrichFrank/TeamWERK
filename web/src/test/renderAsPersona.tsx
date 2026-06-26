@@ -78,6 +78,8 @@ function makeCtx(user: User, capabilities: string[], navRoutes: string[]): AuthC
     capabilities,
     hasCapability: (cap: string) => capabilities.includes(cap),
     navRoutes,
+    passwordChangeRecommended: false,
+    dismissPasswordChangeHint: () => {},
     login: async () => {},
     logout: async () => {},
     startImpersonation: async () => {},

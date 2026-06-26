@@ -13,7 +13,13 @@
 
 - [x] 3.1 `RegisterPage.tsx`, `ResetPasswordPage.tsx` und Passwort-Ändern-Dialog: `minLength`/Hinweistext auf ≥ 12 Zeichen; Server-400 als Fehlermeldung anzeigen
 
-## 4. Tests & Verifikation
+## 4. Sanfter Upgrade-Hinweis (Bestandspasswörter)
+
+- [x] 4a.1 Login: bei Erfolg `password_change_recommended` (Klartext-Länge < Mindestlänge) in der Antwort; Login bleibt erfolgreich (kein Block)
+- [x] 4a.2 Frontend: `AuthContext` hält den Hinweis (nur im Speicher), `AppShell` zeigt einen schließbaren Banner mit Link zur Passwortänderung
+- [x] 4a.3 Test: Login mit kurzem Bestandspasswort → 200 + Flag; mit langem → kein Flag
+
+## 5. Tests & Verifikation
 
 - [x] 4.1 Register: gültiges Passwort → 2xx; < 12 Zeichen → 400; > 72 Byte → 400
 - [x] 4.2 ResetPassword: < 12 Zeichen → 400 und Account bleibt deaktiviert; gültig → 2xx

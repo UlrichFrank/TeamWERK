@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
-import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import ChangelogModal from './ChangelogModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -78,7 +78,7 @@ function initOpenModules(): Record<string, boolean> {
 interface ChildEntry { id: number; first_name: string; last_name: string }
 
 export default function AppShell() {
-  const { user, loading, logout, impersonating, stopImpersonation, navRoutes: navRouteList } = useAuth()
+  const { user, loading, logout, impersonating, stopImpersonation, navRoutes: navRouteList, passwordChangeRecommended, dismissPasswordChangeHint } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 639px)')
@@ -377,6 +377,27 @@ export default function AppShell() {
                 className="flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" /> Zurück
+              </button>
+            </div>
+          )}
+          {passwordChangeRecommended && (
+            <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-brand-info" />
+              <div className="flex-1">
+                Dein Passwort ist kürzer als die empfohlenen 12 Zeichen.{' '}
+                <button
+                  onClick={() => { dismissPasswordChangeHint(); navigate('/profil') }}
+                  className="underline font-medium hover:text-brand-info"
+                >
+                  Jetzt ändern
+                </button>
+              </div>
+              <button
+                onClick={dismissPasswordChangeHint}
+                aria-label="Hinweis schließen"
+                className="text-brand-text-muted hover:text-brand-text shrink-0"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
           )}

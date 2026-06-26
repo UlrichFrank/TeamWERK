@@ -19,3 +19,15 @@ Das System SHALL bei jedem passwortsetzenden Endpunkt — `POST /api/auth/regist
 #### Scenario: Zu kurzes Passwort beim Zurücksetzen
 - **WHEN** `POST /api/auth/reset-password` mit einem gültigen Token, aber einem Passwort unter 12 Zeichen aufgerufen wird
 - **THEN** antwortet der Server mit HTTP 400 und das Passwort wird nicht gesetzt (ein Kind-Account wird dabei NICHT auf `can_login=1` aktiviert)
+
+### Requirement: Sanfter Upgrade-Hinweis für Bestandspasswörter
+
+Bestehende Passwörter SHALL NICHT zwangsweise zurückgesetzt werden; ein Login mit einem korrekten, aber zu kurzen Passwort SHALL weiterhin erfolgreich sein. Beim erfolgreichen Login SHALL der Server signalisieren, ob das verwendete Passwort kürzer als die aktuelle Mindestlänge ist (Feld `password_change_recommended` in der Login-Antwort), damit das Frontend einen nicht-blockierenden Hinweis zur Passwortänderung anzeigen kann.
+
+#### Scenario: Login mit zu kurzem Bestandspasswort gelingt mit Hinweis
+- **WHEN** ein Nutzer mit korrektem, aber kürzer-als-Mindestlänge Passwort `POST /api/auth/login` aufruft
+- **THEN** antwortet der Server mit 200, liefert ein gültiges Access-Token UND `password_change_recommended: true`
+
+#### Scenario: Login mit ausreichend langem Passwort ohne Hinweis
+- **WHEN** ein Nutzer mit einem Passwort ≥ Mindestlänge einloggt
+- **THEN** enthält die Login-Antwort kein `password_change_recommended: true`

@@ -67,15 +67,19 @@ const maxPasswordBytes = 72
 
 const defaultPasswordMinLength = 12
 
+// passwordMinLength liefert die wirksame Mindestlänge (Config oder Default).
+func (h *Handler) passwordMinLength() int {
+	if h.cfg != nil && h.cfg.PasswordMinLength > 0 {
+		return h.cfg.PasswordMinLength
+	}
+	return defaultPasswordMinLength
+}
+
 // validatePassword erzwingt die serverseitige Passwort-Mindeststärke. Ein leerer
 // Fehler-Rückgabewert bedeutet „gültig". Gilt für Register/Reset/Change.
 func (h *Handler) validatePassword(pw string) error {
-	minLen := defaultPasswordMinLength
-	if h.cfg != nil && h.cfg.PasswordMinLength > 0 {
-		minLen = h.cfg.PasswordMinLength
-	}
-	if len([]rune(pw)) < minLen {
-		return fmt.Errorf("password must be at least %d characters", minLen)
+	if len([]rune(pw)) < h.passwordMinLength() {
+		return fmt.Errorf("password must be at least %d characters", h.passwordMinLength())
 	}
 	if len(pw) > maxPasswordBytes {
 		return fmt.Errorf("password must not exceed %d bytes", maxPasswordBytes)
@@ -161,8 +165,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 	clearLegacyRefreshCookie(w)
+	// Sanfter Upgrade-Hinweis: Bestandspasswörter werden nicht zwangsweise
+	// zurückgesetzt. Die Klartext-Länge ist nur hier (beim Login) bekannt — liegt
+	// sie unter der aktuellen Mindestlänge, signalisieren wir dem Client eine
+	// Empfehlung zur Passwortänderung (nicht blockierend).
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"access_token": accessToken})
+	json.NewEncoder(w).Encode(struct {
+		AccessToken               string `json:"access_token"`
+		PasswordChangeRecommended bool   `json:"password_change_recommended,omitempty"`
+	}{
+		AccessToken:               accessToken,
+		PasswordChangeRecommended: len([]rune(req.Password)) < h.passwordMinLength(),
+	})
 }
 
 const lockTimeFormat = time.RFC3339

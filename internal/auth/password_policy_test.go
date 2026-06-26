@@ -1,12 +1,14 @@
 package auth_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // B-6: Register erzwingt die Passwort-Mindeststärke.
@@ -82,6 +84,41 @@ func TestResetPassword_PasswordPolicy(t *testing.T) {
 	db.QueryRow(`SELECT can_login FROM users WHERE id=?`, userID).Scan(&canLogin)
 	if canLogin != 1 {
 		t.Errorf("nach gültigem Reset: erwartet can_login=1, bekam %d", canLogin)
+	}
+}
+
+// B-6 (sanft): Login signalisiert einen Upgrade-Hinweis bei zu kurzem Bestandspasswort.
+func TestLogin_WeakPasswordHint(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard") // Passwort "test" (4 < 12)
+	email := emailSuffix(t, db, userID)
+	srv := newAuthServer(t, db)
+
+	decodeHint := func(res *http.Response) bool {
+		var body struct {
+			AccessToken               string `json:"access_token"`
+			PasswordChangeRecommended bool   `json:"password_change_recommended"`
+		}
+		json.NewDecoder(res.Body).Decode(&body)
+		res.Body.Close()
+		return body.PasswordChangeRecommended
+	}
+
+	// Kurzes Bestandspasswort → Hinweis-Flag true (kein Block, Login gelingt).
+	res := testutil.Post(t, srv, "/api/auth/login", "", map[string]string{"email": email, "password": "test"})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("Login mit Bestandspasswort: erwartet 200, bekam %d", res.StatusCode)
+	}
+	if !decodeHint(res) {
+		t.Error("kurzes Bestandspasswort: erwartet password_change_recommended=true")
+	}
+
+	// Starkes Passwort setzen → Login ohne Hinweis-Flag.
+	hash, _ := bcrypt.GenerateFromPassword([]byte("langGenugPW12"), bcrypt.MinCost)
+	db.Exec(`UPDATE users SET password=? WHERE id=?`, string(hash), userID)
+	res = testutil.Post(t, srv, "/api/auth/login", "", map[string]string{"email": email, "password": "langGenugPW12"})
+	if decodeHint(res) {
+		t.Error("starkes Passwort: erwartet keinen Upgrade-Hinweis")
 	}
 }
 
