@@ -35,9 +35,10 @@ export default function ResetPasswordPage() {
             onChange={setPassword}
             autoComplete="new-password"
             required
-            minLength={8}
+            minLength={12}
             placeholder="Neues Passwort"
           />
+          <p className="text-xs text-brand-text-muted">Mindestens 12 Zeichen.</p>
           <button type="submit" className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
             Passwort speichern
           </button>

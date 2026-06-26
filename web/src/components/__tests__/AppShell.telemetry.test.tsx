@@ -45,6 +45,8 @@ function makeCtx(opts: { loading?: boolean; user?: User | null }): AuthCtx {
     capabilities: [],
     hasCapability: () => false,
     navRoutes: ['/'],
+    passwordChangeRecommended: false,
+    dismissPasswordChangeHint: () => {},
     login: async () => {},
     logout: async () => {},
     startImpersonation: async () => {},

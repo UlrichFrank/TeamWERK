@@ -16,6 +16,10 @@ interface AuthCtx {
   capabilities: string[]
   hasCapability: (cap: string) => boolean
   navRoutes: string[]
+  // Sanfter Hinweis: true, wenn das beim Login verwendete Passwort kürzer als die
+  // aktuelle Mindestlänge ist (kein Zwangs-Reset). Nur im Speicher, kein Persist.
+  passwordChangeRecommended: boolean
+  dismissPasswordChangeHint: () => void
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   startImpersonation: (userId: number, name: string) => Promise<void>
@@ -48,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mapsProvider, setMapsProvider] = useState<MapsProvider>('auto')
   const [capabilities, setCapabilities] = useState<string[]>([])
   const [navRoutes, setNavRoutes] = useState<string[]>([])
+  const [passwordChangeRecommended, setPasswordChangeRecommended] = useState(false)
 
   async function loadMapsProvider() {
     try {
@@ -75,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await axios.post('/api/auth/logout', {}, { withCredentials: true })
     setAccessToken(null)
     setUser(null)
+    setPasswordChangeRecommended(false)
   }
 
   function resetTimer() {
@@ -149,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await axios.post('/api/auth/login', { email, password }, { withCredentials: true })
     const token: string = res.data.access_token
     setAccessToken(token)
+    setPasswordChangeRecommended(res.data.password_change_recommended === true)
     const payload = JSON.parse(atob(token.split('.')[1]))
     setUser({ id: payload.uid, email: payload.email, role: payload.role, clubFunctions: payload.club_functions ?? [], isParent: payload.is_parent ?? false })
     loadMapsProvider()
@@ -175,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, impersonating, mapsProvider, setMapsProvider, capabilities, hasCapability: (cap: string) => capabilities.includes(cap), navRoutes, login, logout, startImpersonation, stopImpersonation }}>
+    <AuthContext.Provider value={{ user, loading, impersonating, mapsProvider, setMapsProvider, capabilities, hasCapability: (cap: string) => capabilities.includes(cap), navRoutes, passwordChangeRecommended, dismissPasswordChangeHint: () => setPasswordChangeRecommended(false), login, logout, startImpersonation, stopImpersonation }}>
       {children}
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

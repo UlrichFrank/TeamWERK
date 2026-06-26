@@ -141,6 +141,19 @@ var exSepaOwner = map[string]int{
 	"spieler": 403, "elternteil": 403,
 }
 
+// Handler-Level-Gate: members.canAccessMember — admin || vorstand || kassierer || isOwn || isParent.
+// Mit einer Member-ID, die keiner Persona gehört (isOwn=false, isParent=false):
+// → admin, vorstand(_elternteil), kassierer kommen durch; alle anderen → 403.
+// Quelle: openspec/changes/secure-member-draft-access (B-1/B-3).
+var exMemberDraftAccess = map[string]int{
+	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
+	"kassierer":          httpAllowed,
+	"vorstand_beisitzer": 403,
+	"trainer":            403, "trainer_elternteil": 403,
+	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
+	"spieler": 403, "elternteil": 403,
+}
+
 // endpointCase beschreibt einen einzelnen Endpoint in der Permission-Matrix.
 type endpointCase struct {
 	method   string
@@ -155,7 +168,9 @@ type endpointCase struct {
 //   - SPA-Fallback (GET /*): kein API-Endpoint.
 var matrix = []endpointCase{
 	// ── Public ──────────────────────────────────────────────────────────────────
-	// Kein Auth-Middleware → exPublic (beliebiger Response-Code akzeptabel).
+	// /api/uploads/* läuft seit B-5 unter CookieMiddleware (kein Bearer-Flow, wie SSE):
+	// ohne Refresh-Cookie → 401. Die Bearer-basierte Matrix akzeptiert das via httpAnyOK;
+	// die eigentliche Cookie-Auth wird in upload.TestServeUpload_RequiresCookieAuth geprüft.
 	{method: "GET", path: "/api/uploads/*", expected: exPublic},
 	{method: "GET", path: "/api/files/{id}/download", expected: exPublic},
 	// sepa-mandat/download ist öffentlich, nutzt aber Query-Token-Check → httpAnyOK
@@ -211,8 +226,9 @@ var matrix = []endpointCase{
 
 	// Members (self-service)
 	{method: "GET", path: "/api/users/{id}/contact", expected: exAuth},
-	{method: "GET", path: "/api/members/{id}/change-drafts", expected: exAuth},
-	{method: "POST", path: "/api/members/{id}/change-request", expected: exAuth},
+	// Änderungsanträge: Handler-Level-Ownership-Gate (B-1) — Eigentümer/Eltern/admin/vorstand/kassierer.
+	{method: "GET", path: "/api/members/{id}/change-drafts", expected: exMemberDraftAccess},
+	{method: "POST", path: "/api/members/{id}/change-request", expected: exMemberDraftAccess},
 	// sepa-mandat-spezifische Routen: Handler-Level-Gate (isAdmin || isVorstand || isOwn || isParent)
 	{method: "GET", path: "/api/members/{id}/sepa-mandat/download-token", expected: exSepaOwner},
 	{method: "DELETE", path: "/api/members/{id}/sepa-mandat", expected: exSepaOwner},

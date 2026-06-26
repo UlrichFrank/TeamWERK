@@ -101,8 +101,9 @@ export default function RegisterPage() {
               onChange={setPassword}
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={12}
             />
+            <p className="mt-1 text-xs text-brand-text-muted">Mindestens 12 Zeichen.</p>
           </div>
           <button
             type="submit"

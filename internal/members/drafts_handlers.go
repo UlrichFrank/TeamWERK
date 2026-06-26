@@ -17,6 +17,14 @@ func (h *Handler) GetChangeRequestsHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Ownership-Gate: nur Eigentümer/Eltern/admin/vorstand/kassierer dürfen die Anträge
+	// (inkl. old_value-Snapshot der aktuellen Mitglieds-PII) eines Mitglieds lesen.
+	claims := auth.ClaimsFromCtx(r.Context())
+	if !h.canAccessMember(r.Context(), claims, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	drafts, err := h.GetChangeDrafts(memberID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve drafts", http.StatusInternalServerError)
@@ -31,7 +39,6 @@ func (h *Handler) GetChangeRequestsHandler(w http.ResponseWriter, r *http.Reques
 	// reicht den Envelope nur an die Finance-Gruppe durch (admin/vorstand/kassierer) und
 	// schwärzt ihn sonst (G2 — Eigentümer/Eltern lesen Bankdaten nicht). Die eigentliche
 	// Entschlüsselung passiert clientseitig mit dem Tresor-Schlüssel.
-	claims := auth.ClaimsFromCtx(r.Context())
 	revealBank := claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("kassierer")
 	redactBankDrafts(drafts, revealBank)
 
@@ -54,6 +61,13 @@ func (h *Handler) CreateChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Ownership-Gate: nur Eigentümer/Eltern/admin/vorstand/kassierer dürfen für ein
+	// Mitglied einen Antrag anlegen, überschreiben oder einen pending-Antrag verdrängen.
+	if !h.canAccessMember(r.Context(), claims, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	var req ChangeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -68,6 +82,14 @@ func (h *Handler) CreateChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 	}
 	if !allowedFields[req.FieldName] {
 		http.Error(w, "Invalid field name", http.StatusBadRequest)
+		return
+	}
+
+	// Bankdaten-Anträge folgen dem Selbstbedienungsmodell: nur Eigentümer/Eltern dürfen
+	// einen (clientseitig verschlüsselten) Envelope einreichen. Damit kann niemand einen
+	// fremden Bankdaten-Envelope unter dem Namen eines anderen Mitglieds hinterlegen.
+	if req.FieldName == "bankdaten" && !h.canSubmitBankDraft(r.Context(), claims, memberID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 

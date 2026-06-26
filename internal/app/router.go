@@ -7,9 +7,11 @@ import (
 	"io/fs"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 
 	"github.com/teamstuttgart/teamwerk/internal/absences"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -67,6 +69,12 @@ type Handlers struct {
 	// BuildHash is the git commit injected via -ldflags. It seeds the ETag for
 	// non-hashed static files so every deploy invalidates the browser cache.
 	BuildHash string
+	// AuthRateLimitPerMin caps requests per client IP on the unauthenticated auth
+	// routes (login/refresh/forgot-password/reset-password). 0 disables the limiter
+	// (e.g. in tests).
+	AuthRateLimitPerMin int
+	// HSTSEnabled adds the Strict-Transport-Security header (only after TLS is live).
+	HSTSEnabled bool
 }
 
 // BuildRouter wires all routes, middleware, and handlers.
@@ -81,6 +89,8 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	// loggt strukturiert (event="panic") — ohne anbieter-spezifisches Alerting.
 	r.Use(health.Recoverer)
 	r.Use(middleware.CleanPath)
+	// Browser-Härtungsheader auf allen Antworten (Clickjacking/CSP/Referrer/Sniffing).
+	r.Use(securityHeaders(h.HSTSEnabled))
 	if h.BaseURL != "" {
 		r.Use(corsMiddleware(h.BaseURL))
 	}
@@ -90,17 +100,24 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	// (Token-Prüfung im Handler; ohne METRICS_TOKEN liefert er 404).
 	r.Get("/api/healthz", h.Health.Healthz)
 	r.Get("/api/metrics", h.Health.Metrics)
-	r.Get("/api/uploads/*", h.Upload.ServeUpload)
 	r.Get("/api/files/{id}/download", h.Files.DownloadFile)
 	r.Get("/api/members/{id}/sepa-mandat/download", h.Upload.SepaDownload)
-	r.Post("/api/auth/login", h.Auth.Login)
-	r.Post("/api/auth/refresh", h.Auth.Refresh)
 	r.Post("/api/auth/logout", h.Auth.Logout)
 	r.Post("/api/auth/request-membership", h.Auth.RequestMembership)
 	r.Post("/api/auth/register", h.Auth.Register)
 	r.Get("/api/auth/token-info", h.Auth.GetTokenInfo)
-	r.Post("/api/auth/forgot-password", h.Auth.ForgotPassword)
-	r.Post("/api/auth/reset-password", h.Auth.ResetPassword)
+	// Unauthenticated, bruteforce-/DoS-exponierte Auth-Routen: IP-Rate-Limiting vor
+	// der teuren Verarbeitung (bcrypt, Mailversand). LimitByRealIP keyt auf
+	// X-Forwarded-For/X-Real-IP (korrekt hinter nginx). 0 ⇒ deaktiviert (Tests).
+	r.Group(func(r chi.Router) {
+		if h.AuthRateLimitPerMin > 0 {
+			r.Use(httprate.LimitByRealIP(h.AuthRateLimitPerMin, time.Minute))
+		}
+		r.Post("/api/auth/login", h.Auth.Login)
+		r.Post("/api/auth/refresh", h.Auth.Refresh)
+		r.Post("/api/auth/forgot-password", h.Auth.ForgotPassword)
+		r.Post("/api/auth/reset-password", h.Auth.ResetPassword)
+	})
 	r.Get("/api/profile/email/confirm", h.Auth.ConfirmEmailChange)
 	r.Get("/api/profile/recovery-email/confirm", h.Auth.ConfirmRecoveryEmailChange)
 	r.Get("/api/calendar/feed/{token}", h.Calendar.Feed)
@@ -108,11 +125,14 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).
 	r.Get("/api/encryption-pubkey", h.Config.GetGroupPublicKey)
 
-	// SSE — cookie-authenticated (EventSource cannot send headers)
+	// Cookie-authenticated GETs — Clients ohne Bearer-Header (EventSource für SSE,
+	// <img> für Uploads). Authentifizierung über das HttpOnly-Refresh-Cookie.
 	r.Group(func(r chi.Router) {
 		r.Use(auth.CookieMiddleware(h.Database))
 		r.Get("/api/events", h.Hub.Events)
 		r.Get("/api/chat/events", h.Chat.ChatEvents)
+		// Mitglieder-/Nutzerfotos: nicht mehr unauthentifiziert erreichbar (B-5).
+		r.Get("/api/uploads/*", h.Upload.ServeUpload)
 	})
 
 	// Authenticated routes

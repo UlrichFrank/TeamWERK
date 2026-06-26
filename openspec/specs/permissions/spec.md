@@ -1,5 +1,13 @@
-## ADDED Requirements
+# permissions Specification
 
+## Purpose
+
+Definiert die verbindliche Autorisierungs-Matrix von TeamWERK: welche Persona
+(Kombination aus System-Rolle, Vereinsfunktionen und Eltern-Status) welche
+Backend-Routen erreichen darf und welche Frontend-Routen, Navigations-Items und
+Page-internen Aktionen sichtbar sind. Dient als Quelle der Wahrheit für die
+mechanischen Drift-Tests (`TestPermissionMatrix_Backend`, Vitest-Smoke-Tests).
+## Requirements
 ### Requirement: Persona-Definition
 
 Das System SHALL die folgenden 11 Personas als Test-Fixtures bereitstellen. Sie decken alle praktisch relevanten Kombinationen aus System-Rolle, Vereinsfunktion(en) und Eltern-Status ab, mit besonderem Fokus auf den im Verein häufigen Fall, dass funktionsführende Mitglieder gleichzeitig Eltern sind.
@@ -32,13 +40,15 @@ Kurzcodes für die folgenden Matrix-Tabellen: `a`=admin, `v`=vorstand, `ve`=vors
 
 ### Requirement: Public Endpoints sind ohne Auth zugänglich
 
-Die Routen `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `POST /api/auth/request-membership`, `POST /api/auth/register`, `GET /api/auth/token-info`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `GET /api/profile/email/confirm`, `GET /api/uploads/*`, `GET /api/files/{id}/download`, `GET /api/members/{id}/sepa-mandat/download` SHALL ohne Bearer-Token erreichbar sein und dürfen NICHT mit 401 antworten, nur weil kein Token vorliegt.
+Die Routen `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `POST /api/auth/request-membership`, `POST /api/auth/register`, `GET /api/auth/token-info`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `GET /api/profile/email/confirm`, `GET /api/files/{id}/download`, `GET /api/members/{id}/sepa-mandat/download` SHALL ohne Bearer-Token erreichbar sein und dürfen NICHT mit 401 antworten, nur weil kein Token vorliegt. `GET /api/uploads/*` ist NICHT mehr Teil dieser Liste und SHALL nicht ohne Authentifizierung ausgeliefert werden (siehe Anforderung „Upload-Auslieferung erfordert Authentifizierung").
 
 #### Scenario: Login ohne Token
 - **WHEN** ein Aufruf an `POST /api/auth/login` mit gültigem Body und ohne `Authorization`-Header gemacht wird
 - **THEN** antwortet der Server NICHT mit 401 (200/400 je nach Body-Validität ist erlaubt)
 
----
+#### Scenario: Unauthentifizierter Upload-Zugriff wird abgelehnt
+- **WHEN** ein Aufruf an `GET /api/uploads/<datei>` ohne gültiges Refresh-Cookie gemacht wird
+- **THEN** antwortet der Server mit 401 und liefert die Datei NICHT aus
 
 ### Requirement: Authenticated-Endpoints erfordern gültiges Bearer-Token
 
@@ -364,3 +374,66 @@ Das System SHALL die folgenden Inkonsistenzen als bekannten Status quo führen. 
 #### Scenario: vorstand_beisitzer hat heute keinen Sondereffekt
 - **WHEN** Persona `vorstand_beisitzer` einen beliebigen Endpoint aufruft, der nicht öffentlich oder Self-Service ist
 - **THEN** antwortet der Server analog zu Persona `spieler` ohne Funktionen — typischerweise 403, sofern nicht ein anderes Gate (z. B. „authenticated") greift
+
+### Requirement: Änderungsantrag-Routen erzwingen Mitglieds-Ownership
+
+Die Self-Service-Routen `GET /api/members/{id}/change-drafts` und `POST /api/members/{id}/change-request` SHALL nur dann Mitgliedsdaten lesen oder schreiben, wenn der Aufrufer eine Beziehung zum Ziel-Mitglied `{id}` hat: Eigentümer (`member.user_id == claims.UserID`), Elternteil des Mitglieds (`family_links`), `admin`, `vorstand` oder `kassierer`. Für alle anderen Aufrufer SHALL der Server mit HTTP 403 antworten, BEVOR Antrags- oder Mitgliedsdaten (insbesondere der `old_value`-Snapshot) gelesen, zurückgegeben oder verändert werden.
+
+| a | v | ve | vb | ka | t | te | s | se | sp | e |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ✅ | ✅ (alle) | ✅ | ❌ (fremd) | ✅ (alle) | ❌ (fremd) | ❌ (fremd) | ❌ (fremd) | ❌ (fremd) | ❌ (fremd) | ✅ (eigenes Kind) |
+
+> „fremd" = Member-ID gehört nicht zum Aufrufer/Kind. Eigentümer und Eltern erreichen ausschließlich das eigene bzw. das Kind-Mitglied; `vorstand`/`kassierer`/`admin` erreichen alle Mitglieder.
+
+#### Scenario: Fremder Spieler liest Änderungsanträge eines anderen Mitglieds
+- **WHEN** Persona `spieler` `GET /api/members/{id}/change-drafts` mit einer Member-ID aufruft, die nicht zu ihrem eigenen Account gehört
+- **THEN** antwortet der Server mit 403 und liefert keine Antragsdaten und keinen `old_value`-Snapshot
+
+#### Scenario: Eigentümer liest eigene Änderungsanträge
+- **WHEN** der Eigentümer eines Mitglieds `GET /api/members/{id}/change-drafts` für die eigene Member-ID aufruft
+- **THEN** antwortet der Server mit 200 und den eigenen Anträgen
+
+#### Scenario: Elternteil liest Anträge des eigenen Kindes
+- **WHEN** Persona `elternteil` `GET /api/members/{id}/change-drafts` für die Member-ID des eigenen Kindes aufruft
+- **THEN** antwortet der Server NICHT mit 403
+
+#### Scenario: Vorstand liest fremde Anträge
+- **WHEN** Persona `vorstand` `GET /api/members/{id}/change-drafts` für ein beliebiges Mitglied aufruft
+- **THEN** antwortet der Server mit 200
+
+#### Scenario: Fremder Nutzer legt Änderungsantrag für anderes Mitglied an
+- **WHEN** Persona `spieler` `POST /api/members/{id}/change-request` mit einer fremden Member-ID aufruft
+- **THEN** antwortet der Server mit 403 und es wird kein Draft erzeugt, aktualisiert oder verdrängt
+
+---
+
+### Requirement: Bankdaten-Anträge nur durch Eigentümer oder Elternteil
+
+Für `field_name='bankdaten'` SHALL `POST /api/members/{id}/change-request` ausschließlich Aufrufer akzeptieren, die Eigentümer oder Elternteil des Mitglieds sind (Selbstbedienungsmodell). Andere Aufrufer — auch `vorstand` und `kassierer`, deren Rolle die Genehmigung, nicht die Einreichung ist — SHALL mit HTTP 403 antworten. Dadurch kann kein fremder Aufrufer einen verschlüsselten Bankdaten-Envelope unter dem Namen eines anderen Mitglieds hinterlegen.
+
+#### Scenario: Fremder unterschiebt Bankdaten-Envelope
+- **WHEN** Persona `spieler` `POST /api/members/{id}/change-request` mit `field_name='bankdaten'` und einem Envelope `{bank_ciphertext, bank_dek_enc}` für eine fremde Member-ID sendet
+- **THEN** antwortet der Server mit 403 und es wird kein `bankdaten`-Draft angelegt oder überschrieben
+
+#### Scenario: Eigentümer reicht eigene Bankdaten ein
+- **WHEN** der Eigentümer eines Mitglieds `POST .../change-request` mit `field_name='bankdaten'` und gültigem Envelope für die eigene Member-ID sendet
+- **THEN** antwortet der Server mit 2xx und der `bankdaten`-Draft wird angelegt oder aktualisiert (UPSERT-Verhalten unverändert)
+
+#### Scenario: Kassierer kann keinen Bankdaten-Antrag für ein Mitglied einreichen
+- **WHEN** Persona `kassierer` `POST .../change-request` mit `field_name='bankdaten'` für ein fremdes Mitglied sendet
+- **THEN** antwortet der Server mit 403 (Korrektur erfolgt über `PUT /api/members/{id}/bank-details`, nicht über den Antragsweg)
+
+### Requirement: Upload-Auslieferung erfordert Authentifizierung
+
+Das System SHALL Dateien unter `/api/uploads/*` nur an authentifizierte Aufrufer ausliefern. Da `<img>`-Requests keinen Bearer-Header senden, erfolgt die Authentifizierung über das HttpOnly-Refresh-Cookie (`auth.CookieMiddleware`, analog zu den SSE-Routen). Ohne gültiges Cookie SHALL der Server mit HTTP 401 antworten und die Datei NICHT ausliefern. Die Auslieferung SHALL `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store` setzen, damit die (UUID-)URL nicht über Referrer oder Caches weiterleakt. Die UUID-Dateinamen bleiben als Defense-in-Depth erhalten.
+
+> Bewusste Grenze: Es gibt keinen Pro-Foto-Sichtbarkeitscheck — jeder authentifizierte Nutzer kann ein Foto über seine (nicht erratbare) UUID-URL laden. Der behobene Befund war der *unauthentifizierte* Zugriff; per-Foto-Granularität wäre angesichts der bereits breiten Foto-Sichtbarkeit in Mitgliederlisten unverhältnismäßig.
+
+#### Scenario: Authentifizierter Aufrufer erhält die Datei
+- **WHEN** ein Aufrufer mit gültigem Refresh-Cookie `GET /api/uploads/<datei>` aufruft
+- **THEN** wird die Datei mit 200 sowie `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store` ausgeliefert
+
+#### Scenario: Unauthentifizierter Zugriff wird abgelehnt
+- **WHEN** `GET /api/uploads/<datei>` ohne gültiges Refresh-Cookie aufgerufen wird
+- **THEN** antwortet der Server mit HTTP 401 und liefert die Datei NICHT aus
+

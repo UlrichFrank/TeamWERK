@@ -195,7 +195,7 @@ func TestRegister_ValidToken(t *testing.T) {
 		"token":      plain,
 		"first_name": "Anna",
 		"last_name":  "Muster",
-		"password":   "sicher123",
+		"password":   "sicheresPW123", // ≥12 Zeichen (Passwort-Policy)
 	})
 	defer res.Body.Close()
 

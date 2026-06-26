@@ -2260,6 +2260,43 @@ func (h *Handler) isParentOf(ctx context.Context, parentUserID, memberID int) bo
 	return count > 0
 }
 
+// isOwnerOrParent reports whether claims belongs to the member's linked user
+// (member.user_id == caller) or to a parent of the member (via family_links).
+func (h *Handler) isOwnerOrParent(ctx context.Context, claims *auth.Claims, memberID int) bool {
+	if claims == nil {
+		return false
+	}
+	var ownerUserID sql.NullInt64
+	if err := h.db.QueryRowContext(ctx,
+		`SELECT user_id FROM members WHERE id=?`, memberID).Scan(&ownerUserID); err != nil {
+		return false
+	}
+	if ownerUserID.Valid && int(ownerUserID.Int64) == claims.UserID {
+		return true
+	}
+	return h.isParentOf(ctx, claims.UserID, memberID)
+}
+
+// canAccessMember reports whether claims may read or write the change-draft data
+// of the given member: the member's owner, a parent, admin, vorstand or kassierer.
+func (h *Handler) canAccessMember(ctx context.Context, claims *auth.Claims, memberID int) bool {
+	if claims == nil {
+		return false
+	}
+	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("kassierer") {
+		return true
+	}
+	return h.isOwnerOrParent(ctx, claims, memberID)
+}
+
+// canSubmitBankDraft reports whether claims may submit a bankdaten change request
+// for the member. Bank data follows a self-service model: only the member's owner
+// or a parent may submit it — vorstand/kassierer approve drafts but do not file
+// them (corrections run through PUT /api/members/{id}/bank-details).
+func (h *Handler) canSubmitBankDraft(ctx context.Context, claims *auth.Claims, memberID int) bool {
+	return h.isOwnerOrParent(ctx, claims, memberID)
+}
+
 // GET /api/profile/kind/:memberId
 func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())

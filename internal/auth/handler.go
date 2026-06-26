@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -27,15 +28,64 @@ type Handler struct {
 	mailer    *mailer.Mailer
 	baseURL   string
 	hub       *hub.EventHub
+
+	// forgot-password Konto-Drosselung (in-process, best-effort): letzter
+	// Mailversand je Konto-Name, geschützt durch fpMu. Resettet bei Neustart.
+	fpMu   sync.Mutex
+	fpLast map[string]time.Time
 }
 
 func NewHandler(db *sql.DB, cfg *appconfig.Config, jwtSecret string, m *mailer.Mailer, baseURL string, h *hub.EventHub) *Handler {
-	return &Handler{db: db, cfg: cfg, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL, hub: h}
+	return &Handler{db: db, cfg: cfg, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL, hub: h, fpLast: make(map[string]time.Time)}
+}
+
+// forgotPasswordAllowed reports whether a reset mail may be sent for the given
+// account name now, recording the send time when it returns true. A
+// non-positive cooldown disables the throttle (e.g. in tests).
+func (h *Handler) forgotPasswordAllowed(accountName string) bool {
+	if h.cfg == nil || h.cfg.ForgotPasswordCooldownSec <= 0 {
+		return true
+	}
+	cooldown := time.Duration(h.cfg.ForgotPasswordCooldownSec) * time.Second
+	key := strings.ToLower(accountName)
+	h.fpMu.Lock()
+	defer h.fpMu.Unlock()
+	if last, ok := h.fpLast[key]; ok && time.Since(last) < cooldown {
+		return false
+	}
+	h.fpLast[key] = time.Now()
+	return true
 }
 
 // dummyHash is a pre-computed bcrypt hash used in the login ErrNoRows branch to
 // perform a constant-time dummy comparison, preventing timing-based email enumeration.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("teamwerk-dummy-password-for-timing"), bcrypt.DefaultCost)
+
+// maxPasswordBytes ist die bcrypt-Grenze: längere Eingaben würden stillschweigend
+// trunkiert, daher lehnen wir sie explizit ab.
+const maxPasswordBytes = 72
+
+const defaultPasswordMinLength = 12
+
+// passwordMinLength liefert die wirksame Mindestlänge (Config oder Default).
+func (h *Handler) passwordMinLength() int {
+	if h.cfg != nil && h.cfg.PasswordMinLength > 0 {
+		return h.cfg.PasswordMinLength
+	}
+	return defaultPasswordMinLength
+}
+
+// validatePassword erzwingt die serverseitige Passwort-Mindeststärke. Ein leerer
+// Fehler-Rückgabewert bedeutet „gültig". Gilt für Register/Reset/Change.
+func (h *Handler) validatePassword(pw string) error {
+	if len([]rune(pw)) < h.passwordMinLength() {
+		return fmt.Errorf("password must be at least %d characters", h.passwordMinLength())
+	}
+	if len(pw) > maxPasswordBytes {
+		return fmt.Errorf("password must not exceed %d bytes", maxPasswordBytes)
+	}
+	return nil
+}
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -46,16 +96,17 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	var id int
+	var id, failedCount int
 	var hash, role, ident string
+	var lockedUntil sql.NullString
 	// Login akzeptiert E-Mail ODER login_name (Vorname.Nachname für Kinder ohne
 	// E-Mail). Beide Spalten werden case-insensitiv gegen denselben Eingabewert
 	// geprüft. ident ist die Identität fürs JWT: E-Mail, sonst der login_name.
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, password, role, COALESCE(NULLIF(email, ''), login_name, '')
+		`SELECT id, password, role, COALESCE(NULLIF(email, ''), login_name, ''), failed_login_count, locked_until
 		 FROM users WHERE (LOWER(email) = LOWER(?) OR LOWER(login_name) = LOWER(?)) AND can_login = 1`,
 		req.Email, req.Email,
-	).Scan(&id, &hash, &role, &ident)
+	).Scan(&id, &hash, &role, &ident, &failedCount, &lockedUntil)
 	if err == sql.ErrNoRows {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password)) //nolint:errcheck
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
@@ -65,10 +116,20 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// Account-Lockout: ein gesperrtes Konto antwortet ohne bcrypt-Prüfung. Der
+	// generische 429 ist von der IP-Drosselung (httprate) nicht unterscheidbar, so
+	// dass die Sperre keine Konto-Existenz verrät.
+	if accountLocked(lockedUntil) {
+		http.Error(w, "too many attempts", http.StatusTooManyRequests)
+		return
+	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
+		h.registerFailedLogin(r.Context(), id, failedCount)
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
+	// Erfolgreicher Login hebt Zähler und Sperre auf.
+	h.resetLoginFailures(r.Context(), id)
 	h.db.ExecContext(r.Context(), `UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?`, id)
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), id)
 	slog.Info("login loadJWTExtras done", "clubFunctions", clubFunctions, "isParent", isParent)
@@ -104,8 +165,57 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 	clearLegacyRefreshCookie(w)
+	// Sanfter Upgrade-Hinweis: Bestandspasswörter werden nicht zwangsweise
+	// zurückgesetzt. Die Klartext-Länge ist nur hier (beim Login) bekannt — liegt
+	// sie unter der aktuellen Mindestlänge, signalisieren wir dem Client eine
+	// Empfehlung zur Passwortänderung (nicht blockierend).
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"access_token": accessToken})
+	json.NewEncoder(w).Encode(struct {
+		AccessToken               string `json:"access_token"`
+		PasswordChangeRecommended bool   `json:"password_change_recommended,omitempty"`
+	}{
+		AccessToken:               accessToken,
+		PasswordChangeRecommended: len([]rune(req.Password)) < h.passwordMinLength(),
+	})
+}
+
+const lockTimeFormat = time.RFC3339
+
+// accountLocked reports whether locked_until lies in the future.
+func accountLocked(lockedUntil sql.NullString) bool {
+	if !lockedUntil.Valid || lockedUntil.String == "" {
+		return false
+	}
+	t, err := time.Parse(lockTimeFormat, lockedUntil.String)
+	if err != nil {
+		return false
+	}
+	return time.Now().Before(t)
+}
+
+// registerFailedLogin increments the failure counter and, once the configured
+// threshold is reached, locks the account for the configured window (resetting
+// the counter so the next window starts fresh). A non-positive LoginMaxFailures
+// disables the lockout (e.g. in tests).
+func (h *Handler) registerFailedLogin(ctx context.Context, userID, currentFailures int) {
+	if h.cfg == nil || h.cfg.LoginMaxFailures <= 0 {
+		return
+	}
+	next := currentFailures + 1
+	if next >= h.cfg.LoginMaxFailures {
+		until := time.Now().Add(time.Duration(h.cfg.LoginLockMinutes) * time.Minute).Format(lockTimeFormat)
+		h.db.ExecContext(ctx,
+			`UPDATE users SET failed_login_count = 0, locked_until = ? WHERE id = ?`, until, userID)
+		return
+	}
+	h.db.ExecContext(ctx,
+		`UPDATE users SET failed_login_count = ? WHERE id = ?`, next, userID)
+}
+
+// resetLoginFailures clears the failure counter and any lock after a successful login.
+func (h *Handler) resetLoginFailures(ctx context.Context, userID int) {
+	h.db.ExecContext(ctx,
+		`UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE id = ?`, userID)
 }
 
 // clearLegacyRefreshCookie löscht das vor f967335 unter Path=/api/auth gesetzte
@@ -562,6 +672,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if err := h.validatePassword(req.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		slog.Error("register bcrypt failed", "error", err)
@@ -626,6 +740,12 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if err != nil || dest == "" {
 		return // kein Treffer oder kein Ziel: kein (nutzloser) Token
 	}
+	// Konto-Drosselung: innerhalb des Cooldowns keine weitere Mail/keinen Token —
+	// verhindert Mail-Bombing eines bekannten Kontos auch über mehrere IPs. Die
+	// Antwort bleibt der gleiche 204 (keine Enumeration, kein Timing-Signal).
+	if !h.forgotPasswordAllowed(req.Email) {
+		return
+	}
 	plain, tokenHash, _ := GenerateOpaqueToken()
 	expiry := PasswordResetExpiry()
 	h.db.ExecContext(r.Context(),
@@ -659,6 +779,10 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	).Scan(&id, &userID, &expiresAt)
 	if err != nil || time.Now().After(expiresAt) {
 		http.Error(w, "invalid or expired token", http.StatusBadRequest)
+		return
+	}
+	if err := h.validatePassword(req.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -1206,6 +1330,10 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.CurrentPassword)); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := h.validatePassword(req.NewPassword); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
