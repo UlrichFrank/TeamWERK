@@ -459,12 +459,18 @@ func (h *Handler) isParentOf(r *http.Request, parentUserID, memberID int) bool {
 	return count > 0
 }
 
-// GET /api/uploads/* — Auth required
+// GET /api/uploads/* — erfordert Authentifizierung. Die Route ist unter
+// auth.CookieMiddleware gemountet (Router), weil <img>-Requests kein Bearer-Token
+// senden können — analog zu den SSE-Routen. Damit ist die Auslieferung nicht mehr
+// unauthentifiziert erreichbar. Zusätzlich verhindern no-referrer/no-store, dass
+// die (UUID-)URL über Referrer oder Caches weiterleakt.
 func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
 	rawPath := strings.TrimPrefix(r.URL.Path, "/api/uploads/")
 	if strings.Contains(rawPath, "..") || rawPath == "" {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Cache-Control", "private, no-store")
 	h.streamFile(w, r, filepath.Join(h.uploadDir, rawPath), filepath.Base(rawPath))
 }

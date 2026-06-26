@@ -168,7 +168,9 @@ type endpointCase struct {
 //   - SPA-Fallback (GET /*): kein API-Endpoint.
 var matrix = []endpointCase{
 	// ── Public ──────────────────────────────────────────────────────────────────
-	// Kein Auth-Middleware → exPublic (beliebiger Response-Code akzeptabel).
+	// /api/uploads/* läuft seit B-5 unter CookieMiddleware (kein Bearer-Flow, wie SSE):
+	// ohne Refresh-Cookie → 401. Die Bearer-basierte Matrix akzeptiert das via httpAnyOK;
+	// die eigentliche Cookie-Auth wird in upload.TestServeUpload_RequiresCookieAuth geprüft.
 	{method: "GET", path: "/api/uploads/*", expected: exPublic},
 	{method: "GET", path: "/api/files/{id}/download", expected: exPublic},
 	// sepa-mandat/download ist öffentlich, nutzt aber Query-Token-Check → httpAnyOK

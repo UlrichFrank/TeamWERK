@@ -1,20 +1,15 @@
-## 1. Backend: Token-Ausgabe & geschützte Auslieferung
+## 1. Backend: Cookie-authentifizierte Auslieferung
 
-- [ ] 1.1 Token-Ausgabe für Uploads analog `SepaDownloadToken` implementieren: authentifiziert, Sichtbarkeitsprüfung (`policy.MemberCan`-analog) für das angeforderte Foto, kurzlebiges HMAC-Token gebunden an die konkrete Datei
-- [ ] 1.2 `ServeUpload` (`internal/upload/handler.go`): Token validieren (Signatur, Ablauf, Datei-Bindung) statt offener Auslieferung; bei fehlendem/ungültigem Token 401/403
-- [ ] 1.3 `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store` auf der Auslieferung setzen; UUID-/`..`-Abwehr beibehalten
-- [ ] 1.4 `/api/uploads/*` in `internal/app/router.go` aus dem Public-Tier nehmen; irreführenden Doc-Kommentar korrigieren
+- [x] 1.1 `/api/uploads/*` in `internal/app/router.go` aus dem Public-Mount in die Cookie-Auth-Group (`auth.CookieMiddleware`, wie SSE) verschieben
+- [x] 1.2 `ServeUpload` (`internal/upload/handler.go`): `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store` setzen; UUID-/`..`-Abwehr beibehalten
+- [x] 1.3 Irreführenden Doc-Kommentar korrigieren (jetzt tatsächlich geschützt)
 
-## 2. Frontend: Token-URLs
+## 2. Tests & Verifikation
 
-- [ ] 2.1 Alle `photoURL`-Verwender in `web/src/` ermitteln
-- [ ] 2.2 Foto-URLs auf das Token-Muster umstellen (Token aus der jeweiligen API-Antwort mitführen oder via Token-Endpoint holen), `<img src=...>` entsprechend setzen
-- [ ] 2.3 Betroffene Seiten visuell prüfen (Mitgliederliste, Profil, Kind-Profil, ggf. Kader)
+- [x] 2.1 Unauthentifizierter `GET /api/uploads/<datei>` → 401
+- [x] 2.2 Mit gültigem Refresh-Cookie → 200 + `Referrer-Policy: no-referrer` + `Cache-Control: private, no-store`
+- [x] 2.3 `/verify-change` + `openspec validate secure-uploads-access --strict`
 
-## 3. Tests & Verifikation
+## 3. Hinweis (kein Frontend-Change nötig)
 
-- [ ] 3.1 Tokenloser `GET /api/uploads/<datei>` → 401/403
-- [ ] 3.2 Berechtigter Aufrufer: Token wird ausgestellt, Auslieferung 200 + `Referrer-Policy`/`Cache-Control`
-- [ ] 3.3 Token für nicht sichtbares Foto wird nicht ausgestellt → 403
-- [ ] 3.4 Abgelaufenes/ungültiges Token → 401/403
-- [ ] 3.5 `/verify-change` + `openspec validate secure-uploads-access --strict`
+- [x] 3.1 Bestätigt: same-origin `<img src="/api/uploads/...">` sendet das HttpOnly-Refresh-Cookie automatisch (SameSite=Strict, Path=/) — keine `photoURL`-Anpassungen im Frontend erforderlich

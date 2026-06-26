@@ -4,10 +4,10 @@
 
 ## What Changes
 
-- **`/api/uploads/*` aus dem Public-Tier entfernen** und Zugriff auf authentifizierte, berechtigte Aufrufer beschränken. Da `<img src>` keinen Bearer-Header sendet, erfolgt der Zugriff über dasselbe **kurzlebige, signierte Download-Token-Muster** wie `SepaDownloadToken`/`SepaDownload` (Capability `file-download-token`) statt über einen Bearer-geschützten XHR.
-- **Ownership-/Sichtbarkeits-Check** beim Ausstellen des Tokens (analog `policy.MemberCan`): wer ein Foto sehen darf, erhält ein Token; das Streamen validiert das Token.
-- **Doc-Kommentar korrigieren** und mit der tatsächlichen Mountierung in Einklang bringen.
-- **Härtung der Foto-Antworten:** `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store`. UUID-Dateinamen bleiben als Defense-in-Depth erhalten.
+- **`/api/uploads/*` aus dem Public-Tier entfernen** und in die **Cookie-Auth-Group** (`auth.CookieMiddleware`) verschieben — dasselbe Muster, mit dem die SSE-Routen das „kein Bearer im `<img>`/`EventSource`"-Problem lösen. Same-origin `<img src>` sendet das HttpOnly-Refresh-Cookie automatisch → **kein Frontend-Umbau** nötig. (Die zunächst erwogene Download-Token-Variante wurde als unverhältnismäßig für einen Low-Befund verworfen, siehe `design.md` D1.)
+- **Doc-Kommentar korrigieren** und mit der tatsächlichen, jetzt geschützten Mountierung in Einklang bringen.
+- **Härtung der Foto-Antworten:** `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store`. UUID-Dateinamen bleiben als Defense-in-Depth.
+- **Bewusste Grenze:** kein Pro-Foto-Sichtbarkeitscheck (nur „authentifiziert"); der behobene Befund war der unauthentifizierte Zugriff.
 
 ## Capabilities
 
@@ -19,8 +19,8 @@
 
 ## Impact
 
-- **Code:** `internal/app/router.go` (Mountierung von `/api/uploads/*` verschieben), `internal/upload/handler.go` (`ServeUpload`: Token-Validierung statt offener Auslieferung; Token-Ausgabe-Endpoint analog `SepaDownloadToken`; Härtungs-Header; Kommentar korrigieren).
-- **Frontend:** Foto-URLs (`photoURL`) müssen das Download-Token mitführen (Token-Endpoint aufrufen, dann `<img src=...token>`); betroffene Stellen in `web/src/` anpassen.
-- **API-Verhalten:** **BREAKING** für direkte, tokenlose `/api/uploads/...`-Zugriffe (bisher offen) — beabsichtigt.
-- **Tests:** tokenloser Zugriff → 401/403; gültiges Token → 200; Token für ein nicht sichtbares Foto wird nicht ausgestellt (403).
+- **Code:** `internal/app/router.go` (`/api/uploads/*` in die Cookie-Auth-Group verschieben), `internal/upload/handler.go` (`ServeUpload`: Härtungs-Header; Kommentar korrigieren).
+- **Frontend:** keine Änderung (same-origin `<img>` sendet das Cookie automatisch).
+- **API-Verhalten:** **BREAKING** für unauthentifizierte `/api/uploads/...`-Zugriffe (bisher offen) — beabsichtigt; eingeloggte Nutzer unverändert.
+- **Tests:** unauthentifiziert → 401; mit Cookie → 200 + Härtungs-Header.
 - **Daten/Migration:** keine.

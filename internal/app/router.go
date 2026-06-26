@@ -100,7 +100,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	// (Token-Prüfung im Handler; ohne METRICS_TOKEN liefert er 404).
 	r.Get("/api/healthz", h.Health.Healthz)
 	r.Get("/api/metrics", h.Health.Metrics)
-	r.Get("/api/uploads/*", h.Upload.ServeUpload)
 	r.Get("/api/files/{id}/download", h.Files.DownloadFile)
 	r.Get("/api/members/{id}/sepa-mandat/download", h.Upload.SepaDownload)
 	r.Post("/api/auth/logout", h.Auth.Logout)
@@ -126,11 +125,14 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).
 	r.Get("/api/encryption-pubkey", h.Config.GetGroupPublicKey)
 
-	// SSE — cookie-authenticated (EventSource cannot send headers)
+	// Cookie-authenticated GETs — Clients ohne Bearer-Header (EventSource für SSE,
+	// <img> für Uploads). Authentifizierung über das HttpOnly-Refresh-Cookie.
 	r.Group(func(r chi.Router) {
 		r.Use(auth.CookieMiddleware(h.Database))
 		r.Get("/api/events", h.Hub.Events)
 		r.Get("/api/chat/events", h.Chat.ChatEvents)
+		// Mitglieder-/Nutzerfotos: nicht mehr unauthentifiziert erreichbar (B-5).
+		r.Get("/api/uploads/*", h.Upload.ServeUpload)
 	})
 
 	// Authenticated routes

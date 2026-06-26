@@ -15,24 +15,20 @@
 
 ## Decisions
 
-**D1 — Download-Token statt Bearer.** Wiederverwendung des `file-download-token`-Musters: Ein authentifizierter `POST/GET`-Endpoint stellt nach Berechtigungsprüfung ein kurzlebiges, signiertes Token (HMAC) für eine konkrete Datei aus; `ServeUpload` validiert das Token, bevor es streamt. Alternative „Bearer-geschützter XHR + Blob-URL im Frontend" verworfen: mehr Frontend-Komplexität, kein Caching-Vorteil, weicht vom etablierten SEPA-Muster ab.
+**D1 — Cookie-Auth statt Download-Token (Revision).** Ursprünglich war ein HMAC-Download-Token pro Foto vorgesehen (wie SEPA). Beim Umsetzen zeigte sich, dass die Codebase dasselbe Problem für SSE bereits idiomatisch löst: `<img>`/`EventSource` senden kein Bearer-Token, deshalb laufen diese Routen unter `auth.CookieMiddleware` (HttpOnly-Refresh-Cookie). `/api/uploads/*` wird in dieselbe Cookie-Auth-Group verschoben. Vorteil: **null Frontend-Änderungen** (same-origin `<img src>` sendet das Cookie automatisch), schließt den eigentlichen Befund (unauthentifizierter Zugriff). Die Token-Variante (großer Frontend-Umbau über alle `photoURL`-Consumer) wurde als unverhältnismäßig für einen Low-Befund verworfen.
 
-**D2 — Berechtigung beim Ausstellen, nicht beim Streamen.** Die teure/fachliche Sichtbarkeitsprüfung (`policy.MemberCan`-analog) passiert bei der Token-Ausgabe; `ServeUpload` prüft nur noch Token-Signatur + Ablauf + Datei-Bindung. Hält den Streaming-Pfad billig und die Autorisierung an einem Ort.
+**D2 — Bewusst kein Pro-Foto-Sichtbarkeitscheck.** Cookie-Auth prüft nur „eingeloggt", nicht „darf genau dieses Foto sehen". Akzeptiert, weil Fotos in Mitgliederlisten ohnehin breit an berechtigte Nutzer ausgespielt werden und der behobene Befund der *unauthentifizierte* Leak war (Referrer/Logs/Cache). UUIDv4-Namen bleiben als Defense-in-Depth.
 
-**D3 — Defense-in-Depth bleibt.** UUIDv4-Dateinamen, `..`-Abwehr und `filepath.Join`-Re-Rooting bleiben erhalten; zusätzlich `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store`, damit Token-URLs nicht über Referrer/History/Proxy-Cache weiterleaken.
+**D3 — Defense-in-Depth bleibt.** UUIDv4-Dateinamen, `..`-Abwehr und `filepath.Join`-Re-Rooting bleiben; zusätzlich `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store` auf der Auslieferung.
 
-**D4 — Doc-Kommentar korrigieren.** Der irreführende `// Auth required`-Kommentar wird an die reale (jetzt tatsächlich geschützte) Mountierung angeglichen, damit künftige Maintainer nicht fälschlich Schutz annehmen.
+**D4 — Doc-Kommentar korrigieren.** Der irreführende `// Auth required`-Kommentar wird an die jetzt tatsächlich geschützte Mountierung angeglichen.
 
 ## Risks / Trade-offs
 
-- **[Frontend-Bildstellen vergessen → kaputte Bilder]** → alle `photoURL`-Verwender in `web/src/` erfassen und auf Token-URL umstellen; visuelle Prüfung der betroffenen Seiten.
-- **[Token-URL leakt trotzdem]** → kurze Gültigkeit + `no-referrer`/`no-store`; Token bindet an konkrete Datei, nicht an ein Pauschalrecht.
-- **[Cache-Verlust bei Fotos]** → `private, no-store` verhindert Shared-Cache; akzeptabel, Fotos sind klein und selten.
+- **[Kein Pro-Foto-Ownership]** → akzeptierte Grenze (D2); jeder Eingeloggte kann ein Foto per nicht-erratbarer UUID-URL laden.
+- **[Cache-Verlust bei Fotos]** → `private, no-store` verhindert Shared-Cache; akzeptabel, Fotos sind klein.
+- **[SameSite=Strict + Cookie-Pfad]** → das Refresh-Cookie liegt unter Path `/` mit SameSite=Strict; same-origin `<img>`-GETs senden es. Bestätigt durch das identische SSE-Muster.
 
 ## Migration Plan
 
-Ein-Schritt-Deploy von Backend + Frontend zusammen (Breaking für tokenlose Direktzugriffe). Rollback durch Zurücknehmen beider Commits. Vor Deploy prüfen, dass keine externen Konsumenten direkt auf `/api/uploads/...` verlinken.
-
-## Open Questions
-
-- Token-Ausgabe als eigener Endpoint pro Foto oder gebündelt (z.B. Token bereits in der `photoURL` der Mitglieds-API mitliefern)? Empfehlung: Token in der jeweiligen API-Antwort mitgeben, die das Foto referenziert — spart einen Roundtrip und bündelt die Sichtbarkeitsprüfung mit der ohnehin erfolgenden Mitglieds-Autorisierung.
+Ein-Schritt-Deploy (nur Backend; kein Frontend-Change). Breaking nur für bisher unauthentifizierte Direktzugriffe — beabsichtigt. Rollback durch Zurücknehmen des Commits.
