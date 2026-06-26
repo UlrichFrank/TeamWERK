@@ -1,4 +1,14 @@
-## ADDED Requirements
+# permissions Specification
+
+## Purpose
+
+Definiert die verbindliche Autorisierungs-Matrix von TeamWERK: welche Persona
+(Kombination aus System-Rolle, Vereinsfunktionen und Eltern-Status) welche
+Backend-Routen erreichen darf und welche Frontend-Routen, Navigations-Items und
+Page-internen Aktionen sichtbar sind. Dient als Quelle der Wahrheit für die
+mechanischen Drift-Tests (`TestPermissionMatrix_Backend`, Vitest-Smoke-Tests).
+
+## Requirements
 
 ### Requirement: Persona-Definition
 
