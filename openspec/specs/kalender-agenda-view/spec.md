@@ -1,6 +1,14 @@
+# kalender-agenda-view Specification
+
 ## Capability: kalender-agenda-view
 
 Mobile Agenda-Darstellung des Monatskalenders auf Viewports < 640px.
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kalender-agenda-view`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Agenda-Liste auf Mobile
 

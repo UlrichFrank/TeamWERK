@@ -1,4 +1,10 @@
-## ADDED Requirements
+# event-wizard Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `event-wizard`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Event-Typ wählen
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-trainings-gaps Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `test-trainings-gaps`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Einzelsitzung anlegen und bearbeiten
 Das System SHALL Trainern ermöglichen, eine einzelne Trainingssession anzulegen und zu bearbeiten. Nur Trainer des zugehörigen Teams oder Admins dürfen schreiben.

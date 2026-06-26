@@ -1,5 +1,11 @@
 # Spec: Profilbild-Crop-Upload
 
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `profilbild-crop-upload`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Nutzer kann Profilbild mit Zuschnitt hochladen
 Nach Auswahl einer Bilddatei MUSS das System ein modales Crop-Interface öffnen, bevor der Upload stattfindet. Das Modal MUSS einen kreisförmigen Ausschnitt (1:1) zeigen, den Nutzer per Drag positionieren und per Pinch-to-Zoom sowie Slider skalieren können. Erst nach Bestätigung wird das Bild verarbeitet und hochgeladen.
 

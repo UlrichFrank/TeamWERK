@@ -1,4 +1,10 @@
-## ADDED Requirements
+# vps-deployment Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `vps-deployment`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Single Go binary serves frontend and API
 The system SHALL be packaged as a single Go binary that embeds the React production build via `embed.FS` and serves both the API routes and the static frontend from the same process.

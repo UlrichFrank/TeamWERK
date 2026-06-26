@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# game-edit-modal Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `game-edit-modal`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: GameEditModal zeigt editierbare Felder eines Spieltags
 

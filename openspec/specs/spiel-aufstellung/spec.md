@@ -1,3 +1,11 @@
+# spiel-aufstellung Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `spiel-aufstellung`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Trainer kann Aufstellung pro Spiel setzen
 
 Das System SHALL einen Endpoint `POST /api/games/{id}/lineup` bereitstellen, der eine Liste von `member_id`-Werten als Aufstellung speichert (bulk upsert + delete-diff). Nur Trainer und Admins dürfen schreiben.

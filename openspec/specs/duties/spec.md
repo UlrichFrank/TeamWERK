@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# duties Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `duties`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Duty board (Dienstbörse)
 Das System SHALL eine Dienstbörse mit allen Duty-Slots anzeigen. Jeder Slot enthält neben den bisherigen Informationen (event name, date, duty type, vacancies) auch die Liste der eingetragenen Personen mit privacy-gefiltertem Kontaktdaten-Payload. Beim Beanspruchen eines Slots MUSS für Elternteile mit verknüpften Kindern mit Proxy-Account ein „Für wen?"-Selektor erscheinen. Das Beanspruchen eines Slots MUSS race-frei implementiert sein: die Prüfung auf verfügbare Kapazität, das Eintragen des Nutzers und das Aktualisieren des Zählers MÜSSEN als eine atomare Operation erfolgen, die auch bei gleichzeitigen Anfragen korrekt funktioniert.
@@ -120,7 +126,6 @@ Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden
 - **THEN** enthält jeder Assignee-Eintrag: `name` (immer), `photo_url` (nur wenn `photo_visible=1`), `phones` (nur wenn `phones_visible=1`, sonst leeres Array), `address` (nur wenn `address_visible=1`, sonst null)
 - **THEN** haben Proxy-Account-Assignees keine `phones` und keine `address` (da Proxy-Accounts diese Daten nicht haben)
 
-## ADDED Requirements
 
 ### Requirement: Audience-Filter-Pille auf Dienste-Seite
 Die Dienstbörse-UI (`/dienste`, `web/src/pages/DutyPage.tsx`) SHALL eine zusätzliche Filter-Pille „Nur meine Audience" mit `Filter`-Icon enthalten, die ausschließlich für Nutzer mit mindestens einer der Vereinsfunktionen `vorstand`, `vorstand_beisitzer`, `trainer`, `sportliche_leitung` sichtbar ist. Die Pille SHALL standardmäßig aktiv sein und ihren Zustand in den URL-Search-Params persistieren: aktiv = kein Param (Default), inaktiv = `?audience=all`. Beim Aufruf von `/api/duty-board` SHALL der Query-Parameter `?audience=all` exakt dann angehängt werden, wenn die Pille deaktiviert ist.

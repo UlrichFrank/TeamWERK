@@ -1,4 +1,10 @@
-## ADDED Requirements
+# beitrags-saetze Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `beitrags-saetze`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Beitragsmatrix verwalten
 Nutzer mit Vereinsfunktion `vorstand` oder `kassierer` (sowie System-Rolle `admin`) SOLLEN die Beitragsmatrix pflegen können. Es gibt genau drei Kategorien: `aktiv_ohne`, `aktiv_mit` und `passiv`. Via `GET /api/fee-rates` MUST alle Sätze inkl. Historie zurückgegeben werden, sortiert nach `kategorie, valid_from DESC`. Via `POST /api/fee-rates` SHALL ein neuer Satz mit `kategorie`, `betrag_cent` (> 0) und `valid_from` angelegt werden. Der gültige Beitrag einer Kategorie zu einem Stichtag ist der Satz mit dem größten `valid_from`, das `<= Stichtag` ist.

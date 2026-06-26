@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# rsvp Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `rsvp`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: rsvp-modal-behavior
 Das RSVP-Modal für Absage/Vielleicht MUSS nur erscheinen wenn der Termin

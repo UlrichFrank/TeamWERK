@@ -1,4 +1,10 @@
-## ADDED Requirements
+# welcome-email Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `welcome-email`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Manual welcome email dispatch
 The system SHALL allow admins to manually send a personalized welcome email to a member, provided a user account is linked to that member. The email SHALL be sent exactly once; once sent, the action cannot be repeated.

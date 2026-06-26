@@ -1,3 +1,11 @@
+# number-spinner Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `number-spinner`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: NumberSpinner rendert ein Zahlenfeld mit gestylten Chevron-Buttons
 
 Die Komponente SHALL ein `<input type="number">` mit zwei absolut positionierten Chevron-Buttons (▲ oben, ▼ unten) rechts im Eingabefeld rendern. Die nativen Browser-Spinner-Pfeile SHALL ausgeblendet werden. Die Buttons SHALL in Markenfarben gelb/schwarz gestaltet sein (`bg-brand-yellow text-brand-black`, Hover: `bg-brand-black text-brand-yellow`).

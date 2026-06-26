@@ -1,4 +1,10 @@
-## ADDED Requirements
+# chat-konversationen Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `chat-konversationen`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Teilnehmer einer Gruppen-Konversation einsehen
 

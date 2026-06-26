@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# rsvp-event-config Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `rsvp-event-config`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: rsvp-opt-out-flag
 Jeder Termin (training_session, game) MUSS ein `rsvp_opt_out`-Flag besitzen (INTEGER 0/1).
@@ -40,7 +46,6 @@ Logik ausgeschlossen: sie müssen explizit zusagen.
 - **WHEN** ein berechtigter Nutzer (admin, trainer, sportliche_leitung, vorstand) ein bestehendes game oder eine bestehende training_session bearbeitet
 - **THEN** KÖNNEN `rsvp_opt_out` und `rsvp_require_reason` geändert werden; der neue Wert wird persistiert und beeinflusst alle künftigen Response-Auswertungen (z.B. `confirmed_count`, `my_rsvp`-Default)
 
-## ADDED Requirements
 
 ### Requirement: rsvp-participants-opt-out
 Der Endpoint `GET /api/games/{id}/participants` MUSS bei `rsvp_opt_out = 1` für reguläre

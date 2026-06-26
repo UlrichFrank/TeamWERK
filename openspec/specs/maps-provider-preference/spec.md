@@ -1,3 +1,11 @@
+# maps-provider-preference Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `maps-provider-preference`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Kartendienst-Präferenz speichern
 Das System SHALL pro Nutzer eine Kartendienst-Präferenz (`auto` | `google` | `apple`) in der Datenbank speichern. Default ist `auto`.
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# membership-request-deeplink Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `membership-request-deeplink`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Push-Notification verlinkt direkt auf den Beitrittsantrag
 Wenn eine neue Beitrittsanfrage eingeht, SHALL die Push-Notification-URL die ID des neu erstellten Antrags enthalten.

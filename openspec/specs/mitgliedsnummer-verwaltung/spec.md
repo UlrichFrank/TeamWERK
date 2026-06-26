@@ -1,5 +1,9 @@
 # mitgliedsnummer-verwaltung Specification
 
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mitgliedsnummer-verwaltung`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
 ## Requirements
 
 ### Requirement: Automatische Vergabe der Mitgliedsnummer beim Anlegen

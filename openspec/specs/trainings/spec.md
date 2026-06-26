@@ -1,3 +1,11 @@
+# trainings Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `trainings`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Training-Series mit Venue
 Training-Series SHALL einen optionalen Venue (venue_id FK) statt eines Freitext-Ortsfeldes haben.
 

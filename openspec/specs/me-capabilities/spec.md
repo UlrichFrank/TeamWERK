@@ -1,4 +1,10 @@
-## ADDED Requirements
+# me-capabilities Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `me-capabilities`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: GET /api/me liefert Capabilities und Nav-Items
 

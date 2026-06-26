@@ -1,4 +1,10 @@
-## ADDED Requirements
+# member-absences Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `member-absences`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Abwesenheit anlegen
 

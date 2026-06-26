@@ -1,3 +1,11 @@
+# team-names-endpoint Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `team-names-endpoint`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Alle aktiven Teams abrufbar für Namensberechnung
 
 Das System SHALL einen Endpoint `GET /api/teams/names` bereitstellen, der für alle eingeloggten User alle aktiven Teams mit den Feldern zurückgibt, die für die clientseitige Kurznamensberechnung nötig sind: `id`, `age_class`, `gender`, `team_number`, `group_count`.

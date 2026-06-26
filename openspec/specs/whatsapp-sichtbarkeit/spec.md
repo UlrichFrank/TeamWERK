@@ -1,4 +1,10 @@
-## ADDED Requirements
+# whatsapp-sichtbarkeit Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `whatsapp-sichtbarkeit`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: WhatsApp-Sichtbarkeitsfeld in DB und API
 Das System SHALL ein Feld `whatsapp_visible` in der `user_visibility`-Tabelle speichern und über

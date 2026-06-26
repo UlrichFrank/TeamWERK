@@ -1,4 +1,10 @@
-## ADDED Requirements
+# mitfahrgelegenheiten-board Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mitfahrgelegenheiten-board`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Mitfahrgelegenheiten als chronologische Liste
 

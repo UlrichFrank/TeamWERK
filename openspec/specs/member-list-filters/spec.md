@@ -1,4 +1,10 @@
-## ADDED Requirements
+# member-list-filters Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `member-list-filters`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Mitgliederliste nach fehlender Nutzerverknüpfung filtern
 `GET /api/members` SHALL einen optionalen Query-Parameter `unlinked_user=1` unterstützen.

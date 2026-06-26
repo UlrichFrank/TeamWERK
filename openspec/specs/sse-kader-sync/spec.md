@@ -1,4 +1,10 @@
-## ADDED Requirements
+# sse-kader-sync Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `sse-kader-sync`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Kader-Mutationen broadcasten `"kader"`-Event
 

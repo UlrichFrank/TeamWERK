@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-auth-gaps Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `test-auth-gaps`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: ChangePassword Sicherheitsinvariante
 Das System SHALL bei Passwortänderung das aktuelle Passwort prüfen und nach erfolgreicher Änderung alle Refresh-Tokens des Nutzers löschen (erzwungener Logout auf allen Geräten).

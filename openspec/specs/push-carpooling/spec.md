@@ -1,4 +1,10 @@
-## ADDED Requirements
+# push-carpooling Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `push-carpooling`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Push bei Fahrgemeinschafts-Ereignissen
 Das System SHALL betroffene Nutzer per Push benachrichtigen, wenn eine Fahrgemeinschaft bestätigt oder abgesagt wird — sofern Push für Kategorie `carpooling` nicht deaktiviert.

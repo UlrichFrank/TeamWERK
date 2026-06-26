@@ -1,3 +1,11 @@
+# erweiterter-kader-trainings-access Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `erweiterter-kader-trainings-access`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Erweiterter Kader sieht Trainings des Teams
 
 Ein Spieler, der im erweiterten Kader (`kader_extended_members`) eines Teams eingetragen ist, SHALL in `GET /api/training-sessions` alle Trainingseinheiten dieses Teams sehen — identisch zu Hauptkader-Spielern.

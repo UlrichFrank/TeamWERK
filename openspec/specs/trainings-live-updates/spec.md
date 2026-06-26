@@ -1,4 +1,10 @@
-## ADDED Requirements
+# trainings-live-updates Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `trainings-live-updates`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Trainings-Mutationen broadcasten SSE-Event
 

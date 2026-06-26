@@ -1,4 +1,10 @@
-## ADDED Requirements
+# passwort-aenderung Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `passwort-aenderung`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Nutzer kann sein Passwort mit Verifikation des alten Passworts ändern
 Das System SHALL jedem authentifizierten Nutzer erlauben, sein Passwort zu ändern. Das aktuelle Passwort MUSS korrekt sein. Nach erfolgreicher Änderung werden alle Refresh-Tokens des Nutzers invalidiert.

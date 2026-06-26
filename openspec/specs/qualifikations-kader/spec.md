@@ -1,4 +1,10 @@
-## ADDED Requirements
+# qualifikations-kader Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `qualifikations-kader`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Qualifikationskader anlegen
 Ein Admin SHALL einen neuen Kader vom Typ `qualification` für eine Altersklasse/Geschlecht innerhalb der aktiven Saison anlegen können. Der Kader wird wie ein regulärer Kader befüllt (Spieler, Trainer).

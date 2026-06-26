@@ -1,4 +1,10 @@
-## ADDED Requirements
+# dashboard-migration Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `dashboard-migration`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Dashboard verwendet ausschließlich Brand-Tokens
 `DashboardPage.tsx` und seine Sub-Komponenten SHALL keine Raw-Tailwind-Farben (`text-black/50`, `bg-green-100`, `text-red-500`, etc.) verwenden. Alle Farbklassen MÜSSEN durch `brand-*`-Tokens ersetzt sein.
@@ -51,7 +57,6 @@ Der Skeleton-Loader im Dashboard (`bg-black/5 animate-pulse`) MUSS durch `bg-bra
 
 ---
 
-## MODIFIED Requirements
 
 ### Requirement: Dashboard-Sektion Fahrtgemeinschaften wird zu Link
 

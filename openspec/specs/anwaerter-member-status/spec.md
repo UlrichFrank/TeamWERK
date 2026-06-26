@@ -1,4 +1,10 @@
-## ADDED Requirements
+# anwaerter-member-status Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `anwaerter-member-status`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Anwärter als gültiger Member-Status
 Das System SHALL `anwaerter` als validen Wert für `members.status` akzeptieren. Ein Anwärter ist ein Spieler in der Probezeit, der noch kein vollwertiges Vereinsmitglied ist und keinen eigenen System-Account benötigt.

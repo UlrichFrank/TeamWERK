@@ -1,3 +1,11 @@
+# global-back-navigation Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `global-back-navigation`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Globaler Zurück-Button in AppShell
 AppShell SHALL einen generischen „← Zurück"-Button anzeigen, sobald der React-Router-interne History-Index größer als 0 ist. Der Button soll auf allen eingeloggten Seiten einheitlich positioniert sein und `navigate(-1)` auslösen.
 

@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# push-games Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `push-games`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Push bei Spiel-Ereignissen
 Das System SHALL allen berechtigten Team-Mitgliedern und deren Elternteilen eine Push Notification senden, wenn ein Spiel erstellt, geändert oder gelöscht wird — sofern der Nutzer Push für die Kategorie `games` nicht deaktiviert hat. Die Notification-`url` MUSS auf den konkreten Spieltermin in der Termine-Seite zeigen (`/termine?focus=game-<id>`), damit der Empfänger direkt zu- oder absagen kann. Für gelöschte Spiele (kein navigierbarer Termin mehr) zeigt die `url` auf `/termine`.

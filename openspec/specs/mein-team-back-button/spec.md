@@ -1,3 +1,11 @@
+# mein-team-back-button Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mein-team-back-button`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Zurück-Button bei gefilterter Team-Ansicht
 MeinTeamPage SHALL einen Zurück-Button anzeigen, wenn der Query-Parameter `team` in der URL gesetzt ist (`focusTeamId != null`). Ein Klick auf den Button MUSS `navigate(-1)` auslösen. Ist kein `?team`-Parameter gesetzt, DARF der Button nicht gerendert werden.
 

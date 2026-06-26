@@ -1,3 +1,11 @@
+# erweiterter-kader-sichtbarkeit Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `erweiterter-kader-sichtbarkeit`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: user_accessible_teams enthält erweiterte Kader-Mitglieder
 
 Das System SHALL die View `user_accessible_teams` so erweitern, dass Mitglieder, die über `kader_extended_members` einem Kader zugeordnet sind, als zugehörig zum Team und zur Saison gelten.

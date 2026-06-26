@@ -1,3 +1,11 @@
+# sse-live-updates Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `sse-live-updates`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: SSE-Endpoint sendet typisierte Refresh-Signale
 
 Der Server SHALL einen SSE-Endpoint `GET /api/events` bereitstellen. Der Endpoint SHALL authentifizierte Verbindungen offen halten und typisierte Event-Strings senden (`data: <event-typ>\n\n`), wenn eine Mutation in einem der folgenden Bereiche stattfindet: `mitfahrgelegenheiten`, `members`, `duties`, `games`, `settings`, `trainings`, `venues`, `absences`, `kader`.
@@ -140,7 +148,6 @@ Alle relevanten Pages SHALL eine `useLiveUpdates`-Verbindung zum SSE-Endpoint au
 - **WHEN** ein Admin ein Mitglied bearbeitet
 - **THEN** lädt die geöffnete MemberDetailPage still neu
 
-## Requirements
 ### Requirement: SSE-Endpoint sendet Versions-Event beim Verbindungsaufbau
 
 Der SSE-Handler SHALL beim Aufbau jeder neuen Verbindung als erstes Event `data: __version:<hash>\n\n` senden, bevor reguläre Mutations-Events gesendet werden. Der `<hash>` ist der zur Compile-Zeit eingebettete Build-Hash.

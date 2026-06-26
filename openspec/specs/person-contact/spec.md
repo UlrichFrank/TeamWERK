@@ -1,4 +1,10 @@
-## ADDED Requirements
+# person-contact Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `person-contact`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Kontaktdaten-Endpoint
 Das System SHALL einen Endpoint `GET /api/users/:id/contact` bereitstellen, der für einen authentifizierten

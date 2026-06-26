@@ -1,3 +1,11 @@
+# training-rsvp Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `training-rsvp`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Training-RSVP-Route
 
 Die Training-RSVP-Funktionalität SHALL über `/termine` erreichbar sein.

@@ -1,3 +1,11 @@
+# familie-im-profil Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `familie-im-profil`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Mitglieder-Navigation rollenbasiert einschränken
 Der Mitglieder-Tab in der Sidebar SHALL nur für Nutzer mit Rolle `admin` oder `trainer` sichtbar sein. Nutzer mit Rolle `spieler` oder `elternteil` sehen diesen Eintrag nicht.
 

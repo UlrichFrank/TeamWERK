@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ical-feed Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `ical-feed`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Token-Verwaltung
 

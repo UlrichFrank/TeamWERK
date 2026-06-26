@@ -1,4 +1,10 @@
-## ADDED Requirements
+# push-duties Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `push-duties`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Push bei Dienst-Ereignissen
 Das System SHALL berechtigten Nutzern eine Push Notification senden, wenn neue Dienst-Slots verfügbar sind oder ein Slot gelöscht wird, dem sie zugeteilt sind — sofern Push für Kategorie `duties` nicht deaktiviert.

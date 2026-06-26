@@ -1,4 +1,10 @@
-## ADDED Requirements
+# mobile-table-cards Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mobile-table-cards`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Tabellen-Seiten zeigen Card-Layout auf Mobile
 Alle 6 Tabellen-Seiten (AdminUsersPage, AdminTeamsPage, MembersPage, AdminDutyTypesPage, DutyAccountsPage, DutySlotsPage) SHALL auf Viewports unter 640px anstelle der `<table>`-Struktur ein Card-basiertes Layout anzeigen. Jede Tabellenzeile MUSS als eigenständige Card erscheinen.

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# kalender-modus-toggle Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kalender-modus-toggle`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Modus-Toggle auf KalenderPage
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-infrastructure Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `test-infrastructure`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Migrations-FS ist aus Tests zugänglich
 

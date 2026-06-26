@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# dashboard-carpooling-hint Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `dashboard-carpooling-hint`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Personalisierten Fahrtgemeinschafts-Status anzeigen
 

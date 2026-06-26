@@ -1,4 +1,10 @@
-## ADDED Requirements
+# duty-board-game-filter Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `duty-board-game-filter`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: duty-board game_id filter
 `GET /duty-board` SHALL akzeptieren einen optionalen Query-Parameter `game_id` (Integer). Wenn angegeben, gibt der Endpunkt nur Slots zurück, deren `ds.game_id` dem angegebenen Wert entspricht. Alle bestehenden Zugriffskontrollen (Team-Sichtbarkeit, aktive Saison) bleiben unverändert aktiv.

@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# mitfahrgelegenheiten-meine-filter Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mitfahrgelegenheiten-meine-filter`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Meine-Filter als Pill
 
@@ -28,7 +34,6 @@ Der Filter ist für alle Rollen sichtbar und aktiv.
 - **WHEN** Nutzer die "Meine"-Pill aktiviert und gleichzeitig "Heim" deaktiviert
 - **THEN** werden nur Spiele mit `eventType ∈ {auswärts, generisch}` angezeigt, bei denen der Nutzer beteiligt ist
 
-## REMOVED Requirements
 
 ### Requirement: Tab-Counts spiegeln den aktiven Filter
 

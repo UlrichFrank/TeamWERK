@@ -1,4 +1,10 @@
-## ADDED Requirements
+# code-metrics Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `code-metrics`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Metrik-Reporting via `make metrics`
 

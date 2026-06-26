@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# push-trainings Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `push-trainings`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Push bei Trainings-Ereignissen
 Das System SHALL allen Mitgliedern des betroffenen Teams und deren Elternteilen eine Push Notification senden, wenn eine Trainingseinheit abgesagt oder verschoben wird — sofern Push für Kategorie `trainings` nicht deaktiviert. Die Notification-`url` MUSS auf den konkreten Trainingstermin in der Termine-Seite zeigen (`/termine?focus=training-<id>`), damit der Empfänger direkt zu- oder absagen kann. Für gelöschte Einheiten oder gelöschte Serien (kein navigierbarer Termin mehr) zeigt die `url` auf `/termine`.

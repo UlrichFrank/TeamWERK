@@ -5,6 +5,10 @@ Die Mannschaftskarten auf der Mein-Team-Seite zeigen eine Tab-Navigation mit dre
 
 ---
 
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `roster-section-tabs`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
 ## Requirements
 
 ### Requirement: RosterSection zeigt Tab-Navigation

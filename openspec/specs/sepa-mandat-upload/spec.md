@@ -1,3 +1,11 @@
+# sepa-mandat-upload Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `sepa-mandat-upload`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Admin kann SEPA-Mandat-Dokument hochladen
 Der Admin SHALL ein SEPA-Mandat-Dokument (PDF oder Bild) in der Mitglieder-Detailseite hochladen können. Nach erfolgreichem Upload SHALL das Dokument sofort als Öffnen-Link angezeigt werden.
 

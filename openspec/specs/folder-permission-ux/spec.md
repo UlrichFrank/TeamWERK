@@ -1,4 +1,10 @@
-## ADDED Requirements
+# folder-permission-ux Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `folder-permission-ux`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Anzeigename statt User-ID in der Berechtigungsliste
 Das System SHALL für `principal_type=user`-Einträge in `GET /api/folders/{id}/permissions` einen `display_name`-String im Response mitliefern (`VORNAME NACHNAME`), der aus der `users`-Tabelle stammt. Ist der Nutzer gelöscht oder nicht auffindbar, MUSS `display_name` auf `principal_ref` (die User-ID) zurückfallen. Das Frontend MUSS diesen Namen anstelle der rohen User-ID darstellen.

@@ -1,3 +1,11 @@
+# duty-read-access Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `duty-read-access`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Trainer can read duty types
 The system SHALL allow users with `trainer` or `sportliche_leitung` club function to retrieve the list of all duty types via `GET /api/duty-types`.
 

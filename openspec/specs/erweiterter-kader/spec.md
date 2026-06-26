@@ -1,3 +1,11 @@
+# erweiterter-kader Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `erweiterter-kader`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Erweiterter Kader ist je Kader verwaltbar
 
 Das System SHALL eine Tabelle `kader_extended_members` bereitstellen, die Gelegenheitsspieler einem Kader zuordnet. Erweiterte Kader-Mitglieder erscheinen NICHT in `player_memberships` und NICHT in Training-Teilnahmelisten. Sie erscheinen jedoch in `user_accessible_teams` (Teamzugang) und in `GET /api/games/{id}/participants` mit `is_extended: true`.

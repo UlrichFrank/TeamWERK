@@ -1,4 +1,10 @@
-## ADDED Requirements
+# termine-unified-view Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `termine-unified-view`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Filterzustand in URL-Query-Parametern
 
