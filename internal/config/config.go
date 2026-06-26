@@ -37,6 +37,9 @@ type Config struct {
 	// Passwort-Reset-Mails pro Konto (zusätzlich zur IP-Drosselung). 0 deaktiviert
 	// die Konto-Drosselung (z.B. in Tests).
 	ForgotPasswordCooldownSec int
+	// PasswordMinLength: serverseitig erzwungene Mindestlänge für neue Passwörter
+	// (Register/Reset/Change). <=0 wird als Default 12 behandelt.
+	PasswordMinLength int
 }
 
 type SMTPConfig struct {
@@ -75,6 +78,7 @@ func Load() (*Config, error) {
 		LoginMaxFailures:          getEnvInt("LOGIN_MAX_FAILURES", 5),
 		LoginLockMinutes:          getEnvInt("LOGIN_LOCK_MINUTES", 15),
 		ForgotPasswordCooldownSec: getEnvInt("FORGOT_PASSWORD_COOLDOWN_SEC", 60),
+		PasswordMinLength:         getEnvInt("PASSWORD_MIN_LENGTH", 12),
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")

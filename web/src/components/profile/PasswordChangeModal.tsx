@@ -79,7 +79,9 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
                 onChange={setPwNew}
                 autoComplete="new-password"
                 required
+                minLength={12}
               />
+              <p className="mt-1 text-xs text-brand-text-muted">Mindestens 12 Zeichen.</p>
             </div>
 
             <div>

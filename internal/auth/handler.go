@@ -61,6 +61,28 @@ func (h *Handler) forgotPasswordAllowed(accountName string) bool {
 // perform a constant-time dummy comparison, preventing timing-based email enumeration.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("teamwerk-dummy-password-for-timing"), bcrypt.DefaultCost)
 
+// maxPasswordBytes ist die bcrypt-Grenze: längere Eingaben würden stillschweigend
+// trunkiert, daher lehnen wir sie explizit ab.
+const maxPasswordBytes = 72
+
+const defaultPasswordMinLength = 12
+
+// validatePassword erzwingt die serverseitige Passwort-Mindeststärke. Ein leerer
+// Fehler-Rückgabewert bedeutet „gültig". Gilt für Register/Reset/Change.
+func (h *Handler) validatePassword(pw string) error {
+	minLen := defaultPasswordMinLength
+	if h.cfg != nil && h.cfg.PasswordMinLength > 0 {
+		minLen = h.cfg.PasswordMinLength
+	}
+	if len([]rune(pw)) < minLen {
+		return fmt.Errorf("password must be at least %d characters", minLen)
+	}
+	if len(pw) > maxPasswordBytes {
+		return fmt.Errorf("password must not exceed %d bytes", maxPasswordBytes)
+	}
+	return nil
+}
+
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
@@ -636,6 +658,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if err := h.validatePassword(req.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		slog.Error("register bcrypt failed", "error", err)
@@ -739,6 +765,10 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	).Scan(&id, &userID, &expiresAt)
 	if err != nil || time.Now().After(expiresAt) {
 		http.Error(w, "invalid or expired token", http.StatusBadRequest)
+		return
+	}
+	if err := h.validatePassword(req.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -1286,6 +1316,10 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.CurrentPassword)); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := h.validatePassword(req.NewPassword); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
