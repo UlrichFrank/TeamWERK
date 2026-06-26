@@ -4,7 +4,7 @@
 TBD - created by archiving change dateiablage. Update Purpose after archive.
 ## Requirements
 ### Requirement: Dynamische Ordnerverwaltung
-Authentifizierte Nutzer mit `can_write` auf einen Ordner SOLLEN darin Unterordner via `POST /api/folders` anlegen können. Ein Ordner MUSS einen `name` und eine `parent_id` (oder null für Wurzel) haben.
+Authentifizierte Nutzer mit `can_write` auf einen Ordner SHALL darin Unterordner via `POST /api/folders` anlegen können. Ein Ordner MUST einen `name` und eine `parent_id` (oder null für Wurzel) haben.
 
 #### Scenario: Unterordner anlegen
 - **WHEN** ein Nutzer mit `can_write` auf Ordner A `POST /api/folders` mit `parent_id = A` aufruft
@@ -19,7 +19,7 @@ Authentifizierte Nutzer mit `can_write` auf einen Ordner SOLLEN darin Unterordne
 - **THEN** wird ein neuer Wurzelordner angelegt
 
 ### Requirement: Additive Berechtigungsvererbung
-Das System SOLL Berechtigungen entlang des Ordnerpfads von der Wurzel zum Blatt auflösen. Ein Nutzer hat `can_read` oder `can_write` auf einen Ordner, wenn IRGENDEIN Ordner im Pfad (einschließlich des Ordners selbst) diese Berechtigung für den Nutzer gewährt. Ein Unterordner KANN NICHT Rechte entziehen die ein Vorfahren gewährt.
+Das System SHALL Berechtigungen entlang des Ordnerpfads von der Wurzel zum Blatt auflösen. Ein Nutzer hat `can_read` oder `can_write` auf einen Ordner, wenn IRGENDEIN Ordner im Pfad (einschließlich des Ordners selbst) diese Berechtigung für den Nutzer gewährt. Ein Unterordner KANN NICHT Rechte entziehen die ein Vorfahren gewährt.
 
 #### Scenario: Vererbtes Leserecht
 - **WHEN** ein Nutzer `can_read` auf Ordner A hat und Ordner B ein Kind von A ist
@@ -30,7 +30,7 @@ Das System SOLL Berechtigungen entlang des Ordnerpfads von der Wurzel zum Blatt 
 - **THEN** hat er `can_read` auf alle Nachkommen von A, unabhängig von deren ACL-Einträgen
 
 ### Requirement: ACL-Einträge verwalten
-Nutzer mit `can_write` auf einen Ordner SOLLEN Berechtigungseinträge via `POST /api/folders/:id/permissions` anlegen können. Bestehende Einträge SOLLEN via `DELETE /api/folders/:id/permissions/:permId` entfernt werden können.
+Nutzer mit `can_write` auf einen Ordner SHALL Berechtigungseinträge via `POST /api/folders/:id/permissions` anlegen können. Bestehende Einträge SHALL via `DELETE /api/folders/:id/permissions/:permId` entfernt werden können.
 
 Ein Eintrag besteht aus `principal_type` (`everyone` | `role` | `club_function` | `user`), `principal_ref` (null bei `everyone`, sonst Rollenname / Funktionsname / user_id) sowie `can_read` und `can_write`.
 
@@ -47,7 +47,7 @@ Ein Eintrag besteht aus `principal_type` (`everyone` | `role` | `club_function` 
 - **THEN** wird der Eintrag gelöscht; geerbte Rechte bleiben unberührt
 
 ### Requirement: Anti-Eskalation
-Das System SOLL verhindern, dass ein Nutzer mehr Rechte vergibt als er selbst auf den Ordner hat. Admin (`role = 'admin'`) ist ausgenommen und darf immer alle Rechte vergeben.
+Das System SHALL verhindern, dass ein Nutzer mehr Rechte vergibt als er selbst auf den Ordner hat. Admin (`role = 'admin'`) ist ausgenommen und darf immer alle Rechte vergeben.
 
 #### Scenario: Nur Leserecht — kann kein Schreibrecht vergeben
 - **WHEN** ein Nutzer nur `can_read` (nicht `can_write`) auf einen Ordner hat und versucht einem anderen Nutzer `can_write` zu geben
@@ -62,7 +62,7 @@ Das System SOLL verhindern, dass ein Nutzer mehr Rechte vergibt als er selbst au
 - **THEN** wird der Eintrag ohne Eskalationsprüfung gespeichert
 
 ### Requirement: Principal-Typen
-Das System SOLL vier Principal-Typen unterstützen, die bei der Berechtigungsauflösung in folgender Reihenfolge ausgewertet werden (spezifischste zuerst): `user` → `club_function` → `role` → `everyone`. Ein Treffer bei einem Typ reicht für die Gewährung.
+Das System SHALL vier Principal-Typen unterstützen, die bei der Berechtigungsauflösung in folgender Reihenfolge ausgewertet werden (spezifischste zuerst): `user` → `club_function` → `role` → `everyone`. Ein Treffer bei einem Typ reicht für die Gewährung.
 
 #### Scenario: Everyone-Berechtigung
 - **WHEN** ein Ordner einen ACL-Eintrag mit `principal_type = 'everyone'` und `can_read = 1` hat

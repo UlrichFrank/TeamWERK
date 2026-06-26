@@ -48,7 +48,7 @@ Das System SHALL den Öffnen-Link in der Mitglieder-Detailansicht allen berechti
 - **THEN** ist `sepa_mandat_url` nicht in der Response enthalten
 
 ### Requirement: Dokument öffnen auf iOS und Desktop
-Das Öffnen des Dokuments MUSS sowohl im Desktop-Browser als auch auf iOS (PWA Standalone-Modus) funktionieren.
+Das Öffnen des Dokuments MUST sowohl im Desktop-Browser als auch auf iOS (PWA Standalone-Modus) funktionieren.
 
 #### Scenario: Öffnen auf Desktop
 - **WHEN** der Nutzer auf den Öffnen-Link klickt
@@ -78,7 +78,7 @@ Ein Mitglied SHALL sein eigenes SEPA-Mandat-Dokument löschen können. Elterntei
 - **THEN** antwortet der Server mit 404 Not Found
 
 ### Requirement: DocumentsPage öffnet Dateien auf iOS korrekt
-`DocumentsPage.openFile` MUSS auf iOS (PWA Standalone-Modus) funktionieren. Das neue Fenster MUSS synchron vor dem async Token-Fetch geöffnet werden.
+`DocumentsPage.openFile` MUST auf iOS (PWA Standalone-Modus) funktionieren. Das neue Fenster MUST synchron vor dem async Token-Fetch geöffnet werden.
 
 #### Scenario: PDF-Klick in iOS PWA
 - **WHEN** ein Nutzer in der installierten iOS PWA auf eine Datei klickt

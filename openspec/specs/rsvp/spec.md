@@ -7,7 +7,7 @@ Diese Spezifikation beschreibt die Capability `rsvp`. (Automatisch normalisiert;
 ## Requirements
 
 ### Requirement: rsvp-modal-behavior
-Das RSVP-Modal für Absage/Vielleicht MUSS nur erscheinen wenn der Termin
+Das RSVP-Modal für Absage/Vielleicht MUST nur erscheinen wenn der Termin
 `rsvp_require_reason = 1` hat. Bei `rsvp_require_reason = 0` wird die RSVP
 direkt ohne Modal gesendet.
 

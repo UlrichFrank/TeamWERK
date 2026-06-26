@@ -38,5 +38,10 @@ Das System SHALL Änderungen an IBAN und Kontoinhaber als einen einzigen Draft m
 
 ### Requirement: Separate iban- und account_holder-Drafts
 
-**Reason**: Ersetzt durch den kombinierten `bankdaten`-Draft; IBAN und Kontoinhaber sind fachlich zusammengehörig und müssen atomar genehmigt werden.
+Das System SHALL keine separaten `iban`- oder `account_holder`-Drafts mehr erzeugen. Diese wurden durch den kombinierten `bankdaten`-Draft ersetzt; IBAN und Kontoinhaber sind fachlich zusammengehörig und müssen atomar genehmigt werden.
 **Migration**: Bestehende `iban`/`account_holder`-Drafts in der DB können vom Admin abgelehnt werden; neue Bankdaten-Anfragen erzeugen ausschließlich `bankdaten`-Drafts.
+
+#### Scenario: Neuer Bankdaten-Request erzeugt keinen iban-Draft
+
+- **WHEN** ein Nutzer Bankdaten ändert
+- **THEN** wird kein Draft mit `field_name='iban'` oder `field_name='account_holder'` angelegt

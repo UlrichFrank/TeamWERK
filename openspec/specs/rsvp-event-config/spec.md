@@ -7,11 +7,11 @@ Diese Spezifikation beschreibt die Capability `rsvp-event-config`. (Automatisch 
 ## Requirements
 
 ### Requirement: rsvp-opt-out-flag
-Jeder Termin (training_session, game) MUSS ein `rsvp_opt_out`-Flag besitzen (INTEGER 0/1).
+Jeder Termin (training_session, game) MUST ein `rsvp_opt_out`-Flag besitzen (INTEGER 0/1).
 Bei `rsvp_opt_out = 1` gilt ein **regulärer Kader-Spieler** (Eintrag in `kader_members` für das
 Team und die Saison des Termins) ohne Response-Eintrag als "confirmed".
-Das Flag MUSS beim Anlegen einer Session von der zugehörigen training_series kopiert werden.
-Das Flag MUSS nach dem Anlegen für berechtigte Nutzer änderbar sein (siehe Requirement
+Das Flag MUST beim Anlegen einer Session von der zugehörigen training_series kopiert werden.
+Das Flag MUST nach dem Anlegen für berechtigte Nutzer änderbar sein (siehe Requirement
 `rsvp-config-edit-ui`).
 
 Erweiterte Kader-Mitglieder (`kader_extended_members`) sind von der Opt-Out-Implicit-Confirmed-
@@ -48,7 +48,7 @@ Logik ausgeschlossen: sie müssen explizit zusagen.
 
 
 ### Requirement: rsvp-participants-opt-out
-Der Endpoint `GET /api/games/{id}/participants` MUSS bei `rsvp_opt_out = 1` für reguläre
+Der Endpoint `GET /api/games/{id}/participants` MUST bei `rsvp_opt_out = 1` für reguläre
 Kader-Mitglieder (`is_extended = 0`) ohne expliziten Response-Eintrag das Feld `rsvp_status`
 auf `"confirmed"` setzen, damit Frontend-Konsumenten ihren impliziten Zusage-Status sehen,
 ohne selbst rechnen zu müssen.
@@ -70,7 +70,7 @@ ohne selbst rechnen zu müssen.
 - **THEN** zeigt `GetParticipants` `rsvp_status` exakt wie in `game_responses` (oder `null` falls kein Eintrag)
 
 ### Requirement: rsvp-getgame-counts
-Der Endpoint `GET /api/games/{id}` MUSS `confirmed_count`, `declined_count` und `maybe_count`
+Der Endpoint `GET /api/games/{id}` MUST `confirmed_count`, `declined_count` und `maybe_count`
 im Game-Response-Objekt liefern. Die Werte folgen den selben Regeln wie in
 `confirmed_count bei Opt-Out` und `declined_count und maybe_count unverändert`.
 

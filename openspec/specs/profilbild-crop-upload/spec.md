@@ -7,7 +7,7 @@ Diese Spezifikation beschreibt die Capability `profilbild-crop-upload`. (Automat
 ## Requirements
 
 ### Requirement: Nutzer kann Profilbild mit Zuschnitt hochladen
-Nach Auswahl einer Bilddatei MUSS das System ein modales Crop-Interface öffnen, bevor der Upload stattfindet. Das Modal MUSS einen kreisförmigen Ausschnitt (1:1) zeigen, den Nutzer per Drag positionieren und per Pinch-to-Zoom sowie Slider skalieren können. Erst nach Bestätigung wird das Bild verarbeitet und hochgeladen.
+Nach Auswahl einer Bilddatei MUST das System ein modales Crop-Interface öffnen, bevor der Upload stattfindet. Das Modal MUST einen kreisförmigen Ausschnitt (1:1) zeigen, den Nutzer per Drag positionieren und per Pinch-to-Zoom sowie Slider skalieren können. Erst nach Bestätigung wird das Bild verarbeitet und hochgeladen.
 
 #### Scenario: Datei auswählen öffnet Crop-Modal
 - **WHEN** ein Nutzer auf „Bild hochladen" / „Bild ersetzen" tippt und eine Bilddatei auswählt
@@ -34,14 +34,14 @@ Nach Auswahl einer Bilddatei MUSS das System ein modales Crop-Interface öffnen,
 - **THEN** schließt das Modal ohne Upload; der Datei-Input wird zurückgesetzt
 
 ### Requirement: Nicht unterstützte Bilddateien werden abgefangen
-Das System MUSS dem Nutzer eine verständliche Fehlermeldung anzeigen, wenn die gewählte Datei nicht als Bild interpretiert werden kann (z. B. beschädigte Datei, nicht unterstütztes Format).
+Das System MUST dem Nutzer eine verständliche Fehlermeldung anzeigen, wenn die gewählte Datei nicht als Bild interpretiert werden kann (z. B. beschädigte Datei, nicht unterstütztes Format).
 
 #### Scenario: Fehler beim Laden des Bildes
 - **WHEN** das gewählte Bild im Crop-Modal nicht geladen werden kann
 - **THEN** schließt das Modal und zeigt eine Fehlermeldung „Bild konnte nicht geladen werden"
 
 ### Requirement: Backend akzeptiert robuste MIME-Types für Fotos
-Der Server MUSS Bildüberträge mit den Content-Types `image/jpeg`, `image/jpg`, `image/png` und `image/webp` akzeptieren. Falls der Content-Type fehlt oder leer ist, MUSS der Server die Dateiart anhand der Magic Bytes bestimmen (JPEG: `FF D8`; PNG: `89 50 4E 47`; WebP: `52 49 46 46 ?? ?? ?? ?? 57 45 42 50`).
+Der Server MUST Bildüberträge mit den Content-Types `image/jpeg`, `image/jpg`, `image/png` und `image/webp` akzeptieren. Falls der Content-Type fehlt oder leer ist, MUST der Server die Dateiart anhand der Magic Bytes bestimmen (JPEG: `FF D8`; PNG: `89 50 4E 47`; WebP: `52 49 46 46 ?? ?? ?? ?? 57 45 42 50`).
 
 #### Scenario: Upload mit image/jpg (Android)
 - **WHEN** ein Client ein JPEG-Bild mit Content-Type `image/jpg` hochlädt
@@ -56,7 +56,7 @@ Der Server MUSS Bildüberträge mit den Content-Types `image/jpeg`, `image/jpg`,
 - **THEN** antwortet der Server mit HTTP 400
 
 ### Requirement: Crop-Modal ist an allen Foto-Upload-Stellen verfügbar
-Das Crop-Modal MUSS einheitlich eingebunden sein bei: eigenem Profilbild (`ProfileProfilTab`), Kinderfoto durch Elternteil (`ChildProfilePage`), und Mitgliedsfoto durch Admin (`MemberStammdatenTab`).
+Das Crop-Modal MUST einheitlich eingebunden sein bei: eigenem Profilbild (`ProfileProfilTab`), Kinderfoto durch Elternteil (`ChildProfilePage`), und Mitgliedsfoto durch Admin (`MemberStammdatenTab`).
 
 #### Scenario: Eigenes Profilbild
 - **WHEN** ein eingeloggter Nutzer auf der Profil-Seite ein Foto auswählt

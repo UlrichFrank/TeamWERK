@@ -45,7 +45,7 @@ Ein Copy-Button SHALL das Passwort in die Zwischenablage kopieren und visuelles 
 
 ### Requirement: Zugriffskontrolle
 
-Der Endpunkt `POST /api/users` MUSS auf Vorstand und Admin beschränkt sein. Alle anderen Rollen erhalten HTTP 403.
+Der Endpunkt `POST /api/users` MUST auf Vorstand und Admin beschränkt sein. Alle anderen Rollen erhalten HTTP 403.
 
 #### Scenario: Unbefugter Zugriff
 

@@ -7,7 +7,7 @@ Diese Spezifikation beschreibt die Capability `kalender-date-param`. (Automatisc
 ## Requirements
 
 ### Requirement: URL-Param-Navigation
-KalenderPage akzeptiert einen optionalen Query-Parameter `?date=YYYY-MM-DD`. Wenn gesetzt, initialisiert die Page `year` und `month` aus dem Datum statt aus `new Date()`.
+KalenderPage SHALL einen optionalen Query-Parameter `?date=YYYY-MM-DD` akzeptieren. Wenn gesetzt, initialisiert die Page `year` und `month` aus dem Datum statt aus `new Date()`.
 
 #### Scenario: Gültiger date-Param
 - **WHEN** die KalenderPage mit `?date=2026-06-14` aufgerufen wird
@@ -22,7 +22,7 @@ KalenderPage akzeptiert einen optionalen Query-Parameter `?date=YYYY-MM-DD`. Wen
 - **THEN** zeigt der Kalender den aktuellen Monat (unverändertes Verhalten)
 
 ### Requirement: Dashboard-Links zu Events
-In DashboardPage navigieren Links in der „Nächste Events"-Sektion zu `/kalender?date=YYYY-MM-DD` (Datum des jeweiligen Events), nicht zum bisherigen `g.link`-Wert.
+In DashboardPage SHALL Links in der „Nächste Events"-Sektion zu `/kalender?date=YYYY-MM-DD` (Datum des jeweiligen Events) navigieren, nicht zum bisherigen `g.link`-Wert.
 
 #### Scenario: Klick auf Event im Dashboard
 - **WHEN** der Nutzer auf ein Event in „Nächste Events" klickt

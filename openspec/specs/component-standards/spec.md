@@ -52,7 +52,7 @@ Alle `<input>`, `<select>` und `<textarea>` SHALL einen der zwei definierten Kla
 ---
 
 ### Requirement: Verbindlicher Card-Klassen-String
-Alle Panel-Container SHA folgende Varianten verwenden:
+Alle Panel-Container SHALL folgende Varianten verwenden:
 
 **Standard:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6`
 **Kompakt:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4`
@@ -103,6 +103,7 @@ Alle `<table>`-Strukturen SHALL folgende Klassen verwenden:
 ---
 
 ### Requirement: Button-Position auf Seiten
+Das System SHALL die Button-Position auf Seiten nach folgenden Regeln festlegen:
 - Listen-Seiten (mit Tabelle): Primär-Button MUSS oben rechts neben `<h1>` erscheinen
 - Formular-Seiten (ganzseitiges Formular): Primär-Button MUSS unten im Formular erscheinen
 - Karten mit Inline-Form: Button MUSS unten in der Karte erscheinen

@@ -8,7 +8,7 @@ Diese Spezifikation beschreibt die Capability `kind-profil-user-strang`. (Automa
 
 ### Requirement: Elternteil kann User-Strang des Kindes aktualisieren
 
-Das System MUSS einen Endpunkt `PUT /api/profile/kind/{memberId}/account` bereitstellen, der `users.first_name`, `users.last_name`, `users.street`, `users.zip`, `users.city` des Kindes sofort aktualisiert. Der Endpunkt DARF NUR aufgerufen werden, wenn `members.user_id IS NOT NULL`. Die Autorisierung MUSS über `family_links` erfolgen (isParentOf-Check).
+Das System MUST einen Endpunkt `PUT /api/profile/kind/{memberId}/account` bereitstellen, der `users.first_name`, `users.last_name`, `users.street`, `users.zip`, `users.city` des Kindes sofort aktualisiert. Der Endpunkt DARF NUR aufgerufen werden, wenn `members.user_id IS NOT NULL`. Die Autorisierung MUST über `family_links` erfolgen (isParentOf-Check).
 
 #### Scenario: Elternteil aktualisiert Kontodaten des Kindes mit Account
 
@@ -27,7 +27,7 @@ Das System MUSS einen Endpunkt `PUT /api/profile/kind/{memberId}/account` bereit
 
 ### Requirement: GET Kind-Profil liefert User-Strang-Daten wenn Kind Account hat
 
-`GET /api/profile/kind/{memberId}` MUSS zusätzlich die `users`-Kontaktdaten des Kindes zurückgeben, wenn `members.user_id IS NOT NULL`. Die Felder MÜSSEN als `user_contact`-Objekt im Response enthalten sein mit: `first_name`, `last_name`, `street`, `zip`, `city`, `phones` (aus `user_phones`), `visibility` (aus `user_visibility`).
+`GET /api/profile/kind/{memberId}` MUST zusätzlich die `users`-Kontaktdaten des Kindes zurückgeben, wenn `members.user_id IS NOT NULL`. Die Felder MUST als `user_contact`-Objekt im Response enthalten sein mit: `first_name`, `last_name`, `street`, `zip`, `city`, `phones` (aus `user_phones`), `visibility` (aus `user_visibility`).
 
 #### Scenario: Kind mit User-Account — Response enthält user_contact
 
@@ -41,7 +41,7 @@ Das System MUSS einen Endpunkt `PUT /api/profile/kind/{memberId}/account` bereit
 
 ### Requirement: Phones-Endpunkte nutzen user_phones wenn Kind Account hat
 
-`POST /api/profile/kind/{memberId}/phones` und `DELETE /api/profile/kind/{memberId}/phones/{phoneId}` MÜSSEN in `user_phones` des Kindes schreiben/löschen, wenn `members.user_id IS NOT NULL`. Bei `user_id IS NULL` bleibt `member_phones` das Ziel.
+`POST /api/profile/kind/{memberId}/phones` und `DELETE /api/profile/kind/{memberId}/phones/{phoneId}` MUST in `user_phones` des Kindes schreiben/löschen, wenn `members.user_id IS NOT NULL`. Bei `user_id IS NULL` bleibt `member_phones` das Ziel.
 
 #### Scenario: Telefonnummer hinzufügen — Kind mit Account
 
@@ -60,7 +60,7 @@ Das System MUSS einen Endpunkt `PUT /api/profile/kind/{memberId}/account` bereit
 
 ### Requirement: Visibility-Endpoint nutzt user_visibility wenn Kind Account hat
 
-`PUT /api/profile/kind/{memberId}/visibility` MUSS in `user_visibility` des Kindes schreiben (UPSERT), wenn `members.user_id IS NOT NULL`. Bei `user_id IS NULL` werden die Felder `phones_visible`, `address_visible`, `photo_visible`, `email_visible` in der `members`-Tabelle gesetzt (bisheriges Verhalten).
+`PUT /api/profile/kind/{memberId}/visibility` MUST in `user_visibility` des Kindes schreiben (UPSERT), wenn `members.user_id IS NOT NULL`. Bei `user_id IS NULL` werden die Felder `phones_visible`, `address_visible`, `photo_visible`, `email_visible` in der `members`-Tabelle gesetzt (bisheriges Verhalten).
 
 #### Scenario: Visibility setzen — Kind mit Account
 

@@ -37,7 +37,7 @@ Wenn gesetzt, MÜSSEN nur User zurückgegeben werden, für die gilt:
 - **THEN** erscheint er nicht in der Antwort von `GET /api/users?unlinked=1`
 
 ### Requirement: "Mitglied erstellen"-Button erscheint nur für wirklich unverknüpfte User
-In der AdminUsersPage DARF der "Mitglied erstellen"-Button nur angezeigt werden, wenn der User weder ein direktes Mitglied (`member_id == null`) noch einen Family-Link (`has_family_link == false`) hat.
+In der AdminUsersPage SHALL der "Mitglied erstellen"-Button nur angezeigt werden, wenn der User weder ein direktes Mitglied (`member_id == null`) noch einen Family-Link (`has_family_link == false`) hat.
 
 #### Scenario: Eltern-User ohne direktes Mitglied bekommt keinen "Mitglied erstellen"-Button
 - **WHEN** ein User `member_id: null` und `has_family_link: true` hat

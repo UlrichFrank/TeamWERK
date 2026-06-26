@@ -90,7 +90,7 @@ zu einem Spiel zurückgeben (member_name, status, reason).
 ---
 
 ### Requirement: Spiel-Response manuell ändern
-Ein Spieler oder berechtigter Elternteil DARF eine Spiel-Response (confirmed/declined/maybe) nur dann manuell ändern, wenn die Response kein gesetztes `absence_id` hat. Ist `absence_id IS NOT NULL`, MUSS die API die Änderung mit HTTP 403 ablehnen. Der Member MUSS stattdessen die zugehörige Abwesenheit löschen.
+Ein Spieler oder berechtigter Elternteil SHALL eine Spiel-Response (confirmed/declined/maybe) nur dann manuell ändern können, wenn die Response kein gesetztes `absence_id` hat. Ist `absence_id IS NOT NULL`, MUST die API die Änderung mit HTTP 403 ablehnen. Der Member MUST stattdessen die zugehörige Abwesenheit löschen.
 
 #### Scenario: Manuelle Änderung ohne Abwesenheit
 - **WHEN** ein Nutzer eine Spiel-Response ändert und `absence_id IS NULL`

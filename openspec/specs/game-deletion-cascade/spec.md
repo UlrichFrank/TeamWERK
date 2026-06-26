@@ -4,7 +4,7 @@
 TBD - created by archiving change dienste-kaskadiert-loeschen. Update Purpose after archive.
 ## Requirements
 ### Requirement: Dienste werden beim Löschen eines Termins automatisch mitgelöscht
-Wenn ein Spiel oder Sonstiger Termin gelöscht wird, MÜSSEN alle verknüpften `duty_slots` (und deren `duty_assignments` via vorhandenem CASCADE) automatisch gelöscht werden. Es gibt keinen opt-out.
+Wenn ein Spiel oder Sonstiger Termin gelöscht wird, MUST alle verknüpften `duty_slots` (und deren `duty_assignments` via vorhandenem CASCADE) automatisch gelöscht werden. Es gibt keinen opt-out.
 
 #### Scenario: Löschen eines Termins mit verknüpften Diensten
 - **WHEN** ein Admin einen Termin (Spiel oder Sonstiger Termin) löscht

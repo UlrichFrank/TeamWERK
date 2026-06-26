@@ -92,7 +92,7 @@ Alle authentifizierten User mit Zugriff auf eine Session SHALL eine Zusammenfass
 ---
 
 ### Requirement: Training-Response manuell ändern
-Ein Spieler oder berechtigter Elternteil DARF eine Training-Response (confirmed/declined/maybe) nur dann manuell ändern, wenn die Response kein gesetztes `absence_id` hat. Ist `absence_id IS NOT NULL`, MUSS die API die Änderung mit HTTP 403 ablehnen. Der Member MUSS stattdessen die zugehörige Abwesenheit löschen.
+Ein Spieler oder berechtigter Elternteil SHALL eine Training-Response (confirmed/declined/maybe) nur dann manuell ändern können, wenn die Response kein gesetztes `absence_id` hat. Ist `absence_id IS NOT NULL`, MUST die API die Änderung mit HTTP 403 ablehnen. Der Member MUST stattdessen die zugehörige Abwesenheit löschen.
 
 #### Scenario: Manuelle Änderung ohne Abwesenheit
 - **WHEN** ein Nutzer eine Training-Response ändert und `absence_id IS NULL`

@@ -99,7 +99,7 @@ Wenn eine neue `training_session` oder ein neues `game` angelegt wird, SHALL das
 - **THEN** erhält dieser Member sofort eine `declined`-Response mit gesetzter `absence_id`
 
 ### Requirement: Auto-declined Responses sind gesperrt
-Eine Response mit gesetzter `absence_id` DARF von keiner Rolle (einschließlich Trainer und Admin) manuell geändert werden. Der Nutzer MUSS die Abwesenheit löschen, um wieder zusagen zu können.
+Eine Response mit gesetzter `absence_id` SHALL von keiner Rolle (einschließlich Trainer und Admin) manuell geändert werden können. Der Nutzer MUST die Abwesenheit löschen, um wieder zusagen zu können.
 
 #### Scenario: Manuelles Ändern einer auto-declined Response abgewiesen
 - **WHEN** ein Nutzer versucht, eine Response mit `absence_id IS NOT NULL` zu ändern
