@@ -28,6 +28,8 @@ import AdminKaderPage from './pages/AdminKaderPage'
 import MitfahrgelegenheitenPage from './pages/MitfahrgelegenheitenPage'
 import DocumentsPage from './pages/DocumentsPage'
 import DocumentFileLinkPage from './pages/DocumentFileLinkPage'
+import FileViewerPage from './pages/FileViewerPage'
+import SepaMandatViewerPage from './pages/SepaMandatViewerPage'
 import TerminePage from './pages/TerminePage'
 import TermineDetailPage from './pages/TermineDetailPage'
 import MeinTeamPage from './pages/MeinTeamPage'
@@ -84,7 +86,9 @@ export default function App() {
               <Route path="profil/kind/:memberId" element={<ChildProfilePage />} />
               <Route path="dokumente" element={<DocumentsPage />} />
               <Route path="dokumente/datei/:fileId" element={<DocumentFileLinkPage />} />
+              <Route path="dokumente/anzeigen/:fileId" element={<FileViewerPage />} />
               <Route path="dokumente/:folderId" element={<DocumentsPage />} />
+              <Route path="mitglieder/:memberId/sepa-mandat/anzeigen" element={<RoleRoute roles={['admin','vorstand','kassierer']}><SepaMandatViewerPage /></RoleRoute>} />
               <Route path="dienste" element={<DutyPage />} />
               <Route path="mitfahrgelegenheiten" element={<MitfahrgelegenheitenPage />} />
               <Route path="anfragen" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
