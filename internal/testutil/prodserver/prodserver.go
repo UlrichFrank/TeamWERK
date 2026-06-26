@@ -97,3 +97,15 @@ func NewWithHub(t *testing.T, database *sql.DB) (*httptest.Server, *hub.EventHub
 	t.Cleanup(srv.Close)
 	return srv, hubInstance
 }
+
+// NewWithAuthRateLimit is like New but enables the IP-based auth rate limiter
+// (httprate) with the given per-minute limit, so tests can assert throttling of
+// the unauthenticated auth routes.
+func NewWithAuthRateLimit(t *testing.T, database *sql.DB, perMin int) *httptest.Server {
+	t.Helper()
+	handlers, _ := buildHandlers(t, database)
+	handlers.AuthRateLimitPerMin = perMin
+	srv := httptest.NewServer(app.BuildRouter(handlers, nil))
+	t.Cleanup(srv.Close)
+	return srv
+}

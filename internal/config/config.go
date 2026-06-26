@@ -23,6 +23,20 @@ type Config struct {
 	MetricsToken string
 	// LogFormat steuert den slog-Handler: "json" (Default, Prod) oder "text" (lokal).
 	LogFormat string
+	// AuthRateLimitPerMin: erlaubte Anfragen pro Minute und Client-IP auf die
+	// unauthentifizierten Auth-Routen (login/refresh/forgot-password/reset-password).
+	// 0 deaktiviert das IP-Rate-Limiting (z.B. in Tests).
+	AuthRateLimitPerMin int
+	// LoginMaxFailures: aufeinanderfolgende Login-Fehlversuche, ab denen ein Konto
+	// gesperrt wird. 0 deaktiviert den Account-Lockout (z.B. in Tests).
+	LoginMaxFailures int
+	// LoginLockMinutes: Dauer der Konto-Sperre in Minuten nach Überschreiten von
+	// LoginMaxFailures.
+	LoginLockMinutes int
+	// ForgotPasswordCooldownSec: Mindestabstand in Sekunden zwischen zwei
+	// Passwort-Reset-Mails pro Konto (zusätzlich zur IP-Drosselung). 0 deaktiviert
+	// die Konto-Drosselung (z.B. in Tests).
+	ForgotPasswordCooldownSec int
 }
 
 type SMTPConfig struct {
@@ -56,6 +70,11 @@ func Load() (*Config, error) {
 		MailerDisabled:  os.Getenv("MAILER_DISABLED") == "true",
 		MetricsToken:    os.Getenv("METRICS_TOKEN"),
 		LogFormat:       getEnv("LOG_FORMAT", "json"),
+
+		AuthRateLimitPerMin:       getEnvInt("AUTH_RATE_LIMIT_PER_MIN", 10),
+		LoginMaxFailures:          getEnvInt("LOGIN_MAX_FAILURES", 5),
+		LoginLockMinutes:          getEnvInt("LOGIN_LOCK_MINUTES", 15),
+		ForgotPasswordCooldownSec: getEnvInt("FORGOT_PASSWORD_COOLDOWN_SEC", 60),
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
@@ -66,6 +85,17 @@ func Load() (*Config, error) {
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+// getEnvInt liest einen ganzzahligen Env-Wert; bei fehlendem oder ungültigem
+// Wert wird der Fallback verwendet.
+func getEnvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return fallback
 }
