@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { ExternalLink, Trash2, AlertTriangle } from 'lucide-react'
 import { api } from '../../lib/api'
 import { errorMessage } from '../../lib/errors'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVault } from '../../contexts/VaultContext'
-import { encryptFile, decryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
+import { encryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -54,6 +55,7 @@ interface Props {
 }
 
 export default function MemberKontaktTab({ memberId, form, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
+  const navigate = useNavigate()
   const { user, hasCapability } = useAuth()
   const { privateKey } = useVault()
   const bankdatenDraft = drafts.find(d => d.field_name === 'bankdaten') ?? null
@@ -78,7 +80,6 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
   const sepaInputRef = useRef<HTMLInputElement>(null)
   const [sepaUploading, setSepaUploading] = useState(false)
   const [sepaUploadError, setSepaUploadError] = useState('')
-  const [openError, setOpenError] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -142,29 +143,10 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
     }
   }
 
-  // Mandat clientseitig entschlüsseln und anzeigen — braucht den entsperrten Tresor.
-  const openSepaMandat = async () => {
+  // Öffnen → In-App-Viewer-Route (entschlüsselt dort via Vault). Verlässt nie die PWA.
+  const openSepaMandat = () => {
     if (!memberId) return
-    setOpenError('')
-    if (!privateKey) {
-      setOpenError('Zum Öffnen den Bankdaten-Tresor entsperren (Menü „Tresor").')
-      return
-    }
-    try {
-      const { data } = await api.get<{ token: string; dek_enc: string }>(
-        `/members/${memberId}/sepa-mandat/download-token`,
-      )
-      const res = await api.get<ArrayBuffer>(
-        `/members/${memberId}/sepa-mandat/download?token=${data.token}`,
-        { responseType: 'arraybuffer' },
-      )
-      const plain = await decryptFile(new Uint8Array(res.data), data.dek_enc, privateKey)
-      const url = URL.createObjectURL(new Blob([plain as BlobPart], { type: 'application/pdf' }))
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch {
-      setOpenError('Dokument konnte nicht geöffnet/entschlüsselt werden.')
-    }
+    navigate(`/mitglieder/${memberId}/sepa-mandat/anzeigen`)
   }
 
   const handleDeleteSepa = async () => {
@@ -365,11 +347,6 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               {sepaUploadError && (
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 flex-shrink-0" />{sepaUploadError}
-                </div>
-              )}
-              {openError && (
-                <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />{openError}
                 </div>
               )}
               {deleteError && (

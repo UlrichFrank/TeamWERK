@@ -606,16 +606,9 @@ export default function DocumentsPage() {
     setTimeout(() => setLinkToast(''), 2500)
   }
 
-  async function openFile(file: FileItem) {
+  function openFile(file: FileItem) {
     setFileError('')
-    const tab = window.open('about:blank', '_blank')
-    try {
-      const { data } = await api.get<{ token: string }>(`/files/${file.id}/download-token`)
-      if (tab) tab.location.href = `/api/files/${file.id}/download?token=${data.token}`
-    } catch {
-      if (tab) tab.close()
-      setFileError('Datei konnte nicht geöffnet werden.')
-    }
+    navigate(`/dokumente/anzeigen/${file.id}`)
   }
 
   async function deleteItem(type: 'folder' | 'file', id: number) {
