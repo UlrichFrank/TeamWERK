@@ -1,4 +1,10 @@
-## ADDED Requirements
+# bankdaten-draft Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `bankdaten-draft`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Bankdaten als atomarer Draft
 
@@ -29,7 +35,6 @@ Das System SHALL Änderungen an IBAN und Kontoinhaber als einen einzigen Draft m
 - **WHEN** ein Nutzer eine Änderungsanfrage mit `field_name='iban'` oder `field_name='account_holder'` sendet
 - **THEN** antwortet das Backend mit HTTP 400
 
-## REMOVED Requirements
 
 ### Requirement: Separate iban- und account_holder-Drafts
 

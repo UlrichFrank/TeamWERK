@@ -1,3 +1,11 @@
+# venue-management Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `venue-management`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Venue anlegen
 Admins SHALL Veranstaltungsorte mit Name, Straße, Stadt, PLZ, Land (Default: DE) und optionaler Notiz anlegen können.
 

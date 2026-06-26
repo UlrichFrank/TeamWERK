@@ -1,4 +1,10 @@
-## ADDED Requirements
+# web-push-subscriptions Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `web-push-subscriptions`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: VAPID Public Key verfügbar
 Das Backend SHALL den VAPID Public Key über einen öffentlichen Endpunkt bereitstellen, damit das Frontend eine Push-Subscription anlegen kann.

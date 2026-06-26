@@ -1,4 +1,10 @@
-## ADDED Requirements
+# draft-type-indicators Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `draft-type-indicators`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Typ-spezifische Pending-Indikatoren in Mitgliederliste
 

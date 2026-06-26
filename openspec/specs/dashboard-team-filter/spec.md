@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# dashboard-team-filter Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `dashboard-team-filter`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Team-Sichtbarkeit auf dem Dashboard
 

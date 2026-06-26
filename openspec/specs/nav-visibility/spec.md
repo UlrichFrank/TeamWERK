@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# nav-visibility Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `nav-visibility`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Mein Profil Sichtbarkeit
 „Mein Profil" SHALL für alle eingeloggten Nutzer außer `admin` sichtbar sein.

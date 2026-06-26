@@ -1,4 +1,10 @@
-## ADDED Requirements
+# team-name-display Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `team-name-display`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Server liefert Display-Strings für Teamnamen
 

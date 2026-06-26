@@ -1,4 +1,10 @@
-## ADDED Requirements
+# mitfahrgelegenheiten-team-filter Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mitfahrgelegenheiten-team-filter`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Team-Dropdown filtert Mitfahrgelegenheiten
 Die Mitfahrgelegenheiten-Seite SHALL einen Team-Dropdown anzeigen, wenn der Nutzer Zugang zu mehr als einem Team hat. Der gewählte Filter wird als `?team_id=X` an `GET /api/mitfahrgelegenheiten` übergeben.

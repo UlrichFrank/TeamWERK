@@ -1,4 +1,10 @@
-## ADDED Requirements
+# agent-harness Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `agent-harness`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 
 ### Requirement: Kanonische Agenten-Konventionsquelle

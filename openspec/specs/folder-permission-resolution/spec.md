@@ -1,4 +1,10 @@
-## ADDED Requirements
+# folder-permission-resolution Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `folder-permission-resolution`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Nearest-Ancestor-Wins Berechtigungsauflösung
 Das System SHALL die Zugriffsrechte auf einen Ordner ausschließlich anhand der Berechtigungen des nächsten Vorfahren (inkl. des Ordners selbst) bestimmen, der eigene Berechtigungseinträge besitzt. Berechtigungen weiter entfernter Vorfahren MÜSSEN ignoriert werden, sobald ein näherer Vorfahre eigene Einträge hat. Ein Ordner ohne Berechtigungseinträge an keiner Stelle seiner Vorfahren-Kette gilt als nicht zugänglich.

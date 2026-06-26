@@ -1,3 +1,11 @@
+# kind-profil Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kind-profil`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Eltern sehen Kind-Einträge in der Navigation
 
 Für Nutzer mit Rolle `elternteil` MÜSSEN unterhalb des Navigations-Eintrags „Mein Profil" dynamische Einträge für jedes verknüpfte Kind angezeigt werden. Die Einträge zeigen den Vornamen des Kindes als Label (z.B. „Jannes Profil"). Kinder ohne `family_links`-Verknüpfung erscheinen nicht.

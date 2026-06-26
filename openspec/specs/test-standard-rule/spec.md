@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-standard-rule Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `test-standard-rule`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: make coverage Target
 Das Projekt SHALL ein `make coverage`-Target bereitstellen, das den Coverage-Report lokal erzeugt.

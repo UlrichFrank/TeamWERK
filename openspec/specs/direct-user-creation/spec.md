@@ -1,4 +1,10 @@
-## ADDED Requirements
+# direct-user-creation Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `direct-user-creation`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Direktes Anlegen eines Nutzeraccounts
 

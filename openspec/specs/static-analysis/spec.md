@@ -1,4 +1,10 @@
-## ADDED Requirements
+# static-analysis Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `static-analysis`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: golangci-lint läuft sauber auf dem gesamten Backend
 

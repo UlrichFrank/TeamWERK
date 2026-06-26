@@ -1,3 +1,11 @@
+# game-rsvp Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `game-rsvp`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Spieler kann zu einem Spiel RSVP abgeben
 
 Das System SHALL es Spielern und Eltern ermöglichen, zu jedem Spiel ihres Teams

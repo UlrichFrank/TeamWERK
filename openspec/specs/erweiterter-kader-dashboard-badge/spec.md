@@ -1,3 +1,11 @@
+# erweiterter-kader-dashboard-badge Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `erweiterter-kader-dashboard-badge`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: GET /teams/my liefert isExtended-Flag pro Team
 
 `GET /api/teams/my` SHALL pro Team-Objekt ein Feld `isExtended: bool` zurückgeben. Das Feld ist `true`, wenn der anfragende User das Team ausschließlich über `kader_extended_members` sieht — also kein Eintrag in `kader_members` für denselben User, dasselbe Team und dieselbe aktive Saison existiert. Für Spieler im Stammkader, Trainer und Eltern ist `isExtended` immer `false`.

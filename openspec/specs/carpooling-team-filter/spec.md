@@ -1,3 +1,11 @@
+# carpooling-team-filter Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `carpooling-team-filter`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: DB-View user_accessible_teams
 Das System SHALL eine SQLite-View `user_accessible_teams(user_id, team_id, season_id)` bereitstellen, die alle User-Team-Zuordnungen rollenübergreifend kapselt:
 - `spieler`: über `kader_members → kader → members.user_id`

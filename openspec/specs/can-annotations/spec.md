@@ -1,4 +1,10 @@
-## ADDED Requirements
+# can-annotations Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `can-annotations`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Listen- und Detail-DTOs tragen ein _can-Objekt
 

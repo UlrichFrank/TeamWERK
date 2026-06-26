@@ -1,4 +1,10 @@
-## ADDED Requirements
+# duty-assignee-display Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `duty-assignee-display`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Assignee-Namen im Duty-Slot sichtbar
 Das System SHALL für jeden Duty-Slot die Namen der eingetragenen Personen anzeigen. Diese Information ist für alle authentifizierten Nutzer sichtbar, die den Slot sehen können.

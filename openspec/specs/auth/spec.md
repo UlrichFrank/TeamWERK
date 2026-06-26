@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# auth Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `auth`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Role-based access control
 The system SHALL enforce access based on the user's system role and club functions embedded in the JWT claims.

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# event-info-modal Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `event-info-modal`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Button „In Terminen öffnen" im EventInfoModal
 

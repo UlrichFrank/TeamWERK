@@ -1,4 +1,10 @@
-## ADDED Requirements
+# carpooling-event-log Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `carpooling-event-log`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Vollständige Ereignisse persistieren
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# vereinsfunktion Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `vereinsfunktion`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Phantom club functions are rejected
 

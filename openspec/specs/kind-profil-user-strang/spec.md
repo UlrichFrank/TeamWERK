@@ -1,3 +1,11 @@
+# kind-profil-user-strang Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kind-profil-user-strang`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Elternteil kann User-Strang des Kindes aktualisieren
 
 Das System MUSS einen Endpunkt `PUT /api/profile/kind/{memberId}/account` bereitstellen, der `users.first_name`, `users.last_name`, `users.street`, `users.zip`, `users.city` des Kindes sofort aktualisiert. Der Endpunkt DARF NUR aufgerufen werden, wenn `members.user_id IS NOT NULL`. Die Autorisierung MUSS über `family_links` erfolgen (isParentOf-Check).

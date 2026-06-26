@@ -1,4 +1,10 @@
-## ADDED Requirements
+# name-aenderung Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `name-aenderung`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Eingeloggter Nutzer kann seinen Anzeigenamen ändern
 Das System SHALL jedem authentifizierten Nutzer erlauben, seinen eigenen Anzeigenamen (`users.name`) zu ändern. Eine Passwort-Verifikation ist nicht erforderlich.

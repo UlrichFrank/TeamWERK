@@ -1,4 +1,10 @@
-## ADDED Requirements
+# dashboard-offene-gesuche Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `dashboard-offene-gesuche`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Offene Mitfahr-Gesuche der eigenen Teams im Dashboard anzeigen
 

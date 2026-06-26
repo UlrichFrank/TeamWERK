@@ -1,4 +1,10 @@
-## ADDED Requirements
+# app-update-reliability Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `app-update-reliability`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: HTTP-Cache-Header für statische Assets
 

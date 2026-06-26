@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# deploy-version-detection Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `deploy-version-detection`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: SSE-Versionscheck erkennt neuen Deployment-Stand
 
@@ -40,7 +46,6 @@ Das Frontend SHALL beim Verbindungsaufbau und bei jedem SSE-Reconnect die empfan
 - **THEN** wird der Update-Banner unabhängig von Versionsänderungen nicht angezeigt
 - **THEN** ist der Versions-Link in der Sidebar sichtbar und zeigt `v dev`
 
-## ADDED Requirements
 
 ### Requirement: CHANGELOG.md wird bei Build aus git log generiert
 

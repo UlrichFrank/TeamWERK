@@ -1,4 +1,10 @@
-## ADDED Requirements
+# team-absences-calendar Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `team-absences-calendar`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Trainer können Team-Abwesenheiten im Kalender einblenden
 Nutzer mit System-Rolle `admin` oder einer der Vereinsfunktionen `trainer`, `sportliche_leitung`, `vorstand` SHALL im Kalender einen Toggle sehen, der Team-Abwesenheiten ein- oder ausblendet. Der Toggle-State wird in `sessionStorage` gespeichert und ist nach Seitenneustart standardmäßig AUS.

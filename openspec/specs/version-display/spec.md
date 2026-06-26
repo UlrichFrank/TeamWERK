@@ -1,4 +1,10 @@
-## ADDED Requirements
+# version-display Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `version-display`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Versions-Button öffnet Changelog-Modal
 

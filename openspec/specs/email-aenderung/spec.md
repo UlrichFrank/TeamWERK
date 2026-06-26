@@ -1,4 +1,10 @@
-## ADDED Requirements
+# email-aenderung Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `email-aenderung`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Nutzer kann E-Mail-Änderung mit Passwort-Verifikation anfordern
 Das System SHALL jedem authentifizierten Nutzer erlauben, eine E-Mail-Adressänderung anzufordern. Das aktuelle Passwort MUSS korrekt sein. Das System speichert die ausstehende Änderung in `email_change_tokens` (TTL 24h) und sendet einen Bestätigungslink an die neue Adresse.

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# carpooling-elternzugang Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `carpooling-elternzugang`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Elternteil kann Eintrag für Kind anlegen
 Das System SHALL es Elternteilen erlauben, einen Mitfahreintrag (biete oder suche) für ein Kind anzulegen, indem sie `forUserId` (die `users.id` des Kindes) im Request-Body mitgeben. Die Berechtigung wird ausschließlich über `family_links` geprüft — unabhängig von `can_login` des Kindes. Der Eintrag wird mit der `user_id` des Kindes gespeichert.

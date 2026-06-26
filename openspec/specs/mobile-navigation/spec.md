@@ -1,4 +1,10 @@
-## ADDED Requirements
+# mobile-navigation Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mobile-navigation`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Hamburger-Menü auf Mobilgeräten
 Die App SHALL auf Viewports unter 640px Breite anstelle der fixen Sidebar einen Hamburger-Button (☰) in einer mobilen Kopfzeile anzeigen. Die Sidebar MUSS dabei standardmäßig ausgeblendet sein.

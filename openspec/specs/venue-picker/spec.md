@@ -1,3 +1,11 @@
+# venue-picker Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `venue-picker`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Venue aus Liste wählen
 Der VenuePicker SHALL in allen Event-Formularen (Spiel, Training-Series, Training-Session) einen auswählbaren Venue ermöglichen.
 

@@ -1,6 +1,14 @@
+# mobile-header-layout Specification
+
 ## Capability: mobile-header-layout
 
 Seitenheader (h1 + Controls) auf Admin-Seiten müssen auf allen Mobilbreiten (≥ 320px) ohne horizontalen Overflow darstellbar sein.
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mobile-header-layout`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Vertikale Stapelung auf Mobile
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# notification-preferences Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `notification-preferences`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Nutzer-konfigurierbare Notification-Präferenzen
 Das System SHALL es jedem Nutzer ermöglichen, pro Kategorie Push-Benachrichtigungen und (wo verfügbar) E-Mail-Benachrichtigungen ein- oder auszuschalten. Die Einstellungen sind im Profil unter „Sonstiges" zugänglich.

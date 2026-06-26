@@ -1,4 +1,10 @@
-## ADDED Requirements
+# dienstkonto-dynamische-soll-formel Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `dienstkonto-dynamische-soll-formel`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Dynamische soll-Berechnung für Elternteil
 Der `/api/dashboard`-Endpoint berechnet `dutyAccount.soll` für Elternteile dynamisch aus Kader-Daten statt pauschal.

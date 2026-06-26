@@ -1,3 +1,9 @@
+# api-routes Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `api-routes`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
 ## Requirements
 
 ### Requirement: Teams-Endpoint ist rollenabhängig

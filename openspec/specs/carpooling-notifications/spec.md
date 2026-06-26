@@ -1,4 +1,10 @@
-## ADDED Requirements
+# carpooling-notifications Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `carpooling-notifications`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Notification bei neuem Angebot
 Wenn ein neues Bieter-Angebot eingestellt wird, SHALL das System allen Nutzern, die ein aktives Gesuch für dasselbe Spiel haben, eine Push-Benachrichtigung senden.

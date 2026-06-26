@@ -1,4 +1,10 @@
-## ADDED Requirements
+# component-standards Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `component-standards`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Verbindlicher Button-Klassen-String
 Jeder Button in `web/src/` SHALL exakt einen der drei definierten Klassen-Strings verwenden. Abweichungen sind nicht erlaubt.

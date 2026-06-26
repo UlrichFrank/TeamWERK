@@ -1,4 +1,10 @@
-## ADDED Requirements
+# vereins-sepa-stammdaten Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `vereins-sepa-stammdaten`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: SEPA-Stammdaten des Vereins
 Die Vereins-Konfiguration MUST die SEPA-Gläubigerdaten `glaeubiger_id`, `iban`, `bic` und `kontoinhaber` führen. `GET /api/club` MUST diese Felder zurückgeben; `PUT /api/club` MUST sie setzen können. Beim Setzen MUST `glaeubiger_id` (Format `DE\d{2}[A-Z0-9]{3}\d{11}`), `iban` (Mod-97-Prüfsumme) und `bic` (8 oder 11 Zeichen) validiert werden. Ungültige Werte MÜSSEN mit HTTP 400 abgelehnt werden.

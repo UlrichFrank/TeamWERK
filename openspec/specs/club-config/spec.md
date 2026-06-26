@@ -1,4 +1,10 @@
-## ADDED Requirements
+# club-config Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `club-config`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Club master data management
 The system SHALL allow an admin to maintain club master data (name, logo, contact address). Only one club record exists per installation.

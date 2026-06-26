@@ -1,4 +1,10 @@
-## ADDED Requirements
+# pwa-support Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `pwa-support`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Installierbare Progressive Web App
 TeamWERK SHALL als Progressive Web App installierbar sein. Browser MÜSSEN auf kompatiblen Geräten die „Zum Homescreen hinzufügen"-Option anzeigen.

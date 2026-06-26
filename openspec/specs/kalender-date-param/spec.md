@@ -1,4 +1,10 @@
-## ADDED Requirements
+# kalender-date-param Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kalender-date-param`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: URL-Param-Navigation
 KalenderPage akzeptiert einen optionalen Query-Parameter `?date=YYYY-MM-DD`. Wenn gesetzt, initialisiert die Page `year` und `month` aus dem Datum statt aus `new Date()`.

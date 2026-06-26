@@ -1,4 +1,10 @@
-## ADDED Requirements
+# push-membership Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `push-membership`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Push bei Beitrittsanfrage
 Das System SHALL alle Admin-Nutzer per Push benachrichtigen, wenn eine neue Beitrittsanfrage eingeht — sofern Push für Kategorie `membership` nicht deaktiviert.

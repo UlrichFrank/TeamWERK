@@ -1,4 +1,10 @@
-## ADDED Requirements
+# password-reveal-toggle Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `password-reveal-toggle`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Toggle nur bei selbst getipptem Passwort
 

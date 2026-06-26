@@ -1,4 +1,10 @@
-## ADDED Requirements
+# push-reminders Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `push-reminders`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Scheduled Push-Reminder für Spiele
 Das System SHALL Mitgliedern und deren Elternteilen einen Push-Reminder 24h vor einem Spiel senden — sofern Push für `games` aktiviert und noch kein Reminder gesendet wurde.

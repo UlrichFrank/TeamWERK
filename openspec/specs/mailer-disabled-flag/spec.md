@@ -1,3 +1,11 @@
+# mailer-disabled-flag Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mailer-disabled-flag`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Mailer kann per Env-Flag deaktiviert werden
 Das System SHALL E-Mail-Versand überspringen, wenn `MAILER_DISABLED=true` in der Umgebung gesetzt ist. Stattdessen MUSS ein Logeintrag mit Empfänger und Subject geschrieben werden. Der Rückgabewert von `Send()` SHALL `nil` sein (kein Fehler).
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# policy-engine Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `policy-engine`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Policy-Package konsolidiert alle Berechtigungs-Predicates
 

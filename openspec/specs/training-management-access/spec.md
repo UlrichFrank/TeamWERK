@@ -1,3 +1,11 @@
+# training-management-access Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `training-management-access`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Trainer-Zugriff auf Trainings basiert auf kader_trainers
 
 Das System SHALL einem Nutzer Trainer-Zugriff auf ein Team erteilen, wenn er in `kader_trainers` als Trainer eines Kaders dieses Teams eingetragen ist (unabhängig von Saison). Admins haben immer Vollzugriff.

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-kader-gaps Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `test-kader-gaps`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Kader aus Vorsaison kopieren
 Das System SHALL beim Saisonwechsel eine Kader-Struktur aus der Vorsaison in die neue Saison kopieren können. Mit `member_source=same-age-previous` werden die Mitglieder der gleichen Altersklasse übernommen.

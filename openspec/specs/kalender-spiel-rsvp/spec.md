@@ -1,4 +1,10 @@
-## ADDED Requirements
+# kalender-spiel-rsvp Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kalender-spiel-rsvp`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Spiel-Kachel zeigt RSVP-Zähler
 

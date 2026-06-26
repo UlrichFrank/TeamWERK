@@ -1,4 +1,10 @@
-## ADDED Requirements
+# trainings-test-coverage Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `trainings-test-coverage`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: ListSessions filtert nach Team-Zugriffsberechtigung
 

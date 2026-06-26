@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nav-exclude-roles Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `nav-exclude-roles`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: NavItem unterstützt excludeRoles
 Das NavItem-Typ-Interface SHALL eine optionale Eigenschaft `excludeRoles?: string[]` besitzen.

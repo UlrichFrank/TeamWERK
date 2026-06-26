@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-members-gaps Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `test-members-gaps`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Eigenes Profil lesen
 Das System SHALL einem eingeloggten Nutzer das Lesen seiner eigenen Profildaten ermöglichen.

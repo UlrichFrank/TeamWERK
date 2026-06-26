@@ -1,4 +1,10 @@
-## ADDED Requirements
+# kalender-dienste-panel Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kalender-dienste-panel`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: DutySlotList Shared Component
 Das System SHALL eine gemeinsame React-Komponente `DutySlotList` bereitstellen, die eine Liste von `BoardSlot`-Objekten darstellt und folgende Interaktionen kapselt: Eintragen/Austragen (Claim/Unclaim), Zuteilungen aufklappen (Admin/Trainer), Erfüllen und Geldersatz buchen (Admin/Trainer), Slot löschen mit Bestätigungsdialog (Admin/Trainer).

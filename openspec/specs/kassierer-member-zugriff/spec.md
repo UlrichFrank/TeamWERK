@@ -1,4 +1,10 @@
-## ADDED Requirements
+# kassierer-member-zugriff Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `kassierer-member-zugriff`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Kassierer-Lesezugriff auf Mitglieder
 Nutzer mit Vereinsfunktion `kassierer` SHALL die Mitgliederliste und Mitglieder-Detailseiten lesen können (`GET /api/members`, `GET /api/members/{id}`, `GET /api/members/{id}/parents`, `GET /api/members/export`). Diese Routen MUST von der bisherigen Vorstand-only-Gruppe in eine `vorstand`+`kassierer`-Gruppe wandern. Mitglieder anlegen, vollständig bearbeiten, löschen, Status ändern, importieren sowie Rollen-/Family-Verwaltung BLEIBEN `vorstand`-only (Admin-Override unverändert).

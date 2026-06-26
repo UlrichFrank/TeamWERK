@@ -1,4 +1,10 @@
-## ADDED Requirements
+# user-list-filters Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `user-list-filters`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Nutzerliste zeigt family_link-Status
 `GET /api/users` SHALL im Response-Objekt jedes Users ein Feld `has_family_link: bool` enthalten.

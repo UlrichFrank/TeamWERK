@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-duties-gaps Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `test-duties-gaps`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Diensterfüllung und Geldersatz
 Das System SHALL einen Trainer in die Lage versetzen, eine Dienstzuweisung als erfüllt zu markieren oder einen Geldersatz zu vermerken. `Fulfill` aktualisiert dabei NICHT `duty_accounts.ist` (Invariante: ist wird separat berechnet).

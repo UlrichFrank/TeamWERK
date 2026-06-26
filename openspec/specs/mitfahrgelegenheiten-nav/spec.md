@@ -1,4 +1,10 @@
-## ADDED Requirements
+# mitfahrgelegenheiten-nav Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `mitfahrgelegenheiten-nav`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Nav-Eintrag Mitfahrgelegenheiten
 Im AppShell-Navigationsbereich „Dienste" erscheint ein neuer Eintrag „Mitfahrgelegenheiten" unterhalb von „Dienste" (nach dem bestehenden Dienste-Link, nach Kalender).

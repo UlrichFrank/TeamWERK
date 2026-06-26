@@ -1,4 +1,10 @@
-## ADDED Requirements
+# icon-system Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `icon-system`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Lucide React als einziges Icon-System
 Alle visuellen Symbole in `web/src/` SHALL als Lucide-React-Komponenten gerendert werden. Unicode-Zeichen (☰ ✕ ⋮ ▸ ▾ ✓ ✗ ⚠ « »), Emojis (🗑 📋 ⚽ 🚌 🏠) und der custom Inline-SVG in `BrandCheckbox` sind zu ersetzen.

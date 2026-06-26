@@ -1,4 +1,10 @@
-## ADDED Requirements
+# chat-day-separators Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `chat-day-separators`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Tageswechsel-Separator im Chat-Verlauf
 

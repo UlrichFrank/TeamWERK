@@ -1,4 +1,10 @@
-## ADDED Requirements
+# member-csv-import-selective Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `member-csv-import-selective`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
 
 ### Requirement: Feld-Auswahl beim CSV-Import (`fields`)
 

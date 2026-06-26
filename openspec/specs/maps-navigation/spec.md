@@ -1,3 +1,11 @@
+# maps-navigation Specification
+
+## Purpose
+
+Diese Spezifikation beschreibt die Capability `maps-navigation`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
+## Requirements
+
 ### Requirement: Maps-Deep-Link anzeigen
 Überall wo ein Venue mit Adresse angezeigt wird, SHALL ein anklickbarer Maps-Link erscheinen.
 
