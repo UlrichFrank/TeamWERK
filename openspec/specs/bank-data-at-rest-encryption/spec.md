@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Bank-/SEPA-PII wird at-rest mit AES-256-GCM verschlüsselt; Entschlüsselung erfolgt zentral autorisiert und der Bestand wird idempotent erstverschlüsselt.
+Bank-/SEPA-PII wird at-rest mit AES-256-GCM verschlüsselt; der Bestand wird idempotent erstverschlüsselt. Entschlüsselung erfolgt ausschließlich clientseitig durch berechtigte Finance-Gruppen-Inhaber (Zero-Knowledge, Modell B) — der Server besitzt keinen Entschlüsselungsschlüssel. `FIELD_ENCRYPTION_KEY` war nur als einmalige Migrations-Brücke vorhanden und ist nach Abschluss der Migration entfernt.
 
 ## Requirements
 
@@ -24,63 +24,36 @@ Das System SHALL Bank-/SEPA-PII der folgenden vier Speicher ausschließlich als 
 
 ### Requirement: Toleranter Decrypt für gemischte Bestände
 
-`Decrypt` SHALL einen Wert ohne `"v1:"`-Prefix unverändert zurückgeben (Behandlung als noch nicht migrierter Klartext) und einen Wert mit `"v1:"`-Prefix mit dem konfigurierten Schlüssel entschlüsseln. Schlägt die Authentifizierung des Ciphertexts fehl, SHALL `Decrypt` einen Fehler zurückgeben und keinen Klartext liefern.
+`Decrypt` SHALL **nur während der Migration** einen `"v1:"`-Wert mit dem konfigurierten
+Schlüssel entschlüsseln und einen Wert ohne Prefix als Klartext durchreichen. Nach der
+Migration existiert kein `"v1:"`- und kein Klartext-Bestand mehr in den Bank-/SEPA-Feldern;
+diese tragen ausschließlich das clientseitige Envelope-Format.
 
-#### Scenario: Gemischter Bestand wird korrekt gelesen
-- **WHEN** eine Spalte teils Klartext (vor Migration), teils `"v1:"`-Ciphertext (nach Migration) enthält
-- **THEN** liefert der Lesepfad in beiden Fällen den korrekten Klartextwert
+#### Scenario: Migration liest Altbestand korrekt
+- **WHEN** der Migrationslauf einen `"v1:"`-Wert oder einen Klartext-Altwert verarbeitet
+- **THEN** liefert der Decrypt-Pfad den korrekten Klartext zur clientseitigen Re-Verschlüsselung
 
-#### Scenario: Manipulierter Ciphertext wird abgewiesen
-- **WHEN** ein `"v1:"`-Wert nachträglich verändert wurde (gebrochene GCM-Authentifizierung)
-- **THEN** liefert `Decrypt` einen Fehler statt eines Klartextwerts
+#### Scenario: Nach Migration kein Altformat mehr
+- **WHEN** die Migration abgeschlossen ist
+- **THEN** enthalten die Bank-/SEPA-Felder weder `"v1:"`- noch Klartextwerte
 
-### Requirement: App-gehaltener Schlüssel mit Startup-Validierung
+### Requirement: App-gehaltener Schlüssel nur als Migrations-Brücke
 
-Das System SHALL den symmetrischen Schlüssel aus der Umgebungsvariable `FIELD_ENCRYPTION_KEY` (32 Byte, base64-kodiert) laden. Fehlt der Schlüssel oder ist er ungültig, SHALL der Serverstart fehlschlagen. Das System SHALL ein Subcommand `gen-encryption-key` bereitstellen, das einen gültigen Schlüssel erzeugt.
+Das System SHALL den symmetrischen Schlüssel `FIELD_ENCRYPTION_KEY` **ausschließlich für
+die einmalige Migration** des `"v1:"`-Bestands auf das clientseitige Envelope-Format
+laden. Nach abgeschlossener Migration SHALL der Schlüssel aus der Betriebsumgebung
+entfernt werden und der Server SHALL ohne ihn starten können. Solange die Migration nicht
+abgeschlossen ist, SHALL der bestehende tolerante `Decrypt` (Klartext-Passthrough,
+`"v1:"`-Entschlüsselung) **nur im Migrationspfad** verfügbar sein, nicht in regulären
+Lesepfaden.
 
-#### Scenario: Start ohne Schlüssel wird verweigert
-- **WHEN** der Server ohne gesetztes `FIELD_ENCRYPTION_KEY` gestartet wird
-- **THEN** bricht der Start mit einer eindeutigen Fehlermeldung ab und nimmt keine Requests an
+#### Scenario: Server startet nach Migration ohne Schlüssel
+- **WHEN** die Migration abgeschlossen ist und `FIELD_ENCRYPTION_KEY` nicht gesetzt ist
+- **THEN** startet der Server normal und bedient alle Bank-/SEPA-Routen (nur Ciphertext)
 
-#### Scenario: Ungültiger Schlüssel wird verweigert
-- **WHEN** `FIELD_ENCRYPTION_KEY` gesetzt, aber kein gültiger base64-kodierter 32-Byte-Wert ist
-- **THEN** bricht der Start mit einer eindeutigen Fehlermeldung ab
-
-#### Scenario: Schlüsselerzeugung
-- **WHEN** `teamwerk gen-encryption-key` ausgeführt wird
-- **THEN** gibt es einen base64-kodierten 32-Byte-Schlüssel aus, der als `FIELD_ENCRYPTION_KEY` verwendbar ist
-
-### Requirement: Zentrale Autorisierung der Entschlüsselung
-
-Das System SHALL Klartext-Bankdaten eines Mitglieds nur dann ausliefern, wenn der Aufrufer berechtigt ist: `admin` ODER Vereinsfunktion `vorstand` ODER `kassierer` ODER der Eigentümer (das verknüpfte Mitglied selbst) ODER ein über `family_links` verbundenes Elternteil. Diese Regel SHALL zentral in `policy.CanDecryptBankData` implementiert und von jedem Lesepfad aufgerufen werden. Nicht-berechtigte Aufrufer SHALL keine entschlüsselten Bankdaten erhalten.
-
-#### Scenario: Vorstand/Kassierer/Admin liest jedes Mitglied
-- **WHEN** ein Nutzer mit Rolle `admin` oder Vereinsfunktion `vorstand`/`kassierer` `GET /api/members/{id}` aufruft
-- **THEN** enthält die Antwort IBAN und Kontoinhaber im Klartext
-
-#### Scenario: Trainer erhält keine Bankdaten
-- **WHEN** ein Nutzer ausschließlich mit Funktion `trainer` Bankdaten eines Mitglieds anfordert
-- **THEN** erhält er keine entschlüsselten Bankdaten (Feld leer/weggelassen bzw. HTTP 403 am dedizierten Endpoint)
-
-#### Scenario: Fremdes Mitglied erhält keine Bankdaten
-- **WHEN** ein Mitglied die Bankdaten eines anderen, nicht verbundenen Mitglieds anfordert
-- **THEN** erhält es keine entschlüsselten Bankdaten
-
-### Requirement: Eigentümer- und Eltern-Lesen der eigenen Bankdaten
-
-Das System SHALL einem Mitglied die eigenen Bankdaten (IBAN, Kontoinhaber) entschlüsselt über `GET /api/profile/me` liefern und einem Elternteil die Bankdaten seines verbundenen Kindes über `GET /api/profile/kind/{id}`. Das Frontend SHALL diese Werte in Profil bzw. Kind-Profil anzeigen.
-
-#### Scenario: Mitglied liest eigene IBAN
-- **WHEN** ein Mitglied mit verknüpftem Nutzerkonto `GET /api/profile/me` aufruft
-- **THEN** enthält die Antwort die eigene IBAN und den Kontoinhaber im Klartext
-
-#### Scenario: Elternteil liest Bankdaten des Kindes
-- **WHEN** ein über `family_links` verbundenes Elternteil `GET /api/profile/kind/{id}` für sein Kind aufruft
-- **THEN** enthält die Antwort die IBAN und den Kontoinhaber des Kindes im Klartext
-
-#### Scenario: Elternteil eines fremden Kindes
-- **WHEN** ein Nutzer `GET /api/profile/kind/{id}` für ein nicht mit ihm verbundenes Mitglied aufruft
-- **THEN** antwortet der Server mit HTTP 403 und liefert keine Bankdaten
+#### Scenario: Regulärer Lesepfad entschlüsselt nicht serverseitig
+- **WHEN** eine reguläre Route Bank-/SEPA-Felder ausliefert
+- **THEN** verwendet sie keinen `crypto.Decrypt`-Aufruf und liefert ausschließlich Ciphertext
 
 ### Requirement: Idempotente Erstverschlüsselung des Bestands
 

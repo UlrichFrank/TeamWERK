@@ -32,34 +32,59 @@ Der Beitragslauf MUST jedes eingeschlossene Mitglied mit dem vollen Jahresbeitra
 - **THEN** entspricht `betrag_cent` exakt `beitrags_saetze.betrag_eur` des für K zum Saisonstart gültigen Satzes
 
 ### Requirement: Ein- und Ausschlussregeln
-Der Vorschau-Endpoint MUST Mitglieder mit `status IN ('ausgetreten','honorar','anwaerter')` oder `beitragsfrei = 1` ausschließen. Ebenso ausgeschlossen werden Mitglieder ohne gültiges SEPA-Mandat, ohne gültige IBAN, ohne Mitgliedsnummer oder mit unvollständiger Adresse. Jeder Ausschluss MUSS in `exclusions` mit Begründung gemeldet werden. Ein fehlender Stammverein (`home_club_id = NULL`) führt NICHT zum Ausschluss, sondern regulär zur Kategorie `aktiv_ohne`.
 
-#### Scenario: Mitglied ohne SEPA-Mandat
+Der Vorschau-Endpoint MUST Mitglieder mit `status IN ('ausgetreten','honorar','anwaerter')`
+oder `beitragsfrei = 1` ausschließen, ebenso Mitglieder ohne gültiges SEPA-Mandat
+(`sepa_mandat = 0`), ohne Mitgliedsnummer oder mit unvollständiger Adresse — diese
+Prüfungen erfolgen serverseitig anhand **nicht-verschlüsselter** Felder. Die Ausschlüsse
+**IBAN fehlt** (`iban_fehlt`) und **IBAN ungültig** (`iban_ungueltig`) SHALL hingegen
+**clientseitig** nach Entschlüsselung der IBAN ermittelt werden, da der Server die IBAN
+nicht mehr im Klartext kennt. Jeder Ausschluss MUSS dem Nutzer mit Begründung angezeigt
+werden (server-gemeldete + clientseitig ergänzte). Ein fehlender Stammverein
+(`home_club_id = NULL`) führt NICHT zum Ausschluss, sondern regulär zur Kategorie `aktiv_ohne`.
+
+#### Scenario: Nicht-IBAN-Ausschluss kommt vom Server
 - **WHEN** ein Mitglied `sepa_mandat = 0` hat
-- **THEN** ist `included = false` und `exclusions` enthält `kein_sepa_mandat`
+- **THEN** meldet die Server-Vorschau `included = false` mit `exclusions` enthält `kein_sepa_mandat`
 
-### Requirement: SEPA-XML-Export (pain.008.001.08), immer RCUR
-Berechtigte Nutzer SOLLEN via `POST /api/fee-run/export` mit Body `{saison_id, member_ids}` eine SEPA-XML-Datei im Schema `pain.008.001.08` herunterladen können. Alle Lastschriften MUST `SeqTp = RCUR` verwenden; es wird NICHT zwischen Erst- und Folgelastschrift unterschieden. Das XML besteht daher aus genau einem `PmtInf`-Block, setzt das Fälligkeitsdatum (`ReqdColltnDt`) auf den 01.07. der Saison (bei Wochenende auf den nächsten Werktag) und führt den Verwendungszweck `Jahresbeitrag Saison {saison_kurz} – Mitgliedsnr. {member_number}`. Sind die Vereins-SEPA-Stammdaten unvollständig, MUSS der Server mit HTTP 400 antworten. Enthält `member_ids` ein ausgeschlossenes Mitglied, MUSS der Server mit HTTP 400 antworten.
+#### Scenario: IBAN-Ausschluss wird clientseitig ergänzt
+- **WHEN** der Browser die IBAN eines sonst eingeschlossenen Mitglieds entschlüsselt und sie
+  fehlt oder die Prüfziffer ungültig ist
+- **THEN** markiert der Client das Mitglied clientseitig als ausgeschlossen
+  (`iban_fehlt`/`iban_ungueltig`) und nimmt es nicht in die erzeugte XML-Datei auf
 
-#### Scenario: Gültiges XML
-- **WHEN** ein Vorstand `POST /api/fee-run/export` mit gültiger Saison und eingeschlossenen `member_ids` aufruft
-- **THEN** liefert der Server `application/xml`, das gegen das pain.008.001.08-XSD validiert
+### Requirement: SEPA-XML-Export (pain.008.001.08), immer RCUR — clientseitig erzeugt
 
-#### Scenario: Genau ein PmtInf-Block mit RCUR
-- **WHEN** das XML erzeugt wird
-- **THEN** enthält es genau einen `PmtInf`-Block mit `SeqTp = RCUR`, unabhängig davon, ob ein Mitglied zum ersten Mal eingezogen wird
+Die `pain.008.001.08`-Datei SHALL **im Browser** des berechtigten Nutzers
+(`vorstand`/`kassierer`/`admin` mit entsperrtem Finance-Gruppenschlüssel) erzeugt werden;
+der Server SHALL keine Klartext-IBANs verarbeiten. Der Server SHALL via
+`POST /api/fee-run/export-data` mit Body `{saison_id, member_ids}` die zur Erzeugung
+nötigen Daten ausschließlich als **Ciphertext + Group-Wraps** ausliefern (Mitglieds-Blobs,
+Vereins-SEPA-Stammdaten-Blob, Beträge, Verwendungszweck-Bausteine). Der Client SHALL die
+Blobs entschlüsseln, IBANs validieren, den genau einen `PmtInf`-Block mit `SeqTp = RCUR`
+und `ReqdColltnDt = 01.07.` der Saison (Wochenende → nächster Werktag) bauen und die Datei
+lokal zum Download anbieten. Alle übrigen fachlichen Invarianten (RCUR, ein PmtInf-Block,
+Verwendungszweck, voller Jahresbeitrag) bleiben unverändert. Sind die Vereins-SEPA-
+Stammdaten unvollständig oder enthält die Auswahl ein ausgeschlossenes Mitglied, SHALL der
+Export (clientseitig nach Entschlüsselung bzw. serverseitig anhand nicht-verschlüsselter
+Felder) abgewiesen werden.
 
-#### Scenario: Fehlende Stammdaten
-- **WHEN** die Gläubiger-ID des Vereins nicht gesetzt ist
-- **THEN** antwortet der Server mit HTTP 400
+#### Scenario: XML wird clientseitig erzeugt
+- **WHEN** ein Kassierer mit entsperrtem Gruppenschlüssel den Export auslöst
+- **THEN** liefert der Server nur Ciphertext + Wraps; der Browser entschlüsselt, baut die
+  pain.008.001.08-Datei und bietet sie zum Download an — der Server sieht keine Klartext-IBAN
+
+#### Scenario: Erzeugtes XML validiert gegen das XSD
+- **WHEN** der Browser die Datei aus den entschlüsselten Daten erzeugt
+- **THEN** validiert sie gegen das pain.008.001.08-XSD und enthält genau einen `PmtInf`-Block mit `SeqTp = RCUR`
+
+#### Scenario: Export ohne entsperrten Gruppenschlüssel
+- **WHEN** ein berechtigter Nutzer den Export ohne entsperrten Finance-Gruppenschlüssel auslöst
+- **THEN** wird zuerst die Schlüssel-/Passphrase-Eingabe verlangt; ohne sie entsteht keine Datei
 
 #### Scenario: Export ohne Berechtigung
-- **WHEN** ein Nutzer mit ausschließlich `club_functions: ["spieler"]` `POST /api/fee-run/export` aufruft
+- **WHEN** ein Nutzer mit ausschließlich `club_functions: ["spieler"]` die Export-Daten anfordert
 - **THEN** antwortet der Server mit HTTP 403
-
-#### Scenario: Kassierer darf exportieren
-- **WHEN** ein Nutzer mit `club_functions: ["kassierer"]` `POST /api/fee-run/export` mit gültiger Auswahl aufruft
-- **THEN** liefert der Server die XML-Datei (HTTP 200)
 
 ### Requirement: Lauf bestätigen und Saison-Protokoll
 Berechtigte Nutzer (`vorstand`, `kassierer`, `admin`) SHALL nach erfolgreicher Bank-Einreichung via `POST /api/fee-run/confirm` mit Body `{saison_id, results: [{member_id, betrag_cent, success}]}` das Ergebnis bestätigen. Die Bestätigung MUST einen Block an eine append-only Textdatei pro Saisonjahr anhängen, die für jeden Lauf festhält, bei welchen Mitgliedern erfolgreich bzw. nicht erfolgreich eingezogen wurde (inkl. Betrag), Zeitpunkt und bestätigendem Nutzer. Bestehende Blöcke DÜRFEN NICHT verändert oder gelöscht werden. Der Confirm DARF KEINE Mitgliederdaten ändern. Via `GET /api/fee-run/protocol?saison_id=…` SHALL der Protokoll-Inhalt als `text/plain` abrufbar sein.
