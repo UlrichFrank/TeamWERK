@@ -1,6 +1,7 @@
 package calendar_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -340,5 +341,70 @@ func TestCalendarToken_Unauthenticated(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", res.StatusCode)
+	}
+}
+
+// --- event-notes: iCal DESCRIPTION ------------------------------------------
+
+// noteCalendarFixture builds a user (in a kader) with one game and one training
+// session for the team. The feed read path reads g.note / ts.note directly, so
+// tests set notes via db.Exec and assert on the rendered DESCRIPTION line.
+func noteCalendarFixture(t *testing.T) (*httptest.Server, *sql.DB, int, int, string) {
+	t.Helper()
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-08-15")
+	trainingID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-08-16")
+	srv := prodserver.New(t, db)
+	userToken := testutil.Token(t, userID, "standard", nil)
+	return srv, db, gameID, trainingID, userToken
+}
+
+func feedBody(t *testing.T, srv *httptest.Server, userToken string, toggles map[string]any) string {
+	t.Helper()
+	tok := postToken(t, srv, userToken, toggles)
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+tok["token"].(string), "")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("feed: expected 200, got %d", res.StatusCode)
+	}
+	return readBody(t, res.Body)
+}
+
+func TestICal_GameWithNote_DescriptionInFeed(t *testing.T) {
+	srv, db, gameID, _, userToken := noteCalendarFixture(t)
+	if _, err := db.Exec(`UPDATE games SET note=? WHERE id=?`, "Bringt Trikots mit", gameID); err != nil {
+		t.Fatalf("set game note: %v", err)
+	}
+
+	body := feedBody(t, srv, userToken, allTogglesOn())
+	if !strings.Contains(body, "DESCRIPTION:Bringt Trikots mit") {
+		t.Errorf("expected game note in DESCRIPTION, feed:\n%s", body)
+	}
+}
+
+func TestICal_TrainingWithNote_DescriptionInFeed(t *testing.T) {
+	srv, db, _, trainingID, userToken := noteCalendarFixture(t)
+	if _, err := db.Exec(`UPDATE training_sessions SET note=? WHERE id=?`, "Halle gesperrt wir joggen", trainingID); err != nil {
+		t.Fatalf("set training note: %v", err)
+	}
+
+	body := feedBody(t, srv, userToken, map[string]any{"include_training": true})
+	if !strings.Contains(body, "DESCRIPTION:Halle gesperrt wir joggen") {
+		t.Errorf("expected training note in DESCRIPTION, feed:\n%s", body)
+	}
+}
+
+func TestICal_TrainingEmptyNote_NoDescriptionLine(t *testing.T) {
+	srv, _, _, _, userToken := noteCalendarFixture(t)
+	// No note set → renderer must not emit a DESCRIPTION line for the training.
+	body := feedBody(t, srv, userToken, map[string]any{"include_training": true})
+	if strings.Contains(body, "DESCRIPTION:") {
+		t.Errorf("expected no DESCRIPTION line for empty note, feed:\n%s", body)
 	}
 }

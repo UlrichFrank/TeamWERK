@@ -212,7 +212,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT DISTINCT
 		    g.id, g.date, g.time, g.end_time, g.end_date,
-		    g.opponent, g.event_type, g.is_home,
+		    g.opponent, g.event_type, g.is_home, g.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,'')
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
@@ -234,9 +234,10 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		var date, startTime, opponent, eventType string
 		var endTime, endDate sql.NullString
 		var isHome bool
+		var note string
 		var vName, vStreet, vPostal, vCity string
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &endDate,
-			&opponent, &eventType, &isHome,
+			&opponent, &eventType, &isHome, &note,
 			&vName, &vStreet, &vPostal, &vCity); err != nil {
 			continue
 		}
@@ -272,12 +273,13 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		}
 
 		events = append(events, calEvent{
-			UID:      fmt.Sprintf("game-%d@teamwerk", id),
-			Summary:  summary,
-			Location: location,
-			Start:    startDT,
-			End:      endDT,
-			HasEnd:   hasEnd,
+			UID:         fmt.Sprintf("game-%d@teamwerk", id),
+			Summary:     summary,
+			Location:    location,
+			Description: note,
+			Start:       startDT,
+			End:         endDT,
+			HasEnd:      hasEnd,
 		})
 	}
 	return events, rows.Err()
@@ -287,7 +289,7 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT DISTINCT
 		    ts.id, ts.date, ts.start_time, ts.end_time,
-		    COALESCE(t.name, ''),
+		    COALESCE(t.name, ''), ts.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,'')
 		FROM training_sessions ts
 		JOIN teams t ON t.id = ts.team_id
@@ -306,9 +308,9 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 	var events []calEvent
 	for rows.Next() {
 		var id int
-		var date, startTime, endTime, teamName string
+		var date, startTime, endTime, teamName, note string
 		var vName, vStreet, vPostal, vCity string
-		if err := rows.Scan(&id, &date, &startTime, &endTime, &teamName,
+		if err := rows.Scan(&id, &date, &startTime, &endTime, &teamName, &note,
 			&vName, &vStreet, &vPostal, &vCity); err != nil {
 			continue
 		}
@@ -330,12 +332,13 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 		start := parseDT(date, startTime, loc)
 		end := parseDT(date, endTime, loc)
 		events = append(events, calEvent{
-			UID:      fmt.Sprintf("training-%d@teamwerk", id),
-			Summary:  summary,
-			Location: location,
-			Start:    start,
-			End:      end,
-			HasEnd:   true,
+			UID:         fmt.Sprintf("training-%d@teamwerk", id),
+			Summary:     summary,
+			Location:    location,
+			Description: note,
+			Start:       start,
+			End:         end,
+			HasEnd:      true,
 		})
 	}
 	return events, rows.Err()
