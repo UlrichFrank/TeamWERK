@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -80,6 +81,103 @@ func (h *Handler) gameTeamIDs(gameID any) []int {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// canEditGameNote reports whether the caller may set a game's note: admin,
+// vorstand, sportliche_leitung, or a trainer of a participating team. Mirrors
+// the canEdit logic of GetGame.
+func (h *Handler) canEditGameNote(ctx context.Context, claims *auth.Claims, gameID int) bool {
+	gp := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
+	if policy.CanViewAllGames(gp) {
+		return true
+	}
+	if !policy.IsTrainerLike(gp) {
+		return false
+	}
+	var trains int
+	h.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM trainer_memberships trm
+		JOIN seasons s ON s.id = trm.season_id AND s.is_active = 1
+		JOIN members m ON m.id = trm.member_id AND m.user_id = ?
+		JOIN game_teams gt ON gt.team_id = trm.team_id AND gt.game_id = ?`,
+		claims.UserID, gameID).Scan(&trains)
+	return trains > 0
+}
+
+// PUT /api/games/{id}/note — setzt das Hinweisfeld eines Spiels/Events.
+// Berechtigung: Vorstand / Trainer eines beteiligten Teams / sportliche_leitung / Admin.
+func (h *Handler) UpdateGameNote(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if utf8.RuneCountInString(req.Note) > 200 {
+		http.Error(w, "note too long", http.StatusBadRequest)
+		return
+	}
+
+	var exists int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT 1 FROM games WHERE id=?`, gameID).Scan(&exists); err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !h.canEditGameNote(r.Context(), claims, gameID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.ExecContext(r.Context(),
+		`UPDATE games SET note = ? WHERE id = ?`, req.Note, gameID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(req.Note) == "" {
+		if _, err = tx.ExecContext(r.Context(),
+			`DELETE FROM pending_event_notes_push WHERE ref_type='game' AND ref_id=?`,
+			gameID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if _, err = tx.ExecContext(r.Context(), `
+			INSERT INTO pending_event_notes_push (ref_type, ref_id, note_text, notify_after, updated_by)
+			VALUES ('game', ?, ?, datetime('now', '+5 minutes'), ?)
+			ON CONFLICT(ref_type, ref_id) DO UPDATE SET
+				note_text    = excluded.note_text,
+				notify_after = excluded.notify_after,
+				updated_by   = excluded.updated_by`,
+			gameID, req.Note, claims.UserID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.Broadcast("event-note")
+	w.WriteHeader(http.StatusOK)
 }
 
 // addMinutes adds offset to a "HH:MM" string, wrapping around 24 hours.
@@ -301,7 +399,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		       END,
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
-		       g.rsvp_opt_out, g.rsvp_require_reason,
+		       g.rsvp_opt_out, g.rsvp_require_reason, g.note,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM games g
 		LEFT JOIN duty_slots ds ON ds.game_id = g.id
@@ -359,6 +457,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		MaybeCount          int                 `json:"maybe_count"`
 		RsvpOptOut          int                 `json:"rsvp_opt_out"`
 		RsvpRequireReason   int                 `json:"rsvp_require_reason"`
+		Note                string              `json:"note"`
 		Venue               *venueRef           `json:"venue,omitempty"`
 		Can                 policy.GameCanFlags `json:"can"`
 	}
@@ -373,7 +472,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &templateIDNull,
 			&g.SlotCount, &g.FilledCount, &g.TotalCount,
 			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
-			&g.RsvpOptOut, &g.RsvpRequireReason,
+			&g.RsvpOptOut, &g.RsvpRequireReason, &g.Note,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			continue
 		}
@@ -468,6 +567,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		TemplateID        *int      `json:"template_id"`
 		RsvpOptOut        int       `json:"rsvp_opt_out"`
 		RsvpRequireReason int       `json:"rsvp_require_reason"`
+		Note              string    `json:"note"`
 		ConfirmedCount    int       `json:"confirmed_count"`
 		DeclinedCount     int       `json:"declined_count"`
 		MaybeCount        int       `json:"maybe_count"`
@@ -488,7 +588,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err := h.db.QueryRowContext(r.Context(),
 		`SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id,
-		        g.rsvp_opt_out, g.rsvp_require_reason,
+		        g.rsvp_opt_out, g.rsvp_require_reason, g.note,
 		        CASE WHEN g.rsvp_opt_out = 1
 		             THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
 		                    SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
@@ -504,7 +604,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		        v.id, v.name, v.street, v.city, v.postal_code, v.note
 		 FROM games g LEFT JOIN venues v ON v.id = g.venue_id WHERE g.id=?`, id).
 		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull,
-			&g.RsvpOptOut, &g.RsvpRequireReason,
+			&g.RsvpOptOut, &g.RsvpRequireReason, &g.Note,
 			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if templateIDNull.Valid {
@@ -989,6 +1089,13 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	// event-notes: etwaige pending Push-Row mitlöschen, sonst Karteileiche.
+	if _, err = tx.ExecContext(r.Context(),
+		`DELETE FROM pending_event_notes_push WHERE ref_type='game' AND ref_id=?`, id); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
@@ -1621,6 +1728,7 @@ type gameListItem struct {
 	ChildrenRSVP        []childRSVP   `json:"children_rsvp,omitempty"`
 	RsvpOptOut          int           `json:"rsvp_opt_out"`
 	RsvpRequireReason   int           `json:"rsvp_require_reason"`
+	Note                string        `json:"note"`
 	Venue               *gameVenueRef `json:"venue,omitempty"`
 }
 
@@ -1734,7 +1842,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
 		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
-		       g.rsvp_opt_out, g.rsvp_require_reason,
+		       g.rsvp_opt_out, g.rsvp_require_reason, g.note,
 		       EXISTS(SELECT 1 FROM game_teams gt_r
 		              JOIN kader k_r ON k_r.team_id = gt_r.team_id AND k_r.season_id = g.season_id
 		              JOIN kader_members km_r ON km_r.kader_id = k_r.id AND km_r.member_id = ?
@@ -1765,7 +1873,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
 			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
-			&g.RsvpOptOut, &g.RsvpRequireReason, &inRegularKader,
+			&g.RsvpOptOut, &g.RsvpRequireReason, &g.Note, &inRegularKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
