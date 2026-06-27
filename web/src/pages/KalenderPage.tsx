@@ -1020,7 +1020,11 @@ export default function KalenderPage() {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
-                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
+                    <input type="date" value={selectedDate} onChange={e => {
+                      const date = e.target.value
+                      setSelectedDate(date)
+                      if (eventType === 'generisch' && selectedEndDate && selectedEndDate < date) setSelectedEndDate(date)
+                    }} className={INPUT_WIZ} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">
@@ -1223,11 +1227,15 @@ export default function KalenderPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig von *</label>
-                    <input type="date" value={seriesValidFrom} onChange={e => setSeriesValidFrom(e.target.value)} className={INPUT_WIZ} />
+                    <input type="date" value={seriesValidFrom} onChange={e => {
+                      const from = e.target.value
+                      setSeriesValidFrom(from)
+                      if (seriesValidUntil && seriesValidUntil < from) setSeriesValidUntil(from)
+                    }} className={INPUT_WIZ} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig bis *</label>
-                    <input type="date" value={seriesValidUntil} onChange={e => setSeriesValidUntil(e.target.value)} className={INPUT_WIZ} />
+                    <input type="date" value={seriesValidUntil} min={seriesValidFrom || undefined} onChange={e => setSeriesValidUntil(e.target.value)} className={INPUT_WIZ} />
                   </div>
                   <div className="space-y-2 pt-2 border-t border-brand-border-subtle">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -1308,7 +1316,14 @@ export default function KalenderPage() {
                       <input
                         type="date"
                         value={absenceForm.start_date}
-                        onChange={e => setAbsenceForm(f => ({ ...f, start_date: e.target.value }))}
+                        onChange={e => {
+                          const start = e.target.value
+                          setAbsenceForm(f => ({
+                            ...f,
+                            start_date: start,
+                            end_date: f.end_date && f.end_date < start ? start : f.end_date,
+                          }))
+                        }}
                         className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                       />
                     </div>
@@ -1317,6 +1332,7 @@ export default function KalenderPage() {
                       <input
                         type="date"
                         value={absenceForm.end_date}
+                        min={absenceForm.start_date || undefined}
                         onChange={e => setAbsenceForm(f => ({ ...f, end_date: e.target.value }))}
                         className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                       />
