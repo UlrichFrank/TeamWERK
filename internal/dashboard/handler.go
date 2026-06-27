@@ -33,6 +33,7 @@ type NextEvent struct {
 	DetailURL  string `json:"detailUrl"`
 	IsHome     *bool  `json:"isHome"` // nil for training, true/false for games
 	IsExtended bool   `json:"isExtended"`
+	Note       string `json:"note"`
 }
 
 type DiensteSlot struct {
@@ -178,7 +179,8 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) AS team_name,
 			       '/termine/training/' || ts.id AS detail_url,
 			       NULL AS is_home,
-			       CASE WHEN ts.team_id IN (SELECT team_id FROM extended_teams) THEN 1 ELSE 0 END AS is_extended
+			       CASE WHEN ts.team_id IN (SELECT team_id FROM extended_teams) THEN 1 ELSE 0 END AS is_extended,
+			       ts.note AS note
 			FROM training_sessions ts
 			JOIN teams t ON t.id = ts.team_id
 			WHERE ts.team_id IN (%s)
@@ -205,7 +207,8 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			           SELECT 1 FROM game_teams gt3
 			           WHERE gt3.game_id = g.id
 			             AND gt3.team_id IN (SELECT team_id FROM primary_teams)
-			       ) THEN 1 ELSE 0 END
+			       ) THEN 1 ELSE 0 END,
+			       g.note
 			FROM games g
 			JOIN game_teams gt ON g.id = gt.game_id
 			JOIN teams t ON t.id = gt.team_id
@@ -215,7 +218,7 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			GROUP BY g.id
 		),
 		min_date AS (SELECT MIN(date) AS d FROM upcoming)
-		SELECT event_id, event_type, date, time, title, team_name, detail_url, is_home, is_extended
+		SELECT event_id, event_type, date, time, title, team_name, detail_url, is_home, is_extended, note
 		FROM upcoming
 		WHERE date = (SELECT d FROM min_date)
 		ORDER BY time ASC`, teamSubquery, teamSubquery),
@@ -231,7 +234,7 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 		var e NextEvent
 		var isHome sql.NullInt64
 		var isExtended int
-		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL, &isHome, &isExtended)
+		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL, &isHome, &isExtended, &e.Note)
 		if isHome.Valid {
 			v := isHome.Int64 == 1
 			e.IsHome = &v

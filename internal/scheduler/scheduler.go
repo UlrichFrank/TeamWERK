@@ -50,6 +50,7 @@ func (s *Scheduler) Run() {
 	s.sendGameReminders()
 	s.sendTrainingReminders()
 	s.sendCarpoolingReminders()
+	s.sendEventNoteReminders()
 	s.recordHeartbeat()
 }
 

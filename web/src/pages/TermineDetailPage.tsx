@@ -3,10 +3,35 @@ import { useParams } from 'react-router-dom'
 import { AlertTriangle, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
+import EventNoteIndicator from '../components/EventNoteIndicator'
+import EventNoteEditor from '../components/EventNoteEditor'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
+
+// EventNoteSection rendert eine eigene „Hinweis"-Sektion: Anzeige des Hinweises
+// und – für Berechtigte – einen Inline-Editor.
+function EventNoteSection({ eventType, eventId, note, canEdit }: {
+  eventType: 'training' | 'game'
+  eventId: number
+  note?: string
+  canEdit: boolean
+}) {
+  const text = note ?? ''
+  if (!canEdit && text.trim() === '') return null
+  return (
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 space-y-3">
+      <h2 className="text-sm font-semibold text-brand-text flex items-center gap-2">
+        <AlertTriangle className="w-4 h-4 text-brand-danger" /> Hinweis
+      </h2>
+      {text.trim() !== '' && <EventNoteIndicator variant="inline" note={text} />}
+      {canEdit && (
+        <EventNoteEditor eventType={eventType} eventId={eventId} initialNote={text} />
+      )}
+    </div>
+  )
+}
 
 function fmtDate(iso: string) {
   const d = new Date(iso.slice(0, 10) + 'T12:00:00')
@@ -91,6 +116,7 @@ interface GameDetail {
   rsvp_opt_out?: number
   rsvp_require_reason?: number
   teams?: TeamRef[]
+  note?: string
   can?: { edit: boolean; delete: boolean; manage_lineup: boolean }
 }
 
@@ -220,8 +246,8 @@ export default function TermineDetailPage() {
   }, [id, type])
 
   useLiveUpdates((event) => {
-    if (isTraining && event === 'trainings') { load(true); loadAttendances() }
-    else if (!isTraining && event === 'games') load(true)
+    if (isTraining && (event === 'trainings' || event === 'event-note')) { load(true); loadAttendances() }
+    else if (!isTraining && (event === 'games' || event === 'event-note')) load(true)
   })
 
   const toggleAttendance = async (memberId: number, newValue: boolean) => {
@@ -298,9 +324,6 @@ export default function TermineDetailPage() {
                 </div>
                 <MapsLink venue={session.venue} />
               </div>
-              {session.note && (
-                <p className="mt-3 text-sm text-brand-text bg-white border border-brand-border-subtle rounded-lg p-3">{session.note}</p>
-              )}
               <RsvpConfigBadges optOut={session.rsvp_opt_out} requireReason={session.rsvp_require_reason} />
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
@@ -321,6 +344,13 @@ export default function TermineDetailPage() {
             </div>
           </div>
         </div>
+
+        <EventNoteSection
+          eventType="training"
+          eventId={session.id}
+          note={session.note}
+          canEdit={isTrainer}
+        />
 
         <ResponseTable
           rows={tableRows}
@@ -414,6 +444,13 @@ export default function TermineDetailPage() {
           </div>
         </div>
       </div>
+
+      <EventNoteSection
+        eventType="game"
+        eventId={g.id}
+        note={g.note}
+        canEdit={isTrainer}
+      />
 
       <ResponseTable
         rows={tableRows}

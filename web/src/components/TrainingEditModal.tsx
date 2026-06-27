@@ -92,13 +92,15 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
     setError(null)
     try {
       if (scope === 'this_one') {
+        // note bewusst NICHT mitsenden: der Termin-Hinweis wird ausschließlich
+        // über EventNoteEditor (PUT /trainings/{id}/note + Debounce) gepflegt.
+        // UpdateSession behandelt note als Tri-State (fehlt = unverändert).
         await api.put(`/training-sessions/${session.id}`, {
           title,
           date,
           start_time: startTime,
           end_time: endTime,
           venue_id: venueId,
-          note: session.note,
           status: session.status,
           cancel_reason: session.cancel_reason ?? '',
           rsvp_opt_out: rsvpOptOut ? 1 : 0,

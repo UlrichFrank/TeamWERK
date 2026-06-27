@@ -15,6 +15,7 @@ import EventInfoModal from '../components/EventInfoModal'
 import SpieltagDetailModal from '../components/SpieltagDetailModal'
 import VenuePicker, { Venue as VenueType } from '../components/VenuePicker'
 import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
+import EventNoteIndicator from '../components/EventNoteIndicator'
 
 interface VenueRef {
   id: number
@@ -67,6 +68,7 @@ interface Game {
   venue?: VenueRef | null
   rsvp_opt_out?: number
   rsvp_require_reason?: number
+  note?: string
 }
 
 interface Absence {
@@ -290,6 +292,7 @@ export default function KalenderPage() {
     if (event === 'games') loadGames()
     if (event === 'absences') loadAbsences()
     if (event === 'trainings') loadTrainings()
+    if (event === 'event-note') { loadGames(); loadTrainings() }
   })
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
@@ -883,6 +886,7 @@ export default function KalenderPage() {
                       <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
                         <X className="w-2.5 h-2.5" />{g.declined_count}
                       </span>
+                      <EventNoteIndicator variant="icon" note={g.note ?? ''} className="ml-auto" />
                     </div>
                   </button>
                   )
@@ -908,6 +912,7 @@ export default function KalenderPage() {
                     <div className="hidden @tile-md:block leading-tight">&nbsp;</div>
                     <div className="flex items-center gap-1.5 text-brand-text-subtle leading-tight">
                       <span>{t.start_time}</span>
+                      <EventNoteIndicator variant="icon" note={t.note ?? ''} className="order-last ml-auto" />
                       {t.my_rsvp_locked ? (
                         <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger" title="Durch Abwesenheit gesetzt">
                           <X className="w-2.5 h-2.5" />

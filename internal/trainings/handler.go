@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
@@ -459,15 +460,24 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	scope := r.URL.Query().Get("scope")
 	fromDate := r.URL.Query().Get("from")
+	// event-notes: pending Push-Rows der betroffenen Sessions vorab aufräumen.
+	cleanupPending := func(extra string, args ...any) {
+		h.db.ExecContext(r.Context(),
+			`DELETE FROM pending_event_notes_push WHERE ref_type='training' AND ref_id IN (
+				SELECT id FROM training_sessions WHERE series_id = ?`+extra+`)`, args...)
+	}
 	var execErr error
 	if scope == "all" {
+		cleanupPending("", seriesID)
 		_, execErr = h.db.ExecContext(r.Context(),
 			`DELETE FROM training_sessions WHERE series_id = ?`, seriesID)
 	} else if scope == "this_and_following" && fromDate != "" {
+		cleanupPending(" AND date >= ?", seriesID, fromDate)
 		_, execErr = h.db.ExecContext(r.Context(),
 			`DELETE FROM training_sessions WHERE series_id = ? AND date >= ?`, seriesID, fromDate)
 	} else {
 		today := time.Now().Format("2006-01-02")
+		cleanupPending(" AND date >= ?", seriesID, today)
 		_, execErr = h.db.ExecContext(r.Context(),
 			`DELETE FROM training_sessions WHERE series_id = ? AND date >= ?`, seriesID, today)
 	}
@@ -509,6 +519,11 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if _, err = h.db.ExecContext(r.Context(),
+		`DELETE FROM pending_event_notes_push WHERE ref_type='training' AND ref_id=?`, sessionID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	if _, err = h.db.ExecContext(r.Context(), `DELETE FROM training_sessions WHERE id = ?`, sessionID); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -517,6 +532,86 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
 		"trainings", "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/termine")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/trainings/{id}/note — setzt das Hinweisfeld eines Trainings.
+// Berechtigung: Trainer des Teams / Vorstand / sportliche_leitung / Admin.
+// Atomar mit der Debounce-Queue (5-min-Push); leerer Text entfernt die pending-Row.
+func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	sessionID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if utf8.RuneCountInString(req.Note) > 200 {
+		http.Error(w, "note too long", http.StatusBadRequest)
+		return
+	}
+
+	var teamID int
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	if err != nil || !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.ExecContext(r.Context(),
+		`UPDATE training_sessions SET note = ? WHERE id = ?`, req.Note, sessionID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(req.Note) == "" {
+		if _, err = tx.ExecContext(r.Context(),
+			`DELETE FROM pending_event_notes_push WHERE ref_type='training' AND ref_id=?`,
+			sessionID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if _, err = tx.ExecContext(r.Context(), `
+			INSERT INTO pending_event_notes_push (ref_type, ref_id, note_text, notify_after, updated_by)
+			VALUES ('training', ?, ?, datetime('now', '+5 minutes'), ?)
+			ON CONFLICT(ref_type, ref_id) DO UPDATE SET
+				note_text    = excluded.note_text,
+				notify_after = excluded.notify_after,
+				updated_by   = excluded.updated_by`,
+			sessionID, req.Note, claims.UserID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.Broadcast("event-note")
+	w.WriteHeader(http.StatusOK)
 }
 
 // POST /api/training-sessions
@@ -601,16 +696,16 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title             string `json:"title"`
-		Date              string `json:"date"`
-		StartTime         string `json:"start_time"`
-		EndTime           string `json:"end_time"`
-		VenueID           *int   `json:"venue_id"`
-		Note              string `json:"note"`
-		Status            string `json:"status"`
-		CancelReason      string `json:"cancel_reason"`
-		RsvpOptOut        *int   `json:"rsvp_opt_out,omitempty"`
-		RsvpRequireReason *int   `json:"rsvp_require_reason,omitempty"`
+		Title             string  `json:"title"`
+		Date              string  `json:"date"`
+		StartTime         string  `json:"start_time"`
+		EndTime           string  `json:"end_time"`
+		VenueID           *int    `json:"venue_id"`
+		Note              *string `json:"note"`
+		Status            string  `json:"status"`
+		CancelReason      string  `json:"cancel_reason"`
+		RsvpOptOut        *int    `json:"rsvp_opt_out,omitempty"`
+		RsvpRequireReason *int    `json:"rsvp_require_reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -629,11 +724,20 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		venueIDVal = *req.VenueID
 	}
 	_, err = h.db.ExecContext(r.Context(),
-		`UPDATE training_sessions SET title=?, date=?, start_time=?, end_time=?, venue_id=?, note=?, status=?, cancel_reason=? WHERE id=?`,
-		req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, status, req.CancelReason, sessionID)
+		`UPDATE training_sessions SET title=?, date=?, start_time=?, end_time=?, venue_id=?, status=?, cancel_reason=? WHERE id=?`,
+		req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, status, req.CancelReason, sessionID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+	// note ist Tri-State: fehlt das Feld, bleibt der Hinweis unverändert (er wird
+	// über PUT /api/trainings/{id}/note + Debounce-Queue gepflegt, nicht hier).
+	if req.Note != nil {
+		if _, err = h.db.ExecContext(r.Context(),
+			`UPDATE training_sessions SET note=? WHERE id=?`, *req.Note, sessionID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 	// Partial-Update: rsvp_opt_out / rsvp_require_reason nur setzen, wenn im Request enthalten.
 	if req.RsvpOptOut != nil || req.RsvpRequireReason != nil {

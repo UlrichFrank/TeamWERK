@@ -1987,3 +1987,140 @@ func TestMigration006_BackfillsHeimAuswaertsNull(t *testing.T) {
 	check(generischNull, 0, "generisch bleibt NULL")
 	check(heimExplicit, heimTplA, "heim mit explizitem Wert unverändert")
 }
+
+// --- event-notes: PUT /api/games/{id}/note ---------------------------------
+
+func TestGames_SetNote_Vorstand_Returns200(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/games/%d/note", gameID), token,
+		map[string]string{"note": "Bringt Trikots mit"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var note string
+	db.QueryRow(`SELECT note FROM games WHERE id=?`, gameID).Scan(&note)
+	if note != "Bringt Trikots mit" {
+		t.Errorf("note not persisted, got %q", note)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM pending_event_notes_push
+		WHERE ref_type='game' AND ref_id=?`, gameID).Scan(&n)
+	if n != 1 {
+		t.Errorf("expected pending row, got %d", n)
+	}
+}
+
+func TestGames_SetNote_StandardUser_Returns403(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", nil)
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/games/%d/note", gameID), token,
+		map[string]string{"note": "darf ich nicht"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+	var note string
+	db.QueryRow(`SELECT note FROM games WHERE id=?`, gameID).Scan(&note)
+	if note != "" {
+		t.Errorf("note should be unchanged, got %q", note)
+	}
+}
+
+func TestGames_SetNote_GenericEvent_Returns200(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+	if _, err := db.Exec(`UPDATE games SET event_type='generisch' WHERE id=?`, gameID); err != nil {
+		t.Fatalf("set generisch: %v", err)
+	}
+
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/games/%d/note", gameID), token,
+		map[string]string{"note": "Vereinsfest, alle helfen"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for generic event, got %d", res.StatusCode)
+	}
+}
+
+func TestGames_SetNote_TooLong_Returns400(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+
+	long := ""
+	for i := 0; i < 201; i++ {
+		long += "x"
+	}
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/games/%d/note", gameID), token,
+		map[string]string{"note": long})
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.StatusCode)
+	}
+	var note string
+	db.QueryRow(`SELECT note FROM games WHERE id=?`, gameID).Scan(&note)
+	if note != "" {
+		t.Errorf("note should be unchanged, got %q", note)
+	}
+}
+
+func TestGames_SetNote_EmptyDeletesPending(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/games/%d/note", gameID), token,
+		map[string]string{"note": "vorhanden"})
+	res.Body.Close()
+
+	res = testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/games/%d/note", gameID), token,
+		map[string]string{"note": ""})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM pending_event_notes_push
+		WHERE ref_type='game' AND ref_id=?`, gameID).Scan(&n)
+	if n != 0 {
+		t.Errorf("expected pending row deleted, got %d", n)
+	}
+}
