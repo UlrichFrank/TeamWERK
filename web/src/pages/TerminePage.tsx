@@ -4,6 +4,7 @@ import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History } from '
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
+import EventNoteIndicator from '../components/EventNoteIndicator'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames } from '../lib/teamName'
 import { useAuth } from '../contexts/AuthContext'
@@ -73,6 +74,7 @@ interface Game {
   rsvp_opt_out: number
   rsvp_require_reason: number
   venue?: VenueRef | null
+  note?: string
 }
 
 interface Team {
@@ -213,7 +215,7 @@ export default function TerminePage() {
     // load kapselt from/to (aus showPast), soll nur bei showPast-Wechsel neu laufen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPast])
-  useLiveUpdates((event) => { if (event === 'trainings' || event === 'games') load() })
+  useLiveUpdates((event) => { if (event === 'trainings' || event === 'games' || event === 'event-note') load() })
 
   const visibleTermine = termine.filter(t => {
     if (focus && t.kind === focus.kind && t.data.id === focus.id) return true
@@ -416,6 +418,7 @@ export default function TerminePage() {
                         {s.status === 'cancelled' && s.cancel_reason && (
                           <p className="text-sm text-brand-danger mt-0.5">{s.cancel_reason}</p>
                         )}
+                        <EventNoteIndicator variant="inline" note={s.note ?? ''} className="mt-0.5" />
                       </div>
                     </div>
 
@@ -501,6 +504,7 @@ export default function TerminePage() {
                       <span onClick={e => e.stopPropagation()}>
                         <MapsLink venue={g.venue} className="mt-0.5" />
                       </span>
+                      <EventNoteIndicator variant="inline" note={g.note ?? ''} className="mt-0.5" />
                     </div>
                   </div>
 

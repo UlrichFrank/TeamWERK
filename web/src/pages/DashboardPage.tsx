@@ -8,6 +8,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import EventNoteIndicator from '../components/EventNoteIndicator'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ interface NextEvent {
   detailUrl: string
   isHome: boolean | null
   isExtended: boolean
+  note: string
 }
 
 interface DiensteSlot {
@@ -200,7 +202,12 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
                 : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
               title={e.title}
               subtitle={`${e.teamName} · ${e.time}`}
-              badge={e.isExtended ? <ExtendedBadge /> : undefined}
+              badge={(e.note.trim() || e.isExtended) ? (
+                <span className="flex items-center gap-1">
+                  <EventNoteIndicator variant="icon" note={e.note} />
+                  {e.isExtended ? <ExtendedBadge /> : null}
+                </span>
+              ) : undefined}
             />
           </li>
         ))}
@@ -437,7 +444,7 @@ export default function DashboardPage() {
   useEffect(() => { load() }, [load])
 
   useLiveUpdates(event => {
-    if (event === 'mitfahrgelegenheiten' || event === 'games' || event === 'trainings' || event === 'duties' || event === 'absences') load(true)
+    if (event === 'mitfahrgelegenheiten' || event === 'games' || event === 'trainings' || event === 'duties' || event === 'absences' || event === 'event-note') load(true)
   })
 
   if (loadState === 'loading') {

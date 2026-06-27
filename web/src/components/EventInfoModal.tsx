@@ -4,6 +4,8 @@ import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList, Trash
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { formatTeamList } from '../lib/teamName'
 import MapsLink from './MapsLink'
+import EventNoteIndicator from './EventNoteIndicator'
+import EventNoteEditor from './EventNoteEditor'
 import { api } from '../lib/api'
 
 interface VenueRef {
@@ -27,6 +29,7 @@ interface Game {
   declined_count: number
   maybe_count: number
   venue?: VenueRef | null
+  note?: string
 }
 
 interface Training {
@@ -40,6 +43,7 @@ interface Training {
   confirmed_count: number
   declined_count: number
   maybe_count: number
+  note?: string
 }
 
 interface AbsenceInfo {
@@ -218,6 +222,13 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               </div>
             )}
             <RsvpRow confirmed={game.confirmed_count} declined={game.declined_count} maybe={game.maybe_count} />
+            <EventNoteIndicator variant="inline" note={game.note ?? ''} className="pt-1" />
+            {onEdit && (
+              <div className="pt-2 border-t border-brand-border-subtle">
+                <p className="text-xs text-brand-text-muted mb-1">Hinweis</p>
+                <EventNoteEditor eventType="game" eventId={game.id} initialNote={game.note ?? ''} />
+              </div>
+            )}
           </div>
         ) : type === 'training' && training ? (
           <div className="space-y-2 text-sm">
@@ -242,6 +253,13 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               </div>
             )}
             <RsvpRow confirmed={training.confirmed_count} declined={training.declined_count} maybe={training.maybe_count} />
+            <EventNoteIndicator variant="inline" note={training.note ?? ''} className="pt-1" />
+            {onEdit && (
+              <div className="pt-2 border-t border-brand-border-subtle">
+                <p className="text-xs text-brand-text-muted mb-1">Hinweis</p>
+                <EventNoteEditor eventType="training" eventId={training.id} initialNote={training.note ?? ''} />
+              </div>
+            )}
           </div>
         ) : type === 'absence' && absence ? (
           editing ? (
