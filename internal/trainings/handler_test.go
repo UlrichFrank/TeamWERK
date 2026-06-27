@@ -1,6 +1,7 @@
 package trainings_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,6 +28,11 @@ func testServer(t *testing.T, h *trainings.Handler) *httptest.Server {
 			r.Post("/api/training-sessions/{id}/attendances", h.SaveAttendances)
 			r.Post("/api/training-sessions", h.CreateSession)
 			r.Put("/api/training-sessions/{id}", h.UpdateSession)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
+			r.Put("/api/trainings/{id}/note", h.UpdateTrainingNote)
 		})
 	})
 }
@@ -841,5 +847,160 @@ func TestListSessions_NoKaderPlayerSeesNothing(t *testing.T) {
 
 	if len(sessions) != 0 {
 		t.Errorf("expected 0 sessions for player without kader, got %d", len(sessions))
+	}
+}
+
+// --- event-notes: PUT /api/trainings/{id}/note -----------------------------
+
+// trainerWithSession sets up a trainer-user for teamA and a session, returning
+// the db, server, trainer token and the session id.
+func trainerWithSession(t *testing.T, sessionDate string) (*sql.DB, *httptest.Server, string, int) {
+	t.Helper()
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+	sessionID := testutil.CreateTrainingSession(t, db, teamA, seasonID, sessionDate)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	return db, srv, token, sessionID
+}
+
+func TestTrainings_SetNote_TrainerOwnTeam_Returns200(t *testing.T) {
+	db, srv, token, sessionID := trainerWithSession(t, "2026-03-10")
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/trainings/%d/note", sessionID), token,
+		map[string]string{"note": "Halle gesperrt, wir joggen am See"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var note string
+	db.QueryRow(`SELECT note FROM training_sessions WHERE id=?`, sessionID).Scan(&note)
+	if note != "Halle gesperrt, wir joggen am See" {
+		t.Errorf("note not persisted, got %q", note)
+	}
+
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM pending_event_notes_push
+		WHERE ref_type='training' AND ref_id=?
+		  AND notify_after > datetime('now','+4 minutes')
+		  AND notify_after <= datetime('now','+5 minutes')`, sessionID).Scan(&n)
+	if n != 1 {
+		t.Errorf("expected pending row with notify_after≈now+5min, got %d", n)
+	}
+}
+
+func TestTrainings_SetNote_TrainerOtherTeam_Returns403(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	// Trainer is bound to team B but edits a team A session.
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderB := testutil.CreateKader(t, db, teamB, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderB, trainerMemberID)
+	sessionID := testutil.CreateTrainingSession(t, db, teamA, seasonID, "2026-03-10")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/trainings/%d/note", sessionID), token,
+		map[string]string{"note": "darf ich nicht"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+
+	var note string
+	db.QueryRow(`SELECT note FROM training_sessions WHERE id=?`, sessionID).Scan(&note)
+	if note != "" {
+		t.Errorf("note should be unchanged, got %q", note)
+	}
+}
+
+func TestTrainings_SetNote_TooLong_Returns400(t *testing.T) {
+	db, srv, token, sessionID := trainerWithSession(t, "2026-03-10")
+
+	long := ""
+	for i := 0; i < 201; i++ {
+		long += "x"
+	}
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/trainings/%d/note", sessionID), token,
+		map[string]string{"note": long})
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.StatusCode)
+	}
+
+	var note string
+	db.QueryRow(`SELECT note FROM training_sessions WHERE id=?`, sessionID).Scan(&note)
+	if note != "" {
+		t.Errorf("note should be unchanged, got %q", note)
+	}
+}
+
+func TestTrainings_SetNote_SecondEditResetsTimer(t *testing.T) {
+	db, srv, token, sessionID := trainerWithSession(t, "2026-03-10")
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/trainings/%d/note", sessionID), token,
+		map[string]string{"note": "erst"})
+	res.Body.Close()
+
+	// Simulate the timer having almost elapsed.
+	if _, err := db.Exec(`UPDATE pending_event_notes_push
+		SET notify_after = datetime('now','-10 minutes')
+		WHERE ref_type='training' AND ref_id=?`, sessionID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	res = testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/trainings/%d/note", sessionID), token,
+		map[string]string{"note": "korrigiert"})
+	res.Body.Close()
+
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM pending_event_notes_push
+		WHERE ref_type='training' AND ref_id=?
+		  AND note_text='korrigiert'
+		  AND notify_after > datetime('now','+4 minutes')`, sessionID).Scan(&n)
+	if n != 1 {
+		t.Errorf("expected notify_after reset to now+5min with new text, got %d", n)
+	}
+}
+
+func TestTrainings_SetNote_EmptyDeletesPending(t *testing.T) {
+	db, srv, token, sessionID := trainerWithSession(t, "2026-03-10")
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/trainings/%d/note", sessionID), token,
+		map[string]string{"note": "vorhanden"})
+	res.Body.Close()
+
+	res = testutil.Do(t, srv, http.MethodPut,
+		fmt.Sprintf("/api/trainings/%d/note", sessionID), token,
+		map[string]string{"note": ""})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM pending_event_notes_push
+		WHERE ref_type='training' AND ref_id=?`, sessionID).Scan(&n)
+	if n != 0 {
+		t.Errorf("expected pending row deleted on empty note, got %d", n)
 	}
 }
