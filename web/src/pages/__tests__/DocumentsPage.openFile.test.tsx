@@ -1,7 +1,9 @@
 /**
  * DocumentsPage — Klick auf Datei:
- *  - Desktop → In-App-Viewer-Route (kein window.open, vorher PWA-Sackgasse).
+ *  - Desktop → nativer Browser-PDF-Viewer im neuen Tab (window.open + Token-URL).
  *  - Mobile  → direkt nativer Viewer (Blob-Download), keine In-App-Render-Seite.
+ *
+ * SEPA-Mandat bleibt aus diesen Tests raus — eigener Pfad.
  */
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
@@ -67,8 +69,23 @@ function LocationProbe() {
 }
 
 describe('DocumentsPage.openFile', () => {
-  test('Klick auf Datei → navigate(/dokumente/anzeigen/:id), kein window.open', async () => {
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+  test('Desktop: Klick auf Datei → window.open + Token-URL (kein navigate)', async () => {
+    // Desktop: matchMedia matched NICHT — `isMobile` ist false.
+    const mqSpy = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as MediaQueryList)
+
+    const fakeTab = { location: { href: '' }, close: vi.fn() }
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => fakeTab as unknown as Window)
+
+    mock.onGet('/files/42/download-token').reply(200, { token: 'tok-desktop' })
 
     render(
       <AuthContext.Provider value={ADMIN_CTX}>
@@ -81,15 +98,56 @@ describe('DocumentsPage.openFile', () => {
       </AuthContext.Provider>,
     )
 
-    // Mobile + Desktop-Layout sind beide im DOM (keine Media-Queries in jsdom).
-    // Es reicht, eine Instanz anzuklicken; beide Layouts rufen openFile auf.
     const matches = await screen.findAllByText('Satzung.pdf')
     fireEvent.click(matches[0])
 
+    // window.open synchron im Click (Popup-Blocker-Workaround).
+    expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank')
+    // Nach Token-Fetch: Download-URL wird gesetzt.
     await waitFor(() => {
-      expect(screen.getByTestId('path').textContent).toBe('/dokumente/anzeigen/42')
+      expect(fakeTab.location.href).toBe('/api/files/42/download?token=tok-desktop')
     })
-    expect(openSpy).not.toHaveBeenCalled()
+    // Es darf NICHT zur In-App-Render-Route navigiert worden sein.
+    expect(screen.queryByTestId('path')).toBeNull()
+
+    mqSpy.mockRestore()
+    openSpy.mockRestore()
+  })
+
+  test('Desktop, Token-Fehler: tab.close() + Fehler-State', async () => {
+    const mqSpy = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as MediaQueryList)
+
+    const fakeTab = { location: { href: '' }, close: vi.fn() }
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => fakeTab as unknown as Window)
+
+    mock.onGet('/files/42/download-token').reply(500)
+
+    render(
+      <AuthContext.Provider value={ADMIN_CTX}>
+        <MemoryRouter initialEntries={['/dokumente/9']}>
+          <Routes>
+            <Route path="/dokumente/:folderId" element={<DocumentsPage />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    )
+
+    const matches = await screen.findAllByText('Satzung.pdf')
+    fireEvent.click(matches[0])
+
+    await waitFor(() => expect(fakeTab.close).toHaveBeenCalled())
+    expect(await screen.findByText(/Datei konnte nicht geöffnet werden/)).toBeInTheDocument()
+
+    mqSpy.mockRestore()
     openSpy.mockRestore()
   })
 
