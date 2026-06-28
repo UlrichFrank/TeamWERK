@@ -31,7 +31,7 @@
 - [x] 4.4 Push-Body bauen: Anzahl + erste 3 Termine im Format `"<Teamname> <Wochentag DD.MM.> (Training|Spiel)"`, Hinweis-Suffix "… und N weitere" wenn >3
 - [x] 4.5 Versand nicht-blockierend via `go push.SendToUsers(...)`, Tap-Ziel `/team/{firstOpenTeamId}/anwesenheit`
 - [x] 4.6 Saison-Cut-off: keine Push wenn keine aktive Saison existiert
-- [ ] 4.7 Tests: mehrfacher Job-Lauf an einem Tag → max 1 Push/Trainer; Trainer ohne offene Termine erhält nichts; Saisonende verhindert Push; Body-Format (2 / 3 / 5 Termine); Stop-Bedingung greift nach erster `attendance`-Row
+- [x] 4.7 Tests: mehrfacher Job-Lauf an einem Tag → max 1 Push/Trainer; Trainer ohne offene Termine erhält nichts; Saisonende verhindert Push; Body-Format (2 / 3 / 5 Termine); Stop-Bedingung greift nach erster `attendance`-Row
 
 ## 5. Frontend — Trainer-Anwesenheits-Seite
 
