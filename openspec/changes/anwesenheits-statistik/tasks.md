@@ -1,7 +1,7 @@
 ## 1. Datenmodell & Migration
 
-- [ ] 1.1 Migration `internal/db/migrations/012_game_attendances.up.sql` + `.down.sql` anlegen (Tabelle + Index, analog `training_attendances`, siehe design.md D5)
-- [ ] 1.2 `make migrate-up` lokal ausführen und Schema verifizieren
+- [x] 1.1 Migration `internal/db/migrations/012_game_attendances.up.sql` + `.down.sql` anlegen (Tabelle + Index, analog `training_attendances`, siehe design.md D5)
+- [x] 1.2 `make migrate-up` lokal ausführen und Schema verifizieren
 
 ## 2. Backend — Spiel-Anwesenheits-Routen (`internal/games/`)
 
