@@ -354,6 +354,19 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/teams/{id}/roster", expected: exPublic},
 	{method: "GET", path: "/api/stammvereine", expected: exAuth},
 
+	// Videos (Spielvideo-Ablage) — Lese-/CRUD-Routen im Authenticated-Tier;
+	// {id}-Routen prüfen zuerst die Existenz → ohne Fixture 404 (≠401/403).
+	{method: "GET", path: "/api/videos", expected: exAuth},
+	{method: "GET", path: "/api/videos/{id}", expected: exAuth},
+	{method: "GET", path: "/api/videos/{id}/play", expected: exAuth},
+	{method: "PATCH", path: "/api/videos/{id}", expected: exAuth},
+	{method: "DELETE", path: "/api/videos/{id}", expected: exAuth},
+	// Upload-Init: RequireClubFunction("vorstand","trainer","sportliche_leitung")
+	{method: "POST", path: "/api/videos", expected: exVorstandTrainer},
+	// HLS-Auslieferung: public, nur per Stream-Token (?st=) — ohne Token 403 für alle.
+	{method: "GET", path: "/api/videos/{id}/hls/master.m3u8", expected: exPublic},
+	{method: "GET", path: "/api/videos/{id}/hls/{rendition}/{segment}", expected: exPublic},
+
 	// ── Trainer + sportliche_leitung ────────────────────────────────────────────
 	{method: "GET", path: "/api/training-series", expected: exTrainer},
 	{method: "POST", path: "/api/training-series", expected: exTrainer},
