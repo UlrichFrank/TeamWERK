@@ -4,31 +4,17 @@ import { AlertTriangle, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plan
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
-import EventNoteEditor from '../components/EventNoteEditor'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
-// EventNoteSection rendert eine eigene „Hinweis"-Sektion: Anzeige des Hinweises
-// und – für Berechtigte – einen Inline-Editor.
-function EventNoteSection({ eventType, eventId, note, canEdit }: {
-  eventType: 'training' | 'game'
-  eventId: number
-  note?: string
-  canEdit: boolean
-}) {
+function EventNoteSection({ note }: { note?: string }) {
   const text = note ?? ''
-  if (!canEdit && text.trim() === '') return null
+  if (text.trim() === '') return null
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 space-y-3">
-      <h2 className="text-sm font-semibold text-brand-text flex items-center gap-2">
-        <AlertTriangle className="w-4 h-4 text-brand-danger" /> Hinweis
-      </h2>
-      {text.trim() !== '' && <EventNoteIndicator variant="inline" note={text} />}
-      {canEdit && (
-        <EventNoteEditor eventType={eventType} eventId={eventId} initialNote={text} />
-      )}
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <EventNoteIndicator variant="inline" note={text} />
     </div>
   )
 }
@@ -345,12 +331,7 @@ export default function TermineDetailPage() {
           </div>
         </div>
 
-        <EventNoteSection
-          eventType="training"
-          eventId={session.id}
-          note={session.note}
-          canEdit={isTrainer}
-        />
+        <EventNoteSection note={session.note} />
 
         <ResponseTable
           rows={tableRows}
@@ -445,12 +426,7 @@ export default function TermineDetailPage() {
         </div>
       </div>
 
-      <EventNoteSection
-        eventType="game"
-        eventId={g.id}
-        note={g.note}
-        canEdit={isTrainer}
-      />
+      <EventNoteSection note={g.note} />
 
       <ResponseTable
         rows={tableRows}
