@@ -63,7 +63,12 @@ type Handlers struct {
 	Calendar       *calendar.Handler
 	Health         *health.Handler
 	Videos         *videos.Handler
-	Hub            *hub.Handler
+	// VideosTus ist der gemountete tusd-Upload-Handler (resumable Upload unter
+	// /api/videos/upload/*). In main.go via Videos.NewTusHandler(ctx) erzeugt;
+	// in Tests/ohne Upload-Layer nil — die Mount-Registrierung wird dann
+	// übersprungen.
+	VideosTus http.Handler
+	Hub       *hub.Handler
 
 	JWTSecret string
 	Database  *sql.DB
@@ -317,6 +322,14 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Vorstand + Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
+			// Spielvideos — Upload-Tier (trainer/sportliche_leitung/vorstand;
+			// admin umgeht RequireClubFunction). POST init prüft zusätzlich
+			// CanUploadToTeam; der tus-Mount nimmt PATCH/HEAD der bereits
+			// autorisierten Session entgegen (Korrelation via video_id-Metadata).
+			r.Post("/api/videos", h.Videos.CreateUpload)
+			if h.VideosTus != nil {
+				r.Handle("/api/videos/upload/*", h.VideosTus)
+			}
 			r.Get("/api/venues", h.Venues.List)
 			r.Post("/api/venues", h.Venues.Create)
 			r.Post("/api/venues/import", h.Venues.Import)

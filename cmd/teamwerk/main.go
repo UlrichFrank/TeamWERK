@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -143,6 +144,16 @@ func serve() {
 
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
 	hubInstance := hub.NewHub()
+
+	videosHandler := videos.NewHandler(database, hubInstance, cfg)
+	// tusd-Upload-Handler (resumable Upload) + Finish-Hook-Goroutine; an den
+	// Prozess-Lebenslauf gebunden. Bei Fehler (z.B. uploads/ nicht anlegbar)
+	// hart abbrechen — ohne Upload-Endpoint wäre der Dienst halbgar.
+	videosTus, err := videosHandler.NewTusHandler(context.Background())
+	if err != nil {
+		fatal("video upload handler init failed", "error", err)
+	}
+
 	handlers := &app.Handlers{
 		Auth:                auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
 		Config:              appconfig.NewHandler(database, hubInstance),
@@ -166,7 +177,8 @@ func serve() {
 		Stammvereine:        stammvereine.NewHandler(database, hubInstance),
 		Calendar:            calendar.NewHandler(database),
 		Health:              health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
-		Videos:              videos.NewHandler(database, hubInstance, cfg),
+		Videos:              videosHandler,
+		VideosTus:           videosTus,
 		Hub:                 hub.NewHandler(hubInstance, buildHash),
 		JWTSecret:           cfg.JWTSecret,
 		Database:            database,

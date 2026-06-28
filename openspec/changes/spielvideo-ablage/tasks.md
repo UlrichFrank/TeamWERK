@@ -15,12 +15,12 @@
 
 ## 3. Backend — Upload (Capability video-upload)
 
-- [ ] 3.1 Dependency `github.com/tus/tusd/v2` einbinden, in Tests pinnen
-- [ ] 3.2 `POST /api/videos` (Pre-Upload): validiert `title`, `team_id`, `season_id`, optional `description`, `game_id`; ruft `CanUploadToTeam`; ruft `RequireFreeBytes(/storage/videos, size*2.5, 2GiB)`; legt DB-Zeile `status='uploading'` an; gibt `upload_id` + tus-URL zurück
-- [ ] 3.3 tus-Handler unter `/api/videos/upload/*` mountieren; `OnUploadFinish`-Hook verschiebt Datei nach `raw/{id}.mp4`, ruft `ffprobe` für `duration_sec`, setzt `status='queued'`, broadcastet `video-queued`
-- [ ] 3.4 2-GB-Hard-Limit in tus-Konfiguration setzen
-- [ ] 3.5 Cleanup-Job: tus-Sessions in `uploads/` älter als 24 h löschen (in Scheduler einhängen)
-- [ ] 3.6 Tests: Happy-Path Init + Upload-Fertig, 403 bei fehlender Berechtigung, 507 bei Disk-Voll, 400 bei ungültigem `team_id`
+- [x] 3.1 Dependency `github.com/tus/tusd/v2` einbinden, in Tests pinnen
+- [x] 3.2 `POST /api/videos` (Pre-Upload): validiert `title`, `team_id`, `season_id`, optional `description`, `game_id`; ruft `CanUploadToTeam`; ruft `RequireFreeBytes(/storage/videos, size*2.5, 2GiB)`; legt DB-Zeile `status='uploading'` an; gibt `upload_id` + tus-URL zurück
+- [x] 3.3 tus-Handler unter `/api/videos/upload/*` mountieren; `OnUploadFinish`-Hook verschiebt Datei nach `raw/{id}.mp4`, ruft `ffprobe` für `duration_sec`, setzt `status='queued'`, broadcastet `video-queued`
+- [x] 3.4 2-GB-Hard-Limit in tus-Konfiguration setzen
+- [x] 3.5 Cleanup-Job: tus-Sessions in `uploads/` älter als 24 h löschen (in Scheduler einhängen)
+- [x] 3.6 Tests: Happy-Path Init + Upload-Fertig, 403 bei fehlender Berechtigung, 507 bei Disk-Voll, 400 bei ungültigem `team_id`
 
 ## 4. Backend — Transcode-Worker (Capability video-transcode)
 

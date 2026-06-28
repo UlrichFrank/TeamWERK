@@ -2,8 +2,11 @@ package scheduler
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -52,7 +55,46 @@ func (s *Scheduler) Run() {
 	s.sendTrainingReminders()
 	s.sendCarpoolingReminders()
 	s.sendEventNoteReminders()
+	s.cleanStaleVideoUploads()
 	s.recordHeartbeat()
+}
+
+// cleanStaleVideoUploads entfernt unfertige tus-Sessions (>24 h) im
+// Video-uploads-Verzeichnis. Idempotent; ein fehlendes Verzeichnis ist kein
+// Fehler (Video-Feature noch nie genutzt / Storage nicht angelegt).
+//
+// Die Logik ist hier inline (statt videos.CleanupStaleUploads aufzurufen): der
+// Scheduler ist ein Foundation-Package und darf das Domain-Package videos nicht
+// importieren (Architektur-Test). Reine Filesystem-Operation ohne Domänenwissen.
+func (s *Scheduler) cleanStaleVideoUploads() {
+	dir := filepath.Join(s.cfg.VideoStorageDir, "uploads")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		slog.Error("scheduler stale-upload cleanup failed", "error", err)
+		return
+	}
+	cutoff := time.Now().Add(-24 * time.Hour)
+	removed := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			if err := os.Remove(filepath.Join(dir, e.Name())); err == nil {
+				removed++
+			}
+		}
+	}
+	if removed > 0 {
+		slog.Info("stale video uploads cleaned", "count", removed)
+	}
 }
 
 // recordHeartbeat schreibt den Zeitstempel des erfolgreichen Laufs in die
