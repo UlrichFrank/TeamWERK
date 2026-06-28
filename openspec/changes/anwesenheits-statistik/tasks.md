@@ -35,34 +35,34 @@
 
 ## 5. Frontend — Trainer-Anwesenheits-Seite
 
-- [ ] 5.1 Neue Seite `web/src/pages/TeamAnwesenheitPage.tsx`, Route `/team/:id/anwesenheit` in `App.tsx` registrieren
-- [ ] 5.2 Banner oben mit Anzahl offener Erfassungen aus `GET /api/teams/{id}/attendance-open`, Klick öffnet Detail-Liste mit Links zu Einzelterminen
-- [ ] 5.3 Tabelle Stammkader: Spalten Spieler | Trainings (✓/⊘/✗/Quote%) | Spiele (✓/⊘/✗/Quote%); Team-Durchschnittszeile am Fuß
-- [ ] 5.4 Sub-Tabelle "Erweiterter Kader (N)" mit gleichem Layout und eigener Durchschnittszeile (nur wenn Mitglieder vorhanden)
-- [ ] 5.5 Mobile-Card-Layout (siehe `docs/agent/05-frontend.md`), brand-Tokens, `lucide-react`-Icons (`Check`, `MinusCircle`, `X`), Touch-Targets ≥ 44px
-- [ ] 5.6 Klick auf Spielerzeile öffnet Member-Detail (interne Navigation zur Spieler-Sicht mit `member_id`-Parameter)
-- [ ] 5.7 `useLiveUpdates((event) => { if (event === 'attendance-changed') reload() })` integrieren
-- [ ] 5.8 Nav-Eintrag in `AppShell.tsx` für Trainer und sportliche Leitung
+- [x] 5.1 Neue Seite `web/src/pages/TeamAnwesenheitPage.tsx`, Route `/team/:id/anwesenheit` in `App.tsx` registrieren
+- [x] 5.2 Banner oben mit Anzahl offener Erfassungen aus `GET /api/teams/{id}/attendance-open`, Klick öffnet Detail-Liste mit Links zu Einzelterminen
+- [x] 5.3 Tabelle Stammkader: Spalten Spieler | Trainings (✓/⊘/✗/Quote%) | Spiele (✓/⊘/✗/Quote%); Team-Durchschnittszeile am Fuß
+- [x] 5.4 Sub-Tabelle "Erweiterter Kader (N)" mit gleichem Layout und eigener Durchschnittszeile (nur wenn Mitglieder vorhanden)
+- [x] 5.5 Mobile-Card-Layout (siehe `docs/agent/05-frontend.md`), brand-Tokens, `lucide-react`-Icons (`Check`, `MinusCircle`, `X`), Touch-Targets ≥ 44px
+- [x] 5.6 Klick auf Spielerzeile öffnet Member-Detail (interne Navigation zur Spieler-Sicht mit `member_id`-Parameter) — Navigation zu `/profil/anwesenheit?member=<id>`
+- [x] 5.7 `useLiveUpdates((event) => { if (event === 'attendance-changed') reload() })` integrieren
+- [x] 5.8 Nav-Eintrag in `AppShell.tsx` für Trainer und sportliche Leitung (gated via `NavFor`/`IsTrainerLike`, Route `/anwesenheit` → erstes Team)
 
 ## 6. Frontend — Spieler-/Eltern-Sicht
 
-- [ ] 6.1 Neue Seite oder Tab `ProfilAnwesenheitPage.tsx` (Routen-/Tab-Entscheidung im Task umsetzen), Route `/profil/anwesenheit` oder als Tab in bestehender Profil-Komponente
-- [ ] 6.2 Kind-Auswahl bei Eltern mit mehreren verlinkten Kindern (Default: erstes Kind)
-- [ ] 6.3 Drei-Säulen-Anzeige (Stacked-Bar grün/gelb/rot) plus Quote für Trainings und Spiele getrennt
-- [ ] 6.4 Tabellarische Listen "Alle Trainings" und "Alle Spiele" mit Datum, Titel, Status-Badge (anwesend/entschuldigt/fehlt/—), Begründung; Cancelled Termine als grauer Badge
-- [ ] 6.5 brand-Tokens, lucide-Icons, Mobile-Card-Layout
+- [x] 6.1 Neue Seite oder Tab `ProfilAnwesenheitPage.tsx` — Entscheidung: **beides** — eigenständige Route `/profil/anwesenheit` (auch Trainer-Drilldown via `?member=`) UND als Tab „Anwesenheit" in `ProfilePage` über die geteilte `ProfilAnwesenheitContent`
+- [x] 6.2 Kind-Auswahl bei Eltern mit mehreren verlinkten Kindern (Default: erstes Kind / eigenes Mitglied)
+- [x] 6.3 Drei-Säulen-Anzeige (Stacked-Bar grün/gelb/rot) plus Quote für Trainings und Spiele getrennt
+- [x] 6.4 Tabellarische Listen "Alle Trainings" und "Alle Spiele" mit Datum, Titel, Status-Badge (anwesend/entschuldigt/fehlt/—), Begründung; Cancelled Termine als grauer Badge
+- [x] 6.5 brand-Tokens, lucide-Icons, Mobile-Card-Layout
 
 ## 7. Frontend — Spiel-Detailseite
 
-- [ ] 7.1 Bestehende Spiel-Detailseite (`/termine/spiel/:id`) um Sektion "Anwesenheit erfassen" für Trainer/SL/Admin erweitern (analog Training)
-- [ ] 7.2 Bulk-Form mit Checkbox pro Mitglied (Stamm + erweitert klar getrennt), Speichern ruft `POST /api/games/{id}/attendances` auf
-- [ ] 7.3 Erfassungssektion nur sichtbar wenn Spiel-Datum ≤ heute; sonst Hinweistext
+- [x] 7.1 Bestehende Spiel-Detailseite (`/termine/spiel/:id`) um Sektion "Anwesenheit erfassen" für Trainer/SL/Admin erweitern (analog Training)
+- [x] 7.2 Bulk-Form mit Checkbox pro Mitglied (Stamm + erweitert klar getrennt), Speichern ruft `POST /api/games/{id}/attendances` auf
+- [x] 7.3 Erfassungssektion nur sichtbar wenn Spiel-Datum ≤ heute; sonst Hinweistext
 
 ## 8. Verifikation & Abschluss
 
-- [ ] 8.1 `make test` (inkl. Architektur-Test) grün
-- [ ] 8.2 `make lint` grün
-- [ ] 8.3 `pnpm -C web build` + `pnpm -C web test` + `pnpm -C web lint` grün
-- [ ] 8.4 `openspec validate anwesenheits-statistik --strict` grün
-- [ ] 8.5 `/verify-change` ausführen — Build/Test/Lint + Projekt-Invarianten (Route→Tests, Mutation→Broadcast+useLiveUpdates, brand-Tokens, lucide-Icons, Migrationsnummer)
+- [x] 8.1 `make test` (inkl. Architektur-Test) grün
+- [x] 8.2 `make lint` grün
+- [x] 8.3 `pnpm -C web build` + `pnpm -C web test` + `pnpm -C web lint` grün
+- [x] 8.4 `openspec validate anwesenheits-statistik --strict` grün
+- [x] 8.5 `/verify-change` ausführen — Build/Test/Lint + Projekt-Invarianten (Route→Tests, Mutation→Broadcast+useLiveUpdates, brand-Tokens, lucide-Icons, Migrationsnummer)
 - [ ] 8.6 Manueller Smoke-Test im lokalen Stack: Spiel-Anwesenheit erfassen → Live-Update → Team-Stats + Member-Stats korrekt → Banner verschwindet

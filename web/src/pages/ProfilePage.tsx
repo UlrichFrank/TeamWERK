@@ -9,6 +9,7 @@ import ProfileBankTab from '../components/profile/ProfileBankTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
 import ProfileKalenderTab from '../components/profile/ProfileKalenderTab'
 import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
+import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 
 export interface Member {
   id: number; first_name: string; last_name: string
@@ -53,7 +54,7 @@ export interface ChangeDraft {
   created_at: string
 }
 
-type TabName = 'account' | 'profile' | 'member' | 'banking' | 'kalender' | 'datenschutz' | 'misc'
+type TabName = 'account' | 'profile' | 'member' | 'banking' | 'anwesenheit' | 'kalender' | 'datenschutz' | 'misc'
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
@@ -86,6 +87,7 @@ export default function ProfilePage() {
   useLiveUpdates((event) => { if (event === 'members') loadProfile() })
 
   const showMemberTabs = ownMember !== null
+  const showAttendanceTab = ownMember !== null || children.length > 0
 
   const handleDraftWithdrawn = () => {
     setDraftRefreshKey(k => k + 1)
@@ -95,6 +97,7 @@ export default function ProfilePage() {
     'account',
     'profile',
     ...(showMemberTabs ? (['member', 'banking'] as TabName[]) : []),
+    ...(showAttendanceTab ? (['anwesenheit'] as TabName[]) : []),
     'kalender',
     ...(showMemberTabs ? (['datenschutz'] as TabName[]) : []),
     'misc',
@@ -105,6 +108,7 @@ export default function ProfilePage() {
     profile: 'Kontakt',
     member: 'Mitgliedsdaten',
     banking: 'Bankdaten',
+    anwesenheit: 'Anwesenheit',
     kalender: 'Kalender-Abo',
     datenschutz: 'Datenschutz',
     misc: 'Sonstiges',
@@ -147,6 +151,7 @@ export default function ProfilePage() {
       {showMemberTabs && activeTab === 'banking' && (
         <ProfileBankTab ownMember={ownMember} />
       )}
+      {showAttendanceTab && activeTab === 'anwesenheit' && <ProfilAnwesenheitContent />}
       {activeTab === 'kalender' && <ProfileKalenderTab />}
       {showMemberTabs && activeTab === 'datenschutz' && ownMember && (
         <ProfileDatenschutzTab ownMember={ownMember} onUpdated={loadProfile} />

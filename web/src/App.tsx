@@ -35,6 +35,8 @@ import TermineDetailPage from './pages/TermineDetailPage'
 import MeinTeamPage from './pages/MeinTeamPage'
 import AdminVenuesPage from './pages/AdminVenuesPage'
 import ChatPage from './pages/ChatPage'
+import TeamAnwesenheitPage from './pages/TeamAnwesenheitPage'
+import ProfilAnwesenheitPage from './pages/ProfilAnwesenheitPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -83,7 +85,10 @@ export default function App() {
               <Route path="mitglieder" element={<RoleRoute roles={['admin','vorstand','kassierer']}><MembersPage /></RoleRoute>} />
               <Route path="mitglieder/:id" element={<RoleRoute roles={['admin','vorstand','kassierer']}><MemberDetailPage /></RoleRoute>} />
               <Route path="profil" element={<ProfilePage />} />
+              <Route path="profil/anwesenheit" element={<ProfilAnwesenheitPage />} />
               <Route path="profil/kind/:memberId" element={<ChildProfilePage />} />
+              <Route path="anwesenheit" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamAnwesenheitPage /></RoleRoute>} />
+              <Route path="team/:id/anwesenheit" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamAnwesenheitPage /></RoleRoute>} />
               <Route path="dokumente" element={<DocumentsPage />} />
               <Route path="dokumente/datei/:fileId" element={<DocumentFileLinkPage />} />
               <Route path="dokumente/anzeigen/:fileId" element={<FileViewerPage />} />
