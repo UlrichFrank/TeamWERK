@@ -15,7 +15,7 @@
 
 - [x] 3.1 Neues Package `internal/attendance/` mit Handler-Struct `Handler{ db *sql.DB; hub *hub.EventHub }` und Konstruktor `NewHandler`
 - [x] 3.2 Klassifikations-Funktion `Classify(present *bool, declined bool, absenceID *int64) Category` (Reihenfolge: ANWESEND → FEHLT → ENTSCHULDIGT → IGNORIERT) plus Unit-Tests inkl. der Edge-Cases aus `attendance-statistics`
-- [ ] 3.3 Route `GET /api/teams/{id}/attendance-stats?season=<id>`: Zähler je Mitglied, Blöcke `regular_members` / `extended_members`, Team-Durchschnitte, Default = aktive Saison, Authz Trainer/SL/Admin
+- [x] 3.3 Route `GET /api/teams/{id}/attendance-stats?season=<id>`: Zähler je Mitglied, Blöcke `regular_members` / `extended_members`, Team-Durchschnitte, Default = aktive Saison, Authz Trainer/SL/Admin
 - [ ] 3.4 Route `GET /api/members/{id}/attendance-stats?season=<id>`: Zähler + vollständige Termin-Liste mit `category` und `reason`, Authz eigener/Eltern/Trainer-SL/Admin
 - [ ] 3.5 Route `GET /api/teams/{id}/attendance-open`: Liste vergangener, nicht-cancelled Termine ohne `attendance`-Row, Authz Trainer/SL/Admin
 - [ ] 3.6 Cancelled Sessions/Games konsequent aus Aggregation entfernen (`status != 'cancelled'`-Filter)
