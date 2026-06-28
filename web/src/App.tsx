@@ -36,6 +36,7 @@ import MeinTeamPage from './pages/MeinTeamPage'
 import AdminVenuesPage from './pages/AdminVenuesPage'
 import ChatPage from './pages/ChatPage'
 import VideosPage from './pages/VideosPage'
+import VideoUploadPage from './pages/VideoUploadPage'
 import VideoDetailPage from './pages/VideoDetailPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -106,6 +107,7 @@ export default function App() {
               <Route path="mein-team" element={<MeinTeamPage />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="videos" element={<VideosPage />} />
+              <Route path="videos/upload" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><VideoUploadPage /></RoleRoute>} />
               <Route path="videos/:id" element={<VideoDetailPage />} />
               <Route path="trainings" element={<Navigate to="/termine" replace />} />
               <Route path="trainings/:id" element={<Navigate to="/termine" replace />} />

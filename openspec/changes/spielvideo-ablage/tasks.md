@@ -73,11 +73,11 @@
 ## 9. Frontend — Upload-Form
 
 - [x] 9.1 `pnpm add hls.js tus-js-client` in `web/`
-- [ ] 9.2 `web/src/pages/VideoUploadPage.tsx`: Formular mit Titel/Beschreibung/Team-Select/Spiel-Select/Datei
-- [ ] 9.3 Datei-Check vor Upload: `file.size > 2 GB` → Fehler; ohne erwartete Größe POST `/api/videos`
-- [ ] 9.4 tus-Client startet Upload an `/api/videos/upload/`; Progress-Bar (Prozent + Restzeit)
-- [ ] 9.5 Bei Fehler 507: klare Meldung "Server-Speicher voll, bitte später erneut versuchen oder Admin informieren"
-- [ ] 9.6 Bei Abbruch/Reload: tus speichert Position in localStorage; Re-Open der Seite zeigt "Upload fortsetzen?"-Button
+- [x] 9.2 `web/src/pages/VideoUploadPage.tsx`: Formular mit Titel/Beschreibung/Team-Select/Spiel-Select/Datei
+- [x] 9.3 Datei-Check vor Upload: `file.size > 2 GB` → Fehler; ohne erwartete Größe POST `/api/videos`
+- [x] 9.4 tus-Client startet Upload an `/api/videos/upload/`; Progress-Bar (Prozent + Restzeit)
+- [x] 9.5 Bei Fehler 507: klare Meldung "Server-Speicher voll, bitte später erneut versuchen oder Admin informieren"
+- [x] 9.6 Bei Abbruch/Reload: tus speichert Position in localStorage; Re-Open der Seite zeigt "Upload fortsetzen?"-Button
 
 ## 10. Deployment-Vorbereitung
 
