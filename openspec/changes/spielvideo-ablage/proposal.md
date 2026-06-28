@@ -1,20 +1,29 @@
 ## Why
 
-Spielvideos (Highlight-Clips, Spielhälften) werden aktuell nicht zentral im System verwaltet. YouTube bietet kostenloses Hosting mit adaptivem Streaming — TeamWERK übernimmt die Zugangskontrolle, damit Videos nicht öffentlich auffindbar sind.
+Spielvideos (Highlight-Clips, Spielhälften) sollen zentral im System verwaltet werden. Die Videos zeigen **Minderjährige** (Junioren-Teams), daher ist **echte Zugangskontrolle** erforderlich — kein "Security by Obscurity"-Modell und kein Hosting bei US-Anbietern (DSGVO Art. 8, Schutz Minderjähriger).
+
+Konsequenz: TeamWERK hostet die Videos selbst, transcodiert sie ressourcenschonend im Hintergrund und liefert sie ausschließlich an berechtigte Nutzer aus. Der VPS-Speicher wird bewusst beachtet (Disk-Guard, Auto-Retention).
 
 ## What Changes
 
-- Neue Seite `/videos` im Frontend: Videoliste mit eingebettetem YouTube-Player
-- Admin/Trainer können YouTube-Links (nicht gelistet) mit Metadaten erfassen
-- Berechtigungsprüfung im Go-Backend: Link wird nur für berechtigte Nutzer ausgeliefert
-- Kein eigener Video-Storage — YouTube ist der Byte-Store
+- Neue Seite `/videos` im Frontend: Videoliste pro Team mit eingebettetem HLS-Player
+- Upload direkt im Browser über **tus-Protokoll** (resumable, max 2 GB) — kein Drittanbieter
+- Hintergrund-**Transcode** mit `nice -n 19` (FFmpeg → HLS, 720p + 360p), seriell über Worker-Goroutine
+- **Stream-Token** (HMAC-signiert, 1 h) schützt jede Segment-Auslieferung
+- **Disk-Guard** prüft vor Upload und vor Transcode den freien Speicher; Worker pausiert bei kritisch wenig Platz
+- **Retention**: Videos werden 90 Tage nach Saisonende automatisch gelöscht
+- **Push-Notification** an Hochladenden + alle Team-Mitglieder/-Eltern, sobald Video fertig ist
+- Optionaler Spiel-Link (`game_id`): Video erscheint in der Spiel-Detailansicht
+- Keine YouTube-Integration, kein Cloud-Storage, kein Backup in Phase 1
 
 ## Capabilities
 
 ### New Capabilities
 
-- `video-management`: YouTube-Video-Links erfassen, bearbeiten und löschen (Admin/Trainer)
-- `video-access`: Videoliste und Embed-Links für berechtigte Nutzer abrufen
+- `video-upload`: Resumable Video-Upload via tus, mit Vorab-Disk-Check und Größen-Limit
+- `video-transcode`: Hintergrund-Transcode in HLS-Renditions (720p/360p) über serielle Worker-Queue
+- `video-stream`: HLS-Auslieferung mit Stream-Token-Authentifizierung und Range-Support
+- `video-management`: CRUD für Video-Metadaten, Berechtigungen, Saison-Retention
 
 ### Modified Capabilities
 
@@ -22,9 +31,13 @@ Spielvideos (Highlight-Clips, Spielhälften) werden aktuell nicht zentral im Sys
 
 ## Impact
 
-- Neues Package `internal/videos/` (Handler, DB-Zugriff)
-- Neue DB-Migration: Tabelle `videos`
-- Neue API-Routen unter `/api/videos/`
-- Neue Frontend-Seite `web/src/pages/VideosPage.tsx` + Nav-Eintrag
-- Kein externer Dienst außer YouTube (kein API-Key nötig für nicht gelistete Videos)
-- Sicherheitshinweis: YouTube-Link ist "Security by Obscurity" — geeignet für Vereinsvideos, nicht für vertrauliche Inhalte
+- Neues Package `internal/videos/` (Handler, DB-Zugriff, Transcode-Worker, Stream-Token)
+- Neue DB-Migration `012_videos.up.sql/.down.sql`: Tabelle `videos`
+- Neue API-Routen unter `/api/videos/` (Upload, Liste, Player-Token, HLS, CRUD)
+- Neue Frontend-Seite `web/src/pages/VideosPage.tsx` + Detail-Seite mit `hls.js`
+- Neuer Nav-Eintrag im `AppShell` (für alle Nutzer mit Team-Zugehörigkeit oder Trainer-Funktion)
+- Neuer Scheduler-Job: Saison-Retention (90 Tage nach `saisons.end_date`)
+- Neue Storage-Pfade: `/storage/videos/{uploads,raw,processed}/`
+- Externe Abhängigkeiten: `ffmpeg` muss auf dem VPS installiert sein (`apt install ffmpeg`); `tusd` als Go-Library (`github.com/tus/tusd`); `hls.js` als Frontend-Dependency
+- Sicherheits-Modell: echte Auth (kein Obscurity); Streaming-Endpoints validieren HMAC-Token
+- Kostenrahmen: keine zusätzlichen laufenden Kosten in Phase 1 (Storage wird auf VPS erweitert)
