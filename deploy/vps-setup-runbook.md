@@ -75,6 +75,7 @@ vim /etc/teamwerk/env
 #   BASE_URL=https://<DOMAIN>
 #   SMTP_USER, SMTP_PASS
 #   VAPID_* — bleibt erstmal Platzhalter (siehe Schritt 5)
+#   VIDEO_STREAM_SECRET — siehe Schritt 3f (Spielvideo-Ablage)
 
 # 3b. Better-Stack-Heartbeat
 echo "https://uptime.betterstack.com/api/v1/heartbeat/XXXX" > /etc/teamwerk/heartbeat-url
@@ -93,7 +94,60 @@ chmod 600 /etc/teamwerk/betterstack-metrics-token
 #     s12345.eu-fsn-3.betterstackdata.com — ohne Schema, kein Slash)
 echo "sZZZZZ.eu-fsn-3.betterstackdata.com" > /etc/teamwerk/betterstack-metrics-endpoint
 chmod 600 /etc/teamwerk/betterstack-metrics-endpoint
+
+# 3f. Spielvideo-Stream-Secret (HMAC für Stream-Token; separat von JWT_SECRET,
+#     damit ein Token-Leak die JWTs nicht betrifft). In /etc/teamwerk/env:
+#   VIDEO_STREAM_SECRET=$(openssl rand -hex 32)
 ```
+
+---
+
+## 3.1 Spielvideo-Ablage (Storage, ffmpeg, Env)
+
+Die Spielvideo-Funktion hostet Videos selbst auf der VPS-Disk (kein
+Drittanbieter, DSGVO — Aufnahmen Minderjähriger). Vor produktiver Nutzung sind
+drei Dinge sicherzustellen.
+
+**1. Storage-Erweiterung.** Videos liegen unter `/storage/videos/`
+(`uploads/` = tus-Sessions, `raw/` = fertiger Upload bis Transcode, `processed/`
+= HLS-Output). Das Setup-Script legt die Verzeichnisstruktur an und setzt den
+Owner `www-data`, **erweitert aber nicht die Disk**. Der Standard-VPS (10 GB)
+reicht nicht für produktiven Video-Betrieb — eine 60-min-Quelle belegt
+zeitweise mehrere GB (raw + processed-Peak vor raw-Delete).
+
+- Disk bzw. zusätzliches Volume beim Provider vergrößern und `/storage` darauf
+  mounten (eigene Partition/Volume empfohlen, damit ein volles Video-Storage
+  nicht DB/Logs unter `/var` blockiert).
+- Faustregel: pro gleichzeitig vorgehaltener Stunde Spielvideo ~3–4 GB
+  einplanen, plus die `VIDEO_RESERVED_BYTES`-Reserve (Default 2 GiB).
+- Der Disk-Guard prüft `free(/storage)` vor jedem Upload (HTTP 507 bei Mangel)
+  und vor jedem Transcode — bei zu wenig Platz wird der Lauf nie hart abbrechen,
+  sondern abgelehnt bzw. zurückgestellt. Auslaufschutz, kein Ersatz für genug
+  Disk.
+
+```bash
+# Owner und Struktur prüfen (vom Setup-Script angelegt)
+ssh vServer "ls -la /storage/videos && df -h /storage"
+```
+
+**2. ffmpeg.** Transcode (HLS 720p + 360p) braucht `ffmpeg`/`ffprobe`. Das
+Setup-Script installiert `ffmpeg` via `apt`. Benötigt wird **≥ 4.x** (Ubuntu
+24.04 liefert 6.x). Verifizieren:
+
+```bash
+ssh vServer "ffmpeg -version | head -1 && ffprobe -version | head -1"
+# → ffmpeg version 6.x …  (mindestens 4.x)
+```
+
+**3. Env-Einträge.** In `/etc/teamwerk/env` (siehe Schritt 3f):
+
+| Variable | Pflicht | Default | Bedeutung |
+|---|---|---|---|
+| `VIDEO_STREAM_SECRET` | ja | — | HMAC-Secret (HS256) für kurzlebige Stream-Token. Separat von `JWT_SECRET` halten — ein Token-Leak betrifft dann keine JWTs. Erzeugen mit `openssl rand -hex 32`. Fehlt es im Production-Modus → Fail-Fast beim Start. |
+| `VIDEO_STORAGE_DIR` | nein | `/storage/videos` | Wurzel der Video-Ablage. Muss `www-data` gehören und auf dem erweiterten Storage liegen. |
+| `VIDEO_RESERVED_BYTES` | nein | `2147483648` (2 GiB) | Reserve, die der Disk-Guard zusätzlich zur geschätzten Dateigröße freihält (DB-Wachstum, Logs, parallele Uploads). |
+
+Nach Änderung an der Env-Datei: `ssh vServer "systemctl restart teamwerk"`.
 
 ---
 

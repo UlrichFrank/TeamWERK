@@ -43,6 +43,15 @@ type Config struct {
 	// HSTSEnabled steuert den Strict-Transport-Security-Header. Default false —
 	// erst nach Live-Zertifikat aktivieren (sonst Aussperrung bei fehlendem TLS).
 	HSTSEnabled bool
+	// VideoStorageDir ist das Wurzelverzeichnis der selbst gehosteten Spielvideos
+	// (raw/, processed/, uploads/). Default /storage/videos.
+	VideoStorageDir string
+	// VideoReservedBytes ist der freizuhaltende Disk-Puffer (DB-Wachstum, Logs,
+	// parallele Uploads), gegen den der Pre-Upload-Disk-Guard prüft. Default 2 GiB.
+	VideoReservedBytes uint64
+	// VideoStreamSecret ist das HMAC-Secret für Stream-Token (getrennt von
+	// JWTSecret). Leer ⇒ Streaming-Token-Signierung deaktiviert.
+	VideoStreamSecret string
 }
 
 type SMTPConfig struct {
@@ -83,6 +92,10 @@ func Load() (*Config, error) {
 		ForgotPasswordCooldownSec: getEnvInt("FORGOT_PASSWORD_COOLDOWN_SEC", 60),
 		PasswordMinLength:         getEnvInt("PASSWORD_MIN_LENGTH", 12),
 		HSTSEnabled:               os.Getenv("HSTS_ENABLED") == "true",
+
+		VideoStorageDir:    getEnv("VIDEO_STORAGE_DIR", "/storage/videos"),
+		VideoReservedBytes: getEnvUint64("VIDEO_RESERVED_BYTES", 2147483648), // 2 GiB
+		VideoStreamSecret:  os.Getenv("VIDEO_STREAM_SECRET"),
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
@@ -102,6 +115,17 @@ func getEnv(key, fallback string) string {
 func getEnvInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+// getEnvUint64 liest einen vorzeichenlosen 64-Bit-Env-Wert; bei fehlendem oder
+// ungültigem Wert wird der Fallback verwendet.
+func getEnvUint64(key string, fallback uint64) uint64 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
 			return n
 		}
 	}

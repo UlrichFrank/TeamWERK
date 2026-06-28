@@ -1,17 +1,17 @@
 ## 1. Datenbank
 
-- [ ] 1.1 Migration `012_videos.up.sql` anlegen: Tabelle `videos` (Schema siehe `design.md`), Indizes auf `(team_id, status)`, `(season_id)`, `(status, created_at)`
-- [ ] 1.2 Migration `012_videos.down.sql` anlegen
-- [ ] 1.3 `make migrate-up` lokal ausführen und Schema prüfen
-- [ ] 1.4 Testfixture `internal/testutil/CreateVideo(...)` ergänzen
+- [x] 1.1 Migration `012_videos.up.sql` anlegen: Tabelle `videos` (Schema siehe `design.md`), Indizes auf `(team_id, status)`, `(season_id)`, `(status, created_at)`
+- [x] 1.2 Migration `012_videos.down.sql` anlegen
+- [x] 1.3 `make migrate-up` lokal ausführen und Schema prüfen
+- [x] 1.4 Testfixture `internal/testutil/CreateVideo(...)` ergänzen
 
 ## 2. Backend — Package-Grundlagen
 
-- [ ] 2.1 Package `internal/videos/` anlegen mit `Handler struct{ db *sql.DB; hub *hub.EventHub; cfg *config.Config }`
-- [ ] 2.2 `NewHandler(db, hub, cfg)` implementieren
-- [ ] 2.3 Pfad-Helper `paths.go`: `RawPath(id)`, `ProcessedDir(id)`, `MasterManifestPath(id)`, `RenditionDir(id, rendition)`
-- [ ] 2.4 Disk-Helper `disk.go`: `FreeBytes(dir)`, `RequireFreeBytes(dir, needed, reserved)`; Tests mit fake `/tmp`
-- [ ] 2.5 Berechtigungs-Helper `access.go`: `CanUploadToTeam(claims, teamID)`, `CanViewVideo(claims, video)`, `CanManageTeamVideos(claims, teamID)` — Tests aus Matrix in `design.md`
+- [x] 2.1 Package `internal/videos/` anlegen mit `Handler struct{ db *sql.DB; hub *hub.EventHub; cfg *config.Config }`
+- [x] 2.2 `NewHandler(db, hub, cfg)` implementieren
+- [x] 2.3 Pfad-Helper `paths.go`: `RawPath(id)`, `ProcessedDir(id)`, `MasterManifestPath(id)`, `RenditionDir(id, rendition)`
+- [x] 2.4 Disk-Helper `disk.go`: `FreeBytes(dir)`, `RequireFreeBytes(dir, needed, reserved)`; Tests mit fake `/tmp`
+- [x] 2.5 Berechtigungs-Helper `access.go`: `CanUploadToTeam(claims, teamID)`, `CanViewVideo(claims, video)`, `CanManageTeamVideos(claims, teamID)` — Tests aus Matrix in `design.md`
 
 ## 3. Backend — Upload (Capability video-upload)
 
@@ -81,9 +81,9 @@
 
 ## 10. Deployment-Vorbereitung
 
-- [ ] 10.1 `deploy/setup-vps.sh` um `apt install -y ffmpeg` ergänzen; Disk-Layout `/storage/videos/{uploads,raw,processed}` mit korrektem Owner anlegen
-- [ ] 10.2 `deploy/vps-setup-runbook.md` ergänzen: Storage-Erweiterung, ffmpeg-Version, neuer Env-Eintrag
-- [ ] 10.3 `.env.example` aktualisieren: `VIDEO_STREAM_SECRET`, optional `VIDEO_STORAGE_DIR` (default `/storage/videos`), `VIDEO_RESERVED_BYTES` (default 2 GiB)
+- [x] 10.1 `deploy/setup-vps.sh` um `apt install -y ffmpeg` ergänzen; Disk-Layout `/storage/videos/{uploads,raw,processed}` mit korrektem Owner anlegen
+- [x] 10.2 `deploy/vps-setup-runbook.md` ergänzen: Storage-Erweiterung, ffmpeg-Version, neuer Env-Eintrag
+- [x] 10.3 `.env.example` aktualisieren: `VIDEO_STREAM_SECRET`, optional `VIDEO_STORAGE_DIR` (default `/storage/videos`), `VIDEO_RESERVED_BYTES` (default 2 GiB)
 
 ## 11. Validierung
 
