@@ -1,7 +1,6 @@
 /**
  * TermineDetailPage — event-notes: die „Hinweis"-Sektion zeigt den Hinweistext
- * an und blendet den Inline-Editor (Textarea) nur für Berechtigte ein
- * (isTrainer = admin || trainer || sportliche_leitung).
+ * an. Der Editor liegt auf /kalender, nicht hier.
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
@@ -50,18 +49,16 @@ function renderDetail(personaId: string) {
 }
 
 describe('TermineDetailPage — Hinweis-Sektion', () => {
-  test('Trainer sieht Hinweistext und Inline-Editor', async () => {
+  test('Trainer sieht Hinweistext ohne Editor', async () => {
     renderDetail('trainer')
     await screen.findByText('Max Mustermann')
     await flushAsync()
 
-    // Hinweistext erscheint (Indikator + Editor-Textarea-Wert)
-    expect(screen.getAllByText('Halle gesperrt, wir joggen am See').length).toBeGreaterThan(0)
-    // Editor-Textarea ist sichtbar (per Placeholder eindeutig)
-    expect(screen.getByPlaceholderText(/Hinweis für die Mannschaft/)).toBeInTheDocument()
+    expect(screen.getByText('Halle gesperrt, wir joggen am See')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/Hinweis für die Mannschaft/)).toBeNull()
   })
 
-  test('Spieler sieht Hinweistext, aber keinen Editor', async () => {
+  test('Spieler sieht Hinweistext ohne Editor', async () => {
     renderDetail('spieler')
     await screen.findByText('Max Mustermann')
     await flushAsync()
