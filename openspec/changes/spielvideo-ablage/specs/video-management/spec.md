@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Video erfassen
-Admin und Nutzer mit Trainer-Rolle oder Trainer-Funktion SOLLEN Videos via `POST /api/videos` erfassen können. Ein Video MUSS mindestens `youtube_id` (11 Zeichen), `title` und `visibility` enthalten. Optional: `team_id`, `game_date`, `description`.
+Admin und Nutzer mit Trainer-Rolle oder Trainer-Funktion SHALL Videos via `POST /api/videos` erfassen können. Ein Video MUST mindestens `youtube_id` (11 Zeichen), `title` und `visibility` enthalten. Optional: `team_id`, `game_date`, `description`.
 
 #### Scenario: Erfolgreiches Anlegen
 - **WHEN** ein Admin oder Trainer `POST /api/videos` mit gültiger `youtube_id` aufruft
@@ -16,14 +16,14 @@ Admin und Nutzer mit Trainer-Rolle oder Trainer-Funktion SOLLEN Videos via `POST
 - **THEN** antwortet der Server mit HTTP 400
 
 ### Requirement: Video bearbeiten
-Admin und Trainer SOLLEN Video-Metadaten via `PUT /api/videos/:id` aktualisieren können.
+Admin und Trainer SHALL Video-Metadaten via `PUT /api/videos/:id` aktualisieren können.
 
 #### Scenario: Erfolgreiche Aktualisierung
 - **WHEN** ein berechtigter Nutzer `PUT /api/videos/:id` mit neuen Metadaten aufruft
 - **THEN** werden die Daten in der DB aktualisiert und `200 OK` zurückgegeben
 
 ### Requirement: Video löschen
-Admin und Trainer SOLLEN Videos via `DELETE /api/videos/:id` löschen können. Nur der DB-Eintrag wird gelöscht; das YouTube-Video bleibt unberührt.
+Admin und Trainer SHALL Videos via `DELETE /api/videos/:id` löschen können. Nur der DB-Eintrag wird gelöscht; das YouTube-Video bleibt unberührt.
 
 #### Scenario: Erfolgreiche Löschung
 - **WHEN** ein berechtigter Nutzer `DELETE /api/videos/:id` aufruft

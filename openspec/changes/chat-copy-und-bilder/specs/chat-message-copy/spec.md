@@ -1,9 +1,4 @@
-# chat-message-copy Specification
-
-## Purpose
-Nachrichtentext via Kontextmenü in die Systemzwischenablage kopieren.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Nachricht kopieren
 

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Videoliste abrufen
-Alle authentifizierten Nutzer SOLLEN via `GET /api/videos` die Videoliste abrufen können. Die Antwort MUSS `id`, `title`, `youtube_id`, `game_date`, `description`, `team_id`, `visibility`, `created_by_name` enthalten. Videos ohne Zugriffsberechtigung DÜRFEN NICHT in der Liste erscheinen.
+Alle authentifizierten Nutzer SHALL via `GET /api/videos` die Videoliste abrufen können. Die Antwort MUST `id`, `title`, `youtube_id`, `game_date`, `description`, `team_id`, `visibility`, `created_by_name` enthalten. Videos ohne Zugriffsberechtigung DÜRFEN NICHT in der Liste erscheinen.
 
 #### Scenario: Spieler ruft vereinsweit-Videos ab
 - **WHEN** ein Nutzer mit Rolle `spieler` `GET /api/videos` aufruft
@@ -12,7 +12,7 @@ Alle authentifizierten Nutzer SOLLEN via `GET /api/videos` die Videoliste abrufe
 - **THEN** erhält er Videos mit `team_id = 5` und `visibility = team`, sofern er dem Team angehört
 
 ### Requirement: YouTube-Embed-URL
-Der Server MUSS den Embed-URL als `embed_url` in der Videolisten-Antwort mitliefern. Format: `https://www.youtube.com/embed/<youtube_id>`. Der `youtube_id` DARF NICHT direkt exponiert werden.
+Der Server MUST den Embed-URL als `embed_url` in der Videolisten-Antwort mitliefern. Format: `https://www.youtube.com/embed/<youtube_id>`. Der `youtube_id` DARF NICHT direkt exponiert werden.
 
 #### Scenario: Embed-URL in Antwort
 - **WHEN** ein berechtigter Nutzer die Videoliste abruft
@@ -23,7 +23,7 @@ Der Server MUSS den Embed-URL als `embed_url` in der Videolisten-Antwort mitlief
 - **THEN** antwortet der Server mit HTTP 401
 
 ### Requirement: YouTube-Vorschaubild
-Das Frontend SOLL für jedes Video ein Vorschaubild anzeigen. Die Thumbnail-URL MUSS vom Server mitgeliefert werden (`https://img.youtube.com/vi/<id>/hqdefault.jpg`). Kein YouTube-API-Key erforderlich.
+Das Frontend SHALL für jedes Video ein Vorschaubild anzeigen. Die Thumbnail-URL MUST vom Server mitgeliefert werden (`https://img.youtube.com/vi/<id>/hqdefault.jpg`). Kein YouTube-API-Key erforderlich.
 
 #### Scenario: Thumbnail-URL in Antwort
 - **WHEN** ein berechtigter Nutzer die Videoliste abruft

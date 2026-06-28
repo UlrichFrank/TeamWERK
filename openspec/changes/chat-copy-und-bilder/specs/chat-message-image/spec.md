@@ -1,9 +1,4 @@
-# chat-message-image Specification
-
-## Purpose
-Bilder in Chat-Konversationen hochladen, senden und inline anzeigen.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Bild hochladen
 
