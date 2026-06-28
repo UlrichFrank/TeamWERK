@@ -58,7 +58,7 @@ Jede Abwesenheit in der Calendar-Response SHALL ein Feld `is_own: bool` enthalte
 ---
 
 ### Requirement: Team-Abwesenheiten werden mit bestehendem Team-Filter koordiniert
-**WHEN** der Nutzer im Kalender ein bestimmtes Team ausgewählt hat (`filterTeamId`) UND Team-Abwesenheiten eingeblendet sind, **THEN** werden nur Abwesenheiten dieses Teams geladen (`?team_id={filterTeamId}`).
+Das System SHALL bei aktivem Team-Filter (`filterTeamId`) nur Abwesenheiten dieses Teams laden (`?team_id={filterTeamId}`), wenn Team-Abwesenheiten eingeblendet sind.
 
 #### Scenario: Team-Filter aktiv
 - **WHEN** Trainer wählt Team A im Dropdown und aktiviert Team-Abwesenheiten

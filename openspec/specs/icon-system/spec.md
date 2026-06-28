@@ -55,7 +55,7 @@ Lucide Icons SHALL exakt eine der drei definierten Größenklassen verwenden:
 ---
 
 ### Requirement: Accessibility für Icon-only-Buttons
-Jeder Button, der ausschließlich ein Icon enthält (kein sichtbarer Text), MUSS ein `aria-label`-Attribut tragen.
+Jeder Button, der ausschließlich ein Icon enthält (kein sichtbarer Text), MUST ein `aria-label`-Attribut tragen.
 
 #### Scenario: Löschen-Button hat aria-label
 - **WHEN** ein Button nur `<Trash2 />` enthält

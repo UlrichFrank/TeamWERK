@@ -7,7 +7,7 @@ Diese Spezifikation beschreibt die Capability `mitfahrgelegenheiten-nav`. (Autom
 ## Requirements
 
 ### Requirement: Nav-Eintrag Mitfahrgelegenheiten
-Im AppShell-Navigationsbereich „Dienste" erscheint ein neuer Eintrag „Mitfahrgelegenheiten" unterhalb von „Dienste" (nach dem bestehenden Dienste-Link, nach Kalender).
+Im AppShell-Navigationsbereich „Dienste" SHALL ein neuer Eintrag „Mitfahrgelegenheiten" unterhalb von „Dienste" erscheinen (nach dem bestehenden Dienste-Link, nach Kalender).
 
 #### Scenario: Alle Rollen sehen den Eintrag
 - **WHEN** ein authentifizierter Nutzer beliebiger Rolle eingeloggt ist
@@ -18,4 +18,9 @@ Im AppShell-Navigationsbereich „Dienste" erscheint ein neuer Eintrag „Mitfah
 - **THEN** navigiert er zu `/mitfahrgelegenheiten`
 
 ### Requirement: Route
-`/mitfahrgelegenheiten` ist eine Route in App.tsx, geschützt hinter dem Authenticated-Wrapper, rendern `MitfahrgelegenheitenPage`.
+`/mitfahrgelegenheiten` SHALL eine Route in App.tsx sein, geschützt hinter dem Authenticated-Wrapper, die `MitfahrgelegenheitenPage` rendert.
+
+#### Scenario: Route ist zugänglich für authentifizierte Nutzer
+
+- **WHEN** ein authentifizierter Nutzer `/mitfahrgelegenheiten` aufruft
+- **THEN** wird `MitfahrgelegenheitenPage` gerendert

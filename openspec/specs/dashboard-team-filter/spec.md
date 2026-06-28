@@ -8,7 +8,7 @@ Diese Spezifikation beschreibt die Capability `dashboard-team-filter`. (Automati
 
 ### Requirement: Team-Sichtbarkeit auf dem Dashboard
 
-**Kontext:** Das Dashboard zeigt team-spezifische Daten nur für Nutzer mit Teamzugang. Die Logik zur Ermittlung der zugänglichen Teams wird vereinheitlicht.
+Das Dashboard SHALL team-spezifische Daten nur für Nutzer mit Teamzugang anzeigen. Die Logik zur Ermittlung der zugänglichen Teams wird vereinheitlicht.
 
 **Bisheriges Verhalten:**
 - `spieler`: Teams via `kader_members` + `members.user_id`
@@ -26,3 +26,8 @@ Diese Spezifikation beschreibt die Capability `dashboard-team-filter`. (Automati
 - Nächste Spiele (`queryNextGames`)
 - Fahrtgemeinschaft-Hint (`queryCarpoolingHint`)
 - Fahrzeug-Action (`vehicleAction`)
+
+#### Scenario: Trainer sieht Spiele seiner Teams
+
+- **WHEN** ein Trainer eingeloggt ist und das Dashboard lädt
+- **THEN** werden in „Nächste Spiele" nur Spiele der Teams angezeigt, in denen der Trainer als `kader_trainers`-Eintrag eingetragen ist

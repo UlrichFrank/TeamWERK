@@ -4,7 +4,7 @@
 TBD - created by archiving change dateiablage. Update Purpose after archive.
 ## Requirements
 ### Requirement: Datei hochladen
-Authentifizierte Nutzer mit `can_write` auf den Zielordner SOLLEN Dateien via `POST /api/folders/:folderId/files` hochladen können. Der Request MUSS `multipart/form-data` verwenden. Die maximale Dateigröße beträgt 50 MB. Auf Disk wird die Datei unter einem UUID-basierten Namen gespeichert; der Original-Name wird in der DB gehalten.
+Authentifizierte Nutzer mit `can_write` auf den Zielordner SHALL Dateien via `POST /api/folders/:folderId/files` hochladen können. Der Request MUST `multipart/form-data` verwenden. Die maximale Dateigröße beträgt 50 MB. Auf Disk wird die Datei unter einem UUID-basierten Namen gespeichert; der Original-Name wird in der DB gehalten.
 
 #### Scenario: Erfolgreicher Upload
 - **WHEN** ein Nutzer mit `can_write` auf den Ordner eine Datei hochlädt
@@ -19,7 +19,7 @@ Authentifizierte Nutzer mit `can_write` auf den Zielordner SOLLEN Dateien via `P
 - **THEN** antwortet der Server mit HTTP 413
 
 ### Requirement: Datei herunterladen
-Authentifizierte Nutzer mit `can_read` auf den enthaltenden Ordner SOLLEN Dateien via `GET /api/files/:id/download` herunterladen können. Der Server MUSS `Content-Disposition: attachment; filename="<original_name>"` setzen.
+Authentifizierte Nutzer mit `can_read` auf den enthaltenden Ordner SHALL Dateien via `GET /api/files/:id/download` herunterladen können. Der Server MUST `Content-Disposition: attachment; filename="<original_name>"` setzen.
 
 #### Scenario: Erfolgreicher Download
 - **WHEN** ein Nutzer mit `can_read` `GET /api/files/:id/download` aufruft
@@ -34,7 +34,7 @@ Authentifizierte Nutzer mit `can_read` auf den enthaltenden Ordner SOLLEN Dateie
 - **THEN** antwortet der Server mit HTTP 404
 
 ### Requirement: Ordnerinhalt auflisten
-Authentifizierte Nutzer mit `can_read` SOLLEN via `GET /api/folders/:id/contents` Unterordner und Dateien auflisten können. Die Antwort MUSS `folders` (id, name, has_children) und `files` (id, name, size, mime_type, uploaded_by_name, created_at) enthalten.
+Authentifizierte Nutzer mit `can_read` SHALL via `GET /api/folders/:id/contents` Unterordner und Dateien auflisten können. Die Antwort MUST `folders` (id, name, has_children) und `files` (id, name, size, mime_type, uploaded_by_name, created_at) enthalten.
 
 #### Scenario: Erfolgreiche Auflistung
 - **WHEN** ein Nutzer mit `can_read` den Inhalt eines Ordners abruft
@@ -45,7 +45,7 @@ Authentifizierte Nutzer mit `can_read` SOLLEN via `GET /api/folders/:id/contents
 - **THEN** antwortet der Server mit HTTP 403
 
 ### Requirement: Datei löschen
-Nutzer mit `can_write` auf den enthaltenden Ordner SOLLEN Dateien via `DELETE /api/files/:id` löschen können. Admin darf immer löschen. DB-Eintrag und Datei auf Disk werden entfernt.
+Nutzer mit `can_write` auf den enthaltenden Ordner SHALL Dateien via `DELETE /api/files/:id` löschen können. Admin darf immer löschen. DB-Eintrag und Datei auf Disk werden entfernt.
 
 #### Scenario: Erfolgreiche Löschung
 - **WHEN** ein Nutzer mit `can_write` `DELETE /api/files/:id` aufruft

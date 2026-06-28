@@ -8,7 +8,7 @@ Diese Spezifikation beschreibt die Capability `kind-profil`. (Automatisch normal
 
 ### Requirement: Eltern sehen Kind-Einträge in der Navigation
 
-Für Nutzer mit Rolle `elternteil` MÜSSEN unterhalb des Navigations-Eintrags „Mein Profil" dynamische Einträge für jedes verknüpfte Kind angezeigt werden. Die Einträge zeigen den Vornamen des Kindes als Label (z.B. „Jannes Profil"). Kinder ohne `family_links`-Verknüpfung erscheinen nicht.
+Für Nutzer mit Rolle `elternteil` MUST unterhalb des Navigations-Eintrags „Mein Profil" dynamische Einträge für jedes verknüpfte Kind angezeigt werden. Die Einträge zeigen den Vornamen des Kindes als Label (z.B. „Jannes Profil"). Kinder ohne `family_links`-Verknüpfung erscheinen nicht.
 
 #### Scenario: Elternteil mit einem Kind
 
@@ -27,7 +27,7 @@ Für Nutzer mit Rolle `elternteil` MÜSSEN unterhalb des Navigations-Eintrags �
 
 ### Requirement: Strikte family_links-Autorisierung auf allen Kind-Endpunkten
 
-Jeder Endpunkt unter `/api/profile/kind/:memberId` (GET, PUT /member, PUT /bank) MUSS als erste Operation prüfen, ob ein Eintrag in `family_links` mit `parent_user_id = <eingeloggter User>` AND `member_id = <memberId>` existiert. Fehlt dieser Eintrag, MUSS der Endpunkt sofort mit HTTP 403 antworten — unabhängig von der Rolle des anfragenden Nutzers. Die Autorisierungsprüfung DARF NICHT durch Kenntnis einer fremden memberId umgangen werden können.
+Jeder Endpunkt unter `/api/profile/kind/:memberId` (GET, PUT /member, PUT /bank) MUST als erste Operation prüfen, ob ein Eintrag in `family_links` mit `parent_user_id = <eingeloggter User>` AND `member_id = <memberId>` existiert. Fehlt dieser Eintrag, MUST der Endpunkt sofort mit HTTP 403 antworten — unabhängig von der Rolle des anfragenden Nutzers. Die Autorisierungsprüfung DARF NICHT durch Kenntnis einer fremden memberId umgangen werden können.
 
 #### Scenario: Elternteil greift auf eigenes Kind zu
 
@@ -51,7 +51,7 @@ Jeder Endpunkt unter `/api/profile/kind/:memberId` (GET, PUT /member, PUT /bank)
 
 ### Requirement: Route für Kindprofil
 
-Das System MUSS eine Route `/profil/kind/:memberId` bereitstellen, die das Profil eines verknüpften Kindes anzeigt. Das Frontend MUSS bei HTTP 403-Antwort des Backends zur Startseite weiterleiten und keinen Profilinhalt anzeigen.
+Das System MUST eine Route `/profil/kind/:memberId` bereitstellen, die das Profil eines verknüpften Kindes anzeigt. Das Frontend MUST bei HTTP 403-Antwort des Backends zur Startseite weiterleiten und keinen Profilinhalt anzeigen.
 
 #### Scenario: Gültiger Aufruf mit verknüpftem Kind
 
@@ -65,7 +65,7 @@ Das System MUSS eine Route `/profil/kind/:memberId` bereitstellen, die das Profi
 
 ### Requirement: Backend-Endpunkt zum Lesen des Kindprofils
 
-Das System MUSS einen Endpunkt `GET /api/profile/kind/:memberId` bereitstellen, der das vollständige Profil eines Kindes zurückgibt. Die Autorisierung erfolgt ausschließlich über die `family_links`-Tabelle (siehe Requirement „Strikte family_links-Autorisierung").
+Das System MUST einen Endpunkt `GET /api/profile/kind/:memberId` bereitstellen, der das vollständige Profil eines Kindes zurückgibt. Die Autorisierung erfolgt ausschließlich über die `family_links`-Tabelle (siehe Requirement „Strikte family_links-Autorisierung").
 
 #### Scenario: Berechtigter Elternteil liest Kindprofil
 
@@ -79,7 +79,7 @@ Das System MUSS einen Endpunkt `GET /api/profile/kind/:memberId` bereitstellen, 
 
 ### Requirement: Eltern können Mitgliedsdaten des Kindes bearbeiten
 
-Das System MUSS einen Endpunkt `PUT /api/profile/kind/:memberId/member` bereitstellen. Eltern DÜRFEN folgende Felder bearbeiten: Vorname, Nachname, Geburtsdatum, Trikot-Nummer, Position, Straße, PLZ, Ort.
+Das System MUST einen Endpunkt `PUT /api/profile/kind/:memberId/member` bereitstellen. Eltern DÜRFEN folgende Felder bearbeiten: Vorname, Nachname, Geburtsdatum, Trikot-Nummer, Position, Straße, PLZ, Ort.
 
 #### Scenario: Mitgliedsdaten erfolgreich aktualisiert
 
@@ -93,7 +93,7 @@ Das System MUSS einen Endpunkt `PUT /api/profile/kind/:memberId/member` bereitst
 
 ### Requirement: Eltern können Bankdaten des Kindes bearbeiten
 
-Das System MUSS einen Endpunkt `PUT /api/profile/kind/:memberId/bank` bereitstellen, mit dem Eltern `iban` und `account_holder` in der `members`-Tabelle setzen können.
+Das System MUST einen Endpunkt `PUT /api/profile/kind/:memberId/bank` bereitstellen, mit dem Eltern `iban` und `account_holder` in der `members`-Tabelle setzen können.
 
 #### Scenario: Bankdaten erfolgreich gesetzt
 
@@ -107,7 +107,7 @@ Das System MUSS einen Endpunkt `PUT /api/profile/kind/:memberId/bank` bereitstel
 
 ### Requirement: Eltern können Adresse des Kindes bearbeiten
 
-Der Endpunkt `PUT /api/profile/kind/:memberId/member` MUSS die Felder `street`, `zip`, `city` in der `members`-Tabelle des Kindes speichern.
+Der Endpunkt `PUT /api/profile/kind/:memberId/member` MUST die Felder `street`, `zip`, `city` in der `members`-Tabelle des Kindes speichern.
 
 #### Scenario: Adresse gesetzt
 
@@ -116,7 +116,7 @@ Der Endpunkt `PUT /api/profile/kind/:memberId/member` MUSS die Felder `street`, 
 
 ### Requirement: Kindprofil zeigt Tab Kontakt, Mitgliedsdaten, Bankdaten
 
-Die Seite `/profil/kind/:memberId` MUSS dieselben Tab-Komponenten wie „Mein Profil" nutzen — jedoch ohne den „Konto"-Tab und den „Sonstiges"-Tab. Wenn das Kind einen verlinkten User-Account hat (`member.user_id != null`), MÜSSEN der Kontakt-Tab Telefonnummern-Verwaltung und Sichtbarkeitseinstellungen aus dem `user_contact`-Objekt des API-Response anzeigen und bearbeiten. Das Speichern MUSS sowohl `PUT /profile/kind/{id}/account` (User-Strang sofort) als auch `POST /members/{id}/change-request` (Member-Strang via Draft) aufrufen.
+Die Seite `/profil/kind/:memberId` MUST dieselben Tab-Komponenten wie „Mein Profil" nutzen — jedoch ohne den „Konto"-Tab und den „Sonstiges"-Tab. Wenn das Kind einen verlinkten User-Account hat (`member.user_id != null`), MUST der Kontakt-Tab Telefonnummern-Verwaltung und Sichtbarkeitseinstellungen aus dem `user_contact`-Objekt des API-Response anzeigen und bearbeiten. Das Speichern MUST sowohl `PUT /profile/kind/{id}/account` (User-Strang sofort) als auch `POST /members/{id}/change-request` (Member-Strang via Draft) aufrufen.
 
 #### Scenario: Kind ohne User-Account
 

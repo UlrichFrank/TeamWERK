@@ -7,7 +7,7 @@ Diese Spezifikation beschreibt die Capability `dienstkonto-dynamische-soll-forme
 ## Requirements
 
 ### Requirement: Dynamische soll-Berechnung für Elternteil
-Der `/api/dashboard`-Endpoint berechnet `dutyAccount.soll` für Elternteile dynamisch aus Kader-Daten statt pauschal.
+Der `/api/dashboard`-Endpoint MUST `dutyAccount.soll` für Elternteile dynamisch aus Kader-Daten berechnen statt pauschal.
 
 Formel pro verknüpftem Kind:
 ```
@@ -41,10 +41,15 @@ wobei:
 - **THEN** Kind wird übersprungen, kein Beitrag zu soll
 
 ### Requirement: Datenschutz
-Kein Elternteil sieht das Dienstkonto oder den soll-Wert des anderen Elternteils. Jedes Konto wird individuell berechnet und ausgegeben.
+Das System MUST sicherstellen, dass kein Elternteil das Dienstkonto oder den soll-Wert des anderen Elternteils sieht. Jedes Konto wird individuell berechnet und ausgegeben.
+
+#### Scenario: Zwei Elternteile sehen unterschiedliche Dienstkonten
+
+- **WHEN** zwei Elternteile mit demselben Kind jeweils das Dashboard laden
+- **THEN** sieht jedes Elternteil nur sein eigenes Dienstkonto, nicht das des anderen
 
 ### Requirement: Erklärtext im Frontend
-DutyAccountTile zeigt für Elternteile: „Ziel: {soll} Dienste (Saison {season.name})" — keine Formel-Details sichtbar.
+DutyAccountTile SHALL für Elternteile den Text „Ziel: {soll} Dienste (Saison {season.name})" anzeigen — keine Formel-Details sichtbar.
 
 #### Scenario: soll = 0 (nicht konfiguriert)
 - **WHEN** soll = 0

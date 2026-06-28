@@ -53,7 +53,7 @@ Das System SHALL die CSV-Spalte `Grund für Beitragsfreiheit` auf das Feld `memb
 - **THEN** bleibt `members.beitragsfrei_grund='Zweitspielrecht'`
 
 ### Requirement: Enrich-Modus im CSV-Import
-Das System MUSS einen dritten Import-Modus `enrich` unterstützen. In diesem Modus werden ausschließlich leere Felder bestehender Mitglieder befüllt. Es werden keine neuen Mitglieder angelegt und keine belegten Felder überschrieben.
+Das System MUST einen dritten Import-Modus `enrich` unterstützen. In diesem Modus werden ausschließlich leere Felder bestehender Mitglieder befüllt. Es werden keine neuen Mitglieder angelegt und keine belegten Felder überschrieben.
 
 #### Scenario: Leeres Feld wird ergänzt
 - **WHEN** eine CSV-Zeile auf ein bestehendes Mitglied matcht und ein Feld in der DB leer (NULL oder leer) ist, das in der CSV einen Wert enthält
@@ -72,7 +72,7 @@ Das System MUSS einen dritten Import-Modus `enrich` unterstützen. In diesem Mod
 - **THEN** erhält die Zeile Status `unchanged`
 
 ### Requirement: Matching-Strategie im Enrich-Modus
-Das System MUSS Mitglieder zuerst via Vorname+Nachname+Geburtsdatum suchen. Fehlt das Geburtsdatum in der CSV, MUSS auf Vorname+Nachname-Matching zurückgefallen werden.
+Das System MUST Mitglieder zuerst via Vorname+Nachname+Geburtsdatum suchen. Fehlt das Geburtsdatum in der CSV, MUST auf Vorname+Nachname-Matching zurückgefallen werden.
 
 #### Scenario: Eindeutiges Match ohne Geburtsdatum
 - **WHEN** die CSV kein Geburtsdatum enthält und genau ein Mitglied mit übereinstimmendem Vor- und Nachname existiert
@@ -83,7 +83,7 @@ Das System MUSS Mitglieder zuerst via Vorname+Nachname+Geburtsdatum suchen. Fehl
 - **THEN** erhält die Zeile Status `error` mit Meldung „mehrdeutig (N Treffer)"
 
 ### Requirement: IBAN-Behandlung im Enrich-Modus
-IBAN und Kontoinhaber MÜSSEN im Enrich-Modus denselben „nur leer befüllen"-Regeln folgen wie alle anderen Felder. Die MOD-97-Validierung MUSS weiterhin ausgeführt werden.
+IBAN und Kontoinhaber MUST im Enrich-Modus denselben „nur leer befüllen"-Regeln folgen wie alle anderen Felder. Die MOD-97-Validierung MUST weiterhin ausgeführt werden.
 
 #### Scenario: IBAN ergänzen wenn leer
 - **WHEN** das IBAN-Feld in der DB leer ist und die CSV eine gültige IBAN enthält
@@ -98,7 +98,7 @@ IBAN und Kontoinhaber MÜSSEN im Enrich-Modus denselben „nur leer befüllen"-R
 - **THEN** wird die CSV-IBAN ignoriert, unabhängig davon ob sie identisch oder verschieden ist
 
 ### Requirement: ImportReport-Erweiterung
-Das System MUSS den `ImportReport` um einen `not_found`-Zähler erweitern und `ImportRow` MUSS den neuen Status `not_found` unterstützen.
+Das System MUST den `ImportReport` um einen `not_found`-Zähler erweitern und `ImportRow` MUST den neuen Status `not_found` unterstützen.
 
 #### Scenario: not_found-Zähler im Summary
 - **WHEN** der Import abgeschlossen ist und N Zeilen keinen Match hatten
@@ -109,7 +109,7 @@ Das System MUSS den `ImportReport` um einen `not_found`-Zähler erweitern und `I
 - **THEN** enthält `ImportRow` `status: "not_found"`, `name` aus der CSV und optional `dob`
 
 ### Requirement: Frontend-Modus-Auswahl
-Das Frontend MUSS einen dritten Radio-Button „Nur leere Felder ergänzen" im Import-Dialog anzeigen, der den `enrich`-Modus auswählt.
+Das Frontend MUST einen dritten Radio-Button „Nur leere Felder ergänzen" im Import-Dialog anzeigen, der den `enrich`-Modus auswählt.
 
 #### Scenario: Modus auswählen
 - **WHEN** der Nutzer „Nur leere Felder ergänzen" auswählt und die Vorschau startet

@@ -7,7 +7,7 @@ Kurzlebige, signierte Download-Tokens ermöglichen es, Dateien direkt per URL zu
 
 ### Requirement: Download-Token ausstellen
 
-Das System MUSS authentifizierten Nutzern erlauben, ein kurzlebiges Download-Token für eine Datei auszustellen, auf die sie Lesezugriff haben. Das Token MUSS HMAC-SHA256-signiert sein (Schlüssel: `JWT_SECRET`), eine TTL von 5 Minuten haben und die File-ID sowie User-ID einschließen. Es DARF kein DB-Eintrag erzeugt werden.
+Das System MUST authentifizierten Nutzern erlauben, ein kurzlebiges Download-Token für eine Datei auszustellen, auf die sie Lesezugriff haben. Das Token MUST HMAC-SHA256-signiert sein (Schlüssel: `JWT_SECRET`), eine TTL von 5 Minuten haben und die File-ID sowie User-ID einschließen. Es DARF kein DB-Eintrag erzeugt werden.
 
 Endpoint: `GET /api/files/{id}/download-token`
 Response: `{ "token": "<base64url_payload>.<base64url_sig>" }`
@@ -26,7 +26,7 @@ Response: `{ "token": "<base64url_payload>.<base64url_sig>" }`
 
 ### Requirement: Datei per Token herunterladen
 
-Der Download-Endpoint `GET /api/files/{id}/download` MUSS zusätzlich zum Authorization-Header auch einen `?token=`-Query-Parameter akzeptieren. Das Token MUSS auf gültige Signatur, Ablauf (exp), und Übereinstimmung mit der URL-File-ID geprüft werden. Bei gültigem Token MUSS die Berechtigungsprüfung (Lesezugriff auf Ordner) erneut durchgeführt werden.
+Der Download-Endpoint `GET /api/files/{id}/download` MUST zusätzlich zum Authorization-Header auch einen `?token=`-Query-Parameter akzeptieren. Das Token MUST auf gültige Signatur, Ablauf (exp), und Übereinstimmung mit der URL-File-ID geprüft werden. Bei gültigem Token MUST die Berechtigungsprüfung (Lesezugriff auf Ordner) erneut durchgeführt werden.
 
 #### Scenario: Gültiges Token
 - **WHEN** ein Browser `GET /api/files/42/download?token=<valid_token>` aufruft

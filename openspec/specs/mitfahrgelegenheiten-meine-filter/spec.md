@@ -37,6 +37,11 @@ Der Filter ist für alle Rollen sichtbar und aktiv.
 
 ### Requirement: Tab-Counts spiegeln den aktiven Filter
 
-**Reason**: Die Tab-Navigation (Auswärtsspiele / Heimspiele / Events) wird durch eine einzige chronologische Liste mit Pill-Filtern ersetzt. Es gibt keine Tabs mehr, also auch keine Tab-Counts. Die Anzahl der sichtbaren Spiele ergibt sich implizit aus der Listendarstellung.
+Die Tab-Navigation SHALL durch eine einzige chronologische Liste mit Pill-Filtern ersetzt werden. Es gibt keine Tabs mehr, also auch keine Tab-Counts. Die Anzahl der sichtbaren Spiele ergibt sich implizit aus der Listendarstellung.
 
 **Migration**: Keine Anpassung im Client nötig — der Counter war reine UI-Anzeige. Falls eine Mengenanzeige gewünscht ist, kann ein optionaler Header über der Liste die Gesamtzahl der sichtbaren Spiele anzeigen (außerhalb dieses Changes).
+
+#### Scenario: Keine Tab-Navigation mehr vorhanden
+
+- **WHEN** ein Nutzer die Mitfahrgelegenheiten-Seite öffnet
+- **THEN** sind keine Tabs (Auswärtsspiele / Heimspiele / Events) mehr sichtbar, sondern Pill-Filter

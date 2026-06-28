@@ -49,7 +49,7 @@ Die Emojis `🏠` (Heimspiel) und `🚌` (Auswärtsspiel) in der `NextGamesList`
 ---
 
 ### Requirement: Dashboard-Ladeanimation verwendet Brand-Tokens
-Der Skeleton-Loader im Dashboard (`bg-black/5 animate-pulse`) MUSS durch `bg-brand-border-subtle animate-pulse` ersetzt werden.
+Der Skeleton-Loader im Dashboard (`bg-black/5 animate-pulse`) MUST durch `bg-brand-border-subtle animate-pulse` ersetzt werden.
 
 #### Scenario: Lade-Skeleton hat Brand-Farbe
 - **WHEN** das Dashboard im Ladezustand gerendert wird
@@ -60,7 +60,7 @@ Der Skeleton-Loader im Dashboard (`bg-black/5 animate-pulse`) MUSS durch `bg-bra
 
 ### Requirement: Dashboard-Sektion Fahrtgemeinschaften wird zu Link
 
-Die bisherige `VehicleSection`-Komponente in der „Fahrtgemeinschaften"-Accordion-Sektion wird durch eine kompakte Link-Karte zur neuen `/mitfahrgelegenheiten`-Seite ersetzt.
+Die bisherige `VehicleSection`-Komponente in der „Fahrtgemeinschaften"-Accordion-Sektion SHALL durch eine kompakte Link-Karte zur neuen `/mitfahrgelegenheiten`-Seite ersetzt werden.
 
 **Vorher:** Zeigt Fahrzeuginfo (Sitzplätze) und Link zu `/profil`.
 
