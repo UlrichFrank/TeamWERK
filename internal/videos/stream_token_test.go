@@ -68,7 +68,7 @@ func TestStreamToken_Tampered(t *testing.T) {
 
 	// Flip a character in the signature part.
 	enc, sig, _ := strings.Cut(tok, ".")
-	tamperedSig := sig
+	var tamperedSig string
 	if sig[0] == 'A' {
 		tamperedSig = "B" + sig[1:]
 	} else {

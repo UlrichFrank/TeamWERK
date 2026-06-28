@@ -163,13 +163,6 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// tusHandler hält den gemounteten tus-Handler. Wird in NewTusHandler erzeugt und
-// in router.go unter /api/videos/upload/ gemountet.
-type tusHandler struct {
-	h    *Handler
-	tusd *tusd.Handler
-}
-
 // NewTusHandler baut den tusd-Handler über einem FileStore unter {root}/uploads,
 // aktiviert die Completion-Notifications und startet die Hook-Goroutine, die
 // fertige Uploads verarbeitet. Der Goroutine-Lebenszyklus ist an ctx gebunden.
