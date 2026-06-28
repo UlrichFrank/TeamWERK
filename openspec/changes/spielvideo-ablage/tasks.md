@@ -47,12 +47,12 @@
 
 ## 6. Backend — CRUD und Liste (Capability video-management)
 
-- [ ] 6.1 `GET /api/videos`: liefert berechtigte Videos (JOIN über `team_memberships` / `team_trainers` / `family_links` / Rolle), Filter `?team_id=`, `?status=`, Paginierung `limit/offset`; Format `{ items, total }`
-- [ ] 6.2 `GET /api/videos/{id}`: Details inkl. Status; 404 wenn nicht sichtbar
-- [ ] 6.3 `PATCH /api/videos/{id}`: Titel/Beschreibung/`game_id` ändern; Auth via `CanManageTeamVideos`
-- [ ] 6.4 `DELETE /api/videos/{id}`: Auth-Check; DB-Zeile löschen; alle Dateien (`raw/{id}.mp4`, `processed/{id}/`) entfernen; Broadcast `video-deleted`
-- [ ] 6.5 Routen in `internal/app/router.go` registrieren (`/api/videos/...`) — Auth-Tier "Authenticated", Upload-Routen "Vorstand+Trainer+sportl. Leitung+Admin"
-- [ ] 6.6 Tests: Liste filtert korrekt nach Berechtigung (Spieler, Elternteil, Trainer, Vorstand), 403/404 bei Zugriffsversuch auf fremdes Team, 200 + Datei-Löschung bei DELETE
+- [x] 6.1 `GET /api/videos`: liefert berechtigte Videos (JOIN über `team_memberships` / `team_trainers` / `family_links` / Rolle), Filter `?team_id=`, `?status=`, Paginierung `limit/offset`; Format `{ items, total }`
+- [x] 6.2 `GET /api/videos/{id}`: Details inkl. Status; 404 wenn nicht sichtbar
+- [x] 6.3 `PATCH /api/videos/{id}`: Titel/Beschreibung/`game_id` ändern; Auth via `CanManageTeamVideos`
+- [x] 6.4 `DELETE /api/videos/{id}`: Auth-Check; DB-Zeile löschen; alle Dateien (`raw/{id}.mp4`, `processed/{id}/`) entfernen; Broadcast `video-deleted`
+- [x] 6.5 Routen in `internal/app/router.go` registrieren (`/api/videos/...`) — Auth-Tier "Authenticated", Upload-Routen "Vorstand+Trainer+sportl. Leitung+Admin"
+- [x] 6.6 Tests: Liste filtert korrekt nach Berechtigung (Spieler, Elternteil, Trainer, Vorstand), 403/404 bei Zugriffsversuch auf fremdes Team, 200 + Datei-Löschung bei DELETE
 
 ## 7. Backend — Retention (Scheduler)
 

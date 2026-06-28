@@ -290,6 +290,14 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// CanViewVideo prüft die Team-Berechtigung; die HLS-Auslieferung selbst
 		// läuft Token-geschützt im Public-Tier (siehe oben).
 		r.Get("/api/videos/{id}/play", h.Videos.Play)
+		// Spielvideos -- Liste/Detail/CRUD. Alle im Authenticated-Tier: die
+		// Handler pruefen Sichtbarkeit (List/Get via CanViewVideo) bzw.
+		// Verwaltungsrecht (PATCH/DELETE via CanManageTeamVideos) selbst.
+		// Upload-Routen werden separat registriert (eigener Tier).
+		r.Get("/api/videos", h.Videos.List)
+		r.Get("/api/videos/{id}", h.Videos.Get)
+		r.Patch("/api/videos/{id}", h.Videos.Update)
+		r.Delete("/api/videos/{id}", h.Videos.Delete)
 
 		// Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
