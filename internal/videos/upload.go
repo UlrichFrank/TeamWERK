@@ -2,6 +2,7 @@ package videos
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -79,6 +80,40 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Referenzielle Validierung VOR der Berechtigungsprüfung und dem INSERT:
+	// team_id/season_id/game_id müssen existieren. Ohne diese Prüfung würde der
+	// FK-Constraint erst beim INSERT zuschlagen und einen nichtssagenden 500
+	// (Server-Fehler-Leak) erzeugen; bei admin/vorstand/sportliche_leitung
+	// liefert CanUploadToTeam zudem für *jede* — auch nicht existente — Team-ID
+	// `true`, sodass die Autorisierung sonst gegen ein Phantom-Team entschiede.
+	if exists, err := h.rowExists("SELECT 1 FROM teams WHERE id = ?", req.TeamID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	} else if !exists {
+		http.Error(w, "unknown team_id", http.StatusBadRequest)
+		return
+	}
+	if exists, err := h.rowExists("SELECT 1 FROM seasons WHERE id = ?", req.SeasonID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	} else if !exists {
+		http.Error(w, "unknown season_id", http.StatusBadRequest)
+		return
+	}
+	if req.GameID != nil {
+		if *req.GameID <= 0 {
+			http.Error(w, "invalid game_id", http.StatusBadRequest)
+			return
+		}
+		if exists, err := h.rowExists("SELECT 1 FROM games WHERE id = ?", *req.GameID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		} else if !exists {
+			http.Error(w, "unknown game_id", http.StatusBadRequest)
+			return
+		}
+	}
+
 	ok, err := h.CanUploadToTeam(claims, req.TeamID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -148,10 +183,16 @@ func (h *Handler) NewTusHandler(ctx context.Context) (http.Handler, error) {
 	store.UseIn(composer)
 
 	th, err := tusd.NewHandler(tusd.Config{
-		BasePath:              "/api/videos/upload/",
-		StoreComposer:         composer,
-		MaxSize:               maxUploadSize,
-		NotifyCompleteUploads: true,
+		BasePath:      "/api/videos/upload/",
+		StoreComposer: composer,
+		MaxSize:       maxUploadSize,
+		// PreUploadCreateCallback bindet die tus-Session an den authentifizierten
+		// Eigentümer der vorab angelegten videos-Zeile und macht den Disk-Guard
+		// gegen die *deklarierte* Upload-Länge autoritativ (Findings 1a + 2). Ein
+		// non-nil error lässt tusd die Session-Erstellung ablehnen (siehe
+		// unrouted_handler.PostFile → sendError).
+		PreUploadCreateCallback: h.preUploadCreate,
+		NotifyCompleteUploads:   true,
 	})
 	if err != nil {
 		return nil, err
@@ -160,6 +201,103 @@ func (h *Handler) NewTusHandler(ctx context.Context) (http.Handler, error) {
 	go h.consumeCompletedUploads(ctx, th.CompleteUploads)
 
 	return th, nil
+}
+
+// preUploadCreate ist der tusd PreUploadCreateCallback. Er läuft bei der
+// Erzeugung der tus-Session (POST an /api/videos/upload/) — nachdem die
+// auth.Middleware + RequireClubFunction den Request passieren ließen, sodass
+// hook.Context die Claims trägt (tusd kopiert den Request-Kontext werterhaltend,
+// siehe handler/context.go). Er erzwingt zwei Invarianten und lehnt die Session
+// mit einem Fehler ab, falls eine verletzt ist (tusd erstellt dann nichts):
+//
+//   - Finding 1a (IDOR-Bindung): Die in der tus-Metadata mitgegebene video_id
+//     MUSS auf eine videos-Zeile mit status='uploading' zeigen, die der
+//     authentifizierte Aufrufer selbst angelegt hat (created_by). So kann eine
+//     Session nicht an eine fremde oder bereits fertige Zeile gebunden werden.
+//   - Finding 2 (Disk-Guard autoritativ): Der Platz-Check läuft gegen die von
+//     tusd erzwungene, *deklarierte* Upload-Länge (hook.Upload.Size), nicht
+//     gegen das vom Client frei wählbare size_bytes der POST-Init.
+//
+// FileInfoChanges bleibt leer (keine Metadaten-/ID-Überschreibung).
+func (h *Handler) preUploadCreate(hook tusd.HookEvent) (tusd.HTTPResponse, tusd.FileInfoChanges, error) {
+	var noChanges tusd.FileInfoChanges
+
+	claims := auth.ClaimsFromCtx(hook.Context)
+	if claims == nil {
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_UNAUTHENTICATED", "upload session requires authentication", http.StatusUnauthorized)
+	}
+
+	idStr := hook.Upload.MetaData["video_id"]
+	videoID, err := strconv.Atoi(idStr)
+	if err != nil || videoID <= 0 {
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_BAD_VIDEO_ID", "missing or invalid video_id metadata", http.StatusBadRequest)
+	}
+
+	// Eigentums- und Status-Bindung: nur eine eigene, noch im Upload befindliche
+	// Zeile darf bespielt werden. Liefert KEINE Zeile bei fremdem Besitzer,
+	// falscher ID oder bereits abgeschlossenem (queued/processing/ready/failed)
+	// Upload — in allen Fällen wird die Session verweigert.
+	var rowSize sql.NullInt64
+	err = h.db.QueryRowContext(hook.Context,
+		`SELECT size_bytes FROM videos WHERE id = ? AND status = 'uploading' AND created_by = ?`,
+		videoID, claims.UserID).Scan(&rowSize)
+	if errors.Is(err, sql.ErrNoRows) {
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_NOT_OWNED", "no owned uploading video for this id", http.StatusForbidden)
+	}
+	if err != nil {
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_LOOKUP", "could not verify upload ownership", http.StatusInternalServerError)
+	}
+
+	// Deklarierte Upload-Länge (das, was tusd hart durchsetzt). Bei deferred
+	// length ist Size beim Create 0 — wir verlangen eine vorab deklarierte Länge,
+	// damit der Disk-Guard greifen kann.
+	declared := hook.Upload.Size
+	if hook.Upload.SizeIsDeferred || declared <= 0 {
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_LENGTH_REQUIRED", "upload length must be declared", http.StatusBadRequest)
+	}
+	if declared > maxUploadSize {
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_TOO_LARGE", "declared upload length exceeds maximum", http.StatusRequestEntityTooLarge)
+	}
+	// Plausibilität: die deklarierte Länge darf die bei der POST-Init notierte
+	// Größe nicht grob übersteigen (kleiner Toleranzfaktor für Container-Overhead).
+	if rowSize.Valid && rowSize.Int64 > 0 && declared > rowSize.Int64*2 {
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_SIZE_MISMATCH", "declared upload length far exceeds announced size", http.StatusBadRequest)
+	}
+
+	// Disk-Guard (autoritativ): free ≥ declared × 2.5 + RESERVED. declared ist
+	// durch maxUploadSize (2 GiB) begrenzt, also überläuft die float64-Konversion
+	// nicht (2 GiB × 2.5 ≪ math.MaxUint64).
+	needed := uint64(float64(declared) * 2.5)
+	if err := RequireFreeBytes(h.cfg.VideoStorageDir, needed, h.cfg.VideoReservedBytes); err != nil {
+		if errors.Is(err, ErrInsufficientDiskSpace) {
+			return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+				"ERR_UPLOAD_INSUFFICIENT_STORAGE", "insufficient storage for declared upload", http.StatusInsufficientStorage)
+		}
+		return tusd.HTTPResponse{}, noChanges, tusd.NewError(
+			"ERR_UPLOAD_DISK_CHECK", "could not verify free space", http.StatusInternalServerError)
+	}
+
+	return tusd.HTTPResponse{}, noChanges, nil
+}
+
+// rowExists meldet, ob die gegebene 1-Spalten-Existenz-Query eine Zeile liefert.
+func (h *Handler) rowExists(query string, args ...any) (bool, error) {
+	var one int
+	err := h.db.QueryRow(query, args...).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // consumeCompletedUploads verarbeitet abgeschlossene tus-Uploads, bis ctx endet.
@@ -198,6 +336,15 @@ func (h *Handler) handleCompletedUpload(ev tusd.HookEvent) {
 // finishUpload verschiebt die fertige Upload-Datei nach raw/{id}.mp4, ermittelt
 // per ffprobe die Dauer, setzt status='queued' samt size/duration/upload_id und
 // broadcastet "video-queued". Als testbare Einheit extrahiert.
+//
+// Die Statustransition ist konditional und atomar (Finding 1b, Defense in
+// Depth): das UPDATE greift nur, solange die Zeile noch status='uploading' hat.
+// Trifft es null Zeilen — die Zeile existiert nicht (mehr), gehört einem anderen
+// Upload oder ist bereits queued/processing/ready/failed — wird das als
+// Hijack-/Race-Versuch gewertet: die soeben nach raw/{id}.mp4 verschobene Datei
+// wird wieder entfernt (kein hängender Klau-Artefakt) und ein Fehler
+// zurückgegeben. So bleibt das Ziel auch dann unangetastet, wenn der
+// PreUploadCreateCallback umgangen würde.
 func (h *Handler) finishUpload(videoID int, srcPath, uploadID string, size int64) error {
 	root := h.cfg.VideoStorageDir
 	rawPath := RawPath(root, videoID)
@@ -210,24 +357,44 @@ func (h *Handler) finishUpload(videoID int, srcPath, uploadID string, size int64
 
 	duration, err := probeDurationSec(rawPath)
 	if err != nil {
+		// raw-Datei nicht zurücklassen (sonst Müll bzw. Überschreibung eines
+		// fremden raw/{id}.mp4, falls videoID gekapert wurde).
+		_ = os.Remove(rawPath)
 		return err
 	}
 
-	if _, err := h.db.Exec(
+	res, err := h.db.Exec(
 		`UPDATE videos SET status='queued', size_bytes=?, duration_sec=?, upload_id=?, failure_reason=NULL
-		 WHERE id=?`,
-		size, duration, uploadID, videoID); err != nil {
+		 WHERE id=? AND status='uploading'`,
+		size, duration, uploadID, videoID)
+	if err != nil {
+		_ = os.Remove(rawPath)
 		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		_ = os.Remove(rawPath)
+		return err
+	}
+	if affected != 1 {
+		// Kein passender 'uploading'-Datensatz: abgelehnt. Die verschobene Datei
+		// entfernen, damit kein Video gekapert/überschrieben bleibt.
+		_ = os.Remove(rawPath)
+		return errors.New("finishUpload: no uploading video row for id (rejected)")
 	}
 
 	h.hub.Broadcast("video-queued")
 	return nil
 }
 
-// markVideoFailed setzt ein Video auf status='failed' mit Begründung (best effort).
+// markVideoFailed setzt ein Video auf status='failed' mit Begründung (best
+// effort). Die Bedingung status='uploading' ist sicherheitskritisch: schlägt
+// finishUpload für einen Hijack-Versuch (fremde/abgeschlossene Zeile) fehl,
+// dürfen wir das Opfer NICHT auf 'failed' umschreiben. Nur die noch im Upload
+// befindliche eigene Zeile wird angefasst.
 func (h *Handler) markVideoFailed(videoID int, reason string) {
 	if _, err := h.db.Exec(
-		`UPDATE videos SET status='failed', failure_reason=? WHERE id=?`,
+		`UPDATE videos SET status='failed', failure_reason=? WHERE id=? AND status='uploading'`,
 		reason, videoID); err != nil {
 		slog.Error("markVideoFailed: db update failed", "video_id", videoID, "error", err)
 	}

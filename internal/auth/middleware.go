@@ -111,3 +111,12 @@ func ClaimsFromCtx(ctx context.Context) *Claims {
 	c, _ := ctx.Value(claimsKey).(*Claims)
 	return c
 }
+
+// ContextWithClaims returns a child context carrying the given claims under the
+// same key the auth middleware uses, so ClaimsFromCtx can read them back. It
+// exists for callers that obtain a non-HTTP context derived from an
+// authenticated request (e.g. the tusd PreUploadCreateCallback, which receives a
+// copy of the request context) and for tests that need to inject claims.
+func ContextWithClaims(ctx context.Context, claims *Claims) context.Context {
+	return context.WithValue(ctx, claimsKey, claims)
+}
