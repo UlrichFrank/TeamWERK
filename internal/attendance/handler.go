@@ -573,3 +573,120 @@ func tallyCount(c *memberCounts, evType string, cat Category) {
 		}
 	}
 }
+
+// openItem ist ein vergangener Termin ohne Anwesenheits-Erfassung.
+type openItem struct {
+	EventType string `json:"event_type"` // "training" oder "game"
+	EventID   int    `json:"event_id"`
+	Date      string `json:"date"`
+	Title     string `json:"title"`
+}
+
+// GetTeamOpen — GET /api/teams/{id}/attendance-open
+// Liefert vergangene, nicht cancelled Termine des Teams in der aktiven
+// Saison, für die noch keine attendance-Zeile existiert.
+func (h *Handler) GetTeamOpen(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	teamID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var exists int
+	if err := h.db.QueryRowContext(r.Context(), `SELECT 1 FROM teams WHERE id = ?`, teamID).Scan(&exists); err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	ok, err := h.canSeeTeamStats(r.Context(), claims, teamID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	seasonID, startDate, _, err := h.resolveSeason(r.Context(), "")
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if seasonID == 0 {
+		// Keine aktive Saison: leere Liste statt Fehler — UI rendert dann
+		// keinen Banner.
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]openItem{})
+		return
+	}
+
+	items := []openItem{}
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT ts.id, ts.date,
+		       COALESCE(NULLIF(ts.title, ''), 'Training')
+		FROM training_sessions ts
+		WHERE ts.team_id = ?
+		  AND ts.season_id = ?
+		  AND ts.status != 'cancelled'
+		  AND date(ts.date) >= date(?)
+		  AND date(ts.date) < date('now')
+		  AND NOT EXISTS (
+		    SELECT 1 FROM training_attendances ta WHERE ta.training_id = ts.id
+		  )
+		ORDER BY ts.date, ts.id`,
+		teamID, seasonID, startDate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "GetTeamOpen trainings: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var it openItem
+		it.EventType = "training"
+		if err := rows.Scan(&it.EventID, &it.Date, &it.Title); err != nil {
+			rows.Close()
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		items = append(items, it)
+	}
+	rows.Close()
+
+	rows, err = h.db.QueryContext(r.Context(), `
+		SELECT g.id, g.date,
+		       COALESCE(NULLIF(g.opponent, ''), 'Spiel')
+		FROM games g
+		JOIN game_teams gt ON gt.game_id = g.id AND gt.team_id = ?
+		WHERE g.season_id = ?
+		  AND g.status != 'cancelled'
+		  AND date(g.date) >= date(?)
+		  AND date(g.date) < date('now')
+		  AND NOT EXISTS (
+		    SELECT 1 FROM game_attendances ga WHERE ga.game_id = g.id
+		  )
+		ORDER BY g.date, g.id`,
+		teamID, seasonID, startDate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "GetTeamOpen games: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var it openItem
+		it.EventType = "game"
+		if err := rows.Scan(&it.EventID, &it.Date, &it.Title); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		items = append(items, it)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
