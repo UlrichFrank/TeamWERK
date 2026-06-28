@@ -33,6 +33,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 	"github.com/teamstuttgart/teamwerk/internal/venues"
+	"github.com/teamstuttgart/teamwerk/internal/videos"
 )
 
 func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub) {
@@ -61,6 +62,7 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, t.TempDir()),
 		Calendar:       calendar.NewHandler(database),
+		Videos:         videos.NewHandler(database, hubInstance, cfg),
 		Hub:            hub.NewHandler(hubInstance, "test"),
 		JWTSecret:      testutil.TestJWTSecret,
 		Database:       database,

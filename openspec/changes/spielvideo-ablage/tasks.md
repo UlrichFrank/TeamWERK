@@ -37,13 +37,13 @@
 
 ## 5. Backend — Streaming (Capability video-stream)
 
-- [ ] 5.1 `internal/videos/stream_token.go`: HMAC-Signing mit `VIDEO_STREAM_SECRET`; Claims `{vid, uid, exp}`; `Sign(vid, uid)` und `Verify(token, vid) → uid, error`
-- [ ] 5.2 `.env.example` um `VIDEO_STREAM_SECRET` ergänzen; Config-Loader ergänzen; bei fehlendem Secret im Production-Modus Fail-Fast
-- [ ] 5.3 `GET /api/videos/{id}/play`: Auth-Check via `CanViewVideo`; signiert Token und gibt `{ token, master_url }` zurück
-- [ ] 5.4 Stream-Routen unter `/api/videos/{id}/hls/*`: Middleware verifiziert `?st=…`-Token gegen `vid` aus Pfad; bei Fehler 403
-- [ ] 5.5 `master.m3u8`-Auslieferung: liest Datei, ersetzt Rendition-URLs sodass `?st=…` mitgegeben wird
-- [ ] 5.6 Segment- und Rendition-Manifest-Auslieferung über `http.ServeContent` (Range-Support, ETag)
-- [ ] 5.7 Tests: 200 für gültigen Token, 403 für fehlenden/abgelaufenen/falscher-vid-Token, Range-Request liefert 206
+- [x] 5.1 `internal/videos/stream_token.go`: HMAC-Signing mit `VIDEO_STREAM_SECRET`; Claims `{vid, uid, exp}`; `Sign(vid, uid)` und `Verify(token, vid) → uid, error`
+- [x] 5.2 `.env.example` um `VIDEO_STREAM_SECRET` ergänzen; Config-Loader ergänzen; bei fehlendem Secret im Production-Modus Fail-Fast
+- [x] 5.3 `GET /api/videos/{id}/play`: Auth-Check via `CanViewVideo`; signiert Token und gibt `{ token, master_url }` zurück
+- [x] 5.4 Stream-Routen unter `/api/videos/{id}/hls/*`: Middleware verifiziert `?st=…`-Token gegen `vid` aus Pfad; bei Fehler 403
+- [x] 5.5 `master.m3u8`-Auslieferung: liest Datei, ersetzt Rendition-URLs sodass `?st=…` mitgegeben wird
+- [x] 5.6 Segment- und Rendition-Manifest-Auslieferung über `http.ServeContent` (Range-Support, ETag)
+- [x] 5.7 Tests: 200 für gültigen Token, 403 für fehlenden/abgelaufenen/falscher-vid-Token, Range-Request liefert 206
 
 ## 6. Backend — CRUD und Liste (Capability video-management)
 

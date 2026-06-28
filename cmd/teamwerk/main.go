@@ -46,6 +46,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 	"github.com/teamstuttgart/teamwerk/internal/venues"
+	"github.com/teamstuttgart/teamwerk/internal/videos"
 )
 
 //go:embed all:web/dist
@@ -165,6 +166,7 @@ func serve() {
 		Stammvereine:        stammvereine.NewHandler(database, hubInstance),
 		Calendar:            calendar.NewHandler(database),
 		Health:              health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
+		Videos:              videos.NewHandler(database, hubInstance, cfg),
 		Hub:                 hub.NewHandler(hubInstance, buildHash),
 		JWTSecret:           cfg.JWTSecret,
 		Database:            database,

@@ -100,6 +100,14 @@ func Load() (*Config, error) {
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
 	}
+	// Fail-Fast: Im Produktionsmodus (LOG_FORMAT != "text" — derselbe Schalter, der
+	// json- statt Klartext-Logs aktiviert, vgl. setupLogger) muss das Stream-Secret
+	// gesetzt sein. Ohne Secret könnten Stream-Token nicht signiert/verifiziert
+	// werden und Videos blieben unabspielbar. Lokal (LOG_FORMAT=text) bleibt es
+	// optional, damit Entwicklung ohne Video-Setup möglich ist.
+	if c.LogFormat != "text" && c.VideoStreamSecret == "" {
+		return nil, fmt.Errorf("VIDEO_STREAM_SECRET must be set in production (LOG_FORMAT != \"text\")")
+	}
 	return c, nil
 }
 

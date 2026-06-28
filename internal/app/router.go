@@ -35,6 +35,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 	"github.com/teamstuttgart/teamwerk/internal/venues"
+	"github.com/teamstuttgart/teamwerk/internal/videos"
 )
 
 // Handlers holds all HTTP handler instances needed to build the router.
@@ -61,6 +62,7 @@ type Handlers struct {
 	Stammvereine   *stammvereine.Handler
 	Calendar       *calendar.Handler
 	Health         *health.Handler
+	Videos         *videos.Handler
 	Hub            *hub.Handler
 
 	JWTSecret string
@@ -121,6 +123,15 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Get("/api/profile/email/confirm", h.Auth.ConfirmEmailChange)
 	r.Get("/api/profile/recovery-email/confirm", h.Auth.ConfirmRecoveryEmailChange)
 	r.Get("/api/calendar/feed/{token}", h.Calendar.Feed)
+	// HLS-Streaming: KEINE JWT-Auth — hls.js kann keinen Bearer-Header senden.
+	// Stattdessen schützt der kurzlebige Stream-Token im ?st=-Query (Verifikation
+	// gegen das {id}-Pfadsegment in StreamTokenMiddleware). Der Token wird über
+	// GET /api/videos/{id}/play (Authenticated-Tier) ausgegeben.
+	r.Route("/api/videos/{id}/hls", func(r chi.Router) {
+		r.Use(h.Videos.StreamTokenMiddleware)
+		r.Get("/master.m3u8", h.Videos.ServeMaster)
+		r.Get("/{rendition}/{segment}", h.Videos.ServeRenditionFile)
+	})
 	// Öffentlicher Gruppen-Schlüssel zum Verschlüsseln von Bankdaten (nicht geheim;
 	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).
 	r.Get("/api/encryption-pubkey", h.Config.GetGroupPublicKey)
@@ -274,6 +285,11 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 
 		// Stammvereine (Liste für Mitglied-Dropdown; alle Eingeloggten)
 		r.Get("/api/stammvereine", h.Stammvereine.List)
+
+		// Spielvideos — Stream-Token-Ausgabe (weitere Video-Routen folgen separat).
+		// CanViewVideo prüft die Team-Berechtigung; die HLS-Auslieferung selbst
+		// läuft Token-geschützt im Public-Tier (siehe oben).
+		r.Get("/api/videos/{id}/play", h.Videos.Play)
 
 		// Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
