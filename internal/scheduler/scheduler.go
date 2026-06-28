@@ -56,6 +56,7 @@ func (s *Scheduler) Run() {
 	s.sendCarpoolingReminders()
 	s.sendEventNoteReminders()
 	s.cleanStaleVideoUploads()
+	s.cleanFailedVideoRaw()
 	s.recordHeartbeat()
 }
 
@@ -94,6 +95,47 @@ func (s *Scheduler) cleanStaleVideoUploads() {
 	}
 	if removed > 0 {
 		slog.Info("stale video uploads cleaned", "count", removed)
+	}
+}
+
+// cleanFailedVideoRaw löscht die Roh-Uploads (raw/{id}.mp4) von Videos, die seit
+// mehr als 7 Tagen den Status 'failed' haben. Bei Transcode-Fehlern bleibt die
+// Rohdatei zunächst für Debug erhalten (siehe videos.Worker.fail); nach 7 Tagen
+// wird sie hier aufgeräumt. Die DB-Zeile bleibt bestehen.
+//
+// Inline (statt Aufruf ins Domain-Package videos): der Scheduler ist
+// Foundation und darf videos nicht importieren (Architektur-Test). Reine
+// DB-Lese- + Filesystem-Operation, das raw/-Pfadschema ist trivial.
+func (s *Scheduler) cleanFailedVideoRaw() {
+	rows, err := s.db.Query(
+		`SELECT id FROM videos
+		 WHERE status = 'failed'
+		   AND created_at < datetime('now', '-7 days')`)
+	if err != nil {
+		logIfBusy(err, "cleanFailedVideoRaw")
+		slog.Error("scheduler failed-video raw cleanup query failed", "error", err)
+		return
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	removed := 0
+	for _, id := range ids {
+		raw := filepath.Join(s.cfg.VideoStorageDir, "raw", fmt.Sprintf("%d.mp4", id))
+		if err := os.Remove(raw); err == nil {
+			removed++
+		} else if !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("failed-video raw cleanup: remove failed", "video_id", id, "error", err)
+		}
+	}
+	if removed > 0 {
+		slog.Info("failed video raw files cleaned", "count", removed)
 	}
 }
 

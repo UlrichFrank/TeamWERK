@@ -11,7 +11,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"golang.org/x/crypto/bcrypt"
@@ -145,14 +147,24 @@ func serve() {
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
 	hubInstance := hub.NewHub()
 
+	// Prozess-weiter Lebenszyklus-Context: bricht bei SIGINT/SIGTERM ab und
+	// beendet damit die Hintergrund-Goroutinen (tus-Finish-Hook, Transcode-Worker)
+	// sauber (graceful shutdown).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	videosHandler := videos.NewHandler(database, hubInstance, cfg)
 	// tusd-Upload-Handler (resumable Upload) + Finish-Hook-Goroutine; an den
 	// Prozess-Lebenslauf gebunden. Bei Fehler (z.B. uploads/ nicht anlegbar)
 	// hart abbrechen — ohne Upload-Endpoint wäre der Dienst halbgar.
-	videosTus, err := videosHandler.NewTusHandler(context.Background())
+	videosTus, err := videosHandler.NewTusHandler(ctx)
 	if err != nil {
 		fatal("video upload handler init failed", "error", err)
 	}
+
+	// Serieller Transcode-Worker (genau EINE Goroutine, siehe design.md). Endet
+	// mit ctx (SIGTERM). In Tests wird der Worker nicht gestartet.
+	go videos.NewWorker(videosHandler).Run(ctx)
 
 	handlers := &app.Handlers{
 		Auth:                auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),

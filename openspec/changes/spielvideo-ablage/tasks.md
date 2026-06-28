@@ -24,16 +24,16 @@
 
 ## 4. Backend — Transcode-Worker (Capability video-transcode)
 
-- [ ] 4.1 `internal/videos/worker.go`: Worker-Loop mit `pickNextQueued()` (`SELECT … WHERE status='queued' ORDER BY created_at LIMIT 1`); idle-Sleep 30 s
-- [ ] 4.2 Crash-Recovery beim Start: `UPDATE videos SET status='queued' WHERE status='processing'`
-- [ ] 4.3 Pre-Transcode-Disk-Check; bei Mangel zurück auf `queued` und 1-h-Sleep
-- [ ] 4.4 FFmpeg-Aufruf: `nice -n 19 ffmpeg -i raw/{id}.mp4 …` → 720p+360p HLS in `processed/{id}/`; `-c:a copy` wenn AAC, sonst `-c:a aac -b:a 128k`; `-hls_time 10`, `-hls_list_size 0`
-- [ ] 4.5 Master-Playlist `master.m3u8` erzeugen, die beide Renditions referenziert
-- [ ] 4.6 Bei Erfolg: `status='ready'`, `ready_at=now()`; raw-Datei löschen; Broadcast `video-ready`
-- [ ] 4.7 Bei Fehler: `status='failed'`, `failure_reason` setzen; raw-Datei für Debug behalten (löscht Cleanup nach 7 Tagen)
-- [ ] 4.8 Push-Notification an Hochladenden + alle Team-Spieler + Eltern + Trainer (Goroutine, nicht-blockierend)
-- [ ] 4.9 Worker in `cmd/teamwerk/main.go` starten (eine Goroutine); sauberes Beenden bei SIGTERM
-- [ ] 4.10 Tests: serielle Verarbeitung (zwei queued → nacheinander), Failure-Pfad mit kaputter Quelle (FFprobe-Reject), Disk-Mangel-Pfad
+- [x] 4.1 `internal/videos/worker.go`: Worker-Loop mit `pickNextQueued()` (`SELECT … WHERE status='queued' ORDER BY created_at LIMIT 1`); idle-Sleep 30 s
+- [x] 4.2 Crash-Recovery beim Start: `UPDATE videos SET status='queued' WHERE status='processing'`
+- [x] 4.3 Pre-Transcode-Disk-Check; bei Mangel zurück auf `queued` und 1-h-Sleep
+- [x] 4.4 FFmpeg-Aufruf: `nice -n 19 ffmpeg -i raw/{id}.mp4 …` → 720p+360p HLS in `processed/{id}/`; `-c:a copy` wenn AAC, sonst `-c:a aac -b:a 128k`; `-hls_time 10`, `-hls_list_size 0`
+- [x] 4.5 Master-Playlist `master.m3u8` erzeugen, die beide Renditions referenziert
+- [x] 4.6 Bei Erfolg: `status='ready'`, `ready_at=now()`; raw-Datei löschen; Broadcast `video-ready`
+- [x] 4.7 Bei Fehler: `status='failed'`, `failure_reason` setzen; raw-Datei für Debug behalten (löscht Cleanup nach 7 Tagen)
+- [x] 4.8 Push-Notification an Hochladenden + alle Team-Spieler + Eltern + Trainer (Goroutine, nicht-blockierend)
+- [x] 4.9 Worker in `cmd/teamwerk/main.go` starten (eine Goroutine); sauberes Beenden bei SIGTERM
+- [x] 4.10 Tests: serielle Verarbeitung (zwei queued → nacheinander), Failure-Pfad mit kaputter Quelle (FFprobe-Reject), Disk-Mangel-Pfad
 
 ## 5. Backend — Streaming (Capability video-stream)
 
