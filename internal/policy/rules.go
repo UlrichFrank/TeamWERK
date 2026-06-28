@@ -232,6 +232,7 @@ func NavFor(p *Principal) []NavItem {
 	// Spielbetrieb — visible to all
 	nav = append(nav, NavItem{"Kalender", "/kalender"})
 	nav = append(nav, NavItem{"Termine", "/termine"})
+	nav = append(nav, NavItem{"Videos", "/videos"})
 
 	// Verein — visible to all
 	nav = append(nav, NavItem{"Mein Team", "/mein-team"})

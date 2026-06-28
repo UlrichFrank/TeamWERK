@@ -63,16 +63,16 @@
 
 ## 8. Frontend — Liste und Detail
 
-- [ ] 8.1 `web/src/pages/VideosPage.tsx`: serverseitige Suche/Filter (`team_id`), "Mehr laden"-Button; Card-Layout mobil, Tabelle desktop
-- [ ] 8.2 Status-Pill anzeigen (queued/processing/ready/failed) mit `brand-*`-Tokens und lucide-Icons
-- [ ] 8.3 `web/src/pages/VideoDetailPage.tsx`: ruft `/play`, lädt `hls.js`, mountet `<video>` mit `master_url`; Fallback-Hinweis bei Browser ohne HLS-Support
-- [ ] 8.4 Lösch-Modal mit Bestätigung; PATCH-Inline-Form für Titel/Beschreibung
-- [ ] 8.5 Live-Updates via `useLiveUpdates`: `video-queued`/`video-ready`/`video-deleted` → Liste neu laden
-- [ ] 8.6 Routen `/videos` und `/videos/:id` in `App.tsx`; Nav-Eintrag in `AppShell.tsx`
+- [x] 8.1 `web/src/pages/VideosPage.tsx`: serverseitige Suche/Filter (`team_id`), "Mehr laden"-Button; Card-Layout mobil, Tabelle desktop
+- [x] 8.2 Status-Pill anzeigen (queued/processing/ready/failed) mit `brand-*`-Tokens und lucide-Icons
+- [x] 8.3 `web/src/pages/VideoDetailPage.tsx`: ruft `/play`, lädt `hls.js`, mountet `<video>` mit `master_url`; Fallback-Hinweis bei Browser ohne HLS-Support
+- [x] 8.4 Lösch-Modal mit Bestätigung; PATCH-Inline-Form für Titel/Beschreibung
+- [x] 8.5 Live-Updates via `useLiveUpdates`: `video-queued`/`video-ready`/`video-deleted` → Liste neu laden
+- [x] 8.6 Routen `/videos` und `/videos/:id` in `App.tsx`; Nav-Eintrag in `AppShell.tsx`
 
 ## 9. Frontend — Upload-Form
 
-- [ ] 9.1 `pnpm add hls.js tus-js-client` in `web/`
+- [x] 9.1 `pnpm add hls.js tus-js-client` in `web/`
 - [ ] 9.2 `web/src/pages/VideoUploadPage.tsx`: Formular mit Titel/Beschreibung/Team-Select/Spiel-Select/Datei
 - [ ] 9.3 Datei-Check vor Upload: `file.size > 2 GB` → Fehler; ohne erwartete Größe POST `/api/videos`
 - [ ] 9.4 tus-Client startet Upload an `/api/videos/upload/`; Progress-Bar (Prozent + Restzeit)

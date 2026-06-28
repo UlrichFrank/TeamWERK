@@ -59,7 +59,7 @@ function personaNavRoutes(p: Persona): string[] {
   const isKassiererLike = isVorstandLike || cf.includes('kassierer')
   const routes = ['/']
   if (!isAdmin) routes.push('/profil')
-  routes.push('/kalender', '/termine', '/mein-team', '/dokumente', '/dienste', '/mitfahrgelegenheiten', '/chat')
+  routes.push('/kalender', '/termine', '/videos', '/mein-team', '/dokumente', '/dienste', '/mitfahrgelegenheiten', '/chat')
   if (isTrainerLike || isVorstandLike) routes.push('/kader')
   if (isVorstandLike) routes.push('/nutzer')
   if (isKassiererLike) routes.push('/mitglieder')
