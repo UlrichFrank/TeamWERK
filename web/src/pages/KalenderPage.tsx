@@ -871,6 +871,9 @@ export default function KalenderPage() {
                       <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text flex-1">
                         {tileLabel || '?'}
                       </span>
+                      {g.slot_count > 0 && g.filled_count < g.total_count && (
+                        <AlertTriangle className="w-3 h-3 text-brand-danger ml-auto shrink-0" aria-label="Offene Dienste" />
+                      )}
                       {g.slot_count > 0 && (
                         <div className={`hidden @tile-sm:block w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
                       )}
@@ -886,12 +889,7 @@ export default function KalenderPage() {
                       <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
                         <X className="w-2.5 h-2.5" />{g.declined_count}
                       </span>
-                      <span className="ml-auto flex items-center gap-0.5">
-                        {g.slot_count > 0 && g.filled_count < g.total_count && (
-                          <AlertTriangle className="w-3 h-3 text-brand-danger" aria-label="Offene Dienste" />
-                        )}
-                        <EventNoteIndicator variant="icon" note={g.note ?? ''} />
-                      </span>
+                      <EventNoteIndicator variant="icon" note={g.note ?? ''} className="ml-auto" />
                     </div>
                   </button>
                   )
