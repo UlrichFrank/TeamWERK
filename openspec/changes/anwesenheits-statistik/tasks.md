@@ -21,7 +21,7 @@
 - [x] 3.6 Cancelled Sessions/Games konsequent aus Aggregation entfernen (`status != 'cancelled'`-Filter)
 - [x] 3.7 Routen in `internal/app/router.go` registrieren (Auth-Tiers gemäß design.md D7)
 - [x] 3.8 Architektur-Test `internal/arch/arch_test.go` um das neue Package erweitern (Composition-Layer: darf trainings/games/members/kader/absences lesen)
-- [ ] 3.9 Tests: Aggregation (drei Säulen korrekt, Stamm vs. erweitert, cancelled ignoriert, Saisonbezug), Authz (alle Rollen, inkl. Eltern via family_links), 401/403/404-Pfade je Endpoint
+- [x] 3.9 Tests: Aggregation (drei Säulen korrekt, Stamm vs. erweitert, cancelled ignoriert, Saisonbezug), Authz (alle Rollen, inkl. Eltern via family_links), 401/403/404-Pfade je Endpoint
 
 ## 4. Backend — Reminder-Scheduler (`internal/scheduler/`)
 

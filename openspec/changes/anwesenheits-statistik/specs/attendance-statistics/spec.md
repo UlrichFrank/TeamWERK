@@ -9,7 +9,7 @@ Die Statistik SHALL für jede Kombination aus Termin (Trainings-Session oder Spi
 - **ENTSCHULDIGT** wenn keine `attendance`-Row existiert UND `response.status = 'declined'` UND `response.absence_id IS NOT NULL`
 - **IGNORIERT** in allen anderen Fällen
 
-Cancelled Termine (`training_sessions.status='cancelled'`, `games.status='cancelled'`) SHALL aus der Bezugsmenge entfernt werden.
+Cancelled Trainings (`training_sessions.status='cancelled'`) SHALL aus der Bezugsmenge entfernt werden. Spiele haben in TeamWERK keinen Cancellation-Status — abgesagte Spiele werden komplett gelöscht und tauchen folglich nicht mehr in der Bezugsmenge auf.
 
 #### Scenario: Anwesenheit dominiert auto-decline
 
@@ -21,9 +21,9 @@ Cancelled Termine (`training_sessions.status='cancelled'`, `games.status='cancel
 - **WHEN** ein vergangener Termin keine `attendance`-Row und keine `declined`-Response mit `absence_id` hat
 - **THEN** zählt der Termin für dieses Mitglied in keiner der drei Säulen
 
-#### Scenario: Cancelled Termin nicht gezählt
+#### Scenario: Cancelled Training nicht gezählt
 
-- **WHEN** eine Trainings-Session oder ein Spiel `status='cancelled'` hat
+- **WHEN** eine Trainings-Session `status='cancelled'` hat
 - **THEN** taucht der Termin in keinem `count` der drei Säulen auf
 
 ### Requirement: Team-Aggregat-Statistik
@@ -42,9 +42,9 @@ Authz: Nur Trainer der zugehörigen Teams (`kader_trainers`), Vereinsfunktion `s
 - **WHEN** ein Mitglied sowohl in `kader_members` als auch in `kader_extended_members` desselben Teams ist
 - **THEN** erscheint es im Block `regular_members` und nicht in `extended_members`
 
-#### Scenario: Cancelled Termine fließen nicht in die Aggregation ein
+#### Scenario: Cancelled Trainings fließen nicht in die Aggregation ein
 
-- **WHEN** eine Trainings-Session oder ein Spiel des Teams mit `status='cancelled'` im Saisonzeitraum liegt
+- **WHEN** eine Trainings-Session des Teams mit `status='cancelled'` im Saisonzeitraum liegt
 - **THEN** spiegelt sich das in keinem der sechs Zähler eines Mitglieds wider
 
 #### Scenario: Sportliche Leitung erhält jedes Team
@@ -88,14 +88,14 @@ Authz: Eigenes Mitglied (über User-Member-Verknüpfung), Elternteil mit `family
 - **WHEN** ein Trainer die Detailstatistik eines Stammkader-Spielers abruft
 - **THEN** enthält `events` jeden nicht-cancelled Trainings-Termin und jedes nicht-cancelled Spiel der Teams im Saisonzeitraum, jeweils mit der korrekten `category`
 
-#### Scenario: Cancelled Termine als category=cancelled gelistet
+#### Scenario: Cancelled Trainings als category=cancelled gelistet
 
-- **WHEN** ein Termin im Saisonzeitraum `status='cancelled'` hat
-- **THEN** erscheint er in der Termin-Liste mit `category: "cancelled"` und zählt in keiner Zähler-Spalte
+- **WHEN** eine Trainings-Session im Saisonzeitraum `status='cancelled'` hat
+- **THEN** erscheint sie in der Termin-Liste mit `category: "cancelled"` und zählt in keiner Zähler-Spalte
 
 ### Requirement: Offene Erfassungen pro Team
 
-Das System SHALL via `GET /api/teams/{id}/attendance-open` eine Liste der vergangenen Termine (`date < today()` oder `date = today() AND end_time < now()`) der aktiven Saison liefern, die `status != 'cancelled'` haben und für die noch **keine** einzige `attendance`-Row existiert. Pro Termin: `event_type` (`training`/`game`), `event_id`, `date`, `title`. Authz: Trainer der zugehörigen Teams, sportliche Leitung, Admin.
+Das System SHALL via `GET /api/teams/{id}/attendance-open` eine Liste der vergangenen Termine (`date < today()`) der aktiven Saison liefern, die noch **keine** einzige `attendance`-Row haben. Trainings mit `status='cancelled'` SHALL ausgeschlossen werden; abgesagte Spiele sind in TeamWERK gelöscht und tauchen daher nicht auf. Pro Termin: `event_type` (`training`/`game`), `event_id`, `date`, `title`. Authz: Trainer der zugehörigen Teams, sportliche Leitung, Admin.
 
 #### Scenario: Vergangenes Training ohne Erfassung erscheint
 
@@ -107,10 +107,10 @@ Das System SHALL via `GET /api/teams/{id}/attendance-open` eine Liste der vergan
 - **WHEN** für ein vergangenes Spiel des Teams bereits mindestens eine `game_attendances`-Row existiert
 - **THEN** ist das Spiel **nicht** in der Antwort enthalten
 
-#### Scenario: Cancelled Termin nicht enthalten
+#### Scenario: Cancelled Training nicht enthalten
 
-- **WHEN** ein vergangener Termin `status='cancelled'` hat
-- **THEN** erscheint er nicht in der Antwort, unabhängig vom Vorhandensein einer `attendance`-Row
+- **WHEN** eine vergangene Trainings-Session `status='cancelled'` hat
+- **THEN** erscheint sie nicht in der Antwort, unabhängig vom Vorhandensein einer `attendance`-Row
 
 #### Scenario: Zukünftiger Termin nicht enthalten
 

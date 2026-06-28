@@ -44,7 +44,7 @@ Pro (Termin × Mitglied) wird **maximal** eine Säule gezählt. Reihenfolge der 
 4. sonst                                            → IGNORIERT (Datenloch)
 ```
 
-Ist beides erfasst (attendance + auto-decline-response durch nachträgliche Abwesenheit), gewinnt die **explizite Trainer-Erfassung**. Cancelled Sessions/Games (`training_sessions.status='cancelled'`, `games.status='cancelled'`) werden komplett aus der Bezugsmenge entfernt.
+Ist beides erfasst (attendance + auto-decline-response durch nachträgliche Abwesenheit), gewinnt die **explizite Trainer-Erfassung**. Cancelled Trainings (`training_sessions.status='cancelled'`) werden komplett aus der Bezugsmenge entfernt. Spiele kennen keinen Cancellation-Status — abgesagte Spiele werden in TeamWERK gelöscht und tauchen damit automatisch nicht mehr auf.
 
 **Quote (nur abgeleitete Anzeige):** `anwesend / (anwesend + fehlt)` — entschuldigte und ignorierte zählen weder im Zähler noch im Nenner. Begründung: ein Spieler mit 2 Trainings (1 anwesend, 1 Urlaub) soll als 100% angezeigt werden, nicht 50%.
 

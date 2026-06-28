@@ -117,10 +117,12 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 	memberJoin := `
 		JOIN kader_members km ON km.member_id = m.id
 		JOIN kader k ON k.id = km.kader_id AND k.team_id = ? AND k.season_id = ?`
+	memberWhere := ""
 	if extended {
 		memberJoin = `
 		JOIN kader_extended_members kem ON kem.member_id = m.id
-		JOIN kader k ON k.id = kem.kader_id AND k.team_id = ? AND k.season_id = ?
+		JOIN kader k ON k.id = kem.kader_id AND k.team_id = ? AND k.season_id = ?`
+		memberWhere = `
 		WHERE NOT EXISTS (
 			SELECT 1 FROM kader_members km2
 			JOIN kader k2 ON k2.id = km2.kader_id
@@ -142,16 +144,17 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		                              AND ts.status != 'cancelled'
 		                              AND date(ts.date) BETWEEN date(?) AND date(?)
 		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = m.id
-		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id
+		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id` +
+		memberWhere + `
 		GROUP BY m.id, m.first_name, m.last_name
 		ORDER BY m.first_name, m.last_name`
 
 	var trainingArgs []any
 	trainingArgs = append(trainingArgs, teamID, seasonID)
+	trainingArgs = append(trainingArgs, startDate, endDate)
 	if extended {
 		trainingArgs = append(trainingArgs, teamID, seasonID)
 	}
-	trainingArgs = append(trainingArgs, startDate, endDate)
 
 	rows, err := h.db.QueryContext(ctx, trainingSQL, trainingArgs...)
 	if err != nil {
@@ -184,10 +187,10 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		LEFT JOIN game_teams gt ON gt.team_id = k.team_id
 		LEFT JOIN games g ON g.id = gt.game_id
 		                  AND g.season_id = k.season_id
-		                  AND g.status != 'cancelled'
 		                  AND date(g.date) BETWEEN date(?) AND date(?)
 		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = m.id
-		LEFT JOIN game_responses gr ON gr.game_id = g.id AND gr.member_id = m.id
+		LEFT JOIN game_responses gr ON gr.game_id = g.id AND gr.member_id = m.id` +
+		memberWhere + `
 		GROUP BY m.id`
 
 	rows, err = h.db.QueryContext(ctx, gameSQL, trainingArgs...)
@@ -443,6 +446,8 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		SELECT ts.id, ts.date, ts.title, ts.status,
 		       ta.present, tr.status, tr.absence_id IS NOT NULL, tr.reason
 		FROM training_sessions ts
+		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = ?
+		LEFT JOIN training_responses  tr ON tr.training_id = ts.id AND tr.member_id = ?
 		WHERE ts.season_id = ?
 		  AND date(ts.date) BETWEEN date(?) AND date(?)
 		  AND ts.team_id IN (
@@ -452,10 +457,8 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		      OR EXISTS (SELECT 1 FROM kader_extended_members kem WHERE kem.kader_id = k.id AND kem.member_id = ?)
 		    )
 		  )
-		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = ?
-		LEFT JOIN training_responses  tr ON tr.training_id = ts.id AND tr.member_id = ?
 		ORDER BY ts.date, ts.id`,
-		seasonID, startDate, endDate, seasonID, memberID, memberID, memberID, memberID)
+		memberID, memberID, seasonID, startDate, endDate, seasonID, memberID, memberID)
 	if err != nil {
 		return nil, counts, fmt.Errorf("training events: %w", err)
 	}
@@ -493,8 +496,10 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 	gameRows, err := h.db.QueryContext(ctx, `
 		SELECT g.id, g.date,
 		       COALESCE(NULLIF(g.opponent, ''), 'Spiel'),
-		       g.status, ga.present, gr.status, gr.absence_id IS NOT NULL, gr.reason
+		       ga.present, gr.status, gr.absence_id IS NOT NULL, gr.reason
 		FROM games g
+		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = ?
+		LEFT JOIN game_responses   gr ON gr.game_id = g.id AND gr.member_id = ?
 		WHERE g.season_id = ?
 		  AND date(g.date) BETWEEN date(?) AND date(?)
 		  AND EXISTS (
@@ -505,31 +510,24 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		      OR EXISTS (SELECT 1 FROM kader_extended_members kem WHERE kem.kader_id = k.id AND kem.member_id = ?)
 		    )
 		  )
-		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = ?
-		LEFT JOIN game_responses   gr ON gr.game_id = g.id AND gr.member_id = ?
 		ORDER BY g.date, g.id`,
-		seasonID, startDate, endDate, memberID, memberID, memberID, memberID)
+		memberID, memberID, seasonID, startDate, endDate, memberID, memberID)
 	if err != nil {
 		return nil, counts, fmt.Errorf("game events: %w", err)
 	}
 	defer gameRows.Close()
 	for gameRows.Next() {
 		var ev eventDetail
-		var status string
 		var present sql.NullInt64
 		var respStatus, reason sql.NullString
 		var hasAbsence bool
-		if err := gameRows.Scan(&ev.EventID, &ev.Date, &ev.Title, &status,
+		if err := gameRows.Scan(&ev.EventID, &ev.Date, &ev.Title,
 			&present, &respStatus, &hasAbsence, &reason); err != nil {
 			return nil, counts, err
 		}
 		ev.EventType = "game"
-		if status == "cancelled" {
-			ev.Category = CategoryCanceled
-		} else {
-			ev.Category = classifyRow(present, respStatus, hasAbsence)
-			tallyCount(&counts, ev.EventType, ev.Category)
-		}
+		ev.Category = classifyRow(present, respStatus, hasAbsence)
+		tallyCount(&counts, ev.EventType, ev.Category)
 		if reason.Valid && reason.String != "" {
 			s := reason.String
 			ev.Reason = &s
@@ -663,7 +661,6 @@ func (h *Handler) GetTeamOpen(w http.ResponseWriter, r *http.Request) {
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id AND gt.team_id = ?
 		WHERE g.season_id = ?
-		  AND g.status != 'cancelled'
 		  AND date(g.date) >= date(?)
 		  AND date(g.date) < date('now')
 		  AND NOT EXISTS (
