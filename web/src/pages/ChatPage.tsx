@@ -712,7 +712,7 @@ export default function ChatPage() {
                 {new Date(activeBroadcast.sentAt).toLocaleString('de-DE')}
                 {activeBroadcast.editedAt && <span className="ml-2">(bearbeitet)</span>}
               </p>
-              <p className="text-sm text-brand-text whitespace-pre-wrap">{activeBroadcast.body}</p>
+              <p className="text-sm text-brand-text whitespace-pre-wrap break-words">{renderWithLinks(activeBroadcast.body, false)}</p>
             </div>
           )}
 
@@ -874,7 +874,7 @@ function renderWithLinks(body: string, isOwn: boolean) {
         href={part}
         target="_blank"
         rel="noopener noreferrer"
-        className={`underline break-all ${isOwn ? 'opacity-75' : 'text-[#3E4A98]'}`}
+        className={`underline break-all ${isOwn ? 'opacity-75' : 'text-brand-blue'}`}
         onClick={e => e.stopPropagation()}
       >
         {part}
