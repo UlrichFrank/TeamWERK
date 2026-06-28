@@ -56,10 +56,10 @@
 
 ## 7. Backend — Retention (Scheduler)
 
-- [ ] 7.1 Scheduler-Job `videos_retention` (täglich 03:00 in `internal/scheduler/`): findet Videos mit `season.end_date < now() - 90 days`, löscht Eintrag + Dateien
-- [ ] 7.2 Vorlauf-Push (T-7): Job sendet 7 Tage vor geplanter Löschung an alle Team-Trainer Push "Video XY wird am DD.MM. gelöscht"
-- [ ] 7.3 Idempotenz via `notification_log`-Eintrag pro `(video_id, retention_warning)`
-- [ ] 7.4 Tests: Stichtag-Logik (88, 90, 92 Tage), Push-Idempotenz, kein Löschen wenn `end_date` NULL
+- [x] 7.1 Scheduler-Job `videos_retention` (täglich 03:00 in `internal/scheduler/`): findet Videos mit `season.end_date < now() - 90 days`, löscht Eintrag + Dateien
+- [x] 7.2 Vorlauf-Push (T-7): Job sendet 7 Tage vor geplanter Löschung an alle Team-Trainer Push "Video XY wird am DD.MM. gelöscht"
+- [x] 7.3 Idempotenz via `notification_log`-Eintrag pro `(video_id, retention_warning)`
+- [x] 7.4 Tests: Stichtag-Logik (88, 90, 92 Tage), Push-Idempotenz, kein Löschen wenn `end_date` NULL
 
 ## 8. Frontend — Liste und Detail
 

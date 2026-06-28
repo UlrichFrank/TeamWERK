@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +58,7 @@ func (s *Scheduler) Run() {
 	s.sendEventNoteReminders()
 	s.cleanStaleVideoUploads()
 	s.cleanFailedVideoRaw()
+	s.runVideoRetention()
 	s.recordHeartbeat()
 }
 
@@ -137,6 +139,163 @@ func (s *Scheduler) cleanFailedVideoRaw() {
 	if removed > 0 {
 		slog.Info("failed video raw files cleaned", "count", removed)
 	}
+}
+
+// runVideoRetention ist der tägliche Saison-basierte Retention-Job (Ziel 03:00
+// lokal, faktisch jede Minute aufgerufen — wie die übrigen Daily-Jobs nicht über
+// eine Uhrzeit, sondern über Idempotenz gegen Doppel-Arbeit abgesichert):
+//
+//  1. T-7-Vorwarnung: genau 7 Tage vor der Löschung (Saisonende = heute - 83 d)
+//     erhalten alle Trainer des Video-Teams einen Push. Idempotent über
+//     notification_log (kind 'video_retention_warning', ref_id = video id).
+//  2. Löschung: Videos, deren Saison vor mehr als 90 Tagen endete, werden
+//     entfernt (DB-Zeile + raw/{id}.mp4 + processed/{id}/). Diese Operation ist
+//     von Natur aus idempotent — gelöschte Zeilen tauchen nicht erneut auf.
+//
+// Videos mit season_end_date IS NULL werden NIE automatisch gelöscht. Inline
+// statt Aufruf ins Domain-Package videos (Scheduler ist Foundation, darf videos
+// nicht importieren — Architektur-Test); das Pfadschema raw/{id}.mp4 und
+// processed/{id} wird trivial nachgebaut (vgl. internal/videos/paths.go).
+func (s *Scheduler) runVideoRetention() {
+	s.sendVideoRetentionWarnings()
+	s.deleteRetainedVideos()
+}
+
+// sendVideoRetentionWarnings schickt die T-7-Vorwarnung an alle Trainer der
+// betroffenen Teams. Stichtag: Saisonende == date('now','-83 days') ⇒ die
+// 90-Tage-Löschung steht in genau 7 Tagen an.
+func (s *Scheduler) sendVideoRetentionWarnings() {
+	rows, err := s.db.Query(`
+		SELECT v.id, v.team_id, v.season_id, v.title, se.end_date
+		FROM videos v
+		JOIN seasons se ON se.id = v.season_id
+		WHERE se.end_date IS NOT NULL
+		  AND date(se.end_date) = date('now','-83 days')`)
+	if err != nil {
+		logIfBusy(err, "sendVideoRetentionWarnings.query")
+		slog.Error("scheduler video retention warning query failed", "error", err)
+		return
+	}
+	type warnRow struct {
+		id       int
+		teamID   int
+		seasonID int
+		title    string
+		endDate  string
+	}
+	var warns []warnRow
+	for rows.Next() {
+		var w warnRow
+		if err := rows.Scan(&w.id, &w.teamID, &w.seasonID, &w.title, &w.endDate); err != nil {
+			continue
+		}
+		warns = append(warns, w)
+	}
+	rows.Close()
+
+	// Löschdatum = Saisonende + 90 Tage (= heute + 7 Tage). Für die Anzeige
+	// reicht heute+7, da der Stichtag oben exakt T-7 erzwingt.
+	deleteOn := time.Now().AddDate(0, 0, 7).Format("02.01.")
+
+	sent := 0
+	for _, w := range warns {
+		trainers := s.teamTrainerUsers(w.teamID, w.seasonID)
+		title := "Video wird gelöscht"
+		body := fmt.Sprintf("Video „%s\" wird am %s gelöscht.", w.title, deleteOn)
+		for _, uid := range trainers {
+			// Idempotenz: Log-Zeile VOR dem Senden schreiben; nur bei
+			// neu eingefügter Zeile (RowsAffected==1) wird gepusht. Mirror
+			// des claimUnsent-/duty-reminder-Patterns.
+			res, err := s.db.Exec(
+				`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+				uid, "video_retention_warning", w.id)
+			if err != nil {
+				logIfBusy(err, "sendVideoRetentionWarnings.claim")
+				continue
+			}
+			if n, _ := res.RowsAffected(); n == 1 {
+				go push.SendToUsers(s.db, s.cfg, []int{uid}, title, body, fmt.Sprintf("/videos/%d", w.id))
+				sent++
+			}
+		}
+	}
+	if sent > 0 {
+		slog.Info("scheduler video retention warnings sent", "count", sent)
+	}
+}
+
+// deleteRetainedVideos löscht Videos, deren Saison vor mehr als 90 Tagen endete,
+// samt zugehöriger Dateien. season_end_date IS NULL ⇒ nie löschen.
+func (s *Scheduler) deleteRetainedVideos() {
+	rows, err := s.db.Query(`
+		SELECT v.id
+		FROM videos v
+		JOIN seasons se ON se.id = v.season_id
+		WHERE se.end_date IS NOT NULL
+		  AND date(se.end_date) < date('now','-90 days')`)
+	if err != nil {
+		logIfBusy(err, "deleteRetainedVideos.query")
+		slog.Error("scheduler video retention query failed", "error", err)
+		return
+	}
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+
+	deleted := 0
+	for _, id := range ids {
+		if _, err := s.db.Exec(`DELETE FROM videos WHERE id = ?`, id); err != nil {
+			logIfBusy(err, "deleteRetainedVideos.delete")
+			slog.Error("scheduler video retention delete failed", "video_id", id, "error", err)
+			continue
+		}
+		// Dateien aufräumen (raw/{id}.mp4 + processed/{id}/); not-exist ignorieren.
+		raw := filepath.Join(s.cfg.VideoStorageDir, "raw", fmt.Sprintf("%d.mp4", id))
+		if err := os.Remove(raw); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("video retention: remove raw failed", "video_id", id, "error", err)
+		}
+		procDir := filepath.Join(s.cfg.VideoStorageDir, "processed", strconv.Itoa(id))
+		if err := os.RemoveAll(procDir); err != nil {
+			slog.Warn("video retention: remove processed failed", "video_id", id, "error", err)
+		}
+		deleted++
+	}
+	if deleted > 0 {
+		slog.Info("scheduler video retention: videos deleted", "count", deleted)
+	}
+}
+
+// teamTrainerUsers liefert die User-IDs aller Trainer eines Teams in der
+// gegebenen Saison (kader → kader_trainers → members → users). Inline-SQL, da
+// der Scheduler das Domain-Package nicht importieren darf.
+func (s *Scheduler) teamTrainerUsers(teamID, seasonID int) []int {
+	rows, err := s.db.Query(`
+		SELECT DISTINCT u.id
+		FROM kader k
+		JOIN kader_trainers kt ON kt.kader_id = k.id
+		JOIN members m ON m.id = kt.member_id
+		JOIN users u ON u.id = m.user_id
+		WHERE k.team_id = ? AND k.season_id = ?`, teamID, seasonID)
+	if err != nil {
+		logIfBusy(err, "teamTrainerUsers")
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // recordHeartbeat schreibt den Zeitstempel des erfolgreichen Laufs in die
