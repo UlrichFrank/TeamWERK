@@ -106,15 +106,6 @@ const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 
-function dutyDotColor(filled: number, total: number): string {
-  if (total === 0) return 'bg-brand-danger'
-  const pct = filled / total
-  if (pct >= 0.9) return 'bg-brand-success'
-  if (pct >= 0.3) return 'bg-brand-warning'
-  return 'bg-brand-danger'
-}
-
-
 function padDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
@@ -854,6 +845,15 @@ export default function KalenderPage() {
                   }))
                   const tileLabel = formatTeamList(teamsForRender, 'kalender')
                   const tooltipLabel = g.teams.length > 1 ? 'Mehrere Teams' : tileLabel
+                  const noteText = (g.note ?? '').trim()
+                  const openSlots = g.slot_count > 0 && g.filled_count < g.total_count
+                    ? g.total_count - g.filled_count
+                    : 0
+                  const showWarning = noteText !== '' || openSlots > 0
+                  const warningParts: string[] = []
+                  if (noteText !== '') warningParts.push(`Hinweis: ${noteText}`)
+                  if (openSlots > 0) warningParts.push(`${openSlots} offene Dienst-Slots`)
+                  const warningTitle = warningParts.join('\n')
                   return (
                   <button
                     key={g.id}
@@ -871,11 +871,14 @@ export default function KalenderPage() {
                       <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text flex-1">
                         {tileLabel || '?'}
                       </span>
-                      {g.slot_count > 0 && g.filled_count < g.total_count && (
-                        <AlertTriangle className="w-3 h-3 text-brand-danger ml-auto shrink-0" aria-label="Offene Dienste" />
-                      )}
-                      {g.slot_count > 0 && (
-                        <div className={`hidden @tile-sm:block w-1.5 h-1.5 rounded-full flex-shrink-0 ${dutyDotColor(g.filled_count, g.total_count)}`} />
+                      {showWarning && (
+                        <span
+                          className="ml-auto inline-flex items-center shrink-0"
+                          aria-label={warningTitle}
+                          title={warningTitle}
+                        >
+                          <AlertTriangle className="w-3 h-3 text-brand-danger" />
+                        </span>
                       )}
                     </div>
                     <div className="hidden @tile-md:block truncate text-brand-text-muted leading-tight">
@@ -889,7 +892,6 @@ export default function KalenderPage() {
                       <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
                         <X className="w-2.5 h-2.5" />{g.declined_count}
                       </span>
-                      <EventNoteIndicator variant="icon" note={g.note ?? ''} className="ml-auto" />
                     </div>
                   </button>
                   )

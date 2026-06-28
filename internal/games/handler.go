@@ -146,6 +146,7 @@ func (h *Handler) UpdateGameNote(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	req.Note = strings.TrimSpace(req.Note)
 	if _, err = tx.ExecContext(r.Context(),
 		`UPDATE games SET note = ? WHERE id = ?`, req.Note, gameID); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
