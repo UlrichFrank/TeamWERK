@@ -30,6 +30,9 @@ interface Game {
   maybe_count: number
   venue?: VenueRef | null
   note?: string
+  slot_count?: number
+  filled_count?: number
+  total_count?: number
 }
 
 interface Training {
@@ -223,6 +226,11 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
             )}
             <RsvpRow confirmed={game.confirmed_count} declined={game.declined_count} maybe={game.maybe_count} />
             <EventNoteIndicator variant="inline" note={game.note ?? ''} className="pt-1" />
+            {(game.slot_count ?? 0) > 0 && (game.filled_count ?? 0) < (game.total_count ?? 0) && (
+              <p className="text-sm text-brand-text-muted mt-1">
+                {(game.total_count ?? 0) - (game.filled_count ?? 0)} offene Dienst-Slots
+              </p>
+            )}
             {onEdit && (
               <div className="pt-2 border-t border-brand-border-subtle">
                 <p className="text-xs text-brand-text-muted mb-1">Hinweis</p>
