@@ -25,12 +25,12 @@
 
 ## 4. Backend — Reminder-Scheduler (`internal/scheduler/`)
 
-- [ ] 4.1 Neue Funktion `RunAttendanceReminders(ctx, db, push, cfg)` registrieren, Trigger 1×/Tag (19:00 lokal) im bestehenden Scheduler-Loop
-- [ ] 4.2 Aggregations-Query: für jeden Trainer (`kader_trainers` ↔ `members` ↔ `users`) der aktiven Saison alle offenen Termine seiner Teams sammeln (vergangene, nicht cancelled, ohne `attendance`-Row)
-- [ ] 4.3 Idempotenz via `notification_log` (`kind='attendance-reminder'`, `context=YYYY-MM-DD`) per `INSERT OR IGNORE` — nur bei neuem Eintrag senden
-- [ ] 4.4 Push-Body bauen: Anzahl + erste 3 Termine im Format `"<Teamname> <Wochentag DD.MM.> (Training|Spiel)"`, Hinweis-Suffix "… und N weitere" wenn >3
-- [ ] 4.5 Versand nicht-blockierend via `go push.SendToUsers(...)`, Tap-Ziel `/team/{firstOpenTeamId}/anwesenheit`
-- [ ] 4.6 Saison-Cut-off: keine Push wenn keine aktive Saison existiert
+- [x] 4.1 Neue Funktion `RunAttendanceReminders(ctx, db, push, cfg)` registrieren, Trigger 1×/Tag (19:00 lokal) im bestehenden Scheduler-Loop
+- [x] 4.2 Aggregations-Query: für jeden Trainer (`kader_trainers` ↔ `members` ↔ `users`) der aktiven Saison alle offenen Termine seiner Teams sammeln (vergangene, nicht cancelled, ohne `attendance`-Row)
+- [x] 4.3 Idempotenz via `notification_log` (`kind='attendance-reminder'`, `context=YYYY-MM-DD`) per `INSERT OR IGNORE` — nur bei neuem Eintrag senden
+- [x] 4.4 Push-Body bauen: Anzahl + erste 3 Termine im Format `"<Teamname> <Wochentag DD.MM.> (Training|Spiel)"`, Hinweis-Suffix "… und N weitere" wenn >3
+- [x] 4.5 Versand nicht-blockierend via `go push.SendToUsers(...)`, Tap-Ziel `/team/{firstOpenTeamId}/anwesenheit`
+- [x] 4.6 Saison-Cut-off: keine Push wenn keine aktive Saison existiert
 - [ ] 4.7 Tests: mehrfacher Job-Lauf an einem Tag → max 1 Push/Trainer; Trainer ohne offene Termine erhält nichts; Saisonende verhindert Push; Body-Format (2 / 3 / 5 Termine); Stop-Bedingung greift nach erster `attendance`-Row
 
 ## 5. Frontend — Trainer-Anwesenheits-Seite
