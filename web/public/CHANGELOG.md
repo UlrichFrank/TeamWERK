@@ -1,3 +1,28 @@
+## 28.06.2026
+- [feat] kalender: Hinweisdarstellung vereinfachen + offene Dienste im Grid markieren
+- [feat] scheduler: zeitzonen-korrekte Event-Reminder mit 24h/3h-Slots
+- [fix] chat: Broadcast-Mitteilungen rendern URLs als Hyperlinks
+
+## 27.06.2026
+- [feat] pwa: DocumentFileLinkPage mit Viewport-Weiche
+- [feat] pwa: Desktop öffnet Dokumente im nativen Browser-Viewer
+- [fix] kalender: Enddatum-Validierung im Event-Wizard absichern
+
+## 26.06.2026
+- [feat] pwa: Dokumente auf Mobilgeräten direkt im nativen Viewer öffnen
+- [feat] pwa: Viewer-Routen für Dokumente und SEPA-Mandate
+- [feat] pwa: PdfRenderer + FileViewer Komponenten
+- [feat] chat: Entwurfs-Text beim Wechseln zwischen Konversationen erhalten
+- [fix] auth: Kinderantrag-Approve legt keinen Member mehr an
+- [fix] security: Audit-Befunde B-1…B-6 (IDOR, Rate-Limiting, Security-Header, Uploads-Auth, Passwort-Policy) (#74)
+- [fix] openspec: Requirement-Texte normativ (SHALL/MUST) + fehlende Scenarios ergänzen
+
+## 25.06.2026
+- [feat] members: Bankstatus im Profil anzeigen + Vault-Gate für Bankdaten-Anträge
+- [fix] calendar: Training-Ort im iCal-Feed über venue_id statt leerem location-Textfeld
+- [feat] crypto: Brücke + Legacy-Spalten entfernen — Server keyless (Tasks 6.5–6.6) (#71)
+- [feat] migration: Zero-Knowledge-Bestandsmigration nach main (Tasks 6.1–6.4, State 1) (#73)
+
 ## 24.06.2026
 - [fix] lint: golangci-lint Go-1.25/1.26-Toolchain-Mismatch beheben
 - [feat] deploy: Dry-Run-Modus + robustere REMOTE-Auflösung im Verschlüsselungs-Skript

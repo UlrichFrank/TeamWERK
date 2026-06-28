@@ -1030,7 +1030,7 @@ export default function KalenderPage() {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
-                    <input type="date" value={selectedDate} onChange={e => {
+                    <input type="date" value={selectedDate} min={todayStr} onChange={e => {
                       const date = e.target.value
                       setSelectedDate(date)
                       if (eventType === 'generisch' && selectedEndDate && selectedEndDate < date) setSelectedEndDate(date)
@@ -1052,7 +1052,7 @@ export default function KalenderPage() {
                     <div>
                       <label className="block text-sm font-medium text-brand-text-muted mb-1">Enddatum <span className="text-brand-text-subtle font-normal">(optional, für mehrtägige Events)</span></label>
                       <input type="date" value={selectedEndDate} onChange={e => setSelectedEndDate(e.target.value)}
-                        min={selectedDate || undefined} className={INPUT_WIZ} />
+                        min={selectedDate || todayStr} className={INPUT_WIZ} />
                       {selectedEndDate && selectedEndDate < selectedDate && (
                         <p className="text-xs text-brand-danger mt-1">Enddatum muss nach dem Startdatum liegen.</p>
                       )}
@@ -1148,7 +1148,7 @@ export default function KalenderPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
-                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
+                    <input type="date" value={selectedDate} min={todayStr} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Startzeit *</label>
@@ -1237,7 +1237,7 @@ export default function KalenderPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig von *</label>
-                    <input type="date" value={seriesValidFrom} onChange={e => {
+                    <input type="date" value={seriesValidFrom} min={todayStr} onChange={e => {
                       const from = e.target.value
                       setSeriesValidFrom(from)
                       if (seriesValidUntil && seriesValidUntil < from) setSeriesValidUntil(from)
@@ -1326,6 +1326,7 @@ export default function KalenderPage() {
                       <input
                         type="date"
                         value={absenceForm.start_date}
+                        min={todayStr}
                         onChange={e => {
                           const start = e.target.value
                           setAbsenceForm(f => ({
