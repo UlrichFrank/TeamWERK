@@ -301,3 +301,275 @@ func (h *Handler) GetTeamStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
+
+// memberStatsResponse ist die Antwortstruktur von
+// GET /api/members/{id}/attendance-stats.
+type memberStatsResponse struct {
+	MemberID  int           `json:"member_id"`
+	SeasonID  int           `json:"season_id"`
+	StartDate string        `json:"start_date"`
+	EndDate   string        `json:"end_date"`
+	Counts    memberCounts  `json:"counts"`
+	Events    []eventDetail `json:"events"`
+}
+
+type eventDetail struct {
+	EventType string   `json:"event_type"` // "training" oder "game"
+	EventID   int      `json:"event_id"`
+	Date      string   `json:"date"`
+	Title     string   `json:"title"`
+	Category  Category `json:"category"`
+	Reason    *string  `json:"reason"`
+}
+
+// canSeeMemberStats prüft die Authz für Mitglieds-Statistik:
+// admin, sportliche_leitung, der Member selbst, Eltern via family_links,
+// oder Trainer eines Teams, in dessen Kader das Mitglied steht.
+func (h *Handler) canSeeMemberStats(ctx context.Context, claims *auth.Claims, memberID int) (bool, error) {
+	if claims == nil {
+		return false, nil
+	}
+	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
+		return true, nil
+	}
+	var ownUserID sql.NullInt64
+	if err := h.db.QueryRowContext(ctx,
+		`SELECT user_id FROM members WHERE id = ?`, memberID).Scan(&ownUserID); err != nil {
+		return false, err
+	}
+	if ownUserID.Valid && int(ownUserID.Int64) == claims.UserID {
+		return true, nil
+	}
+	var familyN int
+	if err := h.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM family_links WHERE parent_user_id = ? AND member_id = ?`,
+		claims.UserID, memberID).Scan(&familyN); err != nil {
+		return false, err
+	}
+	if familyN > 0 {
+		return true, nil
+	}
+	if !claims.HasFunction("trainer") {
+		return false, nil
+	}
+	var trainerN int
+	if err := h.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM trainer_memberships trm
+		JOIN seasons s ON s.id = trm.season_id AND s.is_active = 1
+		JOIN members tm ON tm.id = trm.member_id AND tm.user_id = ?
+		WHERE trm.team_id IN (
+			SELECT k.team_id FROM kader k
+			WHERE k.season_id = trm.season_id AND (
+				EXISTS (SELECT 1 FROM kader_members km          WHERE km.kader_id = k.id  AND km.member_id  = ?)
+				OR EXISTS (SELECT 1 FROM kader_extended_members kem WHERE kem.kader_id = k.id AND kem.member_id = ?)
+			)
+		)`,
+		claims.UserID, memberID, memberID).Scan(&trainerN); err != nil {
+		return false, err
+	}
+	return trainerN > 0, nil
+}
+
+// GetMemberStats — GET /api/members/{id}/attendance-stats?season=<id>
+func (h *Handler) GetMemberStats(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	memberID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var memberName string
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT first_name || ' ' || last_name FROM members WHERE id = ?`,
+		memberID).Scan(&memberName); err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	ok, err := h.canSeeMemberStats(r.Context(), claims, memberID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	seasonID, startDate, endDate, err := h.resolveSeason(r.Context(), r.URL.Query().Get("season"))
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if seasonID == 0 {
+		http.Error(w, "no active season", http.StatusNotFound)
+		return
+	}
+
+	events, counts, err := h.loadMemberEvents(r.Context(), memberID, seasonID, startDate, endDate)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "GetMemberStats: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	counts.MemberID = memberID
+	counts.MemberName = memberName
+
+	resp := memberStatsResponse{
+		MemberID:  memberID,
+		SeasonID:  seasonID,
+		StartDate: startDate,
+		EndDate:   endDate,
+		Counts:    counts,
+		Events:    events,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// loadMemberEvents liefert alle relevanten Trainings + Spiele eines Mitglieds
+// in einer Saison, klassifiziert sie und aggregiert die Zähler.
+func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, startDate, endDate string) ([]eventDetail, memberCounts, error) {
+	events := []eventDetail{}
+	counts := memberCounts{}
+
+	// Trainings: alle Sessions der Teams, in deren Kader oder erweitertem
+	// Kader das Mitglied in dieser Saison steht.
+	trainingRows, err := h.db.QueryContext(ctx, `
+		SELECT ts.id, ts.date, ts.title, ts.status,
+		       ta.present, tr.status, tr.absence_id IS NOT NULL, tr.reason
+		FROM training_sessions ts
+		WHERE ts.season_id = ?
+		  AND date(ts.date) BETWEEN date(?) AND date(?)
+		  AND ts.team_id IN (
+		    SELECT k.team_id FROM kader k
+		    WHERE k.season_id = ? AND (
+		      EXISTS (SELECT 1 FROM kader_members km          WHERE km.kader_id = k.id  AND km.member_id  = ?)
+		      OR EXISTS (SELECT 1 FROM kader_extended_members kem WHERE kem.kader_id = k.id AND kem.member_id = ?)
+		    )
+		  )
+		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = ?
+		LEFT JOIN training_responses  tr ON tr.training_id = ts.id AND tr.member_id = ?
+		ORDER BY ts.date, ts.id`,
+		seasonID, startDate, endDate, seasonID, memberID, memberID, memberID, memberID)
+	if err != nil {
+		return nil, counts, fmt.Errorf("training events: %w", err)
+	}
+	for trainingRows.Next() {
+		var ev eventDetail
+		var status string
+		var present sql.NullInt64
+		var respStatus, reason sql.NullString
+		var hasAbsence bool
+		if err := trainingRows.Scan(&ev.EventID, &ev.Date, &ev.Title, &status,
+			&present, &respStatus, &hasAbsence, &reason); err != nil {
+			trainingRows.Close()
+			return nil, counts, err
+		}
+		ev.EventType = "training"
+		if ev.Title == "" {
+			ev.Title = "Training"
+		}
+		if status == "cancelled" {
+			ev.Category = CategoryCanceled
+		} else {
+			ev.Category = classifyRow(present, respStatus, hasAbsence)
+			tallyCount(&counts, ev.EventType, ev.Category)
+		}
+		if reason.Valid && reason.String != "" {
+			s := reason.String
+			ev.Reason = &s
+		}
+		events = append(events, ev)
+	}
+	trainingRows.Close()
+
+	// Spiele: alle Spiele, deren team_ids im selben Sinn das Mitglied
+	// enthalten.
+	gameRows, err := h.db.QueryContext(ctx, `
+		SELECT g.id, g.date,
+		       COALESCE(NULLIF(g.opponent, ''), 'Spiel'),
+		       g.status, ga.present, gr.status, gr.absence_id IS NOT NULL, gr.reason
+		FROM games g
+		WHERE g.season_id = ?
+		  AND date(g.date) BETWEEN date(?) AND date(?)
+		  AND EXISTS (
+		    SELECT 1 FROM game_teams gt
+		    JOIN kader k ON k.team_id = gt.team_id AND k.season_id = g.season_id
+		    WHERE gt.game_id = g.id AND (
+		      EXISTS (SELECT 1 FROM kader_members km          WHERE km.kader_id = k.id  AND km.member_id  = ?)
+		      OR EXISTS (SELECT 1 FROM kader_extended_members kem WHERE kem.kader_id = k.id AND kem.member_id = ?)
+		    )
+		  )
+		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = ?
+		LEFT JOIN game_responses   gr ON gr.game_id = g.id AND gr.member_id = ?
+		ORDER BY g.date, g.id`,
+		seasonID, startDate, endDate, memberID, memberID, memberID, memberID)
+	if err != nil {
+		return nil, counts, fmt.Errorf("game events: %w", err)
+	}
+	defer gameRows.Close()
+	for gameRows.Next() {
+		var ev eventDetail
+		var status string
+		var present sql.NullInt64
+		var respStatus, reason sql.NullString
+		var hasAbsence bool
+		if err := gameRows.Scan(&ev.EventID, &ev.Date, &ev.Title, &status,
+			&present, &respStatus, &hasAbsence, &reason); err != nil {
+			return nil, counts, err
+		}
+		ev.EventType = "game"
+		if status == "cancelled" {
+			ev.Category = CategoryCanceled
+		} else {
+			ev.Category = classifyRow(present, respStatus, hasAbsence)
+			tallyCount(&counts, ev.EventType, ev.Category)
+		}
+		if reason.Valid && reason.String != "" {
+			s := reason.String
+			ev.Reason = &s
+		}
+		events = append(events, ev)
+	}
+	return events, counts, nil
+}
+
+// classifyRow ist die SQL-Adapter-Variante von Classify: nimmt die rohen
+// NullInt64/NullString-Werte und ruft die reine Funktion auf.
+func classifyRow(present sql.NullInt64, respStatus sql.NullString, hasAbsence bool) Category {
+	var p *bool
+	if present.Valid {
+		b := present.Int64 == 1
+		p = &b
+	}
+	declined := respStatus.Valid && respStatus.String == "declined"
+	return Classify(p, declined, hasAbsence)
+}
+
+func tallyCount(c *memberCounts, evType string, cat Category) {
+	switch evType {
+	case "training":
+		switch cat {
+		case CategoryPresent:
+			c.TrainingPresent++
+		case CategoryMissed:
+			c.TrainingMissed++
+		case CategoryExcused:
+			c.TrainingExcused++
+		}
+	case "game":
+		switch cat {
+		case CategoryPresent:
+			c.GamePresent++
+		case CategoryMissed:
+			c.GameMissed++
+		case CategoryExcused:
+			c.GameExcused++
+		}
+	}
+}
