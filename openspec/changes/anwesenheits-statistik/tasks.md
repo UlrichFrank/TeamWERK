@@ -5,10 +5,10 @@
 
 ## 2. Backend — Spiel-Anwesenheits-Routen (`internal/games/`)
 
-- [ ] 2.1 Handler-Methode `PostGameAttendances` in `internal/games/handler.go`: Bulk-Upsert auf `game_attendances`, nur vergangene Spiele (422 sonst), Authz Trainer eigenes Team / sportliche_leitung / admin (403 sonst), 404 für nicht existierende Spiele
-- [ ] 2.2 Handler-Methode `GetGameAttendances`: Liste aller Kader-Mitglieder (Stamm + erweitert dedupliziert, mit `is_extended`), inkl. `rsvp_status`, `reason`, `present` (nullable)
+- [x] 2.1 Handler-Methode `PostGameAttendances` in `internal/games/handler.go`: Bulk-Upsert auf `game_attendances`, nur vergangene Spiele (422 sonst), Authz Trainer eigenes Team / sportliche_leitung / admin (403 sonst), 404 für nicht existierende Spiele
+- [x] 2.2 Handler-Methode `GetGameAttendances`: Liste aller Kader-Mitglieder (Stamm + erweitert dedupliziert, mit `is_extended`), inkl. `rsvp_status`, `reason`, `present` (nullable)
 - [ ] 2.3 Beide Routen in `internal/app/router.go` unter dem passenden Auth-Tier eintragen
-- [ ] 2.4 `PostGameAttendances` ruft `h.hub.Broadcast("attendance-changed")` auf
+- [x] 2.4 `PostGameAttendances` ruft `h.hub.Broadcast("attendance-changed")` auf
 - [ ] 2.5 Tests in `internal/games/`: Happy-Path POST (200), zukünftiges Spiel (422), fremdes Team als Trainer (403), unauthentifiziert (401), nicht existierendes Spiel (404), GET happy path inkl. is_extended + nullable present, GET unauthorisiert (403)
 
 ## 3. Backend — Aggregations-Package (`internal/attendance/`)
