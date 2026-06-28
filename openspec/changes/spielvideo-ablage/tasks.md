@@ -87,8 +87,8 @@
 
 ## 11. Validierung
 
-- [ ] 11.1 `make test` grün (inkl. neuer Architektur-Test-Klassifizierung für `internal/videos`)
-- [ ] 11.2 `make lint` grün
-- [ ] 11.3 `openspec validate spielvideo-ablage --strict` grün
+- [x] 11.1 `make test` grün (inkl. neuer Architektur-Test-Klassifizierung für `internal/videos`)
+- [x] 11.2 `make lint` grün
+- [x] 11.3 `openspec validate spielvideo-ablage --strict` grün
 - [ ] 11.4 Manueller End-to-End-Test: Upload → Transcode-Wartezeit → Push erhalten → Abspielen funktioniert → Löschen entfernt Dateien
-- [ ] 11.5 `/verify-change` ausführen
+- [x] 11.5 `/verify-change` ausführen
