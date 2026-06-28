@@ -12,6 +12,7 @@ import (
 	_ "time/tzdata"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
 
 type Handler struct {
@@ -256,7 +257,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 			location = strings.Join(parts, ", ")
 		}
 
-		startDT := parseDT(date, startTime, loc)
+		startDT := timez.ParseDT(date, startTime, loc)
 
 		var endDT time.Time
 		hasEnd := false
@@ -265,7 +266,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 			if endDate.Valid && endDate.String != "" {
 				endDateStr = endDate.String
 			}
-			endDT = parseDT(endDateStr, endTime.String, loc)
+			endDT = timez.ParseDT(endDateStr, endTime.String, loc)
 			hasEnd = true
 		} else {
 			endDT = startDT.Add(2 * time.Hour)
@@ -329,8 +330,8 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 			}
 			location = strings.Join(parts, ", ")
 		}
-		start := parseDT(date, startTime, loc)
-		end := parseDT(date, endTime, loc)
+		start := timez.ParseDT(date, startTime, loc)
+		end := timez.ParseDT(date, endTime, loc)
 		events = append(events, calEvent{
 			UID:         fmt.Sprintf("training-%d@teamwerk", id),
 			Summary:     summary,
@@ -368,7 +369,7 @@ func (h *Handler) fetchDuties(r *http.Request, userID int) ([]calEvent, error) {
 		if eventTime == "" {
 			eventTime = "00:00"
 		}
-		start := parseDT(eventDate, eventTime, loc)
+		start := timez.ParseDT(eventDate, eventTime, loc)
 		events = append(events, calEvent{
 			UID:     fmt.Sprintf("duty-%d@teamwerk", id),
 			Summary: "Dienst: " + dutyTypeName + " – " + eventName,
@@ -449,22 +450,6 @@ func escapeText(s string) string {
 
 func formatDT(t time.Time) string {
 	return t.Format("20060102T150405")
-}
-
-func parseDT(date, timeStr string, loc *time.Location) time.Time {
-	// modernc.org/sqlite returns DATE columns as full ISO timestamps
-	// ("2026-08-15T00:00:00Z"), not "2026-08-15" — normalize to the date part.
-	if len(date) > 10 {
-		date = date[:10]
-	}
-	if timeStr == "" {
-		timeStr = "00:00"
-	}
-	t, err := time.ParseInLocation("2006-01-02 15:04", date+" "+timeStr, loc)
-	if err != nil {
-		t, _ = time.ParseInLocation("2006-01-02", date, loc)
-	}
-	return t
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
