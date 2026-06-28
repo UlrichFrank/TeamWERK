@@ -11,6 +11,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/health"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
 
 // logIfBusy emittiert ein strukturiertes slog.Warn, falls err einen SQLITE_BUSY-
@@ -201,10 +202,15 @@ func hashDate(date string) int {
 }
 
 func (s *Scheduler) sendGameReminders() {
-	// Target: games starting in 20-28h (generous window to handle minute-level cron)
-	now := time.Now()
-	from := now.Add(20 * time.Hour).Format("2006-01-02")
-	to := now.Add(28 * time.Hour).Format("2006-01-02")
+	// Two reminder slots per game: 24h before (planning) and 3h before (event
+	// day). The exact firing moment is the game's Berlin wall-clock instant, so
+	// reminders are correct regardless of the server timezone (the VPS runs UTC).
+	berlin := timez.Berlin()
+	now := time.Now().In(berlin)
+	// Candidate date range: any game whose start is within the next 24h has a
+	// date of today or (just past midnight) tomorrow — widen to +25h to be safe.
+	from := now.Format("2006-01-02")
+	to := now.Add(25 * time.Hour).Format("2006-01-02")
 
 	rows, err := s.db.Query(`
 		SELECT g.id, g.opponent, g.date, g.time, gt.team_id, t.name, g.event_type
@@ -237,21 +243,31 @@ func (s *Scheduler) sendGameReminders() {
 
 	sent := 0
 	for _, g := range games {
-		uids := s.unsentUIDs(s.teamMembersAndParents(g.teamID), "game_reminder", g.id)
-		if len(uids) == 0 {
-			continue
+		eventAt := timez.ParseDT(g.date, g.time, berlin)
+		until := eventAt.Sub(now)
+		if until < 0 {
+			continue // already started/past
 		}
 		title := "Spielerinnerung"
 		if g.eventType == "generisch" {
 			title = "Terminerinnerung"
 		}
-		body := g.teamName + ": " + g.opponent + " — morgen um " + g.time + " Uhr"
-		notify.Send(s.db, s.cfg, uids, "games",
-			title, body, fmt.Sprintf("/termine?focus=game-%d", g.id))
-		for _, uid := range uids {
-			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
-				uid, "game_reminder", g.id)
-			sent++
+		recipients := s.teamMembersAndParents(g.teamID)
+		url := fmt.Sprintf("/termine?focus=game-%d", g.id)
+
+		if until <= 24*time.Hour {
+			if uids := s.claimUnsent(recipients, "game_reminder_24h", g.id); len(uids) > 0 {
+				body := g.teamName + ": " + g.opponent + " — morgen um " + g.time + " Uhr"
+				notify.Send(s.db, s.cfg, uids, "games", title, body, url)
+				sent += len(uids)
+			}
+		}
+		if until <= 3*time.Hour {
+			if uids := s.claimUnsent(recipients, "game_reminder_3h", g.id); len(uids) > 0 {
+				body := g.teamName + ": " + g.opponent + " — heute um " + g.time + " Uhr"
+				notify.Send(s.db, s.cfg, uids, "games", title, body, url)
+				sent += len(uids)
+			}
 		}
 	}
 	if sent > 0 {
@@ -259,25 +275,35 @@ func (s *Scheduler) sendGameReminders() {
 	}
 }
 
-// unsentUIDs filters out users that already have a notification_log row
-// matching (refType, refID).
-func (s *Scheduler) unsentUIDs(uids []int, refType string, refID int) []int {
-	out := uids[:0:len(uids)]
+// claimUnsent atomically reserves a reminder slot per user and returns only the
+// user IDs for which this call newly claimed it (RowsAffected == 1). The
+// notification_log row is written BEFORE the push is sent, so a concurrent or
+// repeated scheduler run cannot double-send: the second INSERT OR IGNORE yields
+// RowsAffected == 0 and that user is dropped. Each (refType, refID) pair is one
+// idempotent slot — e.g. "game_reminder_24h" and "game_reminder_3h" for the same
+// game are independent slots that each fire exactly once.
+func (s *Scheduler) claimUnsent(uids []int, refType string, refID int) []int {
+	var claimed []int
 	for _, uid := range uids {
-		var exists int
-		s.db.QueryRow(`SELECT 1 FROM notification_log WHERE user_id=? AND ref_type=? AND ref_id=?`,
-			uid, refType, refID).Scan(&exists)
-		if exists == 0 {
-			out = append(out, uid)
+		res, err := s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+			uid, refType, refID)
+		if err != nil {
+			logIfBusy(err, "claimUnsent")
+			continue
+		}
+		if n, _ := res.RowsAffected(); n == 1 {
+			claimed = append(claimed, uid)
 		}
 	}
-	return out
+	return claimed
 }
 
 func (s *Scheduler) sendTrainingReminders() {
-	now := time.Now()
-	from := now.Add(20 * time.Hour).Format("2006-01-02")
-	to := now.Add(28 * time.Hour).Format("2006-01-02")
+	// Same two-slot model as games (24h + 3h), Berlin wall-clock based.
+	berlin := timez.Berlin()
+	now := time.Now().In(berlin)
+	from := now.Format("2006-01-02")
+	to := now.Add(25 * time.Hour).Format("2006-01-02")
 
 	rows, err := s.db.Query(`
 		SELECT ts.id, ts.team_id, COALESCE(NULLIF(ts.title,''),'Training'), ts.date, ts.start_time, t.name
@@ -309,17 +335,27 @@ func (s *Scheduler) sendTrainingReminders() {
 
 	sent := 0
 	for _, sess := range sessions {
-		uids := s.unsentUIDs(s.teamMembersAndParents(sess.teamID), "training_reminder", sess.id)
-		if len(uids) == 0 {
+		eventAt := timez.ParseDT(sess.date, sess.startTime, berlin)
+		until := eventAt.Sub(now)
+		if until < 0 {
 			continue
 		}
-		body := sess.teamName + ": " + sess.title + " — morgen um " + sess.startTime + " Uhr"
-		notify.Send(s.db, s.cfg, uids, "trainings",
-			"Trainingserinnerung", body, fmt.Sprintf("/termine?focus=training-%d", sess.id))
-		for _, uid := range uids {
-			s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
-				uid, "training_reminder", sess.id)
-			sent++
+		recipients := s.teamMembersAndParents(sess.teamID)
+		url := fmt.Sprintf("/termine?focus=training-%d", sess.id)
+
+		if until <= 24*time.Hour {
+			if uids := s.claimUnsent(recipients, "training_reminder_24h", sess.id); len(uids) > 0 {
+				body := sess.teamName + ": " + sess.title + " — morgen um " + sess.startTime + " Uhr"
+				notify.Send(s.db, s.cfg, uids, "trainings", "Trainingserinnerung", body, url)
+				sent += len(uids)
+			}
+		}
+		if until <= 3*time.Hour {
+			if uids := s.claimUnsent(recipients, "training_reminder_3h", sess.id); len(uids) > 0 {
+				body := sess.teamName + ": " + sess.title + " — heute um " + sess.startTime + " Uhr"
+				notify.Send(s.db, s.cfg, uids, "trainings", "Trainingserinnerung", body, url)
+				sent += len(uids)
+			}
 		}
 	}
 	if sent > 0 {
@@ -328,17 +364,19 @@ func (s *Scheduler) sendTrainingReminders() {
 }
 
 func (s *Scheduler) sendCarpoolingReminders() {
-	now := time.Now()
-	from := now.Add(2 * time.Hour).Format("2006-01-02 15:04")
-	to := now.Add(4 * time.Hour).Format("2006-01-02 15:04")
+	// Single slot: exactly 3h before departure (the game's Berlin wall-clock
+	// start), for confirmed pairings only.
+	berlin := timez.Berlin()
+	now := time.Now().In(berlin)
+	from := now.Format("2006-01-02")
+	to := now.Add(4 * time.Hour).Format("2006-01-02")
 
-	// Find games in ~3h that have confirmed pairings
 	rows, err := s.db.Query(`
 		SELECT DISTINCT mg.user_id, g.id, g.opponent, g.date, g.time
 		FROM mitfahrgelegenheiten mg
 		JOIN games g ON g.id = mg.game_id
 		JOIN mitfahrt_paarungen p ON (p.biete_id = mg.id OR p.suche_id = mg.id) AND p.status = 'confirmed'
-		WHERE (g.date || ' ' || g.time) BETWEEN ? AND ?`, from, to)
+		WHERE g.date BETWEEN ? AND ?`, from, to)
 	if err != nil {
 		logIfBusy(err, "sendCarpoolingReminders.query")
 		slog.Error("scheduler carpooling reminders failed", "error", err)
@@ -362,14 +400,16 @@ func (s *Scheduler) sendCarpoolingReminders() {
 
 	sent := 0
 	for _, c := range entries {
-		uids := s.unsentUIDs([]int{c.userID}, "carpooling_reminder", c.gameID)
+		until := timez.ParseDT(c.date, c.time, berlin).Sub(now)
+		if until < 0 || until > 3*time.Hour {
+			continue
+		}
+		uids := s.claimUnsent([]int{c.userID}, "carpooling_reminder", c.gameID)
 		if len(uids) == 0 {
 			continue
 		}
 		notify.Send(s.db, s.cfg, uids, "carpooling",
 			"Fahrgemeinschaft heute", c.opponent+" — Abfahrt um "+c.time+" Uhr", "/mitfahrgelegenheiten")
-		s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
-			c.userID, "carpooling_reminder", c.gameID)
 		sent++
 	}
 	if sent > 0 {
