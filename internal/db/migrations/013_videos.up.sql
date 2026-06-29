@@ -1,4 +1,4 @@
--- 012_videos: Tabelle für selbst gehostete Spielvideos (HLS, self-hosted auf VPS).
+-- 013_videos: Tabelle für selbst gehostete Spielvideos (HLS, self-hosted auf VPS).
 -- Jedes Video gehört zu genau einem Team und einer Saison; Auslieferung nur an
 -- berechtigte Nutzer (siehe internal/videos/access.go). Hinweis: design.md spricht von
 -- `saisons(id)`, die reale Tabelle heißt jedoch `seasons` (siehe 001_initial.up.sql).

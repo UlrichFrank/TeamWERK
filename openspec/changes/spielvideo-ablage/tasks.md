@@ -1,7 +1,7 @@
 ## 1. Datenbank
 
-- [x] 1.1 Migration `012_videos.up.sql` anlegen: Tabelle `videos` (Schema siehe `design.md`), Indizes auf `(team_id, status)`, `(season_id)`, `(status, created_at)`
-- [x] 1.2 Migration `012_videos.down.sql` anlegen
+- [x] 1.1 Migration `013_videos.up.sql` anlegen: Tabelle `videos` (Schema siehe `design.md`), Indizes auf `(team_id, status)`, `(season_id)`, `(status, created_at)`
+- [x] 1.2 Migration `013_videos.down.sql` anlegen
 - [x] 1.3 `make migrate-up` lokal ausführen und Schema prüfen
 - [x] 1.4 Testfixture `internal/testutil/CreateVideo(...)` ergänzen
 
