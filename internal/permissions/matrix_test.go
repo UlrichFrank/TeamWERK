@@ -223,6 +223,11 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/chat/broadcasts/{id}/read", expected: exPublic},
 	{method: "PUT", path: "/api/chat/broadcasts/{id}", expected: exPublic},
 	{method: "DELETE", path: "/api/chat/broadcasts/{id}", expected: exPublic},
+	// Team-Standard-Gruppen (Picker im "Neues Gespräch"-Modal):
+	// List ist für alle Eingeloggten erlaubt (liefert leere Liste bei fehlender Saison/Mitgliedschaft).
+	// Resolve gating geschieht im Handler (canSeeTeamGroup); für die Matrix gilt: kein Auth-Tier-Gate.
+	{method: "GET", path: "/api/chat/team-groups", expected: exAuth},
+	{method: "GET", path: "/api/chat/team-groups/{teamId}/{kind}/members", expected: exPublic},
 
 	// Members (self-service)
 	{method: "GET", path: "/api/users/{id}/contact", expected: exAuth},

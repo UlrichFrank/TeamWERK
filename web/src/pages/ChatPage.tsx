@@ -59,6 +59,22 @@ interface Broadcast {
 }
 interface ChatUser { id: number; name: string }
 
+interface TeamGroup {
+  teamId: number
+  ageClass: string
+  gender: string
+  teamNumber: number
+  groupCount: number
+  kind: 'trainer' | 'spieler' | 'eltern'
+  count: number
+}
+
+const TEAM_GROUP_KIND_LABEL: Record<TeamGroup['kind'], string> = {
+  trainer: 'Trainer',
+  spieler: 'Spieler',
+  eltern: 'Eltern',
+}
+
 type Tab = 'chats' | 'broadcasts'
 
 interface ContextMenuState {
@@ -1168,6 +1184,18 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
   const [groupName, setGroupName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [teamGroups, setTeamGroups] = useState<TeamGroup[]>([])
+  const [resolvingTag, setResolvingTag] = useState<string | null>(null)
+  const [pickedTags, setPickedTags] = useState<Set<string>>(new Set())
+
+  const tagKey = (tg: { teamId: number; kind: TeamGroup['kind'] }) => `${tg.teamId}:${tg.kind}`
+  const teamGroupShortNames = useMemo(() => {
+    const teamLookup = teamGroups.map(tg => ({
+      id: tg.teamId, age_class: tg.ageClass, gender: tg.gender,
+      team_number: tg.teamNumber, group_count: tg.groupCount,
+    }))
+    return buildTeamShortNames(teamLookup)
+  }, [teamGroups])
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -1178,6 +1206,49 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
     }, 200)
     return () => clearTimeout(t)
   }, [query])
+
+  useEffect(() => {
+    if (type !== 'group') return
+    api.get('/chat/team-groups').then(r => setTeamGroups(r.data ?? [])).catch(() => {})
+  }, [type])
+
+  const visibleTeamGroups = useMemo(() => {
+    if (type !== 'group') return []
+    const q = query.trim().toLowerCase()
+    return teamGroups.filter(tg => {
+      if (pickedTags.has(tagKey(tg))) return false
+      if (!q) return true
+      const short = (teamGroupShortNames.get(tg.teamId) ?? '').toLowerCase()
+      const kindLabel = TEAM_GROUP_KIND_LABEL[tg.kind].toLowerCase()
+      return short.includes(q) || kindLabel.includes(q)
+    })
+  }, [type, teamGroups, query, pickedTags, teamGroupShortNames])
+
+  const addTeamGroup = async (tg: TeamGroup) => {
+    const key = tagKey(tg)
+    if (resolvingTag) return
+    setResolvingTag(key)
+    try {
+      const r = await api.get(`/chat/team-groups/${tg.teamId}/${tg.kind}/members`)
+      const incoming: ChatUser[] = r.data ?? []
+      setSelected(prev => {
+        const seen = new Set(prev.map(p => p.id))
+        const merged = [...prev]
+        for (const u of incoming) {
+          if (!seen.has(u.id)) {
+            merged.push(u)
+            seen.add(u.id)
+          }
+        }
+        return merged
+      })
+      setPickedTags(prev => new Set(prev).add(key))
+    } catch (e) {
+      setError(errorMessage(e, 'Gruppe konnte nicht aufgelöst werden'))
+    } finally {
+      setResolvingTag(null)
+    }
+  }
 
   const toggleUser = (u: ChatUser) => {
     if (type === 'direct') {
@@ -1256,7 +1327,35 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
           </div>
         )}
 
-        <div className="max-h-48 overflow-y-auto border border-brand-border-subtle rounded-md mb-4">
+        <div className="max-h-64 overflow-y-auto border border-brand-border-subtle rounded-md mb-4">
+          {type === 'group' && visibleTeamGroups.length > 0 && (
+            <>
+              <div className="px-3 py-1.5 text-xs uppercase text-brand-text-muted bg-brand-surface-card border-b border-brand-border-subtle">
+                Standard-Gruppen
+              </div>
+              {visibleTeamGroups.map(tg => {
+                const key = tagKey(tg)
+                const short = teamGroupShortNames.get(tg.teamId) ?? `Team ${tg.teamId}`
+                return (
+                  <button
+                    key={key}
+                    onClick={() => addTeamGroup(tg)}
+                    disabled={resolvingTag === key}
+                    className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors disabled:opacity-50"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-brand-text-muted" />
+                      {TEAM_GROUP_KIND_LABEL[tg.kind]} {short}
+                    </span>
+                    <span className="text-xs text-brand-text-muted">{tg.count}</span>
+                  </button>
+                )
+              })}
+              <div className="px-3 py-1.5 text-xs uppercase text-brand-text-muted bg-brand-surface-card border-y border-brand-border-subtle">
+                Personen
+              </div>
+            </>
+          )}
           {users.map(u => (
             <button
               key={u.id}
@@ -1266,7 +1365,9 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
               {u.name}
             </button>
           ))}
-          {users.length === 0 && <p className="text-brand-text-muted text-sm p-3 text-center">Keine Ergebnisse</p>}
+          {users.length === 0 && visibleTeamGroups.length === 0 && (
+            <p className="text-brand-text-muted text-sm p-3 text-center">Keine Ergebnisse</p>
+          )}
         </div>
 
         {error && <p className="text-brand-danger text-sm mb-3">{error}</p>}

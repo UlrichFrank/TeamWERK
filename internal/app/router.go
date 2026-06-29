@@ -179,6 +179,8 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Post("/api/chat/broadcasts/{id}/read", h.Chat.MarkBroadcastRead)
 		r.Put("/api/chat/broadcasts/{id}", h.Chat.EditBroadcast)
 		r.Delete("/api/chat/broadcasts/{id}", h.Chat.DeleteBroadcast)
+		r.Get("/api/chat/team-groups", h.Chat.ListTeamGroups)
+		r.Get("/api/chat/team-groups/{teamId}/{kind}/members", h.Chat.ResolveTeamGroup)
 
 		// Members
 		r.Get("/api/users/{id}/contact", h.Members.GetContact)
