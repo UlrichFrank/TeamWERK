@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/httprate"
 
 	"github.com/teamstuttgart/teamwerk/internal/absences"
+	"github.com/teamstuttgart/teamwerk/internal/attendance"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
 	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
@@ -55,6 +56,7 @@ type Handlers struct {
 	Notif          *notifications.Handler
 	Training       *trainings.Handler
 	Absences       *absences.Handler
+	Attendance     *attendance.Handler
 	Teams          *teams.Handler
 	Venues         *venues.Handler
 	Beitragssaetze *beitragssaetze.Handler
@@ -275,6 +277,10 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/games/{id}/responses", h.Games.ListGameResponses)
 		r.Get("/api/games/{id}/participants", h.Games.GetParticipants)
 		r.Post("/api/games/{id}/lineup", h.Games.SaveLineup)
+		r.Get("/api/games/{id}/attendances", h.Games.GetAttendances)
+		r.Get("/api/teams/{id}/attendance-stats", h.Attendance.GetTeamStats)
+		r.Get("/api/teams/{id}/attendance-open", h.Attendance.GetTeamOpen)
+		r.Get("/api/members/{id}/attendance-stats", h.Attendance.GetMemberStats)
 
 		// Trainings (read + RSVP — all authenticated)
 		r.Get("/api/training-sessions", h.Training.ListSessions)
@@ -315,6 +321,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Put("/api/training-sessions/{id}", h.Training.UpdateSession)
 			r.Delete("/api/training-sessions/{id}", h.Training.DeleteSession)
 			r.Post("/api/training-sessions/{id}/attendances", h.Training.SaveAttendances)
+			r.Post("/api/games/{id}/attendances", h.Games.SaveAttendances)
 			r.Post("/api/duty-assignments/{id}/fulfill", h.Duties.Fulfill)
 			r.Post("/api/duty-assignments/{id}/cash-substitute", h.Duties.CashSubstitute)
 		})

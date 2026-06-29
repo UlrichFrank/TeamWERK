@@ -339,6 +339,14 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/games/{id}/participants", expected: exAuth},
 	// lineup: Handler-Level-Gate (admin || trainer — kein vorstand, kein sportliche_leitung)
 	{method: "POST", path: "/api/games/{id}/lineup", expected: exLineup},
+	// attendance: GET unter Authenticated (Handler-Authz: admin/sL/trainer);
+	// POST unter Trainer+sL (RequireClubFunction-Group).
+	{method: "GET", path: "/api/games/{id}/attendances", expected: exAuth},
+
+	// Anwesenheits-Statistik (Authenticated; Handler-Authz)
+	{method: "GET", path: "/api/teams/{id}/attendance-stats", expected: exAuth},
+	{method: "GET", path: "/api/teams/{id}/attendance-open", expected: exAuth},
+	{method: "GET", path: "/api/members/{id}/attendance-stats", expected: exAuth},
 
 	// Trainings (read + RSVP)
 	{method: "GET", path: "/api/training-sessions", expected: exAuth},
@@ -376,6 +384,7 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/training-sessions/{id}", expected: exTrainer},
 	{method: "DELETE", path: "/api/training-sessions/{id}", expected: exTrainer},
 	{method: "POST", path: "/api/training-sessions/{id}/attendances", expected: exTrainer},
+	{method: "POST", path: "/api/games/{id}/attendances", expected: exTrainer},
 	{method: "POST", path: "/api/duty-assignments/{id}/fulfill", expected: exTrainer},
 	{method: "POST", path: "/api/duty-assignments/{id}/cash-substitute", expected: exTrainer},
 
