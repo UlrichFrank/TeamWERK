@@ -26,7 +26,10 @@ function fakeFile(name: string, size: number): File {
   return f
 }
 
-const TEAMS = [{ id: 7, name: 'Herren 1' }]
+const TEAMS = [{
+  id: 7, name: 'Herren 1',
+  age_class: 'A', gender: 'm', team_number: 1, group_count: 1, is_active: true,
+}]
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -42,7 +45,8 @@ describe('VideoUploadPage', () => {
     expect(screen.getByRole('heading', { name: /Video hochladen/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/Titel/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Team/i)).toBeInTheDocument()
-    expect(await screen.findByRole('option', { name: 'Herren 1' })).toBeInTheDocument()
+    // Kurz-Name aus buildTeamShortNames: gender=m, age_class=A, group_count=1 → "mA".
+    expect(await screen.findByRole('option', { name: 'mA' })).toBeInTheDocument()
   })
 
   test('blockiert Dateien über 2 GB', async () => {

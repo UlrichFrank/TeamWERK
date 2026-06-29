@@ -1,4 +1,5 @@
 ## 29.06.2026
+- [fix] attendance: Teamname in Stats-Response + Team-Auswahl im Kalender-Stil
 - [feat] chat: Standard-Gruppen als Bulk-Selector im Gespräch-Modal
 - [fix] videos: Migration 012 -> 013 (Kollision mit anwesenheits-statistik)
 

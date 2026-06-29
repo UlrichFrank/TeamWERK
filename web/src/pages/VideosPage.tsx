@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, Video } from 'lucide-react'
 import { api } from '../lib/api'
@@ -8,6 +8,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import MobileCard from '../components/MobileCard'
 import VideoStatusPill from '../components/VideoStatusPill'
 import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
+import { buildTeamShortNames } from '../lib/teamName'
 
 interface VideoItem {
   id: number
@@ -32,6 +33,11 @@ interface VideoListResponse {
 interface Team {
   id: number
   name: string
+  age_class: string
+  gender: string
+  team_number: number
+  group_count: number
+  is_active: boolean
 }
 
 const PAGE_SIZE = 50
@@ -104,6 +110,8 @@ export default function VideosPage() {
   })
 
   const hasMore = items.length < total
+  const activeTeams = useMemo(() => teams.filter(t => t.is_active), [teams])
+  const shortNames = useMemo(() => buildTeamShortNames(activeTeams), [activeTeams])
 
   return (
     <div>
@@ -115,18 +123,18 @@ export default function VideosPage() {
               value={teamFilter}
               onChange={e => setTeamFilter(e.target.value)}
               aria-label="Team filtern"
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+              className="border border-brand-border rounded-md px-2 py-2.5 sm:py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-24 sm:shrink-0"
             >
-              <option value="">Alle Teams</option>
-              {teams.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+              <option value="">Teams</option>
+              {activeTeams.map(t => (
+                <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
               ))}
             </select>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
               aria-label="Status filtern"
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+              className="border border-brand-border rounded-md px-2 py-2.5 sm:py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto sm:shrink-0"
             >
               {STATUS_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -135,9 +143,9 @@ export default function VideosPage() {
             {canUpload && (
               <button
                 onClick={() => navigate('/videos/upload')}
-                className="inline-flex items-center justify-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className="inline-flex items-center justify-center gap-1 rounded-md px-3 py-2.5 sm:py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors sm:shrink-0"
               >
-                <Upload className="w-4 h-4" />
+                <Upload className="w-3.5 h-3.5" />
                 Video hochladen
               </button>
             )}

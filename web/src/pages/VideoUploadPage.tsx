@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import * as tus from 'tus-js-client'
-import { Upload, X, AlertTriangle } from 'lucide-react'
+import { Upload, X, AlertTriangle, Info } from 'lucide-react'
 import { api, getAccessToken } from '../lib/api'
+import { buildTeamShortNames } from '../lib/teamName'
 
 const MAX_SIZE = 2 * 1024 * 1024 * 1024 // 2 GiB
 
@@ -14,6 +15,11 @@ type PreviousUpload = Awaited<ReturnType<tus.Upload['findPreviousUploads']>>[num
 interface Team {
   id: number
   name: string
+  age_class: string
+  gender: string
+  team_number: number
+  group_count: number
+  is_active: boolean
 }
 
 interface GameTeam {
@@ -73,6 +79,9 @@ export default function VideoUploadPage() {
 
   const uploadRef = useRef<tus.Upload | null>(null)
   const startTimeRef = useRef(0)
+
+  const activeTeams = useMemo(() => teams.filter(t => t.is_active), [teams])
+  const shortNames = useMemo(() => buildTeamShortNames(activeTeams), [activeTeams])
 
   // Teams laden (nur die der User hochladen darf — Server erzwingt zusätzlich 403).
   useEffect(() => {
@@ -290,7 +299,21 @@ export default function VideoUploadPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 space-y-4">
+        <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text mb-4 flex items-start gap-2">
+           <Info className="w-4 h-4 mt-0.5 shrink-0 text-brand-info" />
+           <div className="space-y-1">
+             <p className="font-medium">So läuft die Bereitstellung</p>
+             <ol className="list-decimal list-inside text-brand-text-muted space-y-0.5">
+               <li>Upload (max. 2 GB, pausierbar/wiederaufnehmbar).</li>
+              <li>Konvertierung im Hintergrund nach HLS 720p + 360p — dauert grob so lange wie das Video selbst.</li>
+              <li>Sobald fertig: Push-Benachrichtigung an Uploader, Spieler, Eltern und Trainer; Video erscheint in der Liste.</li>
+            </ol>
+            <p className="text-brand-text-muted">
+              Sichtbar nur für Team-Mitglieder, Eltern, Trainer, Vorstand. Automatische Löschung 90 Tage nach Saisonende.
+            </p>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 space-y-4">
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-brand-text mb-1">Titel *</label>
           <input
@@ -327,8 +350,8 @@ export default function VideoUploadPage() {
             className={inputCls}
           >
             <option value="">Team auswählen…</option>
-            {teams.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+            {activeTeams.map(t => (
+              <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
             ))}
           </select>
         </div>
