@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AlertTriangle, Check, MinusCircle, X, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { buildTeamShortNames } from '../lib/teamName'
 
 interface MemberCounts {
   member_id: number
@@ -26,6 +27,7 @@ interface Averages {
 
 interface TeamStats {
   team_id: number
+  team_name: string
   season_id: number
   start_date: string
   end_date: string
@@ -42,7 +44,15 @@ interface OpenItem {
   title: string
 }
 
-interface TeamRef { id: number; name: string }
+interface TeamRef {
+  id: number
+  name: string
+  age_class: string
+  gender: string
+  team_number: number
+  group_count: number
+  is_active: boolean
+}
 
 function quote(present: number, missed: number): string {
   const denom = present + missed
@@ -187,19 +197,25 @@ export default function TeamAnwesenheitPage() {
 
   const openMember = (memberId: number) => navigate(`/profil/anwesenheit?member=${memberId}`)
 
-  const teamName = teams.find(t => t.id === teamId)?.name
+  // Stats-Response liefert team_name autoritativ — fängt Teams ohne aktiven Kader ab,
+  // die nicht in der /teams-Dropdown-Liste auftauchen.
+  const teamName = stats?.team_name ?? teams.find(t => t.id === teamId)?.name
+  const shortNames = useMemo(() => buildTeamShortNames(teams), [teams])
 
   return (
     <div className="max-w-3xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-brand-text">Anwesenheit{teamName ? ` — ${teamName}` : ''}</h1>
-        {teams.length > 1 && (
+        {teams.filter(t => t.is_active).length > 1 && (
           <select
             value={teamId ?? ''}
             onChange={e => navigate(`/team/${e.target.value}/anwesenheit`)}
-            className="border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
           >
-            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value="" disabled>Teams</option>
+            {teams.filter(t => t.is_active).map(t => (
+              <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
+            ))}
           </select>
         )}
       </div>

@@ -42,6 +42,7 @@ type memberCounts struct {
 // GET /api/teams/{id}/attendance-stats.
 type teamStatsResponse struct {
 	TeamID           int            `json:"team_id"`
+	TeamName         string         `json:"team_name"`
 	SeasonID         int            `json:"season_id"`
 	StartDate        string         `json:"start_date"`
 	EndDate          string         `json:"end_date"`
@@ -249,8 +250,8 @@ func (h *Handler) GetTeamStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var exists int
-	if err := h.db.QueryRowContext(r.Context(), `SELECT 1 FROM teams WHERE id = ?`, teamID).Scan(&exists); err == sql.ErrNoRows {
+	var teamName string
+	if err := h.db.QueryRowContext(r.Context(), `SELECT name FROM teams WHERE id = ?`, teamID).Scan(&teamName); err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	} else if err != nil {
@@ -293,6 +294,7 @@ func (h *Handler) GetTeamStats(w http.ResponseWriter, r *http.Request) {
 
 	resp := teamStatsResponse{
 		TeamID:           teamID,
+		TeamName:         teamName,
 		SeasonID:         seasonID,
 		StartDate:        startDate,
 		EndDate:          endDate,
