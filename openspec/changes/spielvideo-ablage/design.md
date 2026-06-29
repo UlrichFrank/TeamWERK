@@ -205,14 +205,14 @@ CRUD (Auth: Team-Trainer / Vorstand / Admin)
 
 ## Migration Plan
 
-1. **DB-Migration `012_videos.up.sql`**: Tabelle `videos` mit Indizes und Constraints
+1. **DB-Migration `013_videos.up.sql`**: Tabelle `videos` mit Indizes und Constraints
 2. **Storage-Verzeichnisse**: `/storage/videos/{uploads,raw,processed}` auf VPS anlegen (Setup-Script-Update)
 3. **VPS-Setup**: `apt install ffmpeg` (Setup-Runbook ergänzen); `ffmpeg -version` ≥ 4.x sicherstellen
 4. **Stream-Token-Secret**: neuer `.env`-Eintrag `VIDEO_STREAM_SECRET` (separates HMAC-Secret von `JWT_SECRET`, damit Token-Kompromiss nicht JWTs betrifft)
 5. **Frontend-Dep**: `pnpm add hls.js tus-js-client` in `web/`
 6. **Scheduler-Job**: Retention in `internal/scheduler/` einhängen (täglich um 03:00)
 7. **Roll-out**: zuerst für ein Test-Team, dann freigeben
-8. **Rollback**: Migration `012.down.sql`, Storage-Verzeichnisse manuell aufräumen, Frontend-Route hinter Feature-Flag falls nötig
+8. **Rollback**: Migration `013.down.sql`, Storage-Verzeichnisse manuell aufräumen, Frontend-Route hinter Feature-Flag falls nötig
 
 ## Open Questions
 

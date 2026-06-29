@@ -35,6 +35,9 @@ import TermineDetailPage from './pages/TermineDetailPage'
 import MeinTeamPage from './pages/MeinTeamPage'
 import AdminVenuesPage from './pages/AdminVenuesPage'
 import ChatPage from './pages/ChatPage'
+import VideosPage from './pages/VideosPage'
+import VideoUploadPage from './pages/VideoUploadPage'
+import VideoDetailPage from './pages/VideoDetailPage'
 import TeamAnwesenheitPage from './pages/TeamAnwesenheitPage'
 import ProfilAnwesenheitPage from './pages/ProfilAnwesenheitPage'
 
@@ -108,6 +111,9 @@ export default function App() {
               <Route path="termine/:type/:id" element={<TermineDetailPage />} />
               <Route path="mein-team" element={<MeinTeamPage />} />
               <Route path="chat" element={<ChatPage />} />
+              <Route path="videos" element={<VideosPage />} />
+              <Route path="videos/upload" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><VideoUploadPage /></RoleRoute>} />
+              <Route path="videos/:id" element={<VideoDetailPage />} />
               <Route path="trainings" element={<Navigate to="/termine" replace />} />
               <Route path="trainings/:id" element={<Navigate to="/termine" replace />} />
               <Route path="dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />

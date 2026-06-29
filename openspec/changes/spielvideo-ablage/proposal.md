@@ -32,7 +32,7 @@ Konsequenz: TeamWERK hostet die Videos selbst, transcodiert sie ressourcenschone
 ## Impact
 
 - Neues Package `internal/videos/` (Handler, DB-Zugriff, Transcode-Worker, Stream-Token)
-- Neue DB-Migration `012_videos.up.sql/.down.sql`: Tabelle `videos`
+- Neue DB-Migration `013_videos.up.sql/.down.sql`: Tabelle `videos`
 - Neue API-Routen unter `/api/videos/` (Upload, Liste, Player-Token, HLS, CRUD)
 - Neue Frontend-Seite `web/src/pages/VideosPage.tsx` + Detail-Seite mit `hls.js`
 - Neuer Nav-Eintrag im `AppShell` (für alle Nutzer mit Team-Zugehörigkeit oder Trainer-Funktion)

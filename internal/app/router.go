@@ -36,6 +36,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 	"github.com/teamstuttgart/teamwerk/internal/venues"
+	"github.com/teamstuttgart/teamwerk/internal/videos"
 )
 
 // Handlers holds all HTTP handler instances needed to build the router.
@@ -63,7 +64,13 @@ type Handlers struct {
 	Stammvereine   *stammvereine.Handler
 	Calendar       *calendar.Handler
 	Health         *health.Handler
-	Hub            *hub.Handler
+	Videos         *videos.Handler
+	// VideosTus ist der gemountete tusd-Upload-Handler (resumable Upload unter
+	// /api/videos/upload/*). In main.go via Videos.NewTusHandler(ctx) erzeugt;
+	// in Tests/ohne Upload-Layer nil — die Mount-Registrierung wird dann
+	// übersprungen.
+	VideosTus http.Handler
+	Hub       *hub.Handler
 
 	JWTSecret string
 	Database  *sql.DB
@@ -123,6 +130,15 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Get("/api/profile/email/confirm", h.Auth.ConfirmEmailChange)
 	r.Get("/api/profile/recovery-email/confirm", h.Auth.ConfirmRecoveryEmailChange)
 	r.Get("/api/calendar/feed/{token}", h.Calendar.Feed)
+	// HLS-Streaming: KEINE JWT-Auth — hls.js kann keinen Bearer-Header senden.
+	// Stattdessen schützt der kurzlebige Stream-Token im ?st=-Query (Verifikation
+	// gegen das {id}-Pfadsegment in StreamTokenMiddleware). Der Token wird über
+	// GET /api/videos/{id}/play (Authenticated-Tier) ausgegeben.
+	r.Route("/api/videos/{id}/hls", func(r chi.Router) {
+		r.Use(h.Videos.StreamTokenMiddleware)
+		r.Get("/master.m3u8", h.Videos.ServeMaster)
+		r.Get("/{rendition}/{segment}", h.Videos.ServeRenditionFile)
+	})
 	// Öffentlicher Gruppen-Schlüssel zum Verschlüsseln von Bankdaten (nicht geheim;
 	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).
 	r.Get("/api/encryption-pubkey", h.Config.GetGroupPublicKey)
@@ -281,6 +297,19 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Stammvereine (Liste für Mitglied-Dropdown; alle Eingeloggten)
 		r.Get("/api/stammvereine", h.Stammvereine.List)
 
+		// Spielvideos — Stream-Token-Ausgabe (weitere Video-Routen folgen separat).
+		// CanViewVideo prüft die Team-Berechtigung; die HLS-Auslieferung selbst
+		// läuft Token-geschützt im Public-Tier (siehe oben).
+		r.Get("/api/videos/{id}/play", h.Videos.Play)
+		// Spielvideos -- Liste/Detail/CRUD. Alle im Authenticated-Tier: die
+		// Handler pruefen Sichtbarkeit (List/Get via CanViewVideo) bzw.
+		// Verwaltungsrecht (PATCH/DELETE via CanManageTeamVideos) selbst.
+		// Upload-Routen werden separat registriert (eigener Tier).
+		r.Get("/api/videos", h.Videos.List)
+		r.Get("/api/videos/{id}", h.Videos.Get)
+		r.Patch("/api/videos/{id}", h.Videos.Update)
+		r.Delete("/api/videos/{id}", h.Videos.Delete)
+
 		// Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("trainer", "sportliche_leitung"))
@@ -300,6 +329,14 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Vorstand + Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
+			// Spielvideos — Upload-Tier (trainer/sportliche_leitung/vorstand;
+			// admin umgeht RequireClubFunction). POST init prüft zusätzlich
+			// CanUploadToTeam; der tus-Mount nimmt PATCH/HEAD der bereits
+			// autorisierten Session entgegen (Korrelation via video_id-Metadata).
+			r.Post("/api/videos", h.Videos.CreateUpload)
+			if h.VideosTus != nil {
+				r.Handle("/api/videos/upload/*", h.VideosTus)
+			}
 			r.Get("/api/venues", h.Venues.List)
 			r.Post("/api/venues", h.Venues.Create)
 			r.Post("/api/venues/import", h.Venues.Import)

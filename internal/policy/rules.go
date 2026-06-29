@@ -232,6 +232,7 @@ func NavFor(p *Principal) []NavItem {
 	// Spielbetrieb — visible to all
 	nav = append(nav, NavItem{"Kalender", "/kalender"})
 	nav = append(nav, NavItem{"Termine", "/termine"})
+	nav = append(nav, NavItem{"Videos", "/videos"})
 	// Anwesenheits-Statistik nur für Trainer / sportliche Leitung / Admin.
 	if IsTrainerLike(p) {
 		nav = append(nav, NavItem{"Anwesenheit", "/anwesenheit"})

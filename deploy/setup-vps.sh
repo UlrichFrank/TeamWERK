@@ -11,13 +11,20 @@ set -euo pipefail
 # 1. System-Pakete
 # ---------------------------------------------------------------------------
 apt-get update
-apt-get install -y nginx openssl curl ca-certificates gnupg logrotate
+# ffmpeg: Spielvideo-Transcode (HLS 720p+360p). Version >= 4.x — Ubuntu 24.04
+# liefert 6.x; ein Check (ffmpeg -version) gehört ins Setup-Runbook.
+apt-get install -y nginx openssl curl ca-certificates gnupg logrotate ffmpeg
 
 # ---------------------------------------------------------------------------
 # 2. Verzeichnisse
 # ---------------------------------------------------------------------------
 mkdir -p /var/lib/teamwerk/{uploads,files}
 chown -R www-data:www-data /var/lib/teamwerk
+
+# Spielvideo-Ablage (separater Storage, vor produktiver Nutzung manuell
+# erweitern — siehe vps-setup-runbook.md). Disk-Guard prüft free(/storage).
+mkdir -p /storage/videos/{uploads,raw,processed}
+chown -R www-data:www-data /storage/videos
 
 # ---------------------------------------------------------------------------
 # 3. Env-Datei mit Platzhaltern (nur anlegen, wenn nicht vorhanden)

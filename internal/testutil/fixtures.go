@@ -237,6 +237,23 @@ func CreatePlayerMembership(t *testing.T, database *sql.DB, memberID, teamID, se
 	}
 }
 
+// CreateVideo inserts a video row for the given team/season and returns its ID.
+// status must be one of uploading|queued|processing|ready|failed.
+// Pass gameID=0 to omit the game FK (NULL).
+func CreateVideo(t *testing.T, database *sql.DB, teamID, seasonID, createdByUserID int, status string) int {
+	t.Helper()
+	var gameArg any
+	res, err := database.Exec(
+		`INSERT INTO videos (title, team_id, season_id, game_id, status, created_by)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		fmt.Sprintf("Test Video %d", nextID()), teamID, seasonID, gameArg, status, createdByUserID)
+	if err != nil {
+		t.Fatalf("CreateVideo: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
 // AddExtendedKaderMember adds a member to the extended kader (kader_extended_members).
 func AddExtendedKaderMember(t *testing.T, database *sql.DB, kaderID, memberID int) {
 	t.Helper()
