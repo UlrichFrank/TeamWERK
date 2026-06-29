@@ -203,7 +203,8 @@ export default function TermineDetailPage() {
         api.get(`/games/${id}/participants`),
       ])
         .then(([gameRes, participantsRes]) => {
-          setGame(gameRes.data.game ?? gameRes.data)
+          const gameData: GameDetail = gameRes.data.game ?? gameRes.data
+          setGame(gameData)
           const data: ParticipantsResponse | ParticipantItem[] = participantsRes.data ?? { items: [], hidden_team_ids: [] }
           // Backwards-Kompat: alte Array-Form fallweise erkennen (Tests/Mocks).
           const items: ParticipantItem[] = Array.isArray(data) ? data : (data.items ?? [])
@@ -213,6 +214,15 @@ export default function TermineDetailPage() {
           const map: Record<number, boolean> = {}
           for (const p of items) map[p.member_id] = p.in_lineup
           setLineupMap(map)
+          // Anwesenheitsliste nur laden, wenn der Trainer sie erfassen darf und
+          // das Spiel in der Vergangenheit liegt.
+          const canManage = Boolean(gameData.can?.manage_lineup)
+          const past = gameData.date ? gameData.date.slice(0, 10) <= today : false
+          if (canManage && past) {
+            api.get(`/games/${id}/attendances`)
+              .then(r => applyAttendances(r.data ?? []))
+              .catch(() => {})
+          }
         })
         .finally(() => { if (!silent) setLoading(false) })
     }
@@ -232,18 +242,24 @@ export default function TermineDetailPage() {
   }, [id, type])
 
   useLiveUpdates((event) => {
-    if (isTraining && (event === 'trainings' || event === 'event-note')) { load(true); loadAttendances() }
-    else if (!isTraining && (event === 'games' || event === 'event-note')) load(true)
+    if (isTraining && (event === 'trainings' || event === 'event-note' || event === 'attendance-changed')) { load(true); loadAttendances() }
+    else if (!isTraining && (event === 'games' || event === 'event-note' || event === 'attendance-changed')) load(true)
   })
 
   const toggleAttendance = async (memberId: number, newValue: boolean) => {
     setAttendanceMap(prev => ({ ...prev, [memberId]: newValue }))
-    const entries = attendances.map(a => ({
-      member_id: a.member_id,
-      present: a.member_id === memberId ? newValue : (attendanceMap[a.member_id] ?? false),
+    // Member-Universum: Trainings über die Anwesenheitsliste, Spiele über die
+    // (deduplizierten) Teilnehmer.
+    const ids = isTraining
+      ? attendances.map(a => a.member_id)
+      : Array.from(new Set(participants.map(p => p.member_id)))
+    const entries = ids.map(mid => ({
+      member_id: mid,
+      present: mid === memberId ? newValue : (attendanceMap[mid] ?? false),
     }))
+    const url = isTraining ? `/training-sessions/${id}/attendances` : `/games/${id}/attendances`
     try {
-      await api.post(`/training-sessions/${id}/attendances`, entries)
+      await api.post(url, entries)
       setAttendanceError(null)
     } catch {
       setAttendanceMap(prev => ({ ...prev, [memberId]: !newValue }))
@@ -428,17 +444,23 @@ export default function TermineDetailPage() {
 
       <EventNoteSection note={g.note} />
 
+      {isTrainer && !isPast && (
+        <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+          Anwesenheit kann erst nach dem Spiel erfasst werden.
+        </div>
+      )}
+
       <ResponseTable
         rows={tableRows}
         sections={sections}
-        showAttendanceCol={false}
-        attendanceMap={{}}
-        attendanceError={null}
+        showAttendanceCol={isPast && isTrainer}
+        attendanceMap={attendanceMap}
+        attendanceError={attendanceError}
         isTrainer={isTrainer}
         showReasonId={showReasonId}
         setShowReasonId={setShowReasonId}
-        onToggleAttendance={() => Promise.resolve()}
-        onDismissError={() => {}}
+        onToggleAttendance={toggleAttendance}
+        onDismissError={() => setAttendanceError(null)}
         lineupMap={lineupMap}
         onToggleLineup={isTrainer ? saveLineup : undefined}
       />

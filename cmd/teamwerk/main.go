@@ -21,6 +21,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/absences"
 	"github.com/teamstuttgart/teamwerk/internal/app"
+	"github.com/teamstuttgart/teamwerk/internal/attendance"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
 	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
@@ -158,6 +159,7 @@ func serve() {
 		Notif:               notifications.NewHandler(database, cfg),
 		Training:            trainings.NewHandler(database, cfg, hubInstance),
 		Absences:            absences.NewHandler(database, hubInstance),
+		Attendance:          attendance.NewHandler(database, hubInstance),
 		Teams:               teams.NewHandler(database),
 		Venues:              venues.NewHandler(database, hubInstance),
 		Beitragssaetze:      beitragssaetze.NewHandler(database, hubInstance),

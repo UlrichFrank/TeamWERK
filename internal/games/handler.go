@@ -2439,3 +2439,242 @@ func (h *Handler) ListTeamNames(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
+
+// gameAttendanceItem ist die Repräsentation eines Kader-Mitglieds in der
+// Spiel-Anwesenheitsliste (GET /api/games/{id}/attendances).
+type gameAttendanceItem struct {
+	MemberID   int     `json:"member_id"`
+	MemberName string  `json:"member_name"`
+	IsExtended bool    `json:"is_extended"`
+	RSVPStatus *string `json:"rsvp_status"`
+	Reason     *string `json:"reason"`
+	Present    *bool   `json:"present"`
+}
+
+// canRecordGameAttendance prüft die Authz für Spiel-Anwesenheits-Routen
+// gemäß Design D7: admin / sportliche_leitung / Trainer eines beteiligten
+// Teams. Vorstand darf nicht (anders als bei game-note).
+func (h *Handler) canRecordGameAttendance(ctx context.Context, claims *auth.Claims, gameID int) (bool, error) {
+	if claims == nil {
+		return false, nil
+	}
+	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
+		return true, nil
+	}
+	if !claims.HasFunction("trainer") {
+		return false, nil
+	}
+	var trains int
+	err := h.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM trainer_memberships trm
+		JOIN seasons s ON s.id = trm.season_id AND s.is_active = 1
+		JOIN members m ON m.id = trm.member_id AND m.user_id = ?
+		JOIN game_teams gt ON gt.team_id = trm.team_id AND gt.game_id = ?`,
+		claims.UserID, gameID).Scan(&trains)
+	if err != nil {
+		return false, err
+	}
+	return trains > 0, nil
+}
+
+// POST /api/games/{id}/attendances — Bulk-Upsert der Spiel-Anwesenheit.
+// Erlaubt: admin, sportliche_leitung, Trainer eines beteiligten Teams.
+// Nur für Spiele, deren Datum <= heute liegt.
+func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var isPastOrToday bool
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT date(date) <= date('now') FROM games WHERE id = ?`, gameID).Scan(&isPastOrToday)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if !isPastOrToday {
+		http.Error(w, "attendance can only be recorded for past or current games", http.StatusUnprocessableEntity)
+		return
+	}
+
+	var entries []struct {
+		MemberID int  `json:"member_id"`
+		Present  bool `json:"present"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&entries); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for _, e := range entries {
+		present := 0
+		if e.Present {
+			present = 1
+		}
+		if _, err := tx.ExecContext(r.Context(), `
+			INSERT INTO game_attendances (game_id, member_id, present, noted_at)
+			VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+			ON CONFLICT(game_id, member_id) DO UPDATE SET present=excluded.present, noted_at=CURRENT_TIMESTAMP`,
+			gameID, e.MemberID, present); err != nil {
+			fmt.Fprintf(os.Stderr, "SaveGameAttendances upsert: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("attendance-changed")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/games/{id}/attendances — Anwesenheitsliste eines Spiels.
+// Liefert pro Kader-Mitglied (Stamm + erweitert dedupliziert) RSVP-Status,
+// reason und present (nullable). Authz wie bei SaveAttendances.
+func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var seasonID, rsvpOptOut int
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT season_id, rsvp_opt_out FROM games WHERE id = ?`, gameID).Scan(&seasonID, &rsvpOptOut)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT member_id, member_name, is_extended, rsvp_status, reason, present
+		FROM (
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       0 AS is_extended,
+			       gr.status AS rsvp_status,
+			       gr.reason AS reason,
+			       ga.present AS present
+			FROM members m
+			JOIN kader_members km ON km.member_id = m.id
+			JOIN kader k ON k.id = km.kader_id
+			  AND k.season_id = ?
+			  AND k.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
+			LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
+			LEFT JOIN game_attendances ga ON ga.game_id = ? AND ga.member_id = m.id
+
+			UNION
+
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       1 AS is_extended,
+			       gr.status AS rsvp_status,
+			       gr.reason AS reason,
+			       ga.present AS present
+			FROM members m
+			JOIN kader_extended_members kem ON kem.member_id = m.id
+			JOIN kader k ON k.id = kem.kader_id
+			  AND k.season_id = ?
+			  AND k.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
+			LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
+			LEFT JOIN game_attendances ga ON ga.game_id = ? AND ga.member_id = m.id
+			WHERE NOT EXISTS (
+				SELECT 1 FROM kader_members km2
+				JOIN kader k2 ON k2.id = km2.kader_id
+				  AND k2.season_id = ?
+				  AND k2.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
+				WHERE km2.member_id = m.id
+			)
+		)
+		ORDER BY member_name`,
+		seasonID, gameID, gameID, gameID,
+		seasonID, gameID, gameID, gameID,
+		seasonID, gameID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "GetGameAttendances: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// Dedupe per member_id: ein Stammkader-Eintrag (is_extended=false)
+	// überschreibt einen erweiterten Eintrag.
+	byID := map[int]gameAttendanceItem{}
+	order := []int{}
+	for rows.Next() {
+		var item gameAttendanceItem
+		var isExtended int
+		var rsvp, reason sql.NullString
+		var present sql.NullInt64
+		rows.Scan(&item.MemberID, &item.MemberName, &isExtended, &rsvp, &reason, &present)
+		item.IsExtended = isExtended == 1
+		if rsvp.Valid {
+			item.RSVPStatus = &rsvp.String
+		} else if rsvpOptOut == 1 && !item.IsExtended {
+			confirmed := "confirmed"
+			item.RSVPStatus = &confirmed
+		}
+		if reason.Valid && reason.String != "" {
+			item.Reason = &reason.String
+		}
+		if present.Valid {
+			b := present.Int64 == 1
+			item.Present = &b
+		}
+		if existing, dup := byID[item.MemberID]; dup {
+			if existing.IsExtended && !item.IsExtended {
+				byID[item.MemberID] = item
+			}
+			continue
+		}
+		byID[item.MemberID] = item
+		order = append(order, item.MemberID)
+	}
+
+	result := make([]gameAttendanceItem, 0, len(order))
+	for _, id := range order {
+		result = append(result, byID[id])
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
