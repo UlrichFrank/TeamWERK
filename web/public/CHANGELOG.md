@@ -1,4 +1,30 @@
+## 29.06.2026
+- [feat] chat: Standard-Gruppen als Bulk-Selector im Gespräch-Modal
+- [fix] videos: Migration 012 -> 013 (Kollision mit anwesenheits-statistik)
+
 ## 28.06.2026
+- [feat] videos: Frontend Upload-Form (tus, resumable)
+- [feat] videos: Frontend Liste + Detail mit HLS-Player
+- [feat] videos: Saison-Retention-Job (90 Tage) + T-7-Warnung
+- [fix] videos: Upload-Sicherheit - IDOR, Disk-Guard, FK-Validierung
+- [feat] videos: Transcode-Worker (FFmpeg -> HLS 720p/360p)
+- [feat] videos: Upload via tus mit Pre-Disk-Check und ffprobe-Finish
+- [feat] videos: CRUD + Liste mit Berechtigungsfilter
+- [feat] videos: Streaming - HMAC-Stream-Token + HLS-Auslieferung
+- [feat] videos: Foundation - Migration, Package-Skelett, Disk-/Path-/Access-Helper
+- [feat] attendance: Frontend-Sichten + Spiel-Anwesenheitserfassung
+- [feat] scheduler: taegliche Anwesenheits-Erinnerungen an Trainer
+- [feat] attendance: Aggregations-Routen am Router registrieren
+- [feat] attendance: GET /api/teams/{id}/attendance-open
+- [feat] attendance: GET /api/members/{id}/attendance-stats
+- [feat] attendance: GET /api/teams/{id}/attendance-stats
+- [feat] attendance: Package-Skelett + Classify-Funktion
+- [feat] games: Spiel-Anwesenheits-Routen am Router registrieren
+- [feat] games: Spiel-Anwesenheit POST + GET im Handler
+- [feat] db: Migration 012 fuer game_attendances anlegen
+- [feat] kalender: Warnsignale auf Spiel-Tiles konsolidieren
+- [fix] kalender: Ausrufezeichen (offene Dienste) in Mobile-Ansicht nach oben rechts verschieben
+- [fix] kalender: Datum bei neuen Terminen heute oder in der Zukunft
 - [feat] kalender: Hinweisdarstellung vereinfachen + offene Dienste im Grid markieren
 - [feat] scheduler: zeitzonen-korrekte Event-Reminder mit 24h/3h-Slots
 - [fix] chat: Broadcast-Mitteilungen rendern URLs als Hyperlinks
