@@ -31,6 +31,11 @@ const TEAMS = [{
   age_class: 'A', gender: 'm', team_number: 1, group_count: 1, is_active: true,
 }]
 
+const SEASONS = [
+  { id: 2, is_active: false },
+  { id: 3, is_active: true },
+]
+
 beforeEach(() => {
   vi.clearAllMocks()
   findPrev.mockResolvedValue([])
@@ -70,7 +75,10 @@ describe('VideoUploadPage', () => {
     })
 
     renderAsPersona(<VideoUploadPage />, 'trainer', {
-      mocks: [{ url: /\/teams/, data: TEAMS }],
+      mocks: [
+        { url: /\/teams/, data: TEAMS },
+        { url: /\/seasons/, data: SEASONS },
+      ],
     })
     await flushAsync()
 
@@ -86,6 +94,7 @@ describe('VideoUploadPage', () => {
     expect(post).toHaveBeenCalledWith('/videos', expect.objectContaining({
       title: 'Testspiel',
       team_id: 7,
+      season_id: 3,
       size_bytes: 1024 * 1024,
     }))
 

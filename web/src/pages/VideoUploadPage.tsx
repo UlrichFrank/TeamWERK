@@ -22,6 +22,11 @@ interface Team {
   is_active: boolean
 }
 
+interface Season {
+  id: number
+  is_active: boolean
+}
+
 interface GameTeam {
   id: number
   name: string
@@ -63,6 +68,7 @@ export default function VideoUploadPage() {
 
   const [teams, setTeams] = useState<Team[]>([])
   const [games, setGames] = useState<Game[]>([])
+  const [seasons, setSeasons] = useState<Season[]>([])
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -82,12 +88,20 @@ export default function VideoUploadPage() {
 
   const activeTeams = useMemo(() => teams.filter(t => t.is_active), [teams])
   const shortNames = useMemo(() => buildTeamShortNames(activeTeams), [activeTeams])
+  const activeSeasonId = useMemo(() => seasons.find(s => s.is_active)?.id ?? 0, [seasons])
 
   // Teams laden (nur die der User hochladen darf — Server erzwingt zusätzlich 403).
   useEffect(() => {
     api.get<Team[]>('/teams')
       .then(r => setTeams(Array.isArray(r.data) ? r.data : []))
       .catch(() => setTeams([]))
+  }, [])
+
+  // Saisons laden — das Video wird der aktiven Saison zugeordnet (Server verlangt season_id).
+  useEffect(() => {
+    api.get<Season[]>('/seasons')
+      .then(r => setSeasons(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setSeasons([]))
   }, [])
 
   // Spiele für das gewählte Team laden (clientseitig nach teams[].id filtern).
@@ -195,12 +209,17 @@ export default function VideoUploadPage() {
       setError('Datei zu groß: maximal 2 GB erlaubt.')
       return
     }
+    if (!activeSeasonId) {
+      setError('Keine aktive Saison gesetzt — bitte unter Einstellungen → Saisons eine Saison aktivieren.')
+      return
+    }
 
     setUploading(true)
     try {
       const res = await api.post<CreateUploadResponse>('/videos', {
         title: title.trim(),
         team_id: Number(teamId),
+        season_id: activeSeasonId,
         description: description.trim() || undefined,
         game_id: gameId ? Number(gameId) : undefined,
         size_bytes: file.size,
