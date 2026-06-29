@@ -76,6 +76,11 @@ jobs:
 
       - run: pnpm -C web install --frozen-lockfile
 
+      # Frontend zuerst bauen: vite schreibt nach cmd/teamwerk/web/dist/
+      # (gitignored). //go:embed all:web/dist braucht das Verzeichnis, sonst
+      # schlagen go vet/test mit "pattern all:web/dist: no matching files" fehl.
+      - run: pnpm -C web build
+
       - run: go vet ./...
       - run: go test -race ./...
 
@@ -83,7 +88,6 @@ jobs:
         with:
           version: latest
 
-      - run: pnpm -C web build
       - run: pnpm -C web test
       - run: pnpm -C web lint
 
