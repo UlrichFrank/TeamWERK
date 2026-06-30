@@ -30,6 +30,22 @@ func uploadsDir(root string) string {
 	return filepath.Join(root, "uploads")
 }
 
+// formatGameTitle erzeugt aus dem ISO-Datum (SQLite liefert "YYYY-MM-DDTHH:MM:SSZ")
+// und dem Gegner einen menschenlesbaren Titel "DD.MM.YYYY · Gegner".
+func formatGameTitle(dateStr, opponent string) string {
+	d := dateStr
+	if len(d) >= 10 {
+		d = d[:10]
+	}
+	if parts := strings.SplitN(d, "-", 3); len(parts) == 3 {
+		d = parts[2] + "." + parts[1] + "." + parts[0]
+	}
+	if opponent == "" {
+		return d
+	}
+	return d + " · " + opponent
+}
+
 // createUploadReq ist der Body von POST /api/videos (Pre-Upload-Init).
 type createUploadReq struct {
 	Title       string  `json:"title"`
@@ -60,8 +76,10 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Title = strings.TrimSpace(req.Title)
-	if req.Title == "" {
-		http.Error(w, "title must not be empty", http.StatusBadRequest)
+	// Entweder Titel oder Spiel: ein leerer Titel wird nach der Game-Existenzprüfung
+	// aus Datum + Gegner abgeleitet, damit videos.title (NOT NULL) immer gefüllt ist.
+	if req.Title == "" && req.GameID == nil {
+		http.Error(w, "title or game required", http.StatusBadRequest)
 		return
 	}
 	if req.TeamID <= 0 {
@@ -113,6 +131,17 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unknown game_id", http.StatusBadRequest)
 			return
 		}
+	}
+
+	// Titel aus Spiel ableiten, falls keiner angegeben wurde (Format: "DD.MM.YYYY · Gegner",
+	// passend zur Spiel-Dropdown-Anzeige im Frontend).
+	if req.Title == "" {
+		var dateStr, opponent string
+		if err := h.db.QueryRow(`SELECT date, opponent FROM games WHERE id = ?`, *req.GameID).Scan(&dateStr, &opponent); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		req.Title = formatGameTitle(dateStr, opponent)
 	}
 
 	ok, err := h.CanUploadToTeam(claims, req.TeamID)

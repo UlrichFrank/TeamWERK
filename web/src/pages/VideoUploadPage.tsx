@@ -206,8 +206,8 @@ export default function VideoUploadPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (!title.trim()) {
-      setError('Titel ist erforderlich.')
+    if (!title.trim() && !gameId) {
+      setError('Bitte einen Titel angeben oder ein Spiel auswählen.')
       return
     }
     if (!teamId) {
@@ -348,7 +348,7 @@ export default function VideoUploadPage() {
         </div>
         <form onSubmit={handleSubmit} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 space-y-4">
         <div>
-          <label htmlFor="title" className="block text-sm font-medium text-brand-text mb-1">Titel *</label>
+          <label htmlFor="title" className="block text-sm font-medium text-brand-text mb-1">Titel</label>
           <input
             id="title"
             type="text"
@@ -358,6 +358,9 @@ export default function VideoUploadPage() {
             className={inputCls}
             placeholder="z.B. Heimspiel vs. TV Musterstadt"
           />
+          <p className="text-xs text-brand-text-muted mt-1">
+            Entweder Titel angeben oder unten ein Spiel auswählen — bei Spiel-Auswahl wird der Titel aus Datum und Gegner gebildet.
+          </p>
         </div>
 
         <div>
@@ -390,7 +393,7 @@ export default function VideoUploadPage() {
         </div>
 
         <div>
-          <label htmlFor="game" className="block text-sm font-medium text-brand-text mb-1">Spiel (optional)</label>
+          <label htmlFor="game" className="block text-sm font-medium text-brand-text mb-1">Spiel</label>
           <select
             id="game"
             value={gameId}

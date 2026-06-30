@@ -92,6 +92,45 @@ func TestCreateUpload_HappyPath(t *testing.T) {
 	}
 }
 
+// Leerer Titel + Spiel-ID → Titel wird aus Datum + Gegner abgeleitet.
+// CreateGame nutzt opponent="Test Opponent", date wie übergeben.
+func TestCreateUpload_DerivesTitleFromGame(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	kader := testutil.CreateKader(t, db, team, season)
+	game := testutil.CreateGame(t, db, season, team, "2026-03-15")
+
+	trainerUser := testutil.CreateUser(t, db, "standard")
+	trainerMember := testutil.CreateMember(t, db, trainerUser)
+	testutil.AddKaderTrainer(t, db, kader, trainerMember)
+
+	tok := testutil.Token(t, trainerUser, "standard", []string{"trainer"})
+	body := map[string]any{
+		"team_id":    team,
+		"season_id":  season,
+		"game_id":    game,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", res.StatusCode)
+	}
+
+	var title string
+	if err := db.QueryRow(`SELECT title FROM videos WHERE game_id = ?`, game).Scan(&title); err != nil {
+		t.Fatalf("query video title: %v", err)
+	}
+	const want = "15.03.2026 · Test Opponent"
+	if title != want {
+		t.Errorf("derived title = %q, want %q", title, want)
+	}
+}
+
 func TestCreateUpload_ForbiddenForeignTeam(t *testing.T) {
 	db := testutil.NewDB(t)
 	h, _ := uploadHandler(t, db, 1024)
@@ -177,7 +216,7 @@ func TestCreateUpload_BadRequest(t *testing.T) {
 		name string
 		body map[string]any
 	}{
-		{"missing title", map[string]any{"team_id": team, "season_id": season, "size_bytes": 1024}},
+		{"missing title and game", map[string]any{"team_id": team, "season_id": season, "size_bytes": 1024}},
 		{"missing team_id", map[string]any{"title": "x", "season_id": season, "size_bytes": 1024}},
 		{"invalid team_id zero", map[string]any{"title": "x", "team_id": 0, "season_id": season, "size_bytes": 1024}},
 		{"missing season_id", map[string]any{"title": "x", "team_id": team, "size_bytes": 1024}},
