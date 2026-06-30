@@ -181,10 +181,29 @@ func (h *Handler) ServeRenditionFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.HasSuffix(segment, ".m3u8") {
+		// Rendition-Playlist: Segment-Referenzen on-the-fly mit ?st= versehen,
+		// damit hls.js die Token-geschützten .ts-Endpunkte erreicht. Die Datei
+		// auf Disk listet seg_NNN.ts ohne Query — ohne diesen Rewrite scheitert
+		// jeder Segment-GET an der StreamTokenMiddleware mit 403.
+		data, err := os.ReadFile(full)
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		token := r.URL.Query().Get("st")
+		lines := strings.Split(string(data), "\n")
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if segmentRe.MatchString(trimmed) && strings.HasSuffix(trimmed, ".ts") {
+				lines[i] = trimmed + "?st=" + token
+			}
+		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-	} else {
-		w.Header().Set("Content-Type", "video/mp2t")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write([]byte(strings.Join(lines, "\n")))
+		return
 	}
+	w.Header().Set("Content-Type", "video/mp2t")
 	// http.ServeContent übernimmt Range (206), If-Range und ETag-Handling.
 	http.ServeContent(w, r, segment, info.ModTime(), f)
 }

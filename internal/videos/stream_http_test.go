@@ -273,6 +273,13 @@ func TestRenditionIndex_ValidToken_200(t *testing.T) {
 	if ct := res.Header.Get("Content-Type"); ct != "application/vnd.apple.mpegurl" {
 		t.Errorf("index content-type = %q", ct)
 	}
+	body, _ := io.ReadAll(res.Body)
+	s := string(body)
+	// Segment-Referenzen müssen ?st=<tok> bekommen, sonst scheitert der
+	// Segment-GET an der StreamTokenMiddleware (403).
+	if !strings.Contains(s, "seg_001.ts?st="+tok) {
+		t.Errorf("index ohne Token-Anhang an Segment: %q", s)
+	}
 }
 
 func TestSegment_PathTraversal_Rejected(t *testing.T) {
