@@ -1,0 +1,61 @@
+# Pull-Request- und main-Push-Gate. Spiegelt den gate-Job aus deploy.yml
+# und .githooks/pre-push (go vet/test, golangci-lint, pnpm build/test/lint).
+# Wird u.a. von Dependabot-PRs zur Validierung benutzt.
+#
+# Race-Detector läuft hier bewusst NICHT (siehe docs/agent/08-verification.md):
+# konsistent mit pre-push, separater make-Target `test-race` für gezielte
+# Auditierung heikler nebenläufiger Bereiche.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.26.0'
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm -C web install --frozen-lockfile
+
+      # Frontend zuerst bauen: vite schreibt nach cmd/teamwerk/web/dist/
+      # (gitignored). //go:embed all:web/dist braucht das Verzeichnis, sonst
+      # schlagen go vet/test mit "pattern all:web/dist: no matching files" fehl.
+      - run: pnpm -C web build
+
+      - run: go vet ./...
+      - run: go test ./...
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+
+      - run: pnpm -C web test
+      - run: pnpm -C web lint

@@ -1,0 +1,44 @@
+# Wöchentliche Dependency-Updates → ein PR pro Dependency.
+# Die PRs durchlaufen den ci.yml-Gate (go vet/test, golangci-lint,
+# pnpm build/test/lint) automatisch.
+#
+# Limits sind bewusst hoch, damit „keine Grouping" nicht stillschweigend
+# Updates verschluckt; Dependabot überspringt sonst Updates, sobald das
+# Limit erreicht ist.
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
