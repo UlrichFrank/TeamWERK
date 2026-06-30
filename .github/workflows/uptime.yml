@@ -12,10 +12,16 @@ name: uptime
 on:
   schedule:
     - cron: "*/5 * * * *"
+    - cron: "17 */6 * * *"   # Cleanup alter Runs alle 6 h
   workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   healthz:
+    if: github.event.schedule != '17 */6 * * *'
     runs-on: ubuntu-latest
     steps:
       - name: Poll /api/healthz und Schwellen prüfen
@@ -46,3 +52,31 @@ jobs:
             echo "::error::scheduler_age_sec=$sched (> $SCHED_MAX, Cron tot?)"; fail=1
           fi
           exit $fail
+
+  cleanup:
+    # Verhindert, dass sich GitHub-Actions-Runs (alle 5 min) unbegrenzt anhäufen.
+    # Läuft alle 6 h und löscht Runs dieser Workflow älter als KEEP_HOURS
+    # → im Verlauf bleiben ca. ein halber Tag (~144 Runs).
+    if: github.event.schedule == '17 */6 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alte uptime-Runs löschen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: uptime.yml
+          KEEP_HOURS: "12"
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d "${KEEP_HOURS} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Lösche Runs von $WORKFLOW älter als $cutoff"
+          ids=$(gh api --paginate \
+            "repos/${REPO}/actions/workflows/${WORKFLOW}/runs?per_page=100" \
+            -q ".workflow_runs[] | select(.created_at < \"${cutoff}\") | .id")
+          deleted=0
+          for id in $ids; do
+            if gh api -X DELETE "repos/${REPO}/actions/runs/${id}" >/dev/null 2>&1; then
+              deleted=$((deleted + 1))
+            fi
+          done
+          echo "Gelöscht: $deleted Runs"
