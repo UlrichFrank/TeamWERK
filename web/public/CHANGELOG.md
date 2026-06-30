@@ -1,3 +1,12 @@
+## 30.06.2026
+- [feat] videos: Upload-Limit von 2 GB auf 2,5 GB anheben
+- [fix] videos: Stream-Token an Segment-Referenzen in Rendition-Playlist
+- [fix] videos: Video-Wiedergabe in Prod — CSP, media-src, Stream-Token
+- [fix] videos: tus-Upload hinter nginx — HTTPS-Location, Chunking, kein Bodylimit
+- [feat] videos: Dateigröße auf Upload-Seite anzeigen
+- [fix] deploy: graceful HTTP-Shutdown, damit systemd-Restart nicht 90s hängt
+- [fix] video: upload path
+
 ## 29.06.2026
 - [fix] deploy: Frontend-Build vor go vet/test im gate-Job
 - [fix] videos: Upload sendet season_id der aktiven Saison
