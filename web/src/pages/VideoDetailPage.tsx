@@ -53,9 +53,16 @@ function VideoPlayer({ id }: { id: number }) {
       const { default: Hls } = await import('hls.js')
       if (cancelled) return
 
+      // StreamTokenMiddleware verlangt ?st=<token> auf der Master-Playlist und
+      // jeder Rendition-Anfrage. master_url kommt vom Backend ohne Query —
+      // Token clientseitig anhängen; ServeMaster setzt ihn auf die referenzierten
+      // Rendition-Playlists fort.
+      const sep = play.master_url.includes('?') ? '&' : '?'
+      const masterURL = `${play.master_url}${sep}st=${encodeURIComponent(play.token)}`
+
       if (Hls.isSupported()) {
         const hls = new Hls()
-        hls.loadSource(play.master_url)
+        hls.loadSource(masterURL)
         hls.attachMedia(video)
         hls.on(Hls.Events.ERROR, (_e, data) => {
           if (data.fatal && !cancelled) setError('Das Video konnte nicht abgespielt werden.')
@@ -63,7 +70,7 @@ function VideoPlayer({ id }: { id: number }) {
         destroy = () => hls.destroy()
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Safari / iOS: natives HLS.
-        video.src = play.master_url
+        video.src = masterURL
       } else {
         if (!cancelled) setUnsupported(true)
       }
