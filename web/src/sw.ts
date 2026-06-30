@@ -8,6 +8,19 @@ declare let self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown[] }
 
 precacheAndRoute(self.__WB_MANIFEST)
 
+// Benutzerhandbuch: statische HTML-Seite mit eigenem Cache (vor der
+// app-shell-Route, sonst überschreibt eine Doku-Navigation den app-shell-
+// Eintrag mit maxEntries: 1 und der nächste Offline-Start lädt das Handbuch
+// statt der App).
+registerRoute(
+  ({ url }) => url.pathname === '/benutzerhandbuch.html',
+  new NetworkFirst({
+    cacheName: 'docs-cache',
+    networkTimeoutSeconds: 5,
+    plugins: [new ExpirationPlugin({ maxEntries: 3, maxAgeSeconds: 60 * 60 * 24 * 30 })],
+  })
+)
+
 // Navigations: NetworkFirst so a fresh index.html (pointing at new asset
 // hashes) wins whenever the network answers within 3s. index.html is NOT in
 // the precache anymore; the 'app-shell' cache keeps the last good shell for
