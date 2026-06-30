@@ -1,4 +1,5 @@
 ## 30.06.2026
+- [feat] web: Anwenderhandbuch im Sidebar-Footer („Anleitung")
 - [feat] videos: Titel ODER Spiel beim Upload — eines reicht
 - [feat] videos: Upload-Limit von 2 GB auf 2,5 GB anheben
 - [fix] videos: Stream-Token an Segment-Referenzen in Rendition-Playlist
