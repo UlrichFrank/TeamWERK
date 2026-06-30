@@ -273,20 +273,20 @@ export default function AppShell() {
       </nav>
       <div className="px-4 py-4 border-t border-brand-black/10 text-xs">
         <div className="truncate mb-2 text-brand-black/40">{user?.email}</div>
-        <div className="flex items-center gap-3">
-          <button onClick={handleLogout} className="text-brand-black/40 hover:text-brand-black transition-colors">
-            Abmelden
-          </button>
-          <a
-            href="/benutzerhandbuch.html"
-            target="_blank"
-            rel="noopener"
-            onClick={closeSidebar}
-            className="text-brand-black/40 hover:text-brand-black transition-colors"
-          >
-            Anleitung
-          </a>
-        </div>
+        <button onClick={handleLogout} className="text-brand-black/40 hover:text-brand-black transition-colors">
+          Abmelden
+        </button>
+      </div>
+      <div className="px-4 py-3 border-t border-brand-black/10">
+        <a
+          href="/benutzerhandbuch.html"
+          target="_blank"
+          rel="noopener"
+          onClick={closeSidebar}
+          className="text-xs text-brand-black/40 hover:text-brand-black/70 transition-colors"
+        >
+          Anleitung
+        </a>
       </div>
       {version && (
         <div className="px-4 py-3 border-t border-brand-black/10">
