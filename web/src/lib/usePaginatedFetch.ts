@@ -29,7 +29,7 @@ export function usePaginatedFetch<T>(endpoint: string, limit = 50): UsePaginated
     error: null,
   })
   const [search, setSearchImmediate] = useState('')
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const fetchData = async (searchVal: string, offsetVal: number) => {
     setState(prev => ({ ...prev, loading: true, error: null }))

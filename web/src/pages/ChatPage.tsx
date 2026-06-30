@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, type ReactElement } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users,
@@ -598,7 +598,7 @@ export default function ChatPage() {
               <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2">
                 {(() => {
                   const now = new Date()
-                  const nodes: JSX.Element[] = []
+                  const nodes: ReactElement[] = []
                   let prevSentAt: string | null = null
                   for (const msg of messages) {
                     if (shouldRenderSeparator(prevSentAt, msg.sentAt)) {

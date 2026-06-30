@@ -17,7 +17,7 @@ export function usePagination<T>(endpoint: string, limit = 20, extraParams: Reco
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const extraParamsKey = Object.entries(extraParams).map(([k, v]) => `${k}=${v}`).sort().join('&')
 
