@@ -2,7 +2,7 @@
 
 Konventionen werden mechanisch durchgesetzt, nicht nur dokumentiert.
 
-- **Git-Hooks** (`make hooks`, in `make init`): `pre-commit` = gofmt auf gestagete Go-Dateien; `pre-push` = volles Gate (`go vet`, `go test -race ./...` inkl. Architektur-Test, `golangci-lint`, `pnpm -C web build/test/lint`, `openspec validate`). Notausgang: `git push --no-verify`.
+- **Git-Hooks** (`make hooks`, in `make init`): `pre-commit` = gofmt auf gestagete Go-Dateien; `pre-push` = volles Gate (`go vet`, `go test ./...` inkl. Architektur-Test, `golangci-lint`, `pnpm -C web build/test/lint`, `openspec validate`). Race-Detector läuft separat via `make test-race` (~10× langsamer). Notausgang: `git push --no-verify`.
 - **Architektur-Test** `internal/arch/arch_test.go` (stdlib, Teil von `make test`): Domain-Packages importieren sich nicht gegenseitig; Foundation importiert keine Domain/Composition; jedes neue `internal/`-Package muss klassifiziert werden.
 - **gofmt-Selbstkorrektur:** `PostToolUse`-Hook (`scripts/claude-gofmt-hook.sh`) formatiert via Edit/Write geänderte `*.go`-Dateien.
 - **Pre-Completion:** Slash-Command **`/verify-change`** prüft Build/Test/Lint + Projekt-Invarianten (Route→Tests, Mutation→`Broadcast`/`useLiveUpdates`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).

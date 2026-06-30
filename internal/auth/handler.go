@@ -57,9 +57,26 @@ func (h *Handler) forgotPasswordAllowed(accountName string) bool {
 	return true
 }
 
-// dummyHash is a pre-computed bcrypt hash used in the login ErrNoRows branch to
-// perform a constant-time dummy comparison, preventing timing-based email enumeration.
-var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("teamwerk-dummy-password-for-timing"), bcrypt.DefaultCost)
+// bcryptCost ist der Cost-Faktor für alle Passwort-Hashes. Default ist
+// bcrypt.DefaultCost (10); Tests setzen via TestMain auf bcrypt.MinCost (4),
+// damit der Race-Detector nicht jede Hash-Operation um den Faktor ~40 ausbremst.
+var bcryptCost = bcrypt.DefaultCost
+
+// dummyHash ist ein lazy berechneter bcrypt-Hash für den Login-ErrNoRows-Pfad,
+// damit die Antwortzeit bei unbekanntem Account nicht von einem echten Treffer
+// unterscheidbar ist. Lazy, damit Tests den Cost-Faktor in TestMain absenken
+// können, bevor der Hash zum ersten Mal gebraucht wird.
+var (
+	dummyHashOnce  sync.Once
+	dummyHashCache []byte
+)
+
+func dummyHash() []byte {
+	dummyHashOnce.Do(func() {
+		dummyHashCache, _ = bcrypt.GenerateFromPassword([]byte("teamwerk-dummy-password-for-timing"), bcryptCost)
+	})
+	return dummyHashCache
+}
 
 // maxPasswordBytes ist die bcrypt-Grenze: längere Eingaben würden stillschweigend
 // trunkiert, daher lehnen wir sie explizit ab.
@@ -108,7 +125,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		req.Email, req.Email,
 	).Scan(&id, &hash, &role, &ident, &failedCount, &lockedUntil)
 	if err == sql.ErrNoRows {
-		bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password)) //nolint:errcheck
+		bcrypt.CompareHashAndPassword(dummyHash(), []byte(req.Password)) //nolint:errcheck
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	} else if err != nil {
@@ -668,7 +685,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
 		slog.Error("register bcrypt failed", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -777,7 +794,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	// can_login=1 aktiviert Kinder-Konten (can_login=0) beim ersten Passwort-Setzen;
 	// für bereits aktive Konten (normaler Reset) ist es ein No-op.
 	h.db.ExecContext(r.Context(), `UPDATE users SET password=?, can_login=1 WHERE id=?`, string(hash), userID)
@@ -1046,7 +1063,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	res, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO users (email, first_name, last_name, password, role) VALUES (?,?,?,?,'standard')`,
 		req.Email, req.FirstName, req.LastName, string(hash),
@@ -1328,7 +1345,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcryptCost)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

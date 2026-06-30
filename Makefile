@@ -19,7 +19,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test lint coverage metrics metrics-gate
+.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate
 
 .DEFAULT_GOAL := help
 
@@ -183,9 +183,12 @@ pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal eins
 
 pull-files: backup-files restore-local-files ## Dokumente + Protokolle in einem Schritt sichern und lokal einspielen
 
-test: ## Backend (race) + Frontend (vitest) Tests ausführen
-	$(GO) test -race ./...
+test: ## Backend + Frontend (vitest) Tests ausführen — schnell, ohne Race-Detector
+	$(GO) test ./...
 	cd web && pnpm test
+
+test-race: ## Backend-Tests mit Race-Detector (~10× langsamer; vor Merge in heikle nebenläufige Bereiche)
+	$(GO) test -race ./...
 
 lint: ## Statische Codeanalyse mit golangci-lint
 	@if ! command -v golangci-lint > /dev/null 2>&1; then \

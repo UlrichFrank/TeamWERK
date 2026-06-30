@@ -20,8 +20,8 @@ export PATH="$GOROOT/bin:$PATH"
 echo "▸ pre-push: go vet ./..."
 "$GO" vet ./...
 
-echo "▸ pre-push: go test -race ./...  (inkl. Architektur-Test)"
-"$GO" test -race ./...
+echo "▸ pre-push: go test ./...  (inkl. Architektur-Test; Race-Detector via 'make test-race')"
+"$GO" test ./...
 
 if command -v golangci-lint >/dev/null 2>&1; then
 	echo "▸ pre-push: golangci-lint run ./..."
