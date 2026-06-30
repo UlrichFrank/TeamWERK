@@ -49,6 +49,7 @@ type Member struct {
 	HomeClubID   *int    `json:"home_club_id,omitempty"`
 	HomeClubName *string `json:"home_club_name,omitempty"`
 	JoinDate     *string `json:"join_date,omitempty"`
+	ExitDate     *string `json:"exit_date,omitempty"`
 	// Zero-Knowledge-Envelope (Modell B): clientseitig verschlüsselte Bankdaten. Nur an
 	// vorstand/kassierer/admin ausgeliefert; entschlüsselt wird ausschließlich im Browser.
 	BankCiphertext   *string `json:"bank_ciphertext,omitempty"`
@@ -405,10 +406,16 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		PassNumber    string   `json:"pass_number"`
 		Position      string   `json:"position"`
 		Gender        string   `json:"gender"`
+		JoinDate      string   `json:"join_date"`
 		ClubFunctions []string `json:"club_functions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FirstName == "" || req.LastName == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	// Eintrittsdatum ist Pflicht (für die Beitrags-Halbierung bei unterjährigem Eintritt).
+	if req.JoinDate == "" {
+		http.Error(w, "join_date ist erforderlich", http.StatusBadRequest)
 		return
 	}
 	if req.Gender == "" {
@@ -426,9 +433,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		res, err := h.db.ExecContext(r.Context(),
-			`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender) VALUES (?,?,?,?,?,?,?)`,
+			`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender, join_date) VALUES (?,?,?,?,?,?,?,?)`,
 			req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(memberNumber),
-			nullableString(req.PassNumber), nullableString(req.Position), req.Gender)
+			nullableString(req.PassNumber), nullableString(req.Position), req.Gender, req.JoinDate)
 		if err != nil {
 			if attempt == 2 {
 				http.Error(w, "duplicate pass number or internal error", http.StatusConflict)
@@ -456,7 +463,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
-		       m.street, m.zip, m.city, m.home_club, m.home_club_id, COALESCE(sv.name,''), m.join_date,
+		       m.street, m.zip, m.city, m.home_club, m.home_club_id, COALESCE(sv.name,''), m.join_date, m.exit_date,
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
@@ -472,7 +479,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var jerseyNum, userID, homeClubID sql.NullInt64
 	var clubFunctionsStr string
 	var mStreet, mZip, mCity, mHomeClub, mHomeClubName sql.NullString
-	var joinDate sql.NullString
+	var joinDate, exitDate sql.NullString
 	var photoPath sql.NullString
 	var photoVisible int64
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
@@ -485,7 +492,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
 		&base.MemberNumber, &base.PassNumber,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunctionsStr,
-		&mStreet, &mZip, &mCity, &mHomeClub, &homeClubID, &mHomeClubName, &joinDate,
+		&mStreet, &mZip, &mCity, &mHomeClub, &homeClubID, &mHomeClubName, &joinDate, &exitDate,
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
@@ -546,6 +553,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	if isAdmin || isOwn {
 		if joinDate.Valid {
 			base.JoinDate = &joinDate.String
+		}
+		if exitDate.Valid {
+			base.ExitDate = &exitDate.String
 		}
 		base.DsgvoVerarbeitung = dsgvoVerarb == 1
 		if dsgvoVerarbDate.Valid {
@@ -659,6 +669,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		HomeClub      string `json:"home_club"`
 		HomeClubID    *int   `json:"home_club_id"`
 		JoinDate      string `json:"join_date"`
+		ExitDate      string `json:"exit_date"`
 		IBAN          string `json:"iban"`
 		AccountHolder string `json:"account_holder"`
 
@@ -681,6 +692,20 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Status == "" {
 		req.Status = "aktiv"
+	}
+	// Eintrittsdatum ist Pflicht; Austrittsdatum ist Pflicht, sobald der Status
+	// auf 'ausgetreten' gesetzt wird (für die Beitrags-Halbierung). Bei anderem
+	// Status wird ein evtl. vorhandenes Austrittsdatum geleert.
+	if req.JoinDate == "" {
+		http.Error(w, "join_date ist erforderlich", http.StatusBadRequest)
+		return
+	}
+	if req.Status == "ausgetreten" && req.ExitDate == "" {
+		http.Error(w, "exit_date ist bei Status 'ausgetreten' erforderlich", http.StatusBadRequest)
+		return
+	}
+	if req.Status != "ausgetreten" {
+		req.ExitDate = ""
 	}
 	if req.Status == "honorar" {
 		req.MemberNumber = ""
@@ -733,6 +758,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			jersey_number=?, position=?, gender=?,
 			street=?, zip=?, city=?, home_club=?, home_club_id=?,
 			status=?,
+			join_date=?, exit_date=?,
 			photo_visible=?,
 			cross_team_visible=?,
 			zweitspielrecht=?,
@@ -742,6 +768,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender,
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub), req.HomeClubID,
 		req.Status,
+		req.JoinDate, nullableString(req.ExitDate),
 		boolToInt(req.PhotoVisible),
 		boolToInt(req.CrossTeamVisible),
 		boolToInt(req.Zweitspielrecht),

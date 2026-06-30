@@ -48,6 +48,8 @@ type PreviewItem struct {
 	Kategorie      string   `json:"kategorie,omitempty"`
 	KategorieLabel string   `json:"kategorie_label,omitempty"`
 	BetragCent     int      `json:"betrag_cent,omitempty"`
+	Half           bool     `json:"half"`
+	HalfReason     string   `json:"half_reason,omitempty"` // erstjahr | eintritt | austritt
 	Included       bool     `json:"included"`
 	Warnings       []string `json:"warnings"`
 	Exclusions     []string `json:"exclusions"`
@@ -65,7 +67,7 @@ type previewResult struct {
 }
 
 func (h *Handler) buildPreview(ctx context.Context, saisonID int) (*previewResult, error) {
-	label, saisonStart, err := h.loadSeason(ctx, saisonID)
+	season, err := h.loadSeason(ctx, saisonID)
 	if err != nil {
 		return nil, err
 	}
@@ -77,14 +79,20 @@ func (h *Handler) buildPreview(ctx context.Context, saisonID int) (*previewResul
 	if err != nil {
 		return nil, err
 	}
-	res := &previewResult{SaisonID: saisonID, SaisonLabel: label, SaisonKurz: label, Faelligkeit: saisonStart}
+	res := &previewResult{SaisonID: saisonID, SaisonLabel: season.Label, SaisonKurz: season.Label, Faelligkeit: season.Stichtag}
 	for _, m := range members {
-		res.Items = append(res.Items, computeItem(m, saetze, saisonStart))
+		// Früher (oder ohne Austrittsdatum) ausgetretene Mitglieder gar nicht
+		// anzeigen — wie honorar/anwaerter. Nur unterjährige Austritte
+		// (exit_date im Saisonfenster) werden einbezogen und halbiert.
+		if m.Status == "ausgetreten" && !inWindow(m.ExitDate, season.Start, season.End) {
+			continue
+		}
+		res.Items = append(res.Items, computeItem(m, saetze, season))
 	}
 	return res, nil
 }
 
-func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) PreviewItem {
+func computeItem(m MemberRow, saetze map[string][]Satz, season SeasonInfo) PreviewItem {
 	it := PreviewItem{
 		MemberID:   m.ID,
 		Name:       m.FirstName + " " + m.LastName,
@@ -94,6 +102,11 @@ func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) P
 		row:        m,
 	}
 	gruppe := BeitragsGruppe(m.Status)
+	// Unterjähriger Austritt: ausgetreten + exit_date im Saisonfenster → wie ein
+	// aktives Mitglied behandeln (Kategorie aus home_club_id), Beitrag halbiert.
+	if gruppe == "" && m.Status == "ausgetreten" && inWindow(m.ExitDate, season.Start, season.End) {
+		gruppe = "aktiv"
+	}
 	if gruppe == "" {
 		it.Exclusions = append(it.Exclusions, exclStatusInaktiv)
 	}
@@ -111,12 +124,19 @@ func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) P
 		} else {
 			kategorie = AktivKategorie(m.HasHomeClub)
 		}
-		betrag, err := LookupBetragCent(saetze, kategorie, saisonStart)
+		betrag, err := LookupBetragCent(saetze, kategorie, season.Stichtag)
 		if err != nil {
 			it.Exclusions = append(it.Exclusions, exclKeinSatz)
 		} else {
 			it.Kategorie = kategorie
 			it.KategorieLabel = kategorieLabel[kategorie]
+			// Exakte Halbierung (Integer-Division) bei unterjährigem Ein-/Austritt
+			// oder im ersten Abrechnungsjahr. Ermäßigungen stapeln nicht.
+			if half, reason := halfFee(m, season); half {
+				betrag /= 2
+				it.Half = true
+				it.HalfReason = reason
+			}
 			it.BetragCent = betrag
 		}
 	}
@@ -140,19 +160,33 @@ func computeItem(m MemberRow, saetze map[string][]Satz, saisonStart time.Time) P
 	return it
 }
 
-// loadSeason liefert Label (name) und den Abrechnungs-Stichtag 01.07. des
-// Saison-Startjahres.
-func (h *Handler) loadSeason(ctx context.Context, id int) (label string, stichtag time.Time, err error) {
-	var name, startDate string
-	err = h.db.QueryRowContext(ctx, `SELECT name, start_date FROM seasons WHERE id=?`, id).Scan(&name, &startDate)
+// loadSeason liefert das Abrechnungsjahr: Label, Saisonfenster (start/end),
+// den Stichtag 01.07. des Startjahres (Fälligkeit + Satz-Stichtag) und das
+// is_inaugural-Flag (erstes Abrechnungsjahr → alle zahlen halb).
+func (h *Handler) loadSeason(ctx context.Context, id int) (SeasonInfo, error) {
+	var name, startDate, endDate string
+	var inaugural int
+	err := h.db.QueryRowContext(ctx,
+		`SELECT name, start_date, end_date, COALESCE(is_inaugural,0) FROM seasons WHERE id=?`, id).
+		Scan(&name, &startDate, &endDate, &inaugural)
 	if err != nil {
-		return "", time.Time{}, err
+		return SeasonInfo{}, err
 	}
 	start, perr := time.Parse("2006-01-02", startDate[:min(10, len(startDate))])
 	if perr != nil {
-		return "", time.Time{}, perr
+		return SeasonInfo{}, perr
 	}
-	return name, time.Date(start.Year(), time.July, 1, 0, 0, 0, 0, time.UTC), nil
+	end, perr := time.Parse("2006-01-02", endDate[:min(10, len(endDate))])
+	if perr != nil {
+		return SeasonInfo{}, perr
+	}
+	return SeasonInfo{
+		Label:     name,
+		Start:     start,
+		End:       end,
+		Stichtag:  time.Date(start.Year(), time.July, 1, 0, 0, 0, 0, time.UTC),
+		Inaugural: inaugural != 0,
+	}, nil
 }
 
 // GET /api/fee-run/preview?saison_id=
@@ -275,11 +309,12 @@ func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ungültiger Body", http.StatusBadRequest)
 		return
 	}
-	label, _, err := h.loadSeason(r.Context(), req.SaisonID)
+	season, err := h.loadSeason(r.Context(), req.SaisonID)
 	if err != nil {
 		http.Error(w, "Saison nicht gefunden", http.StatusNotFound)
 		return
 	}
+	label := season.Label
 	results := make([]ProtokollResult, 0, len(req.Results))
 	var okCount, failCount, sumOK int
 	for _, rr := range req.Results {
@@ -321,12 +356,12 @@ func (h *Handler) Protocol(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "saison_id fehlt oder ungültig", http.StatusBadRequest)
 		return
 	}
-	label, _, err := h.loadSeason(r.Context(), saisonID)
+	season, err := h.loadSeason(r.Context(), saisonID)
 	if err != nil {
 		http.Error(w, "Saison nicht gefunden", http.StatusNotFound)
 		return
 	}
-	data, err := ReadProtokoll(h.dir, label)
+	data, err := ReadProtokoll(h.dir, season.Label)
 	if err != nil {
 		http.Error(w, "Protokoll konnte nicht gelesen werden", http.StatusInternalServerError)
 		return

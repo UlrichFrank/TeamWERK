@@ -174,6 +174,7 @@ interface Season {
   start_date: string
   end_date: string
   is_active: boolean
+  is_inaugural: boolean
 }
 
 function generateSeasonOptions() {
@@ -197,6 +198,7 @@ function SaisonsTab() {
   const [createName, setCreateName] = useState('')
   const [createStart, setCreateStart] = useState('')
   const [createEnd, setCreateEnd] = useState('')
+  const [createInaugural, setCreateInaugural] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -206,6 +208,7 @@ function SaisonsTab() {
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
   const [editActive, setEditActive] = useState(false)
+  const [editInaugural, setEditInaugural] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [deleting, setDeleting] = useState<number | null>(null)
@@ -238,9 +241,9 @@ function SaisonsTab() {
     setCreating(true)
     setCreateError(null)
     try {
-      await api.post('/seasons', { name: createName, start_date: createStart, end_date: createEnd })
+      await api.post('/seasons', { name: createName, start_date: createStart, end_date: createEnd, is_inaugural: createInaugural })
       setShowCreate(false)
-      setPreset(''); setCreateName(''); setCreateStart(''); setCreateEnd('')
+      setPreset(''); setCreateName(''); setCreateStart(''); setCreateEnd(''); setCreateInaugural(false)
       await load()
     } catch {
       setCreateError('Saison konnte nicht angelegt werden.')
@@ -255,13 +258,14 @@ function SaisonsTab() {
     setEditStart(s.start_date.slice(0, 10))
     setEditEnd(s.end_date.slice(0, 10))
     setEditActive(s.is_active)
+    setEditInaugural(s.is_inaugural)
   }
 
   const handleSaveEdit = async () => {
     if (!editId) return
     setSaving(true)
     try {
-      await api.put(`/seasons/${editId}`, { name: editName, start_date: editStart, end_date: editEnd })
+      await api.put(`/seasons/${editId}`, { name: editName, start_date: editStart, end_date: editEnd, is_inaugural: editInaugural })
       setEditId(null)
       await load()
     } finally {
@@ -339,6 +343,13 @@ function SaisonsTab() {
                     <input type="date" value={createEnd} onChange={e => setCreateEnd(e.target.value)} className={INPUT} required />
                   </div>
                 </div>
+                <label className="flex items-start gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={createInaugural} onChange={e => setCreateInaugural(e.target.checked)} className="mt-1" />
+                  <span className="text-sm text-brand-text">
+                    Erstes Abrechnungsjahr
+                    <span className="block text-brand-text-muted">Einmalige Startkonzession: alle Mitglieder zahlen im Beitragslauf nur den halben Beitrag.</span>
+                  </span>
+                </label>
                 {createError && (
                   <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>
                 )}
@@ -384,6 +395,13 @@ function SaisonsTab() {
             <input type="date" value={editEnd} onChange={e => setEditEnd(e.target.value)} className={INPUT} />
           </div>
         </div>
+        <label className="flex items-start gap-2 cursor-pointer select-none">
+          <input type="checkbox" checked={editInaugural} onChange={e => setEditInaugural(e.target.checked)} className="mt-1" />
+          <span className="text-sm text-brand-text">
+            Erstes Abrechnungsjahr
+            <span className="block text-brand-text-muted">Einmalige Startkonzession: alle Mitglieder zahlen im Beitragslauf nur den halben Beitrag.</span>
+          </span>
+        </label>
       </EditModal>
 
       {/* Mobile: Cards */}

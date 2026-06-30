@@ -106,15 +106,19 @@ func setupSrv(t *testing.T) (*httptest.Server, *sql.DB, string) {
 
 func tok(t *testing.T) string { return testutil.Token(t, 1, "standard", []string{"vorstand"}) }
 
+type previewItem struct {
+	MemberID   int      `json:"member_id"`
+	Kategorie  string   `json:"kategorie"`
+	BetragCent int      `json:"betrag_cent"`
+	Half       bool     `json:"half"`
+	HalfReason string   `json:"half_reason"`
+	Included   bool     `json:"included"`
+	Warnings   []string `json:"warnings"`
+	Exclusions []string `json:"exclusions"`
+}
+
 type previewResp struct {
-	Items []struct {
-		MemberID   int      `json:"member_id"`
-		Kategorie  string   `json:"kategorie"`
-		BetragCent int      `json:"betrag_cent"`
-		Included   bool     `json:"included"`
-		Warnings   []string `json:"warnings"`
-		Exclusions []string `json:"exclusions"`
-	} `json:"items"`
+	Items []previewItem `json:"items"`
 }
 
 func getPreview(t *testing.T, srv *httptest.Server, saisonID int) previewResp {
@@ -140,14 +144,7 @@ func itoa(n int) string {
 	return string(b)
 }
 
-func itemFor(pr previewResp, id int) (struct {
-	MemberID   int      `json:"member_id"`
-	Kategorie  string   `json:"kategorie"`
-	BetragCent int      `json:"betrag_cent"`
-	Included   bool     `json:"included"`
-	Warnings   []string `json:"warnings"`
-	Exclusions []string `json:"exclusions"`
-}, bool) {
+func itemFor(pr previewResp, id int) (previewItem, bool) {
 	for _, it := range pr.Items {
 		if it.MemberID == id {
 			return it, true
@@ -296,15 +293,71 @@ func TestPreview_BeitragsfreiAusgeschlossen(t *testing.T) {
 	}
 }
 
-func TestPreview_NeumitgliedZahltVollenBeitrag(t *testing.T) {
+// Unterjähriger Eintritt (join_date im Saisonfenster) → halber Jahresbeitrag.
+func TestPreview_NeumitgliedZahltHalbenBeitrag(t *testing.T) {
 	srv, db, _ := setupSrv(t)
-	s := insertSeason2027(t, db)
+	s := insertSeason2027(t, db) // Fenster 2027-09-01 .. 2028-06-30
 	m := defaultMember()
 	id := insertMember(t, db, "Neu", m)
 	db.Exec(`UPDATE members SET join_date='2027-09-15' WHERE id=?`, id)
 	it, _ := itemFor(getPreview(t, srv, s), id)
-	if !it.Included || it.BetragCent != 22600 {
-		t.Errorf("Neumitglied zahlt nicht vollen Beitrag: %+v", it)
+	if !it.Included || it.BetragCent != 11300 || !it.Half || it.HalfReason != "eintritt" {
+		t.Errorf("Neumitglied zahlt nicht halben Beitrag: %+v", it)
+	}
+}
+
+// Ganzjähriges Bestandsmitglied (join_date vor Saisonstart) → voller Beitrag.
+func TestPreview_GanzjaehrigZahltVoll(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Alt", defaultMember())
+	db.Exec(`UPDATE members SET join_date='2020-01-01' WHERE id=?`, id)
+	it, _ := itemFor(getPreview(t, srv, s), id)
+	if !it.Included || it.BetragCent != 22600 || it.Half {
+		t.Errorf("Bestandsmitglied zahlt nicht vollen Beitrag: %+v", it)
+	}
+}
+
+// Unterjähriger Austritt (ausgetreten + exit_date im Fenster) → einbezogen, halb.
+func TestPreview_UnterjaehrigerAustrittEinbezogen(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	m := defaultMember()
+	m.status = "ausgetreten"
+	id := insertMember(t, db, "Geht", m)
+	db.Exec(`UPDATE members SET join_date='2020-01-01', exit_date='2027-11-01' WHERE id=?`, id)
+	it, ok := itemFor(getPreview(t, srv, s), id)
+	if !ok || !it.Included || it.BetragCent != 11300 || !it.Half || it.HalfReason != "austritt" {
+		t.Errorf("unterjähriger Austritt nicht halb einbezogen: %+v (ok=%v)", it, ok)
+	}
+}
+
+// Früher ausgetreten (exit_date vor Saison) → nicht im Preview.
+func TestPreview_FruehererAustrittNichtImPreview(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	aktivID := insertMember(t, db, "Aktiv", defaultMember())
+	m := defaultMember()
+	m.status = "ausgetreten"
+	m.memberNumber = "9001"
+	gone := insertMember(t, db, "Weg", m)
+	db.Exec(`UPDATE members SET exit_date='2025-01-01' WHERE id=?`, gone)
+	pr := getPreview(t, srv, s)
+	if len(pr.Items) != 1 || pr.Items[0].MemberID != aktivID {
+		t.Fatalf("erwarte nur aktives Mitglied, got %d: %+v", len(pr.Items), pr.Items)
+	}
+}
+
+// Erstes Abrechnungsjahr (is_inaugural) → alle Eingeschlossenen zahlen halb.
+func TestPreview_ErstjahrAlleHalb(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	db.Exec(`UPDATE seasons SET is_inaugural=1 WHERE id=?`, s)
+	id := insertMember(t, db, "Egal", defaultMember())
+	db.Exec(`UPDATE members SET join_date='2020-01-01' WHERE id=?`, id) // ganzjährig, trotzdem halb
+	it, _ := itemFor(getPreview(t, srv, s), id)
+	if !it.Included || it.BetragCent != 11300 || !it.Half || it.HalfReason != "erstjahr" {
+		t.Errorf("Erstjahr halbiert nicht: %+v", it)
 	}
 }
 

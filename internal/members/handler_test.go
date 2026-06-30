@@ -757,7 +757,7 @@ func TestMemberStatus_Anwaerter_Create(t *testing.T) {
 
 	srv := newStatusServer(t, database)
 	res := testutil.Post(t, srv, "/api/members", tok,
-		map[string]string{"first_name": "Tom", "last_name": "Probe"})
+		map[string]string{"first_name": "Tom", "last_name": "Probe", "join_date": "2026-01-01"})
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", res.StatusCode)
 	}
@@ -831,6 +831,7 @@ func TestUpdateMember_BeitragsfreiFalseClearsGrund(t *testing.T) {
 			"first_name":         "Petra",
 			"last_name":          "Test",
 			"status":             "aktiv",
+			"join_date":          "2026-01-01",
 			"beitragsfrei":       false,
 			"beitragsfrei_grund": "wird ignoriert",
 		})
@@ -850,5 +851,91 @@ func TestUpdateMember_BeitragsfreiFalseClearsGrund(t *testing.T) {
 	}
 	if grund.Valid {
 		t.Errorf("beitragsfrei_grund: got %q, want NULL", grund.String)
+	}
+}
+
+// ── Eintritts-/Austrittsdatum (Halbierungs-Feature) ───────────────────────────
+
+// POST /api/members ohne join_date → 400 (Eintrittsdatum ist Pflicht).
+func TestCreateMember_OhneEintrittsdatum400(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Post(t, srv, "/api/members", tok,
+		map[string]string{"first_name": "Ohne", "last_name": "Datum"})
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 ohne join_date, got %d", res.StatusCode)
+	}
+}
+
+// PUT /api/members/{id} Status=ausgetreten ohne exit_date → 400.
+func TestUpdateMember_AustrittOhneAustrittsdatum400(t *testing.T) {
+	database := testutil.NewDB(t)
+	memberID := testutil.CreateMember(t, database, 0)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
+		map[string]any{"first_name": "Geht", "last_name": "Weg", "status": "ausgetreten", "join_date": "2026-01-01"})
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 ohne exit_date, got %d", res.StatusCode)
+	}
+}
+
+// PUT mit Status=ausgetreten + exit_date → 204, exit_date persistiert; GET liefert es zurück.
+func TestUpdateMember_AustrittMitDatumOK(t *testing.T) {
+	database := testutil.NewDB(t)
+	memberID := testutil.CreateMember(t, database, 0)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
+		map[string]any{"first_name": "Geht", "last_name": "Weg", "status": "ausgetreten",
+			"join_date": "2026-01-01", "exit_date": "2027-03-15"})
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var exit sql.NullString
+	if err := database.QueryRow(`SELECT exit_date FROM members WHERE id=?`, memberID).Scan(&exit); err != nil {
+		t.Fatalf("scan exit_date: %v", err)
+	}
+	if !exit.Valid || exit.String[:10] != "2027-03-15" {
+		t.Fatalf("exit_date persistiert: got %v, want 2027-03-15", exit)
+	}
+
+	// GET liefert exit_date im Body (Vorstand).
+	got := testutil.Get(t, srv, fmt.Sprintf("/api/members/%d", memberID), tok)
+	var body struct {
+		ExitDate *string `json:"exit_date"`
+	}
+	json.NewDecoder(got.Body).Decode(&body)
+	got.Body.Close()
+	if body.ExitDate == nil || (*body.ExitDate)[:10] != "2027-03-15" {
+		t.Errorf("GET exit_date: got %v, want 2027-03-15", body.ExitDate)
+	}
+}
+
+// Wechsel von ausgetreten zurück zu aktiv leert exit_date.
+func TestUpdateMember_ReaktivierungLeertAustrittsdatum(t *testing.T) {
+	database := testutil.NewDB(t)
+	memberID := testutil.CreateMember(t, database, 0)
+	database.Exec(`UPDATE members SET status='ausgetreten', exit_date='2027-03-15' WHERE id=?`, memberID)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
+		map[string]any{"first_name": "Zurueck", "last_name": "Da", "status": "aktiv", "join_date": "2026-01-01"})
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var exit sql.NullString
+	database.QueryRow(`SELECT exit_date FROM members WHERE id=?`, memberID).Scan(&exit)
+	if exit.Valid {
+		t.Errorf("exit_date sollte geleert sein, got %q", exit.String)
 	}
 }

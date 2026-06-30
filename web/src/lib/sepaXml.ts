@@ -75,11 +75,12 @@ export function saisonStamp(s: string): string {
   return s.replace(/\//g, '-')
 }
 
-function saisonShort(s: string): string {
-  return s
-    .split('/')
-    .map(p => (p.length === 4 && /^\d+$/.test(p) ? p.slice(2) : p))
-    .join('/')
+// abrechnungsjahr liefert nur das Beitrags-/Abrechnungsjahr (2-stellig, Startjahr)
+// aus einem Saison-Label wie "2026/27" → "26" bzw. "2026/2027" → "26".
+// Im Verwendungszweck soll nur das Beitragsjahr stehen, nicht die Saison-Spanne.
+export function abrechnungsjahr(s: string): string {
+  const first = s.split('/')[0].trim()
+  return first.length === 4 && /^\d+$/.test(first) ? first.slice(2) : first
 }
 
 const STREET_RE = /^(.+?)\s+(\d+\s*[a-zA-Z]?)$/
@@ -150,7 +151,7 @@ export function buildPainXML(input: SepaBuildInput): string {
       el('Dbtr', [leaf('Nm', ascii(it.name)), el('PstlAdr', pstlAdr)]),
       el('DbtrAcct', [el('Id', [leaf('IBAN', it.iban)])]),
       el('RmtInf', [
-        leaf('Ustrd', ascii(`Mitgliedsbeitrag Team Stuttgart ${saisonShort(input.saisonKurz)} - Mitglied ${it.memberNumber}`)),
+        leaf('Ustrd', ascii(`Mitgliedsbeitrag Team Stuttgart ${abrechnungsjahr(input.saisonKurz)} - Mitglied ${it.memberNumber}`)),
       ]),
     ])
   })

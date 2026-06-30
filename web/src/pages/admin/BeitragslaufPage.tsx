@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Ban, CheckSquare, X } from 'lucide-react'
+import { AlertTriangle, Ban, CheckSquare, Percent, X } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useVault } from '../../contexts/VaultContext'
 import { useLiveUpdates } from '../../hooks/useLiveUpdates'
@@ -19,9 +19,17 @@ interface PreviewItem {
   kategorie?: string
   kategorie_label?: string
   betrag_cent?: number
+  half: boolean
+  half_reason?: string
   included: boolean
   warnings: string[]
   exclusions: string[]
+}
+
+const HALF_LABEL: Record<string, string> = {
+  erstjahr: 'halber Beitrag (erstes Abrechnungsjahr)',
+  eintritt: 'halber Beitrag (Eintritt im Jahr)',
+  austritt: 'halber Beitrag (Austritt im Jahr)',
 }
 
 interface PreviewResp {
@@ -344,6 +352,11 @@ export default function BeitragslaufPage() {
                           {it.exclusions.map(e => EXCL_LABEL[e] ?? e).join(', ')}
                         </span>
                       )}
+                      {it.included && it.half && (
+                        <span className="inline-flex items-center gap-1 text-brand-text-muted" title={HALF_LABEL[it.half_reason ?? ''] ?? 'halber Beitrag'}>
+                          <Percent className="w-4 h-4 shrink-0" /> {HALF_LABEL[it.half_reason ?? ''] ?? 'halber Beitrag'}
+                        </span>
+                      )}
                       {it.included && it.warnings.length > 0 && (
                         <span className="inline-flex items-center gap-1 text-brand-text-muted" title="Stammverein unklar">
                           <AlertTriangle className="w-4 h-4 shrink-0" /> Stammverein unklar
@@ -375,6 +388,9 @@ export default function BeitragslaufPage() {
                 </div>
                 <div className="text-xs text-brand-text-muted mt-1 flex flex-wrap items-center gap-x-1">
                   <span>{it.status} · {it.kategorie_label ?? '—'}</span>
+                  {it.included && it.half && (
+                    <span className="inline-flex items-center gap-1">· <Percent className="w-4 h-4 shrink-0" />{HALF_LABEL[it.half_reason ?? ''] ?? 'halber Beitrag'}</span>
+                  )}
                   {!it.included && (
                     <span className="inline-flex items-center gap-1">· <Ban className="w-4 h-4 shrink-0" />{it.exclusions.map(e => EXCL_LABEL[e] ?? e).join(', ')}</span>
                   )}
