@@ -47,7 +47,9 @@ type Config struct {
 	// (raw/, processed/, uploads/). Default /storage/videos.
 	VideoStorageDir string
 	// VideoReservedBytes ist der freizuhaltende Disk-Puffer (DB-Wachstum, Logs,
-	// parallele Uploads), gegen den der Pre-Upload-Disk-Guard prüft. Default 2 GiB.
+	// parallele Uploads), gegen den der Pre-Upload-Disk-Guard prüft. Default 1 GiB
+	// (passend zum aktuellen VPS mit ~8.7 GB Root; auf größerem Storage gerne
+	// hochsetzen, um mehr Sicherheitsmarge gegen parallele Uploads zu haben).
 	VideoReservedBytes uint64
 	// VideoStreamSecret ist das HMAC-Secret für Stream-Token (getrennt von
 	// JWTSecret). Leer ⇒ Streaming-Token-Signierung deaktiviert.
@@ -94,7 +96,7 @@ func Load() (*Config, error) {
 		HSTSEnabled:               os.Getenv("HSTS_ENABLED") == "true",
 
 		VideoStorageDir:    getEnv("VIDEO_STORAGE_DIR", "/storage/videos"),
-		VideoReservedBytes: getEnvUint64("VIDEO_RESERVED_BYTES", 2147483648), // 2 GiB
+		VideoReservedBytes: getEnvUint64("VIDEO_RESERVED_BYTES", 1073741824), // 1 GiB
 		VideoStreamSecret:  os.Getenv("VIDEO_STREAM_SECRET"),
 	}
 	if c.JWTSecret == "" {

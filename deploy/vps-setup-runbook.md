@@ -119,7 +119,7 @@ zeitweise mehrere GB (raw + processed-Peak vor raw-Delete).
   mounten (eigene Partition/Volume empfohlen, damit ein volles Video-Storage
   nicht DB/Logs unter `/var` blockiert).
 - Faustregel: pro gleichzeitig vorgehaltener Stunde Spielvideo ~3–4 GB
-  einplanen, plus die `VIDEO_RESERVED_BYTES`-Reserve (Default 2 GiB).
+  einplanen, plus die `VIDEO_RESERVED_BYTES`-Reserve (Default 1 GiB).
 - Der Disk-Guard prüft `free(/storage)` vor jedem Upload (HTTP 507 bei Mangel)
   und vor jedem Transcode — bei zu wenig Platz wird der Lauf nie hart abbrechen,
   sondern abgelehnt bzw. zurückgestellt. Auslaufschutz, kein Ersatz für genug
@@ -145,7 +145,7 @@ ssh vServer "ffmpeg -version | head -1 && ffprobe -version | head -1"
 |---|---|---|---|
 | `VIDEO_STREAM_SECRET` | ja | — | HMAC-Secret (HS256) für kurzlebige Stream-Token. Separat von `JWT_SECRET` halten — ein Token-Leak betrifft dann keine JWTs. Erzeugen mit `openssl rand -hex 32`. Fehlt es im Production-Modus → Fail-Fast beim Start. |
 | `VIDEO_STORAGE_DIR` | nein | `/storage/videos` | Wurzel der Video-Ablage. Muss `www-data` gehören und auf dem erweiterten Storage liegen. |
-| `VIDEO_RESERVED_BYTES` | nein | `2147483648` (2 GiB) | Reserve, die der Disk-Guard zusätzlich zur geschätzten Dateigröße freihält (DB-Wachstum, Logs, parallele Uploads). |
+| `VIDEO_RESERVED_BYTES` | nein | `1073741824` (1 GiB) | Reserve, die der Disk-Guard zusätzlich zur geschätzten Dateigröße freihält (DB-Wachstum, Logs, parallele Uploads). Auf größerem Storage gerne hochsetzen. |
 
 Nach Änderung an der Env-Datei: `ssh vServer "systemctl restart teamwerk"`.
 
