@@ -40,7 +40,7 @@ describe('buildPainXML (Parität zu internal/beitragslauf/xml.go)', () => {
   it('Gläubiger-ID, IBANs, Verwendungszweck, ASCII-Umlaut in Name', () => {
     expect(xml).toContain('<IBAN>DE89370400440532013000</IBAN>')
     expect(xml).toContain('<Id>DE98ZZZ09999999999</Id>')
-    expect(xml).toContain('Mitgliedsbeitrag Team Stuttgart 26/27 - Mitglied 1042')
+    expect(xml).toContain('Mitgliedsbeitrag Team Stuttgart 26 - Mitglied 1042')
     expect(xml).toContain('<EndToEndId>TW-1042-2026-27</EndToEndId>')
     // Umlaut im Dbtr-Namen bleibt erhalten (kein ASCII-Zwang für Nm/Ustrd? -> Go ascii()t Nm)
     expect(xml).toContain('<Nm>Max Mueller</Nm>')

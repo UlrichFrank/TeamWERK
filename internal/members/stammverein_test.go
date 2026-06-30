@@ -24,7 +24,7 @@ func TestUpdate_AssignHomeClub(t *testing.T) {
 
 	// Stammverein 8 ("TV Cannstatt 1846") aus dem Seed zuweisen.
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
-		map[string]any{"first_name": "Test", "last_name": "Spieler", "status": "aktiv", "home_club_id": 8})
+		map[string]any{"first_name": "Test", "last_name": "Spieler", "status": "aktiv", "home_club_id": 8, "join_date": "2026-01-01"})
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("PUT: status %d, want 204", res.StatusCode)
 	}
@@ -54,7 +54,7 @@ func TestUpdate_RemoveHomeClub(t *testing.T) {
 
 	// home_club_id: null → Zuordnung entfernen.
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
-		map[string]any{"first_name": "Test", "last_name": "Spieler", "status": "aktiv", "home_club_id": nil})
+		map[string]any{"first_name": "Test", "last_name": "Spieler", "status": "aktiv", "home_club_id": nil, "join_date": "2026-01-01"})
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("PUT: status %d, want 204", res.StatusCode)
 	}
@@ -76,7 +76,7 @@ func TestUpdate_InvalidHomeClubID(t *testing.T) {
 	srv := newMembersServer(t, database)
 
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
-		map[string]any{"first_name": "Test", "last_name": "Spieler", "status": "aktiv", "home_club_id": 9999})
+		map[string]any{"first_name": "Test", "last_name": "Spieler", "status": "aktiv", "home_club_id": 9999, "join_date": "2026-01-01"})
 	if res.StatusCode != http.StatusBadRequest {
 		t.Errorf("PUT mit ungültiger home_club_id: status %d, want 400", res.StatusCode)
 	}

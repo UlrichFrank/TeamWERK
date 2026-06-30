@@ -28,6 +28,7 @@
 - **`player_memberships` ist eine View** über `kader_members` — kein direktes INSERT; stattdessen `INSERT INTO kader_members (kader_id, member_id) …`.
 - **Beitragslauf-Protokoll ist keine Tabelle**, sondern append-only Textdatei pro Saison unter `BEITRAGSLAUF_DIR` (`./storage/beitragslauf-protokolle`) — ins Backup aufnehmen.
 - **Status-Felder** sind CHECK-Constraints (z.B. `members.status`: `aktiv|verletzt|pausiert|ausgetreten`) — gültige Werte in der jeweiligen Migration nachsehen.
+- **`members.join_date`/`exit_date`** steuern die Beitrags-Halbierung (Migration `014`): `join_date` ist App-Pflichtfeld (DB nullbar), `exit_date` Pflicht bei `status='ausgetreten'`. **`seasons.is_inaugural`** (INTEGER 0/1) markiert das erste Abrechnungsjahr (alle zahlen halb). Details siehe Gotcha „SEPA-Beitragslauf".
 
 ## Paginierung
 

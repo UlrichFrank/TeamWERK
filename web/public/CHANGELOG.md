@@ -1,3 +1,9 @@
+## 01.07.2026
+- [feat] beitragslauf: halber Beitrag bei unterjährigem Ein-/Austritt und im ersten Abrechnungsjahr (exakte Halbierung)
+- [feat] members: Eintrittsdatum (Pflicht) und Austrittsdatum (Pflicht bei Austritt) im Mitglieds-Edit
+- [feat] saisons: Schalter „Erstes Abrechnungsjahr" (alle zahlen halb)
+- [feat] beitragslauf: SEPA-XML-Verwendungszweck zeigt nur das Beitragsjahr (z. B. 26) statt der Saison-Spanne
+
 ## 30.06.2026
 - [feat] web: Anwenderhandbuch im Sidebar-Footer („Anleitung")
 - [feat] videos: Titel ODER Spiel beim Upload — eines reicht

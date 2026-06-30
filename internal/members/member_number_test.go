@@ -46,7 +46,7 @@ func TestCreateMember_AutoAssignsNextNumber_IgnoresClientValue(t *testing.T) {
 	srv := newMembersServer(t, database)
 	// Client schickt explizit "999" mit — muss ignoriert werden.
 	res := testutil.Post(t, srv, "/api/members", tok,
-		map[string]string{"first_name": "Neu", "last_name": "Mitglied", "member_number": "999"})
+		map[string]string{"first_name": "Neu", "last_name": "Mitglied", "member_number": "999", "join_date": "2026-01-01"})
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", res.StatusCode)
 	}
@@ -69,7 +69,7 @@ func TestCreateMember_FirstNumberIsOne(t *testing.T) {
 
 	srv := newMembersServer(t, database)
 	res := testutil.Post(t, srv, "/api/members", tok,
-		map[string]string{"first_name": "Erstes", "last_name": "Mitglied"})
+		map[string]string{"first_name": "Erstes", "last_name": "Mitglied", "join_date": "2026-01-01"})
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", res.StatusCode)
 	}
@@ -93,6 +93,7 @@ func updateBody(firstName, lastName, memberNumber string) map[string]any {
 		"member_number": memberNumber,
 		"status":        "aktiv",
 		"gender":        "u",
+		"join_date":     "2026-01-01",
 	}
 }
 

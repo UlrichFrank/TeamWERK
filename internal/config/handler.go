@@ -125,37 +125,48 @@ func (h *Handler) UpdateClub(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/admin/seasons
 func (h *Handler) ListSeasons(w http.ResponseWriter, r *http.Request) {
-	rows, _ := h.db.QueryContext(r.Context(), `SELECT id, name, start_date, end_date, is_active FROM seasons ORDER BY start_date DESC`)
+	rows, _ := h.db.QueryContext(r.Context(), `SELECT id, name, start_date, end_date, is_active, COALESCE(is_inaugural,0) FROM seasons ORDER BY start_date DESC`)
 	defer rows.Close()
 	type season struct {
-		ID        int    `json:"id"`
-		Name      string `json:"name"`
-		StartDate string `json:"start_date"`
-		EndDate   string `json:"end_date"`
-		IsActive  bool   `json:"is_active"`
+		ID          int    `json:"id"`
+		Name        string `json:"name"`
+		StartDate   string `json:"start_date"`
+		EndDate     string `json:"end_date"`
+		IsActive    bool   `json:"is_active"`
+		IsInaugural bool   `json:"is_inaugural"`
 	}
 	result := []season{}
 	for rows.Next() {
 		var s season
-		var active int
-		rows.Scan(&s.ID, &s.Name, &s.StartDate, &s.EndDate, &active)
+		var active, inaugural int
+		rows.Scan(&s.ID, &s.Name, &s.StartDate, &s.EndDate, &active, &inaugural)
 		s.IsActive = active == 1
+		s.IsInaugural = inaugural == 1
 		result = append(result, s)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
 
+// boolToInt bildet ein bool auf 0/1 für INTEGER-Spalten ab.
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // POST /api/admin/seasons
 func (h *Handler) CreateSeason(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name      string `json:"name"`
-		StartDate string `json:"start_date"`
-		EndDate   string `json:"end_date"`
+		Name        string `json:"name"`
+		StartDate   string `json:"start_date"`
+		EndDate     string `json:"end_date"`
+		IsInaugural bool   `json:"is_inaugural"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	h.db.ExecContext(r.Context(), `INSERT INTO seasons (name, start_date, end_date) VALUES (?,?,?)`,
-		req.Name, req.StartDate, req.EndDate)
+	h.db.ExecContext(r.Context(), `INSERT INTO seasons (name, start_date, end_date, is_inaugural) VALUES (?,?,?,?)`,
+		req.Name, req.StartDate, req.EndDate, boolToInt(req.IsInaugural))
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -171,9 +182,10 @@ func (h *Handler) ActivateSeason(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateSeason(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Name      string `json:"name"`
-		StartDate string `json:"start_date"`
-		EndDate   string `json:"end_date"`
+		Name        string `json:"name"`
+		StartDate   string `json:"start_date"`
+		EndDate     string `json:"end_date"`
+		IsInaugural bool   `json:"is_inaugural"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
@@ -184,8 +196,8 @@ func (h *Handler) UpdateSeason(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`UPDATE seasons SET name=?, start_date=?, end_date=? WHERE id=?`,
-		req.Name, req.StartDate, req.EndDate, id)
+		`UPDATE seasons SET name=?, start_date=?, end_date=?, is_inaugural=? WHERE id=?`,
+		req.Name, req.StartDate, req.EndDate, boolToInt(req.IsInaugural), id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

@@ -1,11 +1,54 @@
 // Package beitragslauf berechnet und exportiert SEPA-Beitragsläufe.
 //
-// Bewusste Vereinfachungen: voller Jahresbeitrag (keine Pro-rata-Berechnung),
-// Fälligkeit immer 01.07., alle Spieler als Kinder eingestuft (keine
-// Volljährigkeits-/Ausbildungsprüfung), alle Einzüge RCUR.
+// Bewusste Vereinfachungen: Fälligkeit immer 01.07., alle Spieler als Kinder
+// eingestuft (keine Volljährigkeits-/Ausbildungsprüfung), alle Einzüge RCUR.
+// Der Jahresbeitrag wird exakt halbiert (keine monatsgenaue Pro-rata-Berechnung),
+// wenn das Mitglied unterjährig ein- oder austritt oder die Saison das erste
+// Abrechnungsjahr des Vereins ist (siehe halfFee).
 package beitragslauf
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
+
+// SeasonInfo beschreibt das Abrechnungsjahr für Satz-Stichtag und Halbierung.
+type SeasonInfo struct {
+	Label     string
+	Start     time.Time // start_date der Saison
+	End       time.Time // end_date der Saison
+	Stichtag  time.Time // 01.07. des Startjahres (Fälligkeit + Satz-Stichtag)
+	Inaugural bool      // erstes Abrechnungsjahr des Vereins → alle zahlen halb
+}
+
+// halfFee bestimmt, ob der Jahresbeitrag halbiert wird, und den Grund.
+// Priorität: erstjahr → eintritt → austritt. Die Ermäßigungen stapeln NICHT —
+// es wird höchstens einmal halbiert.
+func halfFee(m MemberRow, s SeasonInfo) (bool, string) {
+	if s.Inaugural {
+		return true, "erstjahr"
+	}
+	if inWindow(m.JoinDate, s.Start, s.End) {
+		return true, "eintritt"
+	}
+	if m.Status == "ausgetreten" && inWindow(m.ExitDate, s.Start, s.End) {
+		return true, "austritt"
+	}
+	return false, ""
+}
+
+// inWindow prüft, ob ein ISO-Datum (YYYY-MM-DD) inklusive beider Grenzen im
+// Fenster [start, end] liegt. Leeres/ungültiges Datum → false.
+func inWindow(date string, start, end time.Time) bool {
+	if len(date) < 10 {
+		return false
+	}
+	d, err := time.Parse("2006-01-02", date[:10])
+	if err != nil {
+		return false
+	}
+	return !d.Before(start) && !d.After(end)
+}
 
 // BeitragsGruppe bildet den Member-Status auf die Beitragsgruppe ab.
 // "" bedeutet: nicht einzuziehen (ausgetreten/honorar/anwaerter o. Ä.).

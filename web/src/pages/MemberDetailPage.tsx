@@ -31,6 +31,7 @@ interface Member {
   zip?: string
   city?: string
   join_date?: string
+  exit_date?: string
   iban?: string
   account_holder?: string
   bank_ciphertext?: string
@@ -76,7 +77,7 @@ export default function MemberDetailPage() {
   const [form, setForm] = useState<Omit<Member, 'id'>>({
     first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
     jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_functions: [],
-    home_club: '', home_club_id: null, street: '', zip: '', city: '', join_date: '', iban: '', account_holder: '',
+    home_club: '', home_club_id: null, street: '', zip: '', city: '', join_date: '', exit_date: '', iban: '', account_holder: '',
     photo_url: '', photo_visible: false,
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
@@ -128,6 +129,7 @@ export default function MemberDetailPage() {
       home_club_id: m.home_club_id ?? null,
       street: m.street ?? '', zip: m.zip ?? '', city: m.city ?? '',
       join_date: m.join_date?.slice(0, 10) ?? '',
+      exit_date: m.exit_date?.slice(0, 10) ?? '',
       iban: '',
       account_holder: '',
       photo_url: m.photo_url ?? '',
@@ -220,6 +222,15 @@ export default function MemberDetailPage() {
   const handleSave = async () => {
     setSaving(true); setError('')
     try {
+      // Eintrittsdatum ist Pflicht; Austrittsdatum Pflicht bei Status 'ausgetreten'.
+      if (!form.join_date) {
+        setError('Eintrittsdatum ist erforderlich.')
+        return
+      }
+      if (form.status === 'ausgetreten' && !form.exit_date) {
+        setError('Austrittsdatum ist bei Status „ausgetreten" erforderlich.')
+        return
+      }
       // Bankdaten werden NICHT über den Member-Voll-Endpoint geschrieben (Zero-Knowledge):
       // sie laufen ausschließlich clientseitig verschlüsselt über den Bankdaten-Tab
       // (handleSaveBank → /bank-details). Hier herausnehmen, damit kein Klartext zum Server geht.

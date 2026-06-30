@@ -62,17 +62,20 @@ type MemberRow struct {
 	HomeClub       string // Freitext (Audit-Spur); für die Kategorie irrelevant
 	HasHomeClub    bool   // home_club_id IS NOT NULL → bestimmt aktiv_mit/aktiv_ohne
 	SepaMandatDate string
+	JoinDate       string // Eintrittsdatum (YYYY-MM-DD) — leer = vor Erfassung
+	ExitDate       string // Austrittsdatum (YYYY-MM-DD) — leer = kein Austritt erfasst
 	HasBank        bool   // member_sensitive-Zeile vorhanden
 	BankCiphertext string // base64(IV ‖ AES-GCM(payload, DEK))
 	BankDekEnc     string // RSA-OAEP(DEK, group_public_key)
 }
 
 // LoadMembersForLauf lädt alle für den Beitragslauf relevanten Mitglieder.
-// Status, die fachlich nie einen Beitrag zahlen (ausgetreten, honorar,
-// anwaerter), werden bereits hier ausgefiltert, damit sie weder in der
-// Preview-Tabelle noch in den Summen erscheinen. Die Kategorisierung der
-// verbleibenden Status (aktiv/verletzt → aktiv, pausiert/passiv → passiv)
-// passiert im Compute.
+// Status, die fachlich nie einen Beitrag zahlen (honorar, anwaerter), werden
+// bereits hier ausgefiltert. `ausgetreten` bleibt bewusst drin: ein unterjähriger
+// Austritt (exit_date im Saisonfenster) wird im Compute wieder einbezogen und
+// halbiert; ein früherer Austritt wird dort als status_inaktiv ausgeschlossen.
+// Die Kategorisierung (aktiv/verletzt → aktiv, pausiert/passiv → passiv,
+// unterjähriger Austritt → aktiv) passiert im Compute.
 func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 	rows, err := db.Query(`
 		SELECT m.id, m.first_name, m.last_name, m.status,
@@ -80,10 +83,11 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		       COALESCE(m.sepa_mandat_path,''), COALESCE(m.member_number,''),
 		       COALESCE(m.street,''), COALESCE(m.zip,''), COALESCE(m.city,''),
 		       COALESCE(m.home_club,''), (m.home_club_id IS NOT NULL), COALESCE(m.sepa_mandat_date,''),
+		       COALESCE(m.join_date,''), COALESCE(m.exit_date,''),
 		       COALESCE(ms.ciphertext,''), COALESCE(ms.dek_enc_vorstand,'')
 		FROM members m
 		LEFT JOIN member_sensitive ms ON ms.member_id = m.id
-		WHERE m.status NOT IN ('ausgetreten','honorar','anwaerter')`)
+		WHERE m.status NOT IN ('honorar','anwaerter')`)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +99,7 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		if err := rows.Scan(&m.ID, &m.FirstName, &m.LastName, &m.Status,
 			&beitragsfrei, &sepaMandat, &m.SepaMandatPath, &m.MemberNumber,
 			&m.Street, &m.Zip, &m.City, &m.HomeClub, &hasHomeClub, &m.SepaMandatDate,
+			&m.JoinDate, &m.ExitDate,
 			&m.BankCiphertext, &m.BankDekEnc); err != nil {
 			return nil, err
 		}
@@ -104,6 +109,12 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		m.HasBank = m.BankCiphertext != ""
 		if len(m.SepaMandatDate) > 10 {
 			m.SepaMandatDate = m.SepaMandatDate[:10]
+		}
+		if len(m.JoinDate) > 10 {
+			m.JoinDate = m.JoinDate[:10]
+		}
+		if len(m.ExitDate) > 10 {
+			m.ExitDate = m.ExitDate[:10]
 		}
 		out = append(out, m)
 	}
