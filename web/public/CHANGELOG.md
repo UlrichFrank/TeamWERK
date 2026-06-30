@@ -1,5 +1,4 @@
 ## 30.06.2026
-- [chore] videos: Disk-Reserve-Default 2 → 1 GiB (passt auf den 8.7 GB VPS)
 - [feat] videos: Titel ODER Spiel beim Upload — eines reicht
 - [feat] videos: Upload-Limit von 2 GB auf 2,5 GB anheben
 - [fix] videos: Stream-Token an Segment-Referenzen in Rendition-Playlist
