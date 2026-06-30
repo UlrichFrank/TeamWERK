@@ -1372,7 +1372,9 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 }
 
 // attachChildrenRSVPToSessions fills ChildrenRSVP on each item for parent users.
-// Only includes children who are kader members of the session's team.
+// Includes children who are in the regular (kader_members) OR extended
+// (kader_extended_members) squad of the session's team. Extended-only children
+// are not auto-confirmed under rsvp_opt_out — they must always respond explicitly.
 func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID int, items []sessionListItem) error {
 	placeholders := make([]string, len(items))
 	sessionIDs := make([]any, len(items))
@@ -1380,9 +1382,12 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 		placeholders[i] = "?"
 		sessionIDs[i] = s.ID
 	}
-	// Single query: for each session, return only children who are in the kader of that session's team/season
+	ph := strings.Join(placeholders, ",")
+	// Two branches: regular squad (is_extended=0) and extended squad (is_extended=1).
+	// The extended branch excludes members already counted as regular for the same
+	// team/season so a child in both squads appears exactly once (regular wins).
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_opt_out
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_opt_out, 0 AS is_extended
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_members km ON km.kader_id = k.id
@@ -1390,9 +1395,25 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
 		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id
 		WHERE ts.id IN (%s)
-		ORDER BY m.last_name, m.first_name`,
-		strings.Join(placeholders, ",")),
-		append([]any{parentUserID}, sessionIDs...)...)
+
+		UNION
+
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_opt_out, 1 AS is_extended
+		FROM training_sessions ts
+		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
+		JOIN kader_extended_members kem ON kem.kader_id = k.id
+		JOIN members m ON m.id = kem.member_id
+		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
+		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id
+		WHERE ts.id IN (%s)
+		  AND NOT EXISTS (
+			SELECT 1 FROM kader_members km2
+			JOIN kader k2 ON k2.id = km2.kader_id
+			WHERE km2.member_id = m.id AND k2.team_id = ts.team_id AND k2.season_id = ts.season_id
+		  )
+
+		ORDER BY 3`, ph, ph),
+		append(append(append([]any{parentUserID}, sessionIDs...), parentUserID), sessionIDs...)...)
 	if err != nil {
 		return err
 	}
@@ -1403,12 +1424,12 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 		var sid int
 		var c childRSVP
 		var rsvp sql.NullString
-		var rsvpOptOut int
-		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &rsvpOptOut)
+		var rsvpOptOut, isExtended int
+		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &rsvpOptOut, &isExtended)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
-		} else if rsvpOptOut == 1 {
+		} else if rsvpOptOut == 1 && isExtended == 0 {
 			confirmed := "confirmed"
 			c.RSVP = &confirmed
 		}
