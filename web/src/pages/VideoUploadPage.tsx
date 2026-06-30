@@ -55,6 +55,15 @@ function fmtRemaining(seconds: number): string {
   return `${m}m ${s.toString().padStart(2, '0')}s`
 }
 
+function fmtFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const kb = bytes / 1024
+  if (kb < 1024) return `${kb.toFixed(1)} KB`
+  const mb = kb / 1024
+  if (mb < 1024) return `${mb.toFixed(1)} MB`
+  return `${(mb / 1024).toFixed(2)} GB`
+}
+
 function fmtGameDate(iso: string): string {
   // SQLite-Datumsfelder kommen als ISO-Timestamp; nur das Datum verwenden.
   const d = iso.slice(0, 10)
@@ -403,7 +412,9 @@ export default function VideoUploadPage() {
             disabled={uploading}
             className="block w-full text-sm text-brand-text file:mr-3 file:rounded-md file:border-0 file:bg-brand-yellow file:text-brand-black file:px-4 file:py-2 file:text-sm file:font-medium hover:file:bg-brand-black hover:file:text-brand-yellow file:cursor-pointer"
           />
-          <p className="text-xs text-brand-text-muted mt-1">Maximal 2 GB.</p>
+          <p className="text-xs text-brand-text-muted mt-1">
+            {file ? <>Größe: {fmtFileSize(file.size)} · Maximal 2 GB.</> : 'Maximal 2 GB.'}
+          </p>
         </div>
 
         {resumable && !uploading && (
