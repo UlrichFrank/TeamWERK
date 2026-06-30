@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"golang.org/x/crypto/bcrypt"
@@ -211,8 +213,27 @@ func serve() {
 	root.Use(middleware.Logger)
 	root.Mount("/", app.BuildRouter(handlers, distFS))
 
+	// Graceful Shutdown: SIGTERM cancelt ctx → srv.Shutdown drains laufende
+	// Requests (mit 10 s Deadline) und beendet ListenAndServe mit
+	// ErrServerClosed. Ohne das ignoriert ListenAndServe SIGTERM, weil
+	// signal.NotifyContext den Default-Exit-Handler ersetzt — systemd wartet
+	// dann bis SIGKILL (90 s TimeoutStopSec) bei jedem Restart.
+	srv := &http.Server{Addr: ":" + cfg.Port, Handler: root}
+	go func() {
+		<-ctx.Done()
+		slog.Info("shutdown requested, draining connections")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("http shutdown failed", "error", err)
+		}
+	}()
+
 	slog.Info("listening", "port", cfg.Port)
-	fatal("http server stopped", "error", http.ListenAndServe(":"+cfg.Port, root))
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		fatal("http server stopped", "error", err)
+	}
+	slog.Info("http server stopped cleanly")
 }
 
 func runGenVapid() {

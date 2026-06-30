@@ -10,6 +10,9 @@ ExecStart=/usr/local/bin/teamwerk
 EnvironmentFile=/etc/teamwerk/env
 Restart=on-failure
 RestartSec=5
+# SIGKILL-Backstop, falls graceful Shutdown (10 s in main.go) hängt. Ohne dies
+# fällt systemd auf 90 s Default zurück und Deploys hängen entsprechend.
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
