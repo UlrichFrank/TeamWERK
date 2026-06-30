@@ -1232,18 +1232,19 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			 WHERE k.season_id = `+activeSeasonSub+` AND m.user_id = ?
 			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
 	} else if !claims.IsTrainerLike() {
-		// spieler / elternteil: only teams the user or their children are in
+		// spieler / elternteil: only teams the user or their children belong to.
+		// user_accessible_teams covers regular AND extended squad (kader_extended_members)
+		// for both the player themselves and their parents (via family_links).
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
-			 JOIN team_memberships tm ON tm.team_id = t.id AND tm.season_id = k.season_id
 			 WHERE k.season_id = `+activeSeasonSub+`
-			   AND (
-			     EXISTS(SELECT 1 FROM members m WHERE m.id = tm.member_id AND m.user_id = ?)
-			     OR EXISTS(SELECT 1 FROM family_links fl WHERE fl.member_id = tm.member_id AND fl.parent_user_id = ?)
+			   AND t.id IN (
+			     SELECT team_id FROM user_accessible_teams
+			     WHERE user_id = ? AND season_id = `+activeSeasonSub+`
 			   )
-			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID, claims.UserID)
+			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
 	} else {
 		// sportliche_leitung: all teams
 		rows, err = h.db.QueryContext(r.Context(),
@@ -2359,9 +2360,14 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 		placeholders[i] = "?"
 		gameIDs[i] = g.ID
 	}
-	// Single query: for each game, return only children who are in the kader of one of the game's teams
+	ph := strings.Join(placeholders, ",")
+	// Two branches: regular squad (is_extended=0) and extended squad (is_extended=1)
+	// across all of the game's teams. The extended branch excludes members already
+	// counted as regular for one of the game's teams so a child in both squads
+	// appears exactly once (regular wins). Extended-only children are NOT
+	// auto-confirmed under rsvp_opt_out — they must always respond explicitly.
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_opt_out
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_opt_out, 0 AS is_extended
 		FROM game_teams gt
 		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
@@ -2371,9 +2377,28 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
 		LEFT JOIN game_responses gr ON gr.game_id = gt.game_id AND gr.member_id = m.id
 		WHERE gt.game_id IN (%s)
-		ORDER BY m.last_name, m.first_name`,
-		strings.Join(placeholders, ",")),
-		append([]any{parentUserID}, gameIDs...)...)
+
+		UNION
+
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_opt_out, 1 AS is_extended
+		FROM game_teams gt
+		JOIN games g ON g.id = gt.game_id
+		JOIN kader k ON k.team_id = gt.team_id
+		  AND k.season_id = g.season_id
+		JOIN kader_extended_members kem ON kem.kader_id = k.id
+		JOIN members m ON m.id = kem.member_id
+		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
+		LEFT JOIN game_responses gr ON gr.game_id = gt.game_id AND gr.member_id = m.id
+		WHERE gt.game_id IN (%s)
+		  AND NOT EXISTS (
+			SELECT 1 FROM game_teams gt2
+			JOIN kader k2 ON k2.team_id = gt2.team_id AND k2.season_id = g.season_id
+			JOIN kader_members km2 ON km2.kader_id = k2.id AND km2.member_id = m.id
+			WHERE gt2.game_id = gt.game_id
+		  )
+
+		ORDER BY 3`, ph, ph),
+		append(append(append([]any{parentUserID}, gameIDs...), parentUserID), gameIDs...)...)
 	if err != nil {
 		return err
 	}
@@ -2384,12 +2409,12 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 		var gid int
 		var c childRSVP
 		var rsvp sql.NullString
-		var rsvpOptOut int
-		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &rsvpOptOut)
+		var rsvpOptOut, isExtended int
+		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &rsvpOptOut, &isExtended)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
-		} else if rsvpOptOut == 1 {
+		} else if rsvpOptOut == 1 && isExtended == 0 {
 			confirmed := "confirmed"
 			c.RSVP = &confirmed
 		}
