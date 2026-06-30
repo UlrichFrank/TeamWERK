@@ -7,7 +7,7 @@ Konsequenz: TeamWERK hostet die Videos selbst, transcodiert sie ressourcenschone
 ## What Changes
 
 - Neue Seite `/videos` im Frontend: Videoliste pro Team mit eingebettetem HLS-Player
-- Upload direkt im Browser über **tus-Protokoll** (resumable, max 2 GB) — kein Drittanbieter
+- Upload direkt im Browser über **tus-Protokoll** (resumable, max 2,5 GB) — kein Drittanbieter
 - Hintergrund-**Transcode** mit `nice -n 19` (FFmpeg → HLS, 720p + 360p), seriell über Worker-Goroutine
 - **Stream-Token** (HMAC-signiert, 1 h) schützt jede Segment-Auslieferung
 - **Disk-Guard** prüft vor Upload und vor Transcode den freien Speicher; Worker pausiert bei kritisch wenig Platz

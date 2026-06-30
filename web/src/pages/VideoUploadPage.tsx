@@ -6,7 +6,7 @@ import { Upload, X, AlertTriangle, Info } from 'lucide-react'
 import { api, getAccessToken } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 
-const MAX_SIZE = 2 * 1024 * 1024 * 1024 // 2 GiB
+const MAX_SIZE = 2.5 * 1024 * 1024 * 1024 // 2.5 GiB
 
 // tus-js-client exportiert die PreviousUpload-Form nicht als Typ → über den
 // Rückgabewert von findPreviousUploads() ableiten.
@@ -150,7 +150,7 @@ export default function VideoUploadPage() {
     const f = e.target.files?.[0] ?? null
     if (f && f.size > MAX_SIZE) {
       setFile(null)
-      setError('Datei zu groß: maximal 2 GB erlaubt.')
+      setError('Datei zu groß: maximal 2,5 GB erlaubt.')
       return
     }
     setFile(f)
@@ -219,7 +219,7 @@ export default function VideoUploadPage() {
       return
     }
     if (file.size > MAX_SIZE) {
-      setError('Datei zu groß: maximal 2 GB erlaubt.')
+      setError('Datei zu groß: maximal 2,5 GB erlaubt.')
       return
     }
     if (!activeSeasonId) {
@@ -337,7 +337,7 @@ export default function VideoUploadPage() {
            <div className="space-y-1">
              <p className="font-medium">So läuft die Bereitstellung</p>
              <ol className="list-decimal list-inside text-brand-text-muted space-y-0.5">
-               <li>Upload (max. 2 GB, pausierbar/wiederaufnehmbar).</li>
+               <li>Upload (max. 2,5 GB, pausierbar/wiederaufnehmbar).</li>
               <li>Konvertierung im Hintergrund nach HLS 720p + 360p — dauert grob so lange wie das Video selbst.</li>
               <li>Sobald fertig: Push-Benachrichtigung an Uploader, Spieler, Eltern und Trainer; Video erscheint in der Liste.</li>
             </ol>
@@ -418,7 +418,7 @@ export default function VideoUploadPage() {
             className="block w-full text-sm text-brand-text file:mr-3 file:rounded-md file:border-0 file:bg-brand-yellow file:text-brand-black file:px-4 file:py-2 file:text-sm file:font-medium hover:file:bg-brand-black hover:file:text-brand-yellow file:cursor-pointer"
           />
           <p className="text-xs text-brand-text-muted mt-1">
-            {file ? <>Größe: {fmtFileSize(file.size)} · Maximal 2 GB.</> : 'Maximal 2 GB.'}
+            {file ? <>Größe: {fmtFileSize(file.size)} · Maximal 2,5 GB.</> : 'Maximal 2,5 GB.'}
           </p>
         </div>
 

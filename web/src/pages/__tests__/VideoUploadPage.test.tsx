@@ -54,7 +54,7 @@ describe('VideoUploadPage', () => {
     expect(await screen.findByRole('option', { name: 'mA' })).toBeInTheDocument()
   })
 
-  test('blockiert Dateien über 2 GB', async () => {
+  test('blockiert Dateien über 2,5 GB', async () => {
     renderAsPersona(<VideoUploadPage />, 'trainer', {
       mocks: [{ url: /\/teams/, data: TEAMS }],
     })

@@ -22,14 +22,14 @@ Nutzer mit Vereinsfunktion `trainer`, `sportliche_leitung`, `vorstand` oder Roll
 
 ### Requirement: Resumable Upload via tus
 
-Der Server SHALL Uploads über das tus-Protokoll (Version 1.0) unter `/api/videos/upload/` annehmen. Sessions MUST über Browser-Restarts und Verbindungsabbrüche fortsetzbar sein. Die Maximalgröße pro Upload MUST 2 GiB betragen.
+Der Server SHALL Uploads über das tus-Protokoll (Version 1.0) unter `/api/videos/upload/` annehmen. Sessions MUST über Browser-Restarts und Verbindungsabbrüche fortsetzbar sein. Die Maximalgröße pro Upload MUST 2,5 GiB betragen.
 
 #### Scenario: Wiederaufnahme nach Verbindungsabbruch
 - **WHEN** ein Upload bei 600 MB unterbrochen wird und der Client mit derselben tus-Session erneut verbindet
 - **THEN** wird der Upload ab Byte 600 000 000 fortgesetzt
 
 #### Scenario: Überschreitung der Maximalgröße
-- **WHEN** ein Client eine `Upload-Length` > 2 GiB ankündigt
+- **WHEN** ein Client eine `Upload-Length` > 2,5 GiB ankündigt
 - **THEN** lehnt der Server die Session mit HTTP 413 ab
 
 ### Requirement: Abschluss-Verarbeitung

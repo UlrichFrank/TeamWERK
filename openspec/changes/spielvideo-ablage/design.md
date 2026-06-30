@@ -10,7 +10,7 @@ Die Architektur folgt vier Bausteinen: **Upload** (resumable via tus), **Transco
 
 **Goals:**
 - Videos werden ausschließlich an berechtigte Nutzer (Team-Mitglieder, deren Trainer, deren Eltern) ausgeliefert
-- Resumable Upload bis 2 GB pro Datei
+- Resumable Upload bis 2,5 GB pro Datei
 - Hintergrund-Transcode ohne erkennbare Beeinträchtigung des Webserver-Betriebs
 - Adaptive Bitrate-Streaming (HLS 720p + 360p), funktioniert auf Desktop und Mobile
 - Datensparsamkeit durch automatische Retention 90 Tage nach Saisonende
