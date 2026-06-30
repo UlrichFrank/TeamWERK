@@ -172,6 +172,10 @@ export default function VideoUploadPage() {
       // tus läuft NICHT über die axios-Instanz → Bearer-Token explizit setzen.
       // Aktuellen Access-Token zum Upload-Start lesen (kann zwischendurch rotieren).
       headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+      // 64-MB-Chunks: ohne chunkSize sendet tus-js-client die gesamte Datei in
+      // einem PATCH — bei 2 GB schlechtes Recovery, kein feiner Progress, und
+      // kollidiert mit nginx-Bodylimits/Timeouts. 64 MB ist ein Standard-Sweet-Spot.
+      chunkSize: 64 * 1024 * 1024,
       storeFingerprintForResuming: true,
       removeFingerprintOnSuccess: true,
       onError: (err) => {
@@ -258,6 +262,7 @@ export default function VideoUploadPage() {
     const upload = new tus.Upload(file, {
       endpoint: '/api/videos/upload/',
       headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+      chunkSize: 64 * 1024 * 1024,
       storeFingerprintForResuming: true,
       removeFingerprintOnSuccess: true,
       onError: (err) => {

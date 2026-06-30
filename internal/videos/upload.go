@@ -186,6 +186,12 @@ func (h *Handler) NewTusHandler(ctx context.Context) (http.Handler, error) {
 		// unrouted_handler.PostFile → sendError).
 		PreUploadCreateCallback: h.preUploadCreate,
 		NotifyCompleteUploads:   true,
+		// Hinter nginx (TLS-Terminierung → http://127.0.0.1:8080). Ohne diese
+		// Option würde tusd Location-Header mit http://… bauen (r.TLS == nil),
+		// die tus-js-client in localStorage speichert; ein Resume-HEAD ginge
+		// dann an http://… → 301 → Fehler. Nginx setzt X-Forwarded-Proto und
+		// Host bereits (deploy/nginx-intern.conf).
+		RespectForwardedHeaders: true,
 	})
 	if err != nil {
 		return nil, err
