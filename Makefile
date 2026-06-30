@@ -19,7 +19,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up migrate-remote-down reset-migration-version reset-migration-version-remote create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate
+.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate
 
 .DEFAULT_GOAL := help
 
@@ -97,17 +97,6 @@ migrate-down: ## Letzte Migration lokal rückgängig machen
 
 migrate-remote-up: ## Ausstehende Migrationen auf VPS anwenden
 	ssh $(REMOTE) "$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH)"
-
-migrate-remote-down: ## Letzte Migration auf VPS rückgängig machen
-	ssh $(REMOTE) "$(REMOTE_DIR)/$(BINARY) migrate down --db $(DB_PATH)"
-
-reset-migration-version: ## Migrationsversion lokal auf Baseline (v1) zurücksetzen
-	sqlite3 ./teamwerk.db "DELETE FROM schema_migrations; INSERT INTO schema_migrations (version, dirty) VALUES (1, 0);"
-	@echo "Lokale DB auf Migration v1 (Baseline) gesetzt."
-
-reset-migration-version-remote: ## Migrationsversion auf VPS auf Baseline (v1) zurücksetzen
-	ssh $(REMOTE) "sqlite3 $(DB_PATH) 'DELETE FROM schema_migrations; INSERT INTO schema_migrations (version, dirty) VALUES (1, 0);'"
-	@echo "VPS-DB auf Migration v1 (Baseline) gesetzt."
 
 create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
 	$(GO) run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)
