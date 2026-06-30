@@ -1,4 +1,6 @@
 ## 29.06.2026
+- [fix] deploy: Frontend-Build vor go vet/test im gate-Job
+- [fix] videos: Upload sendet season_id der aktiven Saison
 - [fix] attendance: Teamname in Stats-Response + Team-Auswahl im Kalender-Stil
 - [feat] chat: Standard-Gruppen als Bulk-Selector im Gespräch-Modal
 - [fix] videos: Migration 012 -> 013 (Kollision mit anwesenheits-statistik)

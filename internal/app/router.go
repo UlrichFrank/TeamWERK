@@ -337,7 +337,13 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			// autorisierten Session entgegen (Korrelation via video_id-Metadata).
 			r.Post("/api/videos", h.Videos.CreateUpload)
 			if h.VideosTus != nil {
-				r.Handle("/api/videos/upload/*", h.VideosTus)
+				// tusd v2 routet intern über strings.Trim(URL.Path, "/") und
+				// erwartet einen bereits gestrippten BasePath: leer ⇒ POST
+				// (Create), sonst ⇒ {id} für HEAD/PATCH. chi reicht die volle
+				// URL durch, daher hier den Mount-Prefix per StripPrefix
+				// entfernen — sonst fällt jeder POST an /api/videos/upload/
+				// in tusd's Default-Branch und liefert 405 "method not allowed".
+				r.Handle("/api/videos/upload/*", http.StripPrefix("/api/videos/upload", h.VideosTus))
 			}
 			r.Get("/api/venues", h.Venues.List)
 			r.Post("/api/venues", h.Venues.Create)
