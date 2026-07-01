@@ -45,8 +45,14 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [claimDialog, setClaimDialog] = useState<{ slotId: number; selectedUserId: number | null } | null>(null)
   const [claimLoading, setClaimLoading] = useState(false)
+  const [noInstructionOpen, setNoInstructionOpen] = useState(false)
 
-  useEscapeKey(deleteConfirm !== null ? () => setDeleteConfirm(null) : claimDialog !== null ? () => setClaimDialog(null) : null)
+  useEscapeKey(
+    deleteConfirm !== null ? () => setDeleteConfirm(null)
+      : claimDialog !== null ? () => setClaimDialog(null)
+      : noInstructionOpen ? () => setNoInstructionOpen(false)
+      : null,
+  )
 
   const claimForUser = async (slotId: number, userId: number) => {
     setClaimLoading(true)
@@ -112,7 +118,7 @@ onSlotDeleted?.(slotId)
                 <td className="px-4 py-2.5 font-medium text-brand-text">
                   <span className="inline-flex items-center gap-1.5">
                     {s.duty_type}
-                    {s.has_instruction && (
+                    {s.has_instruction ? (
                       <Link
                         to={`/dienste/anleitung/${s.duty_type_id}`}
                         aria-label="Anleitung ansehen"
@@ -121,6 +127,19 @@ onSlotDeleted?.(slotId)
                       >
                         <BookOpen className="w-4 h-4" />
                       </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label="Keine Anleitung vorhanden"
+                        onClick={e => { e.stopPropagation(); setNoInstructionOpen(true) }}
+                        className="relative inline-flex items-center justify-center text-brand-text-subtle hover:text-brand-text-muted"
+                      >
+                        <BookOpen className="w-4 h-4 opacity-60" />
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-current rotate-45"
+                        />
+                      </button>
                     )}
                   </span>
                   {s.role_desc ? <span className="text-brand-text-subtle font-normal"> · {s.role_desc}</span> : null}
@@ -188,6 +207,25 @@ onSlotDeleted?.(slotId)
           ))}
         </tbody>
       </table>
+
+      {noInstructionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4">
+            <h2 className="text-lg font-bold mb-2 text-brand-text">Keine Anleitung</h2>
+            <p className="text-sm text-brand-text-muted mb-4">
+              Für diesen Dienst gibt es noch keine Anleitung.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setNoInstructionOpen(false)}
+                className="text-sm px-4 py-2 rounded bg-brand-yellow text-brand-black font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">

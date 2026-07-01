@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import DutySlotList, { type BoardSlot } from './DutySlotList'
 
@@ -39,7 +39,7 @@ describe('DutySlotList — Anleitung link', () => {
     expect(link.getAttribute('href')).toBe('/dienste/anleitung/42')
   })
 
-  test('renders no link when has_instruction is false', () => {
+  test('renders a strikethrough icon button when has_instruction is false, click opens info modal', () => {
     render(
       <MemoryRouter>
         <DutySlotList
@@ -50,6 +50,13 @@ describe('DutySlotList — Anleitung link', () => {
         />
       </MemoryRouter>,
     )
+    // No link — instead a button with an explanatory aria-label.
     expect(screen.queryByRole('link', { name: 'Anleitung ansehen' })).toBeNull()
+    const btn = screen.getByRole('button', { name: 'Keine Anleitung vorhanden' })
+    expect(btn).not.toBeNull()
+
+    // Click opens an info modal.
+    fireEvent.click(btn)
+    expect(screen.getByText(/noch keine Anleitung/)).toBeTruthy()
   })
 })

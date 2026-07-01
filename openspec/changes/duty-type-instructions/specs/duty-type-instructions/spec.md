@@ -84,23 +84,30 @@ einen neuen Read-Endpoint einzuführen.
 - **AND** das Feld `has_instruction` (Boolean), das genau dann `true` ist,
   wenn `duty_types.instruction_md` für den zugehörigen Typ nicht leer ist
 
-### Requirement: Slot-Link erscheint nur bei vorhandener Anleitung
+### Requirement: Anleitung-Icon ist immer sichtbar, Zustand unterscheidbar
 
-Das Frontend SHALL in der Dienstbörse pro Slot einen Link
-„Anleitung ansehen" (Icon `BookOpen`, `aria-label`) genau dann rendern, wenn
-`has_instruction === true`.
+Das Frontend SHALL in der Dienstbörse pro Slot ein Anleitung-Icon
+(`BookOpen`) rendern. Der Zustand — Anleitung vorhanden oder nicht —
+MUSS visuell erkennbar sein.
 
 #### Scenario: Slot mit Anleitung
 
 - **WHEN** ein Slot mit `has_instruction=true` in `DutySlotList` gerendert wird
-- **THEN** ist ein Router-Link auf `/dienste/anleitung/<duty_type_id>` sichtbar
+- **THEN** ist ein Router-Link (Icon `BookOpen`,
+  `aria-label="Anleitung ansehen"`) auf `/dienste/anleitung/<duty_type_id>`
+  sichtbar
 - **AND** ein Klick auf den Link löst nicht das Claim-/Unclaim-Verhalten des
   Slots aus
 
 #### Scenario: Slot ohne Anleitung
 
 - **WHEN** ein Slot mit `has_instruction=false` gerendert wird
-- **THEN** wird kein Anleitung-Link angezeigt
+- **THEN** wird dasselbe Icon `BookOpen` gerendert, jedoch **visuell
+  durchgestrichen** (diagonaler Strich als Overlay, gedämpfte Farbe) mit
+  `aria-label="Keine Anleitung vorhanden"`
+- **AND** ein Klick öffnet ein Info-Modal mit dem Text
+  „Für diesen Dienst gibt es noch keine Anleitung."
+- **AND** ein Klick löst nicht das Claim-/Unclaim-Verhalten des Slots aus
 
 ### Requirement: Sichere Darstellung der Anleitung
 
