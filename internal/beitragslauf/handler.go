@@ -231,15 +231,21 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /api/fee-run/export-data  {saison_id, member_ids}
+// POST /api/fee-run/export-data  {saison_id, member_ids, faelligkeit?}
 //
 // Liefert die für die clientseitige pain.008-Erzeugung nötigen Daten: NUR Ciphertext +
 // Wraps (Mitglieds-Bankdaten + Vereins-SEPA) sowie nicht-geheime Felder. Der Server sieht
 // keine Klartext-IBAN; das XML wird im Browser des Kassierers gebaut (Zero-Knowledge).
+//
+// `faelligkeit` (YYYY-MM-DD) ist optional und überschreibt für den SEPA-Einzugstermin
+// (ReqdColltnDt) den Default 01.07. der Saison. Muss heute oder in der Zukunft liegen —
+// SEPA-XSD lehnt Vergangenheits-Daten ab. Der Beitragssatz-Stichtag bleibt unverändert
+// bei 01.07., damit ein anderes Fälligkeitsdatum keinen anderen Satz auslöst.
 func (h *Handler) ExportData(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SaisonID  int   `json:"saison_id"`
-		MemberIDs []int `json:"member_ids"`
+		SaisonID    int    `json:"saison_id"`
+		MemberIDs   []int  `json:"member_ids"`
+		Faelligkeit string `json:"faelligkeit"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "ungültiger Body", http.StatusBadRequest)
@@ -254,6 +260,20 @@ func (h *Handler) ExportData(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Saison nicht gefunden", http.StatusNotFound)
 		return
+	}
+	faelligkeitStr := pr.Faelligkeit.Format("2006-01-02")
+	if req.Faelligkeit != "" {
+		fd, ferr := time.Parse("2006-01-02", req.Faelligkeit)
+		if ferr != nil {
+			http.Error(w, "faelligkeit: Format YYYY-MM-DD erwartet", http.StatusBadRequest)
+			return
+		}
+		today := time.Now().UTC().Truncate(24 * time.Hour)
+		if fd.Before(today) {
+			http.Error(w, "faelligkeit liegt in der Vergangenheit — SEPA lehnt das ab", http.StatusBadRequest)
+			return
+		}
+		faelligkeitStr = req.Faelligkeit
 	}
 	byID := map[int]PreviewItem{}
 	for _, it := range pr.Items {
@@ -288,7 +308,7 @@ func (h *Handler) ExportData(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"saison_kurz": pr.SaisonKurz,
-		"faelligkeit": pr.Faelligkeit.Format("2006-01-02"),
+		"faelligkeit": faelligkeitStr,
 		"club_name":   club.Name,
 		"club_sepa":   map[string]string{"ciphertext": club.Ciphertext, "dek_enc": club.DekEnc},
 		"items":       items,

@@ -92,6 +92,9 @@ export default function BeitragslaufPage() {
     new Set<Kategorie>(['aktiv_mit', 'aktiv_ohne', 'passiv'])
   )
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  // Pro-Lauf-Override des SEPA-Einzugsdatums (ReqdColltnDt); Default = Preview-Fälligkeit
+  // (01.07. der Saison). Wird bei Preview-Load initialisiert.
+  const [faelligkeitOverride, setFaelligkeitOverride] = useState<string>('')
 
   useEffect(() => {
     api.get('/seasons').then(r => {
@@ -108,6 +111,7 @@ export default function BeitragslaufPage() {
       const data: PreviewResp = r.data
       setPreview(data)
       setSelected(new Set(data.items.filter(i => i.included).map(i => i.member_id)))
+      setFaelligkeitOverride(data.faelligkeit)
     })
   }
   useEffect(loadPreview, [saisonId])
@@ -190,7 +194,7 @@ export default function BeitragslaufPage() {
 
     try {
       const { data } = await api.post<ExportData>('/fee-run/export-data', {
-        saison_id: saisonId, member_ids: ids,
+        saison_id: saisonId, member_ids: ids, faelligkeit: faelligkeitOverride,
       })
 
       const club = await decryptClubSepa(
@@ -303,7 +307,25 @@ export default function BeitragslaufPage() {
             <span className="inline-flex items-center gap-1"><CheckSquare className="w-4 h-4 shrink-0" /> {summary.count} angehakt</span>
             <span className="inline-flex items-center gap-1 text-brand-text-muted"><AlertTriangle className="w-4 h-4 shrink-0" /> {summary.warn} Warnungen</span>
             <span className="inline-flex items-center gap-1 text-brand-text-muted"><Ban className="w-4 h-4 shrink-0" /> {summary.excl} ausgeschlossen</span>
-            <span className="text-brand-text-muted w-full">Fälligkeit: {preview.faelligkeit}</span>
+            <span className="text-brand-text-muted w-full inline-flex items-center gap-2">
+              Fälligkeit:
+              <input
+                type="date"
+                value={faelligkeitOverride}
+                onChange={e => setFaelligkeitOverride(e.target.value)}
+                className="border border-brand-border rounded-md px-2 py-1 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                title="SEPA-Einzugsdatum (ReqdColltnDt) im XML; muss heute oder in der Zukunft liegen. Default: 01.07. der Saison."
+              />
+              {faelligkeitOverride !== preview.faelligkeit && (
+                <button
+                  type="button"
+                  onClick={() => setFaelligkeitOverride(preview.faelligkeit)}
+                  className="text-brand-text-subtle hover:text-brand-text text-xs underline"
+                >
+                  auf {preview.faelligkeit} zurück
+                </button>
+              )}
+            </span>
             <span className="w-full border-t border-brand-border-subtle pt-2 flex flex-wrap gap-x-6 gap-y-1">
               <span>SEPA-Summe: <span className="font-semibold">{formatBetrag(summary.sepaSum)}</span></span>
               <span className="text-brand-text-muted">nicht abbuchbar: <span className="font-semibold">{formatBetrag(summary.exclSum)}</span></span>

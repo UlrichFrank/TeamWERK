@@ -65,3 +65,75 @@ func TestExportData_OhneVereinsSepa400(t *testing.T) {
 		t.Errorf("ohne Vereins-SEPA: status %d, want 400", res.StatusCode)
 	}
 }
+
+// Ohne 'faelligkeit' im Body → Default 01.07. der Saison zurückgeliefert.
+func TestExportData_FaelligkeitDefault(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{id}})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	var resp struct {
+		Faelligkeit string `json:"faelligkeit"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+	if resp.Faelligkeit != "2027-07-01" {
+		t.Errorf("Default-Fälligkeit: got %q, want 2027-07-01", resp.Faelligkeit)
+	}
+}
+
+// 'faelligkeit' überschreibt den Default, wenn gültig und in der Zukunft.
+func TestExportData_FaelligkeitOverride(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+
+	// Ein Datum weit in der Zukunft, damit der Test unabhängig von time.Now stabil bleibt.
+	future := "2099-08-15"
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{id}, "faelligkeit": future})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	var resp struct {
+		Faelligkeit string `json:"faelligkeit"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+	if resp.Faelligkeit != future {
+		t.Errorf("Fälligkeit-Override: got %q, want %q", resp.Faelligkeit, future)
+	}
+}
+
+// Ungültiges Datumsformat → 400.
+func TestExportData_FaelligkeitUngueltig400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{id}, "faelligkeit": "01.07.2027"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("ungültiges Format: status %d, want 400", res.StatusCode)
+	}
+}
+
+// Fälligkeit in der Vergangenheit → 400 (SEPA-XSD lehnt Vergangenheit ab).
+func TestExportData_FaelligkeitVergangenheit400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{id}, "faelligkeit": "2000-01-01"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("Vergangenheit: status %d, want 400", res.StatusCode)
+	}
+}
