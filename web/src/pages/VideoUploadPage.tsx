@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import * as tus from 'tus-js-client'
 import { Upload, X, AlertTriangle, Info } from 'lucide-react'
-import { api, getAccessToken } from '../lib/api'
+import { api, getAccessToken, getPendingRefresh, refreshAccessToken, setAccessToken } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 
 const MAX_SIZE = 2.5 * 1024 * 1024 * 1024 // 2.5 GiB
@@ -72,6 +72,66 @@ function fmtGameDate(iso: string): string {
   return `${da}.${mo}.${y}`
 }
 
+// tus läuft NICHT über die axios-Instanz und hat damit weder deren Request-
+// Interceptor (Bearer-Header) noch den Response-Interceptor (401-Refresh). Beides
+// bilden wir hier pro Upload nach. Fabrik statt Konstante, damit der
+// sessionExpired-Zustand pro Upload-Instanz isoliert ist.
+function buildAuthHooks() {
+  // Wird true, sobald ein Refresh mit 401 scheitert (Refresh-Token abgelaufen):
+  // ab dann bricht onShouldRetry den Upload ab, statt endlos weiter zu versuchen.
+  let sessionExpired = false
+
+  return {
+    // Setzt den Bearer-Token pro Request frisch aus dem Store (kein statisches
+    // headers-Objekt, weil der Access-Token während langer Uploads rotiert). Läuft
+    // ein Refresh, wird er abgewartet — tus awaited onBeforeRequest —, damit der
+    // durch einen 401 ausgelöste Retry den NEUEN Token trägt.
+    onBeforeRequest: async (req: tus.HttpRequest) => {
+      const pending = getPendingRefresh()
+      if (pending) {
+        try { await pending } catch { /* Fehlerpfad behandelt onShouldRetry */ }
+      }
+      const t = getAccessToken()
+      if (t) req.setHeader('Authorization', `Bearer ${t}`)
+    },
+
+    // Retry-Entscheidung. Muss SYNCHRON ein boolean liefern — tus-js-client@4
+    // wertet den Rückgabewert direkt in `if (shouldRetry(...))` aus; eine async-
+    // Funktion lieferte ein (immer truthy) Promise und hebelte den Abbruch aus.
+    onShouldRetry: (
+      err: tus.DetailedError,
+      retryAttempt: number,
+      options: { retryDelays?: number[] | null },
+    ): boolean => {
+      const maxRetries = options.retryDelays?.length ?? 0
+      const status = err.originalResponse?.getStatus?.() ?? 0
+      if (status !== 401) {
+        // Transienter Fehler (Netzwerk/5xx): tus-Default-Retry beibehalten.
+        return retryAttempt < maxRetries
+      }
+      if (sessionExpired) {
+        // Refresh ist bereits mit 401 gescheitert → sauber abbrechen (→ onError).
+        return false
+      }
+      // Access-Token vermutlich abgelaufen: Single-Flight-Refresh anstoßen. Der
+      // Retry wartet in onBeforeRequest auf diesen Refresh und liest den neuen
+      // Token. Scheitert der Refresh selbst mit 401 (Refresh-Token abgelaufen),
+      // Session beenden und auf /login umleiten (analog zum axios-Interceptor).
+      refreshAccessToken().catch((refreshErr: unknown) => {
+        const refreshStatus = (refreshErr as AxiosError)?.response?.status
+        if (refreshStatus === 401) {
+          sessionExpired = true
+          setAccessToken(null)
+          window.location.href = '/login'
+        }
+        // Nicht-401 (Netzwerk/5xx): kein Redirect; tus retryt nach retryDelays,
+        // der nächste 401-Zyklus stößt dann einen neuen Refresh an.
+      })
+      return retryAttempt < maxRetries
+    },
+  }
+}
+
 export default function VideoUploadPage() {
   const navigate = useNavigate()
 
@@ -136,9 +196,13 @@ export default function VideoUploadPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setResumable(null)
     if (!file) return
+    // findPreviousUploads() liest nur aus dem localStorage (kein authentifizierter
+    // Request) — daher genügt onBeforeRequest zur Konsistenz/Absicherung; ein
+    // onShouldRetry ist hier gegenstandslos.
     const probe = new tus.Upload(file, {
       endpoint: '/api/videos/upload/',
       storeFingerprintForResuming: true,
+      onBeforeRequest: buildAuthHooks().onBeforeRequest,
     })
     probe.findPreviousUploads()
       .then(prev => {
@@ -171,9 +235,11 @@ export default function VideoUploadPage() {
         filename: f.name,
         filetype: f.type,
       },
-      // tus läuft NICHT über die axios-Instanz → Bearer-Token explizit setzen.
-      // Aktuellen Access-Token zum Upload-Start lesen (kann zwischendurch rotieren).
-      headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+      // Kein statisches headers-Objekt: der Access-Token wird pro Request frisch
+      // aus dem Store gelesen und bei einem Chunk-401 refresht + retryt (siehe
+      // buildAuthHooks / Requirement "Access-Token wird pro Chunk-Request frisch
+      // aus dem Store gelesen").
+      ...buildAuthHooks(),
       // 64-MB-Chunks: ohne chunkSize sendet tus-js-client die gesamte Datei in
       // einem PATCH — bei 2 GB schlechtes Recovery, kein feiner Progress, und
       // kollidiert mit nginx-Bodylimits/Timeouts. 64 MB ist ein Standard-Sweet-Spot.
@@ -263,7 +329,8 @@ export default function VideoUploadPage() {
     // trägt seine video_id-Metadaten bereits in sich. Direkt fortsetzen.
     const upload = new tus.Upload(file, {
       endpoint: '/api/videos/upload/',
-      headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+      // Bearer-Token pro Request frisch + 401-Refresh/Retry (siehe buildAuthHooks).
+      ...buildAuthHooks(),
       chunkSize: 64 * 1024 * 1024,
       storeFingerprintForResuming: true,
       removeFingerprintOnSuccess: true,

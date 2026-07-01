@@ -1,8 +1,9 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
+import axios from 'axios'
 import VideoUploadPage from '../VideoUploadPage'
 import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
-import { api } from '../../lib/api'
+import { api, getAccessToken, setAccessToken } from '../../lib/api'
 
 // tus-js-client komplett mocken: kein echter Upload, nur Aufruf-Beobachtung.
 const tusStart = vi.fn()
@@ -104,5 +105,129 @@ describe('VideoUploadPage', () => {
     const calls = UploadMock.mock.calls
     const opts = calls[calls.length - 1][1] as { metadata: Record<string, string> }
     expect(opts.metadata.video_id).toBe('42')
+  })
+})
+
+// Die tus-Auth-Hooks werden isoliert getestet: tus ist vollständig gemockt
+// (kein echter Upload im jsdom), daher fangen wir die an `new tus.Upload(...)`
+// übergebenen Optionen ab und rufen onShouldRetry/onBeforeRequest direkt auf.
+interface AuthHookOpts {
+  onShouldRetry: (
+    err: { originalResponse?: { getStatus: () => number } | null },
+    retryAttempt: number,
+    options: { retryDelays?: number[] | null },
+  ) => boolean
+  onBeforeRequest: (req: { setHeader: (name: string, value: string) => void }) => Promise<void>
+}
+
+const RETRY_OPTS = { retryDelays: [0, 1000, 3000, 5000] }
+const err401 = { originalResponse: { getStatus: () => 401 } }
+
+// Führt den Upload-Flow durch (POST /videos → startTus → new tus.Upload) und
+// liefert die Optionen des echten Uploads (letzter tus.Upload-Aufruf).
+async function startUploadAndCaptureOpts(): Promise<AuthHookOpts> {
+  vi.spyOn(api, 'post').mockResolvedValue({
+    data: { video_id: 42, upload_url: '/api/videos/upload/' },
+  })
+  renderAsPersona(<VideoUploadPage />, 'trainer', {
+    mocks: [
+      { url: /\/teams/, data: TEAMS },
+      { url: /\/seasons/, data: SEASONS },
+    ],
+  })
+  await flushAsync()
+  fireEvent.change(screen.getByLabelText(/Titel/i), { target: { value: 'Testspiel' } })
+  fireEvent.change(screen.getByLabelText(/Team/i), { target: { value: '7' } })
+  const small = fakeFile('clip.mp4', 1024 * 1024)
+  fireEvent.change(screen.getByLabelText(/Videodatei/i), { target: { files: [small] } })
+  fireEvent.click(screen.getByRole('button', { name: /Hochladen/i }))
+  await waitFor(() => expect(tusStart).toHaveBeenCalled())
+  const calls = UploadMock.mock.calls
+  return calls[calls.length - 1][1] as unknown as AuthHookOpts
+}
+
+describe('VideoUploadPage – Token-Refresh der tus-Hooks', () => {
+  let originalLocation: Location
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    findPrev.mockResolvedValue([])
+    setAccessToken('alt-token')
+    originalLocation = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: { href: '' },
+    })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: originalLocation,
+    })
+    setAccessToken(null)
+  })
+
+  test('Access-Token läuft mitten im Upload ab: 401 → Refresh → Retry mit neuem Token', async () => {
+    const refreshSpy = vi
+      .spyOn(axios, 'post')
+      .mockResolvedValue({ data: { access_token: 'neu' } })
+
+    const opts = await startUploadAndCaptureOpts()
+
+    // Erster PATCH liefert 401 → onShouldRetry stößt den Refresh an und retryt.
+    expect(opts.onShouldRetry(err401, 0, RETRY_OPTS)).toBe(true)
+
+    // Der Retry-Request wartet in onBeforeRequest den laufenden Refresh ab und
+    // trägt den neuen Token.
+    const setHeader = vi.fn()
+    await opts.onBeforeRequest({ setHeader })
+
+    // /api/auth/refresh wurde GENAU einmal aufgerufen (Single-Flight-Guard).
+    expect(refreshSpy).toHaveBeenCalledTimes(1)
+    expect(refreshSpy).toHaveBeenCalledWith(
+      '/api/auth/refresh',
+      {},
+      expect.objectContaining({ withCredentials: true }),
+    )
+    expect(setHeader).toHaveBeenCalledWith('Authorization', 'Bearer neu')
+    expect(getAccessToken()).toBe('neu')
+  })
+
+  test('Refresh-Token abgelaufen: Upload bricht sauber ab und leitet auf /login um', async () => {
+    const refreshSpy = vi
+      .spyOn(axios, 'post')
+      .mockRejectedValue({ response: { status: 401 } })
+
+    const opts = await startUploadAndCaptureOpts()
+
+    // Erster 401 → onShouldRetry retryt (true) und stößt den Refresh an, der
+    // seinerseits mit 401 scheitert.
+    expect(opts.onShouldRetry(err401, 0, RETRY_OPTS)).toBe(true)
+    await flushAsync()
+
+    // Refresh-Fehler (401): Token gelöscht + Redirect auf /login.
+    expect(refreshSpy).toHaveBeenCalledTimes(1)
+    expect(getAccessToken()).toBeNull()
+    expect(window.location.href).toBe('/login')
+
+    // Ein weiterer 401 bricht jetzt sauber ab (return false → tus feuert onError),
+    // statt in eine Refresh-Schleife zu laufen.
+    expect(opts.onShouldRetry(err401, 1, RETRY_OPTS)).toBe(false)
+  })
+
+  test('Nicht-401-Fehler: tus-Default-Retry-Verhalten bleibt erhalten', async () => {
+    const refreshSpy = vi.spyOn(axios, 'post')
+    const opts = await startUploadAndCaptureOpts()
+
+    const err503 = { originalResponse: { getStatus: () => 503 } }
+    // Innerhalb der retryDelays weiter retryen, danach aufgeben.
+    expect(opts.onShouldRetry(err503, 0, RETRY_OPTS)).toBe(true)
+    expect(opts.onShouldRetry(err503, 3, RETRY_OPTS)).toBe(true)
+    expect(opts.onShouldRetry(err503, 4, RETRY_OPTS)).toBe(false)
+    // Ein transienter Fehler darf KEINEN Token-Refresh auslösen.
+    expect(refreshSpy).not.toHaveBeenCalled()
   })
 })
