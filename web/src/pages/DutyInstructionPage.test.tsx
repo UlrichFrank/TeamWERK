@@ -18,7 +18,10 @@ function renderAt(path: string) {
 }
 
 describe('DutyInstructionPage', () => {
-  beforeEach(() => { mockGet.mockReset() })
+  beforeEach(() => {
+    mockGet.mockReset()
+    window.history.replaceState(null, '', '/') // fresh history state per test
+  })
 
   test('renders instruction markdown', async () => {
     mockGet.mockResolvedValue({
@@ -44,5 +47,27 @@ describe('DutyInstructionPage', () => {
     mockGet.mockResolvedValue({ data: [{ id: 1, name: 'X' }] })
     renderAt('/dienste/anleitung/999')
     await waitFor(() => expect(screen.getByText(/nicht gefunden/)).toBeTruthy())
+  })
+
+  test('renders fallback back-link on cold-start (history.state.idx === 0)', async () => {
+    // Default JSDOM state: no idx set → coldStart true → fallback visible.
+    mockGet.mockResolvedValue({
+      data: [{ id: 42, name: 'Kasse', instruction_md: '## Foo' }],
+    })
+    renderAt('/dienste/anleitung/42')
+    await waitFor(() => expect(screen.getByText('Foo')).toBeTruthy())
+    const link = screen.getByRole('link', { name: /Zur Dienstbörse/ })
+    expect(link.getAttribute('href')).toBe('/dienste')
+  })
+
+  test('hides fallback back-link when history has depth', async () => {
+    // Simulate that the user navigated in — React Router sets history.state.idx > 0.
+    window.history.replaceState({ idx: 1 }, '', '/dienste/anleitung/42')
+    mockGet.mockResolvedValue({
+      data: [{ id: 42, name: 'Kasse', instruction_md: '## Foo' }],
+    })
+    renderAt('/dienste/anleitung/42')
+    await waitFor(() => expect(screen.getByText('Foo')).toBeTruthy())
+    expect(screen.queryByRole('link', { name: /Zur Dienstbörse/ })).toBeNull()
   })
 })
