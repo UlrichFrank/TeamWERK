@@ -7,7 +7,7 @@ export default function ForgotPasswordPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    await axios.post('/api/auth/forgot-password', { email }).catch(() => {})
+    await axios.post('/api/auth/forgot-password', { email: email.trim() }).catch(() => {})
     setSent(true)
   }
 

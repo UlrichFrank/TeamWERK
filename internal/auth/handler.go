@@ -113,6 +113,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	// Umschließende Whitespaces (Autofill/Copy-Paste, mobile Tastaturen) abschneiden.
+	// Muss konsistent zu Register/ResetPassword sein, wo das Passwort ebenfalls
+	// getrimmt gespeichert wird — sonst schlägt der bcrypt-Vergleich fehl.
+	req.Email = strings.TrimSpace(req.Email)
+	req.Password = strings.TrimSpace(req.Password)
 	var id, failedCount int
 	var hash, role, ident string
 	var lockedUntil sql.NullString
@@ -655,6 +660,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	req.Password = strings.TrimSpace(req.Password) // konsistent zum Login-Trim
 	tokenHash := HashToken(req.Token)
 	var id int
 	var email, role, tokenFirstName, tokenLastName string
@@ -735,6 +741,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"` // E-Mail ODER login_name (Kinder ohne eigene E-Mail)
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	req.Email = strings.TrimSpace(req.Email)
 	var userID int
 	var firstName, lastName, dest string
 	// Lookup über die "AccountName"-Qualität (E-Mail bei Erwachsenen, login_name
@@ -779,6 +786,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	req.Password = strings.TrimSpace(req.Password) // konsistent zum Login-Trim
 	tokenHash := HashToken(req.Token)
 	var id, userID int
 	var expiresAt time.Time
