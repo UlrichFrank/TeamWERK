@@ -55,6 +55,7 @@ build-errors.log
 # Deploy tracking
 .deployed-hash
 web/public/changes.json
+web/public/CHANGELOG.md
 
 # Code-Metrics: generierter Report (thresholds.yml und .gitkeep bleiben getrackt)
 metrics/REPORT.md
