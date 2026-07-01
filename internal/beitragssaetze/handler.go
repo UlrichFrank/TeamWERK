@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
@@ -96,4 +98,27 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Satz{
 		ID: int(id), Kategorie: req.Kategorie, BetragCent: req.BetragCent, ValidFrom: req.ValidFrom,
 	})
+}
+
+// DELETE /api/fee-rates/{id}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "id ungültig", http.StatusBadRequest)
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM beitrags_saetze WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, "DB-Fehler", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "nicht gefunden", http.StatusNotFound)
+		return
+	}
+	if h.hub != nil {
+		h.hub.Broadcast("beitragssatz-changed")
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

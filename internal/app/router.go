@@ -405,6 +405,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			// Beitragsmatrix
 			r.Get("/api/fee-rates", h.Beitragssaetze.List)
 			r.Post("/api/fee-rates", h.Beitragssaetze.Create)
+			r.Delete("/api/fee-rates/{id}", h.Beitragssaetze.Delete)
 			// Beitragslauf
 			r.Get("/api/fee-run/preview", h.Beitragslauf.Preview)
 			r.Post("/api/fee-run/export-data", h.Beitragslauf.ExportData)

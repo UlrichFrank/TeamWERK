@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useVault } from '../contexts/VaultContext'
@@ -640,6 +640,18 @@ function BeitraegeTab() {
     load()
   }
 
+  const remove = async (s: BeitragsSatz) => {
+    setError(null)
+    const label = `${s.valid_from.slice(0, 10)} · ${(s.betrag_cent / 100).toFixed(2)} €`
+    if (!window.confirm(`Beitragssatz löschen?\n\n${kategorieLabel(s.kategorie)}\n${label}`)) return
+    try {
+      await api.delete(`/fee-rates/${s.id}`)
+      load()
+    } catch {
+      setError('Löschen fehlgeschlagen.')
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
       {error && (
@@ -658,16 +670,27 @@ function BeitraegeTab() {
                 <tr className="text-brand-text-muted text-xs uppercase text-left">
                   <th className="py-1">Gültig ab</th>
                   <th className="py-1 text-right">Betrag</th>
+                  <th className="py-1 w-8"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 && (
-                  <tr><td colSpan={2} className="py-2 text-brand-text-muted">Noch kein Satz hinterlegt.</td></tr>
+                  <tr><td colSpan={3} className="py-2 text-brand-text-muted">Noch kein Satz hinterlegt.</td></tr>
                 )}
                 {rows.map(s => (
                   <tr key={s.id} className="border-t border-brand-border-subtle">
                     <td className="py-1.5 text-brand-text">{s.valid_from.slice(0, 10)}</td>
                     <td className="py-1.5 text-right text-brand-text">{(s.betrag_cent / 100).toFixed(2)} €</td>
+                    <td className="py-1.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => remove(s)}
+                        aria-label="Beitragssatz löschen"
+                        className="text-brand-text-muted hover:text-brand-danger transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

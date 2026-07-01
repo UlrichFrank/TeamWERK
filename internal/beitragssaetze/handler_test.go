@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,7 @@ func newSrv(t *testing.T) *httptest.Server {
 			r.Use(auth.RequireClubFunction("vorstand", "kassierer"))
 			r.Get("/api/fee-rates", h.List)
 			r.Post("/api/fee-rates", h.Create)
+			r.Delete("/api/fee-rates/{id}", h.Delete)
 		})
 	})
 }
@@ -84,6 +86,50 @@ func TestSaetze_Forbidden(t *testing.T) {
 	srv := newSrv(t)
 	tok := testutil.Token(t, 2, "standard", []string{"spieler"})
 	if res := testutil.Get(t, srv, "/api/fee-rates", tok); res.StatusCode != http.StatusForbidden {
+		t.Errorf("status %d, want 403", res.StatusCode)
+	}
+}
+
+func TestSaetze_Delete(t *testing.T) {
+	srv := newSrv(t)
+	tok := vorstandTok(t)
+	// Neuen Satz anlegen und wieder löschen.
+	res := testutil.Post(t, srv, "/api/fee-rates", tok,
+		map[string]any{"kategorie": "passiv", "betrag_cent": 5000, "valid_from": "2030-07-01"})
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("POST: status %d", res.StatusCode)
+	}
+	var created beitragssaetze.Satz
+	json.NewDecoder(res.Body).Decode(&created)
+	del := testutil.Do(t, srv, http.MethodDelete, "/api/fee-rates/"+strconv.Itoa(created.ID), tok, nil)
+	if del.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE: status %d, want 204", del.StatusCode)
+	}
+	// Nicht mehr in Liste.
+	lr := testutil.Get(t, srv, "/api/fee-rates", tok)
+	var list listResp
+	json.NewDecoder(lr.Body).Decode(&list)
+	for _, s := range list.Items {
+		if s.ID == created.ID {
+			t.Errorf("Satz %d nach DELETE noch in Liste", created.ID)
+		}
+	}
+}
+
+func TestSaetze_DeleteNotFound(t *testing.T) {
+	srv := newSrv(t)
+	tok := vorstandTok(t)
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/fee-rates/99999", tok, nil)
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("status %d, want 404", res.StatusCode)
+	}
+}
+
+func TestSaetze_DeleteForbidden(t *testing.T) {
+	srv := newSrv(t)
+	tok := testutil.Token(t, 2, "standard", []string{"spieler"})
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/fee-rates/1", tok, nil)
+	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status %d, want 403", res.StatusCode)
 	}
 }
