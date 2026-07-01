@@ -222,7 +222,12 @@ export default function VideoUploadPage() {
     setFile(f)
   }, [])
 
-  function startTus(videoId: number, f: File, resume: PreviousUpload | null) {
+  // startTus startet IMMER eine neue tus-Session für die frisch angelegte video_id.
+  // Bewusst KEIN resumeFromPreviousUpload: der Fingerprint matcht dateibasiert (nicht per
+  // video_id), sonst adoptierte ein frischer Upload derselben Datei die offene Session eines
+  // früheren Uploads und bespielte dessen video_id (Waisen-Zeile auf 'uploading'). Fortsetzen
+  // läuft ausschließlich über handleResume (Button "Upload fortsetzen").
+  function startTus(videoId: number, f: File) {
     setUploading(true)
     setProgress(0)
     setRemaining('')
@@ -267,7 +272,6 @@ export default function VideoUploadPage() {
       },
     })
     uploadRef.current = upload
-    if (resume) upload.resumeFromPreviousUpload(resume)
     upload.start()
   }
 
@@ -305,7 +309,7 @@ export default function VideoUploadPage() {
         game_id: gameId ? Number(gameId) : undefined,
         size_bytes: file.size,
       })
-      startTus(res.data.video_id, file, resumable)
+      startTus(res.data.video_id, file)
     } catch (err) {
       setUploading(false)
       const ax = err as AxiosError<{ error?: string }>

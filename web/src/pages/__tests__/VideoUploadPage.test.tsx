@@ -106,6 +106,47 @@ describe('VideoUploadPage', () => {
     const opts = calls[calls.length - 1][1] as { metadata: Record<string, string> }
     expect(opts.metadata.video_id).toBe('42')
   })
+
+  test('frischer Upload resumt keine vorhandene Session (kein Hijack)', async () => {
+    // Für die Datei liegt eine unterbrochene frühere Session (fremde video_id) vor.
+    findPrev.mockResolvedValue([{
+      metadata: { video_id: '7' },
+      uploadUrl: '/api/videos/upload/abc',
+      size: 1024 * 1024,
+      creationTime: '2026-06-30T00:00:00Z',
+      urlStorageKey: 'tus::x',
+    }])
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      data: { video_id: 42, upload_url: '/api/videos/upload/' },
+    })
+
+    renderAsPersona(<VideoUploadPage />, 'trainer', {
+      mocks: [
+        { url: /\/teams/, data: TEAMS },
+        { url: /\/seasons/, data: SEASONS },
+      ],
+    })
+    await flushAsync()
+
+    fireEvent.change(screen.getByLabelText(/Titel/i), { target: { value: 'Testspiel' } })
+    fireEvent.change(screen.getByLabelText(/Team/i), { target: { value: '7' } })
+
+    const small = fakeFile('clip.mp4', 1024 * 1024)
+    fireEvent.change(screen.getByLabelText(/Videodatei/i), { target: { files: [small] } })
+    // Warten bis die Resume-Sonde den "Upload fortsetzen"-Zustand gesetzt hat.
+    await screen.findByRole('button', { name: /Upload fortsetzen/i })
+
+    fireEvent.click(screen.getByRole('button', { name: /^Hochladen$/i }))
+
+    await waitFor(() => expect(post).toHaveBeenCalled())
+    await waitFor(() => expect(tusStart).toHaveBeenCalled())
+
+    // Der frische Upload trägt die NEUE video_id und resumt NICHT die fremde Session.
+    const calls = UploadMock.mock.calls
+    const opts = calls[calls.length - 1][1] as { metadata: Record<string, string> }
+    expect(opts.metadata.video_id).toBe('42')
+    expect(resumeFrom).not.toHaveBeenCalled()
+  })
 })
 
 // Die tus-Auth-Hooks werden isoliert getestet: tus ist vollständig gemockt
