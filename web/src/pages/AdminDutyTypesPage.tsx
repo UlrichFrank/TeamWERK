@@ -5,6 +5,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { formatOffset, parseOffset } from '../lib/time'
 import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
+import DutyInstructionEditorModal from '../components/DutyInstructionEditorModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 
@@ -19,6 +20,8 @@ interface DutyType {
   adjacent_day_behavior?: string
   adjacent_day_variant_id?: number | null
   audiences?: string[] | null
+  instruction_md?: string
+  instruction_updated_at?: string
 }
 
 interface EditState {
@@ -190,6 +193,7 @@ export default function AdminDutyTypesPage() {
   const [create, setCreate] = useState<EditState>(emptyCreate())
   const [edit, setEdit] = useState<EditState | null>(null)
   const [modalId, setModalId] = useState<number | null>(null)
+  const [instructionTarget, setInstructionTarget] = useState<DutyType | null>(null)
 
   const load = () => api.get('/duty-types').then(r => setTypes(r.data ?? []))
   useEffect(() => { load() }, [])
@@ -342,6 +346,7 @@ export default function AdminDutyTypesPage() {
                   <td className="px-3 py-3 text-right">
                     <ActionMenu actions={[
                       { label: 'Bearbeiten', onClick: () => startEdit(t) },
+                      { label: 'Anleitung', onClick: () => setInstructionTarget(t) },
                       { label: 'Löschen', onClick: () => handleDelete(t.id, t.name), variant: 'danger' },
                     ]} />
                   </td>
@@ -361,6 +366,16 @@ export default function AdminDutyTypesPage() {
         >
           <DutyTypeForm state={edit} onChange={setEdit} types={types} excludeId={modalId ?? undefined} />
         </EditModal>
+      )}
+
+      {instructionTarget && (
+        <DutyInstructionEditorModal
+          dutyTypeId={instructionTarget.id}
+          dutyTypeName={instructionTarget.name}
+          currentMarkdown={instructionTarget.instruction_md ?? ''}
+          onClose={() => setInstructionTarget(null)}
+          onSaved={() => { setInstructionTarget(null); load() }}
+        />
       )}
     </div>
   )
