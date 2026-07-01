@@ -6,6 +6,17 @@ GO         := $(or $(wildcard /usr/local/go/bin/go),go)
 REPO_ROOT  := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 REMOTE     := $(shell grep '^REMOTE=' .env 2>/dev/null | cut -d= -f2)
 REMOTE_DIR := $(shell grep '^REMOTE_DIR=' .env 2>/dev/null | cut -d= -f2)
+BASE_URL   := $(shell grep '^BASE_URL=' .env 2>/dev/null | cut -d= -f2-)
+# Server-Umzug (aus .env; nur gesetzt während einer Migration)
+REMOTE_NEW     := $(shell grep '^REMOTE_NEW=' .env 2>/dev/null | cut -d= -f2-)
+REMOTE_NEW_DIR := $(shell grep '^REMOTE_NEW_DIR=' .env 2>/dev/null | cut -d= -f2-)
+BASE_URL_NEW   := $(shell grep '^BASE_URL_NEW=' .env 2>/dev/null | cut -d= -f2-)
+# CLI-Argument NEW_REMOTE hat Vorrang vor REMOTE_NEW aus .env
+NEW_REMOTE_RESOLVED     := $(or $(NEW_REMOTE),$(REMOTE_NEW))
+NEW_REMOTE_DIR_RESOLVED := $(or $(REMOTE_NEW_DIR),/usr/local/bin)
+# Domains ohne Schema (für Host-Header, nginx server_name, Cert-Pfade)
+SOURCE_DOMAIN := $(patsubst https://%,%,$(BASE_URL))
+NEW_DOMAIN    := $(patsubst https://%,%,$(BASE_URL_NEW))
 DB_PATH        := /var/lib/teamwerk/teamwerk.db
 UPLOAD_DIR_REMOTE        := /var/lib/teamwerk/uploads
 FILES_DIR_REMOTE         := /var/lib/teamwerk/files
@@ -19,7 +30,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate
+.PHONY: help init hooks dev dev-remote build deploy setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -200,3 +211,162 @@ coverage: ## Testabdeckung messen: Coverage-Bericht auf stdout + HTML nach /tmp/
 
 clean: ## Build-Artefakte löschen
 	rm -rf $(BUILD_DIR) cmd/teamwerk/web/dist
+
+# ── Server-Umzug ──────────────────────────────────────────────────────
+# Ablauf: server-bootstrap (einmalig) → server-sync-data (beliebig oft) →
+# server-cutover (finaler Umschalter). Siehe deploy/server-migration-runbook.md.
+
+_check-remote:
+	@if [ -z "$(REMOTE)" ]; then \
+		echo "Fehler: REMOTE nicht in .env gesetzt. Ohne Quelle kein Umzug."; \
+		exit 1; \
+	fi
+
+_check-new-remote:
+	@if [ -z "$(NEW_REMOTE_RESOLVED)" ]; then \
+		echo "Fehler: NEW_REMOTE=<alias> oder REMOTE_NEW= in .env setzen."; \
+		echo "Beispiel: make server-bootstrap NEW_REMOTE=vServerNeu"; \
+		exit 1; \
+	fi
+
+_check-base-url-new:
+	@if [ -z "$(BASE_URL_NEW)" ]; then \
+		echo "Fehler: BASE_URL_NEW in .env fehlt."; \
+		echo "Beispiel: BASE_URL_NEW=https://teamwerk.team-stuttgart.org"; \
+		exit 1; \
+	fi
+	@case "$(BASE_URL_NEW)" in \
+		https://*) ;; \
+		*) echo "Fehler: BASE_URL_NEW muss mit 'https://' beginnen (aktuell: $(BASE_URL_NEW))"; exit 1;; \
+	esac
+
+server-bootstrap: _check-remote _check-new-remote _check-base-url-new build ## Server-Umzug: initialen Zielhost aufsetzen (setup + Env + DB + Storage + Deploy)
+	@echo ">>> Bootstrap: Quelle=$(REMOTE)  Ziel=$(NEW_REMOTE_RESOLVED)  Domain=$(NEW_DOMAIN)"
+	@echo ">>> A) setup-vps auf Ziel"
+	rsync -az deploy/ $(NEW_REMOTE_RESOLVED):/tmp/teamwerk-deploy/
+	ssh $(NEW_REMOTE_RESOLVED) "cd /tmp/teamwerk-deploy && sudo bash setup-vps.sh"
+	@echo ">>> B) Env klonen (mit BASE_URL-Rewrite)"
+	ssh $(REMOTE) "sudo cat /etc/teamwerk/env" \
+		| sed -E "s|^BASE_URL=.*|BASE_URL=$(BASE_URL_NEW)|" \
+		| ssh $(NEW_REMOTE_RESOLVED) "sudo tee /etc/teamwerk/env > /dev/null && sudo chmod 600 /etc/teamwerk/env"
+	@echo ">>> C) Better-Stack-Konfigurationsdateien klonen"
+	@for f in heartbeat-url betterstack-logs-token betterstack-metrics-token betterstack-metrics-endpoint; do \
+		if ssh $(REMOTE) "sudo test -f /etc/teamwerk/$$f"; then \
+			ssh $(REMOTE) "sudo cat /etc/teamwerk/$$f" \
+				| ssh $(NEW_REMOTE_RESOLVED) "sudo tee /etc/teamwerk/$$f > /dev/null && sudo chmod 600 /etc/teamwerk/$$f"; \
+			echo "    kopiert: $$f"; \
+		else \
+			echo "    übersprungen (Quelle hat kein /etc/teamwerk/$$f): $$f"; \
+		fi \
+	done
+	@echo ">>> D) Zielhost-Service stoppen (falls existent)"
+	ssh $(NEW_REMOTE_RESOLVED) "sudo systemctl stop teamwerk 2>/dev/null || true"
+	@echo ">>> E) DB-Snapshot Quelle → Ziel (sqlite3 .backup, WAL-safe)"
+	ssh $(REMOTE) "sudo sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-migration.db' && sudo chmod 644 /tmp/teamwerk-migration.db"
+	ssh $(REMOTE) "sudo cat /tmp/teamwerk-migration.db" \
+		| ssh $(NEW_REMOTE_RESOLVED) "sudo mkdir -p $(dir $(DB_PATH)) && sudo tee $(DB_PATH) > /dev/null && sudo rm -f $(DB_PATH)-wal $(DB_PATH)-shm"
+	ssh $(REMOTE) "sudo rm -f /tmp/teamwerk-migration.db"
+	@echo ">>> F) Storage-Ordner synchronisieren (Direkt-Rsync zwischen Remotes)"
+	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) /storage/videos; do \
+		if ssh $(REMOTE) "sudo test -d $$d"; then \
+			echo "    rsync $$d"; \
+			ssh $(REMOTE) "sudo rsync -az -e ssh $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
+				|| { echo "    Direkt-Rsync fehlgeschlagen, fallback über Laptop-Disk"; \
+				     TMP=$$(mktemp -d); \
+				     rsync -az $(REMOTE):$$d/ $$TMP/ && rsync -az $$TMP/ $(NEW_REMOTE_RESOLVED):$$d/; \
+				     rm -rf $$TMP; }; \
+		else \
+			echo "    übersprungen (Quelle hat kein $$d)"; \
+		fi \
+	done
+	@echo ">>> G) Owner-Fix auf Ziel"
+	ssh $(NEW_REMOTE_RESOLVED) "sudo chown -R www-data:www-data $(dir $(DB_PATH)) 2>/dev/null || true; sudo chown -R www-data:www-data /storage 2>/dev/null || true"
+	@echo ">>> H) Binary deployen (mit umgebogenem REMOTE)"
+	$(MAKE) deploy REMOTE=$(NEW_REMOTE_RESOLVED) REMOTE_DIR=$(NEW_REMOTE_DIR_RESOLVED)
+	@echo ">>> I) Smoke-Test /api/healthz (IP + Host-Header)"
+	@RESP=$$(ssh $(NEW_REMOTE_RESOLVED) "curl -k -s -H 'Host: $(NEW_DOMAIN)' https://localhost/api/healthz"); \
+	echo "    Response: $$RESP"; \
+	echo "$$RESP" | grep -q '"status":"ok"' && echo "$$RESP" | grep -q '"db":"ok"' \
+		|| { echo "Fehler: /api/healthz auf Ziel nicht ok"; exit 1; }
+	@echo ">>> J) BASE_URL auf Ziel verifizieren"
+	@ssh $(NEW_REMOTE_RESOLVED) "sudo grep '^BASE_URL=' /etc/teamwerk/env"
+	@echo ""
+	@echo "Bootstrap fertig. Nächste Schritte:"
+	@echo "  1. Testphase: /etc/hosts-Zeile lokal setzen: $$'\t'$(patsubst https://%,%,$(BASE_URL_NEW)) → Ziel-IP"
+	@echo "  2. Bei Bedarf: make server-sync-data NEW_REMOTE=$(NEW_REMOTE_RESOLVED)"
+	@echo "  3. DNS + Certbot: siehe deploy/server-migration-runbook.md Abschnitt 3"
+	@echo "  4. Cutover: make server-cutover NEW_REMOTE=$(NEW_REMOTE_RESOLVED)"
+
+server-sync-data: _check-remote _check-new-remote _check-base-url-new build ## Server-Umzug: DB + Storage von Quelle auf Ziel neu synchronisieren (überschreibt Testdaten auf Ziel)
+	@if [ "$$MAKE_CONFIRMED" = "1" ]; then \
+		echo ">>> Auto-Confirm (aus server-cutover)"; \
+	else \
+		printf "server-sync-data überschreibt DB und Storage auf $(NEW_REMOTE_RESOLVED) mit einem frischen Snapshot von $(REMOTE). Testdaten auf Ziel gehen verloren. Fortfahren? [y/N] "; \
+		read ans; \
+		case "$$ans" in y|Y) ;; *) echo "Abgebrochen." ; exit 1;; esac; \
+	fi
+	@echo ">>> Sync: Quelle=$(REMOTE)  Ziel=$(NEW_REMOTE_RESOLVED)"
+	@echo ">>> A) Ziel-Service stoppen"
+	ssh $(NEW_REMOTE_RESOLVED) "sudo systemctl stop teamwerk"
+	@echo ">>> B) DB-Snapshot Quelle → Ziel"
+	ssh $(REMOTE) "sudo sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-migration.db' && sudo chmod 644 /tmp/teamwerk-migration.db"
+	ssh $(REMOTE) "sudo cat /tmp/teamwerk-migration.db" \
+		| ssh $(NEW_REMOTE_RESOLVED) "sudo tee $(DB_PATH) > /dev/null && sudo rm -f $(DB_PATH)-wal $(DB_PATH)-shm"
+	ssh $(REMOTE) "sudo rm -f /tmp/teamwerk-migration.db"
+	@echo ">>> C) Storage-Ordner synchronisieren"
+	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) /storage/videos; do \
+		if ssh $(REMOTE) "sudo test -d $$d"; then \
+			echo "    rsync $$d"; \
+			ssh $(REMOTE) "sudo rsync -az --delete -e ssh $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
+				|| { echo "    Direkt-Rsync fehlgeschlagen, fallback über Laptop-Disk"; \
+				     TMP=$$(mktemp -d); \
+				     rsync -az --delete $(REMOTE):$$d/ $$TMP/ && rsync -az --delete $$TMP/ $(NEW_REMOTE_RESOLVED):$$d/; \
+				     rm -rf $$TMP; }; \
+		fi \
+	done
+	@echo ">>> D) Owner-Fix auf Ziel"
+	ssh $(NEW_REMOTE_RESOLVED) "sudo chown -R www-data:www-data $(dir $(DB_PATH)) 2>/dev/null || true; sudo chown -R www-data:www-data /storage 2>/dev/null || true"
+	@echo ">>> E) migrate up auf Ziel (nach Snapshot, damit höhere Schema-Version des Ziel-Codes gewinnt)"
+	ssh $(NEW_REMOTE_RESOLVED) "$(NEW_REMOTE_DIR_RESOLVED)/$(BINARY) migrate up --db $(DB_PATH)"
+	@echo ">>> F) Ziel-Service starten"
+	ssh $(NEW_REMOTE_RESOLVED) "sudo systemctl start teamwerk"
+	@echo ">>> G) Smoke-Test /api/healthz"
+	@RESP=$$(ssh $(NEW_REMOTE_RESOLVED) "curl -k -s -H 'Host: $(NEW_DOMAIN)' https://localhost/api/healthz"); \
+	echo "    Response: $$RESP"; \
+	echo "$$RESP" | grep -q '"status":"ok"' && echo "$$RESP" | grep -q '"db":"ok"' \
+		|| { echo "Fehler: /api/healthz auf Ziel nicht ok"; exit 1; }
+	@echo "Sync fertig."
+
+server-cutover: _check-remote _check-new-remote _check-base-url-new ## Server-Umzug: Alt-Host auf 301-Redirect umschalten (final)
+	@printf "server-cutover stoppt teamwerk auf $(REMOTE) und schaltet den Alt-Host auf 301 → $(BASE_URL_NEW). Ein letzter server-sync-data läuft davor. Fortfahren? [y/N] "; \
+	read ans; \
+	case "$$ans" in y|Y) ;; *) echo "Abgebrochen." ; exit 1;; esac
+	@echo ">>> Cutover: Quelle=$(REMOTE) ($(SOURCE_DOMAIN))  Ziel=$(NEW_REMOTE_RESOLVED) ($(NEW_DOMAIN))"
+	@echo ">>> A) Letzter Daten-Sync"
+	MAKE_CONFIRMED=1 $(MAKE) server-sync-data NEW_REMOTE=$(NEW_REMOTE_RESOLVED)
+	@echo ">>> B) Alt-Host: teamwerk-Service stoppen und disablen"
+	ssh $(REMOTE) "sudo systemctl stop teamwerk && sudo systemctl disable teamwerk"
+	@echo ">>> C) Alt-Host: Nginx-Config-Backup"
+	ssh $(REMOTE) "sudo cp /etc/nginx/sites-available/$(SOURCE_DOMAIN) /etc/nginx/sites-available/$(SOURCE_DOMAIN).$(TS).bak && echo '    Backup: /etc/nginx/sites-available/$(SOURCE_DOMAIN).$(TS).bak'"
+	@echo ">>> D) Alt-Host: Redirect-Config deployen"
+	sed "s|{{SOURCE_DOMAIN}}|$(SOURCE_DOMAIN)|g; s|{{NEW_BASE_URL}}|$(BASE_URL_NEW)|g" deploy/nginx-redirect.conf \
+		| ssh $(REMOTE) "sudo tee /etc/nginx/sites-available/$(SOURCE_DOMAIN) > /dev/null"
+	@echo ">>> E) nginx -t und reload"
+	ssh $(REMOTE) "sudo nginx -t && sudo systemctl reload nginx" \
+		|| { echo "Fehler: nginx-Reload fehlgeschlagen — Backup zurücksichern und teamwerk-Service manuell starten"; exit 1; }
+	@echo ">>> F) Verifikation: Redirect aktiv"
+	@STATUS=$$(ssh $(REMOTE) "curl -k -s -o /dev/null -w '%{http_code}' -H 'Host: $(SOURCE_DOMAIN)' https://localhost/api/healthz"); \
+	if [ "$$STATUS" != "301" ]; then \
+		echo "Fehler: Erwartet HTTP 301 auf Alt-Host, bekommen: $$STATUS"; \
+		exit 1; \
+	fi; \
+	echo "    /api/healthz auf Alt-Host liefert 301 (Redirect aktiv)"
+	@echo ""
+	@echo "Cutover fertig. Nachpflege (manuell):"
+	@echo "  1. Better-Stack HTTP-Monitor umhängen: URL → $(BASE_URL_NEW)/api/healthz"
+	@echo "  2. User informieren (Push/Broadcast/Vorstandsansage) — Kernpunkte:"
+	@echo "     • Neue URL: $(BASE_URL_NEW)"
+	@echo "     • Bookmarks werden per 301 weitergeleitet"
+	@echo "     • PWA-Nutzer: alte PWA vom Homescreen löschen, neue URL aufrufen,"
+	@echo "       „Zum Homescreen hinzufügen\" erneut, Push neu erlauben"
+	@echo "  3. Push-Endpoints der alten Origin sterben mit HTTP 410 → automatisches Cleanup"

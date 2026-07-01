@@ -9,6 +9,10 @@ make migrate-remote-up                               # Migrationen auf VPS
 make create-admin-remote EMAIL=… PASSWORD=… NAME=…   # Admin anlegen
 ```
 
+## Server-Umzug (VPS-Wechsel)
+
+Wiederkehrender Ablauf zum Umzug einer TeamWERK-Instanz auf einen anderen VPS steckt in drei Makefile-Targets: `make server-bootstrap NEW_REMOTE=<alias>` (initialer Aufbau + Daten-Klon), `make server-sync-data NEW_REMOTE=<alias>` (beliebig oft wiederholbarer DB-/Storage-Sync während der Testphase), `make server-cutover NEW_REMOTE=<alias>` (Alt-Host auf 301-Redirect umschalten). Voraussetzungen (`REMOTE_NEW`, `REMOTE_NEW_DIR`, `BASE_URL_NEW` in `.env`) und alle manuellen Schritte (DNS, Certbot, Better-Stack-Umhängen, User-Kommunikation, PWA-Neuinstallation, Rollback) stehen in `deploy/server-migration-runbook.md`.
+
 ## Zero-Knowledge-Verschlüsselung der Bank-/SEPA-PII (Modell B)
 
 Bank-/SEPA-Felder werden **clientseitig** verschlüsselt (`internal/crypto` ist serverseitig
