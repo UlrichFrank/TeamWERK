@@ -57,6 +57,7 @@ func (s *Scheduler) Run() {
 	s.sendCarpoolingReminders()
 	s.sendEventNoteReminders()
 	s.cleanStaleVideoUploads()
+	s.failStaleVideoUploads()
 	s.cleanFailedVideoRaw()
 	s.runVideoRetention()
 	s.sendAttendanceReminders()
@@ -98,6 +99,29 @@ func (s *Scheduler) cleanStaleVideoUploads() {
 	}
 	if removed > 0 {
 		slog.Info("stale video uploads cleaned", "count", removed)
+	}
+}
+
+// failStaleVideoUploads markiert Videos, die länger als 24 h im Status 'uploading'
+// verharren, als 'failed'. Ohne diesen Job bleiben abgebrochene/verwaiste Uploads
+// (z.B. nach Netzwerkabbruch oder wenn ein frischer Upload eine andere Zeile bespielt)
+// dauerhaft als Geister-Eintrag „Wird hochgeladen" in der Liste stehen. Der 24-h-Cutoff
+// deckt sich mit dem Stale-tus-Session-Cleanup; ein legitimer Upload (Hard-Limit 2,5 GB)
+// dauert nie annähernd so lange. Inline statt Aufruf ins Domain-Package videos (Scheduler
+// ist Foundation, darf videos nicht importieren — Architektur-Test).
+func (s *Scheduler) failStaleVideoUploads() {
+	res, err := s.db.Exec(
+		`UPDATE videos
+		 SET status = 'failed', failure_reason = 'Upload abgebrochen'
+		 WHERE status = 'uploading'
+		   AND created_at < datetime('now', '-24 hours')`)
+	if err != nil {
+		logIfBusy(err, "failStaleVideoUploads")
+		slog.Error("scheduler stale uploading-video cleanup failed", "error", err)
+		return
+	}
+	if n, err := res.RowsAffected(); err == nil && n > 0 {
+		slog.Info("stale uploading videos marked failed", "count", n)
 	}
 }
 
