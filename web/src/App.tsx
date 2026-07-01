@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { PersonContactProvider } from './contexts/PersonContactContext'
@@ -16,6 +17,7 @@ import MemberDetailPage from './pages/MemberDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import ChildProfilePage from './pages/ChildProfilePage'
 import DutyPage from './pages/DutyPage'
+const DutyInstructionPage = lazy(() => import('./pages/DutyInstructionPage'))
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import BeitragslaufPage from './pages/admin/BeitragslaufPage'
 import TresorPage from './pages/admin/TresorPage'
@@ -98,6 +100,11 @@ export default function App() {
               <Route path="dokumente/:folderId" element={<DocumentsPage />} />
               <Route path="mitglieder/:memberId/sepa-mandat/anzeigen" element={<RoleRoute roles={['admin','vorstand','kassierer']}><SepaMandatViewerPage /></RoleRoute>} />
               <Route path="dienste" element={<DutyPage />} />
+              <Route path="dienste/anleitung/:typeId" element={
+                <Suspense fallback={<p className="text-sm text-brand-text-muted">Lade Anleitung…</p>}>
+                  <DutyInstructionPage />
+                </Suspense>
+              } />
               <Route path="mitfahrgelegenheiten" element={<MitfahrgelegenheitenPage />} />
               <Route path="anfragen" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="einstellungen" element={<RoleRoute roles={['admin','vorstand','kassierer']}><AdminSettingsPage /></RoleRoute>} />

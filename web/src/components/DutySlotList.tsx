@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Trash2, BookOpen } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -17,6 +18,8 @@ export interface PublicAssignee {
 export interface BoardSlot {
   id: number
   duty_type: string
+  duty_type_id: number
+  has_instruction: boolean
   event_time: string
   slots_total: number
   vacancies: number
@@ -107,7 +110,19 @@ onSlotDeleted?.(slotId)
             <>
               <tr key={s.id}>
                 <td className="px-4 py-2.5 font-medium text-brand-text">
-                  {s.duty_type}
+                  <span className="inline-flex items-center gap-1.5">
+                    {s.duty_type}
+                    {s.has_instruction && (
+                      <Link
+                        to={`/dienste/anleitung/${s.duty_type_id}`}
+                        aria-label="Anleitung ansehen"
+                        onClick={e => e.stopPropagation()}
+                        className="text-brand-text-muted hover:text-brand-text"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                      </Link>
+                    )}
+                  </span>
                   {s.role_desc ? <span className="text-brand-text-subtle font-normal"> · {s.role_desc}</span> : null}
                 </td>
                 <td className="px-4 py-2.5 text-brand-text-muted w-20">{s.event_time || '—'}</td>
