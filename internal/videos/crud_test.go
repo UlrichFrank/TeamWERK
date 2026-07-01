@@ -291,6 +291,79 @@ func TestUpdate_HappyAndForbidden(t *testing.T) {
 	res.Body.Close()
 }
 
+// TestUpdate_GameID deckt die Tri-State-Zuordnung von game_id im PATCH ab:
+// setzen (Zahl), löschen (null), unverändert lassen (Feld weggelassen) und den
+// Berechtigungs-Fehlerfall (403 lässt game_id unangetastet).
+func TestUpdate_GameID(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := crudHandler(t, db)
+	srv := newCRUDServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	kaderA := testutil.CreateKader(t, db, teamA, season)
+	uploader := testutil.CreateUser(t, db, "standard")
+	vid := testutil.CreateVideo(t, db, teamA, season, uploader, "ready")
+	gameID := testutil.CreateGame(t, db, season, teamA, "2026-03-01")
+
+	trainerUser := testutil.CreateUser(t, db, "standard")
+	tm := testutil.CreateMember(t, db, trainerUser)
+	testutil.AddKaderTrainer(t, db, kaderA, tm)
+	trainer := testutil.Token(t, trainerUser, "standard", []string{"trainer"})
+
+	readGameID := func() (int64, bool) {
+		t.Helper()
+		var g sql.NullInt64
+		if err := db.QueryRow(`SELECT game_id FROM videos WHERE id=?`, vid).Scan(&g); err != nil {
+			t.Fatalf("read game_id: %v", err)
+		}
+		return g.Int64, g.Valid
+	}
+
+	// Zuordnung setzen → 200, game_id gesetzt.
+	res := patch(t, srv, "/api/videos/"+itoa(vid), trainer, map[string]any{"game_id": gameID})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("set game_id status = %d, want 200", res.StatusCode)
+	}
+	res.Body.Close()
+	if got, ok := readGameID(); !ok || got != int64(gameID) {
+		t.Errorf("after set: game_id=%d valid=%v, want %d", got, ok, gameID)
+	}
+
+	// Feld weggelassen (nur Titel) → game_id unverändert.
+	res = patch(t, srv, "/api/videos/"+itoa(vid), trainer, map[string]any{"title": "Neuer Titel"})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("title-only status = %d, want 200", res.StatusCode)
+	}
+	res.Body.Close()
+	if got, ok := readGameID(); !ok || got != int64(gameID) {
+		t.Errorf("after title-only: game_id=%d valid=%v, want %d unchanged", got, ok, gameID)
+	}
+
+	// Zuordnung löschen (null) → 200, game_id NULL.
+	res = patch(t, srv, "/api/videos/"+itoa(vid), trainer, map[string]any{"game_id": nil})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("clear game_id status = %d, want 200", res.StatusCode)
+	}
+	res.Body.Close()
+	if _, ok := readGameID(); ok {
+		t.Errorf("after clear: game_id should be NULL")
+	}
+
+	// Ohne Verwaltungsrecht → 403, game_id bleibt NULL.
+	playerUser := testutil.CreateUser(t, db, "standard")
+	pmem := testutil.CreateMember(t, db, playerUser)
+	addKaderMember(t, db, kaderA, pmem)
+	res = patch(t, srv, "/api/videos/"+itoa(vid), testutil.Token(t, playerUser, "standard", []string{"spieler"}), map[string]any{"game_id": gameID})
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("player set game_id status = %d, want 403", res.StatusCode)
+	}
+	res.Body.Close()
+	if _, ok := readGameID(); ok {
+		t.Errorf("after forbidden patch: game_id should remain NULL")
+	}
+}
+
 // --- DELETE: removes row and files ------------------------------------------
 
 func TestDelete_RemovesRowAndFiles(t *testing.T) {

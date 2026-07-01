@@ -28,6 +28,26 @@ interface PlayResponse {
   master_url: string
 }
 
+interface GameTeam {
+  id: number
+  name: string
+}
+
+interface Game {
+  id: number
+  date: string
+  opponent: string
+  teams: GameTeam[]
+}
+
+// fmtGameOption bildet die Spiel-Auswahl "DD.MM.YYYY · Gegner" (wie im Upload-Formular).
+function fmtGameOption(g: Game): string {
+  const d = g.date.slice(0, 10)
+  const [y, mo, da] = d.split('-')
+  const datePart = y && mo && da ? `${da}.${mo}.${y}` : d
+  return `${datePart} · ${g.opponent || 'Spiel'}`
+}
+
 function VideoPlayer({ id }: { id: number }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState('')
@@ -124,6 +144,8 @@ export default function VideoDetailPage() {
   const [showDelete, setShowDelete] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editGameId, setEditGameId] = useState('')
+  const [games, setGames] = useState<Game[]>([])
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState('')
@@ -167,8 +189,17 @@ export default function VideoDetailPage() {
     if (!video) return
     setEditTitle(video.title)
     setEditDescription(video.description ?? '')
+    setEditGameId(video.game_id != null ? String(video.game_id) : '')
     setActionError('')
     setShowEdit(true)
+    // Spiele des Video-Teams für den Zuordnungs-Selector laden (clientseitig filtern,
+    // wie im Upload-Formular). Fehler still schlucken — der Selector bleibt dann leer.
+    api.get<Game[]>('/games')
+      .then(r => {
+        const all = Array.isArray(r.data) ? r.data : []
+        setGames(all.filter(g => (g.teams ?? []).some(t => t.id === video.team_id)))
+      })
+      .catch(() => setGames([]))
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -180,6 +211,8 @@ export default function VideoDetailPage() {
       await api.patch(`/videos/${videoId}`, {
         title: editTitle.trim(),
         description: editDescription.trim(),
+        // Tri-State: gewählte Spiel-ID → Zahl, "Kein Spiel zuordnen" → null (löscht die Zuordnung).
+        game_id: editGameId ? Number(editGameId) : null,
       })
       setShowEdit(false)
       load()
@@ -333,6 +366,20 @@ export default function VideoDetailPage() {
                   rows={4}
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
+              </div>
+              <div>
+                <label htmlFor="edit-game" className="block text-sm font-medium text-brand-text-muted mb-1">Spiel</label>
+                <select
+                  id="edit-game"
+                  value={editGameId}
+                  onChange={e => setEditGameId(e.target.value)}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                >
+                  <option value="">Kein Spiel zuordnen</option>
+                  {games.map(g => (
+                    <option key={g.id} value={g.id}>{fmtGameOption(g)}</option>
+                  ))}
+                </select>
               </div>
               {actionError && (
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{actionError}</div>
