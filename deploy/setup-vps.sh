@@ -13,7 +13,7 @@ set -euo pipefail
 apt-get update
 # ffmpeg: Spielvideo-Transcode (HLS 720p+360p). Version >= 4.x — Ubuntu 24.04
 # liefert 6.x; ein Check (ffmpeg -version) gehört ins Setup-Runbook.
-apt-get install -y nginx openssl curl ca-certificates gnupg logrotate ffmpeg
+apt-get install -y nginx openssl curl ca-certificates gnupg logrotate ffmpeg cron rsync
 
 # ---------------------------------------------------------------------------
 # 2. Verzeichnisse
@@ -80,14 +80,24 @@ fi
 # ---------------------------------------------------------------------------
 # 6. Nginx vhost
 # ---------------------------------------------------------------------------
-cp nginx-intern.conf /etc/nginx/sites-available/intern.team-stuttgart.org
-ln -sf /etc/nginx/sites-available/intern.team-stuttgart.org /etc/nginx/sites-enabled/intern.team-stuttgart.org
-nginx -t
-systemctl enable nginx
-if systemctl is-active --quiet nginx; then
-    systemctl reload nginx
+# SKIP_NGINX=1 überspringt diesen Block (z. B. weil der Aufrufer — etwa
+# bootstrap-new-server.sh — die vhost-Config selbst mit passender Domain +
+# Cert-Pfaden setzt). nginx-intern.conf ist auf `internal.team-stuttgart.org`
+# und einen Let's-Encrypt-Cert hardgekodiert, was auf einem frischen VPS
+# nicht funktioniert.
+if [ "${SKIP_NGINX:-0}" != "1" ]; then
+    cp nginx-intern.conf /etc/nginx/sites-available/intern.team-stuttgart.org
+    ln -sf /etc/nginx/sites-available/intern.team-stuttgart.org /etc/nginx/sites-enabled/intern.team-stuttgart.org
+    nginx -t
+    systemctl enable nginx
+    if systemctl is-active --quiet nginx; then
+        systemctl reload nginx
+    else
+        systemctl start nginx
+    fi
 else
-    systemctl start nginx
+    echo "SKIP_NGINX=1 gesetzt — vhost-Config bleibt Sache des Aufrufers."
+    systemctl enable nginx
 fi
 
 # ---------------------------------------------------------------------------
@@ -120,8 +130,11 @@ chmod +x /usr/local/bin/teamwerk-scheduler.sh
 # 8. Cronjob (idempotent)
 # ---------------------------------------------------------------------------
 CRONJOB="* * * * * /usr/local/bin/teamwerk-scheduler.sh >> /var/log/teamwerk-scheduler.log 2>&1"
-if ! crontab -l 2>/dev/null | grep -qF "/usr/local/bin/teamwerk-scheduler.sh"; then
-    (crontab -l 2>/dev/null | grep -v "/usr/local/bin/teamwerk scheduler:run"; echo "$CRONJOB") | crontab -
+# `crontab -l` returned 1 auf einem User ohne bestehendes Crontab — unter
+# `set -eo pipefail` bricht das den Skript-Ablauf ab. `|| echo ""` neutralisiert.
+EXISTING_CRON="$(crontab -l 2>/dev/null || echo "")"
+if ! echo "$EXISTING_CRON" | grep -qF "/usr/local/bin/teamwerk-scheduler.sh"; then
+    { echo "$EXISTING_CRON" | grep -v "/usr/local/bin/teamwerk scheduler:run" || true; echo "$CRONJOB"; } | crontab -
 fi
 
 # ---------------------------------------------------------------------------
