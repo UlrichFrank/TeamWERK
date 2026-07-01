@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -227,6 +228,7 @@ func TestRespond_SavesRSVP(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, spielerUserID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, spielerUserID, "standard", []string{"spieler"})
@@ -259,6 +261,7 @@ func TestRespond_UpdatesExistingRSVP(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, spielerUserID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, spielerUserID, "standard", []string{"spieler"})
@@ -390,6 +393,7 @@ func TestRespond_ParentForChild(t *testing.T) {
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
 	srv := testServer(t, h)
 
 	// Eltern haben role="standard" und isParent=true (kein eigenes elternteil-Role/Function-Slot).
@@ -1002,5 +1006,349 @@ func TestTrainings_SetNote_EmptyDeletesPending(t *testing.T) {
 		WHERE ref_type='training' AND ref_id=?`, sessionID).Scan(&n)
 	if n != 0 {
 		t.Errorf("expected pending row deleted on empty note, got %d", n)
+	}
+}
+
+// ── RSVP-Cutoff (2 h vor Session-Beginn) ──────────────────────────────────────
+
+func berlinTime(t *testing.T, layout, value string) time.Time {
+	t.Helper()
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatalf("LoadLocation: %v", err)
+	}
+	tm, err := time.ParseInLocation(layout, value, loc)
+	if err != nil {
+		t.Fatalf("ParseInLocation %s: %v", value, err)
+	}
+	return tm
+}
+
+// fixedNow returns a clock that always returns the given time.
+func fixedNow(tm time.Time) func() time.Time { return func() time.Time { return tm } }
+
+func setupCutoffSession(t *testing.T) (db *sql.DB, sessionID, teamID, seasonID int) {
+	t.Helper()
+	db = testutil.NewDB(t)
+	seasonID = testutil.CreateSeason(t, db, "2025/26")
+	teamID = testutil.CreateTeam(t, db, "Team A")
+	// Fixture: date=2026-06-15, start_time=18:00, Europe/Berlin (Sommerzeit).
+	sessionID = testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-06-15")
+	return
+}
+
+// Spieler darf 3 Stunden vor Beginn antworten (vor Cutoff).
+func TestRespond_Cutoff_PlayerBefore_OK(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	spielerUserID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, spielerUserID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 15:00"))) // T-3h
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, spielerUserID, "standard", []string{"spieler"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "declined"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+}
+
+// Spieler sagt 30 min vor Beginn ab → 422 rsvp_locked.
+func TestRespond_Cutoff_PlayerAfter_422(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	spielerUserID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, spielerUserID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30"))) // T-30min
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, spielerUserID, "standard", []string{"spieler"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "declined"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", res.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	if body["error"] != "rsvp_locked" {
+		t.Errorf("expected error=rsvp_locked, got %v", body["error"])
+	}
+	if body["locks_at"] == nil || body["locks_at"] == "" {
+		t.Errorf("expected locks_at to be set, got %v", body["locks_at"])
+	}
+
+	// Keine Zeile in DB geschrieben.
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM training_responses WHERE training_id=? AND member_id=?`,
+		sessionID, memberID).Scan(&n)
+	if n != 0 {
+		t.Errorf("expected no response row, got %d", n)
+	}
+}
+
+// Spieler ändert bestehende confirmed-Antwort nach Cutoff → 422, alter Status bleibt.
+func TestRespond_Cutoff_PlayerStatusChange_422(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	spielerUserID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, spielerUserID)
+	db.Exec(`INSERT INTO training_responses (training_id, member_id, responded_by, status, responded_at)
+	         VALUES (?, ?, ?, 'confirmed', CURRENT_TIMESTAMP)`, sessionID, memberID, spielerUserID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, spielerUserID, "standard", []string{"spieler"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "declined"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", res.StatusCode)
+	}
+	var status string
+	db.QueryRow(`SELECT status FROM training_responses WHERE training_id=? AND member_id=?`,
+		sessionID, memberID).Scan(&status)
+	if status != "confirmed" {
+		t.Errorf("expected status to remain 'confirmed', got %q", status)
+	}
+}
+
+// Eltern für Kind nach Cutoff → 422.
+func TestRespond_Cutoff_ParentAfter_422(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
+	srv := testServer(t, h)
+
+	token := testutil.TokenWithIsParent(t, parentUserID, "standard", nil, true)
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "declined", "member_id": childMemberID})
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", res.StatusCode)
+	}
+}
+
+// Trainer nach Cutoff → 204.
+func TestRespond_Cutoff_TrainerAfter_OK(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, trainerUserID)
+	targetMember := testutil.CreateMember(t, db, 0)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "declined", "member_id": targetMember})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+}
+
+// sportliche_leitung nach Cutoff → 204.
+func TestRespond_Cutoff_SportlicheLeitung_OK(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	slUserID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, slUserID)
+	targetMember := testutil.CreateMember(t, db, 0)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, slUserID, "standard", []string{"sportliche_leitung"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "confirmed", "member_id": targetMember})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+}
+
+// Vorstand 5 min nach Beginn → 204.
+func TestRespond_Cutoff_VorstandAfterStart_OK(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	vUserID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, vUserID)
+	targetMember := testutil.CreateMember(t, db, 0)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 18:05"))) // 5 min nach Beginn
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, vUserID, "standard", []string{"vorstand"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "declined", "member_id": targetMember})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+}
+
+// Admin (Rolle) ohne Funktion nach Cutoff → 204.
+func TestRespond_Cutoff_AdminAfter_OK(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	testutil.CreateMember(t, db, adminUserID)
+	targetMember := testutil.CreateMember(t, db, 0)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "confirmed", "member_id": targetMember})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+}
+
+// Kassierer ohne weitere Funktion nach Cutoff → 422.
+func TestRespond_Cutoff_KassiererAfter_422(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	kUserID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, kUserID)
+	targetMember := testutil.CreateMember(t, db, 0)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, kUserID, "standard", []string{"kassierer"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "declined", "member_id": targetMember})
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", res.StatusCode)
+	}
+}
+
+// Absence-Lock hat Vorrang: 403 vor Cutoff-Check.
+func TestRespond_Cutoff_AbsenceLockTakesPrecedence_403(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	spielerUserID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, spielerUserID)
+
+	// Absence anlegen, dann Response mit absence_id setzen (so wie der Server es bei CreateSession tut).
+	res, err := db.Exec(`INSERT INTO member_absences (member_id, type, start_date, end_date, created_by)
+	                     VALUES (?, 'vacation', '2026-06-14', '2026-06-20', ?)`, memberID, spielerUserID)
+	if err != nil {
+		t.Fatalf("insert absence: %v", err)
+	}
+	absID, _ := res.LastInsertId()
+	db.Exec(`INSERT INTO training_responses (training_id, member_id, responded_by, status, responded_at, absence_id)
+	         VALUES (?, ?, ?, 'declined', CURRENT_TIMESTAMP, ?)`, sessionID, memberID, spielerUserID, absID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	// 3 Stunden vor Beginn — Cutoff würde greifen nicht, aber Absence-Lock kommt zuerst.
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 15:00")))
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, spielerUserID, "standard", []string{"spieler"})
+	httpRes := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
+		map[string]any{"status": "confirmed"})
+	httpRes.Body.Close()
+	if httpRes.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 (absence lock), got %d", httpRes.StatusCode)
+	}
+}
+
+// DST: Sommerzeit-Session 2026-06-15 18:00 Berlin = 16:00Z; locks_at = 14:00Z.
+func TestListSessions_RsvpLocksAt_Summer(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	uID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, uID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, uID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-06-01&to=2026-06-30", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var items []map[string]any
+	json.NewDecoder(res.Body).Decode(&items)
+	var found map[string]any
+	for _, it := range items {
+		if int(it["id"].(float64)) == sessionID {
+			found = it
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("session %d not in response", sessionID)
+	}
+	got, _ := found["rsvp_locks_at"].(string)
+	if got != "2026-06-15T14:00:00Z" {
+		t.Errorf("expected rsvp_locks_at=2026-06-15T14:00:00Z (summer), got %q", got)
+	}
+}
+
+// DST: Winterzeit-Session 2026-01-15 18:00 Berlin = 17:00Z; locks_at = 15:00Z.
+func TestListSessions_RsvpLocksAt_Winter(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-01-15")
+
+	uID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, uID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, uID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-01-01&to=2026-01-31", token)
+	defer res.Body.Close()
+	var items []map[string]any
+	json.NewDecoder(res.Body).Decode(&items)
+	var got string
+	for _, it := range items {
+		if int(it["id"].(float64)) == sessionID {
+			got, _ = it["rsvp_locks_at"].(string)
+			break
+		}
+	}
+	if got != "2026-01-15T15:00:00Z" {
+		t.Errorf("expected rsvp_locks_at=2026-01-15T15:00:00Z (winter), got %q", got)
+	}
+}
+
+// Detail-Response enthält rsvp_locks_at.
+func TestGetSession_RsvpLocksAt(t *testing.T) {
+	db, sessionID, _, _ := setupCutoffSession(t)
+	uID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, uID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/training-sessions/{id}", h.GetSession)
+	})
+
+	token := testutil.Token(t, uID, "admin", nil)
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/training-sessions/%d", sessionID), token)
+	defer res.Body.Close()
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	got, _ := body["rsvp_locks_at"].(string)
+	if got != "2026-06-15T14:00:00Z" {
+		t.Errorf("expected rsvp_locks_at=2026-06-15T14:00:00Z, got %q", got)
 	}
 }

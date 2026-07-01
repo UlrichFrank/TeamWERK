@@ -23,10 +23,55 @@ type Handler struct {
 	db  *sql.DB
 	cfg *appconfig.Config
 	hub *hub.EventHub
+	now func() time.Time
 }
 
 func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
-	return &Handler{db: db, cfg: cfg, hub: h}
+	return &Handler{db: db, cfg: cfg, hub: h, now: time.Now}
+}
+
+// SetNow overrides the clock used for cutoff checks. Intended for tests.
+func (h *Handler) SetNow(now func() time.Time) { h.now = now }
+
+// TrainingRSVPCutoff: bis dahin (vor Session-Beginn) sind RSVP-Änderungen
+// für Spieler/Eltern erlaubt. Trainer/Vorstand/Admin können auch danach pflegen.
+const TrainingRSVPCutoff = 2 * time.Hour
+
+var berlinTZ = mustLoadBerlin()
+
+func mustLoadBerlin() *time.Location {
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		panic("trainings: cannot load Europe/Berlin timezone: " + err.Error())
+	}
+	return loc
+}
+
+// trainingLocksAt liefert den UTC-Zeitpunkt, ab dem RSVP-Änderungen
+// für reguläre Mitglieder gesperrt sind. dateISO ist `YYYY-MM-DD`,
+// startTimeHHMM ist `HH:MM` (Sekunden werden toleriert) in Europe/Berlin.
+func trainingLocksAt(dateISO, startTimeHHMM string) (time.Time, error) {
+	t, err := parseBerlinDateTime(dateISO, startTimeHHMM)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t.Add(-TrainingRSVPCutoff).UTC(), nil
+}
+
+func parseBerlinDateTime(dateISO, hhmm string) (time.Time, error) {
+	// SQLite DATE columns are returned as RFC3339 ("2026-06-15T00:00:00Z");
+	// keep only the YYYY-MM-DD prefix. Tolerate "HH:MM:SS" similarly.
+	if len(dateISO) > 10 {
+		dateISO = dateISO[:10]
+	}
+	if len(hhmm) > 5 {
+		hhmm = hhmm[:5]
+	}
+	t, err := time.ParseInLocation("2006-01-02 15:04", dateISO+" "+hhmm, berlinTZ)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t, nil
 }
 
 // teamMembersAndParents returns user IDs of all active kader members (and their parents) for a team.
@@ -801,6 +846,7 @@ type sessionListItem struct {
 	ChildrenRSVP      []childRSVP      `json:"children_rsvp,omitempty"`
 	RsvpOptOut        int              `json:"rsvp_opt_out"`
 	RsvpRequireReason int              `json:"rsvp_require_reason"`
+	RsvpLocksAt       string           `json:"rsvp_locks_at,omitempty"`
 }
 
 // GET /api/training-sessions
@@ -940,6 +986,9 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 				City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
 			}
 		}
+		if locksAt, err := trainingLocksAt(s.Date, s.StartTime); err == nil {
+			s.RsvpLocksAt = locksAt.Format(time.RFC3339)
+		}
 		result = append(result, s)
 	}
 
@@ -1035,6 +1084,9 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 			ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
 			City: vCity.String, PostalCode: vPostal.String, Note: vNote.String,
 		}
+	}
+	if locksAt, err := trainingLocksAt(s.Date, s.StartTime); err == nil {
+		s.RsvpLocksAt = locksAt.Format(time.RFC3339)
 	}
 
 	// Load responses
@@ -1168,6 +1220,25 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !claims.CanOverrideRSVPCutoff() {
+		var sessDate, sessStart string
+		if err := h.db.QueryRowContext(r.Context(),
+			`SELECT date(date), substr(start_time,1,5) FROM training_sessions WHERE id = ?`,
+			sessionID).Scan(&sessDate, &sessStart); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		locksAt, err := trainingLocksAt(sessDate, sessStart)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if h.now().After(locksAt) {
+			writeRSVPLocked(w, "Training kann nur bis 2 Stunden vor Beginn umgesagt werden.", locksAt)
+			return
+		}
+	}
+
 	_, err = h.db.ExecContext(r.Context(), `
 		INSERT INTO training_responses (training_id, member_id, responded_by, status, reason, responded_at)
 		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -1184,6 +1255,16 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 	}
 	h.hub.Broadcast("trainings")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeRSVPLocked(w http.ResponseWriter, message string, locksAt time.Time) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error":    "rsvp_locked",
+		"message":  message,
+		"locks_at": locksAt.UTC().Format(time.RFC3339),
+	})
 }
 
 type attendanceItem struct {

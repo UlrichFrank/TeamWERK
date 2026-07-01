@@ -41,6 +41,13 @@ func (c *Claims) IsTrainerLike() bool {
 	return c.HasFunction("trainer") || c.HasFunction("sportliche_leitung")
 }
 
+// CanOverrideRSVPCutoff returns true for users who may submit or change RSVP
+// responses after the cutoff (Training: T-2h, Game: T-18h). These users plan
+// the squad and need to keep the attendance list realistic.
+func (c *Claims) CanOverrideRSVPCutoff() bool {
+	return c.Role == "admin" || c.HasFunction("vorstand") || c.IsTrainerLike()
+}
+
 func IssueAccessToken(secret string, userID int, email, role string, clubFunctions []string, isParent bool) (string, error) {
 	if clubFunctions == nil {
 		clubFunctions = []string{}

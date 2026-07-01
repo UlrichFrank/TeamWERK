@@ -23,3 +23,32 @@ func TestClaims_HasAnyFunction(t *testing.T) {
 		t.Error("empty ClubFunctions must return false")
 	}
 }
+
+func TestClaims_CanOverrideRSVPCutoff(t *testing.T) {
+	cases := []struct {
+		name      string
+		role      string
+		functions []string
+		want      bool
+	}{
+		{"admin without functions", "admin", nil, true},
+		{"admin with kassierer", "admin", []string{"kassierer"}, true},
+		{"standard + vorstand", "standard", []string{"vorstand"}, true},
+		{"standard + trainer", "standard", []string{"trainer"}, true},
+		{"standard + sportliche_leitung", "standard", []string{"sportliche_leitung"}, true},
+		{"standard + vorstand_beisitzer", "standard", []string{"vorstand_beisitzer"}, false},
+		{"standard + kassierer only", "standard", []string{"kassierer"}, false},
+		{"standard + spieler", "standard", []string{"spieler"}, false},
+		{"standard without functions", "standard", nil, false},
+		{"standard + multiple incl. trainer", "standard", []string{"spieler", "trainer"}, true},
+		{"standard + multiple excl. override roles", "standard", []string{"spieler", "kassierer"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Claims{Role: tc.role, ClubFunctions: tc.functions}
+			if got := c.CanOverrideRSVPCutoff(); got != tc.want {
+				t.Errorf("CanOverrideRSVPCutoff() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
