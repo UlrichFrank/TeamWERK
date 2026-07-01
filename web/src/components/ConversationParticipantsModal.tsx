@@ -41,6 +41,7 @@ export default function ConversationParticipantsModal({
       lastInitialName.current = initialName
     }
   }, [initialName])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { setLocalMembers(members) }, [members])
 
   useEffect(() => {

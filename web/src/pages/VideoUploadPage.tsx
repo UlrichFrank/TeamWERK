@@ -115,6 +115,7 @@ export default function VideoUploadPage() {
 
   // Spiele für das gewählte Team laden (clientseitig nach teams[].id filtern).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setGameId('')
     if (!teamId) {
       setGames([])
@@ -132,6 +133,7 @@ export default function VideoUploadPage() {
   // tus-Resume: liegt für die aktuelle Datei eine frühere Upload-Session im
   // localStorage vor, bieten wir "Upload fortsetzen?" an.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setResumable(null)
     if (!file) return
     const probe = new tus.Upload(file, {

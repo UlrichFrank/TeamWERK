@@ -246,6 +246,7 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
     }
   }, [folderId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { load() }, [load])
 
   async function loadPickerUsers() {
@@ -563,11 +564,13 @@ export default function DocumentsPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     loadRoot()
   }, [loadRoot])
 
   useEffect(() => {
     if (currentFolderId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       loadContents(currentFolderId)
     } else {
       setContents(null)

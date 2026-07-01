@@ -505,6 +505,7 @@ interface GameCardProps {
 
 function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequest, onOpenQuickPair, onConfirm, onReject }: GameCardProps) {
   const [activeTab, setActiveTab] = useState<'biete' | 'suche'>(focusTab ?? 'biete')
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { if (focusTab) setActiveTab(focusTab) }, [focusTab])
   const teamIds = data.game.teamIds ?? []
   const shorts = teamIds.map(id => teamShortNames.get(id)).filter((s): s is string => !!s).sort()
@@ -721,6 +722,7 @@ export default function MitfahrgelegenheitenPage() {
     }).catch(() => {})
   }, [])
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     load()
   }, [filterTeamId]) // eslint-disable-line react-hooks/exhaustive-deps
   useLiveUpdates((event) => { if (event === 'mitfahrgelegenheiten') load(true) })

@@ -64,6 +64,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
   const [decryptedDraft, setDecryptedDraft] = useState<{ iban: string; account_holder: string } | null>(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     if (!bankdatenDraft || !privateKey) { setDecryptedDraft(null); return }
     const env = bankdatenDraft.new_value as unknown as BankEnvelope
     if (!env?.bank_ciphertext || !env?.bank_dek_enc) { setDecryptedDraft(null); return }
@@ -87,6 +88,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
   const MAX_SEPA_BYTES = 2 * 1024 * 1024
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setIbanDisplay(formatIBAN(form.iban || ''))
   }, [form.iban])
 

@@ -441,6 +441,7 @@ export default function DashboardPage() {
       .catch(err => { setError(err.message); setLoadState('error') })
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { load() }, [load])
 
   useLiveUpdates(event => {

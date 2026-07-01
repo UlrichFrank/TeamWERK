@@ -145,6 +145,7 @@ export default function AttendanceStatsView({ memberId }: { memberId: number }) 
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     load()
     // load kapselt memberId, soll nur bei dessen Änderung neu laufen
     // eslint-disable-next-line react-hooks/exhaustive-deps

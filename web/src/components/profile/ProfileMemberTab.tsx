@@ -46,7 +46,16 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  const loadDrafts = async () => {
+    if (!ownMember) return
+    try {
+      const r = await api.get(`/members/${ownMember.id}/change-drafts`)
+      setDrafts(r.data?.drafts ?? [])
+    } catch {}
+  }
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     if (ownMember && !onSaveDirect) loadDrafts()
     if (ownMember && onSaveDirect) {
       setEditFirstName(ownMember.first_name)
@@ -58,14 +67,6 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
     // Edit-Felder/Drafts nur bei Wechsel des Members neu initialisieren
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownMember?.id])
-
-  const loadDrafts = async () => {
-    if (!ownMember) return
-    try {
-      const r = await api.get(`/members/${ownMember.id}/change-drafts`)
-      setDrafts(r.data?.drafts ?? [])
-    } catch {}
-  }
 
   const handleDirectSave = async () => {
     if (!onSaveDirect || !ownMember) return

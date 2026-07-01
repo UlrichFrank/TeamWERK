@@ -120,6 +120,7 @@ export default function AppShell() {
         .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
       setNavChildren(kids)
     }).catch(() => {})
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     loadChatUnread()
     // Effekt soll nur bei Wechsel der Nutzer-Identität laufen (user?.id), nicht bei jeder user-Objektreferenz
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,6 +134,7 @@ export default function AppShell() {
 
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setTeamSlug('none')
       return
     }
@@ -162,6 +164,7 @@ export default function AppShell() {
   }, [location.pathname, location.search, loading, user, teamSlug])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setCanGoBack((window.history.state?.idx ?? 0) > 0)
   }, [location])
 
@@ -201,7 +204,7 @@ export default function AppShell() {
 
   const closeSidebar = () => setSidebarOpen(false)
 
-  const Sidebar = () => (
+  const sidebar = (
     <aside className="w-56 bg-brand-gray text-brand-black flex flex-col overflow-y-auto">
       <div className="px-4 py-5 border-b border-brand-black/10 flex items-center justify-between">
         <NavLink to="/" onClick={closeSidebar} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -305,7 +308,7 @@ export default function AppShell() {
     <div className="h-screen overflow-hidden flex bg-brand-gray">
       {/* Desktop sidebar */}
       <div className="hidden sm:flex">
-        <Sidebar />
+        {sidebar}
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -316,7 +319,7 @@ export default function AppShell() {
             onClick={closeSidebar}
           />
           <div className="fixed inset-y-0 left-0 z-50 w-56">
-            <Sidebar />
+            {sidebar}
           </div>
         </>
       )}

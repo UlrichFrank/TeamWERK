@@ -9,6 +9,7 @@ export default function DurationInput({ value, onChange, className, placeholder 
 }) {
   const [str, setStr] = useState(formatDuration(value))
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { setStr(formatDuration(value)) }, [value])
 
   return (

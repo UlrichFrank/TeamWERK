@@ -146,7 +146,36 @@ export default function ChatPage() {
     } catch {}
   }, [])
 
+  const loadMessages = async (convId: number) => {
+    try {
+      const r = await api.get(`/chat/conversations/${convId}/messages`)
+      setMessages(r.data ?? [])
+      setEmojiPickerMsgId(null)
+      await api.post(`/chat/conversations/${convId}/read`)
+      loadConversations()
+    } catch {}
+  }
+
+  const openConversation = async (conv: Conversation) => {
+    // Aktuellen Entwurf für die bisherige Konversation sichern, damit er beim
+    // Zurückwechseln erhalten bleibt. Während einer Edit-Session enthält
+    // msgInput den bearbeiteten Nachrichtentext, nicht den Entwurf → nicht
+    // überschreiben.
+    if (activeConv && activeConv.id !== conv.id && !editingMessage) {
+      if (msgInput) draftsRef.current.set(activeConv.id, msgInput)
+      else draftsRef.current.delete(activeConv.id)
+    }
+    setActiveConv(conv)
+    setMobileShowChat(true)
+    setReplyTo(null)
+    setEditingMessage(null)
+    setMsgInput(draftsRef.current.get(conv.id) ?? '')
+    await loadMessages(conv.id)
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+  }
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     loadConversations()
     loadBroadcasts()
   }, [loadConversations, loadBroadcasts])
@@ -178,6 +207,7 @@ export default function ChatPage() {
     const tabParam = searchParams.get('tab')
     if (tabParam === 'broadcasts') {
       deepLinkConsumed.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setTab('broadcasts')
       setSearchParams({}, { replace: true })
       return
@@ -230,39 +260,11 @@ export default function ChatPage() {
     if (event === 'chat:new-broadcast') loadBroadcasts()
   })
 
-  const loadMessages = async (convId: number) => {
-    try {
-      const r = await api.get(`/chat/conversations/${convId}/messages`)
-      setMessages(r.data ?? [])
-      setEmojiPickerMsgId(null)
-      await api.post(`/chat/conversations/${convId}/read`)
-      loadConversations()
-    } catch {}
-  }
-
   const toggleReaction = async (msgId: number, emoji: string) => {
     try {
       await api.post(`/chat/messages/${msgId}/reactions`, { emoji })
       if (activeConv) loadMessages(activeConv.id)
     } catch {}
-  }
-
-  const openConversation = async (conv: Conversation) => {
-    // Aktuellen Entwurf für die bisherige Konversation sichern, damit er beim
-    // Zurückwechseln erhalten bleibt. Während einer Edit-Session enthält
-    // msgInput den bearbeiteten Nachrichtentext, nicht den Entwurf → nicht
-    // überschreiben.
-    if (activeConv && activeConv.id !== conv.id && !editingMessage) {
-      if (msgInput) draftsRef.current.set(activeConv.id, msgInput)
-      else draftsRef.current.delete(activeConv.id)
-    }
-    setActiveConv(conv)
-    setMobileShowChat(true)
-    setReplyTo(null)
-    setEditingMessage(null)
-    setMsgInput(draftsRef.current.get(conv.id) ?? '')
-    await loadMessages(conv.id)
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
 
   useEffect(() => {

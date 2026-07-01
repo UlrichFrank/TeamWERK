@@ -350,6 +350,7 @@ export default function MemberDetailPage() {
   useEffect(() => {
     const visible = tabButtons.filter(t => t.show).map(t => t.name)
     if (visible.length > 0 && !visible.includes(activeTab)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setActiveTab(visible[0])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

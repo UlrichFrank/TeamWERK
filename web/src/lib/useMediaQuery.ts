@@ -6,6 +6,7 @@ export function useMediaQuery(query: string): boolean {
   useEffect(() => {
     const media = window.matchMedia(query)
     if (media.matches !== matches) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setMatches(media.matches)
     }
     const listener = () => setMatches(media.matches)

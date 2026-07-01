@@ -220,6 +220,7 @@ function SaisonsTab() {
 
   useEffect(() => {
     if (loaded) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setLoading(true)
     load().finally(() => { setLoading(false); setLoaded(true) })
   }, [loaded])
@@ -508,6 +509,7 @@ function AltersklassenTab() {
 
   useEffect(() => {
     if (loaded) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setLoading(true)
     api.get<AgeClassRule[]>('/age-class-rules').then(r => {
       const data: AgeClassRule[] = Array.isArray(r.data) ? r.data : []

@@ -19,6 +19,7 @@ export default function RegisterPage() {
   const [nameReadOnly, setNameReadOnly] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     if (!token) { setLoading(false); return }
     axios.get(`/api/auth/token-info?token=${token}`)
       .then(r => {

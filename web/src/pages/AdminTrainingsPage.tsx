@@ -118,6 +118,15 @@ export default function AdminTrainingsPage() {
   const isNewSeries = seriesModal !== null && seriesModal.id === undefined
   const isNewSession = sessionModal !== null && sessionModal.id === undefined
 
+  const loadSeries = () => api.get('/training-series').then(r => setSeries(r.data ?? []))
+  const loadStandalone = () => {
+    const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const to = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    api.get(`/training-sessions?from=${from}&to=${to}`).then(r => {
+      setStandalone((r.data ?? []).filter((s: StandaloneSession & { series_id: number | null }) => s.series_id === null))
+    })
+  }
+
   useEffect(() => {
     Promise.all([api.get('/teams'), api.get('/seasons')]).then(([t, s]) => {
       setTeams(t.data ?? [])
@@ -128,15 +137,6 @@ export default function AdminTrainingsPage() {
   }, [])
 
   useLiveUpdates(event => { if (event === 'trainings') { loadSeries(); loadStandalone() } })
-
-  const loadSeries = () => api.get('/training-series').then(r => setSeries(r.data ?? []))
-  const loadStandalone = () => {
-    const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    const to = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    api.get(`/training-sessions?from=${from}&to=${to}`).then(r => {
-      setStandalone((r.data ?? []).filter((s: StandaloneSession & { series_id: number | null }) => s.series_id === null))
-    })
-  }
 
   const openNewSeries = () => {
     setError('')

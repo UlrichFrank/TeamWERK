@@ -88,6 +88,7 @@ export default function ProfileProfilTab({
   useEffect(() => {
     if (mode !== 'child') return
     if (userContact) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setFirstName(userContact.first_name)
       setLastName(userContact.last_name)
       setAddress({ street: userContact.street, zip: userContact.zip, city: userContact.city })

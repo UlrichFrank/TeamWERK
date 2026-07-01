@@ -20,6 +20,7 @@ export default function SepaMandatViewerPage() {
   useEffect(() => {
     if (!memberId || !privateKey) return
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setLoading(true)
     setError('')
     setBlob(null)

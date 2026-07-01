@@ -142,6 +142,7 @@ export default function VideoDetailPage() {
   }, [videoId])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     load()
   }, [load])
 

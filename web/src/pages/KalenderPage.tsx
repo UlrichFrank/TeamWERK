@@ -236,6 +236,14 @@ export default function KalenderPage() {
     }
   }
 
+  const loadAbsenceChildren = async () => {
+    try {
+      const r = await api.get('/profile/me')
+      const kinder: Array<{ id: number; first_name: string; last_name: string }> = r.data?.children ?? []
+      setAbsenceChildren(kinder.map(k => ({ id: k.id, name: `${k.first_name} ${k.last_name}` })))
+    } catch {}
+  }
+
   useEffect(() => {
     const loadInitialData = async () => {
       await Promise.all([
@@ -268,13 +276,16 @@ export default function KalenderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { loadTrainings(); loadAbsences() }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { loadAbsences() }, [filterTeamId, showTeamAbsences]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select the only child once children have loaded — keeps the parent
   // with exactly one linked kid from being forced through a useless selector.
   useEffect(() => {
     if (eventType === 'abwesenheit' && absenceChildren.length === 1 && absenceForm.member_ids.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setAbsenceForm(f => ({ ...f, member_ids: [absenceChildren[0].id] }))
     }
   }, [eventType, absenceChildren, absenceForm.member_ids.length])
@@ -562,14 +573,6 @@ export default function KalenderPage() {
       if (next.has(i)) next.delete(i); else next.add(i)
       return next
     })
-  }
-
-  const loadAbsenceChildren = async () => {
-    try {
-      const r = await api.get('/profile/me')
-      const kinder: Array<{ id: number; first_name: string; last_name: string }> = r.data?.children ?? []
-      setAbsenceChildren(kinder.map(k => ({ id: k.id, name: `${k.first_name} ${k.last_name}` })))
-    } catch {}
   }
 
   const handleAbsencePreview = async () => {

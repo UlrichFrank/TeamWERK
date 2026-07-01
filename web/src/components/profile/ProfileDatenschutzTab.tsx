@@ -17,6 +17,7 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
   // State neu aus den Props aufsetzen, sonst zeigt der Toggle weiter den
   // Wert des vorigen Kindes.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setCrossTeamVisible(!!ownMember.cross_team_visible)
     setError(null)
   }, [ownMember.id, ownMember.cross_team_visible])

@@ -33,6 +33,9 @@ const VaultContext = createContext<VaultContextValue>({
   lock: () => {},
 })
 
+// Context-Datei exportiert bewusst Provider + Hook zusammen (idiomatisches
+// Muster); der Hook aus einer eigenen Datei würde alle Importeure umhängen.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useVault() {
   return useContext(VaultContext)
 }

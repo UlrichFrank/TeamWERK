@@ -122,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       clearTimers()
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setShowWarning(false)
       return
     }
@@ -139,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // (login, refresh, impersonation), so role changes take effect after the next refresh.
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setCapabilities([])
       setNavRoutes([])
       return

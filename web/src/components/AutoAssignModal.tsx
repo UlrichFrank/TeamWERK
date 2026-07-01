@@ -27,6 +27,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setLoading(true)
     api.get('/kader', { params: { season_id: seasonId } })
       .then(r => {

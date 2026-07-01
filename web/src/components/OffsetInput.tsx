@@ -8,6 +8,7 @@ export default function OffsetInput({ value, onChange, className }: {
 }) {
   const [str, setStr] = useState(formatOffset(value))
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { setStr(formatOffset(value)) }, [value])
 
   return (

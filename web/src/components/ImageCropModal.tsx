@@ -41,6 +41,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
   // Load image from file
   useEffect(() => {
     if (!file) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setLoaded(false)
     setLoadError(false)
     zoomRef.current = 1

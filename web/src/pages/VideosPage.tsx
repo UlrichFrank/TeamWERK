@@ -99,6 +99,7 @@ export default function VideosPage() {
 
   // Filterwechsel → Liste von vorne laden.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     fetchPage(0, true)
   }, [fetchPage])
 

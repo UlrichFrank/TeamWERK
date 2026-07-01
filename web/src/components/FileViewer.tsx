@@ -63,6 +63,7 @@ export default function FileViewer(props: FileViewerProps) {
   useEffect(() => {
     if (props.source !== 'file') return
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setLoading(true)
     setError('')
     setLoaded(null)

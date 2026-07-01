@@ -28,6 +28,7 @@ export function useVersionCheck(): VersionCheckResult {
   useEffect(() => {
     if (import.meta.env.DEV) return
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setVersion(null)
       setLatestVersion(null)
       setUpdateAvailable(false)

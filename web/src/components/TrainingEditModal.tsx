@@ -79,6 +79,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   // with the matching source so the user sees the current value for the chosen scope.
   useEffect(() => {
     if (scope === 'this_one') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setRsvpOptOut(session.rsvp_opt_out === 1)
       setRsvpRequireReason(session.rsvp_require_reason === 1)
     } else if (series) {

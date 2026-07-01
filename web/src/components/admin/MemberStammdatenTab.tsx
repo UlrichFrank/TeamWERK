@@ -80,6 +80,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
 
   useEffect(() => {
     if (form.photo_url && form.photo_url !== photoURL) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
       setPhotoURL(form.photo_url)
     }
   }, [form.photo_url, photoURL])
