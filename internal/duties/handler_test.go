@@ -110,6 +110,10 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
 			r.Get("/api/duty-types", h.ListTypes)
 		})
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand"))
+			r.Put("/api/duty-types/{id}/instruction", h.SetInstruction)
+		})
 	})
 }
 
@@ -1442,5 +1446,233 @@ func TestBoard_TeamNameUsesShortForm(t *testing.T) {
 	got, _ := groups[0]["team_name"].(string)
 	if got != "mB" {
 		t.Errorf("expected team_name 'mB' (single team in B-Jugend männlich), got %q", got)
+	}
+}
+
+// ── Anleitung pro Dienst-Typ ─────────────────────────────────────────────────
+
+func TestPutInstruction_HappyPath(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	userID := testutil.CreateUser(t, db, "standard")
+	eh := hub.NewHub()
+	h := duties.NewHandler(db, testutil.TestConfig(), eh)
+	srv := testServer(t, h)
+
+	// Subscribe before the mutation so the buffered broadcast is captured.
+	ch := eh.Subscribe()
+	defer eh.Unsubscribe(ch)
+
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+	body := map[string]any{"markdown": "## Ablauf\n1. Kasse öffnen\n2. Bilanz notieren"}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID)+"/instruction", token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var reply map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil {
+		t.Fatalf("decode reply: %v", err)
+	}
+	if reply["instruction_updated_at"] == "" {
+		t.Errorf("expected non-empty instruction_updated_at in reply")
+	}
+
+	var md string
+	var updatedAt sql.NullString
+	var updatedBy sql.NullInt64
+	err := db.QueryRow(`SELECT instruction_md, instruction_updated_at, instruction_updated_by FROM duty_types WHERE id=?`, dtID).
+		Scan(&md, &updatedAt, &updatedBy)
+	if err != nil {
+		t.Fatalf("select duty_types: %v", err)
+	}
+	if md != "## Ablauf\n1. Kasse öffnen\n2. Bilanz notieren" {
+		t.Errorf("instruction_md mismatch, got %q", md)
+	}
+	if !updatedAt.Valid || updatedAt.String == "" {
+		t.Errorf("instruction_updated_at not set")
+	}
+	if !updatedBy.Valid || int(updatedBy.Int64) != userID {
+		t.Errorf("instruction_updated_by=%v, want %d", updatedBy, userID)
+	}
+
+	select {
+	case ev := <-ch:
+		if ev != "duties" {
+			t.Errorf("got broadcast %q, want %q", ev, "duties")
+		}
+	default:
+		t.Errorf("no broadcast emitted")
+	}
+}
+
+func TestPutInstruction_Unauthenticated(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	body := map[string]any{"markdown": "x"}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID)+"/instruction", "", body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", res.StatusCode)
+	}
+
+	var md string
+	db.QueryRow(`SELECT instruction_md FROM duty_types WHERE id=?`, dtID).Scan(&md)
+	if md != "" {
+		t.Errorf("instruction_md changed on unauthenticated request: %q", md)
+	}
+}
+
+func TestPutInstruction_ForbiddenForStandard(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"spieler"})
+	body := map[string]any{"markdown": "x"}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID)+"/instruction", token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+func TestPutInstruction_NotFound(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+	body := map[string]any{"markdown": "x"}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/9999/instruction", token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.StatusCode)
+	}
+}
+
+func TestPutInstruction_MissingBody(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+	// Body without "markdown" field.
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID)+"/instruction", token, map[string]any{"foo": "bar"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.StatusCode)
+	}
+}
+
+func TestPutInstruction_TooLarge(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+	big := make([]byte, 65537)
+	for i := range big {
+		big[i] = 'x'
+	}
+	body := map[string]any{"markdown": string(big)}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID)+"/instruction", token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.StatusCode)
+	}
+}
+
+func TestListTypes_IncludesInstructionFields(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	testutil.SetDutyInstruction(t, db, dtID, "## Foo")
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", []string{"vorstand"})
+	res := testutil.Get(t, srv, "/api/duty-types", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var items []map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&items); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(items) == 0 {
+		t.Fatalf("expected at least one type")
+	}
+	if md, _ := items[0]["instruction_md"].(string); md != "## Foo" {
+		t.Errorf("expected instruction_md '## Foo', got %q", md)
+	}
+	if _, ok := items[0]["instruction_updated_at"]; !ok {
+		t.Errorf("expected instruction_updated_at in response")
+	}
+}
+
+func TestBoard_ExposesHasInstruction(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	// Two types: one with instruction, one without.
+	dtWith := createDutyType(t, db, "Kasse", 2.0)
+	dtWithout := createDutyType(t, db, "Aufbau", 1.0)
+	testutil.SetDutyInstruction(t, db, dtWith, "## Ablauf")
+	slotWith := createDutySlot(t, db, dtWith, seasonID, teamID, 0, "2026-06-14")
+	slotWithout := createDutySlot(t, db, dtWithout, seasonID, teamID, 0, "2026-06-14")
+
+	userID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/duty-board", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var groups []map[string]any
+	json.NewDecoder(res.Body).Decode(&groups)
+
+	seen := map[int]map[string]any{}
+	for _, g := range groups {
+		slots, _ := g["slots"].([]any)
+		for _, s := range slots {
+			m, _ := s.(map[string]any)
+			idF, _ := m["id"].(float64)
+			seen[int(idF)] = m
+		}
+	}
+	sw, ok := seen[slotWith]
+	if !ok {
+		t.Fatalf("slot with instruction not returned")
+	}
+	if v, _ := sw["has_instruction"].(bool); !v {
+		t.Errorf("expected has_instruction=true for %q, got %v", "Kasse", v)
+	}
+	if id, _ := sw["duty_type_id"].(float64); int(id) != dtWith {
+		t.Errorf("expected duty_type_id=%d, got %v", dtWith, id)
+	}
+	swo, ok := seen[slotWithout]
+	if !ok {
+		t.Fatalf("slot without instruction not returned")
+	}
+	if v, _ := swo["has_instruction"].(bool); v {
+		t.Errorf("expected has_instruction=false for %q, got %v", "Aufbau", v)
+	}
+	if id, _ := swo["duty_type_id"].(float64); int(id) != dtWithout {
+		t.Errorf("expected duty_type_id=%d, got %v", dtWithout, id)
 	}
 }

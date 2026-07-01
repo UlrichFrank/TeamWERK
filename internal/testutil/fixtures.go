@@ -162,6 +162,18 @@ func CreateDutyType(t *testing.T, database *sql.DB, name string, hoursValue floa
 	return int(id)
 }
 
+// SetDutyInstruction sets the Markdown instruction of a duty type. Used by tests
+// that exercise the has_instruction flag on the duty board.
+func SetDutyInstruction(t *testing.T, database *sql.DB, dutyTypeID int, markdown string) {
+	t.Helper()
+	if _, err := database.Exec(
+		`UPDATE duty_types SET instruction_md=?, instruction_updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?`,
+		markdown, dutyTypeID,
+	); err != nil {
+		t.Fatalf("SetDutyInstruction: %v", err)
+	}
+}
+
 // CreateDutySlot inserts a duty slot (slots_total=2, slots_filled=0) and returns its ID.
 // Pass gameID=0 to omit the game FK (NULL).
 func CreateDutySlot(t *testing.T, database *sql.DB, dutyTypeID, seasonID, teamID, gameID int, date string) int {

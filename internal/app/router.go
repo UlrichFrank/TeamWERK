@@ -452,6 +452,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Delete("/api/family-links", h.Members.DeleteFamilyLink)
 			r.Post("/api/duty-types", h.Duties.CreateType)
 			r.Put("/api/duty-types/{id}", h.Duties.UpdateType)
+			r.Put("/api/duty-types/{id}/instruction", h.Duties.SetInstruction)
 			r.Delete("/api/duty-types/{id}", h.Duties.DeleteType)
 			r.Get("/api/duty-accounts/export", h.Duties.ExportAccounts)
 			r.Post("/api/duty-templates", h.Games.CreateTemplate)

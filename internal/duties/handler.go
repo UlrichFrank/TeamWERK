@@ -90,7 +90,8 @@ func (h *Handler) assignedUsers(slotID string) []int {
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
-		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences
+		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences,
+		        instruction_md, instruction_updated_at, instruction_updated_by
 		 FROM duty_types ORDER BY name`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ListTypes query error: %v\n", err)
@@ -110,6 +111,9 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
 		AdjacentDayVariantID *int     `json:"adjacent_day_variant_id,omitempty"`
 		Audiences            []string `json:"audiences,omitempty"`
+		InstructionMD        string   `json:"instruction_md"`
+		InstructionUpdatedAt *string  `json:"instruction_updated_at,omitempty"`
+		InstructionUpdatedBy *int     `json:"instruction_updated_by,omitempty"`
 	}
 	result := []dt{}
 	for rows.Next() {
@@ -118,8 +122,11 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		var sdvi sql.NullInt64
 		var advi sql.NullInt64
 		var audiences sql.NullString
+		var instrUpdatedAt sql.NullString
+		var instrUpdatedBy sql.NullInt64
 		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes,
-			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi, &audiences)
+			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi, &audiences,
+			&d.InstructionMD, &instrUpdatedAt, &instrUpdatedBy)
 		if cs.Valid {
 			d.CashSubstitute = &cs.Float64
 		}
@@ -130,6 +137,14 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		if advi.Valid {
 			id := int(advi.Int64)
 			d.AdjacentDayVariantID = &id
+		}
+		if instrUpdatedAt.Valid {
+			s := instrUpdatedAt.String
+			d.InstructionUpdatedAt = &s
+		}
+		if instrUpdatedBy.Valid {
+			id := int(instrUpdatedBy.Int64)
+			d.InstructionUpdatedBy = &id
 		}
 		d.Audiences = audiencesFromDB(audiences)
 		result = append(result, d)
@@ -228,6 +243,63 @@ func (h *Handler) DeleteType(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	h.db.ExecContext(r.Context(), `DELETE FROM duty_types WHERE id=?`, id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/duty-types/{id}/instruction
+// Sets the Markdown instruction of a duty type. Vorstand/Admin only.
+func (h *Handler) SetInstruction(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	id := r.PathValue("id")
+	const maxBody = 65536
+	r.Body = http.MaxBytesReader(w, r.Body, maxBody+1)
+	var req struct {
+		Markdown *string `json:"markdown"`
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if req.Markdown == nil {
+		http.Error(w, "markdown required", http.StatusBadRequest)
+		return
+	}
+	if len(*req.Markdown) > maxBody {
+		http.Error(w, "markdown too large", http.StatusBadRequest)
+		return
+	}
+	var exists int
+	err := h.db.QueryRowContext(r.Context(), `SELECT 1 FROM duty_types WHERE id=?`, id).Scan(&exists)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	var updatedAt string
+	err = h.db.QueryRowContext(r.Context(),
+		`UPDATE duty_types
+		 SET instruction_md=?,
+		     instruction_updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+		     instruction_updated_by=?
+		 WHERE id=?
+		 RETURNING instruction_updated_at`,
+		*req.Markdown, claims.UserID, id,
+	).Scan(&updatedAt)
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("duties")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"instruction_updated_at": updatedAt})
 }
 
 // GET /api/duty-slots
@@ -459,7 +531,9 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''),
 		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END,
 		    COALESCE(ds.audiences, dt.audiences),
-		    COALESCE(ds.event_name, '')
+		    COALESCE(ds.event_name, ''),
+		    dt.id AS duty_type_id,
+		    CASE WHEN COALESCE(dt.instruction_md, '') != '' THEN 1 ELSE 0 END AS has_instruction
 		 FROM duty_slots ds
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
@@ -482,16 +556,18 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	boardDutyCan := policy.DutyCan(bp)
 
 	type boardSlot struct {
-		ID          int                 `json:"id"`
-		DutyType    string              `json:"duty_type"`
-		EventTime   string              `json:"event_time,omitempty"`
-		SlotsTotal  int                 `json:"slots_total"`
-		Vacancies   int                 `json:"vacancies"`
-		ClaimedByMe bool                `json:"claimed_by_me"`
-		RoleDesc    string              `json:"role_desc,omitempty"`
-		Audiences   []string            `json:"audiences,omitempty"`
-		Assignees   []publicAssignee    `json:"assignees"`
-		Can         policy.DutyCanFlags `json:"can"`
+		ID             int                 `json:"id"`
+		DutyType       string              `json:"duty_type"`
+		DutyTypeID     int                 `json:"duty_type_id"`
+		HasInstruction bool                `json:"has_instruction"`
+		EventTime      string              `json:"event_time,omitempty"`
+		SlotsTotal     int                 `json:"slots_total"`
+		Vacancies      int                 `json:"vacancies"`
+		ClaimedByMe    bool                `json:"claimed_by_me"`
+		RoleDesc       string              `json:"role_desc,omitempty"`
+		Audiences      []string            `json:"audiences,omitempty"`
+		Assignees      []publicAssignee    `json:"assignees"`
+		Can            policy.DutyCanFlags `json:"can"`
 	}
 	type boardGroup struct {
 		GameID    *int        `json:"game_id"`
@@ -510,13 +586,13 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	groupMap := map[string]*boardGroup{}
 
 	for rows.Next() {
-		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt int
+		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt, dutyTypeID, hasInstrInt int
 		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, teamName, eventName string
 		var gameID sql.NullInt64
 		var audiences sql.NullString
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
 			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime,
-			&teamID, &teamName, &isPastInt, &audiences, &eventName)
+			&teamID, &teamName, &isPastInt, &audiences, &eventName, &dutyTypeID, &hasInstrInt)
 
 		var key string
 		if gameID.Valid {
@@ -555,16 +631,18 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			grp.Past = false
 		}
 		grp.Slots = append(grp.Slots, boardSlot{
-			ID:          slotID,
-			DutyType:    dutyType,
-			EventTime:   eventTime,
-			SlotsTotal:  slotsTotal,
-			Vacancies:   slotsTotal - slotsFilled,
-			ClaimedByMe: claimedInt == 1,
-			RoleDesc:    roleDesc,
-			Audiences:   audiencesFromDB(audiences),
-			Assignees:   []publicAssignee{},
-			Can:         boardDutyCan,
+			ID:             slotID,
+			DutyType:       dutyType,
+			DutyTypeID:     dutyTypeID,
+			HasInstruction: hasInstrInt == 1,
+			EventTime:      eventTime,
+			SlotsTotal:     slotsTotal,
+			Vacancies:      slotsTotal - slotsFilled,
+			ClaimedByMe:    claimedInt == 1,
+			RoleDesc:       roleDesc,
+			Audiences:      audiencesFromDB(audiences),
+			Assignees:      []publicAssignee{},
+			Can:            boardDutyCan,
 		})
 	}
 

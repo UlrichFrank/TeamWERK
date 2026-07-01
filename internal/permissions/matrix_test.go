@@ -491,6 +491,7 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/family-links", expected: exVorstand},
 	{method: "POST", path: "/api/duty-types", expected: exVorstand},
 	{method: "PUT", path: "/api/duty-types/{id}", expected: exVorstand},
+	{method: "PUT", path: "/api/duty-types/{id}/instruction", expected: exVorstand},
 	{method: "DELETE", path: "/api/duty-types/{id}", expected: exVorstand},
 	{method: "GET", path: "/api/duty-accounts/export", expected: exVorstand},
 	{method: "POST", path: "/api/duty-templates", expected: exVorstand},
