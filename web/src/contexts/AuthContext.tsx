@@ -152,7 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function login(email: string, password: string) {
-    const res = await axios.post('/api/auth/login', { email, password }, { withCredentials: true })
+    // Umschließende Whitespaces (Autofill/Copy-Paste) abschneiden — Backend trimmt ebenso.
+    const res = await axios.post('/api/auth/login', { email: email.trim(), password: password.trim() }, { withCredentials: true })
     const token: string = res.data.access_token
     setAccessToken(token)
     setPasswordChangeRecommended(res.data.password_change_recommended === true)

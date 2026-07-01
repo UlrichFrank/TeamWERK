@@ -59,6 +59,22 @@ func TestLogin_ValidCredentials(t *testing.T) {
 	}
 }
 
+// Umschließende Whitespaces an E-Mail und Passwort (Autofill/Copy-Paste) werden
+// getrimmt → Login gelingt trotzdem.
+func TestLogin_TrimsWhitespace(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard") // password = "test"
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/auth/login",
+		"", map[string]string{"email": "  " + emailSuffix(t, db, userID) + " ", "password": "  test\t"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 with surrounding whitespace, got %d", res.StatusCode)
+	}
+}
+
 // TC-A02: falsches Passwort → 401.
 func TestLogin_WrongPassword(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -211,6 +227,32 @@ func TestRegister_ValidToken(t *testing.T) {
 	db.QueryRow(`SELECT used_at FROM invitation_tokens WHERE email='new@test.local'`).Scan(&usedAt)
 	if !usedAt.Valid {
 		t.Error("invitation_token.used_at should be set after registration")
+	}
+}
+
+// Register trimmt das Passwort konsistent zum Login: mit umschließenden Whitespaces
+// registriert, danach mit dem getrimmten Wert einloggbar.
+func TestRegister_TrimsPasswordConsistentWithLogin(t *testing.T) {
+	db := testutil.NewDB(t)
+	plain := testutil.CreateInvitationToken(t, db, "trim@test.local", "standard", time.Now().Add(48*time.Hour))
+	srv := newAuthServer(t, db)
+
+	reg := testutil.Post(t, srv, "/api/auth/register", "", map[string]any{
+		"token":      plain,
+		"first_name": "Trim",
+		"last_name":  "Test",
+		"password":   "  sicheresPW123  ",
+	})
+	reg.Body.Close()
+	if reg.StatusCode != http.StatusCreated {
+		t.Fatalf("register: expected 201, got %d", reg.StatusCode)
+	}
+
+	login := testutil.Post(t, srv, "/api/auth/login", "",
+		map[string]string{"email": "trim@test.local", "password": "sicheresPW123"})
+	login.Body.Close()
+	if login.StatusCode != http.StatusOK {
+		t.Fatalf("login with trimmed password: expected 200, got %d", login.StatusCode)
 	}
 }
 

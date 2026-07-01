@@ -13,7 +13,7 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      await axios.post('/api/auth/reset-password', { token, password })
+      await axios.post('/api/auth/reset-password', { token, password: password.trim() })
       navigate('/login')
     } catch {
       setError('Ungültiger oder abgelaufener Link.')

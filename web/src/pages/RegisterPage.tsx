@@ -48,7 +48,7 @@ export default function RegisterPage() {
     e.preventDefault()
     setError('')
     try {
-      await axios.post('/api/auth/register', { token, first_name: firstName, last_name: lastName, password })
+      await axios.post('/api/auth/register', { token, first_name: firstName, last_name: lastName, password: password.trim() })
       setDone(true)
       setTimeout(() => navigate('/login'), 2000)
     } catch {
