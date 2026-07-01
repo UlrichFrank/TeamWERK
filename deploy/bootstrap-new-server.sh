@@ -119,25 +119,34 @@ rsync -az deploy/ "$REMOTE_NEW:/tmp/teamwerk-deploy/"
 ssh "$REMOTE_NEW" 'cd /tmp/teamwerk-deploy && sudo SKIP_NGINX=1 bash setup-vps.sh'
 
 # --- B2) Nginx vhost mit neuer Domain + Self-signed-Cert -------------------
-log "B2) Nginx vhost für $NEW_DOMAIN (self-signed als Übergang bis Certbot)"
-# Alte partielle Config aufräumen (falls ein vorheriger Bootstrap-Lauf sie hinterlegt hat)
-ssh "$REMOTE_NEW" 'sudo rm -f /etc/nginx/sites-enabled/intern.team-stuttgart.org /etc/nginx/sites-available/intern.team-stuttgart.org'
-# Self-signed-Cert mit CN=NEW_DOMAIN (überschreibt den setup-vps-Default-CN)
-ssh "$REMOTE_NEW" "sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-    -keyout /etc/ssl/teamwerk/key.pem \
-    -out /etc/ssl/teamwerk/cert.pem \
-    -subj '/CN=${NEW_DOMAIN}' 2>/dev/null"
-# vhost-Config aus nginx-intern.conf ableiten:
-#  - server_name → NEW_DOMAIN
-#  - Cert-Pfade → self-signed (Certbot ersetzt sie später mit --nginx automatisch)
-sed \
-    -e "s|internal\.team-stuttgart\.org|${NEW_DOMAIN}|g" \
-    -e "s|/etc/letsencrypt/live/${NEW_DOMAIN}/fullchain.pem|/etc/ssl/teamwerk/cert.pem|g" \
-    -e "s|/etc/letsencrypt/live/${NEW_DOMAIN}/privkey.pem|/etc/ssl/teamwerk/key.pem|g" \
-    deploy/nginx-intern.conf \
-    | ssh "$REMOTE_NEW" "sudo tee /etc/nginx/sites-available/${NEW_DOMAIN} > /dev/null"
-ssh "$REMOTE_NEW" "sudo ln -sf /etc/nginx/sites-available/${NEW_DOMAIN} /etc/nginx/sites-enabled/${NEW_DOMAIN}"
-# limit_req_zone im http{}-Kontext ergänzen, wenn noch nicht drin (siehe nginx-intern.conf Kommentar)
+# Erstlauf: neue Config + Self-signed-Cert. Folgelauf (Config existiert bereits
+# und referenziert /etc/letsencrypt/live/...): NICHT anfassen, sonst wird der
+# von Certbot eingespielte LE-Cert-Pfad überschrieben und der Server läuft
+# wieder auf Self-signed (Browser blockt → „nicht erreichbar").
+CONF_PATH="/etc/nginx/sites-available/${NEW_DOMAIN}"
+if ssh "$REMOTE_NEW" "sudo test -f ${CONF_PATH} && sudo grep -q '/etc/letsencrypt/live/${NEW_DOMAIN}' ${CONF_PATH}"; then
+	log "B2) Nginx vhost existiert bereits mit Let's-Encrypt-Cert-Pfaden — Config bleibt unangetastet"
+else
+	log "B2) Nginx vhost für $NEW_DOMAIN neu anlegen (Self-signed als Übergang bis Certbot)"
+	# Alte partielle Config aufräumen (falls ein vorheriger Bootstrap-Lauf sie hinterlegt hat)
+	ssh "$REMOTE_NEW" 'sudo rm -f /etc/nginx/sites-enabled/intern.team-stuttgart.org /etc/nginx/sites-available/intern.team-stuttgart.org'
+	# Self-signed-Cert mit CN=NEW_DOMAIN (überschreibt den setup-vps-Default-CN)
+	ssh "$REMOTE_NEW" "sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+	    -keyout /etc/ssl/teamwerk/key.pem \
+	    -out /etc/ssl/teamwerk/cert.pem \
+	    -subj '/CN=${NEW_DOMAIN}' 2>/dev/null"
+	# vhost-Config aus nginx-intern.conf ableiten:
+	#  - server_name → NEW_DOMAIN
+	#  - Cert-Pfade → self-signed (Certbot ersetzt sie später mit --nginx automatisch)
+	sed \
+	    -e "s|internal\.team-stuttgart\.org|${NEW_DOMAIN}|g" \
+	    -e "s|/etc/letsencrypt/live/${NEW_DOMAIN}/fullchain.pem|/etc/ssl/teamwerk/cert.pem|g" \
+	    -e "s|/etc/letsencrypt/live/${NEW_DOMAIN}/privkey.pem|/etc/ssl/teamwerk/key.pem|g" \
+	    deploy/nginx-intern.conf \
+	    | ssh "$REMOTE_NEW" "sudo tee ${CONF_PATH} > /dev/null"
+	ssh "$REMOTE_NEW" "sudo ln -sf ${CONF_PATH} /etc/nginx/sites-enabled/${NEW_DOMAIN}"
+fi
+# limit_req_zone im http{}-Kontext ergänzen, wenn noch nicht drin (idempotent)
 ssh "$REMOTE_NEW" '
     if ! grep -q "zone=teamwerk_auth" /etc/nginx/nginx.conf; then
         sudo sed -i "/^http {/a \    limit_req_zone \$binary_remote_addr zone=teamwerk_auth:10m rate=20r/m;" /etc/nginx/nginx.conf
