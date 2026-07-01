@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
@@ -117,7 +118,11 @@ func TestGameRespond_ParentForExtendedChild_OK(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
+	// Zukünftiges Datum: das RSVP-Cutoff (18 h vor Spielbeginn) darf eine
+	// gültige Zusage nicht mit 422 ablehnen. Relativ zu now, damit der Test
+	// nicht wieder zeitabhängig kippt.
+	gameDate := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, gameDate)
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	childMemberID := testutil.CreateMember(t, db, 0)
