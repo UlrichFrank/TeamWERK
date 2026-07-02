@@ -12,12 +12,12 @@ import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 
 interface BoardGroup {
   game_id: number | null
-  team_id: number | null
+  team_ids: number[]
+  team_names: string[]
   date: string | null
   event_time: string | null
   opponent: string | null
   event_type: string | null
-  team_name: string
   label: string | null
   past: boolean
   slots: BoardSlot[]
@@ -145,7 +145,7 @@ export default function DutyPage() {
     if (!showPast && g.past) return false
     const eventType = g.event_type ?? 'generisch'
     if (!filterTypes.has(eventType)) return false
-    if (filterTeamId !== null && g.team_id !== filterTeamId) return false
+    if (filterTeamId !== null && !g.team_ids.includes(filterTeamId)) return false
     return true
   })
 
@@ -262,7 +262,7 @@ export default function DutyPage() {
                   )}
                   </div>
                 </div>
-                <span className="text-xs text-brand-text-muted font-medium">{g.team_name}</span>
+                <span className="text-xs text-brand-text-muted font-medium">{g.team_names.join(', ')}</span>
               </div>
 
               <DutySlotList

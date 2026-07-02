@@ -571,12 +571,12 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	}
 	type boardGroup struct {
 		GameID    *int        `json:"game_id"`
-		TeamID    *int        `json:"team_id,omitempty"`
+		TeamIDs   []int       `json:"team_ids"`
+		TeamNames []string    `json:"team_names"`
 		Date      string      `json:"date,omitempty"`
 		EventTime string      `json:"event_time,omitempty"`
 		Opponent  string      `json:"opponent,omitempty"`
 		EventType string      `json:"event_type,omitempty"`
-		TeamName  string      `json:"team_name"`
 		Label     string      `json:"label,omitempty"`
 		Past      bool        `json:"past"`
 		Slots     []boardSlot `json:"slots"`
@@ -602,10 +602,12 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, ok := groupMap[key]; !ok {
-			g := &boardGroup{TeamName: teamName, Slots: []boardSlot{}, Past: isPastInt == 1}
-			if teamID > 0 {
-				tid := teamID
-				g.TeamID = &tid
+			g := &boardGroup{TeamIDs: []int{}, TeamNames: []string{}, Slots: []boardSlot{}, Past: isPastInt == 1}
+			// Game-lose Handslots: Team stammt aus dem Slot selbst. Game-basierte
+			// Gruppen bekommen ihre Termin-Teams (game_teams) nach dem Scan-Loop.
+			if !gameID.Valid && teamID > 0 {
+				g.TeamIDs = append(g.TeamIDs, teamID)
+				g.TeamNames = append(g.TeamNames, teamName)
 			}
 			if gameID.Valid {
 				id := int(gameID.Int64)
@@ -689,6 +691,43 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 					if assignees, ok := assigneeMap[grp.Slots[i].ID]; ok {
 						grp.Slots[i].Assignees = assignees
 					}
+				}
+			}
+		}
+	}
+
+	// Termin-Teams je game-basierter Gruppe aus game_teams nachladen. Fachlich
+	// gehört ein Dienst zu den Teams seines Termins (potenziell mehrere), nicht
+	// zu ds.team_id — das ist bei generischen Events NULL und bei Mehr-Team-
+	// Spielen nur eines von mehreren. Muster wie das Assignee-Nachladen oben.
+	gameGroups := map[int]*boardGroup{}
+	for _, grp := range groupMap {
+		if grp.GameID != nil {
+			gameGroups[*grp.GameID] = grp
+		}
+	}
+	if len(gameGroups) > 0 {
+		ph := make([]string, 0, len(gameGroups))
+		gArgs := make([]any, 0, len(gameGroups))
+		for gid := range gameGroups {
+			ph = append(ph, "?")
+			gArgs = append(gArgs, gid)
+		}
+		tRows, tErr := h.db.QueryContext(r.Context(), `
+			SELECT gt.game_id, gt.team_id, COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, '')
+			FROM game_teams gt
+			JOIN teams t ON t.id = gt.team_id
+			WHERE gt.game_id IN (`+strings.Join(ph, ",")+`)
+			ORDER BY gt.game_id, t.age_class, t.gender, t.name`, gArgs...)
+		if tErr == nil {
+			defer tRows.Close()
+			for tRows.Next() {
+				var gid, tid int
+				var tname string
+				tRows.Scan(&gid, &tid, &tname)
+				if grp, ok := gameGroups[gid]; ok {
+					grp.TeamIDs = append(grp.TeamIDs, tid)
+					grp.TeamNames = append(grp.TeamNames, tname)
 				}
 			}
 		}
