@@ -85,7 +85,27 @@ function VideoPlayer({ id }: { id: number }) {
         hls.loadSource(masterURL)
         hls.attachMedia(video)
         hls.on(Hls.Events.ERROR, (_e, data) => {
-          if (data.fatal && !cancelled) setError('Das Video konnte nicht abgespielt werden.')
+          if (cancelled) return
+          // Nicht-fatale Stalls: hls.js hebt sich ohne Nudge nicht raus. Buffer-
+          // Stall/Nudge, Nachlade-Bump.
+          if (!data.fatal) {
+            if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+              const v = videoRef.current
+              if (v && !v.paused && !v.seeking) v.currentTime = v.currentTime + 0.1
+              hls.startLoad()
+            }
+            return
+          }
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad()
+              break
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError()
+              break
+            default:
+              setError('Das Video konnte nicht abgespielt werden.')
+          }
         })
         destroy = () => hls.destroy()
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {

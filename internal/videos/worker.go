@@ -369,6 +369,11 @@ func runFFmpegRendition(ctx context.Context, rawPath, dir string, rd rendition, 
 		"-crf", "26",
 		"-maxrate", rd.maxrate,
 		"-bufsize", rd.bufsize,
+		// Keyframes alle 4s erzwingen, damit HLS an einer Keyframe-Grenze
+		// schneiden kann. Ohne -force_key_frames wächst die GOP-Länge mit
+		// dem Sport-Content auf 16+ s, ffmpeg schneidet erst dort → Segmente
+		// werden 3–4 MB groß, mobile Clients laufen in Buffer-Underrun.
+		"-force_key_frames", "expr:gte(t,n_forced*4)",
 	}
 	if aacSource {
 		args = append(args, "-c:a", "copy")
@@ -377,7 +382,7 @@ func runFFmpegRendition(ctx context.Context, rawPath, dir string, rd rendition, 
 	}
 	args = append(args,
 		"-f", "hls",
-		"-hls_time", "10",
+		"-hls_time", "4",
 		"-hls_list_size", "0",
 		"-hls_segment_filename", filepath.Join(dir, "seg_%03d.ts"),
 		filepath.Join(dir, "index.m3u8"),
