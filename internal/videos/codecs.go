@@ -58,9 +58,17 @@ func ffprobeVideoProfileLevel(ctx context.Context, path string) (string, int, er
 	if err != nil {
 		return "", 0, err
 	}
+	return parseVideoProfileLevel(string(out))
+}
+
+// parseVideoProfileLevel liest (profile, level_x10) aus der ffprobe-Ausgabe.
+// ffprobe gibt bei MPEG-TS-Segmenten den Stream-Eintrag mitunter doppelt aus
+// (z.B. "profile=High 10\nlevel=31\nprofile=High 10\nlevel=31"); die letzte
+// gültige Zeile pro Schlüssel gewinnt — bei identischen Duplikaten unkritisch.
+func parseVideoProfileLevel(out string) (string, int, error) {
 	var profile string
 	var level int
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		k, v, ok := strings.Cut(line, "=")
 		if !ok {
 			continue
@@ -76,7 +84,7 @@ func ffprobeVideoProfileLevel(ctx context.Context, path string) (string, int, er
 		}
 	}
 	if profile == "" || level == 0 {
-		return "", 0, fmt.Errorf("ffprobe returned incomplete video info: %q", string(out))
+		return "", 0, fmt.Errorf("ffprobe returned incomplete video info: %q", out)
 	}
 	return profile, level, nil
 }
@@ -94,11 +102,21 @@ func ffprobeAudioProfile(ctx context.Context, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	profile := strings.TrimSpace(string(out))
-	if profile == "" {
-		return "", fmt.Errorf("ffprobe returned empty audio profile")
+	return parseAudioProfile(string(out))
+}
+
+// parseAudioProfile liest das AAC-Profil aus der ffprobe-Ausgabe. ffprobe gibt
+// bei MPEG-TS-Segmenten den Stream-Eintrag mitunter doppelt aus (z.B. "LC\nLC")
+// — sonst scheiterte aacCodecString an "LC\nLC" und der komplette Transcode
+// (worker.go realFFmpegTranscode) würde fehlschlagen. Wir nehmen die erste
+// nicht-leere Zeile.
+func parseAudioProfile(out string) (string, error) {
+	for _, line := range strings.Split(out, "\n") {
+		if p := strings.TrimSpace(line); p != "" {
+			return p, nil
+		}
 	}
-	return profile, nil
+	return "", fmt.Errorf("ffprobe returned empty audio profile")
 }
 
 // h264CodecString baut den `avc1.PPCCLL`-Substring aus ffprobe-Profil und
