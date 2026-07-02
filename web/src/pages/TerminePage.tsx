@@ -174,6 +174,7 @@ export default function TerminePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, past: showPast, focus } = parseFilters(searchParams)
   const triedPastExpansion = useRef(false)
+  const scrollRestoreRef = useRef<{ id: string; offset: number } | null>(null)
 
   const [termine, setTermine] = useState<Termin[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -270,6 +271,29 @@ export default function TerminePage() {
   }, [focus?.kind, focus?.id, loading])
 
   useEffect(() => { triedPastExpansion.current = false }, [focus?.kind, focus?.id])
+
+  // Nach Toggle „Vergangene" scrollt die Seite ohne diese Restauration nach oben,
+  // weil das Loading-Placeholder die Liste kurz aus dem DOM nimmt. Wir merken uns
+  // beim Klick den obersten sichtbaren Termin + dessen Viewport-Offset und stellen
+  // dieselbe Pixel-Position nach dem Reload wieder her. Focus-Scroll hat Vorrang.
+  useEffect(() => {
+    if (loading || focus) return
+    const restore = scrollRestoreRef.current
+    if (!restore) return
+    scrollRestoreRef.current = null
+    const el = document.getElementById(restore.id)
+    if (!el) return
+    window.scrollBy({ top: el.getBoundingClientRect().top - restore.offset, behavior: 'auto' })
+  }, [loading, focus])
+
+  const togglePast = () => {
+    const anchor = Array.from(document.querySelectorAll<HTMLElement>('[id^="termin-"]'))
+      .find(el => el.getBoundingClientRect().bottom > 0)
+    if (anchor) {
+      scrollRestoreRef.current = { id: anchor.id, offset: anchor.getBoundingClientRect().top }
+    }
+    updateFilter({ past: !showPast })
+  }
 
   useEffect(() => {
     if (!focus || loading) return
@@ -385,7 +409,7 @@ export default function TerminePage() {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => updateFilter({ past: !showPast })}
+            onClick={togglePast}
             aria-label="Vergangene anzeigen"
             className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
               showPast
