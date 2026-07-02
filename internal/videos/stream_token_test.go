@@ -15,7 +15,7 @@ func tokenHandler(secret string) *Handler {
 
 func TestStreamToken_ValidRoundTrip(t *testing.T) {
 	h := tokenHandler("super-secret")
-	tok, err := h.Sign(42, 7)
+	tok, err := h.Sign(42, 7, 0)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestStreamToken_NotYetExpiredBoundary(t *testing.T) {
 
 func TestStreamToken_WrongVid(t *testing.T) {
 	h := tokenHandler("super-secret")
-	tok, err := h.Sign(42, 7)
+	tok, err := h.Sign(42, 7, 0)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
@@ -97,11 +97,39 @@ func TestStreamToken_WrongSecret(t *testing.T) {
 
 func TestStreamToken_EmptySecret(t *testing.T) {
 	h := tokenHandler("")
-	if _, err := h.Sign(1, 1); err == nil {
+	if _, err := h.Sign(1, 1, 0); err == nil {
 		t.Fatal("Sign with empty secret should error")
 	}
 	if _, err := verifyStreamToken("", "x.y", 1, time.Now().Unix()); !errors.Is(err, ErrInvalidStreamToken) {
 		t.Fatalf("empty secret verify: expected ErrInvalidStreamToken, got %v", err)
+	}
+}
+
+// TestComputeStreamTokenTTL prüft die dauerabhängige TTL-Formel
+// `clamp(duration + 30min, 1h, 4h)` inklusive der Grenzfälle.
+func TestComputeStreamTokenTTL(t *testing.T) {
+	cases := []struct {
+		name        string
+		durationSec int
+		want        time.Duration
+	}{
+		{"NullLegacy", 0, time.Hour},
+		{"NegativLegacy", -1, time.Hour},
+		{"UnterFloor_30min", 1800, time.Hour},                               // 30min + 30min = 1h → Floor greift nicht, aber trifft genau 1h
+		{"KnappUnterFloor_29min59s", 1799, time.Hour},                       // 29min59s + 30min = 59min59s → Floor auf 1h
+		{"Mittel_60min", 3600, 3600*time.Second + 30*time.Minute},           // 1h + 30min = 1.5h
+		{"Lang_90min", 5400, 5400*time.Second + 30*time.Minute},             // 90min + 30min = 2h
+		{"KnappUnterCap_210min", 12600, 12600*time.Second + 30*time.Minute}, // 210min + 30min = 4h (genau am Cap)
+		{"UeberCap_211min", 12660, 4 * time.Hour},                           // 211min + 30min > 4h → Cap
+		{"SehrLang_100000s", 100000, 4 * time.Hour},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := computeStreamTokenTTL(tc.durationSec)
+			if got != tc.want {
+				t.Fatalf("computeStreamTokenTTL(%d) = %v, want %v", tc.durationSec, got, tc.want)
+			}
+		})
 	}
 }
 

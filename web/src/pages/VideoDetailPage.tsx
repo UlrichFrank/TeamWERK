@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import VideoStatusPill from '../components/VideoStatusPill'
+import CastButton from '../components/CastButton'
 import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 
 interface VideoDetail {
@@ -52,6 +53,9 @@ function VideoPlayer({ id }: { id: number }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState('')
   const [unsupported, setUnsupported] = useState(false)
+  // masterURL wird für Chromecast-Wurf gebraucht — CastButton übergibt die
+  // komplette URL inkl. ?st=-Token an den Receiver, der direkt vom Server holt.
+  const [masterURL, setMasterURL] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -78,7 +82,11 @@ function VideoPlayer({ id }: { id: number }) {
       // Token clientseitig anhängen; ServeMaster setzt ihn auf die referenzierten
       // Rendition-Playlists fort.
       const sep = play.master_url.includes('?') ? '&' : '?'
-      const masterURL = `${play.master_url}${sep}st=${encodeURIComponent(play.token)}`
+      const url = `${play.master_url}${sep}st=${encodeURIComponent(play.token)}`
+      const masterURL = url
+      // Absolute URL für Cast — der Receiver muss den Origin kennen. Backend
+      // liefert `/api/videos/…` (Pfad); CastButton kombiniert mit window.location.
+      setMasterURL(new URL(url, window.location.origin).toString())
 
       if (Hls.isSupported()) {
         const hls = new Hls()
@@ -139,8 +147,18 @@ function VideoPlayer({ id }: { id: number }) {
         ref={videoRef}
         controls
         playsInline
+        // AirPlay auf Safari explizit erlauben — belt-and-suspenders gegen
+        // künftige Safari-Default-Verschärfungen. Zusammen mit CODECS im
+        // master.m3u8 (siehe worker.go writeMasterManifest) sorgt das dafür,
+        // dass AirPlay auf AppleTV Bild + Ton zeigt (nicht nur Ton).
+        {...{ 'x-webkit-airplay': 'allow' }}
         className="w-full rounded-lg bg-brand-black aspect-video"
       />
+      {masterURL && (
+        <div className="mt-2 flex justify-end">
+          <CastButton masterURL={masterURL} />
+        </div>
+      )}
       {error && (
         <div className="mt-2 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />{error}

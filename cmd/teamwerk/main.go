@@ -169,6 +169,17 @@ func serve() {
 	// mit ctx (SIGTERM). In Tests wird der Worker nicht gestartet.
 	go videos.NewWorker(videosHandler).Run(ctx)
 
+	// Einmaliger, idempotenter Backfill für Bestandsvideos ohne `codecs`
+	// (video-tv-streaming). Läuft im Hintergrund — HTTP-Serving darauf nicht
+	// warten lassen, ffprobe je Alt-Video ist billig, aber muss den Startup
+	// nicht verzögern. Bei anhaltenden Fehlern loggen wir und leben damit;
+	// betroffene Videos spielen im Browser weiter, nur AirPlay bleibt schwarz.
+	go func() {
+		if err := videos.RunTVCompatBackfill(ctx, database, cfg.VideoStorageDir); err != nil && ctx.Err() == nil {
+			slog.Error("video tv-compat backfill failed", "error", err)
+		}
+	}()
+
 	handlers := &app.Handlers{
 		Auth:                auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
 		Config:              appconfig.NewHandler(database, hubInstance),

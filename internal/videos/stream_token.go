@@ -23,8 +23,35 @@ import (
 // Der HMAC wird über den ersten (base64url-)Teil gebildet, sodass Manipulation an
 // vid/uid/exp die Signatur bricht.
 
-// streamTokenTTL ist die Gültigkeitsdauer eines frisch signierten Tokens.
-const streamTokenTTL = time.Hour
+// legacyStreamTokenTTL ist die Untergrenze und der Fallback für Videos ohne
+// bekannte Dauer (Legacy-Verhalten vor video-tv-streaming).
+const legacyStreamTokenTTL = time.Hour
+
+// maxStreamTokenTTL deckelt die TTL bei sehr langen (oder fehlerhaft mit
+// Riesen-Dauern versehenen) Videos — deckt Vollspiel + Pause + Nachspielzeit +
+// Trainer-Analyse, ohne Tokens „unbegrenzt" gültig zu lassen.
+const maxStreamTokenTTL = 4 * time.Hour
+
+// streamTokenSlack ist der Puffer, der auf die Video-Dauer draufaddiert wird —
+// deckt Pause-Klicks, Rebuffering und den Vor-/Nachlauf beim Öffnen ab.
+const streamTokenSlack = 30 * time.Minute
+
+// computeStreamTokenTTL wählt die Gültigkeit basierend auf der Video-Dauer:
+// `clamp(duration + 30min, 1h, 4h)`. Bei fehlender Dauer (`durationSec <= 0`)
+// gilt die Legacy-1h — der Wiedergabepfad bleibt für Alt-Videos unverändert.
+func computeStreamTokenTTL(durationSec int) time.Duration {
+	if durationSec <= 0 {
+		return legacyStreamTokenTTL
+	}
+	ttl := time.Duration(durationSec)*time.Second + streamTokenSlack
+	if ttl < legacyStreamTokenTTL {
+		return legacyStreamTokenTTL
+	}
+	if ttl > maxStreamTokenTTL {
+		return maxStreamTokenTTL
+	}
+	return ttl
+}
 
 // now ist injizierbar, damit Tests Ablauf-Logik ohne Sleeps prüfen können.
 var now = time.Now
@@ -49,12 +76,14 @@ func signStreamToken(secret string, vid, uid int, exp int64) string {
 }
 
 // Sign signiert einen Stream-Token für das Video vid und den Nutzer uid mit
-// einem Ablauf von now()+1h. Ein leeres Secret ist ein Konfigurationsfehler.
-func (h *Handler) Sign(vid, uid int) (string, error) {
+// einer Gültigkeit, die sich an der Video-Dauer bemisst (siehe
+// computeStreamTokenTTL). `durationSec <= 0` fällt auf die Legacy-1h zurück.
+// Ein leeres Secret ist ein Konfigurationsfehler.
+func (h *Handler) Sign(vid, uid, durationSec int) (string, error) {
 	if h.cfg.VideoStreamSecret == "" {
 		return "", ErrInvalidStreamToken
 	}
-	exp := now().Add(streamTokenTTL).Unix()
+	exp := now().Add(computeStreamTokenTTL(durationSec)).Unix()
 	return signStreamToken(h.cfg.VideoStreamSecret, vid, uid, exp), nil
 }
 

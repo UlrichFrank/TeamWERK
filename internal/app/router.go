@@ -137,7 +137,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Route("/api/videos/{id}/hls", func(r chi.Router) {
 		r.Use(h.Videos.StreamTokenMiddleware)
 		r.Get("/master.m3u8", h.Videos.ServeMaster)
+		r.Options("/master.m3u8", h.Videos.HLSPreflight)
 		r.Get("/{rendition}/{segment}", h.Videos.ServeRenditionFile)
+		r.Options("/{rendition}/{segment}", h.Videos.HLSPreflight)
 	})
 	// Öffentlicher Gruppen-Schlüssel zum Verschlüsseln von Bankdaten (nicht geheim;
 	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -97,12 +98,19 @@ func writeRaw(t *testing.T, root string, id int) string {
 	return p
 }
 
-// fakeHLSTranscode simuliert ffmpeg: legt master.m3u8 + Rendition-Manifeste an.
-func fakeHLSTranscode(_ context.Context, _ string, processedDir string) error {
-	if err := writeMasterManifest(ensureRenditions(processedDir)); err != nil {
-		return err
+// fakeCodecs ist der Codec-String, den die Fakes durchreichen — muss zum
+// echten ffmpeg-Output-Format passen (`avc1.PPCCLL,mp4a.40.X`), damit
+// Assertions gegen master.m3u8 realistisch bleiben.
+const fakeCodecs = "avc1.640028,mp4a.40.2"
+
+// fakeHLSTranscode simuliert ffmpeg: legt master.m3u8 + Rendition-Manifeste an
+// und liefert einen deterministischen CODECS-String zurück (Naht analog zum
+// echten realFFmpegTranscode, das den String aus ffprobe ableitet).
+func fakeHLSTranscode(_ context.Context, _ string, processedDir string) (string, error) {
+	if err := writeMasterManifest(ensureRenditions(processedDir), fakeCodecs); err != nil {
+		return "", err
 	}
-	return nil
+	return fakeCodecs, nil
 }
 
 // ensureRenditions legt die Rendition-Verzeichnisse + Dummy-index.m3u8 an und
@@ -152,7 +160,7 @@ func TestWorkerSerialProcessing(t *testing.T) {
 		concurrent int
 		maxConc    int
 	)
-	tc := func(_ context.Context, raw, processedDir string) error {
+	tc := func(_ context.Context, raw, processedDir string) (string, error) {
 		mu.Lock()
 		concurrent++
 		if concurrent > maxConc {
@@ -201,8 +209,25 @@ func TestWorkerSerialProcessing(t *testing.T) {
 	if !renditionLinePrefix.MatchString("720p/index.m3u8") {
 		t.Fatal("sanity: renditionLinePrefix should match 720p/index.m3u8")
 	}
-	if !containsLine(string(master), "720p/index.m3u8") || !containsLine(string(master), "360p/index.m3u8") {
-		t.Fatalf("master.m3u8 missing rendition lines:\n%s", master)
+	if !containsLine(string(master), "720p/index.m3u8") {
+		t.Fatalf("master.m3u8 missing 720p rendition line:\n%s", master)
+	}
+	if containsLine(string(master), "360p/index.m3u8") {
+		t.Fatalf("master.m3u8 unexpectedly contains 360p rendition line:\n%s", master)
+	}
+	if !strings.Contains(string(master), "CODECS=") {
+		t.Fatalf("master.m3u8 missing CODECS attribute (AirPlay needs it):\n%s", master)
+	}
+	if !containsLine(string(master), "#EXT-X-INDEPENDENT-SEGMENTS") {
+		t.Fatalf("master.m3u8 missing #EXT-X-INDEPENDENT-SEGMENTS:\n%s", master)
+	}
+	// Codecs sind in videos.codecs persistiert — Play-Route + Backfill lesen daraus.
+	var codecs sql.NullString
+	if err := db.QueryRow(`SELECT codecs FROM videos WHERE id=?`, v1).Scan(&codecs); err != nil {
+		t.Fatalf("select codecs: %v", err)
+	}
+	if !codecs.Valid || codecs.String != fakeCodecs {
+		t.Fatalf("expected codecs=%q, got %+v", fakeCodecs, codecs)
 	}
 }
 
@@ -231,6 +256,44 @@ func splitLines(s string) []string {
 	return out
 }
 
+// TestBuildFFmpegRenditionArgs_ContainsPixFmt: `-pix_fmt yuv420p` MUSS in der
+// Arg-Liste stehen — sonst produziert libx264 bei 10-bit-Quellen yuv420p10, das
+// AppleTV/tvOS nicht dekodiert (Ton ohne Bild).
+func TestBuildFFmpegRenditionArgs_ContainsPixFmt(t *testing.T) {
+	rd := workerRenditions[0]
+	for _, aacSource := range []bool{true, false} {
+		args := buildFFmpegRenditionArgs("/raw/1.mp4", "/dir", rd, aacSource)
+		if !hasArgSequence(args, "-pix_fmt", "yuv420p") {
+			t.Fatalf("aacSource=%v: -pix_fmt yuv420p missing in %v", aacSource, args)
+		}
+		// Reihenfolge: -pix_fmt vor -c:v libx264, damit ffmpeg das Ausgabeformat
+		// vor der Codec-Wahl anwendet.
+		if idxOf(args, "-pix_fmt") > idxOf(args, "-c:v") {
+			t.Fatalf("aacSource=%v: -pix_fmt must come before -c:v in %v", aacSource, args)
+		}
+	}
+}
+
+// hasArgSequence prüft, ob a und b als benachbarte Elemente im Slice stehen.
+func hasArgSequence(args []string, a, b string) bool {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == a && args[i+1] == b {
+			return true
+		}
+	}
+	return false
+}
+
+// idxOf liefert den ersten Index von needle in args oder -1.
+func idxOf(args []string, needle string) int {
+	for i, s := range args {
+		if s == needle {
+			return i
+		}
+	}
+	return -1
+}
+
 // TestWorkerFailurePath: transcode liefert Fehler → status=failed, raw bleibt.
 func TestWorkerFailurePath(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -239,8 +302,8 @@ func TestWorkerFailurePath(t *testing.T) {
 	season := testutil.CreateSeason(t, db, "2025/26")
 	v := testutil.CreateVideo(t, db, team, season, user, "queued")
 
-	tc := func(_ context.Context, _, _ string) error {
-		return errors.New("ffmpeg exploded")
+	tc := func(_ context.Context, _, _ string) (string, error) {
+		return "", errors.New("ffmpeg exploded")
 	}
 	wk, bc, cfg := newTestWorker(t, db, tc)
 	rawPath := writeRaw(t, cfg.root, v)
@@ -281,9 +344,9 @@ func TestWorkerDiskShortage(t *testing.T) {
 	}
 
 	called := false
-	tc := func(_ context.Context, _, _ string) error {
+	tc := func(_ context.Context, _, _ string) (string, error) {
 		called = true
-		return nil
+		return "", nil
 	}
 	wk, _, cfg := newTestWorker(t, db, tc)
 	writeRaw(t, cfg.root, v)
@@ -325,9 +388,9 @@ func TestWorkerClaimGuard(t *testing.T) {
 	v := testutil.CreateVideo(t, db, team, season, user, "processing")
 
 	called := false
-	tc := func(_ context.Context, _, _ string) error {
+	tc := func(_ context.Context, _, _ string) (string, error) {
 		called = true
-		return nil
+		return "", nil
 	}
 	wk, _, cfg := newTestWorker(t, db, tc)
 	writeRaw(t, cfg.root, v)
