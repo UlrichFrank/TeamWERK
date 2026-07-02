@@ -61,10 +61,7 @@ interface ChatUser { id: number; name: string }
 
 interface TeamGroup {
   teamId: number
-  ageClass: string
-  gender: string
-  teamNumber: number
-  groupCount: number
+  displayShort: string
   kind: 'trainer' | 'spieler' | 'eltern'
   count: number
 }
@@ -1191,13 +1188,6 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
   const [pickedTags, setPickedTags] = useState<Set<string>>(new Set())
 
   const tagKey = (tg: { teamId: number; kind: TeamGroup['kind'] }) => `${tg.teamId}:${tg.kind}`
-  const teamGroupShortNames = useMemo(() => {
-    const teamLookup = teamGroups.map(tg => ({
-      id: tg.teamId, age_class: tg.ageClass, gender: tg.gender,
-      team_number: tg.teamNumber, group_count: tg.groupCount,
-    }))
-    return buildTeamShortNames(teamLookup)
-  }, [teamGroups])
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -1220,11 +1210,11 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
     return teamGroups.filter(tg => {
       if (pickedTags.has(tagKey(tg))) return false
       if (!q) return true
-      const short = (teamGroupShortNames.get(tg.teamId) ?? '').toLowerCase()
+      const short = tg.displayShort.toLowerCase()
       const kindLabel = TEAM_GROUP_KIND_LABEL[tg.kind].toLowerCase()
       return short.includes(q) || kindLabel.includes(q)
     })
-  }, [type, teamGroups, query, pickedTags, teamGroupShortNames])
+  }, [type, teamGroups, query, pickedTags])
 
   const addTeamGroup = async (tg: TeamGroup) => {
     const key = tagKey(tg)
@@ -1337,7 +1327,7 @@ function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onC
               </div>
               {visibleTeamGroups.map(tg => {
                 const key = tagKey(tg)
-                const short = teamGroupShortNames.get(tg.teamId) ?? `Team ${tg.teamId}`
+                const short = tg.displayShort || `Team ${tg.teamId}`
                 return (
                   <button
                     key={key}
