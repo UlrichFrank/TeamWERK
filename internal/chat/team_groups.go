@@ -8,17 +8,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/db"
 )
 
 type TeamGroup struct {
-	TeamID     int    `json:"teamId"`
-	TeamName   string `json:"teamName"`
-	AgeClass   string `json:"ageClass"`
-	Gender     string `json:"gender"`
-	TeamNumber int    `json:"teamNumber"`
-	GroupCount int    `json:"groupCount"`
-	Kind       string `json:"kind"`
-	Count      int    `json:"count"`
+	TeamID       int    `json:"teamId"`
+	DisplayShort string `json:"displayShort"`
+	Kind         string `json:"kind"`
+	Count        int    `json:"count"`
 }
 
 type TeamGroupMember struct {
@@ -70,11 +67,15 @@ func (h *Handler) canSeeTeamGroup(r *http.Request, claims *auth.Claims, teamID i
 func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 
+	// display_short = kanonische Team-Kurzform; die Team-Nummer wird saisonweit
+	// disambiguiert (unabhängig von der Sichtbarkeit des Callers).
+	displayShort := db.TeamDisplayShort("t")
+
 	var teamRows *sql.Rows
 	var err error
 	if hasGlobalTeamGroupAccess(claims) {
 		teamRows, err = h.db.QueryContext(r.Context(), `
-			SELECT DISTINCT t.id, t.age_class, t.gender, k.team_number
+			SELECT DISTINCT t.id, COALESCE(`+displayShort+`, t.name)
 			FROM teams t
 			JOIN kader k ON k.team_id = t.id
 			JOIN seasons s ON s.id = k.season_id
@@ -82,7 +83,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 			ORDER BY t.age_class, t.gender, k.team_number`)
 	} else {
 		teamRows, err = h.db.QueryContext(r.Context(), `
-			SELECT DISTINCT t.id, t.age_class, t.gender, k.team_number
+			SELECT DISTINCT t.id, COALESCE(`+displayShort+`, t.name)
 			FROM user_accessible_teams uat
 			JOIN teams t ON t.id = uat.team_id
 			JOIN kader k ON k.team_id = t.id AND k.season_id = uat.season_id
@@ -97,26 +98,18 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	defer teamRows.Close()
 
 	type teamInfo struct {
-		id         int
-		ageClass   string
-		gender     string
-		teamNumber int
+		id           int
+		displayShort string
 	}
 	var teams []teamInfo
 	for teamRows.Next() {
 		var t teamInfo
-		if err := teamRows.Scan(&t.id, &t.ageClass, &t.gender, &t.teamNumber); err != nil {
+		if err := teamRows.Scan(&t.id, &t.displayShort); err != nil {
 			continue
 		}
 		teams = append(teams, t)
 	}
 	teamRows.Close()
-
-	// group_count = wie viele team_number-Varianten teilen sich age_class+gender
-	groupCounts := map[string]int{}
-	for _, t := range teams {
-		groupCounts[t.ageClass+"|"+t.gender]++
-	}
 
 	results := []TeamGroup{}
 	for _, t := range teams {
@@ -126,13 +119,10 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			results = append(results, TeamGroup{
-				TeamID:     t.id,
-				AgeClass:   t.ageClass,
-				Gender:     t.gender,
-				TeamNumber: t.teamNumber,
-				GroupCount: groupCounts[t.ageClass+"|"+t.gender],
-				Kind:       kind,
-				Count:      count,
+				TeamID:       t.id,
+				DisplayShort: t.displayShort,
+				Kind:         kind,
+				Count:        count,
 			})
 		}
 	}

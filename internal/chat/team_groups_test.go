@@ -211,6 +211,66 @@ func TestListTeamGroups_InactiveSeasonHidden(t *testing.T) {
 	}
 }
 
+// setupTwoTeams legt team1/team2 mit identischer Altersklasse+Geschlecht
+// (Erwachsene/mixed, team_number 1 und 2) an → kanonische Kurzformen "gE1"/"gE2".
+// Der Trainer von team1 sieht nur team1; displayShort MUSS trotzdem die Nummer
+// behalten, weil saisonweit zwei Teams die Gruppe teilen.
+func TestListTeamGroups_ShortNameKeepsNumberWhenSeasonHasMultiple(t *testing.T) {
+	f, mux := setupTwoTeams(t)
+	srv := testutil.NewServer(t, func(r chi.Router) { r.Mount("/", mux) })
+
+	res := testutil.Get(t, srv, "/api/chat/team-groups",
+		testutil.Token(t, f.trainerU1, "standard", nil))
+	groups := decodeJSON[[]chat.TeamGroup](t, res)
+
+	if len(groups) == 0 {
+		t.Fatalf("trainer should see own team groups, got none")
+	}
+	for _, g := range groups {
+		if g.TeamID != f.team1 {
+			t.Fatalf("trainer should only see team1, got team %d", g.TeamID)
+		}
+		if g.DisplayShort != "gE1" {
+			t.Errorf("expected displayShort 'gE1' (season-wide disambiguation despite single visible team), got %q", g.DisplayShort)
+		}
+	}
+}
+
+// Bei genau einem Team der Altersklasse+Geschlecht entfällt die Team-Nummer.
+func TestListTeamGroups_ShortNameOmitsNumberWhenTeamUnique(t *testing.T) {
+	db := testutil.NewDB(t)
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Solo")
+	kader := testutil.CreateKader(t, db, team, season)
+	u := testutil.CreateUser(t, db, "standard")
+	m := testutil.CreateMember(t, db, u)
+	testutil.AddKaderTrainer(t, db, kader, m)
+	// ein Spieler außer dem Caller, damit die Spieler-Gruppe count>0 hat
+	pu := testutil.CreateUser(t, db, "standard")
+	pm := testutil.CreateMember(t, db, pu)
+	if _, err := db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kader, pm); err != nil {
+		t.Fatalf("insert kader_members: %v", err)
+	}
+
+	h := chat.NewHandler(db, hub.NewHub(), testutil.TestConfig())
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/chat/team-groups", h.ListTeamGroups)
+	})
+
+	res := testutil.Get(t, srv, "/api/chat/team-groups",
+		testutil.Token(t, u, "standard", nil))
+	groups := decodeJSON[[]chat.TeamGroup](t, res)
+
+	if len(groups) == 0 {
+		t.Fatalf("trainer should see own team groups, got none")
+	}
+	for _, g := range groups {
+		if g.DisplayShort != "gE" {
+			t.Errorf("expected displayShort 'gE' (unique team, no number), got %q", g.DisplayShort)
+		}
+	}
+}
+
 func TestResolveTeamGroup_SpielerIncludesExtended(t *testing.T) {
 	f, mux := setupTwoTeams(t)
 	srv := testutil.NewServer(t, func(r chi.Router) { r.Mount("/", mux) })
