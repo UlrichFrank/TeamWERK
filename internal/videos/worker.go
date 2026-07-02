@@ -16,10 +16,12 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
-// renditions beschreibt die zwei erzeugten HLS-Varianten. Die Verzeichnisnamen
-// (720p/360p) und das Segment-/Manifest-Schema MÜSSEN byte-kompatibel zur
+// renditions beschreibt die erzeugten HLS-Varianten. Die Verzeichnisnamen
+// (720p) und das Segment-/Manifest-Schema MÜSSEN byte-kompatibel zur
 // Streaming-Schicht bleiben (stream.go: renditionRe `^[0-9]{3,4}p$`, segmentRe
 // `^(index\.m3u8|seg_[0-9]{1,6}\.ts)$`, ServeMaster erwartet `{rendition}/index.m3u8`).
+// Aktuell nur 720p — 360p wurde aus Speichergründen entfernt; kein ABR-Fallback
+// mehr bei schwacher Verbindung (bewusster Trade-Off, siehe video-tv-streaming).
 type rendition struct {
 	name      string // Verzeichnisname, z.B. "720p"
 	height    int    // Skalierungs-Zielhöhe
@@ -31,7 +33,6 @@ type rendition struct {
 
 var workerRenditions = []rendition{
 	{name: "720p", height: 720, maxrate: "2800k", bufsize: "5600k", bandwidth: 2_800_000, width: 1280},
-	{name: "360p", height: 360, maxrate: "800k", bufsize: "1600k", bandwidth: 800_000, width: 640},
 }
 
 const (
@@ -47,8 +48,12 @@ const (
 
 // transcodeFunc ist die injizierbare Naht (4.4/4.10): Produktion ruft echtes
 // ffmpeg, Tests injizieren eine Fake, die nur HLS-Dummy-Dateien schreibt. Sie
-// transcodiert rawPath in das ProcessedDir des Videos (HLS 720p+360p + master).
-type transcodeFunc func(ctx context.Context, rawPath, processedDir string) error
+// transcodiert rawPath in das ProcessedDir des Videos (HLS 720p + master) und
+// liefert die zusammengesetzten CODECS-Attribute (`avc1.PPCCLL,mp4a.40.X`)
+// zurück, damit der Worker sie in `videos.codecs` persistieren kann. Für
+// AirPlay/tvOS ist die CODECS-Signalisierung im master.m3u8 pflicht — sonst
+// kommt Ton ohne Bild.
+type transcodeFunc func(ctx context.Context, rawPath, processedDir string) (codecs string, err error)
 
 // Worker zieht serielle (eine Goroutine) Transcode-Jobs aus der DB.
 type Worker struct {
@@ -205,7 +210,8 @@ func (wk *Worker) process(ctx context.Context, id int) {
 	rawPath := RawPath(root, id)
 	processedDir := ProcessedDir(root, id)
 
-	if err := wk.transcode(ctx, rawPath, processedDir); err != nil {
+	codecs, err := wk.transcode(ctx, rawPath, processedDir)
+	if err != nil {
 		// Abbruch durch Shutdown ist kein Failure: zurück auf 'queued', damit der
 		// nächste Prozess-Start es erneut versucht.
 		if ctx.Err() != nil {
@@ -216,7 +222,7 @@ func (wk *Worker) process(ctx context.Context, id int) {
 		return
 	}
 
-	wk.succeed(id)
+	wk.succeed(id, codecs)
 }
 
 // estimateNeeded schätzt den nötigen freien Platz für den Transcode (4.3):
@@ -235,11 +241,13 @@ func (wk *Worker) estimateNeeded(id int) uint64 {
 }
 
 // succeed markiert ein Video als 'ready', löscht die Rohdatei, broadcastet
-// "video-ready" und stößt die Push-Notification an (4.6/4.8).
-func (wk *Worker) succeed(id int) {
+// "video-ready" und stößt die Push-Notification an (4.6/4.8). codecs (kann leer
+// sein, wenn ffprobe scheiterte) wird in videos.codecs persistiert — nötig für
+// die CODECS-Attribute im master.m3u8, ohne die AirPlay nur Ton, kein Bild liefert.
+func (wk *Worker) succeed(id int, codecs string) {
 	if _, err := wk.db.Exec(
-		`UPDATE videos SET status='ready', ready_at=CURRENT_TIMESTAMP, failure_reason=NULL WHERE id=?`,
-		id); err != nil {
+		`UPDATE videos SET status='ready', ready_at=CURRENT_TIMESTAMP, failure_reason=NULL, codecs=? WHERE id=?`,
+		nullIfEmpty(codecs), id); err != nil {
 		slog.Error("video worker mark ready failed", "video_id", id, "error", err)
 		return
 	}
@@ -332,38 +340,69 @@ func (wk *Worker) pushRecipients(id int) ([]int, error) {
 	return uids, rows.Err()
 }
 
-// realFFmpegTranscode ist die Produktions-Naht (4.4/4.5): erzeugt für jede
-// Rendition serielle ein HLS-Set via `nice -n 19 ffmpeg` und schreibt danach die
-// master.m3u8. CRF 26, preset medium, H.264; Audio `-c:a copy` wenn Quelle AAC,
-// sonst `-c:a aac -b:a 128k`.
-func realFFmpegTranscode(ctx context.Context, rawPath, processedDir string) error {
+// realFFmpegTranscode ist die Produktions-Naht (4.4/4.5): erzeugt pro Rendition
+// serielle ein HLS-Set via `nice -n 19 ffmpeg` und schreibt danach die
+// master.m3u8. CRF 26, preset medium, H.264 (yuv420p erzwungen für 10-bit-Quellen);
+// Audio `-c:a copy` wenn Quelle AAC, sonst `-c:a aac -b:a 128k`. Nach dem 720p-Lauf
+// probet die Funktion `seg_001.ts` per ffprobe und leitet den CODECS-String
+// (`avc1.PPCCLL,mp4a.40.X`) ab, den `writeMasterManifest` in die STREAM-INF-Zeile
+// hängt — Pflicht für AirPlay/tvOS.
+func realFFmpegTranscode(ctx context.Context, rawPath, processedDir string) (string, error) {
 	if err := os.MkdirAll(processedDir, 0o755); err != nil {
-		return err
+		return "", err
 	}
 	aacSource, err := sourceIsAAC(ctx, rawPath)
 	if err != nil {
-		return fmt.Errorf("ffprobe audio codec: %w", err)
+		return "", fmt.Errorf("ffprobe audio codec: %w", err)
 	}
 	for _, rd := range workerRenditions {
 		dir := filepath.Join(processedDir, rd.name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
+			return "", err
 		}
 		if err := runFFmpegRendition(ctx, rawPath, dir, rd, aacSource); err != nil {
-			return fmt.Errorf("ffmpeg %s: %w", rd.name, err)
+			return "", fmt.Errorf("ffmpeg %s: %w", rd.name, err)
 		}
 	}
-	return writeMasterManifest(processedDir)
+	// CODECS aus dem tatsächlich produzierten 720p-Segment ableiten — auf die
+	// Encoder-Defaults zu verlassen ist brüchig, weil `-c:a copy` je nach Quelle
+	// HE-AAC statt LC durchreicht. Ein falscher CODECS-String hätte denselben
+	// Symptomkreis wie das ursprüngliche Bug (Ton ohne Bild).
+	codecs, err := probeSegmentCodecs(ctx, filepath.Join(processedDir, "720p", "seg_001.ts"))
+	if err != nil {
+		return "", fmt.Errorf("probe codecs: %w", err)
+	}
+	if err := writeMasterManifest(processedDir, codecs); err != nil {
+		return "", err
+	}
+	return codecs, nil
 }
 
 // runFFmpegRendition führt einen einzelnen ffmpeg-Lauf für eine Rendition aus.
 // Segmente: seg_%03d.ts, Manifest: index.m3u8 (MUSS zur Streaming-Schicht passen).
 func runFFmpegRendition(ctx context.Context, rawPath, dir string, rd rendition, aacSource bool) error {
+	args := buildFFmpegRenditionArgs(rawPath, dir, rd, aacSource)
+	cmd := exec.CommandContext(ctx, "nice", args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, lastLines(string(out), 5))
+	}
+	return nil
+}
+
+// buildFFmpegRenditionArgs baut die Argumentliste für einen Rendition-Lauf.
+// Reine Funktion (keine Prozess-Ausführung), damit Tests das exakte Arg-Layout
+// prüfen können — insbesondere `-pix_fmt yuv420p`, dessen Fehlen bei 10-bit-
+// Quellen zu einem yuv420p10-Output führt, den tvOS nicht dekodiert.
+func buildFFmpegRenditionArgs(rawPath, dir string, rd rendition, aacSource bool) []string {
 	args := []string{
 		"-n", "19", "ffmpeg",
 		"-y",
 		"-i", rawPath,
 		"-vf", fmt.Sprintf("scale=-2:%d", rd.height),
+		// `-pix_fmt yuv420p` erzwingt 8-bit-Ausgabe. Ohne diesen Zwang würde
+		// libx264 bei 10-bit-Quellen (moderne iPhone-Aufnahmen) yuv420p10
+		// produzieren, das tvOS/AppleTV nicht dekodiert → Ton ohne Bild.
+		"-pix_fmt", "yuv420p",
 		"-c:v", "libx264",
 		"-preset", "medium",
 		"-crf", "26",
@@ -387,11 +426,7 @@ func runFFmpegRendition(ctx context.Context, rawPath, dir string, rd rendition, 
 		"-hls_segment_filename", filepath.Join(dir, "seg_%03d.ts"),
 		filepath.Join(dir, "index.m3u8"),
 	)
-	cmd := exec.CommandContext(ctx, "nice", args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%w: %s", err, lastLines(string(out), 5))
-	}
-	return nil
+	return args
 }
 
 // sourceIsAAC probet den Audio-Codec der Quelle. Liefert true, wenn der erste
@@ -410,20 +445,41 @@ func sourceIsAAC(ctx context.Context, rawPath string) (bool, error) {
 	return strings.EqualFold(strings.TrimSpace(string(out)), "aac"), nil
 }
 
-// writeMasterManifest schreibt die master.m3u8 mit beiden Renditions (4.5). Die
-// Rendition-Referenzen MÜSSEN exakt `{rendition}/index.m3u8` lauten (stream.go
-// renditionLinePrefix `^[0-9]{3,4}p/index\.m3u8$`), sonst hängt ServeMaster den
-// ?st=-Token nicht an → Playback-404.
-func writeMasterManifest(processedDir string) error {
+// writeMasterManifest schreibt die master.m3u8 mit allen konfigurierten
+// Renditions (4.5). Die Rendition-Referenzen MÜSSEN exakt
+// `{rendition}/index.m3u8` lauten (stream.go renditionLinePrefix
+// `^[0-9]{3,4}p/index\.m3u8$`), sonst hängt ServeMaster den ?st=-Token nicht an
+// → Playback-404. codecs im Format `avc1.PPCCLL,mp4a.40.X` wird als
+// CODECS-Attribut in jede STREAM-INF-Zeile gehängt (Pflicht für AirPlay/tvOS).
+// Leerer codecs-String lässt das Attribut weg — betrifft nur Legacy-Videos vor
+// Backfill; AirPlay/Cast greifen dort noch nicht.
+// `#EXT-X-INDEPENDENT-SEGMENTS` signalisiert, dass jedes Segment mit einem
+// Keyframe startet (dank `-force_key_frames` inhaltlich schon erfüllt).
+func writeMasterManifest(processedDir, codecs string) error {
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
 	b.WriteString("#EXT-X-VERSION:3\n")
+	b.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
 	for _, rd := range workerRenditions {
-		fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d\n",
-			rd.bandwidth, rd.width, rd.height)
+		b.WriteString("#EXT-X-STREAM-INF:")
+		fmt.Fprintf(&b, "BANDWIDTH=%d,RESOLUTION=%dx%d", rd.bandwidth, rd.width, rd.height)
+		if codecs != "" {
+			fmt.Fprintf(&b, ",CODECS=%q", codecs)
+		}
+		b.WriteString("\n")
 		fmt.Fprintf(&b, "%s/index.m3u8\n", rd.name)
 	}
 	return os.WriteFile(filepath.Join(processedDir, "master.m3u8"), []byte(b.String()), 0o644)
+}
+
+// nullIfEmpty gibt sql.NullString mit Valid=false zurück, wenn s leer ist —
+// damit `videos.codecs` sauber NULL bleibt statt "" zu speichern (Backfill
+// nutzt `codecs IS NULL` als Selektor).
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // lastLines liefert die letzten n Zeilen von s (für kompakte ffmpeg-Fehlermeldungen).

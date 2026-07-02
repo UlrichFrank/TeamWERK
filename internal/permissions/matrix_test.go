@@ -379,6 +379,10 @@ var matrix = []endpointCase{
 	// HLS-Auslieferung: public, nur per Stream-Token (?st=) — ohne Token 403 für alle.
 	{method: "GET", path: "/api/videos/{id}/hls/master.m3u8", expected: exPublic},
 	{method: "GET", path: "/api/videos/{id}/hls/{rendition}/{segment}", expected: exPublic},
+	// CORS-Preflight für Chromecast-Default-Receiver: HLSPreflight liefert 204 mit
+	// `Access-Control-Allow-Origin: *`. Kein Auth-Check (per RFC credential-frei).
+	{method: "OPTIONS", path: "/api/videos/{id}/hls/master.m3u8", expected: exPublic},
+	{method: "OPTIONS", path: "/api/videos/{id}/hls/{rendition}/{segment}", expected: exPublic},
 
 	// ── Trainer + sportliche_leitung ────────────────────────────────────────────
 	{method: "GET", path: "/api/training-series", expected: exTrainer},

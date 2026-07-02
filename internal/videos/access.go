@@ -5,9 +5,11 @@ import (
 )
 
 // Video ist die für Berechtigungsprüfungen relevante Teilmenge einer videos-Zeile.
+// `DurationSec` (0 wenn NULL) fließt in die Stream-Token-TTL ein (video-tv-streaming).
 type Video struct {
-	ID     int
-	TeamID int
+	ID          int
+	TeamID      int
+	DurationSec int64
 }
 
 // CanUploadToTeam meldet, ob der Aufrufer ein Video in das gegebene Team hochladen
