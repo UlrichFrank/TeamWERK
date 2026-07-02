@@ -202,7 +202,9 @@ func createChildMembershipRequest(t *testing.T, db *sql.DB, firstName, lastName,
 	return int(id)
 }
 
-// TC-KID-APPROVE01: Kinder-Approve legt nur das Konto an (kein Member), Status approved.
+// TC-KID-APPROVE01: Kinder-Approve legt nur das Konto an (kein Member) mit dem
+// Kindnamen in users.first_name/last_name und recovery_email = Eltern-Adresse;
+// KEIN family_link, Status approved.
 func TestApproveMembershipRequest_Child(t *testing.T) {
 	db := testutil.NewDB(t)
 	reqID := createChildMembershipRequest(t, db, "Lena", "Schmidt", "mama@test.local")
@@ -219,10 +221,11 @@ func TestApproveMembershipRequest_Child(t *testing.T) {
 	}
 
 	var userID, canLogin int
-	var email sql.NullString
+	var firstName, lastName string
+	var email, recovery sql.NullString
 	if err := db.QueryRow(
-		`SELECT id, can_login, email FROM users WHERE login_name = 'Lena.Schmidt'`,
-	).Scan(&userID, &canLogin, &email); err != nil {
+		`SELECT id, can_login, email, first_name, last_name, recovery_email FROM users WHERE login_name = 'Lena.Schmidt'`,
+	).Scan(&userID, &canLogin, &email, &firstName, &lastName, &recovery); err != nil {
 		t.Fatalf("child user not found: %v", err)
 	}
 	if canLogin != 0 {
@@ -230,6 +233,13 @@ func TestApproveMembershipRequest_Child(t *testing.T) {
 	}
 	if email.Valid {
 		t.Errorf("child user email should be NULL, got %q", email.String)
+	}
+	// Bugfix: der Kindname landet im users-Konto (nicht nur im login_name).
+	if firstName != "Lena" || lastName != "Schmidt" {
+		t.Errorf("expected name 'Lena Schmidt' in users, got %q %q", firstName, lastName)
+	}
+	if !recovery.Valid || recovery.String != "mama@test.local" {
+		t.Errorf("expected recovery_email='mama@test.local', got %v", recovery)
 	}
 
 	var memberCount int
@@ -240,6 +250,12 @@ func TestApproveMembershipRequest_Child(t *testing.T) {
 	}
 	if memberCount != 0 {
 		t.Errorf("expected no member, got %d", memberCount)
+	}
+
+	var familyLinks int
+	db.QueryRow(`SELECT COUNT(*) FROM family_links`).Scan(&familyLinks)
+	if familyLinks != 0 {
+		t.Errorf("expected no family_link, got %d", familyLinks)
 	}
 
 	var status string

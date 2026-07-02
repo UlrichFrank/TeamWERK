@@ -1,0 +1,4 @@
+-- Bewusster No-op: der Namens-Backfill (016.up) ist nicht sinnvoll reversibel.
+-- Der vorherige Zustand war ein leerer first_name/last_name (= der behobene Bug);
+-- ein Zurücksetzen würde ihn wieder einführen und wäre zudem nicht von echten
+-- Namenseingaben zu unterscheiden. Keine Schemaänderung zurückzunehmen.

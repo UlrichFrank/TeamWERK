@@ -133,3 +133,68 @@ func TestMigration011_Down_RemovesColumnsAndQueue(t *testing.T) {
 		t.Error("pending_event_notes_push sollte nach 011 down weg sein")
 	}
 }
+
+// TC: Migration 016 füllt ein eindeutig zuordenbares namenloses Kinderkonto aus
+// membership_requests, lässt aber mehrdeutige Zuordnungen unangetastet.
+func TestMigration016_BackfillChildNames(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(15); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 15: %v", err)
+	}
+
+	// (A) Eindeutig: ein namenloses Kinderkonto + genau ein passender Antrag.
+	if _, err := sqlDB.Exec(
+		`INSERT INTO users (id, email, login_name, first_name, last_name, can_login, recovery_email)
+		 VALUES (100, NULL, 'Lena.Schmidt', '', '', 0, 'eltern@test.local')`); err != nil {
+		t.Fatalf("seed child A: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO membership_requests (first_name, last_name, email, is_child, parent_email, status)
+		 VALUES ('Lena', 'Schmidt', '', 1, 'eltern@test.local', 'approved')`); err != nil {
+		t.Fatalf("seed request A: %v", err)
+	}
+
+	// (B) Mehrdeutig: zwei namensgleiche approved Anträge derselben Eltern-Adresse
+	// → COUNT != 1 → Konto bleibt leer (kein Ratewerk).
+	if _, err := sqlDB.Exec(
+		`INSERT INTO users (id, email, login_name, first_name, last_name, can_login, recovery_email)
+		 VALUES (101, NULL, 'Max.Mueller', '', '', 0, 'zwilling@test.local')`); err != nil {
+		t.Fatalf("seed child B: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO membership_requests (first_name, last_name, email, is_child, parent_email, status)
+		 VALUES ('Max', 'Mueller', '', 1, 'zwilling@test.local', 'approved'),
+		        ('Max', 'Mueller', '', 1, 'zwilling@test.local', 'approved')`); err != nil {
+		t.Fatalf("seed requests B: %v", err)
+	}
+
+	if err := m.Migrate(16); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 16: %v", err)
+	}
+
+	var aFirst, aLast string
+	if err := sqlDB.QueryRow(`SELECT first_name, last_name FROM users WHERE id=100`).Scan(&aFirst, &aLast); err != nil {
+		t.Fatalf("read child A: %v", err)
+	}
+	if aFirst != "Lena" || aLast != "Schmidt" {
+		t.Errorf("child A: erwartet 'Lena Schmidt', bekam %q %q", aFirst, aLast)
+	}
+
+	var bFirst, bLast string
+	if err := sqlDB.QueryRow(`SELECT first_name, last_name FROM users WHERE id=101`).Scan(&bFirst, &bLast); err != nil {
+		t.Fatalf("read child B: %v", err)
+	}
+	if bFirst != "" || bLast != "" {
+		t.Errorf("child B (mehrdeutig): erwartet leer, bekam %q %q", bFirst, bLast)
+	}
+
+	// down (No-op) muss von golang-migrate fehlerfrei akzeptiert werden; die
+	// bereits gefüllten Namen bleiben erhalten (kein Rollback des Backfills).
+	if err := m.Migrate(15); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate down to 15: %v", err)
+	}
+	sqlDB.QueryRow(`SELECT first_name, last_name FROM users WHERE id=100`).Scan(&aFirst, &aLast)
+	if aFirst != "Lena" || aLast != "Schmidt" {
+		t.Errorf("nach down: Name sollte unverändert sein, bekam %q %q", aFirst, aLast)
+	}
+}

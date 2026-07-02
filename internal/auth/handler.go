@@ -518,8 +518,8 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 		recoveryEmail = parentEmail
 	}
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO users (email, login_name, password, role, can_login, recovery_email) VALUES (NULL, ?, '', 'standard', 0, ?)`,
-		loginName, recoveryEmail,
+		`INSERT INTO users (email, login_name, first_name, last_name, password, role, can_login, recovery_email) VALUES (NULL, ?, ?, ?, '', 'standard', 0, ?)`,
+		loginName, firstName, lastName, recoveryEmail,
 	)
 	if err != nil {
 		slog.Error("approve membership child insert user failed", "error", err)
