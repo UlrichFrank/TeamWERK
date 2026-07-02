@@ -18,12 +18,12 @@ vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
 const DUTY_BOARD_FIXTURE = [
   {
     game_id: null,
-    team_id: 1,
+    team_ids: [1],
     date: '2030-06-17',
     event_time: '10:00',
     opponent: null,
     event_type: 'generisch',
-    team_name: 'Test Team',
+    team_names: ['Test Team'],
     label: 'Testveranstaltung',
     past: false,
     slots: [

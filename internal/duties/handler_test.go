@@ -20,6 +20,15 @@ import (
 
 func itoa(n int) string { return fmt.Sprintf("%d", n) }
 
+func containsInt(xs []int, v int) bool {
+	for _, x := range xs {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
 func insertDutyAssignment(t *testing.T, db *sql.DB, slotID, userID int, status string) {
 	t.Helper()
 	if _, err := db.Exec(
@@ -462,10 +471,28 @@ func TestBoard_VorstandSeesAllTeams(t *testing.T) {
 	}
 }
 
-// TestBoard_GroupContainsTeamID verifies that every team-specific group in the
-// duty-board response carries a numeric team_id field — required by the
-// frontend team filter.
-func TestBoard_GroupContainsTeamID(t *testing.T) {
+// groupTeamIDs extracts the team_ids array of a board group as []int.
+func groupTeamIDs(t *testing.T, grp map[string]any) []int {
+	t.Helper()
+	raw, ok := grp["team_ids"].([]any)
+	if !ok {
+		t.Fatalf("expected team_ids array in group, got %T (%v)", grp["team_ids"], grp["team_ids"])
+	}
+	ids := make([]int, 0, len(raw))
+	for _, v := range raw {
+		f, ok := v.(float64)
+		if !ok {
+			t.Fatalf("expected numeric team id, got %T (%v)", v, v)
+		}
+		ids = append(ids, int(f))
+	}
+	return ids
+}
+
+// TestBoard_GamelessSlotCarriesSlotTeam verifies that a game-less handslot
+// exposes its own ds.team_id via the team_ids array — required by the frontend
+// team filter.
+func TestBoard_GamelessSlotCarriesSlotTeam(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
@@ -489,12 +516,141 @@ func TestBoard_GroupContainsTeamID(t *testing.T) {
 	if len(groups) != 1 {
 		t.Fatalf("expected 1 group, got %d", len(groups))
 	}
-	tid, ok := groups[0]["team_id"].(float64)
-	if !ok {
-		t.Fatalf("expected numeric team_id in group, got %T (%v)", groups[0]["team_id"], groups[0]["team_id"])
+	ids := groupTeamIDs(t, groups[0])
+	if len(ids) != 1 || ids[0] != teamA {
+		t.Errorf("expected team_ids=[%d], got %v", teamA, ids)
 	}
-	if int(tid) != teamA {
-		t.Errorf("expected team_id=%d, got %d", teamA, int(tid))
+}
+
+// TestBoard_GamelessSlotWithoutTeamHasEmptyTeamIDs verifies that a game-less
+// slot without a team yields an empty team_ids array (never null), so the
+// frontend .includes() filter needs no null guard.
+func TestBoard_GamelessSlotWithoutTeamHasEmptyTeamIDs(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	dtID := createDutyType(t, db, "Vereinsfest", 4.0)
+	// team_id NULL, game_id NULL → game-loser Dienst ohne Team.
+	if _, err := db.Exec(
+		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, slots_filled, team_id, season_id, game_id)
+		 VALUES (?, ?, ?, 2, 0, NULL, ?, NULL)`,
+		"Sommerfest", "2026-06-14", dtID, seasonID); err != nil {
+		t.Fatalf("insert slot: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/duty-board", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var groups []map[string]any
+	json.NewDecoder(res.Body).Decode(&groups)
+	res.Body.Close()
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	if ids := groupTeamIDs(t, groups[0]); len(ids) != 0 {
+		t.Errorf("expected empty team_ids, got %v", ids)
+	}
+}
+
+// TestBoard_GameGroupCarriesTerminTeams verifies that a game-based group derives
+// its teams from game_teams — including ALL teams of a multi-team fixture, not
+// just the slot's ds.team_id.
+func TestBoard_GameGroupCarriesTerminTeams(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	gameID := testutil.CreateGame(t, db, seasonID, teamA, "2026-06-14")
+	// second team on the same fixture
+	if _, err := db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, teamB); err != nil {
+		t.Fatalf("game_teams teamB: %v", err)
+	}
+	dtID := createDutyType(t, db, "Kasse", 1.0)
+	// slot carries only teamA, but the group must expose both A and B.
+	createDutySlot(t, db, dtID, seasonID, teamA, gameID, "2026-06-14")
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/duty-board", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var groups []map[string]any
+	json.NewDecoder(res.Body).Decode(&groups)
+	res.Body.Close()
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	ids := groupTeamIDs(t, groups[0])
+	if len(ids) != 2 || !containsInt(ids, teamA) || !containsInt(ids, teamB) {
+		t.Errorf("expected team_ids to contain %d and %d, got %v", teamA, teamB, ids)
+	}
+	names, ok := groups[0]["team_names"].([]any)
+	if !ok || len(names) != len(ids) {
+		t.Errorf("expected team_names positionally aligned with team_ids, got %v", groups[0]["team_names"])
+	}
+}
+
+// TestBoard_GenericEventCarriesTerminTeams verifies that a generic event, whose
+// slots have ds.team_id=NULL, still exposes the team(s) of its Termin via
+// game_teams.
+func TestBoard_GenericEventCarriesTerminTeams(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	// generic event as a game row with its game_teams link
+	res, err := db.Exec(
+		`INSERT INTO games (season_id, opponent, date, time, event_type, is_home) VALUES (?, ?, ?, ?, 'generisch', 0)`,
+		seasonID, "Vereinsfest", "2026-06-14", "10:00")
+	if err != nil {
+		t.Fatalf("insert game: %v", err)
+	}
+	gameID64, _ := res.LastInsertId()
+	gameID := int(gameID64)
+	if _, err := db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, teamA); err != nil {
+		t.Fatalf("game_teams: %v", err)
+	}
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+	// slot with team_id NULL but linked to the generic event
+	if _, err := db.Exec(
+		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, slots_filled, team_id, season_id, game_id)
+		 VALUES (?, ?, ?, 2, 0, NULL, ?, ?)`,
+		"Aufbau", "2026-06-14", dtID, seasonID, gameID); err != nil {
+		t.Fatalf("insert slot: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	got := testutil.Get(t, srv, "/api/duty-board", token)
+	if got.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", got.StatusCode)
+	}
+
+	var groups []map[string]any
+	json.NewDecoder(got.Body).Decode(&groups)
+	got.Body.Close()
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+	ids := groupTeamIDs(t, groups[0])
+	if len(ids) != 1 || ids[0] != teamA {
+		t.Errorf("expected team_ids=[%d] from game_teams despite NULL slot team_id, got %v", teamA, ids)
 	}
 }
 
@@ -1443,9 +1599,12 @@ func TestBoard_TeamNameUsesShortForm(t *testing.T) {
 	if len(groups) == 0 {
 		t.Fatalf("expected at least one group")
 	}
-	got, _ := groups[0]["team_name"].(string)
-	if got != "mB" {
-		t.Errorf("expected team_name 'mB' (single team in B-Jugend männlich), got %q", got)
+	names, ok := groups[0]["team_names"].([]any)
+	if !ok || len(names) != 1 {
+		t.Fatalf("expected single-element team_names, got %v", groups[0]["team_names"])
+	}
+	if got, _ := names[0].(string); got != "mB" {
+		t.Errorf("expected team_names[0] 'mB' (single team in B-Jugend männlich), got %q", got)
 	}
 }
 
