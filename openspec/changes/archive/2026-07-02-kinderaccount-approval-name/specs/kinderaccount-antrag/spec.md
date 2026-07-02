@@ -1,22 +1,4 @@
-# kinderaccount-antrag Specification
-
-## Purpose
-TBD - created by archiving change kinderaccount-ohne-email. Update Purpose after archive.
-## Requirements
-### Requirement: Beitrittsantrag-Variante „Kinderaccount"
-Das öffentliche Beitrittsantrag-Formular SHALL eine Variante „Kinderaccount anlegen" anbieten. Ist sie aktiv, MUSS der Antrag den Vor- und Nachnamen des Kindes sowie eine verwaltende Eltern-E-Mail erfassen (statt einer eigenen E-Mail des Antragstellers) und mit `is_child=1` sowie `parent_email` gespeichert werden. Ein Geschlechtsfeld wird NICHT erfasst.
-
-#### Scenario: Kinderantrag wird angelegt
-- **WHEN** ein Kinderantrag mit Vorname, Nachname und gültiger `parent_email` abgeschickt wird
-- **THEN** legt das System einen `membership_requests`-Eintrag mit `is_child=1`, gesetztem `parent_email` und `status='pending'` an (HTTP 201/200)
-
-#### Scenario: Kinderantrag ohne Eltern-E-Mail wird abgelehnt
-- **WHEN** ein Kinderantrag ohne `parent_email` (oder mit ungültiger E-Mail) abgeschickt wird
-- **THEN** lehnt das System mit HTTP 400 ab
-
-#### Scenario: Standard-Antrag bleibt unverändert
-- **WHEN** ein Antrag ohne Kinderaccount-Variante (eigene E-Mail) abgeschickt wird
-- **THEN** wird er wie bisher mit `is_child=0` gespeichert
+## ADDED Requirements
 
 ### Requirement: Approve eines Kinderantrags erzeugt Konto und Eltern-Mail
 
@@ -56,3 +38,8 @@ Bereits vor Einführung des Namens-Fixes ohne Namen angelegte Kinder-Konten (`ca
 - **WHEN** ein namenloses Kinder-Konto keinem eindeutigen `membership_requests`-Antrag zugeordnet werden kann
 - **THEN** bleiben `first_name`/`last_name` des Kontos unverändert (leer), ohne einen falschen Namen zu raten
 
+## REMOVED Requirements
+
+### Requirement: Approve eines Kinderantrags erzeugt Konto, Mitglied und Eltern-Mail
+**Reason**: Fehlformulierung — der Approve legt bewusst KEIN Mitglied an (nur ein `users`-Konto, „reine Korrespondenz"; `internal/auth/handler.go:493-497`). Die Requirement und ihre Szenarien beschrieben eine Mitglieds-Erzeugung, die der Code nie durchführte (Spec/Code-Drift).
+**Migration**: Ersetzt durch „Approve eines Kinderantrags erzeugt Konto und Eltern-Mail" (korrigierte Formulierung: nur Konto inkl. `first_name`/`last_name`, kein `members`-Datensatz).
