@@ -181,23 +181,6 @@ func validRsvpDefault(v string) bool {
 	return v == "confirmed" || v == "declined" || v == "none"
 }
 
-// rsvpSettingsConflict reports whether the combination of defaults + require_reason
-// is contradictory (a Default-Absage entsteht ohne Nutzerhandlung → kein Grund
-// erhebbar). Returns true when a HTTP 400 response should be sent.
-func rsvpSettingsConflict(defPlayers, defExtended string, requireReason int) bool {
-	return requireReason == 1 && (defPlayers == "declined" || defExtended == "declined")
-}
-
-// writeInvalidRsvpSettings emits the canonical 400 response for conflicting RSVP settings.
-func writeInvalidRsvpSettings(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"error":   "invalid_rsvp_settings",
-		"message": "„Standardmäßig abgesagt“ ist nicht mit „Begründung bei Absage erforderlich“ kombinierbar.",
-	})
-}
-
 // GET /api/training-series
 func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -319,10 +302,6 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validRsvpDefault(req.RsvpDefaultPlayers) || !validRsvpDefault(req.RsvpDefaultExtended) {
 		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
-		return
-	}
-	if rsvpSettingsConflict(req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason) {
-		writeInvalidRsvpSettings(w)
 		return
 	}
 	ok, err := h.hasTeamAccess(r.Context(), claims, req.TeamID)
@@ -466,10 +445,6 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	rsvpRequireReason := curReqReason
 	if req.RsvpRequireReason != nil {
 		rsvpRequireReason = *req.RsvpRequireReason
-	}
-	if rsvpSettingsConflict(rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason) {
-		writeInvalidRsvpSettings(w)
-		return
 	}
 
 	until, err := time.Parse("2006-01-02", req.ValidUntil)
@@ -745,10 +720,6 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
 		return
 	}
-	if rsvpSettingsConflict(req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason) {
-		writeInvalidRsvpSettings(w)
-		return
-	}
 	ok, err := h.hasTeamAccess(r.Context(), claims, req.TeamID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -858,46 +829,21 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 	// Partial-Update: RSVP-Voreinstellungen / -Grund-Pflicht nur setzen, wenn im Request enthalten.
 	if req.RsvpDefaultPlayers != nil || req.RsvpDefaultExtended != nil || req.RsvpRequireReason != nil {
-		// Merged Effektivwerte für Konfliktprüfung — nicht gesetzte Felder aus DB nachziehen.
-		var curDefPlayers, curDefExtended string
-		var curReqReason int
-		if err = h.db.QueryRowContext(r.Context(),
-			`SELECT rsvp_default_players, rsvp_default_extended, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
-			Scan(&curDefPlayers, &curDefExtended, &curReqReason); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		effDefPlayers := curDefPlayers
+		setParts := []string{}
+		setArgs := []interface{}{}
 		if req.RsvpDefaultPlayers != nil {
 			if !validRsvpDefault(*req.RsvpDefaultPlayers) {
 				http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
 				return
 			}
-			effDefPlayers = *req.RsvpDefaultPlayers
+			setParts = append(setParts, "rsvp_default_players=?")
+			setArgs = append(setArgs, *req.RsvpDefaultPlayers)
 		}
-		effDefExtended := curDefExtended
 		if req.RsvpDefaultExtended != nil {
 			if !validRsvpDefault(*req.RsvpDefaultExtended) {
 				http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
 				return
 			}
-			effDefExtended = *req.RsvpDefaultExtended
-		}
-		effReqReason := curReqReason
-		if req.RsvpRequireReason != nil {
-			effReqReason = *req.RsvpRequireReason
-		}
-		if rsvpSettingsConflict(effDefPlayers, effDefExtended, effReqReason) {
-			writeInvalidRsvpSettings(w)
-			return
-		}
-		setParts := []string{}
-		setArgs := []interface{}{}
-		if req.RsvpDefaultPlayers != nil {
-			setParts = append(setParts, "rsvp_default_players=?")
-			setArgs = append(setArgs, *req.RsvpDefaultPlayers)
-		}
-		if req.RsvpDefaultExtended != nil {
 			setParts = append(setParts, "rsvp_default_extended=?")
 			setArgs = append(setArgs, *req.RsvpDefaultExtended)
 		}
@@ -1019,9 +965,10 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	// Order must match the ?-markers in the query:
 	// 1. member_id (explicit_rsvp), 2. member_id (stammkader-check for default),
-	// 3. member_id (extended-check for default), 4. member_id (my_rsvp_locked subquery),
+	// 3. member_id (extended-check for default), 4. member_id (trainer-check for default),
+	// 5. member_id (my_rsvp_locked subquery),
 	// 5. teamArgs (WHERE), 6. from, 7. to, 8. optional team filter
-	args := append([]any{memberID, memberID, memberID, memberID}, teamArgs...)
+	args := append([]any{memberID, memberID, memberID, memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 	optTeamFilter := ""
 	if teamFilter != "" {
@@ -1067,6 +1014,8 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		           THEN NULLIF(ts.rsvp_default_players, 'none')
 		         WHEN EXISTS (SELECT 1 FROM kader_extended_members kemMe JOIN kader kMe ON kMe.id=kemMe.kader_id WHERE kemMe.member_id=? AND kMe.team_id=ts.team_id AND kMe.season_id=ts.season_id)
 		           THEN NULLIF(ts.rsvp_default_extended, 'none')
+		         WHEN EXISTS (SELECT 1 FROM kader_trainers ktMe JOIN kader kTr ON kTr.id=ktMe.kader_id WHERE ktMe.member_id=? AND kTr.team_id=ts.team_id AND kTr.season_id=ts.season_id)
+		           THEN 'confirmed'
 		         ELSE NULL
 		       END AS default_rsvp,
 		       (SELECT absence_id IS NOT NULL FROM training_responses WHERE training_id = ts.id AND member_id = ? LIMIT 1),

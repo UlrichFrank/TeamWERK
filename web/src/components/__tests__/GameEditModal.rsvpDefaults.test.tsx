@@ -55,19 +55,20 @@ describe('GameEditModal — RSVP-Voreinstellung', () => {
     expect(body.rsvp_default_players).toBe('confirmed')
   })
 
-  test('Konflikt-Sperre wirkt in beide Richtungen', async () => {
+  test('declined und Reason-Pflicht sind frei kombinierbar (keine Sperre)', async () => {
     const { container } = render(
       <GameEditModal game={GAME} onClose={() => {}} onSaved={() => {}} />,
     )
     await screen.findByText('RSVP-Voreinstellung')
 
-    // Reason gesetzt → declined-Radios disabled.
+    // Reason gesetzt → declined-Radios bleiben aktiv.
     fireEvent.click(screen.getByLabelText('Begründung bei Absage erforderlich'))
-    expect(container.querySelector<HTMLInputElement>('input[name="rsvp-players"][value="declined"]')!.disabled).toBe(true)
+    expect(container.querySelector<HTMLInputElement>('input[name="rsvp-players"][value="declined"]')!.disabled).toBe(false)
 
-    // Reason wieder lösen, dann declined wählen → Reason-Checkbox disabled.
-    fireEvent.click(screen.getByLabelText('Begründung bei Absage erforderlich'))
+    // declined wählen → Reason-Checkbox bleibt aktiv und gesetzt.
     fireEvent.click(container.querySelector<HTMLInputElement>('input[name="rsvp-extended"][value="declined"]')!)
-    expect((screen.getByLabelText('Begründung bei Absage erforderlich') as HTMLInputElement).disabled).toBe(true)
+    const reason = screen.getByLabelText('Begründung bei Absage erforderlich') as HTMLInputElement
+    expect(reason.disabled).toBe(false)
+    expect(reason.checked).toBe(true)
   })
 })

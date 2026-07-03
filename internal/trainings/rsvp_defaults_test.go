@@ -135,9 +135,9 @@ func TestRsvpDefault_SeriesCopiesToSessions(t *testing.T) {
 	}
 }
 
-// 4.4 Konfliktsperre: PUT mit players='declined' + rsvp_require_reason=1 → HTTP 400,
-// keine DB-Änderung.
-func TestRsvpDefault_ConflictRejected(t *testing.T) {
+// declined + rsvp_require_reason=1 ist zulässig (keine Konflikt-Sperre mehr) — die
+// beiden Einstellungen betreffen disjunkte Gruppen. PUT speichert beide Werte.
+func TestRsvpDefault_DeclinedWithRequireReasonAccepted(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
@@ -158,20 +158,16 @@ func TestRsvpDefault_ConflictRejected(t *testing.T) {
 		"rsvp_require_reason":  1,
 	}
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/training-sessions/%d", sessionID), token, body)
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", res.StatusCode)
-	}
-	var payload map[string]any
-	json.NewDecoder(res.Body).Decode(&payload)
-	if payload["error"] != "invalid_rsvp_settings" {
-		t.Errorf("expected error=invalid_rsvp_settings, got %v", payload["error"])
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
 	}
 
 	var players string
-	db.QueryRow(`SELECT rsvp_default_players FROM training_sessions WHERE id=?`, sessionID).Scan(&players)
-	if players != "none" {
-		t.Errorf("session must be unchanged on 400, got players=%s", players)
+	var reqReason int
+	db.QueryRow(`SELECT rsvp_default_players, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).Scan(&players, &reqReason)
+	if players != "declined" || reqReason != 1 {
+		t.Errorf("expected (declined,1), got (%s,%d)", players, reqReason)
 	}
 }
 
@@ -278,5 +274,68 @@ func TestRsvpDefault_TrainerHardConfirmed_NotCounted(t *testing.T) {
 	res.Body.Close()
 	if s.ConfirmedCount != 0 || s.DeclinedCount != 0 {
 		t.Errorf("trainer must not be counted, got confirmed=%d declined=%d", s.ConfirmedCount, s.DeclinedCount)
+	}
+}
+
+// listSessionMyRSVP holt GET /api/training-sessions und liefert my_rsvp der Session.
+func listSessionMyRSVP(t *testing.T, srv *httptest.Server, token string, sessionID int) *string {
+	t.Helper()
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2020-01-01&to=2030-12-31", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("list sessions: expected 200, got %d", res.StatusCode)
+	}
+	var list []struct {
+		ID     int     `json:"id"`
+		MyRSVP *string `json:"my_rsvp"`
+	}
+	json.NewDecoder(res.Body).Decode(&list)
+	res.Body.Close()
+	for _, s := range list {
+		if s.ID == sessionID {
+			return s.MyRSVP
+		}
+	}
+	t.Fatalf("session %d not in list", sessionID)
+	return nil
+}
+
+// Trainer des Teams ohne Response → my_rsvp='confirmed' (virtueller Trainer-Default).
+func TestRsvpDefault_TrainerMyRSVPConfirmed(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+
+	srv := testServer(t, trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub()))
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+
+	got := listSessionMyRSVP(t, srv, token, sessionID)
+	if got == nil || *got != "confirmed" {
+		t.Errorf("trainer should see my_rsvp=confirmed, got %v", got)
+	}
+}
+
+// Vorstand (kein Trainer/Spieler des Teams) → my_rsvp=null trotz Sichtbarkeit.
+func TestRsvpDefault_NonTrainerMyRSVPNull(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
+	testutil.CreateKader(t, db, teamID, seasonID)
+
+	vorstandUserID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, vorstandUserID)
+
+	srv := testServer(t, trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub()))
+	token := testutil.Token(t, vorstandUserID, "standard", []string{"vorstand"})
+
+	got := listSessionMyRSVP(t, srv, token, sessionID)
+	if got != nil {
+		t.Errorf("non-participant should see my_rsvp=null, got %v", *got)
 	}
 }
