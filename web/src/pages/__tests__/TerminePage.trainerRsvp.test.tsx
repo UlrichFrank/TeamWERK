@@ -39,6 +39,16 @@ function renderTrainer(session: Record<string, unknown>) {
   })
 }
 
+function renderTrainerElternteil(session: Record<string, unknown>) {
+  renderAsPersona(<TerminePage />, 'trainer_elternteil', {
+    mocks: [
+      { url: /\/training-sessions\?/, data: [session] },
+      { url: /\/games\/my/, data: [] },
+      { url: /\/teams/, data: [] },
+    ],
+  })
+}
+
 describe('TerminePage — Trainer-RSVP-Buttons', () => {
   test('Trainer eines Team-Termins (my_rsvp=confirmed) sieht Buttons', async () => {
     renderTrainer({ ...baseSession, my_rsvp: 'confirmed', my_rsvp_is_default: true })
@@ -49,5 +59,31 @@ describe('TerminePage — Trainer-RSVP-Buttons', () => {
     renderTrainer({ ...baseSession, my_rsvp: null })
     await screen.findByText('18:00 – 19:30')
     expect(screen.queryByText('Zusagen')).toBeNull()
+  })
+
+  test('Trainer-Elternteil mit Kind im Team sieht eigene UND Kind-Buttons', async () => {
+    renderTrainerElternteil({
+      ...baseSession,
+      my_rsvp: 'confirmed',
+      my_rsvp_is_default: true,
+      children_rsvp: [{ member_id: 99, name: 'Lias Muster', rsvp: null }],
+    })
+    // Eigene Zeile hat Label "Ich" und Buttons
+    expect(await screen.findByText('Ich')).not.toBeNull()
+    expect(screen.getByText('Lias Muster')).not.toBeNull()
+    // Beide Zeilen → je 1x "Zusagen" pro Zeile
+    expect(screen.getAllByText('Zusagen').length).toBe(2)
+  })
+
+  test('Trainer-Elternteil ohne Kind im Team sieht trotzdem eigene Buttons', async () => {
+    renderTrainerElternteil({
+      ...baseSession,
+      my_rsvp: 'confirmed',
+      my_rsvp_is_default: true,
+      // kein children_rsvp → Kind nicht im Team
+    })
+    expect(await screen.findByText('Zusagen')).not.toBeNull()
+    // Kein "Ich"-Label, da keine Kind-Zeile daneben steht
+    expect(screen.queryByText('Ich')).toBeNull()
   })
 })
