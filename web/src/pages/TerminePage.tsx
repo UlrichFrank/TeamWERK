@@ -292,7 +292,7 @@ export default function TerminePage() {
     scrollToTodayRef.current = false
     const divider = document.getElementById('today-divider')
     if (divider) {
-      divider.scrollIntoView({ behavior: 'auto', block: 'start' })
+      divider.scrollIntoView({ behavior: 'auto', block: 'center' })
       return
     }
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'auto' })
