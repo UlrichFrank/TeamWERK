@@ -3,9 +3,7 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `training-rsvp`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-
 ## Requirements
-
 ### Requirement: Training-RSVP-Route
 
 Die Training-RSVP-Funktionalität SHALL über `/termine` erreichbar sein.
@@ -184,4 +182,76 @@ Listing- und Detail-Endpoints für Trainings SHALL pro Session ein Feld `rsvp_lo
 #### Scenario: rsvp_locks_at = start - 2h
 - **WHEN** eine Session am 30.06.2026 um 18:00 Uhr Europe/Berlin startet
 - **THEN** liefert die API `rsvp_locks_at = "2026-06-30T14:00:00Z"` (16:00 Berliner Sommerzeit = 14:00 UTC)
+
+### Requirement: Trainer können auf Trainings-RSVP antworten
+
+`POST /api/training-sessions/{id}/respond` SHALL akzeptieren, dass ein User mit Vereinsfunktion `trainer` für seine eigene `member_id` oder für die `member_id` eines anderen Trainers antwortet. Der `status` MUSS einer von `confirmed | declined | maybe` sein.
+
+Trainer-Rows in `training_responses` werden NICHT in `confirmed_count` / `declined_count` / `pending_count` gezählt (siehe `trainer-rsvp`-Capability).
+
+#### Scenario: Trainer sagt für sich selbst zu
+
+- **WHEN** ein Trainer `POST /api/training-sessions/{id}/respond` mit `{"status":"confirmed"}` aufruft (implizit auf eigene `member_id`)
+- **THEN** antwortet der Server mit HTTP 204
+- **THEN** existiert eine Row in `training_responses` mit `member_id=<Trainers Member>` und `status='confirmed'`
+
+#### Scenario: Trainer sagt für anderen Trainer ab
+
+- **WHEN** Trainer A `POST …/respond` mit `member_id=<TrainerB>` und `status='declined'` aufruft
+- **THEN** antwortet der Server mit HTTP 204 und legt die Row für Trainer B an
+
+### Requirement: RSVP-Voreinstellung pro Rolle (Trainings)
+
+Jede Trainings-Session und Trainings-Serie SHALL für Stammkader-Spieler und den Erweiterten Kader **unabhängig** eine der drei Voreinstellungen tragen: `confirmed` („standardmäßig zugesagt"), `declined` („standardmäßig abgesagt"), `none` („keine automatische Rückmeldung"). Die Spalten heißen `rsvp_default_players` und `rsvp_default_extended` (TEXT NOT NULL DEFAULT `'none'` mit `CHECK` auf die drei Werte). Trainer haben KEINE Voreinstellungs-Spalte und werden weiterhin hart als `confirmed` behandelt.
+
+Die Voreinstellung wird **virtuell** angewendet: fehlt zu einem Mitglied eine `training_responses`-Row, liefert die API den passenden Default-Status. Es werden dabei KEINE Rows in `training_responses` erzeugt.
+
+#### Scenario: Stammkader-Spieler ohne Response bei `players='confirmed'`
+- **WHEN** eine Session `rsvp_default_players='confirmed'` hat
+- **AND** ein Mitglied ist über `kader_members` im Stammkader und hat keine `training_responses`-Row
+- **THEN** liefert `GET /api/training-sessions/{id}/attendances` für dieses Mitglied `rsvp_status='confirmed'` und `rsvp_is_default=true`
+
+#### Scenario: Erweiterter Kader unabhängig von Stammkader
+- **WHEN** eine Session `rsvp_default_players='confirmed'` und `rsvp_default_extended='none'` hat
+- **AND** ein Mitglied ist nur über `kader_extended_members` beteiligt und hat keine Response
+- **THEN** liefert die API für dieses Mitglied `rsvp_status=null` (kein Default) und `rsvp_is_default=false`
+
+#### Scenario: Default „standardmäßig abgesagt" wird angezeigt
+- **WHEN** eine Session `rsvp_default_extended='declined'` hat
+- **AND** ein Erweitertes-Kader-Mitglied hat keine Response
+- **THEN** liefert die API `rsvp_status='declined'` und `rsvp_is_default=true`
+
+#### Scenario: Aktive Response überschreibt Default
+- **WHEN** dieselbe Session `rsvp_default_players='confirmed'` hat und ein Stammkader-Spieler hat `training_responses.status='declined'`
+- **THEN** liefert die API `rsvp_status='declined'` und `rsvp_is_default=false`
+
+---
+
+### Requirement: Header-Zähler bezieht Voreinstellungen ein (Trainings)
+
+`GET /api/training-sessions/{id}` sowie die aggregierte Session-Liste SHALL in `confirmed_count`, `declined_count` und `pending_count` Mitglieder mit virtuellem Default-Status ihrer Rolle mitzählen — nach der Formel `COALESCE(training_responses.status, session.rsvp_default_<role>)`, wobei `'none'` nirgends mitzählt. Trainer bleiben (unverändert) aus allen drei Zählern ausgeschlossen.
+
+#### Scenario: Zähler bei `players='confirmed'` ohne Responses
+- **WHEN** eine Session `rsvp_default_players='confirmed'` hat und 3 Stammkader-Spieler ohne Response existieren
+- **THEN** enthält der Session-Response `confirmed_count=3` und `declined_count=0`
+
+#### Scenario: Zähler bei `extended='declined'` ohne Responses
+- **WHEN** eine Session `rsvp_default_extended='declined'` hat und 2 Erweiterte-Kader-Mitglieder ohne Response existieren
+- **THEN** enthält der Session-Response `declined_count=2`
+
+#### Scenario: Zähler ignoriert Default `'none'`
+- **WHEN** beide Voreinstellungen `'none'` sind und keine Responses existieren
+- **THEN** sind `confirmed_count=0`, `declined_count=0`, `pending_count` = Anzahl der spieler-orientierten Zeilen
+
+### Requirement: Trainer-Default `confirmed` in der Trainings-Session-Liste
+
+`GET /api/training-sessions` SHALL für einen aufrufenden User, der über `kader_trainers` Trainer des Team-Kaders der Session ist und **keine** eigene `training_responses`-Row hat, `my_rsvp='confirmed'` als virtuellen Default liefern (Priorität: explizite Response > Stammkader-Default > Erweitert-Default > Trainer-`confirmed` > `null`). Für User, die keine Beziehung zur Session haben (weder Spieler, Erweiterter Kader noch Trainer dieses Teams), bleibt `my_rsvp=null`.
+
+#### Scenario: Trainer ohne Response sieht confirmed
+- **WHEN** ein User Trainer des Team-Kaders einer Session ist und keine `training_responses`-Row hat
+- **THEN** liefert `GET /api/training-sessions` für diese Session `my_rsvp='confirmed'`
+
+#### Scenario: Fremder Funktionsträger sieht keinen Default
+- **WHEN** ein Vorstand (kein Trainer/Spieler/Erweiterter dieses Teams) die Session sieht und keine Response hat
+- **THEN** liefert `GET /api/training-sessions` für diese Session `my_rsvp=null`
 

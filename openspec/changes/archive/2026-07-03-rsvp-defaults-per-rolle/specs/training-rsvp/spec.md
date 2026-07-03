@@ -57,11 +57,3 @@ Das System SHALL `PUT /api/training-sessions/{id}` und `PUT /api/training-series
 #### Scenario: Zähler ignoriert Default `'none'`
 - **WHEN** beide Voreinstellungen `'none'` sind und keine Responses existieren
 - **THEN** sind `confirmed_count=0`, `declined_count=0`, `pending_count` = Anzahl der spieler-orientierten Zeilen
-
-## REMOVED Requirements
-
-### Requirement: `rsvp_opt_out`-Feld (Trainings)
-
-**Reason**: Der Boolean `rsvp_opt_out` konnte nur zwei Modi abbilden (Auto-Confirm für Stammkader ja/nein) und ignorierte den Erweiterten Kader. Ersetzt durch zwei orthogonale Enum-Spalten `rsvp_default_players` und `rsvp_default_extended`, die je drei Modi (`confirmed`/`declined`/`none`) für die beiden Kader-Rollen unabhängig ausdrücken.
-
-**Migration**: Bestandsdaten werden per Migration `018` konservativ übersetzt (`rsvp_opt_out=1` → `players='confirmed'`, sonst `'none'`; `extended='none'` überall). `PUT`-Requests mit dem alten Feld `rsvp_opt_out` werden mit HTTP 400 abgelehnt (kein silent no-op).
