@@ -437,17 +437,21 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type, g.template_id,
 		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0),
 		       CASE WHEN g.rsvp_opt_out = 1
-		            THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
+		            THEN COALESCE((SELECT COUNT(*) FROM game_responses gr_c WHERE gr_c.game_id=g.id AND gr_c.status='confirmed'
+		                            AND gr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0) + (
 		                   SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
 		                   JOIN kader k4 ON k4.team_id = gt4.team_id AND k4.season_id = g.season_id
 		                   JOIN kader_members km ON km.kader_id = k4.id
 		                   WHERE gt4.game_id = g.id
 		                   AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = km.member_id)
 		                 )
-		            ELSE COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0)
+		            ELSE COALESCE((SELECT COUNT(*) FROM game_responses gr_c WHERE gr_c.game_id=g.id AND gr_c.status='confirmed'
+		                            AND gr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0)
 		       END,
-		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
-		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses gr_d WHERE gr_d.game_id=g.id AND gr_d.status='declined'
+		                  AND gr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses gr_m WHERE gr_m.game_id=g.id AND gr_m.status='maybe'
+		                  AND gr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0),
 		       g.rsvp_opt_out, g.rsvp_require_reason, g.note,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM games g
@@ -644,17 +648,21 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		`SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id,
 		        g.rsvp_opt_out, g.rsvp_require_reason, g.note,
 		        CASE WHEN g.rsvp_opt_out = 1
-		             THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
+		             THEN COALESCE((SELECT COUNT(*) FROM game_responses gr_c WHERE gr_c.game_id=g.id AND gr_c.status='confirmed'
+		                             AND gr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0) + (
 		                    SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
 		                    JOIN kader k4 ON k4.team_id = gt4.team_id AND k4.season_id = g.season_id
 		                    JOIN kader_members km ON km.kader_id = k4.id
 		                    WHERE gt4.game_id = g.id
 		                    AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = km.member_id)
 		                  )
-		             ELSE COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0)
+		             ELSE COALESCE((SELECT COUNT(*) FROM game_responses gr_c WHERE gr_c.game_id=g.id AND gr_c.status='confirmed'
+		                             AND gr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0)
 		        END,
-		        COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
-		        COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
+		        COALESCE((SELECT COUNT(*) FROM game_responses gr_d WHERE gr_d.game_id=g.id AND gr_d.status='declined'
+		                   AND gr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0),
+		        COALESCE((SELECT COUNT(*) FROM game_responses gr_m WHERE gr_m.game_id=g.id AND gr_m.status='maybe'
+		                   AND gr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0),
 		        v.id, v.name, v.street, v.city, v.postal_code, v.note
 		 FROM games g LEFT JOIN venues v ON v.id = g.venue_id WHERE g.id=?`, id).
 		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull,
@@ -1888,17 +1896,21 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		            FROM game_teams gt_l JOIN teams t_l ON t_l.id = gt_l.team_id
 		            WHERE gt_l.game_id = g.id ORDER BY l)),
 		       CASE WHEN g.rsvp_opt_out = 1
-		            THEN COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0) + (
+		            THEN COALESCE((SELECT COUNT(*) FROM game_responses gr_c WHERE gr_c.game_id=g.id AND gr_c.status='confirmed'
+		                            AND gr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0) + (
 		                   SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
 		                   JOIN kader k4 ON k4.team_id = gt4.team_id AND k4.season_id = g.season_id
 		                   JOIN kader_members km ON km.kader_id = k4.id
 		                   WHERE gt4.game_id = g.id
 		                   AND NOT EXISTS (SELECT 1 FROM game_responses gr2 WHERE gr2.game_id = g.id AND gr2.member_id = km.member_id)
 		                 )
-		            ELSE COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='confirmed'),0)
+		            ELSE COALESCE((SELECT COUNT(*) FROM game_responses gr_c WHERE gr_c.game_id=g.id AND gr_c.status='confirmed'
+		                            AND gr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0)
 		       END,
-		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='declined'),0),
-		       COALESCE((SELECT COUNT(*) FROM game_responses WHERE game_id=g.id AND status='maybe'),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses gr_d WHERE gr_d.game_id=g.id AND gr_d.status='declined'
+		                  AND gr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0),
+		       COALESCE((SELECT COUNT(*) FROM game_responses gr_m WHERE gr_m.game_id=g.id AND gr_m.status='maybe'
+		                  AND gr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0),
 		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
 		       g.rsvp_opt_out, g.rsvp_require_reason, g.note,
@@ -2178,6 +2190,7 @@ type participantItem struct {
 	MemberID         int     `json:"member_id"`
 	MemberName       string  `json:"member_name"`
 	IsExtended       bool    `json:"is_extended"`
+	IsTrainer        bool    `json:"is_trainer"`
 	RsvpStatus       *string `json:"rsvp_status"`
 	InLineup         bool    `json:"in_lineup"`
 	TeamID           int     `json:"team_id"`
@@ -2240,11 +2253,29 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	// implizit als "confirmed". Extended-Mitglieder sind davon ausgenommen — sie
 	// müssen explizit zusagen.
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, rsvp_status, in_lineup, team_id, cross_team_visible
+		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, in_lineup, team_id, cross_team_visible
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       0 AS is_extended,
+			       1 AS is_trainer,
+			       COALESCE(gr.status, 'confirmed') AS rsvp_status,
+			       0 AS in_lineup,
+			       k.team_id AS team_id,
+			       m.cross_team_visible AS cross_team_visible
+			FROM members m
+			JOIN kader_trainers kt ON kt.member_id = m.id
+			JOIN kader k ON k.id = kt.kader_id
+			  AND k.season_id = (SELECT season_id FROM games WHERE id = ?)
+			JOIN game_teams gt ON gt.game_id = ? AND gt.team_id = k.team_id
+			LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
+
+			UNION
+
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       0 AS is_extended,
+			       0 AS is_trainer,
 			       COALESCE(gr.status,
 			                CASE WHEN (SELECT rsvp_opt_out FROM games WHERE id = ?) = 1
 			                     THEN 'confirmed' ELSE NULL END) AS rsvp_status,
@@ -2263,6 +2294,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       1 AS is_extended,
+			       0 AS is_trainer,
 			       NULL AS rsvp_status,
 			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup,
 			       k.team_id AS team_id,
@@ -2274,6 +2306,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			JOIN game_teams gt ON gt.game_id = ? AND gt.team_id = k.team_id
 		)
 		ORDER BY member_name`,
+		gameID, gameID, gameID,
 		gameID, gameID, gameID, gameID, gameID,
 		gameID, gameID, gameID)
 	if err != nil {
@@ -2289,9 +2322,10 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p participantItem
 		var status sql.NullString
-		var isExtended, inLineup, ctv int
-		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &status, &inLineup, &p.TeamID, &ctv)
+		var isExtended, isTrainer, inLineup, ctv int
+		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &isTrainer, &status, &inLineup, &p.TeamID, &ctv)
 		p.IsExtended = isExtended == 1
+		p.IsTrainer = isTrainer == 1
 		p.InLineup = inLineup == 1
 		p.crossTeamVisible = ctv == 1
 		if status.Valid {
@@ -2550,6 +2584,7 @@ type gameAttendanceItem struct {
 	MemberID   int     `json:"member_id"`
 	MemberName string  `json:"member_name"`
 	IsExtended bool    `json:"is_extended"`
+	IsTrainer  bool    `json:"is_trainer"`
 	RSVPStatus *string `json:"rsvp_status"`
 	Reason     *string `json:"reason"`
 	Present    *bool   `json:"present"`
@@ -2636,6 +2671,31 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	for _, e := range entries {
+		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die als Trainer eines
+		// beteiligten Teams eingetragen sind und nicht auch als Spieler geführt werden,
+		// werden mit 400 abgelehnt.
+		var isTrainerOnly int
+		if err := tx.QueryRowContext(r.Context(), `
+			SELECT CASE
+			  WHEN EXISTS (
+			    SELECT 1 FROM kader_trainers kt
+			    JOIN kader k ON k.id=kt.kader_id AND k.season_id=(SELECT season_id FROM games WHERE id=?)
+			    WHERE kt.member_id=? AND k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=?)
+			  ) AND NOT EXISTS (
+			    SELECT 1 FROM kader_members km
+			    JOIN kader k2 ON k2.id=km.kader_id AND k2.season_id=(SELECT season_id FROM games WHERE id=?)
+			    WHERE km.member_id=? AND k2.team_id IN (SELECT team_id FROM game_teams WHERE game_id=?)
+			  )
+			  THEN 1 ELSE 0 END`,
+			gameID, e.MemberID, gameID, gameID, e.MemberID, gameID).Scan(&isTrainerOnly); err != nil {
+			fmt.Fprintf(os.Stderr, "SaveGameAttendances trainer check: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if isTrainerOnly == 1 {
+			http.Error(w, "attendance cannot be recorded for trainers", http.StatusBadRequest)
+			return
+		}
 		present := 0
 		if e.Present {
 			present = 1
@@ -2691,11 +2751,28 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, rsvp_status, reason, present
+		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, reason, present
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       0 AS is_extended,
+			       1 AS is_trainer,
+			       gr.status AS rsvp_status,
+			       gr.reason AS reason,
+			       NULL AS present
+			FROM members m
+			JOIN kader_trainers kt ON kt.member_id = m.id
+			JOIN kader k ON k.id = kt.kader_id
+			  AND k.season_id = ?
+			  AND k.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
+			LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
+
+			UNION
+
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       0 AS is_extended,
+			       0 AS is_trainer,
 			       gr.status AS rsvp_status,
 			       gr.reason AS reason,
 			       ga.present AS present
@@ -2706,12 +2783,20 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			  AND k.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
 			LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
 			LEFT JOIN game_attendances ga ON ga.game_id = ? AND ga.member_id = m.id
+			WHERE NOT EXISTS (
+				SELECT 1 FROM kader_trainers kt2
+				JOIN kader k2 ON k2.id = kt2.kader_id
+				  AND k2.season_id = ?
+				  AND k2.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
+				WHERE kt2.member_id = m.id
+			)
 
 			UNION
 
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       1 AS is_extended,
+			       0 AS is_trainer,
 			       gr.status AS rsvp_status,
 			       gr.reason AS reason,
 			       ga.present AS present
@@ -2729,11 +2814,18 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 				  AND k2.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
 				WHERE km2.member_id = m.id
 			)
+			AND NOT EXISTS (
+				SELECT 1 FROM kader_trainers kt3
+				JOIN kader k3 ON k3.id = kt3.kader_id
+				  AND k3.season_id = ?
+				  AND k3.team_id IN (SELECT team_id FROM game_teams WHERE game_id = ?)
+				WHERE kt3.member_id = m.id
+			)
 		)
 		ORDER BY member_name`,
-		seasonID, gameID, gameID, gameID,
-		seasonID, gameID, gameID, gameID,
-		seasonID, gameID)
+		seasonID, gameID, gameID,
+		seasonID, gameID, gameID, gameID, seasonID, gameID,
+		seasonID, gameID, gameID, gameID, seasonID, gameID, seasonID, gameID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "GetGameAttendances: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -2741,19 +2833,25 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	// Dedupe per member_id: ein Stammkader-Eintrag (is_extended=false)
-	// überschreibt einen erweiterten Eintrag.
+	// Dedupe per member_id: Trainer schlägt Stammkader schlägt erweiterten Kader.
+	// (Fachlich gibt es keine Spielertrainer, aber Query kann duplizieren; Priorität
+	// robust festhalten.)
 	byID := map[int]gameAttendanceItem{}
 	order := []int{}
 	for rows.Next() {
 		var item gameAttendanceItem
-		var isExtended int
+		var isExtended, isTrainer int
 		var rsvp, reason sql.NullString
 		var present sql.NullInt64
-		rows.Scan(&item.MemberID, &item.MemberName, &isExtended, &rsvp, &reason, &present)
+		rows.Scan(&item.MemberID, &item.MemberName, &isExtended, &isTrainer, &rsvp, &reason, &present)
 		item.IsExtended = isExtended == 1
+		item.IsTrainer = isTrainer == 1
 		if rsvp.Valid {
 			item.RSVPStatus = &rsvp.String
+		} else if item.IsTrainer {
+			// Trainer sind immer im Opt-out, unabhängig vom Session-Setting.
+			confirmed := "confirmed"
+			item.RSVPStatus = &confirmed
 		} else if rsvpOptOut == 1 && !item.IsExtended {
 			confirmed := "confirmed"
 			item.RSVPStatus = &confirmed
@@ -2761,12 +2859,16 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		if reason.Valid && reason.String != "" {
 			item.Reason = &reason.String
 		}
-		if present.Valid {
+		// Trainer haben keine Anwesenheitserfassung.
+		if present.Valid && !item.IsTrainer {
 			b := present.Int64 == 1
 			item.Present = &b
 		}
 		if existing, dup := byID[item.MemberID]; dup {
-			if existing.IsExtended && !item.IsExtended {
+			// Priorität: Trainer > Stammkader > Erweiterter Kader.
+			if item.IsTrainer && !existing.IsTrainer {
+				byID[item.MemberID] = item
+			} else if existing.IsExtended && !item.IsExtended && !existing.IsTrainer {
 				byID[item.MemberID] = item
 			}
 			continue
