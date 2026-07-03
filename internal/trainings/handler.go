@@ -937,6 +937,11 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		FROM training_sessions ts
 		LEFT JOIN teams t ON t.id = ts.team_id
 		LEFT JOIN training_responses tr ON tr.training_id = ts.id
+		     AND tr.member_id NOT IN (
+		         SELECT kt.member_id FROM kader_trainers kt
+		         JOIN kader k ON k.id = kt.kader_id
+		         WHERE k.team_id = ts.team_id AND k.season_id = ts.season_id
+		     )
 		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE %s AND ts.date >= ? AND ts.date <= ? %s
 		GROUP BY ts.id
@@ -1040,14 +1045,18 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.note, ts.status, ts.cancel_reason,
 		       CASE WHEN ts.rsvp_opt_out = 1
-		            THEN COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
+		            THEN COALESCE((SELECT COUNT(*) FROM training_responses tr_c WHERE tr_c.training_id=ts.id AND tr_c.status='confirmed'
+		                           AND tr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
 		                 + (SELECT COUNT(*) FROM player_memberships tm2
 		                    WHERE tm2.team_id = ts.team_id
 		                    AND NOT EXISTS (SELECT 1 FROM training_responses tr2 WHERE tr2.training_id=ts.id AND tr2.member_id=tm2.member_id))
-		            ELSE COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='confirmed'),0)
+		            ELSE COALESCE((SELECT COUNT(*) FROM training_responses tr_c WHERE tr_c.training_id=ts.id AND tr_c.status='confirmed'
+		                           AND tr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
 		       END,
-		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='declined'),0),
-		       COALESCE((SELECT COUNT(*) FROM training_responses WHERE training_id=ts.id AND status='maybe'),0),
+		       COALESCE((SELECT COUNT(*) FROM training_responses tr_d WHERE tr_d.training_id=ts.id AND tr_d.status='declined'
+		                  AND tr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0),
+		       COALESCE((SELECT COUNT(*) FROM training_responses tr_m WHERE tr_m.training_id=ts.id AND tr_m.status='maybe'
+		                  AND tr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0),
 		       (SELECT status FROM training_responses WHERE training_id=ts.id AND member_id=?),
 		       ts.rsvp_opt_out, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
@@ -1271,6 +1280,7 @@ type attendanceItem struct {
 	MemberID   int     `json:"member_id"`
 	MemberName string  `json:"member_name"`
 	IsExtended bool    `json:"is_extended"`
+	IsTrainer  bool    `json:"is_trainer"`
 	RSVPStatus *string `json:"rsvp_status"`
 	Reason     *string `json:"reason"`
 	Present    *bool   `json:"present"`
@@ -1314,11 +1324,26 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, rsvp_status, reason, present
+		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, reason, present
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       0 AS is_extended,
+			       1 AS is_trainer,
+			       tr.status AS rsvp_status,
+			       tr.reason AS reason,
+			       NULL AS present
+			FROM members m
+			JOIN kader_trainers kt ON kt.member_id = m.id
+			JOIN kader k ON k.id = kt.kader_id AND k.team_id = ? AND k.season_id = ?
+			LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
+
+			UNION
+
+			SELECT DISTINCT m.id AS member_id,
+			       m.first_name || ' ' || m.last_name AS member_name,
+			       0 AS is_extended,
+			       0 AS is_trainer,
 			       tr.status AS rsvp_status,
 			       tr.reason AS reason,
 			       ta.present AS present
@@ -1326,12 +1351,18 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			JOIN player_memberships pm ON pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?
 			LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 			LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
+			WHERE NOT EXISTS (
+				SELECT 1 FROM kader_trainers kt2
+				JOIN kader k2 ON k2.id = kt2.kader_id
+				WHERE kt2.member_id = m.id AND k2.team_id = ? AND k2.season_id = ?
+			)
 
 			UNION
 
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       1 AS is_extended,
+			       0 AS is_trainer,
 			       tr.status AS rsvp_status,
 			       tr.reason AS reason,
 			       ta.present AS present
@@ -1343,8 +1374,16 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			WHERE NOT EXISTS (
 				SELECT 1 FROM player_memberships pm WHERE pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?
 			)
+			AND NOT EXISTS (
+				SELECT 1 FROM kader_trainers kt3
+				JOIN kader k3 ON k3.id = kt3.kader_id
+				WHERE kt3.member_id = m.id AND k3.team_id = ? AND k3.season_id = ?
+			)
 		)
-		ORDER BY member_name`, teamID, seasonID, sessionID, sessionID, teamID, seasonID, sessionID, sessionID, teamID, seasonID)
+		ORDER BY member_name`,
+		teamID, seasonID, sessionID,
+		teamID, seasonID, sessionID, sessionID, teamID, seasonID,
+		teamID, seasonID, sessionID, sessionID, teamID, seasonID, teamID, seasonID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "GetAttendances: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -1355,13 +1394,18 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	result := []attendanceItem{}
 	for rows.Next() {
 		var item attendanceItem
-		var isExtended int
+		var isExtended, isTrainer int
 		var rsvp, reason sql.NullString
 		var present sql.NullInt64
-		rows.Scan(&item.MemberID, &item.MemberName, &isExtended, &rsvp, &reason, &present)
+		rows.Scan(&item.MemberID, &item.MemberName, &isExtended, &isTrainer, &rsvp, &reason, &present)
 		item.IsExtended = isExtended == 1
+		item.IsTrainer = isTrainer == 1
 		if rsvp.Valid {
 			item.RSVPStatus = &rsvp.String
+		} else if item.IsTrainer {
+			// Trainer sind immer im Opt-out-Modus, unabhängig vom Session-Setting.
+			confirmed := "confirmed"
+			item.RSVPStatus = &confirmed
 		} else if rsvpOptOut == 1 && !item.IsExtended {
 			confirmed := "confirmed"
 			item.RSVPStatus = &confirmed
@@ -1370,7 +1414,8 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		if canSeeReason && reason.Valid && reason.String != "" {
 			item.Reason = &reason.String
 		}
-		if present.Valid {
+		// Trainer haben keine Anwesenheitserfassung — present bleibt nil.
+		if present.Valid && !item.IsTrainer {
 			b := present.Int64 == 1
 			item.Present = &b
 		}
@@ -1429,6 +1474,24 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	for _, e := range entries {
+		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die zum Kader-Trainerstab
+		// gehören und nicht als Spieler im Kader stehen, werden mit 400 abgelehnt.
+		var isTrainerOnly int
+		if err := tx.QueryRowContext(r.Context(), `
+			SELECT CASE
+			  WHEN EXISTS (SELECT 1 FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id
+			               WHERE kt.member_id=? AND k.team_id=? AND k.season_id=(SELECT season_id FROM training_sessions WHERE id=?))
+			    AND NOT EXISTS (SELECT 1 FROM player_memberships pm WHERE pm.member_id=? AND pm.team_id=?)
+			  THEN 1 ELSE 0 END`,
+			e.MemberID, teamID, sessionID, e.MemberID, teamID).Scan(&isTrainerOnly); err != nil {
+			fmt.Fprintf(os.Stderr, "SaveAttendances trainer check: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if isTrainerOnly == 1 {
+			http.Error(w, "attendance cannot be recorded for trainers", http.StatusBadRequest)
+			return
+		}
 		present := 0
 		if e.Present {
 			present = 1

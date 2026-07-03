@@ -226,8 +226,9 @@ func TestGetGameAttendances_HappyPath(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&items); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items (regular + extended), got %d", len(items))
+	// Trainer erscheint jetzt zusätzlich in der Liste (is_trainer=true), also 3 Items.
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items (trainer + regular + extended), got %d", len(items))
 	}
 	byID := map[int]map[string]any{}
 	for _, it := range items {
@@ -247,6 +248,12 @@ func TestGetGameAttendances_HappyPath(t *testing.T) {
 	}
 	if byID[extended]["present"] != nil {
 		t.Errorf("extended member without attendance row should have present=nil, got %v", byID[extended]["present"])
+	}
+	if byID[trainerMemberID]["is_trainer"].(bool) != true {
+		t.Errorf("trainer member should have is_trainer=true")
+	}
+	if byID[trainerMemberID]["present"] != nil {
+		t.Errorf("trainer present should be nil, got %v", byID[trainerMemberID]["present"])
 	}
 }
 

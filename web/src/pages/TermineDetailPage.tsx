@@ -44,6 +44,7 @@ interface ParticipantItem {
   member_id: number
   member_name: string
   is_extended: boolean
+  is_trainer?: boolean
   rsvp_status: string | null
   in_lineup: boolean
   team_id: number
@@ -128,6 +129,7 @@ interface AttendanceItem {
   member_id: number
   member_name: string
   is_extended?: boolean
+  is_trainer?: boolean
   rsvp_status: string | null
   reason: string | null
   present: boolean | null
@@ -140,6 +142,7 @@ interface TableRow {
   reason: string | null
   present: boolean | null
   is_extended?: boolean
+  is_trainer?: boolean
   in_lineup?: boolean
   team_id?: number
 }
@@ -294,6 +297,7 @@ export default function TermineDetailPage() {
       member_id: a.member_id,
       member_name: a.member_name,
       is_extended: a.is_extended,
+      is_trainer: a.is_trainer,
       rsvp_status: a.rsvp_status,
       reason: a.reason,
       present: a.present,
@@ -379,14 +383,14 @@ export default function TermineDetailPage() {
     reason: null,
     present: null,
     is_extended: p.is_extended,
+    is_trainer: p.is_trainer,
     in_lineup: p.in_lineup,
     team_id: p.team_id,
   })
 
   // Bei generischen Ereignissen mit mehreren Teams werden die Teilnehmer nach
-  // Team gruppiert; pro Team werden Stamm- und erweiterter Kader gemeinsam nach
-  // Vorname (= member_name beginnt mit dem Vornamen) sortiert. In allen anderen
-  // Fällen bleibt die bisherige Aufteilung Stammkader / Erweiterter Kader.
+  // Team gruppiert; innerhalb jedes Team-Blocks stehen Trainer oben, dann
+  // Spieler+erweiterter Kader gemeinsam nach Vorname sortiert.
   const groupByTeam = g.event_type === 'generisch' && (g.teams?.length ?? 0) > 1
   let sections: TableSection[] | undefined
   if (groupByTeam) {
@@ -396,7 +400,12 @@ export default function TermineDetailPage() {
       rows: participants
         .filter(p => p.team_id === team.id)
         .map(toRow)
-        .sort((a, b) => a.member_name.localeCompare(b.member_name, 'de')),
+        .sort((a, b) => {
+          if (Boolean(a.is_trainer) !== Boolean(b.is_trainer)) {
+            return a.is_trainer ? -1 : 1
+          }
+          return a.member_name.localeCompare(b.member_name, 'de')
+        }),
       hasHidden: hiddenSet.has(team.id),
     }))
       // Sektionen ohne sichtbare Mitglieder weglassen (auch wenn `hasHidden`
@@ -410,9 +419,10 @@ export default function TermineDetailPage() {
     ? []
     : Array.from(new Map(participants.map(p => [p.member_id, toRow(p)])).values())
 
-  const confirmedCount = participants.filter(p => p.rsvp_status === 'confirmed').length
-  const declinedCount = participants.filter(p => p.rsvp_status === 'declined').length
-  const maybeCount = participants.filter(p => p.rsvp_status === 'maybe').length
+  // Trainer sind NICHT in die Zusagen-Zähler einbezogen.
+  const confirmedCount = participants.filter(p => !p.is_trainer && p.rsvp_status === 'confirmed').length
+  const declinedCount = participants.filter(p => !p.is_trainer && p.rsvp_status === 'declined').length
+  const maybeCount = participants.filter(p => !p.is_trainer && p.rsvp_status === 'maybe').length
 
   return (
     <div className="max-w-2xl space-y-4">
@@ -511,7 +521,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
         </td>
         {a.lineupMap !== undefined && (
           <td className="px-4 py-3 text-center">
-            {a.onToggleLineup ? (
+            {row.is_trainer ? null : a.onToggleLineup ? (
               <input
                 type="checkbox"
                 checked={a.lineupMap[row.member_id] ?? false}
@@ -527,13 +537,15 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
         )}
         {a.showAttendanceCol && (
           <td className="px-4 py-3 text-center">
-            <input
-              type="checkbox"
-              checked={a.attendanceMap[row.member_id] ?? false}
-              onChange={a.isTrainer ? e => a.onToggleAttendance(row.member_id, e.target.checked) : undefined}
-              readOnly={!a.isTrainer}
-              className={`w-4 h-4 rounded border-brand-border ${a.isTrainer ? '' : 'cursor-default opacity-60'}`}
-            />
+            {row.is_trainer ? null : (
+              <input
+                type="checkbox"
+                checked={a.attendanceMap[row.member_id] ?? false}
+                onChange={a.isTrainer ? e => a.onToggleAttendance(row.member_id, e.target.checked) : undefined}
+                readOnly={!a.isTrainer}
+                className={`w-4 h-4 rounded border-brand-border ${a.isTrainer ? '' : 'cursor-default opacity-60'}`}
+              />
+            )}
           </td>
         )}
       </tr>
@@ -564,11 +576,12 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
 }) {
   const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup }
 
-  // Wenn keine expliziten Sektionen übergeben werden, fällt die Tabelle auf die
-  // bisherige Aufteilung Stammkader / Erweiterter Kader zurück.
+  // Ohne explizite Sektionen: drei benannte Sektionen Trainer / Spieler / Erweiterter Kader
+  // in dieser Reihenfolge; leere Sektionen werden weggelassen.
   const effectiveSections: TableSection[] = sections ?? [
-    { title: null, rows: rows.filter(r => !r.is_extended) },
-    { title: 'Erweiterter Kader', rows: rows.filter(r => r.is_extended) },
+    { title: 'Trainer', rows: rows.filter(r => r.is_trainer) },
+    { title: 'Spieler', rows: rows.filter(r => !r.is_trainer && !r.is_extended) },
+    { title: 'Erweiterter Kader', rows: rows.filter(r => !r.is_trainer && r.is_extended) },
   ].filter(s => s.rows.length > 0)
 
   const isEmpty = effectiveSections.every(s => s.rows.length === 0)
