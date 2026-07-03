@@ -257,6 +257,13 @@ export default function TerminePage() {
     return true
   })
 
+  // Index des ersten nicht-vergangenen Termins (date >= today). Die „heute"-Trennlinie
+  // wird nur davor gerendert, wenn mind. ein vergangener Termin darüber steht (> 0) —
+  // sonst (alle sichtbaren Termine liegen in Gegenwart/Zukunft) erschiene sie redundant
+  // ganz oben.
+  const todayIdx = visibleTermine.findIndex(t => t.data.date.slice(0, 10) >= today)
+  const showTodayDivider = todayIdx > 0
+
   const focusNotFound = !loading && !!focus && showPast && !termine.some(t => t.kind === focus.kind && t.data.id === focus.id)
 
   useEffect(() => {
@@ -276,6 +283,9 @@ export default function TerminePage() {
   // weil das Loading-Placeholder die Liste kurz aus dem DOM nimmt. Wir merken uns
   // beim Klick den obersten sichtbaren Termin + dessen Viewport-Offset und stellen
   // dieselbe Pixel-Position nach dem Reload wieder her. Focus-Scroll hat Vorrang.
+  // Wichtig: Der Scrollcontainer ist das <main> in AppShell (overflow-auto), nicht
+  // das window — window.scrollBy wäre ein No-Op. Restauriert wird daher auf dem
+  // nächstgelegenen <main>-Vorfahren des Ankers.
   useEffect(() => {
     if (loading || focus) return
     const restore = scrollRestoreRef.current
@@ -283,7 +293,9 @@ export default function TerminePage() {
     scrollRestoreRef.current = null
     const el = document.getElementById(restore.id)
     if (!el) return
-    window.scrollBy({ top: el.getBoundingClientRect().top - restore.offset, behavior: 'auto' })
+    const container = el.closest('main')
+    if (!container) return
+    container.scrollBy({ top: el.getBoundingClientRect().top - restore.offset, behavior: 'auto' })
   }, [loading, focus])
 
   const togglePast = () => {
@@ -438,7 +450,8 @@ export default function TerminePage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {visibleTermine.map(t => {
+          {(() => {
+          const cards = visibleTermine.map(t => {
             if (t.kind === 'training') {
               const s = t.data
               const key = `t-${s.id}`
@@ -622,7 +635,17 @@ export default function TerminePage() {
                 })()}
               </div>
             )
-          })}
+          })
+          if (!showTodayDivider) return cards
+          const todayDivider = (
+            <div key="today-divider" className="flex items-center gap-3 py-1" aria-hidden="true">
+              <span className="flex-1 border-t border-brand-border-subtle" />
+              <span className="text-brand-text-muted text-xs uppercase tracking-wide">heute</span>
+              <span className="flex-1 border-t border-brand-border-subtle" />
+            </div>
+          )
+          return [...cards.slice(0, todayIdx), todayDivider, ...cards.slice(todayIdx)]
+          })()}
         </div>
       )}
 
