@@ -22,7 +22,8 @@ const GAME_FIXTURE = {
     event_type: 'generisch',
     is_home: true,
     season_id: 1,
-    rsvp_opt_out: 0,
+    rsvp_default_players: 'none',
+    rsvp_default_extended: 'none',
     rsvp_require_reason: 0,
     teams: [
       { id: 100, name: 'Team A', display_short: 'A', display_long: 'Team A' },

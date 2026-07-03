@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import VenuePicker from './VenuePicker'
+import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
 
 interface TeamRef {
   id: number
@@ -21,7 +22,8 @@ interface Game {
   template_id?: number | null
   teams?: TeamRef[]
   venue?: { id: number; name: string; street: string; city: string; postal_code: string; note: string } | null
-  rsvp_opt_out?: number
+  rsvp_default_players?: RsvpDefault
+  rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
 }
 
@@ -62,7 +64,8 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [endDate, setEndDate] = useState(game.end_date ? game.end_date.slice(0, 10) : '')
   const [eventType, setEventType] = useState(game.event_type)
   const [venueId, setVenueId] = useState<number | null>(game.venue?.id ?? null)
-  const [rsvpOptOut, setRsvpOptOut] = useState<boolean>(game.rsvp_opt_out === 1)
+  const [rsvpDefaultPlayers, setRsvpDefaultPlayers] = useState<RsvpDefault>(game.rsvp_default_players ?? 'none')
+  const [rsvpDefaultExtended, setRsvpDefaultExtended] = useState<RsvpDefault>(game.rsvp_default_extended ?? 'none')
   const [rsvpRequireReason, setRsvpRequireReason] = useState<boolean>(game.rsvp_require_reason === 1)
   const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>(game.teams?.map(t => t.id) ?? [])
   const [availableTeams, setAvailableTeams] = useState<AvailableTeam[]>([])
@@ -118,7 +121,8 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         event_type: eventType,
         venue_id: venueId,
         team_ids: selectedTeamIds.length > 0 ? selectedTeamIds : undefined,
-        rsvp_opt_out: rsvpOptOut ? 1 : 0,
+        rsvp_default_players: rsvpDefaultPlayers,
+        rsvp_default_extended: rsvpDefaultExtended,
         rsvp_require_reason: rsvpRequireReason ? 1 : 0,
         template_id: templateId,
       })
@@ -237,27 +241,14 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
               ))}
             </select>
           </div>
-          <div className="pt-2 border-t border-brand-border-subtle space-y-2">
-            <p className="text-sm font-medium text-brand-text-muted">RSVP-Einstellungen</p>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rsvpOptOut}
-                onChange={e => setRsvpOptOut(e.target.checked)}
-                className="mt-0.5 rounded accent-brand-yellow"
-              />
-              <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-            </label>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rsvpRequireReason}
-                onChange={e => setRsvpRequireReason(e.target.checked)}
-                className="mt-0.5 rounded accent-brand-yellow"
-              />
-              <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
-            </label>
-          </div>
+          <RsvpDefaultsEditor
+            defaultPlayers={rsvpDefaultPlayers}
+            defaultExtended={rsvpDefaultExtended}
+            requireReason={rsvpRequireReason}
+            onChangePlayers={setRsvpDefaultPlayers}
+            onChangeExtended={setRsvpDefaultExtended}
+            onChangeRequireReason={setRsvpRequireReason}
+          />
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
               {error}

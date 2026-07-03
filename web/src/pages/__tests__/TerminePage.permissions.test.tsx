@@ -30,7 +30,8 @@ const SESSION_FIXTURE = [
     my_rsvp: null,
     note: '',
     cancel_reason: '',
-    rsvp_opt_out: 0,
+    rsvp_default_players: 'none',
+    rsvp_default_extended: 'none',
     rsvp_require_reason: 0,
     // Eltern sehen RSVP-Buttons über children_rsvp
     children_rsvp: [{ member_id: 1, name: 'Kind A', rsvp: null }],

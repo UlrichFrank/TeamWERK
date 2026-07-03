@@ -1696,8 +1696,10 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 
 // attachChildrenRSVPToSessions fills ChildrenRSVP on each item for parent users.
 // Includes children who are in the regular (kader_members) OR extended
-// (kader_extended_members) squad of the session's team. Extended-only children
-// are not auto-confirmed under rsvp_opt_out — they must always respond explicitly.
+// (kader_extended_members) squad of the session's team. Without an explicit
+// response, the role-specific default applies (rsvp_default_players for regular
+// squad members, rsvp_default_extended for extended-only members); 'none' leaves
+// the RSVP empty so the child must respond explicitly.
 func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID int, items []sessionListItem) error {
 	placeholders := make([]string, len(items))
 	sessionIDs := make([]any, len(items))
@@ -1710,7 +1712,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 	// The extended branch excludes members already counted as regular for the same
 	// team/season so a child in both squads appears exactly once (regular wins).
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_opt_out, 0 AS is_extended
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_players
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_members km ON km.kader_id = k.id
@@ -1721,7 +1723,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 
 		UNION
 
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_opt_out, 1 AS is_extended
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_extended
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_extended_members kem ON kem.kader_id = k.id
@@ -1747,14 +1749,14 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 		var sid int
 		var c childRSVP
 		var rsvp sql.NullString
-		var rsvpOptOut, isExtended int
-		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &rsvpOptOut, &isExtended)
+		var roleDefault string
+		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &roleDefault)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
-		} else if rsvpOptOut == 1 && isExtended == 0 {
-			confirmed := "confirmed"
-			c.RSVP = &confirmed
+		} else if roleDefault == "confirmed" || roleDefault == "declined" {
+			d := roleDefault
+			c.RSVP = &d
 		}
 		bySession[sid] = append(bySession[sid], c)
 	}

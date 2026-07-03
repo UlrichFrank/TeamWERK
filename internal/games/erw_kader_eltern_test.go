@@ -71,7 +71,7 @@ func TestMyGames_ExtendedChild_NoAutoConfirm(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
-	db.Exec(`UPDATE games SET rsvp_opt_out=1 WHERE id=?`, gameID)
+	db.Exec(`UPDATE games SET rsvp_default_players='confirmed' WHERE id=?`, gameID)
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	regularChild := testutil.CreateMember(t, db, 0)

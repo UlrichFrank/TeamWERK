@@ -5,6 +5,7 @@ import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventT
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
+import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames } from '../lib/teamName'
 import { useAuth } from '../contexts/AuthContext'
@@ -50,7 +51,8 @@ interface Session {
   maybe_count: number
   my_rsvp: string | null
   children_rsvp?: ChildRSVP[]
-  rsvp_opt_out: number
+  rsvp_default_players: RsvpDefault
+  rsvp_default_extended: RsvpDefault
   rsvp_require_reason: number
   rsvp_locks_at?: string
 }
@@ -72,7 +74,8 @@ interface Game {
   maybe_count: number
   my_rsvp: string | null
   children_rsvp?: ChildRSVP[]
-  rsvp_opt_out: number
+  rsvp_default_players: RsvpDefault
+  rsvp_default_extended: RsvpDefault
   rsvp_require_reason: number
   rsvp_locks_at?: string
   venue?: VenueRef | null
@@ -529,7 +532,7 @@ export default function TerminePage() {
                           })
                         ) : (
                           <div className="flex gap-2">
-                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === key} onClick={() => respondTraining(s.id, s.rsvp_opt_out ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === key} onClick={() => respondTraining(s.id, s.rsvp_default_players === 'confirmed' ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
                             <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'maybe') : respondTraining(s.id, 'maybe')} />
                             <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'declined') : respondTraining(s.id, 'declined')} />
                           </div>
@@ -617,7 +620,7 @@ export default function TerminePage() {
                         })
                       ) : (
                         <div className="flex gap-2">
-                          <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === key} onClick={() => respondGame(g.id, g.rsvp_opt_out ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                          <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === key} onClick={() => respondGame(g.id, g.rsvp_default_players === 'confirmed' ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
                           <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
                           <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
                         </div>

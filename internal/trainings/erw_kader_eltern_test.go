@@ -66,15 +66,16 @@ func TestSessions_ParentExtendedChild_InChildrenRSVP(t *testing.T) {
 	}
 }
 
-// TestSessions_ExtendedChild_NoAutoConfirm: under rsvp_opt_out, a regular-kader child
-// is auto-confirmed but an extended-kader child is not (must respond explicitly).
+// TestSessions_ExtendedChild_NoAutoConfirm: with rsvp_default_players='confirmed'
+// (extended stays 'none'), a regular-kader child is auto-confirmed but an
+// extended-kader child is not (must respond explicitly).
 func TestSessions_ExtendedChild_NoAutoConfirm(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-07-15")
-	db.Exec(`UPDATE training_sessions SET rsvp_opt_out=1 WHERE id=?`, sessionID)
+	db.Exec(`UPDATE training_sessions SET rsvp_default_players='confirmed' WHERE id=?`, sessionID)
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	regularChild := testutil.CreateMember(t, db, 0)

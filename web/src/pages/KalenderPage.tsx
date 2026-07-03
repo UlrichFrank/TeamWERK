@@ -14,6 +14,7 @@ import GameEditModal from '../components/GameEditModal'
 import EventInfoModal from '../components/EventInfoModal'
 import SpieltagDetailModal from '../components/SpieltagDetailModal'
 import VenuePicker, { Venue as VenueType } from '../components/VenuePicker'
+import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 
@@ -45,7 +46,8 @@ interface Training {
   season_id: number
   note: string
   cancel_reason?: string
-  rsvp_opt_out?: number
+  rsvp_default_players?: RsvpDefault
+  rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
 }
 
@@ -66,7 +68,8 @@ interface Game {
   declined_count: number
   maybe_count: number
   venue?: VenueRef | null
-  rsvp_opt_out?: number
+  rsvp_default_players?: RsvpDefault
+  rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
   note?: string
 }
@@ -176,7 +179,8 @@ export default function KalenderPage() {
   const [seriesWeekday, setSeriesWeekday] = useState(1)
   const [seriesValidFrom, setSeriesValidFrom] = useState('')
   const [seriesValidUntil, setSeriesValidUntil] = useState('')
-  const [gameRsvpOptOut, setGameRsvpOptOut] = useState(0)
+  const [gameDefaultPlayers, setGameDefaultPlayers] = useState<RsvpDefault>('none')
+  const [gameDefaultExtended, setGameDefaultExtended] = useState<RsvpDefault>('none')
   const [gameRsvpRequireReason, setGameRsvpRequireReason] = useState(1)
   // Absence wizard states
   const [absenceForm, setAbsenceForm] = useState<{ member_ids: number[]; type: string; start_date: string; end_date: string; note: string }>({ member_ids: [], type: 'vacation', start_date: '', end_date: '', note: '' })
@@ -463,7 +467,8 @@ export default function KalenderPage() {
         event_type: eventType,
         template_id: selectedTemplate,
         venue_id: selectedVenueId,
-        rsvp_opt_out: gameRsvpOptOut,
+        rsvp_default_players: gameDefaultPlayers,
+        rsvp_default_extended: gameDefaultExtended,
         rsvp_require_reason: gameRsvpRequireReason,
         slots: slotsPayload,
       })
@@ -495,7 +500,8 @@ export default function KalenderPage() {
         start_time: trainingStartTime,
         end_time: trainingEndTime,
         venue_id: trainingVenueId,
-        rsvp_opt_out: gameRsvpOptOut,
+        rsvp_default_players: gameDefaultPlayers,
+        rsvp_default_extended: gameDefaultExtended,
         rsvp_require_reason: gameRsvpRequireReason,
       })
       await loadTrainings()
@@ -526,7 +532,8 @@ export default function KalenderPage() {
         end_time: trainingEndTime,
         valid_from: seriesValidFrom,
         valid_until: seriesValidUntil,
-        rsvp_opt_out: gameRsvpOptOut,
+        rsvp_default_players: gameDefaultPlayers,
+        rsvp_default_extended: gameDefaultExtended,
         rsvp_require_reason: gameRsvpRequireReason,
       })
       await loadTrainings()
@@ -667,7 +674,8 @@ export default function KalenderPage() {
     setSeriesWeekday(1)
     setSeriesValidFrom('')
     setSeriesValidUntil('')
-    setGameRsvpOptOut(0)
+    setGameDefaultPlayers('none')
+    setGameDefaultExtended('none')
     setGameRsvpRequireReason(1)
     setAbsenceForm({ member_ids: [], type: 'vacation', start_date: '', end_date: '', note: '' })
     setAbsencePreviewEvents(null)
@@ -1109,20 +1117,15 @@ export default function KalenderPage() {
                       </select>
                     )}
                   </div>
-                  <div className="space-y-2 pt-2 border-t border-brand-border-subtle">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={gameRsvpOptOut === 1}
-                        onChange={e => setGameRsvpOptOut(e.target.checked ? 1 : 0)}
-                        className="w-4 h-4 accent-brand-yellow" />
-                      <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={gameRsvpRequireReason === 1}
-                        onChange={e => setGameRsvpRequireReason(e.target.checked ? 1 : 0)}
-                        className="w-4 h-4 accent-brand-yellow" />
-                      <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
-                    </label>
-                  </div>
+                  <RsvpDefaultsEditor
+                    idPrefix="kalender"
+                    defaultPlayers={gameDefaultPlayers}
+                    defaultExtended={gameDefaultExtended}
+                    requireReason={gameRsvpRequireReason === 1}
+                    onChangePlayers={setGameDefaultPlayers}
+                    onChangeExtended={setGameDefaultExtended}
+                    onChangeRequireReason={v => setGameRsvpRequireReason(v ? 1 : 0)}
+                  />
                   {createError && <p className="text-brand-danger text-sm">{createError}</p>}
                 </div>
                 <div className="flex gap-2 pt-4">
@@ -1175,20 +1178,15 @@ export default function KalenderPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="space-y-2 pt-2 border-t border-brand-border-subtle">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={gameRsvpOptOut === 1}
-                        onChange={e => setGameRsvpOptOut(e.target.checked ? 1 : 0)}
-                        className="w-4 h-4 accent-brand-yellow" />
-                      <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={gameRsvpRequireReason === 1}
-                        onChange={e => setGameRsvpRequireReason(e.target.checked ? 1 : 0)}
-                        className="w-4 h-4 accent-brand-yellow" />
-                      <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
-                    </label>
-                  </div>
+                  <RsvpDefaultsEditor
+                    idPrefix="kalender"
+                    defaultPlayers={gameDefaultPlayers}
+                    defaultExtended={gameDefaultExtended}
+                    requireReason={gameRsvpRequireReason === 1}
+                    onChangePlayers={setGameDefaultPlayers}
+                    onChangeExtended={setGameDefaultExtended}
+                    onChangeRequireReason={v => setGameRsvpRequireReason(v ? 1 : 0)}
+                  />
                   {createError && <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>}
                 </div>
                 <div className="flex gap-2 pt-4">
@@ -1250,20 +1248,15 @@ export default function KalenderPage() {
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig bis *</label>
                     <input type="date" value={seriesValidUntil} min={seriesValidFrom || undefined} onChange={e => setSeriesValidUntil(e.target.value)} className={INPUT_WIZ} />
                   </div>
-                  <div className="space-y-2 pt-2 border-t border-brand-border-subtle">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={gameRsvpOptOut === 1}
-                        onChange={e => setGameRsvpOptOut(e.target.checked ? 1 : 0)}
-                        className="w-4 h-4 accent-brand-yellow" />
-                      <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={gameRsvpRequireReason === 1}
-                        onChange={e => setGameRsvpRequireReason(e.target.checked ? 1 : 0)}
-                        className="w-4 h-4 accent-brand-yellow" />
-                      <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
-                    </label>
-                  </div>
+                  <RsvpDefaultsEditor
+                    idPrefix="kalender"
+                    defaultPlayers={gameDefaultPlayers}
+                    defaultExtended={gameDefaultExtended}
+                    requireReason={gameRsvpRequireReason === 1}
+                    onChangePlayers={setGameDefaultPlayers}
+                    onChangeExtended={setGameDefaultExtended}
+                    onChangeRequireReason={v => setGameRsvpRequireReason(v ? 1 : 0)}
+                  />
                   {createError && <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>}
                 </div>
                 <div className="flex gap-2 pt-4">

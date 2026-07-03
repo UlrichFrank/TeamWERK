@@ -943,7 +943,7 @@ func TestListMyGames_ExtendedKaderKeinAutoConfirm(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Herren")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
-	db.Exec(`UPDATE games SET rsvp_opt_out=1 WHERE id=?`, gameID)
+	db.Exec(`UPDATE games SET rsvp_default_players='confirmed' WHERE id=?`, gameID)
 
 	extUserID := testutil.CreateUser(t, db, "standard")
 	extMemberID := testutil.CreateMember(t, db, extUserID)
@@ -978,7 +978,7 @@ func TestListMyGames_RegularKaderAutoConfirmBleibt(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Herren")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
-	db.Exec(`UPDATE games SET rsvp_opt_out=1 WHERE id=?`, gameID)
+	db.Exec(`UPDATE games SET rsvp_default_players='confirmed' WHERE id=?`, gameID)
 
 	userID := testutil.CreateUser(t, db, "standard")
 	memberID := testutil.CreateMember(t, db, userID)
@@ -1005,7 +1005,7 @@ func TestListMyGames_RegularKaderAutoConfirmBleibt(t *testing.T) {
 }
 
 // TestUpdateGame_RsvpFlagsPersisted verifies that PUT /api/games/{id} with
-// rsvp_opt_out and rsvp_require_reason in the payload writes both values to DB.
+// rsvp_default_* and rsvp_require_reason in the payload writes the values to DB.
 func TestUpdateGame_RsvpFlagsPersisted(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -1017,13 +1017,14 @@ func TestUpdateGame_RsvpFlagsPersisted(t *testing.T) {
 	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
 
 	body := map[string]any{
-		"date":                "2026-06-14",
-		"time":                "18:00",
-		"opponent":            "FC Test",
-		"team_ids":            []int{teamID},
-		"event_type":          "heim",
-		"rsvp_opt_out":        1,
-		"rsvp_require_reason": 0,
+		"date":                  "2026-06-14",
+		"time":                  "18:00",
+		"opponent":              "FC Test",
+		"team_ids":              []int{teamID},
+		"event_type":            "heim",
+		"rsvp_default_players":  "confirmed",
+		"rsvp_default_extended": "declined",
+		"rsvp_require_reason":   0,
 	}
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, body)
 	res.Body.Close()
@@ -1031,13 +1032,14 @@ func TestUpdateGame_RsvpFlagsPersisted(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var optOut, reqReason int
-	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM games WHERE id=?`, gameID).
-		Scan(&optOut, &reqReason); err != nil {
+	var defPlayers, defExtended string
+	var reqReason int
+	if err := db.QueryRow(`SELECT rsvp_default_players, rsvp_default_extended, rsvp_require_reason FROM games WHERE id=?`, gameID).
+		Scan(&defPlayers, &defExtended, &reqReason); err != nil {
 		t.Fatalf("query rsvp flags: %v", err)
 	}
-	if optOut != 1 || reqReason != 0 {
-		t.Errorf("expected rsvp_opt_out=1, rsvp_require_reason=0; got %d, %d", optOut, reqReason)
+	if defPlayers != "confirmed" || defExtended != "declined" || reqReason != 0 {
+		t.Errorf("expected (confirmed,declined,0); got (%s,%s,%d)", defPlayers, defExtended, reqReason)
 	}
 }
 
@@ -1049,7 +1051,7 @@ func TestUpdateGame_RsvpFlagsPartialUpdate(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
 
-	if _, err := db.Exec(`UPDATE games SET rsvp_opt_out=1, rsvp_require_reason=0 WHERE id=?`, gameID); err != nil {
+	if _, err := db.Exec(`UPDATE games SET rsvp_default_players='confirmed', rsvp_require_reason=0 WHERE id=?`, gameID); err != nil {
 		t.Fatalf("seed rsvp flags: %v", err)
 	}
 
@@ -1070,13 +1072,14 @@ func TestUpdateGame_RsvpFlagsPartialUpdate(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var optOut, reqReason int
-	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM games WHERE id=?`, gameID).
-		Scan(&optOut, &reqReason); err != nil {
+	var defPlayers string
+	var reqReason int
+	if err := db.QueryRow(`SELECT rsvp_default_players, rsvp_require_reason FROM games WHERE id=?`, gameID).
+		Scan(&defPlayers, &reqReason); err != nil {
 		t.Fatalf("query rsvp flags: %v", err)
 	}
-	if optOut != 1 || reqReason != 0 {
-		t.Errorf("partial update must preserve flags; expected (1,0), got (%d,%d)", optOut, reqReason)
+	if defPlayers != "confirmed" || reqReason != 0 {
+		t.Errorf("partial update must preserve flags; expected (confirmed,0), got (%s,%d)", defPlayers, reqReason)
 	}
 }
 
@@ -1093,8 +1096,8 @@ func TestUpdateGame_RsvpFlags_PlayerForbidden(t *testing.T) {
 	token := testutil.Token(t, spielerID, "standard", []string{"spieler"})
 
 	body := map[string]any{
-		"rsvp_opt_out":        1,
-		"rsvp_require_reason": 0,
+		"rsvp_default_players": "confirmed",
+		"rsvp_require_reason":  0,
 	}
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, body)
 	res.Body.Close()
@@ -1102,13 +1105,14 @@ func TestUpdateGame_RsvpFlags_PlayerForbidden(t *testing.T) {
 		t.Fatalf("expected 403, got %d", res.StatusCode)
 	}
 
-	var optOut, reqReason int
-	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM games WHERE id=?`, gameID).
-		Scan(&optOut, &reqReason); err != nil {
+	var defPlayers string
+	var reqReason int
+	if err := db.QueryRow(`SELECT rsvp_default_players, rsvp_require_reason FROM games WHERE id=?`, gameID).
+		Scan(&defPlayers, &reqReason); err != nil {
 		t.Fatalf("query rsvp flags: %v", err)
 	}
-	if optOut != 0 || reqReason != 1 {
-		t.Errorf("DB flags must be unchanged on 403; expected defaults (0,1), got (%d,%d)", optOut, reqReason)
+	if defPlayers != "none" || reqReason != 1 {
+		t.Errorf("DB flags must be unchanged on 403; expected defaults (none,1), got (%s,%d)", defPlayers, reqReason)
 	}
 }
 
@@ -1124,7 +1128,7 @@ func optOutFixture(t *testing.T, db *sql.DB, kaderSize int, optOut bool) (season
 	kaderID = testutil.CreateKader(t, db, teamID, seasonID)
 	gameID = testutil.CreateGame(t, db, seasonID, teamID, "2026-01-15")
 	if optOut {
-		if _, err := db.Exec(`UPDATE games SET rsvp_opt_out=1 WHERE id=?`, gameID); err != nil {
+		if _, err := db.Exec(`UPDATE games SET rsvp_default_players='confirmed' WHERE id=?`, gameID); err != nil {
 			t.Fatalf("set rsvp_opt_out: %v", err)
 		}
 	}
