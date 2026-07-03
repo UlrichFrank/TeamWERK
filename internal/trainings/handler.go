@@ -159,21 +159,43 @@ func generateSessionDates(from, until time.Time, dayOfWeek int) []time.Time {
 }
 
 // insertSessions bulk-inserts training_sessions within an existing transaction.
-func insertSessions(ctx context.Context, tx *sql.Tx, seriesID int, teamID, seasonID int, startTime, endTime string, venueID *int, note string, rsvpOptOut, rsvpRequireReason int, dates []time.Time) error {
+func insertSessions(ctx context.Context, tx *sql.Tx, seriesID int, teamID, seasonID int, startTime, endTime string, venueID *int, note string, rsvpDefaultPlayers, rsvpDefaultExtended string, rsvpRequireReason int, dates []time.Time) error {
 	var venueIDVal interface{}
 	if venueID != nil {
 		venueIDVal = *venueID
 	}
 	for _, d := range dates {
 		_, err := tx.ExecContext(ctx,
-			`INSERT INTO training_sessions (series_id, team_id, season_id, date, start_time, end_time, venue_id, note, rsvp_opt_out, rsvp_require_reason)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			seriesID, teamID, seasonID, d.Format("2006-01-02"), startTime, endTime, venueIDVal, note, rsvpOptOut, rsvpRequireReason)
+			`INSERT INTO training_sessions (series_id, team_id, season_id, date, start_time, end_time, venue_id, note, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			seriesID, teamID, seasonID, d.Format("2006-01-02"), startTime, endTime, venueIDVal, note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// validRsvpDefault reports whether v is one of the accepted enum values.
+func validRsvpDefault(v string) bool {
+	return v == "confirmed" || v == "declined" || v == "none"
+}
+
+// rsvpSettingsConflict reports whether the combination of defaults + require_reason
+// is contradictory (a Default-Absage entsteht ohne Nutzerhandlung → kein Grund
+// erhebbar). Returns true when a HTTP 400 response should be sent.
+func rsvpSettingsConflict(defPlayers, defExtended string, requireReason int) bool {
+	return requireReason == 1 && (defPlayers == "declined" || defExtended == "declined")
+}
+
+// writeInvalidRsvpSettings emits the canonical 400 response for conflicting RSVP settings.
+func writeInvalidRsvpSettings(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error":   "invalid_rsvp_settings",
+		"message": "„Standardmäßig abgesagt“ ist nicht mit „Begründung bei Absage erforderlich“ kombinierbar.",
+	})
 }
 
 // GET /api/training-series
@@ -202,7 +224,7 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 		       s.start_time, s.end_time, s.valid_from, s.valid_until, s.note,
 		       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) as team_name,
 		       COUNT(ts.id) as session_count,
-		       s.rsvp_opt_out, s.rsvp_require_reason,
+		       s.rsvp_default_players, s.rsvp_default_extended, s.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_series s
 		JOIN teams t ON t.id = s.team_id
@@ -229,21 +251,22 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 		Note       string `json:"note"`
 	}
 	type seriesItem struct {
-		ID                int       `json:"id"`
-		TeamID            int       `json:"team_id"`
-		SeasonID          int       `json:"season_id"`
-		Name              string    `json:"name"`
-		DayOfWeek         int       `json:"day_of_week"`
-		StartTime         string    `json:"start_time"`
-		EndTime           string    `json:"end_time"`
-		ValidFrom         string    `json:"valid_from"`
-		ValidUntil        string    `json:"valid_until"`
-		Note              string    `json:"note"`
-		TeamName          string    `json:"team_name"`
-		SessionCount      int       `json:"session_count"`
-		RsvpOptOut        int       `json:"rsvp_opt_out"`
-		RsvpRequireReason int       `json:"rsvp_require_reason"`
-		Venue             *venueRef `json:"venue,omitempty"`
+		ID                  int       `json:"id"`
+		TeamID              int       `json:"team_id"`
+		SeasonID            int       `json:"season_id"`
+		Name                string    `json:"name"`
+		DayOfWeek           int       `json:"day_of_week"`
+		StartTime           string    `json:"start_time"`
+		EndTime             string    `json:"end_time"`
+		ValidFrom           string    `json:"valid_from"`
+		ValidUntil          string    `json:"valid_until"`
+		Note                string    `json:"note"`
+		TeamName            string    `json:"team_name"`
+		SessionCount        int       `json:"session_count"`
+		RsvpDefaultPlayers  string    `json:"rsvp_default_players"`
+		RsvpDefaultExtended string    `json:"rsvp_default_extended"`
+		RsvpRequireReason   int       `json:"rsvp_require_reason"`
+		Venue               *venueRef `json:"venue,omitempty"`
 	}
 	result := []seriesItem{}
 	for rows.Next() {
@@ -252,7 +275,7 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		rows.Scan(&s.ID, &s.TeamID, &s.SeasonID, &s.Name, &s.DayOfWeek,
 			&s.StartTime, &s.EndTime, &s.ValidFrom, &s.ValidUntil, &s.Note,
-			&s.TeamName, &s.SessionCount, &s.RsvpOptOut, &s.RsvpRequireReason,
+			&s.TeamName, &s.SessionCount, &s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 		if vID.Valid {
 			s.Venue = &venueRef{
@@ -270,21 +293,36 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
-		TeamID            int    `json:"team_id"`
-		SeasonID          int    `json:"season_id"`
-		Name              string `json:"name"`
-		VenueID           *int   `json:"venue_id"`
-		DayOfWeek         int    `json:"day_of_week"`
-		StartTime         string `json:"start_time"`
-		EndTime           string `json:"end_time"`
-		ValidFrom         string `json:"valid_from"`
-		ValidUntil        string `json:"valid_until"`
-		Note              string `json:"note"`
-		RsvpOptOut        int    `json:"rsvp_opt_out"`
-		RsvpRequireReason int    `json:"rsvp_require_reason"`
+		TeamID              int    `json:"team_id"`
+		SeasonID            int    `json:"season_id"`
+		Name                string `json:"name"`
+		VenueID             *int   `json:"venue_id"`
+		DayOfWeek           int    `json:"day_of_week"`
+		StartTime           string `json:"start_time"`
+		EndTime             string `json:"end_time"`
+		ValidFrom           string `json:"valid_from"`
+		ValidUntil          string `json:"valid_until"`
+		Note                string `json:"note"`
+		RsvpDefaultPlayers  string `json:"rsvp_default_players"`
+		RsvpDefaultExtended string `json:"rsvp_default_extended"`
+		RsvpRequireReason   int    `json:"rsvp_require_reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.RsvpDefaultPlayers == "" {
+		req.RsvpDefaultPlayers = "none"
+	}
+	if req.RsvpDefaultExtended == "" {
+		req.RsvpDefaultExtended = "none"
+	}
+	if !validRsvpDefault(req.RsvpDefaultPlayers) || !validRsvpDefault(req.RsvpDefaultExtended) {
+		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
+		return
+	}
+	if rsvpSettingsConflict(req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason) {
+		writeInvalidRsvpSettings(w)
 		return
 	}
 	ok, err := h.hasTeamAccess(r.Context(), claims, req.TeamID)
@@ -324,11 +362,11 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		venueIDVal = *req.VenueID
 	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO training_series (team_id, season_id, name, venue_id, day_of_week, start_time, end_time, valid_from, valid_until, note, created_by, rsvp_opt_out, rsvp_require_reason)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO training_series (team_id, season_id, name, venue_id, day_of_week, start_time, end_time, valid_from, valid_until, note, created_by, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		req.TeamID, req.SeasonID, req.Name, venueIDVal, req.DayOfWeek,
 		req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, claims.UserID,
-		req.RsvpOptOut, req.RsvpRequireReason)
+		req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSeries insert series: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -337,7 +375,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	seriesID, _ := res.LastInsertId()
 
 	dates := generateSessionDates(from, until, req.DayOfWeek)
-	if err := insertSessions(r.Context(), tx, int(seriesID), req.TeamID, req.SeasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpOptOut, req.RsvpRequireReason, dates); err != nil {
+	if err := insertSessions(r.Context(), tx, int(seriesID), req.TeamID, req.SeasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason, dates); err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSeries insert sessions: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -366,18 +404,19 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name              string `json:"name"`
-		VenueID           *int   `json:"venue_id"`
-		DayOfWeek         int    `json:"day_of_week"`
-		StartTime         string `json:"start_time"`
-		EndTime           string `json:"end_time"`
-		ValidFrom         string `json:"valid_from"`
-		ValidUntil        string `json:"valid_until"`
-		Note              string `json:"note"`
-		Scope             string `json:"scope"`     // "all" or "this_and_following"
-		FromDate          string `json:"from_date"` // required when scope="this_and_following"
-		RsvpOptOut        *int   `json:"rsvp_opt_out,omitempty"`
-		RsvpRequireReason *int   `json:"rsvp_require_reason,omitempty"`
+		Name                string  `json:"name"`
+		VenueID             *int    `json:"venue_id"`
+		DayOfWeek           int     `json:"day_of_week"`
+		StartTime           string  `json:"start_time"`
+		EndTime             string  `json:"end_time"`
+		ValidFrom           string  `json:"valid_from"`
+		ValidUntil          string  `json:"valid_until"`
+		Note                string  `json:"note"`
+		Scope               string  `json:"scope"`     // "all" or "this_and_following"
+		FromDate            string  `json:"from_date"` // required when scope="this_and_following"
+		RsvpDefaultPlayers  *string `json:"rsvp_default_players,omitempty"`
+		RsvpDefaultExtended *string `json:"rsvp_default_extended,omitempty"`
+		RsvpRequireReason   *int    `json:"rsvp_require_reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -388,10 +427,11 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var teamID, seasonID, curOptOut, curReqReason int
+	var teamID, seasonID, curReqReason int
+	var curDefPlayers, curDefExtended string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id, rsvp_opt_out, rsvp_require_reason FROM training_series WHERE id = ?`, seriesID).
-		Scan(&teamID, &seasonID, &curOptOut, &curReqReason)
+		`SELECT team_id, season_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason FROM training_series WHERE id = ?`, seriesID).
+		Scan(&teamID, &seasonID, &curDefPlayers, &curDefExtended, &curReqReason)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -407,13 +447,29 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Partial-Update: fehlende RSVP-Felder behalten den aktuellen DB-Wert.
-	rsvpOptOut := curOptOut
-	if req.RsvpOptOut != nil {
-		rsvpOptOut = *req.RsvpOptOut
+	rsvpDefaultPlayers := curDefPlayers
+	if req.RsvpDefaultPlayers != nil {
+		if !validRsvpDefault(*req.RsvpDefaultPlayers) {
+			http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
+			return
+		}
+		rsvpDefaultPlayers = *req.RsvpDefaultPlayers
+	}
+	rsvpDefaultExtended := curDefExtended
+	if req.RsvpDefaultExtended != nil {
+		if !validRsvpDefault(*req.RsvpDefaultExtended) {
+			http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
+			return
+		}
+		rsvpDefaultExtended = *req.RsvpDefaultExtended
 	}
 	rsvpRequireReason := curReqReason
 	if req.RsvpRequireReason != nil {
 		rsvpRequireReason = *req.RsvpRequireReason
+	}
+	if rsvpSettingsConflict(rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason) {
+		writeInvalidRsvpSettings(w)
+		return
 	}
 
 	until, err := time.Parse("2006-01-02", req.ValidUntil)
@@ -434,8 +490,8 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		venueIDVal = *req.VenueID
 	}
 	_, err = tx.ExecContext(r.Context(),
-		`UPDATE training_series SET name=?, venue_id=?, day_of_week=?, start_time=?, end_time=?, valid_from=?, valid_until=?, note=?, rsvp_opt_out=?, rsvp_require_reason=? WHERE id=?`,
-		req.Name, venueIDVal, req.DayOfWeek, req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, rsvpOptOut, rsvpRequireReason, seriesID)
+		`UPDATE training_series SET name=?, venue_id=?, day_of_week=?, start_time=?, end_time=?, valid_from=?, valid_until=?, note=?, rsvp_default_players=?, rsvp_default_extended=?, rsvp_require_reason=? WHERE id=?`,
+		req.Name, venueIDVal, req.DayOfWeek, req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason, seriesID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -466,7 +522,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dates := generateSessionDates(genFrom, until, req.DayOfWeek)
-	if err := insertSessions(r.Context(), tx, seriesID, teamID, seasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, rsvpOptOut, rsvpRequireReason, dates); err != nil {
+	if err := insertSessions(r.Context(), tx, seriesID, teamID, seasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason, dates); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -663,19 +719,34 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
-		TeamID            int    `json:"team_id"`
-		SeasonID          int    `json:"season_id"`
-		Title             string `json:"title"`
-		Date              string `json:"date"`
-		StartTime         string `json:"start_time"`
-		EndTime           string `json:"end_time"`
-		VenueID           *int   `json:"venue_id"`
-		Note              string `json:"note"`
-		RsvpOptOut        int    `json:"rsvp_opt_out"`
-		RsvpRequireReason int    `json:"rsvp_require_reason"`
+		TeamID              int    `json:"team_id"`
+		SeasonID            int    `json:"season_id"`
+		Title               string `json:"title"`
+		Date                string `json:"date"`
+		StartTime           string `json:"start_time"`
+		EndTime             string `json:"end_time"`
+		VenueID             *int   `json:"venue_id"`
+		Note                string `json:"note"`
+		RsvpDefaultPlayers  string `json:"rsvp_default_players"`
+		RsvpDefaultExtended string `json:"rsvp_default_extended"`
+		RsvpRequireReason   int    `json:"rsvp_require_reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.RsvpDefaultPlayers == "" {
+		req.RsvpDefaultPlayers = "none"
+	}
+	if req.RsvpDefaultExtended == "" {
+		req.RsvpDefaultExtended = "none"
+	}
+	if !validRsvpDefault(req.RsvpDefaultPlayers) || !validRsvpDefault(req.RsvpDefaultExtended) {
+		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
+		return
+	}
+	if rsvpSettingsConflict(req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason) {
+		writeInvalidRsvpSettings(w)
 		return
 	}
 	ok, err := h.hasTeamAccess(r.Context(), claims, req.TeamID)
@@ -688,9 +759,9 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		venueIDVal = *req.VenueID
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO training_sessions (team_id, season_id, title, date, start_time, end_time, venue_id, note, rsvp_opt_out, rsvp_require_reason)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		req.TeamID, req.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, req.RsvpOptOut, req.RsvpRequireReason)
+		`INSERT INTO training_sessions (team_id, season_id, title, date, start_time, end_time, venue_id, note, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		req.TeamID, req.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSession: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -741,16 +812,17 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title             string  `json:"title"`
-		Date              string  `json:"date"`
-		StartTime         string  `json:"start_time"`
-		EndTime           string  `json:"end_time"`
-		VenueID           *int    `json:"venue_id"`
-		Note              *string `json:"note"`
-		Status            string  `json:"status"`
-		CancelReason      string  `json:"cancel_reason"`
-		RsvpOptOut        *int    `json:"rsvp_opt_out,omitempty"`
-		RsvpRequireReason *int    `json:"rsvp_require_reason,omitempty"`
+		Title               string  `json:"title"`
+		Date                string  `json:"date"`
+		StartTime           string  `json:"start_time"`
+		EndTime             string  `json:"end_time"`
+		VenueID             *int    `json:"venue_id"`
+		Note                *string `json:"note"`
+		Status              string  `json:"status"`
+		CancelReason        string  `json:"cancel_reason"`
+		RsvpDefaultPlayers  *string `json:"rsvp_default_players,omitempty"`
+		RsvpDefaultExtended *string `json:"rsvp_default_extended,omitempty"`
+		RsvpRequireReason   *int    `json:"rsvp_require_reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -784,13 +856,50 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Partial-Update: rsvp_opt_out / rsvp_require_reason nur setzen, wenn im Request enthalten.
-	if req.RsvpOptOut != nil || req.RsvpRequireReason != nil {
+	// Partial-Update: RSVP-Voreinstellungen / -Grund-Pflicht nur setzen, wenn im Request enthalten.
+	if req.RsvpDefaultPlayers != nil || req.RsvpDefaultExtended != nil || req.RsvpRequireReason != nil {
+		// Merged Effektivwerte für Konfliktprüfung — nicht gesetzte Felder aus DB nachziehen.
+		var curDefPlayers, curDefExtended string
+		var curReqReason int
+		if err = h.db.QueryRowContext(r.Context(),
+			`SELECT rsvp_default_players, rsvp_default_extended, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
+			Scan(&curDefPlayers, &curDefExtended, &curReqReason); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		effDefPlayers := curDefPlayers
+		if req.RsvpDefaultPlayers != nil {
+			if !validRsvpDefault(*req.RsvpDefaultPlayers) {
+				http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
+				return
+			}
+			effDefPlayers = *req.RsvpDefaultPlayers
+		}
+		effDefExtended := curDefExtended
+		if req.RsvpDefaultExtended != nil {
+			if !validRsvpDefault(*req.RsvpDefaultExtended) {
+				http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
+				return
+			}
+			effDefExtended = *req.RsvpDefaultExtended
+		}
+		effReqReason := curReqReason
+		if req.RsvpRequireReason != nil {
+			effReqReason = *req.RsvpRequireReason
+		}
+		if rsvpSettingsConflict(effDefPlayers, effDefExtended, effReqReason) {
+			writeInvalidRsvpSettings(w)
+			return
+		}
 		setParts := []string{}
 		setArgs := []interface{}{}
-		if req.RsvpOptOut != nil {
-			setParts = append(setParts, "rsvp_opt_out=?")
-			setArgs = append(setArgs, *req.RsvpOptOut)
+		if req.RsvpDefaultPlayers != nil {
+			setParts = append(setParts, "rsvp_default_players=?")
+			setArgs = append(setArgs, *req.RsvpDefaultPlayers)
+		}
+		if req.RsvpDefaultExtended != nil {
+			setParts = append(setParts, "rsvp_default_extended=?")
+			setArgs = append(setArgs, *req.RsvpDefaultExtended)
 		}
 		if req.RsvpRequireReason != nil {
 			setParts = append(setParts, "rsvp_require_reason=?")
@@ -825,28 +934,30 @@ type sessionVenueRef struct {
 }
 
 type sessionListItem struct {
-	ID                int              `json:"id"`
-	SeriesID          *int             `json:"series_id,omitempty"`
-	TeamID            int              `json:"team_id"`
-	TeamName          string           `json:"team_name"`
-	SeasonID          int              `json:"season_id"`
-	Title             string           `json:"title"`
-	Date              string           `json:"date"`
-	StartTime         string           `json:"start_time"`
-	EndTime           string           `json:"end_time"`
-	Venue             *sessionVenueRef `json:"venue,omitempty"`
-	Note              string           `json:"note"`
-	Status            string           `json:"status"`
-	CancelReason      string           `json:"cancel_reason,omitempty"`
-	ConfirmedCount    int              `json:"confirmed_count"`
-	DeclinedCount     int              `json:"declined_count"`
-	MaybeCount        int              `json:"maybe_count"`
-	MyRSVP            *string          `json:"my_rsvp"`
-	MyRSVPLocked      bool             `json:"my_rsvp_locked"`
-	ChildrenRSVP      []childRSVP      `json:"children_rsvp,omitempty"`
-	RsvpOptOut        int              `json:"rsvp_opt_out"`
-	RsvpRequireReason int              `json:"rsvp_require_reason"`
-	RsvpLocksAt       string           `json:"rsvp_locks_at,omitempty"`
+	ID                  int              `json:"id"`
+	SeriesID            *int             `json:"series_id,omitempty"`
+	TeamID              int              `json:"team_id"`
+	TeamName            string           `json:"team_name"`
+	SeasonID            int              `json:"season_id"`
+	Title               string           `json:"title"`
+	Date                string           `json:"date"`
+	StartTime           string           `json:"start_time"`
+	EndTime             string           `json:"end_time"`
+	Venue               *sessionVenueRef `json:"venue,omitempty"`
+	Note                string           `json:"note"`
+	Status              string           `json:"status"`
+	CancelReason        string           `json:"cancel_reason,omitempty"`
+	ConfirmedCount      int              `json:"confirmed_count"`
+	DeclinedCount       int              `json:"declined_count"`
+	MaybeCount          int              `json:"maybe_count"`
+	MyRSVP              *string          `json:"my_rsvp"`
+	MyRSVPIsDefault     bool             `json:"my_rsvp_is_default,omitempty"`
+	MyRSVPLocked        bool             `json:"my_rsvp_locked"`
+	ChildrenRSVP        []childRSVP      `json:"children_rsvp,omitempty"`
+	RsvpDefaultPlayers  string           `json:"rsvp_default_players"`
+	RsvpDefaultExtended string           `json:"rsvp_default_extended"`
+	RsvpRequireReason   int              `json:"rsvp_require_reason"`
+	RsvpLocksAt         string           `json:"rsvp_locks_at,omitempty"`
 }
 
 // GET /api/training-sessions
@@ -907,8 +1018,10 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Order must match the ?-markers in the query:
-	// 1. member_id (my_rsvp subquery), 2. member_id (my_rsvp_locked subquery), 3. teamArgs (WHERE), 4. from, 5. to, 6. optional team filter
-	args := append([]any{memberID, memberID}, teamArgs...)
+	// 1. member_id (explicit_rsvp), 2. member_id (stammkader-check for default),
+	// 3. member_id (extended-check for default), 4. member_id (my_rsvp_locked subquery),
+	// 5. teamArgs (WHERE), 6. from, 7. to, 8. optional team filter
+	args := append([]any{memberID, memberID, memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 	optTeamFilter := ""
 	if teamFilter != "" {
@@ -919,20 +1032,45 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	query := fmt.Sprintf(`
 		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.note, ts.status, ts.cancel_reason,
-		       CASE WHEN ts.rsvp_opt_out = 1
-		            THEN COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0) + (
-		                   SELECT COUNT(*) FROM player_memberships tm2
-		                   JOIN members m2 ON m2.id = tm2.member_id
-		                   WHERE tm2.team_id = ts.team_id
-		                   AND NOT EXISTS (SELECT 1 FROM training_responses tr2 WHERE tr2.training_id = ts.id AND tr2.member_id = tm2.member_id)
-		                 )
-		            ELSE COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0)
-		       END,
-		       COALESCE(SUM(CASE WHEN tr.status='declined'  THEN 1 ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN tr.status='maybe'     THEN 1 ELSE 0 END), 0),
-		       (SELECT status FROM training_responses WHERE training_id = ts.id AND member_id = ?),
+		       COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0)
+		         + CASE WHEN ts.rsvp_default_players='confirmed' THEN (
+		             SELECT COUNT(*) FROM player_memberships pm2
+		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = pm2.member_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		           ) ELSE 0 END
+		         + CASE WHEN ts.rsvp_default_extended='confirmed' THEN (
+		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
+		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = kem2.member_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		           ) ELSE 0 END AS confirmed_count,
+		       COALESCE(SUM(CASE WHEN tr.status='declined' THEN 1 ELSE 0 END), 0)
+		         + CASE WHEN ts.rsvp_default_players='declined' THEN (
+		             SELECT COUNT(*) FROM player_memberships pm2
+		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = pm2.member_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		           ) ELSE 0 END
+		         + CASE WHEN ts.rsvp_default_extended='declined' THEN (
+		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
+		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = kem2.member_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		           ) ELSE 0 END AS declined_count,
+		       COALESCE(SUM(CASE WHEN tr.status='maybe' THEN 1 ELSE 0 END), 0) AS maybe_count,
+		       (SELECT status FROM training_responses WHERE training_id = ts.id AND member_id = ?) AS explicit_rsvp,
+		       CASE
+		         WHEN EXISTS (SELECT 1 FROM player_memberships pmMe WHERE pmMe.member_id=? AND pmMe.team_id=ts.team_id AND pmMe.season_id=ts.season_id)
+		           THEN NULLIF(ts.rsvp_default_players, 'none')
+		         WHEN EXISTS (SELECT 1 FROM kader_extended_members kemMe JOIN kader kMe ON kMe.id=kemMe.kader_id WHERE kemMe.member_id=? AND kMe.team_id=ts.team_id AND kMe.season_id=ts.season_id)
+		           THEN NULLIF(ts.rsvp_default_extended, 'none')
+		         ELSE NULL
+		       END AS default_rsvp,
 		       (SELECT absence_id IS NOT NULL FROM training_responses WHERE training_id = ts.id AND member_id = ? LIMIT 1),
-		       ts.rsvp_opt_out, ts.rsvp_require_reason,
+		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
 		LEFT JOIN teams t ON t.id = ts.team_id
@@ -959,15 +1097,15 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var s sessionListItem
 		var seriesID sql.NullInt64
-		var myRSVP sql.NullString
+		var explicitRSVP, defaultRSVP sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		err := rows.Scan(
 			&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 			&s.Note, &s.Status, &s.CancelReason,
-			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP, &myRSVPLocked,
-			&s.RsvpOptOut, &s.RsvpRequireReason,
+			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP, &myRSVPLocked,
+			&s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ListSessions scan: %v\n", err)
@@ -978,11 +1116,12 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			id := int(seriesID.Int64)
 			s.SeriesID = &id
 		}
-		if myRSVP.Valid {
-			s.MyRSVP = &myRSVP.String
-		} else if s.RsvpOptOut == 1 {
-			confirmed := "confirmed"
-			s.MyRSVP = &confirmed
+		if explicitRSVP.Valid {
+			s.MyRSVP = &explicitRSVP.String
+		} else if defaultRSVP.Valid {
+			v := defaultRSVP.String
+			s.MyRSVP = &v
+			s.MyRSVPIsDefault = true
 		}
 		s.MyRSVPLocked = myRSVPLocked.Valid && myRSVPLocked.Int64 == 1
 		if vID.Valid {
@@ -1038,36 +1177,62 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 
 	var s sessionListItem
 	var seriesID sql.NullInt64
-	var myRSVP sql.NullString
+	var explicitRSVP, defaultRSVP sql.NullString
 	var vID sql.NullInt64
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err = h.db.QueryRowContext(r.Context(), `
 		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.note, ts.status, ts.cancel_reason,
-		       CASE WHEN ts.rsvp_opt_out = 1
-		            THEN COALESCE((SELECT COUNT(*) FROM training_responses tr_c WHERE tr_c.training_id=ts.id AND tr_c.status='confirmed'
-		                           AND tr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
-		                 + (SELECT COUNT(*) FROM player_memberships tm2
-		                    WHERE tm2.team_id = ts.team_id
-		                    AND NOT EXISTS (SELECT 1 FROM training_responses tr2 WHERE tr2.training_id=ts.id AND tr2.member_id=tm2.member_id))
-		            ELSE COALESCE((SELECT COUNT(*) FROM training_responses tr_c WHERE tr_c.training_id=ts.id AND tr_c.status='confirmed'
-		                           AND tr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
-		       END,
+		       COALESCE((SELECT COUNT(*) FROM training_responses tr_c WHERE tr_c.training_id=ts.id AND tr_c.status='confirmed'
+		                  AND tr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
+		         + CASE WHEN ts.rsvp_default_players='confirmed' THEN (
+		             SELECT COUNT(*) FROM player_memberships pm2
+		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=pm2.member_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		           ) ELSE 0 END
+		         + CASE WHEN ts.rsvp_default_extended='confirmed' THEN (
+		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
+		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=kem2.member_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		           ) ELSE 0 END,
 		       COALESCE((SELECT COUNT(*) FROM training_responses tr_d WHERE tr_d.training_id=ts.id AND tr_d.status='declined'
-		                  AND tr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0),
+		                  AND tr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
+		         + CASE WHEN ts.rsvp_default_players='declined' THEN (
+		             SELECT COUNT(*) FROM player_memberships pm2
+		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=pm2.member_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		           ) ELSE 0 END
+		         + CASE WHEN ts.rsvp_default_extended='declined' THEN (
+		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
+		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=kem2.member_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		           ) ELSE 0 END,
 		       COALESCE((SELECT COUNT(*) FROM training_responses tr_m WHERE tr_m.training_id=ts.id AND tr_m.status='maybe'
 		                  AND tr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0),
 		       (SELECT status FROM training_responses WHERE training_id=ts.id AND member_id=?),
-		       ts.rsvp_opt_out, ts.rsvp_require_reason,
+		       CASE
+		         WHEN EXISTS (SELECT 1 FROM player_memberships pmMe WHERE pmMe.member_id=? AND pmMe.team_id=ts.team_id AND pmMe.season_id=ts.season_id)
+		           THEN NULLIF(ts.rsvp_default_players, 'none')
+		         WHEN EXISTS (SELECT 1 FROM kader_extended_members kemMe JOIN kader kMe ON kMe.id=kemMe.kader_id WHERE kemMe.member_id=? AND kMe.team_id=ts.team_id AND kMe.season_id=ts.season_id)
+		           THEN NULLIF(ts.rsvp_default_extended, 'none')
+		         ELSE NULL
+		       END,
+		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
 		LEFT JOIN teams t ON t.id = ts.team_id
 		LEFT JOIN venues v ON v.id = ts.venue_id
-		WHERE ts.id = ?`, memberID, sessionID).Scan(
+		WHERE ts.id = ?`, memberID, memberID, memberID, sessionID).Scan(
 		&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 		&s.Note, &s.Status, &s.CancelReason,
-		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &myRSVP,
-		&s.RsvpOptOut, &s.RsvpRequireReason,
+		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP,
+		&s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 		&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -1082,11 +1247,12 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		id := int(seriesID.Int64)
 		s.SeriesID = &id
 	}
-	if myRSVP.Valid {
-		s.MyRSVP = &myRSVP.String
-	} else if s.RsvpOptOut == 1 {
-		confirmed := "confirmed"
-		s.MyRSVP = &confirmed
+	if explicitRSVP.Valid {
+		s.MyRSVP = &explicitRSVP.String
+	} else if defaultRSVP.Valid {
+		v := defaultRSVP.String
+		s.MyRSVP = &v
+		s.MyRSVPIsDefault = true
 	}
 	if vID.Valid {
 		s.Venue = &sessionVenueRef{
@@ -1277,13 +1443,14 @@ func writeRSVPLocked(w http.ResponseWriter, message string, locksAt time.Time) {
 }
 
 type attendanceItem struct {
-	MemberID   int     `json:"member_id"`
-	MemberName string  `json:"member_name"`
-	IsExtended bool    `json:"is_extended"`
-	IsTrainer  bool    `json:"is_trainer"`
-	RSVPStatus *string `json:"rsvp_status"`
-	Reason     *string `json:"reason"`
-	Present    *bool   `json:"present"`
+	MemberID      int     `json:"member_id"`
+	MemberName    string  `json:"member_name"`
+	IsExtended    bool    `json:"is_extended"`
+	IsTrainer     bool    `json:"is_trainer"`
+	RSVPStatus    *string `json:"rsvp_status"`
+	RSVPIsDefault bool    `json:"rsvp_is_default,omitempty"`
+	Reason        *string `json:"reason"`
+	Present       *bool   `json:"present"`
 }
 
 // GET /api/training-sessions/{id}/attendances
@@ -1294,9 +1461,11 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var teamID, seasonID, rsvpOptOut int
+	var teamID, seasonID int
+	var defPlayers, defExtended string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id, rsvp_opt_out FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID, &seasonID, &rsvpOptOut)
+		`SELECT team_id, season_id, rsvp_default_players, rsvp_default_extended FROM training_sessions WHERE id = ?`, sessionID).
+		Scan(&teamID, &seasonID, &defPlayers, &defExtended)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1406,9 +1575,19 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			// Trainer sind immer im Opt-out-Modus, unabhängig vom Session-Setting.
 			confirmed := "confirmed"
 			item.RSVPStatus = &confirmed
-		} else if rsvpOptOut == 1 && !item.IsExtended {
-			confirmed := "confirmed"
-			item.RSVPStatus = &confirmed
+		} else {
+			// Voreinstellung pro Rolle greift; 'none' bleibt ohne Status.
+			var def string
+			if item.IsExtended {
+				def = defExtended
+			} else {
+				def = defPlayers
+			}
+			if def == "confirmed" || def == "declined" {
+				v := def
+				item.RSVPStatus = &v
+				item.RSVPIsDefault = true
+			}
 		}
 		canSeeReason := isTrainerLike
 		if canSeeReason && reason.Valid && reason.String != "" {
