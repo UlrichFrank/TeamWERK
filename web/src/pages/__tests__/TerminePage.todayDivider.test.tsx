@@ -32,7 +32,8 @@ function training(id: number, date: string) {
     my_rsvp: null,
     note: '',
     cancel_reason: '',
-    rsvp_opt_out: 0,
+    rsvp_default_players: 'none',
+    rsvp_default_extended: 'none',
     rsvp_require_reason: 0,
   }
 }

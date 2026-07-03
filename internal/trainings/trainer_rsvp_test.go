@@ -40,7 +40,7 @@ type trainerAttendanceItem struct {
 // Trainer erscheint mit is_trainer=true und Default-Status confirmed.
 func TestGetAttendances_Trainer_DefaultConfirmed(t *testing.T) {
 	db, sessionID, _, _, trainerMemberID, _ := setupTrainerSession(t)
-	// Session bewusst mit rsvp_opt_out=0 — Trainer default confirmed muss dennoch greifen.
+	// Session bewusst mit rsvp_default_players='none' — Trainer default confirmed muss dennoch greifen.
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())

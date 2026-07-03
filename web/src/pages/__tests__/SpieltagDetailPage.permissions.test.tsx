@@ -32,7 +32,8 @@ const GAME_FIXTURE = {
     declined_count: 0,
     maybe_count: 0,
     my_rsvp: null,
-    rsvp_opt_out: 0,
+    rsvp_default_players: 'none',
+    rsvp_default_extended: 'none',
     rsvp_require_reason: 0,
   },
 }

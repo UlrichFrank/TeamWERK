@@ -4,6 +4,7 @@ import { AlertTriangle, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plan
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
+import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 
@@ -46,6 +47,7 @@ interface ParticipantItem {
   is_extended: boolean
   is_trainer?: boolean
   rsvp_status: string | null
+  rsvp_is_default?: boolean
   in_lineup: boolean
   team_id: number
 }
@@ -80,7 +82,8 @@ interface SessionDetail {
   maybe_count: number
   my_rsvp: string | null
   responses: RSVPEntry[]
-  rsvp_opt_out?: number
+  rsvp_default_players?: RsvpDefault
+  rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
 }
 
@@ -100,22 +103,25 @@ interface GameDetail {
   is_home: boolean
   season_id: number
   venue?: VenueRef | null
-  rsvp_opt_out?: number
+  rsvp_default_players?: RsvpDefault
+  rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
   teams?: TeamRef[]
   note?: string
   can?: { edit: boolean; delete: boolean; manage_lineup: boolean }
 }
 
-function RsvpConfigBadges({ optOut, requireReason }: { optOut?: number; requireReason?: number }) {
-  if (optOut !== 1 && requireReason !== 1) return null
+function RsvpConfigBadges({ defaultPlayers, defaultExtended, requireReason }: { defaultPlayers?: RsvpDefault; defaultExtended?: RsvpDefault; requireReason?: number }) {
+  const defaultLabel = (d?: RsvpDefault) =>
+    d === 'confirmed' ? 'standardmäßig zugesagt' : d === 'declined' ? 'standardmäßig abgesagt' : null
+  const playersLabel = defaultLabel(defaultPlayers)
+  const extendedLabel = defaultLabel(defaultExtended)
+  if (!playersLabel && !extendedLabel && requireReason !== 1) return null
+  const badge = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-info/10 text-brand-info border border-brand-info/30'
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
-      {optOut === 1 && (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-info/10 text-brand-info border border-brand-info/30">
-          Opt-Out aktiv
-        </span>
-      )}
+      {playersLabel && <span className={badge}>Kader-Spieler: {playersLabel}</span>}
+      {extendedLabel && <span className={badge}>Erweiterter Kader: {extendedLabel}</span>}
       {requireReason === 1 && (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-yellow/20 text-brand-text border border-brand-yellow/40">
           Begründung bei Absage Pflicht
@@ -131,6 +137,7 @@ interface AttendanceItem {
   is_extended?: boolean
   is_trainer?: boolean
   rsvp_status: string | null
+  rsvp_is_default?: boolean
   reason: string | null
   present: boolean | null
 }
@@ -139,6 +146,7 @@ interface TableRow {
   member_id: number
   member_name: string
   rsvp_status: string | null
+  rsvp_is_default?: boolean
   reason: string | null
   present: boolean | null
   is_extended?: boolean
@@ -299,6 +307,7 @@ export default function TermineDetailPage() {
       is_extended: a.is_extended,
       is_trainer: a.is_trainer,
       rsvp_status: a.rsvp_status,
+      rsvp_is_default: a.rsvp_is_default,
       reason: a.reason,
       present: a.present,
     }))
@@ -331,7 +340,7 @@ export default function TermineDetailPage() {
                 </div>
                 <MapsLink venue={session.venue} />
               </div>
-              <RsvpConfigBadges optOut={session.rsvp_opt_out} requireReason={session.rsvp_require_reason} />
+              <RsvpConfigBadges defaultPlayers={session.rsvp_default_players} defaultExtended={session.rsvp_default_extended} requireReason={session.rsvp_require_reason} />
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                   <Check className="w-3 h-3" /> {session.confirmed_count}
@@ -380,6 +389,7 @@ export default function TermineDetailPage() {
     member_id: p.member_id,
     member_name: p.member_name,
     rsvp_status: p.rsvp_status,
+    rsvp_is_default: p.rsvp_is_default,
     reason: null,
     present: null,
     is_extended: p.is_extended,
@@ -437,7 +447,7 @@ export default function TermineDetailPage() {
               {g.time} Uhr
             </div>
             <MapsLink venue={g.venue} className="mt-1.5" />
-            <RsvpConfigBadges optOut={g.rsvp_opt_out} requireReason={g.rsvp_require_reason} />
+            <RsvpConfigBadges defaultPlayers={g.rsvp_default_players} defaultExtended={g.rsvp_default_extended} requireReason={g.rsvp_require_reason} />
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                 <Check className="w-3 h-3" /> {confirmedCount}
@@ -502,7 +512,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
           <span>{row.member_name}</span>
         </td>
         <td className="px-4 py-3">
-          <div className="relative group flex items-center gap-1">
+          <div className={`relative group flex items-center gap-1 ${row.rsvp_is_default ? 'text-brand-text-subtle italic' : 'text-brand-text'}`}>
             <RsvpIcon status={row.rsvp_status} />
             {row.reason && (
               <>

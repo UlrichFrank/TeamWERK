@@ -19,12 +19,14 @@ import (
 func testServer(t *testing.T, h *trainings.Handler) *httptest.Server {
 	return testutil.NewServer(t, func(r chi.Router) {
 		r.Get("/api/training-sessions", h.ListSessions)
+		r.Get("/api/training-sessions/{id}", h.GetSession)
 		r.Post("/api/training-sessions/{id}/respond", h.Respond)
 		r.Get("/api/training-sessions/{id}/attendances", h.GetAttendances)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("trainer", "sportliche_leitung"))
 			r.Post("/api/training-series", h.CreateSeries)
+			r.Put("/api/training-series/{id}", h.UpdateSeries)
 			r.Delete("/api/training-series/{id}", h.DeleteSeries)
 			r.Post("/api/training-sessions/{id}/attendances", h.SaveAttendances)
 			r.Post("/api/training-sessions", h.CreateSession)
@@ -489,7 +491,7 @@ func TestUpdateSession_ChangesTime(t *testing.T) {
 }
 
 // TestUpdateSession_RsvpFlagsPersisted verifies that PUT /api/training-sessions/{id}
-// with rsvp_opt_out and rsvp_require_reason writes both values to DB.
+// with rsvp_default_players and rsvp_require_reason writes both values to DB.
 func TestUpdateSession_RsvpFlagsPersisted(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -502,14 +504,15 @@ func TestUpdateSession_RsvpFlagsPersisted(t *testing.T) {
 	token := testutil.Token(t, adminUserID, "admin", nil)
 
 	body := map[string]any{
-		"team_id":             teamID,
-		"season_id":           seasonID,
-		"title":               "Test",
-		"date":                "2026-08-05",
-		"start_time":          "18:00",
-		"end_time":            "20:00",
-		"rsvp_opt_out":        1,
-		"rsvp_require_reason": 0,
+		"team_id":               teamID,
+		"season_id":             seasonID,
+		"title":                 "Test",
+		"date":                  "2026-08-05",
+		"start_time":            "18:00",
+		"end_time":              "20:00",
+		"rsvp_default_players":  "confirmed",
+		"rsvp_default_extended": "declined",
+		"rsvp_require_reason":   0,
 	}
 	res := testutil.Do(t, srv, http.MethodPut,
 		fmt.Sprintf("/api/training-sessions/%d", sessionID), token, body)
@@ -518,13 +521,14 @@ func TestUpdateSession_RsvpFlagsPersisted(t *testing.T) {
 		t.Fatalf("expected 204, got %d", res.StatusCode)
 	}
 
-	var optOut, reqReason int
-	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
-		Scan(&optOut, &reqReason); err != nil {
+	var defPlayers, defExtended string
+	var reqReason int
+	if err := db.QueryRow(`SELECT rsvp_default_players, rsvp_default_extended, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
+		Scan(&defPlayers, &defExtended, &reqReason); err != nil {
 		t.Fatalf("query rsvp flags: %v", err)
 	}
-	if optOut != 1 || reqReason != 0 {
-		t.Errorf("expected (1,0), got (%d,%d)", optOut, reqReason)
+	if defPlayers != "confirmed" || defExtended != "declined" || reqReason != 0 {
+		t.Errorf("expected (confirmed,declined,0), got (%s,%s,%d)", defPlayers, defExtended, reqReason)
 	}
 }
 
@@ -536,7 +540,7 @@ func TestUpdateSession_RsvpFlagsPartialUpdate(t *testing.T) {
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-08-05")
 
-	if _, err := db.Exec(`UPDATE training_sessions SET rsvp_opt_out=1, rsvp_require_reason=0 WHERE id=?`, sessionID); err != nil {
+	if _, err := db.Exec(`UPDATE training_sessions SET rsvp_default_players='confirmed', rsvp_require_reason=0 WHERE id=?`, sessionID); err != nil {
 		t.Fatalf("seed rsvp flags: %v", err)
 	}
 
@@ -560,13 +564,14 @@ func TestUpdateSession_RsvpFlagsPartialUpdate(t *testing.T) {
 		t.Fatalf("expected 204, got %d", res.StatusCode)
 	}
 
-	var optOut, reqReason int
-	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
-		Scan(&optOut, &reqReason); err != nil {
+	var defPlayers string
+	var reqReason int
+	if err := db.QueryRow(`SELECT rsvp_default_players, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
+		Scan(&defPlayers, &reqReason); err != nil {
 		t.Fatalf("query rsvp flags: %v", err)
 	}
-	if optOut != 1 || reqReason != 0 {
-		t.Errorf("partial update must preserve flags; expected (1,0), got (%d,%d)", optOut, reqReason)
+	if defPlayers != "confirmed" || reqReason != 0 {
+		t.Errorf("partial update must preserve flags; expected (confirmed,0), got (%s,%d)", defPlayers, reqReason)
 	}
 }
 
@@ -584,8 +589,8 @@ func TestUpdateSession_RsvpFlags_PlayerForbidden(t *testing.T) {
 	token := testutil.Token(t, spielerID, "standard", []string{"spieler"})
 
 	body := map[string]any{
-		"rsvp_opt_out":        1,
-		"rsvp_require_reason": 0,
+		"rsvp_default_players": "confirmed",
+		"rsvp_require_reason":  0,
 	}
 	res := testutil.Do(t, srv, http.MethodPut,
 		fmt.Sprintf("/api/training-sessions/%d", sessionID), token, body)
@@ -594,13 +599,14 @@ func TestUpdateSession_RsvpFlags_PlayerForbidden(t *testing.T) {
 		t.Fatalf("expected 403, got %d", res.StatusCode)
 	}
 
-	var optOut, reqReason int
-	if err := db.QueryRow(`SELECT rsvp_opt_out, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
-		Scan(&optOut, &reqReason); err != nil {
+	var defPlayers string
+	var reqReason int
+	if err := db.QueryRow(`SELECT rsvp_default_players, rsvp_require_reason FROM training_sessions WHERE id=?`, sessionID).
+		Scan(&defPlayers, &reqReason); err != nil {
 		t.Fatalf("query rsvp flags: %v", err)
 	}
-	if optOut != 0 || reqReason != 1 {
-		t.Errorf("DB flags must be unchanged on 403; expected (0,1), got (%d,%d)", optOut, reqReason)
+	if defPlayers != "none" || reqReason != 1 {
+		t.Errorf("DB flags must be unchanged on 403; expected (none,1), got (%s,%d)", defPlayers, reqReason)
 	}
 }
 
@@ -778,14 +784,15 @@ func TestGetAttendances_IsExtended(t *testing.T) {
 	}
 }
 
-// TestGetAttendances_OptOut_NotAppliedToExtended verifies that rsvp_opt_out auto-confirm
-// applies only to primary kader members, never to extended kader members.
+// TestGetAttendances_OptOut_NotAppliedToExtended verifies that rsvp_default_players='confirmed'
+// auto-confirm applies only to primary kader members, never to extended kader members
+// (whose default stays 'none').
 func TestGetAttendances_OptOut_NotAppliedToExtended(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-09-10")
-	db.Exec(`UPDATE training_sessions SET rsvp_opt_out = 1 WHERE id = ?`, sessionID)
+	db.Exec(`UPDATE training_sessions SET rsvp_default_players = 'confirmed' WHERE id = ?`, sessionID)
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
 	primaryMemberID := testutil.CreateMember(t, db, 0)
@@ -818,7 +825,7 @@ func TestGetAttendances_OptOut_NotAppliedToExtended(t *testing.T) {
 	}
 
 	if rsvp := byID[primaryMemberID]; rsvp == nil || *rsvp != "confirmed" {
-		t.Errorf("primary kader member should be auto-confirmed via rsvp_opt_out, got %v", rsvp)
+		t.Errorf("primary kader member should be auto-confirmed via rsvp_default_players, got %v", rsvp)
 	}
 	if rsvp := byID[extMemberID]; rsvp != nil {
 		t.Errorf("extended kader member should NOT be auto-confirmed, got %v", *rsvp)

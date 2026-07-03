@@ -198,3 +198,105 @@ func TestMigration016_BackfillChildNames(t *testing.T) {
 		t.Errorf("nach down: Name sollte unverändert sein, bekam %q %q", aFirst, aLast)
 	}
 }
+
+// TC: Migration 018 ersetzt rsvp_opt_out durch zwei rsvp_default_*-Enums;
+// bestehende opt_out=1-Rows werden konservativ auf players='confirmed' gemappt,
+// extended startet überall 'none' (aktuelles Verhalten).
+func TestMigration018_ReplacesOptOutWithPerRoleDefaults(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(17); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 17: %v", err)
+	}
+
+	// Parent-Rows für FKs.
+	if _, err := sqlDB.Exec(`INSERT INTO seasons (id, name, start_date, end_date, is_active)
+		VALUES (1, '24/25', '2024-08-01', '2025-07-31', 1)`); err != nil {
+		t.Fatalf("seed season: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO teams (id, name, gender, age_class, is_active)
+		VALUES (1, 'H1', 'm', 'herren', 1)`); err != nil {
+		t.Fatalf("seed team: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO users (id, email, login_name, first_name, last_name, can_login)
+		VALUES (1, 'a@b', 'a', 'A', 'B', 1)`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	// Ein Spiel mit opt_out=1 (soll später zu players='confirmed' werden), eins mit opt_out=0.
+	if _, err := sqlDB.Exec(`INSERT INTO games (id, season_id, opponent, date, rsvp_opt_out)
+		VALUES (10, 1, 'X', '2025-01-01', 1), (11, 1, 'Y', '2025-01-02', 0)`); err != nil {
+		t.Fatalf("seed games: %v", err)
+	}
+	// Eine Trainings-Serie mit opt_out=1.
+	if _, err := sqlDB.Exec(`INSERT INTO training_series
+		(id, team_id, season_id, name, day_of_week, start_time, end_time,
+		 valid_from, valid_until, created_by, rsvp_opt_out)
+		VALUES (20, 1, 1, 'A', 1, '18:00', '19:30', '2024-08-01', '2025-07-31', 1, 1)`); err != nil {
+		t.Fatalf("seed series: %v", err)
+	}
+	// Eine Session mit opt_out=0.
+	if _, err := sqlDB.Exec(`INSERT INTO training_sessions
+		(id, series_id, team_id, season_id, date, start_time, end_time, rsvp_opt_out)
+		VALUES (30, 20, 1, 1, '2025-01-06', '18:00', '19:30', 0)`); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	if err := m.Migrate(18); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 18: %v", err)
+	}
+
+	// Alte Spalte weg, neue Spalten da.
+	if hasColumn(t, sqlDB, "games", "rsvp_opt_out") {
+		t.Error("games.rsvp_opt_out sollte nach 018 up entfernt sein")
+	}
+	if !hasColumn(t, sqlDB, "games", "rsvp_default_players") {
+		t.Error("games.rsvp_default_players fehlt nach 018 up")
+	}
+	if !hasColumn(t, sqlDB, "games", "rsvp_default_extended") {
+		t.Error("games.rsvp_default_extended fehlt nach 018 up")
+	}
+	if hasColumn(t, sqlDB, "training_series", "rsvp_opt_out") {
+		t.Error("training_series.rsvp_opt_out sollte weg sein")
+	}
+	if hasColumn(t, sqlDB, "training_sessions", "rsvp_opt_out") {
+		t.Error("training_sessions.rsvp_opt_out sollte weg sein")
+	}
+
+	// Backfill: opt_out=1 → players='confirmed', extended immer 'none'.
+	var p, e string
+	sqlDB.QueryRow(`SELECT rsvp_default_players, rsvp_default_extended FROM games WHERE id=10`).Scan(&p, &e)
+	if p != "confirmed" || e != "none" {
+		t.Errorf("game 10: erwartet ('confirmed','none'), bekam (%q,%q)", p, e)
+	}
+	sqlDB.QueryRow(`SELECT rsvp_default_players, rsvp_default_extended FROM games WHERE id=11`).Scan(&p, &e)
+	if p != "none" || e != "none" {
+		t.Errorf("game 11: erwartet ('none','none'), bekam (%q,%q)", p, e)
+	}
+	sqlDB.QueryRow(`SELECT rsvp_default_players, rsvp_default_extended FROM training_series WHERE id=20`).Scan(&p, &e)
+	if p != "confirmed" || e != "none" {
+		t.Errorf("series 20: erwartet ('confirmed','none'), bekam (%q,%q)", p, e)
+	}
+	sqlDB.QueryRow(`SELECT rsvp_default_players, rsvp_default_extended FROM training_sessions WHERE id=30`).Scan(&p, &e)
+	if p != "none" || e != "none" {
+		t.Errorf("session 30: erwartet ('none','none'), bekam (%q,%q)", p, e)
+	}
+
+	// CHECK-Constraint greift.
+	if _, err := sqlDB.Exec(`UPDATE games SET rsvp_default_players='bogus' WHERE id=10`); err == nil {
+		t.Error("erwartet CHECK-Verletzung für rsvp_default_players='bogus'")
+	}
+
+	// Down: Enums zurück auf Bool, 'confirmed' → 1, sonst 0.
+	if err := m.Migrate(17); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate down to 17: %v", err)
+	}
+	if !hasColumn(t, sqlDB, "games", "rsvp_opt_out") {
+		t.Error("games.rsvp_opt_out sollte nach 018 down zurück sein")
+	}
+	var opt10, opt11 int
+	sqlDB.QueryRow(`SELECT rsvp_opt_out FROM games WHERE id=10`).Scan(&opt10)
+	sqlDB.QueryRow(`SELECT rsvp_opt_out FROM games WHERE id=11`).Scan(&opt11)
+	if opt10 != 1 || opt11 != 0 {
+		t.Errorf("nach down: erwartet games (1,0), bekam (%d,%d)", opt10, opt11)
+	}
+}

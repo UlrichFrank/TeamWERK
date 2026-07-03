@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 import VenuePicker from '../components/VenuePicker'
 import MapsLink from '../components/MapsLink'
+import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { errorMessage } from '../lib/errors'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
@@ -36,7 +37,8 @@ interface Series {
   note: string
   team_name: string
   session_count: number
-  rsvp_opt_out: number
+  rsvp_default_players: RsvpDefault
+  rsvp_default_extended: RsvpDefault
   rsvp_require_reason: number
 }
 
@@ -52,7 +54,8 @@ interface StandaloneSession {
   note: string
   status: string
   cancel_reason: string
-  rsvp_opt_out?: number
+  rsvp_default_players?: RsvpDefault
+  rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
 }
 
@@ -68,7 +71,8 @@ type SeriesModal = {
   valid_from: string
   valid_until: string
   note: string
-  rsvp_opt_out: number
+  rsvp_default_players: RsvpDefault
+  rsvp_default_extended: RsvpDefault
   rsvp_require_reason: number
 }
 
@@ -83,7 +87,8 @@ type SessionModal = {
   note: string
   status: string
   cancel_reason: string
-  rsvp_opt_out: number
+  rsvp_default_players: RsvpDefault
+  rsvp_default_extended: RsvpDefault
   rsvp_require_reason: number
 }
 
@@ -142,24 +147,24 @@ export default function AdminTrainingsPage() {
     setError('')
     setEditScope('this_and_following')
     setEditFromDate('')
-    setSeriesModal({ team_id: 0, season_id: activeSeasonId, name: '', venue_id: null, day_of_week: 0, start_time: '18:00', end_time: '19:30', valid_from: '', valid_until: '', note: '', rsvp_opt_out: 0, rsvp_require_reason: 1 })
+    setSeriesModal({ team_id: 0, season_id: activeSeasonId, name: '', venue_id: null, day_of_week: 0, start_time: '18:00', end_time: '19:30', valid_from: '', valid_until: '', note: '', rsvp_default_players: 'none', rsvp_default_extended: 'none', rsvp_require_reason: 1 })
   }
 
   const openEditSeries = (s: Series) => {
     setError('')
     setEditScope('this_and_following')
     setEditFromDate('')
-    setSeriesModal({ id: s.id, team_id: s.team_id, season_id: s.season_id, name: s.name, venue_id: s.venue?.id ?? null, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, valid_from: s.valid_from.slice(0, 10), valid_until: s.valid_until.slice(0, 10), note: s.note, rsvp_opt_out: s.rsvp_opt_out ?? 0, rsvp_require_reason: s.rsvp_require_reason ?? 1 })
+    setSeriesModal({ id: s.id, team_id: s.team_id, season_id: s.season_id, name: s.name, venue_id: s.venue?.id ?? null, day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, valid_from: s.valid_from.slice(0, 10), valid_until: s.valid_until.slice(0, 10), note: s.note, rsvp_default_players: s.rsvp_default_players ?? 'none', rsvp_default_extended: s.rsvp_default_extended ?? 'none', rsvp_require_reason: s.rsvp_require_reason ?? 1 })
   }
 
   const openNewSession = () => {
     setError('')
-    setSessionModal({ team_id: 0, season_id: activeSeasonId, date: '', start_time: '18:00', end_time: '19:30', venue_id: null, note: '', status: 'active', cancel_reason: '', rsvp_opt_out: 0, rsvp_require_reason: 1 })
+    setSessionModal({ team_id: 0, season_id: activeSeasonId, date: '', start_time: '18:00', end_time: '19:30', venue_id: null, note: '', status: 'active', cancel_reason: '', rsvp_default_players: 'none', rsvp_default_extended: 'none', rsvp_require_reason: 1 })
   }
 
   const openEditSession = (s: StandaloneSession) => {
     setError('')
-    setSessionModal({ id: s.id, team_id: s.team_id, season_id: 0, date: s.date.slice(0, 10), start_time: s.start_time, end_time: s.end_time, venue_id: s.venue?.id ?? null, note: s.note, status: s.status, cancel_reason: s.cancel_reason, rsvp_opt_out: s.rsvp_opt_out ?? 0, rsvp_require_reason: s.rsvp_require_reason ?? 1 })
+    setSessionModal({ id: s.id, team_id: s.team_id, season_id: 0, date: s.date.slice(0, 10), start_time: s.start_time, end_time: s.end_time, venue_id: s.venue?.id ?? null, note: s.note, status: s.status, cancel_reason: s.cancel_reason, rsvp_default_players: s.rsvp_default_players ?? 'none', rsvp_default_extended: s.rsvp_default_extended ?? 'none', rsvp_require_reason: s.rsvp_require_reason ?? 1 })
   }
 
   const handleSubmitSeries = async (e: React.FormEvent) => {
@@ -183,7 +188,8 @@ export default function AdminTrainingsPage() {
           valid_from: seriesModal.valid_from,
           valid_until: seriesModal.valid_until,
           note: seriesModal.note,
-          rsvp_opt_out: seriesModal.rsvp_opt_out,
+          rsvp_default_players: seriesModal.rsvp_default_players,
+          rsvp_default_extended: seriesModal.rsvp_default_extended,
           rsvp_require_reason: seriesModal.rsvp_require_reason,
           scope: editScope,
           from_date: editScope === 'this_and_following' ? editFromDate : undefined,
@@ -218,7 +224,8 @@ export default function AdminTrainingsPage() {
           note: sessionModal.note,
           status: sessionModal.status,
           cancel_reason: sessionModal.cancel_reason,
-          rsvp_opt_out: sessionModal.rsvp_opt_out,
+          rsvp_default_players: sessionModal.rsvp_default_players,
+          rsvp_default_extended: sessionModal.rsvp_default_extended,
           rsvp_require_reason: sessionModal.rsvp_require_reason,
         })
       }
@@ -517,25 +524,16 @@ export default function AdminTrainingsPage() {
                     onChange={e => setSeriesModal(f => f ? { ...f, note: e.target.value } : f)}
                     className={INPUT} placeholder="Hinweis für alle Termine dieser Serie" />
                 </div>
-                <div className="sm:col-span-2 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={seriesModal.rsvp_opt_out === 1}
-                      onChange={e => setSeriesModal(f => f ? { ...f, rsvp_opt_out: e.target.checked ? 1 : 0 } : f)}
-                      className="w-4 h-4 accent-brand-yellow"
-                    />
-                    <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={seriesModal.rsvp_require_reason === 1}
-                      onChange={e => setSeriesModal(f => f ? { ...f, rsvp_require_reason: e.target.checked ? 1 : 0 } : f)}
-                      className="w-4 h-4 accent-brand-yellow"
-                    />
-                    <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
-                  </label>
+                <div className="sm:col-span-2">
+                  <RsvpDefaultsEditor
+                    idPrefix="series"
+                    defaultPlayers={seriesModal.rsvp_default_players}
+                    defaultExtended={seriesModal.rsvp_default_extended}
+                    requireReason={seriesModal.rsvp_require_reason === 1}
+                    onChangePlayers={v => setSeriesModal(f => f ? { ...f, rsvp_default_players: v } : f)}
+                    onChangeExtended={v => setSeriesModal(f => f ? { ...f, rsvp_default_extended: v } : f)}
+                    onChangeRequireReason={v => setSeriesModal(f => f ? { ...f, rsvp_require_reason: v ? 1 : 0 } : f)}
+                  />
                 </div>
               </div>
 
@@ -638,25 +636,16 @@ export default function AdminTrainingsPage() {
                     onChange={e => setSessionModal(f => f ? { ...f, note: e.target.value } : f)}
                     className={INPUT} placeholder="Optionaler Hinweis" />
                 </div>
-                <div className="sm:col-span-2 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={sessionModal.rsvp_opt_out === 1}
-                      onChange={e => setSessionModal(f => f ? { ...f, rsvp_opt_out: e.target.checked ? 1 : 0 } : f)}
-                      className="w-4 h-4 accent-brand-yellow"
-                    />
-                    <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={sessionModal.rsvp_require_reason === 1}
-                      onChange={e => setSessionModal(f => f ? { ...f, rsvp_require_reason: e.target.checked ? 1 : 0 } : f)}
-                      className="w-4 h-4 accent-brand-yellow"
-                    />
-                    <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
-                  </label>
+                <div className="sm:col-span-2">
+                  <RsvpDefaultsEditor
+                    idPrefix="session"
+                    defaultPlayers={sessionModal.rsvp_default_players}
+                    defaultExtended={sessionModal.rsvp_default_extended}
+                    requireReason={sessionModal.rsvp_require_reason === 1}
+                    onChangePlayers={v => setSessionModal(f => f ? { ...f, rsvp_default_players: v } : f)}
+                    onChangeExtended={v => setSessionModal(f => f ? { ...f, rsvp_default_extended: v } : f)}
+                    onChangeRequireReason={v => setSessionModal(f => f ? { ...f, rsvp_require_reason: v ? 1 : 0 } : f)}
+                  />
                 </div>
                 {!isNewSession && (
                   <>

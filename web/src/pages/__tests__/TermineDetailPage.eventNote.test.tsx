@@ -24,7 +24,8 @@ const SESSION_WITH_NOTE = {
   my_rsvp: null,
   note: 'Halle gesperrt, wir joggen am See',
   cancel_reason: '',
-  rsvp_opt_out: 0,
+  rsvp_default_players: 'none',
+  rsvp_default_extended: 'none',
   rsvp_require_reason: 0,
 }
 

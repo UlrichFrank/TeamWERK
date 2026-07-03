@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import VenuePicker from './VenuePicker'
+import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
 
 interface VenueRef { id: number; name: string; street: string; city: string; postal_code: string; note: string }
 
@@ -18,7 +19,8 @@ interface Training {
   series_id?: number
   team_id: number
   season_id: number
-  rsvp_opt_out?: number
+  rsvp_default_players?: RsvpDefault
+  rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
 }
 
@@ -32,7 +34,8 @@ interface Series {
   valid_from: string
   valid_until: string
   note: string
-  rsvp_opt_out: number
+  rsvp_default_players: RsvpDefault
+  rsvp_default_extended: RsvpDefault
   rsvp_require_reason: number
 }
 
@@ -54,7 +57,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   const [startTime, setStartTime] = useState(session.start_time)
   const [endTime, setEndTime] = useState(session.end_time)
   const [venueId, setVenueId] = useState<number | null>(session.venue?.id ?? null)
-  const [rsvpOptOut, setRsvpOptOut] = useState<boolean>(session.rsvp_opt_out === 1)
+  const [rsvpDefaultPlayers, setRsvpDefaultPlayers] = useState<RsvpDefault>(session.rsvp_default_players ?? 'none')
+  const [rsvpDefaultExtended, setRsvpDefaultExtended] = useState<RsvpDefault>(session.rsvp_default_extended ?? 'none')
   const [rsvpRequireReason, setRsvpRequireReason] = useState<boolean>(session.rsvp_require_reason === 1)
   const [scope, setScope] = useState<Scope>('this_one')
   const [series, setSeries] = useState<Series | null>(null)
@@ -80,13 +84,15 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   useEffect(() => {
     if (scope === 'this_one') {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
-      setRsvpOptOut(session.rsvp_opt_out === 1)
+      setRsvpDefaultPlayers(session.rsvp_default_players ?? 'none')
+      setRsvpDefaultExtended(session.rsvp_default_extended ?? 'none')
       setRsvpRequireReason(session.rsvp_require_reason === 1)
     } else if (series) {
-      setRsvpOptOut(series.rsvp_opt_out === 1)
+      setRsvpDefaultPlayers(series.rsvp_default_players ?? 'none')
+      setRsvpDefaultExtended(series.rsvp_default_extended ?? 'none')
       setRsvpRequireReason(series.rsvp_require_reason === 1)
     }
-  }, [scope, series, session.rsvp_opt_out, session.rsvp_require_reason])
+  }, [scope, series, session.rsvp_default_players, session.rsvp_default_extended, session.rsvp_require_reason])
 
   const handleSave = async () => {
     setSaving(true)
@@ -104,7 +110,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           venue_id: venueId,
           status: session.status,
           cancel_reason: session.cancel_reason ?? '',
-          rsvp_opt_out: rsvpOptOut ? 1 : 0,
+          rsvp_default_players: rsvpDefaultPlayers,
+          rsvp_default_extended: rsvpDefaultExtended,
           rsvp_require_reason: rsvpRequireReason ? 1 : 0,
         })
       } else if (series) {
@@ -117,7 +124,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           valid_from: series.valid_from.slice(0, 10),
           valid_until: series.valid_until.slice(0, 10),
           note: series.note,
-          rsvp_opt_out: rsvpOptOut ? 1 : 0,
+          rsvp_default_players: rsvpDefaultPlayers,
+          rsvp_default_extended: rsvpDefaultExtended,
           rsvp_require_reason: rsvpRequireReason ? 1 : 0,
           scope: scope === 'this_and_following' ? 'this_and_following' : 'all',
           from_date: scope === 'this_and_following' ? session.date.slice(0, 10) : undefined,
@@ -216,27 +224,14 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
             <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
             <VenuePicker value={venueId} onChange={setVenueId} />
           </div>
-          <div className="space-y-2 pt-1 border-t border-brand-border-subtle pt-2">
-            <p className="text-sm font-medium text-brand-text-muted">RSVP-Einstellungen</p>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rsvpOptOut}
-                onChange={e => setRsvpOptOut(e.target.checked)}
-                className="w-4 h-4 accent-brand-yellow"
-              />
-              <span className="text-sm text-brand-text">Alle Spieler standardmäßig zugesagt (Opt-Out)</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rsvpRequireReason}
-                onChange={e => setRsvpRequireReason(e.target.checked)}
-                className="w-4 h-4 accent-brand-yellow"
-              />
-              <span className="text-sm text-brand-text">Begründung bei Absage erforderlich</span>
-            </label>
-          </div>
+          <RsvpDefaultsEditor
+            defaultPlayers={rsvpDefaultPlayers}
+            defaultExtended={rsvpDefaultExtended}
+            requireReason={rsvpRequireReason}
+            onChangePlayers={setRsvpDefaultPlayers}
+            onChangeExtended={setRsvpDefaultExtended}
+            onChangeRequireReason={setRsvpRequireReason}
+          />
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
               {error}
