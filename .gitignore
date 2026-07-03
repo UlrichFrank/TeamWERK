@@ -51,6 +51,8 @@ build-errors.log
 
 # Claude Code
 .claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Deploy tracking
 .deployed-hash
