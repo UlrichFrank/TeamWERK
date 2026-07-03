@@ -174,7 +174,7 @@ export default function TerminePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, past: showPast, focus } = parseFilters(searchParams)
   const triedPastExpansion = useRef(false)
-  const scrollRestoreRef = useRef<{ id: string; offset: number } | null>(null)
+  const scrollToTodayRef = useRef(false)
 
   const [termine, setTermine] = useState<Termin[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -279,31 +279,27 @@ export default function TerminePage() {
 
   useEffect(() => { triedPastExpansion.current = false }, [focus?.kind, focus?.id])
 
-  // Nach Toggle „Vergangene" scrollt die Seite ohne diese Restauration nach oben,
-  // weil das Loading-Placeholder die Liste kurz aus dem DOM nimmt. Wir merken uns
-  // beim Klick den obersten sichtbaren Termin + dessen Viewport-Offset und stellen
-  // dieselbe Pixel-Position nach dem Reload wieder her. Focus-Scroll hat Vorrang.
+  // Nach Toggle „Vergangene" scrollt die Seite ohne dieses Zutun nach oben, weil das
+  // Loading-Placeholder die Liste kurz aus dem DOM nimmt. Der „Vergangene"-Button ist
+  // nur oben (bei „heute") erreichbar, deshalb springen wir nach dem Reload einfach
+  // zur „heute"-Trennlinie — bzw. an den Listenanfang, wenn keine Trennlinie existiert
+  // (kein vergangener Termin davor). Focus-Scroll hat Vorrang.
   // Wichtig: Der Scrollcontainer ist das <main> in AppShell (overflow-auto), nicht
-  // das window — window.scrollBy wäre ein No-Op. Restauriert wird daher auf dem
-  // nächstgelegenen <main>-Vorfahren des Ankers.
+  // das window.
   useEffect(() => {
     if (loading || focus) return
-    const restore = scrollRestoreRef.current
-    if (!restore) return
-    scrollRestoreRef.current = null
-    const el = document.getElementById(restore.id)
-    if (!el) return
-    const container = el.closest('main')
-    if (!container) return
-    container.scrollBy({ top: el.getBoundingClientRect().top - restore.offset, behavior: 'auto' })
+    if (!scrollToTodayRef.current) return
+    scrollToTodayRef.current = false
+    const divider = document.getElementById('today-divider')
+    if (divider) {
+      divider.scrollIntoView({ behavior: 'auto', block: 'start' })
+      return
+    }
+    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'auto' })
   }, [loading, focus])
 
   const togglePast = () => {
-    const anchor = Array.from(document.querySelectorAll<HTMLElement>('[id^="termin-"]'))
-      .find(el => el.getBoundingClientRect().bottom > 0)
-    if (anchor) {
-      scrollRestoreRef.current = { id: anchor.id, offset: anchor.getBoundingClientRect().top }
-    }
+    scrollToTodayRef.current = true
     updateFilter({ past: !showPast })
   }
 
@@ -638,7 +634,7 @@ export default function TerminePage() {
           })
           if (!showTodayDivider) return cards
           const todayDivider = (
-            <div key="today-divider" className="flex items-center gap-3 py-1" aria-hidden="true">
+            <div key="today-divider" id="today-divider" className="flex items-center gap-3 py-1" aria-hidden="true">
               <span className="flex-1 border-t border-brand-border-subtle" />
               <span className="text-brand-text-muted text-xs uppercase tracking-wide">heute</span>
               <span className="flex-1 border-t border-brand-border-subtle" />
