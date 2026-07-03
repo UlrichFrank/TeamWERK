@@ -415,23 +415,6 @@ func validRsvpDefault(v string) bool {
 	return v == "confirmed" || v == "declined" || v == "none"
 }
 
-// rsvpSettingsConflict reports whether the combination of defaults + require_reason
-// is contradictory (a Default-Absage entsteht ohne Nutzerhandlung → kein Grund
-// erhebbar). Returns true when a HTTP 400 response should be sent.
-func rsvpSettingsConflict(defPlayers, defExtended string, requireReason int) bool {
-	return requireReason == 1 && (defPlayers == "declined" || defExtended == "declined")
-}
-
-// writeInvalidRsvpSettings emits the canonical 400 response for conflicting RSVP settings.
-func writeInvalidRsvpSettings(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"error":   "invalid_rsvp_settings",
-		"message": "„Standardmäßig abgesagt“ ist nicht mit „Begründung bei Absage erforderlich“ kombinierbar.",
-	})
-}
-
 // gameRegularNoResp counts regular kader members (across all of the game's teams)
 // without a game_responses row, excluding trainers. Correlates on the outer alias g.
 const gameRegularNoResp = `(SELECT COUNT(DISTINCT km.member_id) FROM game_teams gt4
@@ -884,10 +867,6 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	} else if req.EventType == "generisch" {
 		rsvpRequireReason = 0
 	}
-	if rsvpSettingsConflict(req.RsvpDefaultPlayers, req.RsvpDefaultExtended, rsvpRequireReason) {
-		writeInvalidRsvpSettings(w)
-		return
-	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -1048,15 +1027,12 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Capture pre-update state so the regen window can include the old date if it
-	// changes, and so partial RSVP-Updates keep the unspecified fields' DB values.
+	// Capture pre-update state so the regen window can include the old date if it changes.
 	var oldDate string
 	var oldSeasonID int
-	var curDefPlayers, curDefExtended string
-	var curReqReason int
 	if err := tx.QueryRowContext(r.Context(),
-		`SELECT date, season_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason FROM games WHERE id=?`, id).
-		Scan(&oldDate, &oldSeasonID, &curDefPlayers, &curDefExtended, &curReqReason); err != nil {
+		`SELECT date, season_id FROM games WHERE id=?`, id).
+		Scan(&oldDate, &oldSeasonID); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
@@ -1065,29 +1041,13 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Effektive RSVP-Werte (Request überschreibt DB) für die Konflikt-Prüfung.
-	effDefPlayers := curDefPlayers
-	if req.RsvpDefaultPlayers != nil {
-		if !validRsvpDefault(*req.RsvpDefaultPlayers) {
-			http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
-			return
-		}
-		effDefPlayers = *req.RsvpDefaultPlayers
+	// Enum-Validierung der bereitgestellten RSVP-Felder (keine Konflikt-Prüfung mehr).
+	if req.RsvpDefaultPlayers != nil && !validRsvpDefault(*req.RsvpDefaultPlayers) {
+		http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
+		return
 	}
-	effDefExtended := curDefExtended
-	if req.RsvpDefaultExtended != nil {
-		if !validRsvpDefault(*req.RsvpDefaultExtended) {
-			http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
-			return
-		}
-		effDefExtended = *req.RsvpDefaultExtended
-	}
-	effReqReason := curReqReason
-	if req.RsvpRequireReason != nil {
-		effReqReason = *req.RsvpRequireReason
-	}
-	if rsvpSettingsConflict(effDefPlayers, effDefExtended, effReqReason) {
-		writeInvalidRsvpSettings(w)
+	if req.RsvpDefaultExtended != nil && !validRsvpDefault(*req.RsvpDefaultExtended) {
+		http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
 		return
 	}
 
@@ -1963,8 +1923,8 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Args order: memberID (my_rsvp), memberID (my_rsvp_locked), memberID (in_regular_kader),
-	// memberID (in_extended_kader), teamArgs, from, to
-	args := append([]any{memberID, memberID, memberID, memberID}, teamArgs...)
+	// memberID (in_extended_kader), memberID (in_trainer_kader), teamArgs, from, to
+	args := append([]any{memberID, memberID, memberID, memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 
 	query := fmt.Sprintf(`
@@ -1991,6 +1951,10 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		              JOIN kader k_e ON k_e.team_id = gt_e.team_id AND k_e.season_id = g.season_id
 		              JOIN kader_extended_members kem_e ON kem_e.kader_id = k_e.id AND kem_e.member_id = ?
 		              WHERE gt_e.game_id = g.id),
+		       EXISTS(SELECT 1 FROM game_teams gt_t
+		              JOIN kader k_t ON k_t.team_id = gt_t.team_id AND k_t.season_id = g.season_id
+		              JOIN kader_trainers kt_t ON kt_t.kader_id = k_t.id AND kt_t.member_id = ?
+		              WHERE gt_t.game_id = g.id),
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
@@ -2009,7 +1973,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 	result := []gameListItem{}
 	for rows.Next() {
 		var g gameListItem
-		var isHome, inRegularKader, inExtendedKader int
+		var isHome, inRegularKader, inExtendedKader, inTrainerKader int
 		var myRSVP sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var teamNames, teamIDsCSV, teamShortCSV, teamLongCSV sql.NullString
@@ -2017,7 +1981,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
 			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
-			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &inRegularKader, &inExtendedKader,
+			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &inRegularKader, &inExtendedKader, &inTrainerKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -2036,7 +2000,8 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// Priorität: explizite Response > rsvp_default_players (Stammkader) >
-		// rsvp_default_extended (nur Erweiterter Kader) > null. 'none' liefert nichts.
+		// rsvp_default_extended (nur Erweiterter Kader) > Trainer-confirmed > null.
+		// 'none' liefert nichts.
 		if myRSVP.Valid {
 			g.MyRSVP = &myRSVP.String
 		} else if inRegularKader == 1 && (g.RsvpDefaultPlayers == "confirmed" || g.RsvpDefaultPlayers == "declined") {
@@ -2046,6 +2011,10 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		} else if inExtendedKader == 1 && (g.RsvpDefaultExtended == "confirmed" || g.RsvpDefaultExtended == "declined") {
 			v := g.RsvpDefaultExtended
 			g.MyRSVP = &v
+			g.MyRSVPIsDefault = true
+		} else if inTrainerKader == 1 {
+			confirmed := "confirmed"
+			g.MyRSVP = &confirmed
 			g.MyRSVPIsDefault = true
 		}
 		g.MyRSVPLocked = myRSVPLocked.Valid && myRSVPLocked.Int64 == 1

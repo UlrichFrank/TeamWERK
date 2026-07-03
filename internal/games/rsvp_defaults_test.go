@@ -73,8 +73,8 @@ func TestGameRsvpDefault_ExtendedConfirmed_MyRSVP(t *testing.T) {
 	}
 }
 
-// 4.9 Konfliktsperre: POST /api/games mit declined + rsvp_require_reason=1 → 400, kein Spiel.
-func TestGameRsvpDefault_CreateConflictRejected(t *testing.T) {
+// declined + rsvp_require_reason=1 ist bei POST /api/games zulässig (keine Sperre mehr).
+func TestGameRsvpDefault_CreateDeclinedWithRequireReasonAccepted(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
@@ -95,25 +95,20 @@ func TestGameRsvpDefault_CreateConflictRejected(t *testing.T) {
 		"rsvp_require_reason":  1,
 	}
 	res := testutil.Do(t, srv, http.MethodPost, "/api/games", token, body)
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", res.StatusCode)
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
 	}
-	var payload map[string]any
-	json.NewDecoder(res.Body).Decode(&payload)
-	if payload["error"] != "invalid_rsvp_settings" {
-		t.Errorf("expected error=invalid_rsvp_settings, got %v", payload["error"])
-	}
-
-	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM games`).Scan(&count)
-	if count != 0 {
-		t.Errorf("no game must be created on conflict, got %d", count)
+	var players string
+	var reqReason int
+	db.QueryRow(`SELECT rsvp_default_players, rsvp_require_reason FROM games LIMIT 1`).Scan(&players, &reqReason)
+	if players != "declined" || reqReason != 1 {
+		t.Errorf("expected (declined,1), got (%s,%d)", players, reqReason)
 	}
 }
 
-// 4.9 Konfliktsperre: PUT /api/games/{id} mit extended='declined' + require_reason=1 → 400, unverändert.
-func TestGameRsvpDefault_UpdateConflictRejected(t *testing.T) {
+// declined + rsvp_require_reason=1 ist bei PUT /api/games/{id} zulässig.
+func TestGameRsvpDefault_UpdateDeclinedWithRequireReasonAccepted(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, teamID, _, gameID := seedGameWithKader(t, db)
 
@@ -131,15 +126,16 @@ func TestGameRsvpDefault_UpdateConflictRejected(t *testing.T) {
 		"rsvp_require_reason":   1,
 	}
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, body)
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", res.StatusCode)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
 	var defExtended string
-	db.QueryRow(`SELECT rsvp_default_extended FROM games WHERE id=?`, gameID).Scan(&defExtended)
-	if defExtended != "none" {
-		t.Errorf("game must be unchanged on 400, got extended=%s", defExtended)
+	var reqReason int
+	db.QueryRow(`SELECT rsvp_default_extended, rsvp_require_reason FROM games WHERE id=?`, gameID).Scan(&defExtended, &reqReason)
+	if defExtended != "declined" || reqReason != 1 {
+		t.Errorf("expected (declined,1), got (%s,%d)", defExtended, reqReason)
 	}
 }
 
@@ -208,4 +204,30 @@ func gameCounts(t *testing.T, db *sql.DB, gameID int) (confirmed, declined int) 
 	json.NewDecoder(res.Body).Decode(&payload)
 	res.Body.Close()
 	return payload.Game.ConfirmedCount, payload.Game.DeclinedCount
+}
+
+// Trainer eines beteiligten Teams ohne Response → GET /api/games/my liefert my_rsvp='confirmed'.
+func TestGameRsvpDefault_TrainerMyRSVPConfirmed(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, kaderID, _ := seedGameWithKader(t, db)
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Get(t, srv, "/api/games/my", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("games/my: expected 200, got %d", res.StatusCode)
+	}
+	var list []map[string]any
+	json.NewDecoder(res.Body).Decode(&list)
+	res.Body.Close()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 game for trainer, got %d", len(list))
+	}
+	if list[0]["my_rsvp"] != "confirmed" {
+		t.Errorf("trainer should see my_rsvp=confirmed, got %v", list[0]["my_rsvp"])
+	}
 }

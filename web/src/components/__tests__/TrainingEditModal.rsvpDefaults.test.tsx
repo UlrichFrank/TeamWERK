@@ -57,7 +57,7 @@ describe('TrainingEditModal — RSVP-Voreinstellung', () => {
     expect(body.rsvp_default_players).toBe('none')
   })
 
-  test('gesetzte Reason-Checkbox deaktiviert die „abgesagt"-Radios', () => {
+  test('gesetzte Reason-Checkbox lässt die „abgesagt"-Radios aktiv (keine Kopplung)', () => {
     const { container } = render(
       <TrainingEditModal session={SESSION} onClose={() => {}} onSaved={() => {}} />,
     )
@@ -65,19 +65,18 @@ describe('TrainingEditModal — RSVP-Voreinstellung', () => {
 
     const playersDeclined = container.querySelector<HTMLInputElement>('input[name="rsvp-players"][value="declined"]')!
     const extDeclined = container.querySelector<HTMLInputElement>('input[name="rsvp-extended"][value="declined"]')!
-    expect(playersDeclined.disabled).toBe(true)
-    expect(extDeclined.disabled).toBe(true)
+    expect(playersDeclined.disabled).toBe(false)
+    expect(extDeclined.disabled).toBe(false)
   })
 
-  test('gewählte „abgesagt"-Voreinstellung deaktiviert die Reason-Checkbox', () => {
-    const { container } = render(
+  test('gewählte „abgesagt"-Voreinstellung lässt die Reason-Checkbox aktiv', () => {
+    render(
       <TrainingEditModal session={{ ...SESSION, rsvp_default_players: 'declined' }} onClose={() => {}} onSaved={() => {}} />,
     )
     const reason = screen.getByLabelText('Begründung bei Absage erforderlich') as HTMLInputElement
-    expect(reason.disabled).toBe(true)
-    // Nach Zurückschalten auf „zugesagt" ist die Checkbox wieder aktiv.
-    const playersConfirmed = container.querySelector<HTMLInputElement>('input[name="rsvp-players"][value="confirmed"]')!
-    fireEvent.click(playersConfirmed)
-    expect((screen.getByLabelText('Begründung bei Absage erforderlich') as HTMLInputElement).disabled).toBe(false)
+    expect(reason.disabled).toBe(false)
+    // Beide frei kombinierbar: Reason lässt sich trotz declined setzen.
+    fireEvent.click(reason)
+    expect((screen.getByLabelText('Begründung bei Absage erforderlich') as HTMLInputElement).checked).toBe(true)
   })
 })
