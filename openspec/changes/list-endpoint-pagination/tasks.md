@@ -47,8 +47,8 @@
 
 ## 6. Abschluss
 
-- [ ] 6.1 `/verify-change` (insb. Route→Tests, brand-Tokens, lucide-Icons).
-- [ ] 6.2 `openspec validate list-endpoint-pagination --strict`.
-- [ ] 6.3 Proposal archivieren.
+- [x] 6.1 Gates grün: `go vet ./...`, `go test ./...` (inkl. Arch-Test), `golangci-lint run`, `pnpm build/test/lint` (Route→Tests, brand-Tokens, lucide-Icons geprüft).
+- [x] 6.2 `openspec validate list-endpoint-pagination --strict` → valid.
+- [ ] 6.3 Proposal archivieren. (bewusst offen gelassen)
 
   _Commit:_ `chore(api): archiviere list-endpoint-pagination`
