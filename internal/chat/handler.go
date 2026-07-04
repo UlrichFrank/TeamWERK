@@ -422,13 +422,54 @@ func (h *Handler) getConversation(r *http.Request, convID, userID int) (*Convers
 	return &c, nil
 }
 
-// GET /api/chat/conversations/{id}/messages
+// messageSelect ist der gemeinsame SELECT-Rumpf für alle ListMessages-Varianten
+// (voll, ?after=, ?before=); nur WHERE/ORDER/LIMIT unterscheiden sich.
+const messageSelect = `
+	SELECT m.id, m.sender_id, u.first_name || ' ' || u.last_name,
+	       CASE WHEN m.deleted_at IS NOT NULL THEN '' ELSE m.body END,
+	       m.sent_at,
+	       m.reply_to_id,
+	       CASE
+	         WHEN m.reply_to_id IS NULL THEN NULL
+	         WHEN rm.deleted_at IS NOT NULL THEN '[Nachricht gelöscht]'
+	         ELSE rm.body
+	       END AS reply_to_body,
+	       CASE WHEN m.reply_to_id IS NOT NULL THEN ru.first_name || ' ' || ru.last_name ELSE NULL END,
+	       m.edited_at,
+	       m.deleted_at,
+	       m.is_system
+	FROM messages m
+	JOIN users u ON u.id = m.sender_id
+	LEFT JOIN messages rm ON rm.id = m.reply_to_id
+	LEFT JOIN users ru ON ru.id = rm.sender_id
+	WHERE m.conversation_id = ?`
+
+// messagePageSize begrenzt jede ListMessages-Antwort (voll, after, before).
+const messagePageSize = 100
+
+// GET /api/chat/conversations/{id}/messages[?after=<msgId>|?before=<msgId>]
+//
+// Inkrementeller Sync (id-Cursor, append-only — kein updated_at nötig):
+//   - ?after=<msgId>  → nur Nachrichten mit id > msgId, aufsteigend (Delta-Nachladen).
+//   - ?before=<msgId> → Seite der Nachrichten unmittelbar vor msgId (Verlaufs-Scroll).
+//   - ohne Parameter  → unverändert: letzte 100 Nachrichten, älteste zuerst.
 func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
+	}
+
+	afterStr := r.URL.Query().Get("after")
+	beforeStr := r.URL.Query().Get("before")
+	if afterStr != "" && beforeStr != "" {
+		http.Error(w, "after and before are mutually exclusive", http.StatusBadRequest)
+		return
+	}
+	parseCursor := func(s string) (int, bool) {
+		v, convErr := strconv.Atoi(s)
+		return v, convErr == nil && v >= 0
 	}
 
 	if !h.isMember(r, convID, claims.UserID) {
@@ -451,27 +492,34 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		Reactions         []messageReaction `json:"reactions"`
 	}
 
-	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT m.id, m.sender_id, u.first_name || ' ' || u.last_name,
-		       CASE WHEN m.deleted_at IS NOT NULL THEN '' ELSE m.body END,
-		       m.sent_at,
-		       m.reply_to_id,
-		       CASE
-		         WHEN m.reply_to_id IS NULL THEN NULL
-		         WHEN rm.deleted_at IS NOT NULL THEN '[Nachricht gelöscht]'
-		         ELSE rm.body
-		       END AS reply_to_body,
-		       CASE WHEN m.reply_to_id IS NOT NULL THEN ru.first_name || ' ' || ru.last_name ELSE NULL END,
-		       m.edited_at,
-		       m.deleted_at,
-		       m.is_system
-		FROM messages m
-		JOIN users u ON u.id = m.sender_id
-		LEFT JOIN messages rm ON rm.id = m.reply_to_id
-		LEFT JOIN users ru ON ru.id = rm.sender_id
-		WHERE m.conversation_id = ?
-		ORDER BY m.sent_at DESC
-		LIMIT 100`, convID)
+	var rows *sql.Rows
+	newestFirst := false // true, wenn die Query absteigend sortiert → vor Antwort umdrehen
+	switch {
+	case afterStr != "":
+		after, ok := parseCursor(afterStr)
+		if !ok {
+			http.Error(w, "invalid after", http.StatusBadRequest)
+			return
+		}
+		rows, err = h.db.QueryContext(r.Context(),
+			messageSelect+` AND m.id > ? ORDER BY m.id ASC LIMIT ?`,
+			convID, after, messagePageSize)
+	case beforeStr != "":
+		before, ok := parseCursor(beforeStr)
+		if !ok {
+			http.Error(w, "invalid before", http.StatusBadRequest)
+			return
+		}
+		newestFirst = true
+		rows, err = h.db.QueryContext(r.Context(),
+			messageSelect+` AND m.id < ? ORDER BY m.id DESC LIMIT ?`,
+			convID, before, messagePageSize)
+	default:
+		newestFirst = true
+		rows, err = h.db.QueryContext(r.Context(),
+			messageSelect+` ORDER BY m.sent_at DESC LIMIT ?`,
+			convID, messagePageSize)
+	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -504,9 +552,11 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		msgs = append(msgs, msg)
 	}
 
-	// Reverse so oldest first
-	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
-		msgs[i], msgs[j] = msgs[j], msgs[i]
+	// Reverse so oldest first (nur nötig, wenn absteigend gelesen wurde)
+	if newestFirst {
+		for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+			msgs[i], msgs[j] = msgs[j], msgs[i]
+		}
 	}
 
 	// Attach emoji reactions
