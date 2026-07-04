@@ -52,8 +52,8 @@
 
 ## 7. Abschluss
 
-- [ ] 7.1 `/verify-change`.
-- [ ] 7.2 `openspec validate efficient-data-loading-quickwins --strict`.
+- [x] 7.1 `/verify-change`.
+- [x] 7.2 `openspec validate efficient-data-loading-quickwins --strict`.
 - [ ] 7.3 Proposal archivieren.
 
   _Commit:_ `chore(pwa): archiviere efficient-data-loading-quickwins`
