@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/teamstuttgart/teamwerk/internal/httpcache"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
@@ -50,8 +51,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&v.ID, &v.Name, &v.Street, &v.City, &v.PostalCode, &v.Country, &v.Note, &v.IsHomeVenue)
 		result = append(result, v)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	// Referenzdaten: ETag/304-Revalidierung, kein geteilter max-age.
+	httpcache.ServeJSON(w, r, "private, no-cache", result)
 }
 
 // POST /api/admin/venues

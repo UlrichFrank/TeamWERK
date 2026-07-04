@@ -15,6 +15,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
+	"github.com/teamstuttgart/teamwerk/internal/httpcache"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
@@ -1371,8 +1372,10 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			result = append(result, t)
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	// Nutzergefilterte Referenzdaten: ETag aus dem Body (pro Nutzer korrekt),
+	// Revalidierung per 304 — bewusst KEIN geteiltes public/max-age, damit
+	// Zwischencaches nie die Antwort eines anderen Nutzers ausliefern.
+	httpcache.ServeJSON(w, r, "private, no-cache", result)
 }
 
 // ── Duty Templates ───────────────────────────────────────────────────────────

@@ -20,9 +20,9 @@
 
 ## 3. Backend: ETag/304 auf Referenzrouten
 
-- [ ] 3.1 `GET /api/seasons` (`internal/config/handler.go`): schwacher ETag aus `COUNT`+`MAX(updated_at)`, `Cache-Control: private, no-cache`.
-- [ ] 3.2 `GET /api/venues` (`internal/venues/handler.go`), `GET /api/age-class-rules` (`internal/config/handler.go`): analog.
-- [ ] 3.3 Tests: `TestSeasons_ETagChangesOnMutation` (Happy + `304`-Revalidierung), Fehlerfall unverändert.
+- [x] 3.1 `GET /api/seasons` (`internal/config/handler.go`): schwacher ETag aus `COUNT`+`MAX(updated_at)`, `Cache-Control: private, no-cache`.
+- [x] 3.2 `GET /api/venues` (`internal/venues/handler.go`), `GET /api/age-class-rules` (`internal/config/handler.go`): analog.
+- [x] 3.3 Tests: `TestSeasons_ETagChangesOnMutation` (Happy + `304`-Revalidierung), Fehlerfall unverändert.
 
   _Commit:_ `feat(config,venues): ETag/304-Revalidierung für Referenzrouten`
 
