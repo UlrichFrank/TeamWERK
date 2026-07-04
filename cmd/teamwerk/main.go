@@ -206,7 +206,7 @@ func serve() {
 		Health:              health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
 		Videos:              videosHandler,
 		VideosTus:           videosTus,
-		Hub:                 hub.NewHandler(hubInstance, buildHash),
+		Hub:                 hub.NewHandler(hubInstance, buildHash, auth.UserIDFromCtx),
 		JWTSecret:           cfg.JWTSecret,
 		Database:            database,
 		BaseURL:             cfg.BaseURL,

@@ -65,7 +65,7 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, t.TempDir()),
 		Calendar:       calendar.NewHandler(database),
 		Videos:         videos.NewHandler(database, hubInstance, cfg),
-		Hub:            hub.NewHandler(hubInstance, "test"),
+		Hub:            hub.NewHandler(hubInstance, "test", auth.UserIDFromCtx),
 		JWTSecret:      testutil.TestJWTSecret,
 		Database:       database,
 		BaseURL:        "",

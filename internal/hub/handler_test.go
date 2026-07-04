@@ -15,7 +15,7 @@ import (
 func newSSEServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	db := testutil.NewDB(t)
-	h := hub.NewHandler(hub.NewHub(), "test-build-hash")
+	h := hub.NewHandler(hub.NewHub(), "test-build-hash", auth.UserIDFromCtx)
 
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
@@ -33,7 +33,7 @@ func TestSSE_CookieAuth_Valid(t *testing.T) {
 	userID := testutil.CreateUser(t, db, "standard")
 	plainToken := testutil.CreateRefreshToken(t, db, userID)
 
-	h := hub.NewHandler(hub.NewHub(), "test-hash")
+	h := hub.NewHandler(hub.NewHub(), "test-hash", auth.UserIDFromCtx)
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
 		r.Use(auth.CookieMiddleware(db))
@@ -81,7 +81,7 @@ func TestSSE_CookieAuth_QueryTokenRejected(t *testing.T) {
 	_ = testutil.CreateRefreshToken(t, db, userID)
 	jwtToken := testutil.Token(t, userID, "standard", nil)
 
-	h := hub.NewHandler(hub.NewHub(), "test-hash")
+	h := hub.NewHandler(hub.NewHub(), "test-hash", auth.UserIDFromCtx)
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
 		r.Use(auth.CookieMiddleware(db))

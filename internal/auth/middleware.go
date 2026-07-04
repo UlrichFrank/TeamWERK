@@ -112,6 +112,17 @@ func ClaimsFromCtx(ctx context.Context) *Claims {
 	return c
 }
 
+// UserIDFromCtx returns the authenticated user's ID, or 0 if no claims are
+// present. It exists so foundation packages that must not import auth (e.g. the
+// hub SSE handler — auth already imports hub, so the reverse would cycle) can be
+// injected with a plain func(context.Context) int at the composition root.
+func UserIDFromCtx(ctx context.Context) int {
+	if c := ClaimsFromCtx(ctx); c != nil {
+		return c.UserID
+	}
+	return 0
+}
+
 // ContextWithClaims returns a child context carrying the given claims under the
 // same key the auth middleware uses, so ClaimsFromCtx can read them back. It
 // exists for callers that obtain a non-HTTP context derived from an
