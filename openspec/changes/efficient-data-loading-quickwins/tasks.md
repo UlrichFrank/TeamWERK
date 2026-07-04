@@ -12,9 +12,9 @@
 
 ## 2. Backend: Cache-Header auf Immutable-Routen
 
-- [ ] 2.1 `GET /api/encryption-pubkey` (`internal/config/vault.go`): ETag + `Cache-Control: public, max-age=86400`.
-- [ ] 2.2 `GET /api/push/vapid-public-key` (`internal/notifications/handler.go`): ETag + `Cache-Control: public, max-age=31536000, immutable`.
-- [ ] 2.3 Tests: `TestEncryptionPubkey_ETag_304`, `TestVapidKey_CacheControlImmutable`.
+- [x] 2.1 `GET /api/encryption-pubkey` (`internal/config/vault.go`): ETag + `Cache-Control: public, max-age=86400`.
+- [x] 2.2 `GET /api/push/vapid-public-key` (`internal/notifications/handler.go`): ETag + `Cache-Control: public, max-age=31536000, immutable`.
+- [x] 2.3 Tests: `TestEncryptionPubkey_ETag_304`, `TestVapidKey_CacheControlImmutable`.
 
   _Commit:_ `feat(config,notifications): Immutable-Cache-Header für pubkey/VAPID`
 

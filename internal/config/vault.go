@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/httpcache"
 )
 
 // Tresor-Verwaltung (Zero-Knowledge-Vault, Modell B — asymmetrisches Gruppen-Keypair).
@@ -17,10 +19,15 @@ import (
 func (h *Handler) GetGroupPublicKey(w http.ResponseWriter, r *http.Request) {
 	var pub sql.NullString
 	h.db.QueryRowContext(r.Context(), `SELECT group_public_key FROM clubs LIMIT 1`).Scan(&pub)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"configured":       pub.Valid && pub.String != "",
-		"group_public_key": pub.String,
+	// Quasi-unveränderlich (ändert sich nur bei Keypair-Rotation) und nicht
+	// geheim → ETag aus dem Key-Material + langer public-Cache; If-None-Match
+	// wird mit 304 beantwortet (Change efficient-data-loading-quickwins).
+	etag := httpcache.ETagFor([]byte(pub.String))
+	httpcache.Serve(w, r, etag, "public, max-age=86400", func() any {
+		return map[string]any{
+			"configured":       pub.Valid && pub.String != "",
+			"group_public_key": pub.String,
+		}
 	})
 }
 
