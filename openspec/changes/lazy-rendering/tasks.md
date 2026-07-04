@@ -26,8 +26,8 @@
 
 ## 4. On-Demand-Rosters (MeinTeam)
 
-- [ ] 4.1 `MeinTeamPage.tsx`: Roster erst bei Fokus/Aufklappen laden; geladene Rosters in der Session behalten.
-- [ ] 4.2 Test: `roster_loads_only_when_expanded`.
+- [x] 4.1 `MeinTeamPage.tsx`: Roster erst bei Fokus/Aufklappen laden; geladene Rosters in der Session behalten.
+- [x] 4.2 Test: `roster_loads_only_when_expanded`.
 
   _Commit:_ `feat(teams): Team-Rosters on-demand statt eager laden`
 
