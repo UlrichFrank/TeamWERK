@@ -48,6 +48,9 @@ interface Message {
 }
 
 const REACTION_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🙌', '🔥']
+// Serverseitige Seitengröße von GET /chat/conversations/{id}/messages —
+// eine volle Seite heißt: es kann noch ältere Nachrichten geben (?before=).
+const MESSAGE_PAGE_SIZE = 100
 interface Broadcast {
   id: number
   senderName: string
@@ -103,7 +106,11 @@ export default function ChatPage() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [mobileOverlay, setMobileOverlay] = useState<{ message: Message; isOwn: boolean } | null>(null)
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<number | null>(null)
+  const [hasOlder, setHasOlder] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesBoxRef = useRef<HTMLDivElement>(null)
+  const suppressAutoScrollRef = useRef(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const draftsRef = useRef<Map<number, string>>(new Map())
@@ -146,11 +153,64 @@ export default function ChatPage() {
   const loadMessages = async (convId: number) => {
     try {
       const r = await api.get(`/chat/conversations/${convId}/messages`)
-      setMessages(r.data ?? [])
+      const msgs: Message[] = r.data ?? []
+      setMessages(msgs)
+      setHasOlder(msgs.length === MESSAGE_PAGE_SIZE)
       setEmojiPickerMsgId(null)
       await api.post(`/chat/conversations/${convId}/read`)
       loadConversations()
     } catch {}
+  }
+
+  // Inkrementelles Nachladen (incremental-sync, id-Cursor): holt per
+  // ?after=<letzte bekannte id> nur die neueren Nachrichten und hängt sie an,
+  // statt die ganze Konversation neu zu laden. Ein leeres Delta heißt: das
+  // Event kam von einer Mutation einer bestehenden Nachricht (Edit/Löschung/
+  // Reaktion — der Server sendet dafür dasselbe chat:new-message-Event) →
+  // dann ist der Voll-Reload weiterhin nötig.
+  const appendNewMessages = async (convId: number) => {
+    const lastId = messages.length > 0 ? messages[messages.length - 1].id : 0
+    if (lastId === 0) {
+      await loadMessages(convId)
+      return
+    }
+    try {
+      const r = await api.get(`/chat/conversations/${convId}/messages`, { params: { after: lastId } })
+      const newMsgs: Message[] = r.data ?? []
+      if (newMsgs.length === 0) {
+        await loadMessages(convId)
+        return
+      }
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.id))
+        return [...prev, ...newMsgs.filter(m => !seen.has(m.id))]
+      })
+      await api.post(`/chat/conversations/${convId}/read`)
+      loadConversations()
+    } catch {}
+  }
+
+  // Verlaufs-Scroll: lädt per ?before=<älteste bekannte id> die vorherige
+  // Seite und stellt sie voran; Scroll-Position bleibt stabil.
+  const loadOlderMessages = async () => {
+    if (!activeConv || loadingOlder || messages.length === 0) return
+    setLoadingOlder(true)
+    try {
+      const r = await api.get(`/chat/conversations/${activeConv.id}/messages`, { params: { before: messages[0].id } })
+      const older: Message[] = r.data ?? []
+      setHasOlder(older.length === MESSAGE_PAGE_SIZE)
+      if (older.length > 0) {
+        const box = messagesBoxRef.current
+        const prevHeight = box?.scrollHeight ?? 0
+        suppressAutoScrollRef.current = true
+        setMessages(prev => [...older, ...prev])
+        requestAnimationFrame(() => {
+          if (box) box.scrollTop += box.scrollHeight - prevHeight
+        })
+      }
+    } catch {} finally {
+      setLoadingOlder(false)
+    }
   }
 
   const openConversation = async (conv: Conversation) => {
@@ -222,10 +282,15 @@ export default function ChatPage() {
 
   useChatEvents((event) => {
     if (event.startsWith('chat:new-message')) {
-      loadConversations()
       const parts = event.split(':')
       const convId = parseInt(parts[2])
-      if (activeConv?.id === convId) loadMessages(convId)
+      if (activeConv?.id === convId) {
+        // hängt das Delta an (?after=) und aktualisiert die Liste mit;
+        // Voll-Reload nur noch als Fallback bei leerem Delta
+        appendNewMessages(convId)
+      } else {
+        loadConversations()
+      }
     }
     if (event.startsWith('chat:member-left')) {
       loadConversations()
@@ -265,6 +330,11 @@ export default function ChatPage() {
   }
 
   useEffect(() => {
+    // Beim Voranstellen älterer Nachrichten (?before=) nicht ans Ende springen
+    if (suppressAutoScrollRef.current) {
+      suppressAutoScrollRef.current = false
+      return
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
@@ -312,7 +382,12 @@ export default function ChatPage() {
       }
       setMsgInput('')
       draftsRef.current.delete(activeConv.id)
-      await loadMessages(activeConv.id)
+      if (editingMessage) {
+        // Edit ändert eine bestehende Nachricht → Voll-Reload nötig
+        await loadMessages(activeConv.id)
+      } else {
+        await appendNewMessages(activeConv.id)
+      }
     } catch {} finally {
       setSending(false)
     }
@@ -594,7 +669,16 @@ export default function ChatPage() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2">
+              <div ref={messagesBoxRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2">
+                {hasOlder && (
+                  <button
+                    onClick={loadOlderMessages}
+                    disabled={loadingOlder}
+                    className="self-center bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {loadingOlder ? 'Lade…' : 'Ältere Nachrichten laden'}
+                  </button>
+                )}
                 {(() => {
                   const now = new Date()
                   const nodes: ReactElement[] = []
