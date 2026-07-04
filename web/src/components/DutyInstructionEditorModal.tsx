@@ -9,26 +9,42 @@ import MarkdownRenderer from './MarkdownRenderer'
 interface DutyInstructionEditorModalProps {
   dutyTypeId: number
   dutyTypeName: string
-  currentMarkdown: string
   onClose: () => void
   onSaved: () => void
 }
 
 export default function DutyInstructionEditorModal({
-  dutyTypeId, dutyTypeName, currentMarkdown, onClose, onSaved,
+  dutyTypeId, dutyTypeName, onClose, onSaved,
 }: DutyInstructionEditorModalProps) {
-  const initial = currentMarkdown === '' ? DUTY_INSTRUCTION_TEMPLATE : currentMarkdown
-  const [markdown, setMarkdown] = useState<string>(initial)
+  const [markdown, setMarkdown] = useState<string>('')
   const [hasChanged, setHasChanged] = useState<boolean>(false)
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>('')
 
   useEscapeKey(onClose)
+  // Der Volltext liegt nicht mehr in der Typen-Liste — beim Öffnen aus dem
+  // Detail-Pfad nachladen. Leerer Text → Beispiel-Template vorbelegen.
   useEffect(() => {
-    setMarkdown(currentMarkdown === '' ? DUTY_INSTRUCTION_TEMPLATE : currentMarkdown)
+    let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Reset beim Öffnen/Typ-Wechsel vor dem async Nachladen, kein Ableitungs-Bug
+    setLoading(true)
     setHasChanged(false)
     setError('')
-  }, [dutyTypeId, currentMarkdown])
+    api.get<{ instruction_md?: string }>(`/duty-types/${dutyTypeId}/instruction`)
+      .then(res => {
+        if (cancelled) return
+        const md = res.data?.instruction_md ?? ''
+        setMarkdown(md === '' ? DUTY_INSTRUCTION_TEMPLATE : md)
+      })
+      .catch(() => {
+        if (!cancelled) setMarkdown(DUTY_INSTRUCTION_TEMPLATE)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [dutyTypeId])
 
   const save = async () => {
     setSaving(true)
@@ -70,8 +86,9 @@ export default function DutyInstructionEditorModal({
           <label className="text-xs uppercase text-brand-text-muted">Markdown</label>
           <textarea
             value={markdown}
+            disabled={loading}
             onChange={e => { setMarkdown(e.target.value); setHasChanged(true) }}
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text font-mono placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-h-64"
+            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text font-mono placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-h-64 disabled:opacity-40"
           />
 
           <label className="text-xs uppercase text-brand-text-muted">Vorschau</label>
@@ -89,7 +106,7 @@ export default function DutyInstructionEditorModal({
         <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle shrink-0">
           <button
             type="button"
-            disabled={!hasChanged || saving}
+            disabled={!hasChanged || saving || loading}
             onClick={save}
             className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >

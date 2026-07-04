@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute } from 'workbox-precaching'
 import { registerRoute } from 'workbox-routing'
-import { CacheFirst, NetworkFirst, NetworkOnly } from 'workbox-strategies'
+import { CacheFirst, NetworkFirst, NetworkOnly, StaleWhileRevalidate } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 
 declare let self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown[] }
@@ -67,10 +67,41 @@ registerRoute(
   new NetworkOnly()
 )
 
-// Other API routes: network-first
+// Referenz-Endpunkte: StaleWhileRevalidate — der gecachte Stand wird sofort
+// ausgeliefert und im Hintergrund aus dem Netz erneuert. Quasi-statisch, daher
+// unkritisch, wenn ein Abruf kurz veraltet ist (der In-Memory-TTL-Cache in
+// api.ts + SSE-Invalidierung halten die App-Daten frisch).
+// MUSS vor der generischen /api/*-Regel stehen (first match wins).
+//
+// NUR club-weit für ALLE authentifizierten Nutzer identische Routen. `/api/teams`
+// ist bewusst NICHT dabei: `Games.ListTeamsForUser` filtert pro Nutzer → ein
+// geteilter (geräteweiter) SW-Cache würde auf einem gemeinsamen Gerät nach
+// Login-Wechsel die Teams des Vor-Nutzers ausliefern (Cross-User-Leak). `/api/teams`
+// fällt daher auf die NetworkFirst-Regel unten zurück; der nutzerspezifische
+// In-Memory-Cache in api.ts wird bei Identitätswechsel (setAccessToken) geleert.
+const REFERENCE_PATHS = new Set([
+  '/api/seasons',
+  '/api/venues',
+  '/api/age-class-rules',
+  '/api/duty-types',
+])
+registerRoute(
+  ({ url }) => REFERENCE_PATHS.has(url.pathname),
+  new StaleWhileRevalidate({
+    cacheName: 'api-reference-cache',
+    plugins: [new ExpirationPlugin({ maxEntries: 32, maxAgeSeconds: 60 * 60 * 24 })],
+  })
+)
+
+// Other API routes: network-first. Grenze setzen, damit der api-cache nicht
+// unbegrenzt wächst (früher ohne maxEntries/maxAgeSeconds → monotones Wachstum).
 registerRoute(
   ({ url }) => url.pathname.startsWith('/api/'),
-  new NetworkFirst({ cacheName: 'api-cache', networkTimeoutSeconds: 10 })
+  new NetworkFirst({
+    cacheName: 'api-cache',
+    networkTimeoutSeconds: 10,
+    plugins: [new ExpirationPlugin({ maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 })],
+  })
 )
 
 // Push notification handler

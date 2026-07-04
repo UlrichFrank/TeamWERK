@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/httpcache"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
@@ -144,8 +145,9 @@ func (h *Handler) ListSeasons(w http.ResponseWriter, r *http.Request) {
 		s.IsInaugural = inaugural == 1
 		result = append(result, s)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	// Referenzdaten: schwacher ETag aus dem Body, Revalidierung per 304.
+	// Bewusst KEIN geteiltes public/max-age (Change efficient-data-loading-quickwins).
+	httpcache.ServeJSON(w, r, "private, no-cache", result)
 }
 
 // boolToInt bildet ein bool auf 0/1 für INTEGER-Spalten ab.
@@ -167,6 +169,7 @@ func (h *Handler) CreateSeason(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 	h.db.ExecContext(r.Context(), `INSERT INTO seasons (name, start_date, end_date, is_inaugural) VALUES (?,?,?,?)`,
 		req.Name, req.StartDate, req.EndDate, boolToInt(req.IsInaugural))
+	h.hub.Broadcast("seasons")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -175,6 +178,7 @@ func (h *Handler) ActivateSeason(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	h.db.ExecContext(r.Context(), `UPDATE seasons SET is_active=0`)
 	h.db.ExecContext(r.Context(), `UPDATE seasons SET is_active=1 WHERE id=?`, id)
+	h.hub.Broadcast("seasons")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -213,6 +217,7 @@ func (h *Handler) UpdateSeason(w http.ResponseWriter, r *http.Request) {
 		StartDate string `json:"start_date"`
 		EndDate   string `json:"end_date"`
 	}
+	h.hub.Broadcast("seasons")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(season{ID: id, Name: req.Name, StartDate: req.StartDate, EndDate: req.EndDate})
 }
@@ -234,6 +239,7 @@ func (h *Handler) DeleteSeason(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast("seasons")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -280,6 +286,7 @@ func (h *Handler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(), `INSERT INTO teams (name, age_class, gender) VALUES (?,?,?)`,
 		req.Name, ageClassVal, req.Gender)
+	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -320,8 +327,8 @@ func (h *Handler) GetAgeClassRulesHandler(w http.ResponseWriter, r *http.Request
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(rules)
+	// Referenzdaten: ETag/304-Revalidierung, kein geteilter max-age.
+	httpcache.ServeJSON(w, r, "private, no-cache", rules)
 }
 
 // PUT /api/admin/age-class-rules/{ageClass}

@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { X } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, getReference } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { formatOffset, parseOffset } from '../lib/time'
 import ActionMenu from '../components/ActionMenu'
@@ -20,7 +20,8 @@ interface DutyType {
   adjacent_day_behavior?: string
   adjacent_day_variant_id?: number | null
   audiences?: string[] | null
-  instruction_md?: string
+  // Die Liste liefert nur noch das Flag; der Volltext kommt aus dem Detail-Pfad.
+  has_instruction?: boolean
   instruction_updated_at?: string
 }
 
@@ -195,7 +196,7 @@ export default function AdminDutyTypesPage() {
   const [modalId, setModalId] = useState<number | null>(null)
   const [instructionTarget, setInstructionTarget] = useState<DutyType | null>(null)
 
-  const load = () => api.get('/duty-types').then(r => setTypes(r.data ?? []))
+  const load = () => getReference<DutyType[]>('/duty-types').then(d => setTypes(d ?? []))
   useEffect(() => { load() }, [])
   useLiveUpdates(event => { if (event === 'duties') load() })
 
@@ -372,7 +373,6 @@ export default function AdminDutyTypesPage() {
         <DutyInstructionEditorModal
           dutyTypeId={instructionTarget.id}
           dutyTypeName={instructionTarget.name}
-          currentMarkdown={instructionTarget.instruction_md ?? ''}
           onClose={() => setInstructionTarget(null)}
           onSaved={() => { setInstructionTarget(null); load() }}
         />

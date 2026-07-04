@@ -46,13 +46,18 @@ export default function DutyInstructionPage() {
 
   const load = useCallback(async () => {
     if (!typeId) return
-    const idNum = parseInt(typeId, 10)
-    const { data } = await api.get<DutyTypeItem[]>('/duty-types')
-    const found = (data ?? []).find(t => t.id === idNum) ?? null
-    setItem(found)
-    setNotFound(!found)
+    // Volltext aus dem Detail-Pfad (die Typen-Liste liefert ihn nicht mehr).
+    try {
+      const { data } = await api.get<DutyTypeItem>(`/duty-types/${typeId}/instruction`)
+      setItem(data ?? null)
+      setNotFound(!data)
+    } catch {
+      setItem(null)
+      setNotFound(true)
+    }
   }, [typeId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Laden-beim-Mount; setState liegt hinter await in load(), kein synchroner Ableitungs-Bug
   useEffect(() => { load() }, [load])
   useLiveUpdates(event => { if (event === 'duties') load() })
 

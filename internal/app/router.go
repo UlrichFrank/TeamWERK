@@ -238,6 +238,10 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/duty-board", h.Duties.Board)
 		r.Post("/api/duty-board/{slotId}/claim", h.Duties.Claim)
 		r.Delete("/api/duty-board/{slotId}/claim", h.Duties.Unclaim)
+		// Anleitung-Volltext (Detail-Pfad): das Board verlinkt für alle
+		// Eingeloggten auf die Anleitungs-Seite; die Typen-Liste liefert nur
+		// has_instruction (Change efficient-data-loading-quickwins).
+		r.Get("/api/duty-types/{id}/instruction", h.Duties.GetInstruction)
 		r.Get("/api/duty-accounts", h.Duties.Accounts)
 		r.Get("/api/duty-slots", h.Duties.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", h.Duties.ListAssignments)

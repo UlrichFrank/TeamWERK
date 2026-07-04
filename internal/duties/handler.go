@@ -12,6 +12,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
+	"github.com/teamstuttgart/teamwerk/internal/httpcache"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
@@ -87,11 +88,16 @@ func (h *Handler) assignedUsers(slotID string) []int {
 }
 
 // GET /api/admin/duty-types
+//
+// Die Liste transportiert bewusst NICHT den Markdown-Volltext der Anleitung
+// (potenziell mehrere KB je Typ), sondern nur das Flag has_instruction —
+// analog zum Duty-Board. Der Volltext bleibt über den Detail-Pfad
+// GET /api/duty-types/{id}/instruction abrufbar (GetInstruction).
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
 		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences,
-		        instruction_md, instruction_updated_at, instruction_updated_by
+		        instruction_md <> '', instruction_updated_at, instruction_updated_by
 		 FROM duty_types ORDER BY name`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ListTypes query error: %v\n", err)
@@ -111,7 +117,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
 		AdjacentDayVariantID *int     `json:"adjacent_day_variant_id,omitempty"`
 		Audiences            []string `json:"audiences,omitempty"`
-		InstructionMD        string   `json:"instruction_md"`
+		HasInstruction       bool     `json:"has_instruction"`
 		InstructionUpdatedAt *string  `json:"instruction_updated_at,omitempty"`
 		InstructionUpdatedBy *int     `json:"instruction_updated_by,omitempty"`
 	}
@@ -126,7 +132,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		var instrUpdatedBy sql.NullInt64
 		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes,
 			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi, &audiences,
-			&d.InstructionMD, &instrUpdatedAt, &instrUpdatedBy)
+			&d.HasInstruction, &instrUpdatedAt, &instrUpdatedBy)
 		if cs.Valid {
 			d.CashSubstitute = &cs.Float64
 		}
@@ -149,8 +155,47 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		d.Audiences = audiencesFromDB(audiences)
 		result = append(result, d)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	// Referenzdaten: ETag/304-Revalidierung, kein geteilter max-age.
+	httpcache.ServeJSON(w, r, "private, no-cache", result)
+}
+
+// GET /api/duty-types/{id}/instruction — Detail-Pfad für den Anleitung-Volltext.
+// Authenticated-Tier: das Duty-Board verlinkt für alle Eingeloggten (Spieler,
+// Eltern, …) auf die Anleitungs-Seite; die Liste liefert nur has_instruction.
+func (h *Handler) GetInstruction(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var typeID int
+	var name, md string
+	var updatedAt sql.NullString
+	var updatedBy sql.NullInt64
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT id, name, instruction_md, instruction_updated_at, instruction_updated_by
+		 FROM duty_types WHERE id=?`, id).
+		Scan(&typeID, &name, &md, &updatedAt, &updatedBy)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	resp := map[string]any{
+		"id":             typeID,
+		"name":           name,
+		"instruction_md": md,
+	}
+	if updatedAt.Valid {
+		resp["instruction_updated_at"] = updatedAt.String
+	} else {
+		resp["instruction_updated_at"] = nil
+	}
+	if updatedBy.Valid {
+		resp["instruction_updated_by"] = int(updatedBy.Int64)
+	} else {
+		resp["instruction_updated_by"] = nil
+	}
+	httpcache.ServeJSON(w, r, "private, no-cache", resp)
 }
 
 // POST /api/admin/duty-types
@@ -191,6 +236,7 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
 		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, audiencesToDB(req.Audiences))
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -235,6 +281,7 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
 		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID,
 		audiencesToDB(req.Audiences), id)
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -242,6 +289,7 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteType(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	h.db.ExecContext(r.Context(), `DELETE FROM duty_types WHERE id=?`, id)
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
 

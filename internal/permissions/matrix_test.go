@@ -292,6 +292,9 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/duty-board", expected: exAuth},
 	{method: "POST", path: "/api/duty-board/{slotId}/claim", expected: exAuth},
 	{method: "DELETE", path: "/api/duty-board/{slotId}/claim", expected: exAuth},
+	// Anleitung-Volltext (Detail-Pfad): das Board verlinkt für alle Eingeloggten
+	// darauf; die Typen-Liste liefert nur has_instruction.
+	{method: "GET", path: "/api/duty-types/{id}/instruction", expected: exAuth},
 	{method: "GET", path: "/api/duty-accounts", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots/{id}/assignments", expected: exAuth},

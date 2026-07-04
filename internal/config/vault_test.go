@@ -3,6 +3,8 @@ package config_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -11,6 +13,77 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
+
+// TestEncryptionPubkey_ETag_304 — GET /api/encryption-pubkey liefert ETag +
+// public-Cache-Control; ein zweiter Request mit If-None-Match des gelieferten
+// ETag wird mit 304 (leerer Body) beantwortet. Nach Keypair-Rotation ändert
+// sich der ETag und der volle Body wird wieder ausgeliefert.
+func TestEncryptionPubkey_ETag_304(t *testing.T) {
+	database := testutil.NewDB(t)
+	if _, err := database.Exec(`INSERT INTO clubs (name, group_public_key) VALUES ('Team Stuttgart', 'PUB1')`); err != nil {
+		t.Fatalf("seed club: %v", err)
+	}
+	h := config.NewHandler(database, hub.NewHub())
+	// Route ist im echten Router public (Beitritts-Formular) — ohne Auth-Middleware mounten.
+	r := chi.NewRouter()
+	r.Get("/api/encryption-pubkey", h.GetGroupPublicKey)
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	res, err := http.Get(srv.URL + "/api/encryption-pubkey")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("erster Abruf: status %d, want 200", res.StatusCode)
+	}
+	etag := res.Header.Get("ETag")
+	if etag == "" {
+		t.Fatalf("kein ETag gesetzt")
+	}
+	if cc := res.Header.Get("Cache-Control"); !strings.Contains(cc, "public") || !strings.Contains(cc, "max-age=86400") {
+		t.Errorf("Cache-Control = %q, want public + max-age=86400", cc)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	if body["group_public_key"] != "PUB1" || body["configured"] != true {
+		t.Errorf("Body = %v, want group_public_key=PUB1 + configured=true", body)
+	}
+
+	// Revalidierung mit If-None-Match → 304, leerer Body.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/encryption-pubkey", nil)
+	req.Header.Set("If-None-Match", etag)
+	res2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("revalidierter GET: %v", err)
+	}
+	defer res2.Body.Close()
+	if res2.StatusCode != http.StatusNotModified {
+		t.Fatalf("revalidierter Abruf: status %d, want 304", res2.StatusCode)
+	}
+	if res2.ContentLength > 0 {
+		t.Errorf("304-Body nicht leer (Content-Length %d)", res2.ContentLength)
+	}
+
+	// Keypair-Rotation → anderer ETag, voller Body trotz altem If-None-Match.
+	if _, err := database.Exec(`UPDATE clubs SET group_public_key='PUB2'`); err != nil {
+		t.Fatalf("rotate pubkey: %v", err)
+	}
+	req3, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/encryption-pubkey", nil)
+	req3.Header.Set("If-None-Match", etag)
+	res3, err := http.DefaultClient.Do(req3)
+	if err != nil {
+		t.Fatalf("GET nach Rotation: %v", err)
+	}
+	defer res3.Body.Close()
+	if res3.StatusCode != http.StatusOK {
+		t.Fatalf("nach Rotation: status %d, want 200", res3.StatusCode)
+	}
+	if newTag := res3.Header.Get("ETag"); newTag == etag {
+		t.Errorf("ETag nach Keypair-Rotation unverändert: %q", newTag)
+	}
+}
 
 func TestEncryptionConfig_SetGetConflict(t *testing.T) {
 	database := testutil.NewDB(t)

@@ -114,6 +114,7 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 		r.Get("/api/duty-slots/{id}/assignments", h.ListAssignments)
 		r.Post("/api/duty-assignments/{id}/fulfill", h.Fulfill)
 		r.Post("/api/duty-assignments/{id}/cash-substitute", h.CashSubstitute)
+		r.Get("/api/duty-types/{id}/instruction", h.GetInstruction)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
@@ -1752,10 +1753,13 @@ func TestPutInstruction_TooLarge(t *testing.T) {
 	}
 }
 
-func TestListTypes_IncludesInstructionFields(t *testing.T) {
+// TestDutyTypes_ListOmitsInstructionMd — die Typen-Liste liefert has_instruction
+// statt des Markdown-Volltexts; zusätzlich revalidiert die Liste per ETag/304.
+func TestDutyTypes_ListOmitsInstructionMd(t *testing.T) {
 	db := testutil.NewDB(t)
-	dtID := createDutyType(t, db, "Kasse", 2.0)
-	testutil.SetDutyInstruction(t, db, dtID, "## Foo")
+	dtWith := createDutyType(t, db, "Kasse", 2.0)
+	createDutyType(t, db, "Aufbau", 1.0) // ohne Anleitung
+	testutil.SetDutyInstruction(t, db, dtWith, "## Foo")
 	userID := testutil.CreateUser(t, db, "standard")
 	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	srv := testServer(t, h)
@@ -1770,14 +1774,94 @@ func TestListTypes_IncludesInstructionFields(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&items); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(items) == 0 {
-		t.Fatalf("expected at least one type")
+	if len(items) != 2 {
+		t.Fatalf("expected 2 types, got %d", len(items))
 	}
-	if md, _ := items[0]["instruction_md"].(string); md != "## Foo" {
-		t.Errorf("expected instruction_md '## Foo', got %q", md)
+	for _, item := range items {
+		if _, ok := item["instruction_md"]; ok {
+			t.Errorf("Liste enthält instruction_md für %v — Volltext gehört nur in den Detail-Pfad", item["name"])
+		}
+		has, ok := item["has_instruction"].(bool)
+		if !ok {
+			t.Fatalf("has_instruction fehlt oder ist kein Bool: %v", item)
+		}
+		wantHas := item["name"] == "Kasse"
+		if has != wantHas {
+			t.Errorf("has_instruction für %v = %v, want %v", item["name"], has, wantHas)
+		}
 	}
-	if _, ok := items[0]["instruction_updated_at"]; !ok {
+	if _, ok := items[1]["instruction_updated_at"]; !ok && items[1]["name"] == "Kasse" {
 		t.Errorf("expected instruction_updated_at in response")
+	}
+
+	// ETag/304-Revalidierung der Liste.
+	etag := res.Header.Get("ETag")
+	if etag == "" {
+		t.Fatalf("kein ETag gesetzt")
+	}
+	if cc := res.Header.Get("Cache-Control"); cc != "private, no-cache" {
+		t.Errorf("Cache-Control = %q, want private, no-cache", cc)
+	}
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/duty-types", nil)
+	req.Header.Set("Authorization", token)
+	req.Header.Set("If-None-Match", etag)
+	res304, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("revalidierter GET: %v", err)
+	}
+	defer res304.Body.Close()
+	if res304.StatusCode != http.StatusNotModified {
+		t.Errorf("revalidierter Abruf: status %d, want 304", res304.StatusCode)
+	}
+}
+
+// TestDutyTypes_DetailKeepsInstructionMd — der Detail-Pfad
+// GET /api/duty-types/{id}/instruction liefert den Volltext samt Metadaten;
+// unbekannte IDs → 404, ohne Token → 401.
+func TestDutyTypes_DetailKeepsInstructionMd(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	testutil.SetDutyInstruction(t, db, dtID, "## Foo")
+	userID := testutil.CreateUser(t, db, "standard")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	// Authenticated-Tier: auch Spieler/Eltern (Board-Link) lesen den Volltext.
+	token := testutil.Token(t, userID, "standard", []string{"spieler"})
+	res := testutil.Get(t, srv, "/api/duty-types/"+itoa(dtID)+"/instruction", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var detail map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&detail); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if md, _ := detail["instruction_md"].(string); md != "## Foo" {
+		t.Errorf("instruction_md = %q, want '## Foo'", md)
+	}
+	if detail["name"] != "Kasse" {
+		t.Errorf("name = %v, want Kasse", detail["name"])
+	}
+	if v, ok := detail["instruction_updated_at"].(string); !ok || v == "" {
+		t.Errorf("instruction_updated_at fehlt: %v", detail["instruction_updated_at"])
+	}
+	if _, ok := detail["instruction_updated_by"]; !ok {
+		t.Errorf("instruction_updated_by fehlt in der Antwort")
+	}
+
+	// Fehlerfall: unbekannter Typ → 404.
+	res404 := testutil.Get(t, srv, "/api/duty-types/999999/instruction", token)
+	defer res404.Body.Close()
+	if res404.StatusCode != http.StatusNotFound {
+		t.Errorf("unbekannte ID: status %d, want 404", res404.StatusCode)
+	}
+
+	// Fehlerfall: ohne Token → 401.
+	resUnauth := testutil.Get(t, srv, "/api/duty-types/"+itoa(dtID)+"/instruction", "")
+	defer resUnauth.Body.Close()
+	if resUnauth.StatusCode != http.StatusUnauthorized {
+		t.Errorf("ohne Token: status %d, want 401", resUnauth.StatusCode)
 	}
 }
 

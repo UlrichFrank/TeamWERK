@@ -8,6 +8,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/httpcache"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
@@ -68,8 +69,12 @@ func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 
 // GET /api/push/vapid-public-key
 func (h *Handler) GetVAPIDPublicKey(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"publicKey": h.cfg.VAPIDPublicKey})
+	// Der VAPID-Public-Key ist deploy-stabil (aus der Umgebung) und nicht
+	// geheim → immutable-Cache; Rotation ändert den ETag und invalidiert.
+	etag := httpcache.ETagFor([]byte(h.cfg.VAPIDPublicKey))
+	httpcache.Serve(w, r, etag, "public, max-age=31536000, immutable", func() any {
+		return map[string]string{"publicKey": h.cfg.VAPIDPublicKey}
+	})
 }
 
 // POST /api/push/subscribe

@@ -23,28 +23,26 @@ describe('DutyInstructionPage', () => {
     window.history.replaceState(null, '', '/') // fresh history state per test
   })
 
-  test('renders instruction markdown', async () => {
+  test('renders instruction markdown from the detail path', async () => {
     mockGet.mockResolvedValue({
-      data: [
-        { id: 42, name: 'Kasse', instruction_md: '## Ablauf\nKasse öffnen', instruction_updated_at: '2026-06-14T12:00:00Z' },
-      ],
+      data: { id: 42, name: 'Kasse', instruction_md: '## Ablauf\nKasse öffnen', instruction_updated_at: '2026-06-14T12:00:00Z' },
     })
     renderAt('/dienste/anleitung/42')
     await waitFor(() => expect(screen.getByText('Ablauf')).toBeTruthy())
+    // Detail-Route, nicht die Liste.
+    expect(mockGet).toHaveBeenCalledWith('/duty-types/42/instruction')
     expect(screen.getByText('Kasse öffnen')).toBeTruthy()
     expect(screen.getByText(/Anleitung: Kasse/)).toBeTruthy()
   })
 
   test('shows placeholder when instruction empty', async () => {
-    mockGet.mockResolvedValue({
-      data: [{ id: 7, name: 'Aufbau', instruction_md: '' }],
-    })
+    mockGet.mockResolvedValue({ data: { id: 7, name: 'Aufbau', instruction_md: '' } })
     renderAt('/dienste/anleitung/7')
     await waitFor(() => expect(screen.getByText(/noch keine Anleitung/)).toBeTruthy())
   })
 
-  test('shows not-found when id missing', async () => {
-    mockGet.mockResolvedValue({ data: [{ id: 1, name: 'X' }] })
+  test('shows not-found when detail path 404s', async () => {
+    mockGet.mockRejectedValue(new Error('not found'))
     renderAt('/dienste/anleitung/999')
     await waitFor(() => expect(screen.getByText(/nicht gefunden/)).toBeTruthy())
   })
@@ -52,7 +50,7 @@ describe('DutyInstructionPage', () => {
   test('renders fallback back-link on cold-start (history.state.idx === 0)', async () => {
     // Default JSDOM state: no idx set → coldStart true → fallback visible.
     mockGet.mockResolvedValue({
-      data: [{ id: 42, name: 'Kasse', instruction_md: '## Foo' }],
+      data: { id: 42, name: 'Kasse', instruction_md: '## Foo' },
     })
     renderAt('/dienste/anleitung/42')
     await waitFor(() => expect(screen.getByText('Foo')).toBeTruthy())
@@ -64,7 +62,7 @@ describe('DutyInstructionPage', () => {
     // Simulate that the user navigated in — React Router sets history.state.idx > 0.
     window.history.replaceState({ idx: 1 }, '', '/dienste/anleitung/42')
     mockGet.mockResolvedValue({
-      data: [{ id: 42, name: 'Kasse', instruction_md: '## Foo' }],
+      data: { id: 42, name: 'Kasse', instruction_md: '## Foo' },
     })
     renderAt('/dienste/anleitung/42')
     await waitFor(() => expect(screen.getByText('Foo')).toBeTruthy())

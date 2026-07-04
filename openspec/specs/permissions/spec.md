@@ -59,7 +59,7 @@ Betroffene Endpoint-Gruppen (Auswahl, vollständige Liste im Matrix-Test):
 - **Profil-Self:** `GET/PUT /api/profile/me`, `/vehicle`, `/account`, `/phones`, `/visibility`, `/reminder-preference`, `/absence-visibility`, `/notification-preferences`, `POST /api/profile/password`, `POST /api/profile/email`
 - **Kind-Profil:** `GET/PUT /api/profile/kind/{memberId}/...`, `POST/DELETE /api/profile/kind/{memberId}/photo|phones`
 - **Dashboard:** `GET /api/dashboard`
-- **Dienste (Self-Service):** `GET /api/duty-board`, `POST/DELETE /api/duty-board/{slotId}/claim`, `GET /api/duty-accounts`, `GET /api/duty-slots`, `GET /api/duty-slots/{id}/assignments`
+- **Dienste (Self-Service):** `GET /api/duty-board`, `POST/DELETE /api/duty-board/{slotId}/claim`, `GET /api/duty-types/{id}/instruction`, `GET /api/duty-accounts`, `GET /api/duty-slots`, `GET /api/duty-slots/{id}/assignments`
 - **Mitfahrgelegenheiten:** `GET/POST /api/mitfahrgelegenheiten`, `DELETE /api/mitfahrgelegenheiten/{id}`, `POST /api/mitfahrt-paarungen` (+ confirm/reject)
 - **Push:** `GET /api/push/vapid-public-key`, `POST/DELETE /api/push/subscribe`
 - **Dokumente:** `GET /api/folders`, `POST /api/folders`, `GET /api/folders/{id}/contents`, … (Pro-Folder-Permission filtert auf Inhaltsebene)
