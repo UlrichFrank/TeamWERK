@@ -28,9 +28,9 @@
 
 ## 4. Backend: duty-types-Liste trimmen
 
-- [ ] 4.1 `internal/duties/handler.go:90` (`ListTypes`): `instruction_md` aus Listen-Serialisierung entfernen, `has_instruction bool` ergänzen. Detail-Pfad behält Volltext.
-- [ ] 4.2 ETag/304 auf `GET /api/duty-types` (analog Task 3).
-- [ ] 4.3 Tests: `TestDutyTypes_ListOmitsInstructionMd`, `TestDutyTypes_DetailKeepsInstructionMd`.
+- [x] 4.1 `internal/duties/handler.go:90` (`ListTypes`): `instruction_md` aus Listen-Serialisierung entfernen, `has_instruction bool` ergänzen. Detail-Pfad behält Volltext.
+- [x] 4.2 ETag/304 auf `GET /api/duty-types` (analog Task 3).
+- [x] 4.3 Tests: `TestDutyTypes_ListOmitsInstructionMd`, `TestDutyTypes_DetailKeepsInstructionMd`.
 
   _Commit:_ `feat(duties): duty-types-Liste liefert has_instruction statt Volltext`
 
