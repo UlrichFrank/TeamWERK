@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,17 @@ type Handler struct {
 
 func NewHandler(db *sql.DB, uploadDir, secret string, h *hub.EventHub) *Handler {
 	return &Handler{db: db, uploadDir: uploadDir, secret: secret, hub: h}
+}
+
+// broadcastMembers sends the "members" live-update event only to the finance
+// group (vorstand/vorstand_beisitzer/kassierer + admin). Replaces the former
+// global Broadcast("members"); topic string and Frontend contract unchanged.
+func (h *Handler) broadcastMembers(ctx context.Context) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).FinanceGroup(ctx)
+	h.hub.BroadcastToUsers(ids, "members")
 }
 
 func sniffImageType(b []byte) string {
@@ -298,9 +310,7 @@ func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.hub != nil {
-		h.hub.Broadcast("members")
-	}
+	h.broadcastMembers(r.Context())
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"sepa_mandat_url": "/api/uploads/" + filename})
 }
