@@ -39,9 +39,9 @@
 
 ## 5. Chat: Body-Preview
 
-- [ ] 5.1 `internal/chat/handler.go:426` (`ListMessages`): `preview` (≤280 Zeichen) + `truncated`; gelöschte Nachrichten ohne Body; Volltext nur im Einzel-Pfad.
-- [ ] 5.2 Tests: `TestListMessages_BodyPreviewTruncated`, `TestListMessages_DeletedNoBody`.
-- [ ] 5.3 Chat-Frontend: Preview rendern, Volltext bei Bedarf nachladen.
+- [x] 5.1 `internal/chat/handler.go` (`ListMessages`): `preview` (≤280 Zeichen, rune-genau) + `truncated`; gelöschte Nachrichten ohne Body/Preview. Neuer Einzel-Pfad `GET /api/chat/messages/{id}` (`GetMessage`) für den Volltext (Mitglieds-Check, gelöscht → leerer Body).
+- [x] 5.2 Tests: `TestListMessages_BodyPreviewTruncated`, `TestListMessages_DeletedNoBody`, `TestGetMessage_FullBody` (inkl. 403 für Nicht-Mitglied); Permission-Matrix-Eintrag ergänzt.
+- [x] 5.3 Chat-Frontend (`ChatPage.tsx`): Preview rendern, „Mehr anzeigen" + Volltext bei Edit/Kopieren on-demand nachladen (`fetchFullBody`).
 
   _Commit:_ `feat(chat): Nachrichtenliste liefert Body-Preview statt Volltext`
 

@@ -216,6 +216,7 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/chat/conversations/{id}", expected: exPublic},
 	{method: "POST", path: "/api/chat/conversations/{id}/members", expected: exPublic},
 	// Nachrichten: Sender-Check → 403 für alle (kein Fixture)
+	{method: "GET", path: "/api/chat/messages/{id}", expected: exPublic},
 	{method: "PUT", path: "/api/chat/messages/{id}", expected: exPublic},
 	{method: "DELETE", path: "/api/chat/messages/{id}", expected: exPublic},
 	{method: "POST", path: "/api/chat/messages/{id}/reactions", expected: exPublic},

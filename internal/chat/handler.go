@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -422,6 +423,21 @@ func (h *Handler) getConversation(r *http.Request, convID, userID int) (*Convers
 	return &c, nil
 }
 
+// messagePreviewLen ist die maximale Zeichenzahl (runes) des Body-Previews in
+// der Nachrichtenliste. Der Volltext wird bei Bedarf über den Einzel-Pfad
+// (GET /api/chat/messages/{id}) nachgeladen.
+const messagePreviewLen = 280
+
+// previewBody kürzt body rune-genau auf messagePreviewLen und meldet, ob
+// gekürzt wurde. Leerer body (u. a. gelöschte Nachrichten) → ("", false).
+func previewBody(body string) (string, bool) {
+	if utf8.RuneCountInString(body) <= messagePreviewLen {
+		return body, false
+	}
+	runes := []rune(body)
+	return string(runes[:messagePreviewLen]), true
+}
+
 // GET /api/chat/conversations/{id}/messages
 func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -436,11 +452,16 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Preview statt Volltext: die Liste liefert höchstens messagePreviewLen
+	// Zeichen (rune-genau) plus truncated-Flag. Der Volltext wird bei Bedarf
+	// über GET /api/chat/messages/{id} nachgeladen. Gelöschte Nachrichten
+	// liefern weder Preview noch Body (leerer Preview, truncated=false).
 	type Message struct {
 		ID                int               `json:"id"`
 		SenderID          int               `json:"senderId"`
 		SenderName        string            `json:"senderName"`
-		Body              string            `json:"body"`
+		Preview           string            `json:"preview"`
+		Truncated         bool              `json:"truncated"`
 		SentAt            string            `json:"sentAt"`
 		ReplyToID         *int              `json:"replyToId"`
 		ReplyToBody       *string           `json:"replyToBody"`
@@ -481,10 +502,14 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	msgs := []Message{}
 	for rows.Next() {
 		var msg Message
+		var body string
 		var replyToID sql.NullInt64
 		var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
-		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &msg.Body, &msg.SentAt,
+		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &body, &msg.SentAt,
 			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem)
+		// Body ist bei gelöschten Nachrichten bereits '' (SQL-CASE) → Preview leer,
+		// truncated=false. Sonst rune-genau auf messagePreviewLen kürzen.
+		msg.Preview, msg.Truncated = previewBody(body)
 		if replyToID.Valid {
 			id := int(replyToID.Int64)
 			msg.ReplyToID = &id
@@ -569,6 +594,47 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(msgs)
+}
+
+// GET /api/chat/messages/{id}
+//
+// Einzel-Pfad für den Nachrichten-Volltext (die Liste liefert nur den Preview).
+// Sichtbarkeit unverändert: nur Mitglieder der Konversation lesen; gelöschte
+// Nachrichten liefern keinen Body.
+func (h *Handler) GetMessage(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	msgID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var convID int
+	var body string
+	var deletedAt sql.NullString
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT conversation_id, body, deleted_at FROM messages WHERE id = ?`, msgID).
+		Scan(&convID, &body, &deletedAt); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if !h.isMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Gelöschte Nachricht → kein Body.
+	if deletedAt.Valid {
+		body = ""
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":      msgID,
+		"body":    body,
+		"deleted": deletedAt.Valid,
+	})
 }
 
 // POST /api/chat/conversations/{id}/messages

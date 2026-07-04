@@ -36,7 +36,10 @@ interface Message {
   id: number
   senderId: number
   senderName: string
-  body: string
+  // Liste liefert nur einen gekürzten Preview (≤280 Zeichen) + truncated-Flag;
+  // der Volltext wird bei Bedarf über GET /chat/messages/{id} nachgeladen.
+  preview: string
+  truncated: boolean
   sentAt: string
   replyToId: number | null
   replyToBody: string | null
@@ -89,6 +92,8 @@ export default function ChatPage() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([])
   const [activeConv, setActiveConv] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  // Cache für nachgeladene Volltexte gekürzter Nachrichten (id → body).
+  const [fullBodies, setFullBodies] = useState<Record<number, string>>({})
   const [msgInput, setMsgInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showNewModal, setShowNewModal] = useState(false)
@@ -326,10 +331,29 @@ export default function ChatPage() {
     inputRef.current?.focus()
   }
 
-  const startEdit = (msg: Message) => {
+  // bodyOf liefert den bereits verfügbaren Text: den nachgeladenen Volltext, sonst
+  // den Preview. Für nicht-gekürzte Nachrichten ist der Preview der Volltext.
+  const bodyOf = (msg: Message) => fullBodies[msg.id] ?? msg.preview
+
+  // fetchFullBody lädt bei gekürzten Nachrichten den Volltext über den Einzel-Pfad
+  // nach (und cached ihn). Gibt den Volltext zurück; bei Fehlern den Preview.
+  const fetchFullBody = async (msg: Message): Promise<string> => {
+    if (!msg.truncated || fullBodies[msg.id] !== undefined) return bodyOf(msg)
+    try {
+      const r = await api.get(`/chat/messages/${msg.id}`)
+      const body: string = r.data?.body ?? msg.preview
+      setFullBodies(prev => ({ ...prev, [msg.id]: body }))
+      return body
+    } catch {
+      return msg.preview
+    }
+  }
+
+  const startEdit = async (msg: Message) => {
     setEditingMessage(msg)
     setReplyTo(null)
-    setMsgInput(msg.body)
+    // Beim Bearbeiten den Volltext ins Eingabefeld — nicht den gekürzten Preview.
+    setMsgInput(msg.truncated ? await fetchFullBody(msg) : msg.preview)
     setContextMenu(null)
     inputRef.current?.focus()
   }
@@ -340,8 +364,9 @@ export default function ChatPage() {
     setMsgInput('')
   }
 
-  const copyMsgToClipboard = (msg: Message, selectedText?: string) => {
-    navigator.clipboard.writeText(selectedText ?? msg.body).catch(() => {})
+  const copyMsgToClipboard = async (msg: Message, selectedText?: string) => {
+    const text = selectedText ?? (msg.truncated ? await fetchFullBody(msg) : msg.preview)
+    navigator.clipboard.writeText(text).catch(() => {})
     setContextMenu(null)
   }
 
@@ -613,7 +638,7 @@ export default function ChatPage() {
                       nodes.push(
                         <div key={msg.id} className="flex justify-center my-1">
                           <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
-                            {msg.senderName} {msg.body}
+                            {msg.senderName} {msg.preview}
                           </span>
                         </div>
                       )
@@ -624,6 +649,9 @@ export default function ChatPage() {
                       <MessageBubble
                         key={msg.id}
                         msg={msg}
+                        body={bodyOf(msg)}
+                        showExpand={msg.truncated && fullBodies[msg.id] === undefined}
+                        onExpand={() => { void fetchFullBody(msg) }}
                         isOwn={isOwn}
                         onContextMenu={handleContextMenu}
                         onSwipeReply={startReply}
@@ -653,7 +681,7 @@ export default function ChatPage() {
                       {replyTo ? `Antwort auf ${replyTo.senderName}` : 'Nachricht bearbeiten'}
                     </p>
                     {replyTo && (
-                      <p className="text-xs text-brand-text-muted truncate">{replyTo.body.slice(0, 60)}</p>
+                      <p className="text-xs text-brand-text-muted truncate">{bodyOf(replyTo).slice(0, 60)}</p>
                     )}
                   </div>
                   <button onClick={cancelReplyOrEdit} aria-label="Abbrechen" className="text-brand-text-muted hover:text-brand-text shrink-0">
@@ -804,6 +832,8 @@ export default function ChatPage() {
       {mobileOverlay && (
         <MobileMessageActionOverlay
           overlay={mobileOverlay}
+          body={bodyOf(mobileOverlay.message)}
+          onCopyFull={() => fetchFullBody(mobileOverlay.message)}
           onClose={() => setMobileOverlay(null)}
           onReply={msg => { startReply(msg); setMobileOverlay(null) }}
           onEdit={msg => { startEdit(msg); setMobileOverlay(null) }}
@@ -901,6 +931,9 @@ function renderWithLinks(body: string, isOwn: boolean) {
 // --- Message Bubble ---
 function MessageBubble({
   msg,
+  body,
+  showExpand,
+  onExpand,
   isOwn,
   onContextMenu,
   onSwipeReply,
@@ -911,6 +944,9 @@ function MessageBubble({
   onToggleReaction,
 }: {
   msg: Message
+  body: string
+  showExpand: boolean
+  onExpand: () => void
   isOwn: boolean
   onContextMenu: (e: React.MouseEvent, msg: Message) => void
   onSwipeReply: (msg: Message) => void
@@ -1045,7 +1081,15 @@ function MessageBubble({
               <p className="truncate">{(msg.replyToBody ?? '').slice(0, 60)}</p>
             </div>
           )}
-          <span className="whitespace-pre-wrap break-words">{renderWithLinks(msg.body, isOwn)}</span>
+          <span className="whitespace-pre-wrap break-words">{renderWithLinks(body, isOwn)}</span>
+          {showExpand && (
+            <button
+              onClick={onExpand}
+              className={`block mt-1 text-xs font-medium underline ${isOwn ? 'text-brand-black/70' : 'text-brand-info'}`}
+            >
+              Mehr anzeigen
+            </button>
+          )}
         </div>
 
         {/* Reaction chips */}
@@ -1091,6 +1135,8 @@ function MessageBubble({
 // --- Mobile Message Action Overlay ---
 function MobileMessageActionOverlay({
   overlay,
+  body,
+  onCopyFull,
   onClose,
   onReply,
   onEdit,
@@ -1100,6 +1146,8 @@ function MobileMessageActionOverlay({
   userId,
 }: {
   overlay: { message: Message; isOwn: boolean }
+  body: string
+  onCopyFull: () => Promise<string>
   onClose: () => void
   onReply: (msg: Message) => void
   onEdit: (msg: Message) => void
@@ -1110,9 +1158,12 @@ function MobileMessageActionOverlay({
 }) {
   const { message: msg, isOwn } = overlay
 
-  const copyText = () => {
+  const copyText = async () => {
     const sel = window.getSelection()
-    const text = sel && sel.toString().trim() ? sel.toString() : msg.body
+    // Bei gekürzten Nachrichten ohne aktive Selektion den Volltext nachladen.
+    const text = sel && sel.toString().trim()
+      ? sel.toString()
+      : (msg.truncated ? await onCopyFull() : body)
     navigator.clipboard.writeText(text).catch(() => {})
     onClose()
   }
@@ -1143,7 +1194,7 @@ function MobileMessageActionOverlay({
               <p className="truncate">{(msg.replyToBody ?? '').slice(0, 60)}</p>
             </div>
           )}
-          <span className="whitespace-pre-wrap break-words">{renderWithLinks(msg.body, isOwn)}</span>
+          <span className="whitespace-pre-wrap break-words">{renderWithLinks(body, isOwn)}</span>
         </div>
 
         {/* Action buttons */}
