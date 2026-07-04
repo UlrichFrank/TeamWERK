@@ -8,6 +8,8 @@ import { usePagination } from '../lib/usePagination'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
 import Pagination from '../components/Pagination'
+import WindowedTableBody from '../components/WindowedTableBody'
+import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import PersonChip from '../components/PersonChip'
 
@@ -159,6 +161,10 @@ export default function MembersPage() {
   }, [clubFunctionFilter, unlinkedUserFilter, hasDraftFilter])
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
+  // Windowing der Mitgliedertabelle: nur sichtbare Zeilen im DOM. Scroll-Quelle ist
+  // die Seite (window); der Wrapper misst seine Position relativ zum Viewport.
+  const { containerRef: memberContainerRef, start: memberStart, end: memberEnd, padTop: memberPadTop, padBottom: memberPadBottom } =
+    useWindowedList({ count: items.length, estimatedRowHeight: 53, scroll: 'window' })
   const isAdmin = hasCapability('manage_members')
 
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
@@ -479,8 +485,9 @@ export default function MembersPage() {
         </div>
       </div>
 
-      {/* Table — always visible, columns drop off as screen shrinks */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      {/* Table — always visible, columns drop off as screen shrinks.
+          Windowing (memberWindow) rendert nur sichtbare Zeilen; Scroll-Quelle ist die Seite. */}
+      <div ref={memberContainerRef} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr>
@@ -492,8 +499,15 @@ export default function MembersPage() {
               {isAdmin && <th className="bg-brand-surface-card px-4 py-3" />}
             </tr>
           </thead>
-          <tbody className="divide-y divide-brand-border-subtle">
-            {items.map(m => (
+          <WindowedTableBody
+            items={items}
+            start={memberStart}
+            end={memberEnd}
+            padTop={memberPadTop}
+            padBottom={memberPadBottom}
+            colSpan={isAdmin ? 6 : 5}
+            className="divide-y divide-brand-border-subtle"
+            renderRow={m => (
               <tr key={m.id} className="hover:bg-brand-table-select transition-colors cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
                 <td className="px-4 py-3 font-medium text-brand-text">
                   <PersonChip userId={m.user_id} name={`${m.last_name}, ${m.first_name}`} photoUrl={m.user_photo_url} />
@@ -533,8 +547,8 @@ export default function MembersPage() {
                   </td>
                 )}
               </tr>
-            ))}
-          </tbody>
+            )}
+          />
         </table>
       </div>
 
