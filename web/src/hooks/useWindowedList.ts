@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 /**
  * Leichtgewichtiges Windowing für lange Listen — kein NPM-Paket (RAM-Budget
@@ -12,6 +12,16 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
  *
  * Die Zeilenhöhe ist eine Schätzung (variable Höhen sind erlaubt): sie steuert nur,
  * wie viele Zeilen materialisiert werden, nicht *welche* Daten sichtbar sind.
+ *
+ * Der Container wird über eine Callback-Ref (`containerRef`) angebunden — kein
+ * `RefObject`, damit die Geometrie-Felder ohne `.current`-Zugriff während des
+ * Renderings gelesen werden dürfen.
+ *
+ * Zwei Scroll-Modi:
+ * - `scroll: 'container'` (default): `containerRef` an einen eigenen
+ *   `overflow-y-auto`-Container hängen (z. B. Chat).
+ * - `scroll: 'window'`: die Seite selbst scrollt; das Fenster wird relativ zur
+ *   Position des Containers im Viewport berechnet (z. B. Tabellenseiten).
  */
 
 export interface WindowedListOptions {
@@ -22,16 +32,17 @@ export interface WindowedListOptions {
   /** Zusätzliche Zeilen ober-/unterhalb des Viewports (Puffer gegen leere Ränder). */
   overscan?: number
   /**
-   * Wird gesetzt, sobald Windowing greifen soll. Unterhalb dieser Schwelle wird
-   * die ganze Liste gerendert (kleine Listen brauchen kein Windowing; hält Tests
-   * und Fallback ohne Layout-Messung stabil).
+   * Ab dieser Listengröße greift Windowing. Kleinere Listen werden vollständig
+   * gerendert (kein Windowing-Overhead; stabiler Fallback ohne Layout-Messung).
    */
   threshold?: number
+  /** Scroll-Quelle: eigener Container (default) oder die ganze Seite. */
+  scroll?: 'container' | 'window'
 }
 
 export interface WindowedListResult {
-  /** Ref auf den scrollbaren Container. */
-  scrollRef: React.RefObject<HTMLDivElement | null>
+  /** Callback-Ref für den scrollbaren Container bzw. den beobachteten Wrapper. */
+  containerRef: (el: HTMLDivElement | null) => void
   /** Index der ersten zu rendernden Zeile (inkl.). */
   start: number
   /** Index nach der letzten zu rendernden Zeile (exkl.). */
@@ -47,60 +58,79 @@ export interface WindowedListResult {
 const DEFAULT_OVERSCAN = 6
 const DEFAULT_THRESHOLD = 40
 
+interface Metrics {
+  /** Scroll-Offset innerhalb der Liste (0 = oberster Eintrag im/über Viewport). */
+  offset: number
+  /** Sichtbare Höhe für die Liste. */
+  viewport: number
+}
+
 export function useWindowedList({
   count,
   estimatedRowHeight,
   overscan = DEFAULT_OVERSCAN,
   threshold = DEFAULT_THRESHOLD,
+  scroll = 'container',
 }: WindowedListOptions): WindowedListResult {
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  const [scrollTop, setScrollTop] = useState(0)
-  const [viewportHeight, setViewportHeight] = useState(0)
+  const [el, setEl] = useState<HTMLDivElement | null>(null)
+  const [metrics, setMetrics] = useState<Metrics>({ offset: 0, viewport: 0 })
 
-  const measure = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    setScrollTop(el.scrollTop)
-    setViewportHeight(el.clientHeight)
+  const containerRef = useCallback((node: HTMLDivElement | null) => {
+    setEl(node)
   }, [])
 
-  // Erste Messung nach Mount (Layout steht) + Resize-Beobachtung.
-  useLayoutEffect(() => {
-    measure()
-  }, [measure, count])
-
   useEffect(() => {
-    const el = scrollRef.current
     if (!el) return
-    const onScroll = () => setScrollTop(el.scrollTop)
-    el.addEventListener('scroll', onScroll, { passive: true })
 
+    const measure = () => {
+      if (scroll === 'window') {
+        const rect = el.getBoundingClientRect()
+        // Wie weit ist der Listenkopf bereits über den oberen Viewport-Rand gescrollt?
+        setMetrics({ offset: Math.max(0, -rect.top), viewport: window.innerHeight })
+      } else {
+        setMetrics({ offset: el.scrollTop, viewport: el.clientHeight })
+      }
+    }
+
+    // Erste Messung, sobald der Container steht.
+    measure()
+
+    if (scroll === 'window') {
+      window.addEventListener('scroll', measure, { passive: true })
+      window.addEventListener('resize', measure)
+      return () => {
+        window.removeEventListener('scroll', measure)
+        window.removeEventListener('resize', measure)
+      }
+    }
+
+    el.addEventListener('scroll', measure, { passive: true })
     let ro: ResizeObserver | null = null
     if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => setViewportHeight(el.clientHeight))
+      ro = new ResizeObserver(measure)
       ro.observe(el)
     }
     return () => {
-      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('scroll', measure)
       ro?.disconnect()
     }
-  }, [])
+  }, [el, scroll, count])
 
   // Windowing nur, wenn Liste groß genug UND der Viewport gemessen wurde.
   // Ohne gemessene Höhe (z. B. jsdom ohne Layout) fällt es auf „ganze Liste" zurück,
   // damit nichts fälschlich ausgeblendet wird.
-  const windowed = count > threshold && viewportHeight > 0
+  const windowed = count > threshold && metrics.viewport > 0
 
   if (!windowed) {
-    return { scrollRef, start: 0, end: count, padTop: 0, padBottom: 0, windowed: false }
+    return { containerRef, start: 0, end: count, padTop: 0, padBottom: 0, windowed: false }
   }
 
-  const visibleCount = Math.ceil(viewportHeight / estimatedRowHeight)
-  const rawStart = Math.floor(scrollTop / estimatedRowHeight)
+  const visibleCount = Math.ceil(metrics.viewport / estimatedRowHeight)
+  const rawStart = Math.floor(metrics.offset / estimatedRowHeight)
   const start = Math.max(0, rawStart - overscan)
   const end = Math.min(count, rawStart + visibleCount + overscan)
   const padTop = start * estimatedRowHeight
   const padBottom = (count - end) * estimatedRowHeight
 
-  return { scrollRef, start, end, padTop, padBottom, windowed: true }
+  return { containerRef, start, end, padTop, padBottom, windowed: true }
 }

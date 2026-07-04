@@ -12,8 +12,8 @@
 
 ## 2. Lange Listen virtualisieren
 
-- [ ] 2.1 `MembersPage`, `DutyPage`/`DutySlotList`, `ChatPage`-Historie auf Windowing umstellen (bestehende Endpoints/„Mehr laden").
-- [ ] 2.2 Tests je Ansicht (nur Viewport gerendert; Scrollen tauscht Zeilen).
+- [x] 2.1 `MembersPage`, `DutyPage`/`DutySlotList`, `ChatPage`-Historie auf Windowing umstellen (bestehende Endpoints/„Mehr laden").
+- [x] 2.2 Tests je Ansicht (nur Viewport gerendert; Scrollen tauscht Zeilen).
 
   _Commit:_ `feat(pwa): Members/Duty-Slots/Chat virtualisiert rendern`
 

@@ -4,6 +4,8 @@ import { Trash2, BookOpen } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useWindowedList } from '../hooks/useWindowedList'
+import WindowedTableBody from './WindowedTableBody'
 import PersonChip from './PersonChip'
 import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
@@ -42,6 +44,10 @@ interface DutySlotListProps {
 
 export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit, proxyChildren = [] }: DutySlotListProps) {
   const { user } = useAuth()
+  // Windowing der Slot-Zeilen: bei sehr vielen Slots nur sichtbare im DOM.
+  // Scroll-Quelle ist die Seite (Duty-Board scrollt als Ganzes).
+  const { containerRef: slotContainerRef, start: slotStart, end: slotEnd, padTop: slotPadTop, padBottom: slotPadBottom } =
+    useWindowedList({ count: slots.length, estimatedRowHeight: 52, scroll: 'window' })
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [claimDialog, setClaimDialog] = useState<{ slotId: number; selectedUserId: number | null } | null>(null)
   const [claimLoading, setClaimLoading] = useState(false)
@@ -110,10 +116,17 @@ onSlotDeleted?.(slotId)
 
   return (
     <>
+      <div ref={slotContainerRef}>
       <table className="w-full text-sm">
-        <tbody className="divide-y divide-brand-border-subtle">
-          {slots.map(s => (
-            <>
+        <WindowedTableBody
+          items={slots}
+          start={slotStart}
+          end={slotEnd}
+          padTop={slotPadTop}
+          padBottom={slotPadBottom}
+          colSpan={4}
+          className="divide-y divide-brand-border-subtle"
+          renderRow={s => (
               <tr key={s.id}>
                 <td className="px-4 py-2.5 font-medium text-brand-text">
                   <span className="inline-flex items-center gap-1.5">
@@ -202,11 +215,10 @@ onSlotDeleted?.(slotId)
                   </div>
                 </td>
               </tr>
-
-            </>
-          ))}
-        </tbody>
+          )}
+        />
       </table>
+      </div>
 
       {noInstructionOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">

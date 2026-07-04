@@ -1,9 +1,11 @@
 import { type ReactNode } from 'react'
-import { type WindowedListResult } from '../hooks/useWindowedList'
 
 interface WindowedTableBodyProps<T> {
   items: T[]
-  window: Pick<WindowedListResult, 'start' | 'end' | 'padTop' | 'padBottom'>
+  start: number
+  end: number
+  padTop: number
+  padBottom: number
   renderRow: (item: T, index: number) => ReactNode
   /** Spaltenzahl für die Platzhalter-Zeilen (colSpan). */
   colSpan: number
@@ -19,12 +21,14 @@ interface WindowedTableBodyProps<T> {
  */
 export default function WindowedTableBody<T>({
   items,
-  window: win,
+  start,
+  end,
+  padTop,
+  padBottom,
   renderRow,
   colSpan,
   className,
 }: WindowedTableBodyProps<T>) {
-  const { start, end, padTop, padBottom } = win
   return (
     <tbody className={className}>
       {padTop > 0 && (

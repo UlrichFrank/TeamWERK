@@ -7,8 +7,13 @@ interface WindowedRowsBase<T> {
   renderRow: (item: T, index: number) => ReactNode
   overscan?: number
   threshold?: number
+  /** Scroll-Quelle: eigener Container (default) oder die ganze Seite. */
+  scroll?: 'container' | 'window'
   /** Zusätzliche Klassen für den Scroll-Container. */
   className?: string
+  /** Wird innerhalb des Containers nach dem unteren Platzhalter gerendert
+   *  (z. B. ein Anker-Ref für Auto-Scroll-ans-Ende). */
+  footer?: ReactNode
 }
 
 /**
@@ -30,20 +35,24 @@ export default function WindowedRows<T>({
   renderRow,
   overscan,
   threshold,
+  scroll,
   className,
+  footer,
 }: WindowedRowsBase<T>) {
-  const { scrollRef, start, end, padTop, padBottom } = useWindowedList({
+  const { containerRef, start, end, padTop, padBottom } = useWindowedList({
     count: items.length,
     estimatedRowHeight,
     overscan,
     threshold,
+    scroll,
   })
 
   return (
-    <div ref={scrollRef} className={className} data-windowed-scroll>
+    <div ref={containerRef} className={className} data-windowed-scroll>
       {padTop > 0 && <div style={{ height: padTop }} aria-hidden />}
       {items.slice(start, end).map((item, i) => renderRow(item, start + i))}
       {padBottom > 0 && <div style={{ height: padBottom }} aria-hidden />}
+      {footer}
     </div>
   )
 }

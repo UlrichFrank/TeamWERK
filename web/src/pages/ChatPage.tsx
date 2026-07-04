@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, type ReactElement } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Send, Plus, LogOut, MessageSquare, Megaphone, X, Search, Users,
@@ -9,6 +9,7 @@ import { buildTeamShortNames } from '../lib/teamName'
 import { daySeparatorLabel, shouldRenderSeparator } from '../lib/chatDateFormat'
 import { errorMessage } from '../lib/errors'
 import { DaySeparator } from '../components/DaySeparator'
+import WindowedRows from '../components/WindowedRows'
 import { useAuth } from '../contexts/AuthContext'
 import { useChatEvents } from '../hooks/useChatEvents'
 import ConversationParticipantsModal from '../components/ConversationParticipantsModal'
@@ -594,35 +595,40 @@ export default function ChatPage() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2">
-                {(() => {
+              {/* Windowing der Chat-Historie: bei langen Verläufen nur sichtbare
+                  Nachrichten (+ Puffer) im DOM. `messagesEndRef` bleibt unterhalb des
+                  Fensters, damit Auto-Scroll ans Ende weiter greift. */}
+              <WindowedRows
+                items={messages}
+                estimatedRowHeight={64}
+                className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2"
+                footer={<div ref={messagesEndRef} />}
+                renderRow={(msg, index) => {
                   const now = new Date()
-                  const nodes: ReactElement[] = []
-                  let prevSentAt: string | null = null
-                  for (const msg of messages) {
-                    if (shouldRenderSeparator(prevSentAt, msg.sentAt)) {
-                      nodes.push(
-                        <DaySeparator
-                          key={`sep-${msg.id}`}
-                          label={daySeparatorLabel(new Date(msg.sentAt), now)}
-                        />
-                      )
-                    }
-                    prevSentAt = msg.sentAt
-                    if (msg.isSystem) {
-                      nodes.push(
-                        <div key={msg.id} className="flex justify-center my-1">
+                  const prevSentAt = index > 0 ? messages[index - 1].sentAt : null
+                  const sep = shouldRenderSeparator(prevSentAt, msg.sentAt) ? (
+                    <DaySeparator
+                      key={`sep-${msg.id}`}
+                      label={daySeparatorLabel(new Date(msg.sentAt), now)}
+                    />
+                  ) : null
+                  if (msg.isSystem) {
+                    return (
+                      <div key={msg.id} className="contents">
+                        {sep}
+                        <div className="flex justify-center my-1">
                           <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
                             {msg.senderName} {msg.body}
                           </span>
                         </div>
-                      )
-                      continue
-                    }
-                    const isOwn = msg.senderId === user?.id
-                    nodes.push(
+                      </div>
+                    )
+                  }
+                  const isOwn = msg.senderId === user?.id
+                  return (
+                    <div key={msg.id} className="contents">
+                      {sep}
                       <MessageBubble
-                        key={msg.id}
                         msg={msg}
                         isOwn={isOwn}
                         onContextMenu={handleContextMenu}
@@ -633,12 +639,10 @@ export default function ChatPage() {
                         onClosePicker={() => setEmojiPickerMsgId(null)}
                         onToggleReaction={toggleReaction}
                       />
-                    )
-                  }
-                  return nodes
-                })()}
-                <div ref={messagesEndRef} />
-              </div>
+                    </div>
+                  )
+                }}
+              />
 
               {/* Reply / Edit bar */}
               {(replyTo || editingMessage) && (
