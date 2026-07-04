@@ -300,3 +300,14 @@ func CreateMatchReport(t *testing.T, database *sql.DB, gameID, authorUserID, dut
 	id, _ := res.LastInsertId()
 	return int(id)
 }
+
+// AssignDutySlot creates a duty_assignments row (status='assigned') that ties
+// a user to a slot — matchreports uses this to prove slot ownership.
+func AssignDutySlot(t *testing.T, database *sql.DB, slotID, userID int) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT INTO duty_assignments (duty_slot_id, user_id, status) VALUES (?, ?, 'assigned')`,
+		slotID, userID); err != nil {
+		t.Fatalf("AssignDutySlot: %v", err)
+	}
+}
