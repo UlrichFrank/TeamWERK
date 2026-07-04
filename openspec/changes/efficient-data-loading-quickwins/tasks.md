@@ -4,9 +4,9 @@
 
 ## 1. Foundation: ETag-Helfer
 
-- [ ] 1.1 `internal/httpcache/etag.go` anlegen: `Serve(w, r, etag, cacheControl, bodyFn)` mit `If-None-Match`→`304`. Foundation-Package (importiert keine Domain).
-- [ ] 1.2 `internal/arch/arch_test.go` um Klassifizierung von `httpcache` (Foundation) ergänzen.
-- [ ] 1.3 `internal/httpcache/etag_test.go`: `TestServe_NoneMatchReturns304`, `TestServe_SetsCacheControl`.
+- [x] 1.1 `internal/httpcache/etag.go` anlegen: `Serve(w, r, etag, cacheControl, bodyFn)` mit `If-None-Match`→`304`. Foundation-Package (importiert keine Domain).
+- [x] 1.2 `internal/arch/arch_test.go` um Klassifizierung von `httpcache` (Foundation) ergänzen.
+- [x] 1.3 `internal/httpcache/etag_test.go`: `TestServe_NoneMatchReturns304`, `TestServe_SetsCacheControl`.
 
   _Commit:_ `feat(httpcache): schwacher-ETag/304-Helfer als Foundation-Package`
 
