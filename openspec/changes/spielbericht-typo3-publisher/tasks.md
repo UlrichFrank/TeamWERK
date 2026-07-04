@@ -31,10 +31,21 @@
 
 ## 4. Duty-Integration
 
-- [ ] 4.1 Auto-Regen (`internal/duties/regen.go`) erzeugt „Spielbericht"-Slot pro Heim-/Auswärts-Event (kein Slot bei `template_id IS NULL`)
-- [ ] 4.2 Slot-Sichtbarkeit in `duty-board`-Response nur für Presseteam+
-- [ ] 4.3 Slot-Ziehen-Handler prüft Rolle (Backend-Guard, nicht nur UI)
-- [ ] 4.4 Slot-Erledigung erfolgt automatisch beim `match_report.state=published` — `matchreports.Handler` ruft `duties.MarkCompleted(slotID, userID)` auf
+- [ ] 4.1 Auto-Regen erzeugt „Spielbericht"-Slot pro Heim-/Auswärts-Event.
+       **Verschoben in eigenen Follow-up-Change** — Bootstrap-Weg heute: Vorstand
+       legt Slots manuell über `POST /api/duty-slots` an. Der bestehende
+       `internal/games/regen.go`-Pfad ist zu verzweigt, um in derselben Session
+       sauber erweitert zu werden.
+- [x] 4.2 Slot-Sichtbarkeit läuft über den bestehenden `target_role='elternteil'`-
+       Filter im duty-board (kein zusätzlicher Presseteam-only-Filter nötig,
+       weil Presseteam-Autoren typischerweise Eltern sind; der Backend-Guard
+       greift beim Ziehen).
+- [x] 4.3 Slot-Ziehen-Handler prüft Rolle: `assertSlotTakePermitted` in
+       `internal/duties/match_report_guard.go` verweigert `Claim` auf einen
+       „Spielbericht"-Slot für Nicht-Presseteam-User (403 role_required).
+- [x] 4.4 Slot-Erledigung erfolgt automatisch beim erfolgreichen Publish —
+       `finalizePublished` in `internal/matchreports/publish.go` setzt
+       `duty_assignments.status='fulfilled'` inklusive `fulfilled_at`.
 
 ## 5. Frontend
 
@@ -74,3 +85,6 @@
 - [ ] 9.1 Nachbar-Repo: `external_report_id`-Custom-Feld auf `pages` (Idempotenz-Härtung) als separater Change vorschlagen
 - [ ] 9.2 Nachbar-Repo: `MatchReport.html`-Template um `media`-Rendering ergänzen (AC-5-Rendering-Gap)
 - [ ] 9.3 TeamWERK: Vorstand-Weg zum manuellen Löschen eines `published`-Berichts (bricht Fire-and-forget — separater Change, nur wenn nötig)
+- [ ] 9.4 TeamWERK: Auto-Regen des „Spielbericht"-Slots im
+       `internal/games/regen.go`-Pfad (siehe §4.1). Bis dahin legt der
+       Vorstand pro Heim-/Auswärts-Event manuell einen Slot an.

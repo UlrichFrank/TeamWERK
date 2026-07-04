@@ -54,6 +54,23 @@ type Config struct {
 	// VideoStreamSecret ist das HMAC-Secret für Stream-Token (getrennt von
 	// JWTSecret). Leer ⇒ Streaming-Token-Signierung deaktiviert.
 	VideoStreamSecret string
+
+	// TYPO3ImportURL ist der Endpoint der team-stuttgart-org-Extension,
+	// die Spielberichte entgegennimmt (siehe spielbericht-typo3-publisher).
+	// Leer ⇒ Publisher liefert ErrPublisherNotConfigured statt zu crashen.
+	TYPO3ImportURL string
+	// TYPO3ImportToken ist der Shared-Secret Bearer-Token für den Endpoint.
+	// Muss auf der TYPO3-Seite (additional.php) identisch stehen.
+	TYPO3ImportToken string
+	// TYPO3SeasonFolderPID ist die pages.uid des Season-Ordners auf TYPO3,
+	// unter dem neue Spielbericht-Seiten (doktype=126) angelegt werden.
+	// Redaktion pflegt einen Ordner pro Saison im TYPO3-Backend und trägt
+	// die UID hier ein. 0 = Publisher liefert 500 (unkonfiguriert).
+	TYPO3SeasonFolderPID int
+	// MatchReportImageDir ist das Verzeichnis für Draft-Bilder von
+	// Spielberichten (pro Bericht ein Unterordner). Default
+	// ./storage/match-report-images.
+	MatchReportImageDir string
 }
 
 type SMTPConfig struct {
@@ -98,6 +115,11 @@ func Load() (*Config, error) {
 		VideoStorageDir:    getEnv("VIDEO_STORAGE_DIR", "/storage/videos"),
 		VideoReservedBytes: getEnvUint64("VIDEO_RESERVED_BYTES", 1073741824), // 1 GiB
 		VideoStreamSecret:  os.Getenv("VIDEO_STREAM_SECRET"),
+
+		TYPO3ImportURL:       os.Getenv("TYPO3_IMPORT_URL"),
+		TYPO3ImportToken:     os.Getenv("TYPO3_IMPORT_TOKEN"),
+		TYPO3SeasonFolderPID: getEnvInt("TYPO3_SEASON_FOLDER_PID", 0),
+		MatchReportImageDir:  getEnv("MATCH_REPORT_IMAGE_DIR", "./storage/match-report-images"),
 	}
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")

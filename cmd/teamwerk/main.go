@@ -43,6 +43,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
+	"github.com/teamstuttgart/teamwerk/internal/matchreports"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/metrics"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
@@ -206,6 +207,7 @@ func serve() {
 		Health:              health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
 		Videos:              videosHandler,
 		VideosTus:           videosTus,
+		MatchReports:        matchreports.NewHandler(database, hubInstance, cfg),
 		Hub:                 hub.NewHandler(hubInstance, buildHash),
 		JWTSecret:           cfg.JWTSecret,
 		Database:            database,
