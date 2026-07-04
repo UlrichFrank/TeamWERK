@@ -4,9 +4,9 @@
 
 ## 1. Windowing-Grundlage
 
-- [ ] 1.1 Windowing-Ansatz (A hand-rolled vs. B schlankes Utility, siehe `design.md`) wählen; geteilte Komponente/Hook in `web/src/components/` bzw. `web/src/hooks/`.
-- [ ] 1.2 Test: `renders_only_visible_rows` (N≫Viewport → nur sichtbare + Puffer im DOM).
-- [ ] 1.3 `pnpm -C web build` + `lint`; Bundle-Delta via `make metrics` prüfen.
+- [x] 1.1 Windowing-Ansatz (A hand-rolled vs. B schlankes Utility, siehe `design.md`) wählen; geteilte Komponente/Hook in `web/src/components/` bzw. `web/src/hooks/`.
+- [x] 1.2 Test: `renders_only_visible_rows` (N≫Viewport → nur sichtbare + Puffer im DOM).
+- [x] 1.3 `pnpm -C web build` + `lint`; Bundle-Delta via `make metrics` prüfen.
 
   _Commit:_ `feat(pwa): Windowing-Grundlage für lange Listen`
 
