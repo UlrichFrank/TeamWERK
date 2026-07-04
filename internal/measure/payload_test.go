@@ -41,7 +41,10 @@ func measuredRoutes(data *measureData) []struct{ label, path string } {
 		{"duty-types", "/api/duty-types"},
 		{"games", "/api/games"},
 		{"game-participants", fmt.Sprintf("/api/games/%d/participants", data.gameT1)},
-		{"training-sessions", "/api/training-sessions"},
+		// Explicit from/to spanning the seeded window: the endpoint's default
+		// range is relative to wall-clock now, which would exclude the fixed
+		// measureRefTime-anchored sessions and make the baseline non-deterministic.
+		{"training-sessions", fmt.Sprintf("/api/training-sessions?from=%s&to=%s", dayOffset(-60), dayOffset(60))},
 		{"chat-messages", fmt.Sprintf("/api/chat/conversations/%d/messages", data.convID)},
 		{"teams", "/api/teams"},
 		{"team-names", "/api/teams/names"},
