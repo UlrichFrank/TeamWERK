@@ -50,8 +50,8 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
 
   const handleSelectSeason = async (seasonId: number) => {
     setFromSeasonId(seasonId)
-    const res = await api.get('/kader', { params: { season_id: seasonId } })
-    const kader: SourceKader[] = res.data ?? []
+    const res = await api.get('/kader', { params: { season_id: seasonId, limit: 200 } })
+    const kader: SourceKader[] = res.data?.items ?? []
     setSourceKader(kader)
     const keys = new Set(kader.map(k => `${k.age_class}|${k.gender}`))
     setSelectedKader(keys)

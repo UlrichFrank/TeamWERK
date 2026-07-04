@@ -128,22 +128,44 @@ const kaderSelectSQL = `
 	       CAST(strftime('%Y', s.start_date) AS INTEGER)
 	FROM kader k JOIN seasons s ON s.id = k.season_id`
 
-// GET /api/admin/kader?season_id=N
+// GET /api/admin/kader?season_id=N&limit=&offset=
 func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	kaderCan := policy.CanFlags{Edit: policy.CanEditKader(p), Delete: policy.CanEditKader(p)}
 
 	seasonID := r.URL.Query().Get("season_id")
-	var query string
-	var args []any
-
-	if seasonID != "" {
-		query = kaderSelectSQL + ` WHERE k.season_id=? ORDER BY k.age_class, k.gender, k.team_number`
-		args = append(args, seasonID)
-	} else {
-		query = kaderSelectSQL + ` WHERE k.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) ORDER BY k.age_class, k.gender, k.team_number`
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
 	}
+	if limit < 1 {
+		limit = 50
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	where := ` WHERE k.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
+	var args []any
+	if seasonID != "" {
+		where = ` WHERE k.season_id=?`
+		args = append(args, seasonID)
+	}
+
+	// total mit denselben WHERE-Bedingungen wie die Items (Sichtbarkeit invariant).
+	var total int
+	if err := h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM kader k`+where, args...).Scan(&total); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	query := kaderSelectSQL + where + ` ORDER BY k.age_class, k.gender, k.team_number LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
@@ -176,7 +198,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
 }
 
 // GET /api/admin/kader/{id}
