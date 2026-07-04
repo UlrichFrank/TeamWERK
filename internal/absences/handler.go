@@ -24,6 +24,23 @@ func NewHandler(db *sql.DB, h *hub.EventHub) *Handler {
 	return &Handler{db: db, hub: h}
 }
 
+// broadcastMemberEvents sends the given events only to the audience of the
+// affected members: their teams (players + trainers/sL + parents +
+// vorstand/admin) plus each member's own user and parents. Used for absences and
+// the training/game RSVP auto-declines they cascade. Replaces the former global
+// Broadcast; the Frontend contract (topic strings + useLiveUpdates) is
+// unchanged, only the recipient set shrinks. Resolve members BEFORE deleting the
+// absence row.
+func (h *Handler) broadcastMemberEvents(ctx context.Context, memberIDs []int, events ...string) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).MembersAudience(ctx, memberIDs)
+	for _, ev := range events {
+		h.hub.BroadcastToUsers(ids, ev)
+	}
+}
+
 type absence struct {
 	ID         int    `json:"id"`
 	MemberID   int    `json:"member_id"`
@@ -408,9 +425,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.Broadcast("absences")
-	h.hub.Broadcast("trainings")
-	h.hub.Broadcast("games")
+	h.broadcastMemberEvents(r.Context(), resolvedIDs, "absences", "trainings", "games")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -432,9 +447,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var createdBy int
+	var createdBy, memberID int
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT created_by FROM member_absences WHERE id = ?`, id).Scan(&createdBy)
+		`SELECT created_by, member_id FROM member_absences WHERE id = ?`, id).Scan(&createdBy, &memberID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -451,9 +466,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	h.db.ExecContext(r.Context(), `DELETE FROM member_absences WHERE id = ?`, id)
 
-	h.hub.Broadcast("absences")
-	h.hub.Broadcast("trainings")
-	h.hub.Broadcast("games")
+	// Team des betroffenen Mitglieds wurde vor dem Löschen geladen (memberID).
+	h.broadcastMemberEvents(r.Context(), []int{memberID}, "absences", "trainings", "games")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -724,8 +738,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(os.Stderr, "absences update auto-decline games: %v\n", err)
 	}
 
-	h.hub.Broadcast("absences")
-	h.hub.Broadcast("trainings")
-	h.hub.Broadcast("games")
+	h.broadcastMemberEvents(r.Context(), []int{existing.MemberID}, "absences", "trainings", "games")
 	w.WriteHeader(http.StatusNoContent)
 }

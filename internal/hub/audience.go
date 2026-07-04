@@ -80,6 +80,91 @@ func (a *Audience) TeamIDsForTraining(ctx context.Context, trainingID int) []int
 	return a.teamIDs(ctx, `SELECT team_id FROM training_sessions WHERE id = ?`, trainingID)
 }
 
+// MembersAudience resolves the audience for events bound to one or more members
+// (e.g. absences and their cascaded training/game RSVP auto-declines): the
+// teams those members belong to (players + trainers + parents + club-wide
+// staff), plus each member's own linked user and their parents explicitly (so a
+// member not currently in any kader is still covered). Empty memberIDs yields
+// only the club-wide staff.
+func (a *Audience) MembersAudience(ctx context.Context, memberIDs []int, extraUserIDs ...int) []int {
+	if len(memberIDs) == 0 {
+		return a.Team(ctx, nil, extraUserIDs...)
+	}
+	ids := a.Team(ctx, a.teamIDsForMembers(ctx, memberIDs), extraUserIDs...)
+	set := newIDSet()
+	for _, id := range ids {
+		set.add(id)
+	}
+	a.collectMemberOwners(ctx, set, memberIDs)
+	a.collectMemberParents(ctx, set, memberIDs)
+	return set.slice()
+}
+
+// teamIDsForMembers returns the distinct team IDs the given members belong to.
+func (a *Audience) teamIDsForMembers(ctx context.Context, memberIDs []int) []int {
+	if len(memberIDs) == 0 {
+		return nil
+	}
+	args := make([]any, len(memberIDs))
+	for i, id := range memberIDs {
+		args[i] = id
+	}
+	return a.teamIDs(ctx,
+		`SELECT DISTINCT team_id FROM team_memberships WHERE member_id IN (`+placeholders(len(memberIDs))+`)`,
+		args...)
+}
+
+// collectMemberOwners adds the user_id of each given member.
+func (a *Audience) collectMemberOwners(ctx context.Context, set *idSet, memberIDs []int) {
+	args := make([]any, len(memberIDs))
+	for i, id := range memberIDs {
+		args[i] = id
+	}
+	rows, err := a.db.QueryContext(ctx,
+		`SELECT user_id FROM members WHERE user_id IS NOT NULL AND id IN (`+placeholders(len(memberIDs))+`)`,
+		args...)
+	if err != nil {
+		return
+	}
+	scanIDs(rows, set)
+}
+
+// collectMemberParents adds the parent user IDs linked to the given members.
+func (a *Audience) collectMemberParents(ctx context.Context, set *idSet, memberIDs []int) {
+	args := make([]any, len(memberIDs))
+	for i, id := range memberIDs {
+		args[i] = id
+	}
+	rows, err := a.db.QueryContext(ctx,
+		`SELECT parent_user_id FROM family_links WHERE member_id IN (`+placeholders(len(memberIDs))+`)`,
+		args...)
+	if err != nil {
+		return
+	}
+	scanIDs(rows, set)
+}
+
+// TeamIDsForDutySlot returns the team IDs a duty slot belongs to: its own
+// team_id if set, otherwise the teams of its linked game (game_teams). This
+// mirrors the /api/duty-board team filter (slot's team, or its game's teams).
+// Empty result → slot has neither a team nor a game (fall back to global).
+func (a *Audience) TeamIDsForDutySlot(ctx context.Context, slotID any) []int {
+	return a.teamIDs(ctx, `
+		SELECT team_id FROM duty_slots WHERE id = ? AND team_id IS NOT NULL
+		UNION
+		SELECT gt.team_id
+		FROM duty_slots ds
+		JOIN game_teams gt ON gt.game_id = ds.game_id
+		WHERE ds.id = ? AND ds.team_id IS NULL`, slotID, slotID)
+}
+
+// TeamIDsForKader returns the team ID of a kader (may be empty if the kader has
+// no team assigned yet — team_id is nullable). kaderID accepts int or the raw
+// string path value (SQLite coerces the bind parameter).
+func (a *Audience) TeamIDsForKader(ctx context.Context, kaderID any) []int {
+	return a.teamIDs(ctx, `SELECT team_id FROM kader WHERE id = ? AND team_id IS NOT NULL`, kaderID)
+}
+
 // TeamIDsForTrainingSeries returns the team ID of a training series.
 func (a *Audience) TeamIDsForTrainingSeries(ctx context.Context, seriesID int) []int {
 	return a.teamIDs(ctx, `SELECT team_id FROM training_series WHERE id = ?`, seriesID)
