@@ -36,9 +36,9 @@
 
 ## 5. Frontend: Client-TTL-Cache + Single-Flight
 
-- [ ] 5.1 `web/src/lib/api.ts`: Referenz-Allowlist mit TTL, In-Memory-Map, Single-Flight für parallele Requests; SSE-Invalidierung (`seasons`/`settings`/`venues`/`duties`).
-- [ ] 5.2 `AdminDutyTypesPage.tsx` bzw. Typ-Detail: Volltext aus Detail-Route laden.
-- [ ] 5.3 `pnpm -C web build` + `lint` + Frontend-Test für Cache-Hit/Invalidierung.
+- [x] 5.1 `web/src/lib/api.ts`: Referenz-Allowlist mit TTL, In-Memory-Map, Single-Flight für parallele Requests; SSE-Invalidierung (`seasons`/`settings`/`venues`/`duties`).
+- [x] 5.2 `AdminDutyTypesPage.tsx` bzw. Typ-Detail: Volltext aus Detail-Route laden.
+- [x] 5.3 `pnpm -C web build` + `lint` + Frontend-Test für Cache-Hit/Invalidierung.
 
   _Commit:_ `feat(pwa): Client-TTL-Cache + Single-Flight für Referenzdaten in api.ts`
 
