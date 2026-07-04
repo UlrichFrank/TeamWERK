@@ -31,9 +31,9 @@
 
 ## 4. Training-Sessions: Paginierung + serverseitiger Filter
 
-- [ ] 4.1 `internal/trainings/handler.go:910` (`ListSessions`): `?limit&offset`, `{items,total}`, Default 100; `?exclude_series=1` (ersetzt Client-`filter(series_id===null)`).
-- [ ] 4.2 Tests: `TestListSessions_Paginated`, `TestListSessions_ExcludeSeriesFilter`.
-- [ ] 4.3 `web/src/pages/AdminTrainingsPage.tsx`: `?exclude_series=1` nutzen, Client-`filter()` entfernen; `{items,total}`.
+- [x] 4.1 `internal/trainings/handler.go:910` (`ListSessions`): `?limit&offset`, `{items,total}`, Default 100; `?exclude_series=1` (ersetzt Client-`filter(series_id===null)`). COUNT(*) mit denselben WHERE-Bedingungen.
+- [x] 4.2 Tests: `TestListSessions_Paginated`, `TestListSessions_ExcludeSeriesFilter` (401-Fehlerfall bereits durch `TestListSessions_Unauthenticated`).
+- [x] 4.3 `web/src/pages/AdminTrainingsPage.tsx`: `?exclude_series=1` nutzen, Client-`filter()` entfernt; `{items,total}`. Auch `TerminePage`/`KalenderPage` auf `.items` umgestellt.
 
   _Commit:_ `feat(trainings): training-sessions paginieren + exclude_series-Filter`
 

@@ -72,8 +72,12 @@ func TestListSessions_FilterByTeam(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var sessions []map[string]any
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	if len(sessions) != 1 {
@@ -103,8 +107,12 @@ func TestListSessions_AdminSeesAll(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var sessions []map[string]any
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	if len(sessions) != 2 {
@@ -132,8 +140,12 @@ func TestListSessions_VorstandSeesAll(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var sessions []map[string]any
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	if len(sessions) != 2 {
@@ -677,8 +689,12 @@ func TestListSessions_ExtendedKaderPlayerSeesTeam(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var sessions []map[string]any
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	if len(sessions) != 1 {
@@ -852,8 +868,12 @@ func TestListSessions_NoKaderPlayerSeesNothing(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var sessions []map[string]any
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	if len(sessions) != 0 {
@@ -1290,8 +1310,12 @@ func TestListSessions_RsvpLocksAt_Summer(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var items []map[string]any
-	json.NewDecoder(res.Body).Decode(&items)
+	var listResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&listResp)
+	items := listResp.Items
 	var found map[string]any
 	for _, it := range items {
 		if int(it["id"].(float64)) == sessionID {
@@ -1324,8 +1348,12 @@ func TestListSessions_RsvpLocksAt_Winter(t *testing.T) {
 	token := testutil.Token(t, uID, "admin", nil)
 	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-01-01&to=2026-01-31", token)
 	defer res.Body.Close()
-	var items []map[string]any
-	json.NewDecoder(res.Body).Decode(&items)
+	var listResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&listResp)
+	items := listResp.Items
 	var got string
 	for _, it := range items {
 		if int(it["id"].(float64)) == sessionID {

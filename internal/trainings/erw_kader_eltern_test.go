@@ -45,8 +45,12 @@ func TestSessions_ParentExtendedChild_InChildrenRSVP(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var sessions []sessionWithChildren
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []sessionWithChildren `json:"items"`
+		Total int                   `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	var found *sessionWithChildren
@@ -93,8 +97,12 @@ func TestSessions_ExtendedChild_NoAutoConfirm(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var sessions []sessionWithChildren
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []sessionWithChildren `json:"items"`
+		Total int                   `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	byMember := map[int]*string{}
@@ -137,8 +145,12 @@ func TestSessions_ChildInBothKaders_SingleEntry(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var sessions []sessionWithChildren
-	json.NewDecoder(res.Body).Decode(&sessions)
+	var sessionsResp struct {
+		Items []sessionWithChildren `json:"items"`
+		Total int                   `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&sessionsResp)
+	sessions := sessionsResp.Items
 	res.Body.Close()
 
 	var count int

@@ -284,11 +284,15 @@ func listSessionMyRSVP(t *testing.T, srv *httptest.Server, token string, session
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("list sessions: expected 200, got %d", res.StatusCode)
 	}
-	var list []struct {
-		ID     int     `json:"id"`
-		MyRSVP *string `json:"my_rsvp"`
+	var listResp struct {
+		Items []struct {
+			ID     int     `json:"id"`
+			MyRSVP *string `json:"my_rsvp"`
+		} `json:"items"`
+		Total int `json:"total"`
 	}
-	json.NewDecoder(res.Body).Decode(&list)
+	json.NewDecoder(res.Body).Decode(&listResp)
+	list := listResp.Items
 	res.Body.Close()
 	for _, s := range list {
 		if s.ID == sessionID {

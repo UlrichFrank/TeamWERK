@@ -230,11 +230,15 @@ export default function TerminePage() {
   const load = () => {
     setLoading(true)
     Promise.all([
-      api.get(`/training-sessions?from=${from}&to=${to}`),
+      api.get(`/training-sessions?from=${from}&to=${to}&limit=500`),
       api.get(`/games/my?from=${from}&to=${to}`),
     ])
       .then(([trainingsRes, gamesRes]) => {
-        const trainings: Termin[] = (trainingsRes.data ?? []).map((s: Session) => ({ kind: 'training' as const, data: s }))
+        // /training-sessions liefert {items,total}; /games/my bleibt ein Array.
+        const sessionItems: Session[] = Array.isArray(trainingsRes.data?.items)
+          ? trainingsRes.data.items
+          : (Array.isArray(trainingsRes.data) ? trainingsRes.data : [])
+        const trainings: Termin[] = sessionItems.map((s: Session) => ({ kind: 'training' as const, data: s }))
         const games: Termin[] = (gamesRes.data ?? []).map((g: Game) => ({ kind: 'game' as const, data: g }))
         const merged = [...trainings, ...games].sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
         setTermine(merged)

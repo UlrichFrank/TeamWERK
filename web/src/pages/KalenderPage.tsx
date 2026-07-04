@@ -216,8 +216,10 @@ export default function KalenderPage() {
       const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
       const lastDay = new Date(year, month + 1, 0).getDate()
       const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      const r = await api.get(`/training-sessions?from=${from}&to=${to}`)
-      setTrainings(Array.isArray(r.data) ? r.data : [])
+      const r = await api.get(`/training-sessions?from=${from}&to=${to}&limit=500`)
+      // Antwort ist {items,total}; Kalender braucht alle Termine des Monats.
+      const items = Array.isArray(r.data?.items) ? r.data.items : (Array.isArray(r.data) ? r.data : [])
+      setTrainings(items)
     } catch {
       setTrainings([])
     }
