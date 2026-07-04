@@ -275,3 +275,28 @@ func AddExtendedKaderMember(t *testing.T, database *sql.DB, kaderID, memberID in
 		t.Fatalf("AddExtendedKaderMember: %v", err)
 	}
 }
+
+// CreatePressTeamUser inserts a user with role=presseteam and returns its ID.
+// Shortcut for CreateUser(t, db, auth.RolePressTeam) — hides the role string.
+func CreatePressTeamUser(t *testing.T, database *sql.DB) int {
+	return CreateUser(t, database, auth.RolePressTeam)
+}
+
+// CreateMatchReport inserts a match_reports row in state='draft' and returns its ID.
+// dutySlotID may be 0 to omit the FK (NULL).
+func CreateMatchReport(t *testing.T, database *sql.DB, gameID, authorUserID, dutySlotID int) int {
+	t.Helper()
+	var slotArg any
+	if dutySlotID > 0 {
+		slotArg = dutySlotID
+	}
+	res, err := database.Exec(
+		`INSERT INTO match_reports (game_id, author_user_id, duty_slot_id, state)
+		 VALUES (?, ?, ?, 'draft')`,
+		gameID, authorUserID, slotArg)
+	if err != nil {
+		t.Fatalf("CreateMatchReport: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
