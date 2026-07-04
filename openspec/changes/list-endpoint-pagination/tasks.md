@@ -12,11 +12,11 @@
 
 ## 2. Duty-Slots- & Board-Paginierung/Trim
 
-- [ ] 2.1 `internal/duties/handler.go:306` (`ListSlots`): `?limit&offset` (+ optional `?season_id&date_from`), `{items,total}`, Default 100.
-- [ ] 2.2 `internal/duties/handler.go:412` (`Board`): Assignees auf `{user_id,name}` trimmen; `photo_url`/Kontakt aus Inline-Payload entfernen; optional `?from&to`.
-- [ ] 2.3 On-Demand-Pfad für Assignee-Kontakt/Avatar eines Slots (falls nicht vorhanden), Sichtbarkeitsregeln wie heute.
-- [ ] 2.4 Tests: `TestListDutySlots_Paginated`, `TestDutyBoard_NamesWithoutHeavyFields`, Auth-Fehlerfall.
-- [ ] 2.5 `web/src/pages/DutyPage.tsx`/`DutySlotList`: Lazy-Load Avatar/Kontakt bei Slot-Öffnung; „Mehr laden" für Slots.
+- [x] 2.1 `internal/duties/handler.go:306` (`ListSlots`): `?limit&offset` (+ optional `?season_id&date_from`), `{items,total}`, Default 100.
+- [x] 2.2 `internal/duties/handler.go:412` (`Board`): Assignees auf `{user_id,name}` trimmen; `photo_url`/Kontakt aus Inline-Payload entfernen; optional `?from&to`.
+- [x] 2.3 On-Demand-Pfad für Assignee-Kontakt/Avatar eines Slots (falls nicht vorhanden), Sichtbarkeitsregeln wie heute. — bereits vorhanden: `GET /api/users/{id}/contact` (`members.GetContact`, `*_visible`-Regeln inkl. `photo_visible`); PersonChip nutzt ihn on-demand.
+- [x] 2.4 Tests: `TestListDutySlots_Paginated`, `TestDutyBoard_NamesWithoutHeavyFields`, Auth-Fehlerfall.
+- [x] 2.5 `web/src/pages/DutyPage.tsx`/`DutySlotList`: Lazy-Load Avatar/Kontakt bei Slot-Öffnung; „Mehr laden" für Slots. — Board bleibt gruppiert (kein `{items,total}`); statt „Mehr laden" begrenzt `?from=heute` die Payload, „Vergangene"-Toggle lädt die Historie nach.
 
   _Commit:_ `feat(duties): duty-slots paginieren + duty-board Assignee-Felder aufschieben`
 

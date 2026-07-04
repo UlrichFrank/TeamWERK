@@ -122,14 +122,20 @@ export default function DutyPage() {
     const params = new URLSearchParams()
     if (viewMine) params.set('view', 'mine')
     if (audienceAll) params.set('audience', 'all')
+    // Ohne „Vergangene": Datumsfenster serverseitig ab heute — spart die
+    // komplette Historie in der Payload. Mit Toggle wird alles geladen.
+    if (!showPast) {
+      const d = new Date()
+      params.set('from', `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+    }
     const qs = params.toString()
     const url = qs ? `/duty-board?${qs}` : '/duty-board'
     api.get(url).then(r => setGroups(r.data ?? []))
   }
 
-  // load kapselt viewMine/audienceAll, soll nur bei deren Änderung neu laufen
+  // load kapselt viewMine/audienceAll/showPast, soll nur bei deren Änderung neu laufen
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load() }, [viewMine, audienceAll])
+  useEffect(() => { load() }, [viewMine, audienceAll, showPast])
   useLiveUpdates((event) => { if (event === 'duties') load() })
 
   useEffect(() => {

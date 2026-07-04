@@ -302,15 +302,57 @@ func (h *Handler) SetInstruction(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"instruction_updated_at": updatedAt})
 }
 
-// GET /api/duty-slots
+// GET /api/duty-slots?limit=&offset=&season_id=&date_from=
 func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
-	rows, _ := h.db.QueryContext(r.Context(),
+
+	q := r.URL.Query()
+	limit := 100
+	if l := q.Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if limit < 1 {
+		limit = 100
+	}
+	offset := 0
+	if o := q.Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	where := ` WHERE 1=1`
+	var args []any
+	if seasonID := q.Get("season_id"); seasonID != "" {
+		where += ` AND ds.season_id = ?`
+		args = append(args, seasonID)
+	}
+	if dateFrom := q.Get("date_from"); dateFrom != "" {
+		where += ` AND ds.event_date >= ?`
+		args = append(args, dateFrom)
+	}
+
+	// total mit denselben WHERE-Bedingungen wie die Items (Sichtbarkeit invariant).
+	var total int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM duty_slots ds JOIN duty_types dt ON dt.id = ds.duty_type_id`+where,
+		args...).Scan(&total); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT ds.id, ds.event_name, ds.event_date, ds.slots_total, ds.slots_filled,
 		        dt.name, COALESCE(ds.role_desc,'')
-		 FROM duty_slots ds JOIN duty_types dt ON dt.id = ds.duty_type_id
-		 ORDER BY ds.event_date DESC`)
+		 FROM duty_slots ds JOIN duty_types dt ON dt.id = ds.duty_type_id`+where+`
+		 ORDER BY ds.event_date DESC, ds.id LIMIT ? OFFSET ?`,
+		append(args, limit, offset)...)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	defer rows.Close()
 	type slot struct {
 		ID          int                 `json:"id"`
@@ -331,7 +373,7 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 		result = append(result, s)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
 }
 
 // POST /api/duty-slots
@@ -514,6 +556,16 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		args = append(args, gameIDStr)
 	}
 
+	// Optionales Datumsfenster — reiner Umfangs-Filter, keine Sichtbarkeitsregel.
+	if from := r.URL.Query().Get("from"); from != "" {
+		whereParts += ` AND ds.event_date >= ?`
+		args = append(args, from)
+	}
+	if to := r.URL.Query().Get("to"); to != "" {
+		whereParts += ` AND ds.event_date <= ?`
+		args = append(args, to)
+	}
+
 	rows, err := h.db.QueryContext(r.Context(), `SELECT
 		    ds.id,
 		    COALESCE(ds.event_date, '') AS event_date,
@@ -547,10 +599,12 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	// Bewusst schlank: nur user_id + Name inline (duty-assignee-display).
+	// Avatar/Kontakt lädt das Frontend on-demand über GET /api/users/{id}/contact
+	// (dort gelten die *_visible-Sichtbarkeitsregeln).
 	type publicAssignee struct {
-		UserID   int     `json:"user_id"`
-		Name     string  `json:"name"`
-		PhotoURL *string `json:"photo_url,omitempty"`
+		UserID int    `json:"user_id"`
+		Name   string `json:"name"`
 	}
 	bp := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	boardDutyCan := policy.DutyCan(bp)
@@ -665,11 +719,9 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		aRows, aErr := h.db.QueryContext(r.Context(), `
 			SELECT da.duty_slot_id,
 			       u.id,
-			       u.first_name || ' ' || u.last_name,
-			       CASE WHEN COALESCE(uv.photo_visible,0)=1 AND COALESCE(u.photo_path,'') != '' THEN '/api/uploads/' || u.photo_path END
+			       u.first_name || ' ' || u.last_name
 			FROM duty_assignments da
 			JOIN users u ON u.id = da.user_id
-			LEFT JOIN user_visibility uv ON uv.user_id = u.id
 			WHERE da.duty_slot_id IN (`+strings.Join(ph, ",")+`)
 			ORDER BY da.created_at`, aArgs...)
 		if aErr == nil {
@@ -678,13 +730,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			for aRows.Next() {
 				var slotID, userID int
 				var name string
-				var photoURL sql.NullString
-				aRows.Scan(&slotID, &userID, &name, &photoURL)
-				a := publicAssignee{UserID: userID, Name: name}
-				if photoURL.Valid && photoURL.String != "" {
-					a.PhotoURL = &photoURL.String
-				}
-				assigneeMap[slotID] = append(assigneeMap[slotID], a)
+				aRows.Scan(&slotID, &userID, &name)
+				assigneeMap[slotID] = append(assigneeMap[slotID], publicAssignee{UserID: userID, Name: name})
 			}
 			for _, grp := range groupMap {
 				for i := range grp.Slots {
