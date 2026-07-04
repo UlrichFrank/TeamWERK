@@ -31,6 +31,30 @@ func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
 	return &Handler{db: db, cfg: cfg, hub: h, now: time.Now}
 }
 
+// broadcastGame sends event only to the team audience of the given game (team
+// members + trainers/sL + parents + vorstand/admin). Replaces the former global
+// Broadcast for game-bound topics; the Frontend contract (topic string +
+// useLiveUpdates) is unchanged, only the recipient set shrinks. Resolve the
+// game's teams BEFORE deleting the game (game_teams cascades on delete).
+func (h *Handler) broadcastGame(ctx context.Context, gameID int, event string) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).GameAudience(ctx, gameID)
+	h.hub.BroadcastToUsers(ids, event)
+}
+
+// broadcastGameTeams is like broadcastGame but takes already-resolved team IDs
+// (used by DeleteGame, which must capture the teams before the game_teams rows
+// cascade away). extraUserIDs (e.g. affected duty assignees) are included.
+func (h *Handler) broadcastGameTeams(ctx context.Context, teamIDs []int, event string, extraUserIDs ...int) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).Team(ctx, teamIDs, extraUserIDs...)
+	h.hub.BroadcastToUsers(ids, event)
+}
+
 // SetNow overrides the clock used for cutoff checks. Intended for tests.
 func (h *Handler) SetNow(now func() time.Time) { h.now = now }
 
@@ -225,7 +249,7 @@ func (h *Handler) UpdateGameNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.Broadcast("event-note")
+	h.broadcastGame(r.Context(), gameID, "event-note")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -965,7 +989,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 			gameID, teamID, req.SeasonID, req.Date)
 	}
 
-	h.hub.Broadcast("games")
+	h.broadcastGame(r.Context(), int(gameID), "games")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(req.TeamIDs),
 		"games", "Neues Spiel", eventName+" am "+req.Date, fmt.Sprintf("/termine?focus=game-%d", gameID))
 	h.dispatchRegenNotifications(summary)
@@ -1135,9 +1159,9 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("games")
 	gameIDInt := 0
 	fmt.Sscan(id, &gameIDInt)
+	h.broadcastGame(r.Context(), gameIDInt, "games")
 	notify.Send(h.db, h.cfg,
 		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)),
 		"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
@@ -1236,7 +1260,9 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.Broadcast("games")
+	// Game is gone (game_teams cascaded) — use the teamIDs captured before the
+	// delete, plus the duty assignees whose slots vanished, as the audience.
+	h.broadcastGameTeams(r.Context(), teamIDs, "games", append(append([]int{}, assignedUIDs...), fulfilledUIDs...)...)
 
 	// Targeted notification to duty assignees in their "duties" category.
 	if len(assignedUIDs) > 0 {
@@ -1491,6 +1517,8 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newID, _ := res.LastInsertId()
+	// Templates sind nicht team-gebunden (sie steuern die Dienst-Generierung
+	// vereinsweit) → bewusst global, kein Team-Scoping.
 	h.hub.Broadcast("games")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -1574,6 +1602,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// Template-Änderung ist vereinsweit (nicht team-gebunden) → bewusst global.
 	h.hub.Broadcast("games")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1591,6 +1620,7 @@ func (h *Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	// Template-Löschung ist vereinsweit (nicht team-gebunden) → bewusst global.
 	h.hub.Broadcast("games")
 	w.WriteHeader(http.StatusOK)
 }
@@ -2152,7 +2182,7 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("games")
+	h.broadcastGame(r.Context(), gameID, "games")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2506,7 +2536,7 @@ func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.Broadcast("games")
+	h.broadcastGame(r.Context(), gameID, "games")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2783,7 +2813,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("attendance-changed")
+	h.broadcastGame(r.Context(), gameID, "attendance-changed")
 	w.WriteHeader(http.StatusNoContent)
 }
 

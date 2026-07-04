@@ -30,6 +30,27 @@ func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
 	return &Handler{db: db, cfg: cfg, hub: h, now: time.Now}
 }
 
+// broadcastTeam sends event only to the team audience (team members +
+// trainers/sL + parents + vorstand/admin) of the given team IDs. Replaces the
+// former global Broadcast for training-bound topics; the Frontend contract
+// (topic string + useLiveUpdates) is unchanged, only the recipient set shrinks.
+func (h *Handler) broadcastTeam(ctx context.Context, teamIDs []int, event string) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).Team(ctx, teamIDs)
+	h.hub.BroadcastToUsers(ids, event)
+}
+
+// broadcastSession resolves the team from a training session ID and broadcasts.
+func (h *Handler) broadcastSession(ctx context.Context, sessionID int, event string) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).TrainingAudience(ctx, sessionID)
+	h.hub.BroadcastToUsers(ids, event)
+}
+
 // SetNow overrides the clock used for cutoff checks. Intended for tests.
 func (h *Handler) SetNow(now func() time.Time) { h.now = now }
 
@@ -363,7 +384,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("trainings")
+	h.broadcastTeam(r.Context(), []int{req.TeamID}, "trainings")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -505,7 +526,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("trainings")
+	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"sessions_created": len(dates)})
 }
@@ -565,7 +586,8 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("trainings")
+	// Serie gelöscht → Team aus dem vorab geladenen teamID scopen.
+	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
 		"trainings", "Trainingsserie gelöscht", "Eine Trainingsserie wurde beendet", "/termine")
 	w.WriteHeader(http.StatusNoContent)
@@ -604,7 +626,8 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("trainings")
+	// Session gelöscht → Team aus dem vorab geladenen teamID scopen.
+	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
 		"trainings", "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/termine")
 	w.WriteHeader(http.StatusNoContent)
@@ -686,7 +709,7 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.Broadcast("event-note")
+	h.broadcastSession(r.Context(), sessionID, "event-note")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -751,7 +774,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		ON CONFLICT(training_id, member_id) DO NOTHING`,
 		id, req.TeamID, req.SeasonID, req.Date)
 
-	h.hub.Broadcast("trainings")
+	h.broadcastTeam(r.Context(), []int{req.TeamID}, "trainings")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"id": id})
@@ -858,7 +881,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	h.hub.Broadcast("trainings")
+	h.broadcastSession(r.Context(), sessionID, "trainings")
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
 		"trainings", "Training geändert", "Eine Trainingseinheit wurde aktualisiert", fmt.Sprintf("/termine?focus=training-%d", sessionID))
 	w.WriteHeader(http.StatusNoContent)
@@ -1377,7 +1400,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("trainings")
+	h.broadcastSession(r.Context(), sessionID, "trainings")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1639,7 +1662,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("trainings")
+	h.broadcastSession(r.Context(), sessionID, "trainings")
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -69,6 +69,46 @@ func (a *Audience) Team(ctx context.Context, teamIDs []int, extraUserIDs ...int)
 	return set.slice()
 }
 
+// TeamIDsForGame returns the team IDs linked to a game via game_teams.
+func (a *Audience) TeamIDsForGame(ctx context.Context, gameID int) []int {
+	return a.teamIDs(ctx, `SELECT team_id FROM game_teams WHERE game_id = ?`, gameID)
+}
+
+// TeamIDsForTraining returns the team ID of a training session (single team per
+// session). Returned as a slice for symmetry with the games path.
+func (a *Audience) TeamIDsForTraining(ctx context.Context, trainingID int) []int {
+	return a.teamIDs(ctx, `SELECT team_id FROM training_sessions WHERE id = ?`, trainingID)
+}
+
+// TeamIDsForTrainingSeries returns the team ID of a training series.
+func (a *Audience) TeamIDsForTrainingSeries(ctx context.Context, seriesID int) []int {
+	return a.teamIDs(ctx, `SELECT team_id FROM training_series WHERE id = ?`, seriesID)
+}
+
+// GameAudience resolves the team audience for a game (its teams' players +
+// trainers + parents, plus club-wide staff). If the game has no resolvable
+// teams, the audience is only the club-wide staff — callers should then prefer
+// the global Broadcast (see design.md "Konservativ scopen").
+func (a *Audience) GameAudience(ctx context.Context, gameID int, extraUserIDs ...int) []int {
+	return a.Team(ctx, a.TeamIDsForGame(ctx, gameID), extraUserIDs...)
+}
+
+// TrainingAudience resolves the team audience for a training session.
+func (a *Audience) TrainingAudience(ctx context.Context, trainingID int, extraUserIDs ...int) []int {
+	return a.Team(ctx, a.TeamIDsForTraining(ctx, trainingID), extraUserIDs...)
+}
+
+// teamIDs runs a single-int-column query and returns the distinct positive IDs.
+func (a *Audience) teamIDs(ctx context.Context, query string, args ...any) []int {
+	rows, err := a.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil
+	}
+	set := newIDSet()
+	scanIDs(rows, set)
+	return set.slice()
+}
+
 // collectAdmins adds every admin user ID to set.
 func (a *Audience) collectAdmins(ctx context.Context, set *idSet) {
 	rows, err := a.db.QueryContext(ctx, `SELECT id FROM users WHERE role = 'admin'`)
