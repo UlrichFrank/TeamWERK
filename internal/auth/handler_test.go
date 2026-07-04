@@ -577,8 +577,10 @@ func TestDeleteUser_Broadcast(t *testing.T) {
 	targetID := testutil.CreateUser(t, db, "standard")
 
 	srv, h := prodserver.NewWithHub(t, db)
-	ch := h.Subscribe()
-	defer h.Unsubscribe(ch)
+	// users events are now scoped to the finance group (admin included) and
+	// delivered per user via SubscribeUser, no longer via the global Subscribe.
+	ch := h.SubscribeUser(adminID)
+	defer h.UnsubscribeUser(adminID, ch)
 
 	res := testutil.Do(t, srv, http.MethodDelete,
 		"/api/users/"+itoa(targetID),
@@ -640,8 +642,10 @@ func TestDeleteUser_SelfRejected(t *testing.T) {
 	adminID := testutil.CreateUser(t, db, "admin")
 
 	srv, h := prodserver.NewWithHub(t, db)
-	ch := h.Subscribe()
-	defer h.Unsubscribe(ch)
+	// Subscribe as the admin (finance group) — a users event, if one fired,
+	// would reach this stream; the assertion is that none does.
+	ch := h.SubscribeUser(adminID)
+	defer h.UnsubscribeUser(adminID, ch)
 
 	res := testutil.Do(t, srv, http.MethodDelete,
 		"/api/users/"+itoa(adminID),

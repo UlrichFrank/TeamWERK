@@ -90,6 +90,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	// "beitragssatz-changed" ist ein vereinsweites Referenzdaten-Topic
+	// (Beitragsmatrix, niederfrequent) → bewusst global (siehe scoped-live-updates).
 	if h.hub != nil {
 		h.hub.Broadcast("beitragssatz-changed")
 	}

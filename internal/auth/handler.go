@@ -39,6 +39,20 @@ func NewHandler(db *sql.DB, cfg *appconfig.Config, jwtSecret string, m *mailer.M
 	return &Handler{db: db, cfg: cfg, jwtSecret: jwtSecret, mailer: m, baseURL: baseURL, hub: h, fpLast: make(map[string]time.Time)}
 }
 
+// broadcastFinance sends a members/users live-update event only to the finance
+// group (vorstand/vorstand_beisitzer/kassierer + admin) — the roles that may
+// read member/user data — plus any explicitly affected users. Replaces the
+// former global Broadcast("members"/"users"); the topic string and the
+// Frontend useLiveUpdates contract stay unchanged, only the recipient set
+// shrinks.
+func (h *Handler) broadcastFinance(ctx context.Context, event string, extraUserIDs ...int) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).FinanceGroup(ctx, extraUserIDs...)
+	h.hub.BroadcastToUsers(ids, event)
+}
+
 // forgotPasswordAllowed reports whether a reset mail may be sent for the given
 // account name now, recording the send time when it returns true. A
 // non-positive cooldown disables the throttle (e.g. in tests).
@@ -558,9 +572,7 @@ func (h *Handler) approveChildRequest(w http.ResponseWriter, r *http.Request, re
 	}
 
 	// Ab hier sind die Daten committed: Mailfehler dürfen den Vorgang nicht zurückrollen.
-	if h.hub != nil {
-		h.hub.Broadcast("users")
-	}
+	h.broadcastFinance(r.Context(), "users")
 	link := fmt.Sprintf("%s/reset-password?token=%s", h.baseURL, plain)
 	body := fmt.Sprintf("Hallo,\n\nder Account für %s %s wurde angelegt.\n\nLogin-Name (zum Einloggen): %s\n\nBitte setze jetzt das Passwort:\n%s\n\nDer Link ist 48 Stunden gültig.",
 		firstName, lastName, loginName, link)
@@ -1114,9 +1126,8 @@ func (h *Handler) SetRecoveryEmail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	if h.hub != nil {
-		h.hub.Broadcast("members")
-	}
+	// Recovery-E-Mail eines Ziel-Nutzers geändert → Finance-Gruppe + Betroffener.
+	h.broadcastFinance(r.Context(), "members", targetID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1204,9 +1215,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	if h.hub != nil {
-		h.hub.Broadcast("users")
-	}
+	h.broadcastFinance(r.Context(), "users")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1551,9 +1560,8 @@ func (h *Handler) ConfirmRecoveryEmailChange(w http.ResponseWriter, r *http.Requ
 		// Neue Adresse bestätigt → schreiben.
 		h.db.ExecContext(r.Context(), `UPDATE users SET recovery_email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, newEmail, userID)
 		h.db.ExecContext(r.Context(), `UPDATE email_change_tokens SET used_at=CURRENT_TIMESTAMP WHERE id=?`, id)
-		if h.hub != nil {
-			h.hub.Broadcast("members")
-		}
+		// Selbstbedienung (Kinderkonto-Recovery) → Finance-Gruppe + Betroffener.
+		h.broadcastFinance(r.Context(), "members", userID)
 		http.Redirect(w, r, "/login?info=recovery_changed", http.StatusFound)
 	default:
 		http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)

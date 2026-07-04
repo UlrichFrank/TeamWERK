@@ -21,6 +21,31 @@ type Handler struct {
 
 func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
+// broadcastKader sends the "kader" event only to the team audience of the given
+// kader (team members + trainers/sL + parents + vorstand/admin). Replaces the
+// former global Broadcast; the Frontend contract (topic string + useLiveUpdates)
+// is unchanged, only the recipient set shrinks. A kader without a team assigned
+// resolves to only the club-wide staff audience. Resolve the team BEFORE
+// deleting the kader (its team_id is gone afterwards).
+func (h *Handler) broadcastKader(ctx context.Context, kaderID any) {
+	if h.hub == nil {
+		return
+	}
+	a := hub.NewAudience(h.db)
+	ids := a.Team(ctx, a.TeamIDsForKader(ctx, kaderID))
+	h.hub.BroadcastToUsers(ids, "kader")
+}
+
+// broadcastKaderTeams broadcasts "kader" to an already-resolved team-ID set
+// (used by DeleteKader, which captures the team before the row is gone).
+func (h *Handler) broadcastKaderTeams(ctx context.Context, teamIDs []int) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).Team(ctx, teamIDs)
+	h.hub.BroadcastToUsers(ids, "kader")
+}
+
 type dbq interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
@@ -326,7 +351,7 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	if len(req.MembersAdd) > 0 || len(req.MembersRemove) > 0 {
 		h.db.ExecContext(r.Context(), `UPDATE kader SET updated_at=? WHERE id=?`, time.Now(), id)
 	}
-	h.hub.Broadcast("kader")
+	h.broadcastKader(r.Context(), id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -408,6 +433,7 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 			`UPDATE kader SET team_id=? WHERE season_id=? AND age_class=? AND gender=? AND team_number=1 AND team_id IS NULL`,
 			teamID, req.SeasonID, s.ageClass, s.gender)
 	}
+	// Initialisiert mehrere Kader über eine ganze Saison → bewusst global.
 	h.hub.Broadcast("kader")
 	w.WriteHeader(http.StatusCreated)
 }
@@ -439,7 +465,7 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 		return
 	}
 	bys, bkys := computeBirthYears(k, seasonStartYear)
-	h.hub.Broadcast("kader")
+	h.broadcastKaderTeams(r.Context(), []int{int(teamID)})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(kaderDetail{
@@ -471,12 +497,15 @@ func (h *Handler) DeleteKader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Team vor dem Löschen auflösen (team_id ist danach weg).
+	teamIDs := hub.NewAudience(h.db).TeamIDsForKader(r.Context(), id)
+
 	_, err := h.db.ExecContext(r.Context(), `DELETE FROM kader WHERE id=?`, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("kader")
+	h.broadcastKaderTeams(r.Context(), teamIDs)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -511,6 +540,7 @@ func (h *Handler) CopyFromSeason(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Kopiert mehrere Kader saisonuebergreifend → bewusst global.
 	h.hub.Broadcast("kader")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -568,6 +598,7 @@ func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Bulk-Zuordnung über mehrere Kader (req.KaderIDs) → bewusst global.
 	h.hub.Broadcast("kader")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -595,7 +626,7 @@ func (h *Handler) PatchGamesPerSeason(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.hub.Broadcast("kader")
+	h.broadcastKader(r.Context(), id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

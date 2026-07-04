@@ -107,6 +107,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	// "venues" ist ein vereinsweites Referenzdaten-Topic (Spielstätten,
+	// niederfrequent) → bewusst global (siehe scoped-live-updates).
 	h.hub.Broadcast("venues")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

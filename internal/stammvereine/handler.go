@@ -28,6 +28,9 @@ type Handler struct {
 
 func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
+// broadcast fires the "stammvereine" event. This is a club-wide reference-data
+// topic (Stammvereine, low-frequency) → intentionally global, not team/role
+// scoped (see scoped-live-updates).
 func (h *Handler) broadcast() {
 	if h.hub != nil {
 		h.hub.Broadcast("stammvereine")

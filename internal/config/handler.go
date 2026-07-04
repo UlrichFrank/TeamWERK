@@ -120,6 +120,8 @@ func (h *Handler) UpdateClub(w http.ResponseWriter, r *http.Request) {
 				*req.SepaCiphertext, *req.SepaDekEnc)
 		}
 	}
+	// "settings" ist ein vereinsweites Referenzdaten-Topic (niederfrequent) →
+	// bewusst global (kein Team-/Rollen-Scoping, siehe scoped-live-updates).
 	h.hub.Broadcast("settings")
 	w.WriteHeader(http.StatusNoContent)
 }

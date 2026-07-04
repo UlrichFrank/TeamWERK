@@ -1,6 +1,7 @@
 package duties
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
@@ -26,6 +27,31 @@ type Handler struct {
 
 func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
 	return &Handler{db: db, cfg: cfg, hub: h}
+}
+
+// broadcastDutySlot sends the "duties" event only to the team audience of the
+// duty slot (its team, or its game's teams — mirrors the /api/duty-board team
+// filter — plus vorstand/admin/sL). Replaces the former global Broadcast; the
+// Frontend contract (topic string + useLiveUpdates) is unchanged, only the
+// recipient set shrinks. extraUserIDs (e.g. the affected assignee) are included.
+// A slot without a team or game resolves to only the club-wide staff.
+func (h *Handler) broadcastDutySlot(ctx context.Context, slotID any, extraUserIDs ...int) {
+	if h.hub == nil {
+		return
+	}
+	a := hub.NewAudience(h.db)
+	ids := a.Team(ctx, a.TeamIDsForDutySlot(ctx, slotID), extraUserIDs...)
+	h.hub.BroadcastToUsers(ids, "duties")
+}
+
+// broadcastDutyTeams broadcasts "duties" to an already-resolved team-ID set
+// (used when the slot is created/deleted and its ID/team is known directly).
+func (h *Handler) broadcastDutyTeams(ctx context.Context, teamIDs []int, extraUserIDs ...int) {
+	if h.hub == nil {
+		return
+	}
+	ids := hub.NewAudience(h.db).Team(ctx, teamIDs, extraUserIDs...)
+	h.hub.BroadcastToUsers(ids, "duties")
 }
 
 // eligibleDutyUsers returns user IDs that could be relevant recipients for a duty slot notification:
@@ -345,6 +371,7 @@ func (h *Handler) SetInstruction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
+	// Anleitung eines duty_type ist vereinsweit (kein Slot/Team) → bewusst global.
 	h.hub.Broadcast("duties")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"instruction_updated_at": updatedAt})
@@ -405,7 +432,15 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences, is_custom)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,1)`,
 		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences))
-	h.hub.Broadcast("duties")
+	// Team-Audience aus dem angegebenen Team bzw. den Teams des verknüpften
+	// Spiels ableiten; ohne beides bewusst global (Slot ohne Team-Kontext).
+	if req.TeamID != nil {
+		h.broadcastDutyTeams(r.Context(), []int{*req.TeamID})
+	} else if req.GameID != nil {
+		h.broadcastDutyTeams(r.Context(), hub.NewAudience(h.db).TeamIDsForGame(r.Context(), *req.GameID))
+	} else {
+		h.hub.Broadcast("duties")
+	}
 	notify.Send(h.db, h.cfg, h.eligibleDutyUsers(req.TeamID),
 		"duties", "Neuer Dienst verfügbar", req.EventName+" — jetzt eintragen", "/dienste")
 	w.WriteHeader(http.StatusCreated)
@@ -430,7 +465,7 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=?, audiences=?, is_custom=1 WHERE id=?`,
 		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, audiencesToDB(req.Audiences), id)
-	h.hub.Broadcast("duties")
+	h.broadcastDutySlot(r.Context(), id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -438,6 +473,8 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	assigned := h.assignedUsers(id)
+	// Team des Slots VOR dem Löschen auflösen (danach ist die Zeile weg).
+	teamIDs := hub.NewAudience(h.db).TeamIDsForDutySlot(r.Context(), id)
 	res, err := h.db.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE id=?`, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -448,7 +485,8 @@ func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	h.hub.Broadcast("duties")
+	// Team-Audience + bereits eingetragene Nutzer (die den Slot verlieren).
+	h.broadcastDutyTeams(r.Context(), teamIDs, assigned...)
 	if len(assigned) > 0 {
 		notify.Send(h.db, h.cfg, assigned, "duties",
 			"Dienst abgesagt", "Ein Dienst, für den du eingetragen warst, wurde abgesagt", "/dienste")
@@ -925,6 +963,8 @@ func (h *Handler) Fulfill(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_assignments SET status='fulfilled', fulfilled_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+	// Betrifft die (staff-weite) Dienst-Konten-Ansicht; Adressat schwer eng
+	// einzugrenzen → bewusst global (niederfrequente Kassierer-/Vorstand-Aktion).
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -939,6 +979,7 @@ func (h *Handler) CashSubstitute(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_assignments SET status='cash_substitute', cash_amount=?, fulfilled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		req.Amount, id)
+	// Betrifft die (staff-weite) Dienst-Konten-Ansicht → bewusst global.
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
