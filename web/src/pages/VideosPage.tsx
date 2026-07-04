@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, Video } from 'lucide-react'
+import { Upload, Video, ArrowUp } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -70,6 +70,13 @@ export default function VideosPage() {
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Anzahl neuer, noch nicht geladener Videos (via video-queued) → „N neue"-Chip.
+  const [newCount, setNewCount] = useState(0)
+
+  // Spiegel des aktuell geladenen Bestands für den (String-only) SSE-Handler,
+  // damit er ohne Stale-Closure die geladene Spanne kennt.
+  const itemsRef = useRef<VideoItem[]>(items)
+  useEffect(() => { itemsRef.current = items }, [items])
 
   useEffect(() => {
     api.get<Team[]>('/teams')
@@ -100,15 +107,63 @@ export default function VideosPage() {
   // Filterwechsel → Liste von vorne laden.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
+    setNewCount(0)
     fetchPage(0, true)
   }, [fetchPage])
 
-  // Live-Updates: bei jeder Video-Mutation Liste neu laden.
-  useLiveUpdates((event) => {
-    if (event === 'video-queued' || event === 'video-ready' || event === 'video-updated' || event === 'video-deleted') {
+  // Reconciliation der bereits geladenen Spanne, OHNE auf Seite 0 zurückzusetzen:
+  // die geladene Anzahl Videos wird neu geholt und per ID mit dem Bestand
+  // abgeglichen — aktualisierte Elemente werden ersetzt, gelöschte entfernt.
+  // Reihenfolge und Scroll-Position bleiben erhalten (kein State-Reset, keine
+  // Rückkehr an den Listenanfang). Da SSE-Events keine ID tragen (String-only,
+  // kein API-Change), gleichen wir die ganze geladene Spanne ab statt eines
+  // einzelnen Elements.
+  const reconcileLoaded = useCallback(async () => {
+    const loaded = itemsRef.current
+    if (loaded.length === 0) {
       fetchPage(0, true)
+      return
+    }
+    try {
+      const params = new URLSearchParams()
+      if (teamFilter) params.append('team_id', teamFilter)
+      if (statusFilter) params.append('status', statusFilter)
+      params.append('limit', String(loaded.length))
+      params.append('offset', '0')
+      const res = await api.get<VideoListResponse>(`/videos?${params}`)
+      const fresh = new Map(res.data.items.map(v => [v.id, v]))
+      // Bestehende IDs in vorhandener Reihenfolge patchen; nicht mehr vorhandene
+      // (gelöschte) fallen raus.
+      const reconciled = loaded
+        .filter(v => fresh.has(v.id))
+        .map(v => fresh.get(v.id)!)
+      // Etwaige neu an den Anfang gerückte Videos innerhalb der Spanne ergänzen.
+      for (const v of res.data.items) {
+        if (!reconciled.some(r => r.id === v.id)) reconciled.unshift(v)
+      }
+      setTotal(res.data.total)
+      setItems(reconciled)
+      setOffset(reconciled.length)
+    } catch {
+      // Bei Fehler bleibt der bisherige Bestand konsistent-genug stehen.
+    }
+  }, [teamFilter, statusFilter, fetchPage])
+
+  // Live-Updates ohne Voll-Refetch/Reset:
+  // - ready/updated/deleted → geladene Spanne per ID abgleichen (Scroll bleibt).
+  // - queued → nur „N neue"-Chip hochzählen; Nachladen erst auf Klick.
+  useLiveUpdates((event) => {
+    if (event === 'video-ready' || event === 'video-updated' || event === 'video-deleted') {
+      reconcileLoaded()
+    } else if (event === 'video-queued') {
+      setNewCount(c => c + 1)
     }
   })
+
+  const loadNew = () => {
+    setNewCount(0)
+    fetchPage(0, true)
+  }
 
   const hasMore = items.length < total
   const activeTeams = useMemo(() => teams.filter(t => t.is_active), [teams])
@@ -153,6 +208,18 @@ export default function VideosPage() {
           </div>
         </div>
       </div>
+
+      {newCount > 0 && (
+        <div className="flex justify-center mb-4">
+          <button
+            onClick={loadNew}
+            className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 sm:py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors"
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+            {newCount === 1 ? '1 neues Video' : `${newCount} neue Videos`}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger mb-4">

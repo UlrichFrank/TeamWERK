@@ -19,8 +19,8 @@
 
 ## 3. VideosPage: Seiten erhalten
 
-- [ ] 3.1 `VideosPage.tsx`: `video-*`-Events per ID patchen/entfernen statt `fetchPage(0, true)`; „N neue"-Chip für `video-queued`; Scroll-Position erhalten.
-- [ ] 3.2 Test: `keeps_loaded_pages_on_sse_event`.
+- [x] 3.1 `VideosPage.tsx`: `video-*`-Events per ID patchen/entfernen statt `fetchPage(0, true)`; „N neue"-Chip für `video-queued`; Scroll-Position erhalten.
+- [x] 3.2 Test: `keeps_loaded_pages_on_sse_event`.
 
   _Commit:_ `feat(videos): geladene Seiten bei Live-Update erhalten statt Reset`
 
