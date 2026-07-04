@@ -516,8 +516,10 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 			convID, before, messagePageSize)
 	default:
 		newestFirst = true
+		// id als Tie-Breaker: sent_at hat Sekundengranularität, gleiche
+		// Timestamps wären sonst instabil sortiert.
 		rows, err = h.db.QueryContext(r.Context(),
-			messageSelect+` ORDER BY m.sent_at DESC LIMIT ?`,
+			messageSelect+` ORDER BY m.sent_at DESC, m.id DESC LIMIT ?`,
 			convID, messagePageSize)
 	}
 	if err != nil {

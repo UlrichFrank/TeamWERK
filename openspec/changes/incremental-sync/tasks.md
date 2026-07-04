@@ -5,7 +5,7 @@
 ## 1. Chat inkrementell (ohne Schema)
 
 - [x] 1.1 `internal/chat/handler.go` (`ListMessages`): `?after=<msgId>` (nur `id > after`) und `?before=<msgId>` (ältere Seite). Ohne Param unverändert.
-- [ ] 1.2 Tests: `TestMessagesAfter_ReturnsOnlyNewer`, `TestMessagesBefore_ReturnsOlderPage`.
+- [x] 1.2 Tests: `TestMessagesAfter_ReturnsOnlyNewer`, `TestMessagesBefore_ReturnsOlderPage`.
 - [ ] 1.3 `web/src/pages/ChatPage.tsx`: bei `chat:new-message:<id>` per `?after=` anhängen statt `loadMessages()`; Verlaufs-Scroll per `?before=`.
 
   _Commit:_ `feat(chat): inkrementelles Nachladen (after/before) statt Voll-Reload`
