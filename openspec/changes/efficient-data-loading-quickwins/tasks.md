@@ -44,9 +44,9 @@
 
 ## 6. Frontend: Coalescing + Service Worker
 
-- [ ] 6.1 `web/src/hooks/useLiveUpdates.ts`: 300-ms-Coalescing-Fenster, deduplizierte Event-Typen, `__version:`-Pfad unberührt.
-- [ ] 6.2 `web/src/sw.ts`: Referenzrouten auf `StaleWhileRevalidate`; `api-cache` `maxEntries`/`maxAgeSeconds`.
-- [ ] 6.3 `pnpm -C web build` + `lint` + Test für Coalescing (mehrere Events → ein Callback).
+- [x] 6.1 `web/src/hooks/useLiveUpdates.ts`: 300-ms-Coalescing-Fenster, deduplizierte Event-Typen, `__version:`-Pfad unberührt.
+- [x] 6.2 `web/src/sw.ts`: Referenzrouten auf `StaleWhileRevalidate`; `api-cache` `maxEntries`/`maxAgeSeconds`.
+- [x] 6.3 `pnpm -C web build` + `lint` + Test für Coalescing (mehrere Events → ein Callback).
 
   _Commit:_ `feat(pwa): useLiveUpdates-Coalescing + SW-StaleWhileRevalidate für Referenzdaten`
 
