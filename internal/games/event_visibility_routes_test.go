@@ -35,8 +35,12 @@ func TestListGames_FilterEigeneTeams(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var games []map[string]any
-	json.NewDecoder(res.Body).Decode(&games)
+	var gamesResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&gamesResp)
+	games := gamesResp.Items
 	if len(games) != 1 {
 		t.Fatalf("Spieler in Team A: erwartet 1 Spiel, got %d", len(games))
 	}
@@ -68,8 +72,12 @@ func TestListGames_ElternSiehtTeamsDerKinder(t *testing.T) {
 	token := testutil.TokenWithIsParent(t, parentUID, "standard", nil, true)
 	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
 	defer res.Body.Close()
-	var games []map[string]any
-	json.NewDecoder(res.Body).Decode(&games)
+	var gamesResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&gamesResp)
+	games := gamesResp.Items
 	if len(games) != 1 {
 		t.Fatalf("Elternteil: erwartet 1 Spiel (Kind-Team A), got %d", len(games))
 	}

@@ -60,6 +60,10 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
   }
 
   const state = get(userId)
+  // Avatar on-demand: fällt der Aufrufer-Prop weg (z. B. Dienstbörse liefert nur
+  // noch Namen inline), erscheint das Foto nach dem Kontakt-Fetch beim Öffnen.
+  const contact = typeof state === 'object' ? state : undefined
+  const chipPhoto = photoUrl ?? contact?.photo_url
 
   function handleOpen() {
     if (!btnRef.current) return
@@ -82,8 +86,8 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
         onClick={(e) => { e.stopPropagation(); if (!open) { handleOpen() } else { setOpen(false) } }}
         aria-label={`Details zu ${name}`}
       >
-        {photoUrl && (
-          <img src={photoUrl} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+        {chipPhoto && (
+          <img src={chipPhoto} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
         )}
         {name}
       </button>

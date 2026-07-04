@@ -9,10 +9,12 @@ import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
 
+// Bewusst schlank: Board liefert nur Namen inline; Avatar/Kontakt lädt
+// PersonChip on-demand über GET /api/users/{id}/contact (Sichtbarkeitsregeln
+// wie bisher serverseitig via *_visible).
 export interface PublicAssignee {
   user_id: number
   name: string
-  photo_url?: string
 }
 
 export interface BoardSlot {
@@ -159,7 +161,7 @@ onSlotDeleted?.(slotId)
                     )}
                     {s.assignees && s.assignees.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1">
-                        {s.assignees.map((a, i) => <PersonChip key={i} userId={a.user_id} name={a.name} photoUrl={a.photo_url} />)}
+                        {s.assignees.map((a, i) => <PersonChip key={i} userId={a.user_id} name={a.name} />)}
                       </div>
                     )}
                   </div>

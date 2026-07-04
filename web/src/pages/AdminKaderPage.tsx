@@ -42,6 +42,8 @@ interface Kader {
   extended_members: Member[]
 }
 
+const KADER_PAGE_SIZE = 50
+
 const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
 const GENDER_SHORT: Record<string, string> = { m: 'm', f: 'w', mixed: 'mix' }
 
@@ -57,6 +59,8 @@ export default function AdminKaderPage() {
   const [seasons, setSeasons] = useState<Season[]>([])
   const [selectedSeason, setSelectedSeason] = useState<Season | null>(null)
   const [kaderList, setKaderList] = useState<Kader[]>([])
+  const [kaderTotal, setKaderTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const [showAutoAssignModal, setShowAutoAssignModal] = useState(false)
@@ -92,13 +96,17 @@ export default function AdminKaderPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const loadKader = async (seasonId: number) => {
+  // Lädt die Liste neu; windowSize hält die bereits nachgeladene Fenstergröße
+  // bei Reloads (Mutationen, Live-Updates). Season-Wechsel übergeben 0.
+  const loadKader = async (seasonId: number, windowSize?: number) => {
+    const limit = Math.max(KADER_PAGE_SIZE, windowSize ?? kaderList.length)
     const [kaderRes, ageClassRes] = await Promise.all([
-      api.get(`/kader?season_id=${seasonId}`),
+      api.get(`/kader?season_id=${seasonId}&limit=${limit}&offset=0`),
       api.get('/age-class-rules'),
     ])
-    const list: Kader[] = Array.isArray(kaderRes.data) ? kaderRes.data : []
+    const list: Kader[] = kaderRes.data?.items ?? []
     setKaderList(list)
+    setKaderTotal(kaderRes.data?.total ?? list.length)
     setPendingDedicated(new Set())
     const initialGps: Record<number, number> = {}
     for (const k of list) initialGps[k.id] = k.games_per_season
@@ -110,6 +118,25 @@ export default function AdminKaderPage() {
       if (prev && classes.includes(prev)) return prev
       return classes[0] ?? null
     })
+  }
+
+  const loadMoreKader = async () => {
+    if (!selectedSeason) return
+    setLoadingMore(true)
+    try {
+      const res = await api.get(`/kader?season_id=${selectedSeason.id}&limit=${KADER_PAGE_SIZE}&offset=${kaderList.length}`)
+      const page: Kader[] = res.data?.items ?? []
+      const list = [...kaderList, ...page]
+      setKaderList(list)
+      setKaderTotal(res.data?.total ?? list.length)
+      setGpsValues(prev => {
+        const next = { ...prev }
+        for (const k of page) next[k.id] = k.games_per_season
+        return next
+      })
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   useEffect(() => {
@@ -313,7 +340,7 @@ export default function AdminKaderPage() {
                 const id = parseInt(e.target.value)
                 const season = seasons.find(s => s.id === id) ?? null
                 setSelectedSeason(season)
-                if (season) loadKader(season.id)
+                if (season) loadKader(season.id, 0)
               }}
               className="border border-brand-border rounded-md px-3 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-[9rem]"
             >
@@ -619,6 +646,18 @@ export default function AdminKaderPage() {
         )
       })}
 
+      {/* Mehr laden */}
+      {kaderList.length < kaderTotal && (
+        <div className="flex justify-center mb-6">
+          <button
+            onClick={loadMoreKader}
+            disabled={loadingMore}
+            className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {loadingMore ? 'Laden…' : `Mehr laden (${kaderList.length} von ${kaderTotal})`}
+          </button>
+        </div>
+      )}
 
       {/* Create team modal */}
       {createModal && (

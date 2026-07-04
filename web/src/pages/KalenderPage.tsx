@@ -198,9 +198,11 @@ export default function KalenderPage() {
 
   const loadGames = async () => {
     try {
-      const r = await api.get('/games')
+      // Kalender zeigt einen ganzen Monat → großzügiges Limit, damit keine
+      // Spiele fehlen. Antwort ist {items,total}.
+      const r = await api.get('/games?limit=500')
       const data = r.data
-      const payload = Array.isArray(data) ? data : (data?.games ?? [])
+      const payload = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : [])
       setGames(payload)
       return payload
     } catch {
@@ -214,8 +216,10 @@ export default function KalenderPage() {
       const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
       const lastDay = new Date(year, month + 1, 0).getDate()
       const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      const r = await api.get(`/training-sessions?from=${from}&to=${to}`)
-      setTrainings(Array.isArray(r.data) ? r.data : [])
+      const r = await api.get(`/training-sessions?from=${from}&to=${to}&limit=500`)
+      // Antwort ist {items,total}; Kalender braucht alle Termine des Monats.
+      const items = Array.isArray(r.data?.items) ? r.data.items : (Array.isArray(r.data) ? r.data : [])
+      setTrainings(items)
     } catch {
       setTrainings([])
     }

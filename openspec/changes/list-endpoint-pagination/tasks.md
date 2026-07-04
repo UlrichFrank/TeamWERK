@@ -4,51 +4,51 @@
 
 ## 1. Kader-Paginierung
 
-- [ ] 1.1 `internal/kader/handler.go` (`ListKader`): `?limit&offset` + `COUNT(*)`, Response `{items,total}`, Default-Limit 50.
-- [ ] 1.2 Tests: `TestListKader_PaginationLimitOffset`, `TestListKader_DefaultLimitApplied`.
-- [ ] 1.3 `web/src/pages/AdminKaderPage.tsx`: `{items,total}` + „Mehr laden".
+- [x] 1.1 `internal/kader/handler.go` (`ListKader`): `?limit&offset` + `COUNT(*)`, Response `{items,total}`, Default-Limit 50.
+- [x] 1.2 Tests: `TestListKader_PaginationLimitOffset`, `TestListKader_DefaultLimitApplied`.
+- [x] 1.3 `web/src/pages/AdminKaderPage.tsx`: `{items,total}` + „Mehr laden".
 
   _Commit:_ `feat(kader): Paginierung für GET /api/kader`
 
 ## 2. Duty-Slots- & Board-Paginierung/Trim
 
-- [ ] 2.1 `internal/duties/handler.go:306` (`ListSlots`): `?limit&offset` (+ optional `?season_id&date_from`), `{items,total}`, Default 100.
-- [ ] 2.2 `internal/duties/handler.go:412` (`Board`): Assignees auf `{user_id,name}` trimmen; `photo_url`/Kontakt aus Inline-Payload entfernen; optional `?from&to`.
-- [ ] 2.3 On-Demand-Pfad für Assignee-Kontakt/Avatar eines Slots (falls nicht vorhanden), Sichtbarkeitsregeln wie heute.
-- [ ] 2.4 Tests: `TestListDutySlots_Paginated`, `TestDutyBoard_NamesWithoutHeavyFields`, Auth-Fehlerfall.
-- [ ] 2.5 `web/src/pages/DutyPage.tsx`/`DutySlotList`: Lazy-Load Avatar/Kontakt bei Slot-Öffnung; „Mehr laden" für Slots.
+- [x] 2.1 `internal/duties/handler.go:306` (`ListSlots`): `?limit&offset` (+ optional `?season_id&date_from`), `{items,total}`, Default 100.
+- [x] 2.2 `internal/duties/handler.go:412` (`Board`): Assignees auf `{user_id,name}` trimmen; `photo_url`/Kontakt aus Inline-Payload entfernen; optional `?from&to`.
+- [x] 2.3 On-Demand-Pfad für Assignee-Kontakt/Avatar eines Slots (falls nicht vorhanden), Sichtbarkeitsregeln wie heute. — bereits vorhanden: `GET /api/users/{id}/contact` (`members.GetContact`, `*_visible`-Regeln inkl. `photo_visible`); PersonChip nutzt ihn on-demand.
+- [x] 2.4 Tests: `TestListDutySlots_Paginated`, `TestDutyBoard_NamesWithoutHeavyFields`, Auth-Fehlerfall.
+- [x] 2.5 `web/src/pages/DutyPage.tsx`/`DutySlotList`: Lazy-Load Avatar/Kontakt bei Slot-Öffnung; „Mehr laden" für Slots. — Board bleibt gruppiert (kein `{items,total}`); statt „Mehr laden" begrenzt `?from=heute` die Payload, „Vergangene"-Toggle lädt die Historie nach.
 
   _Commit:_ `feat(duties): duty-slots paginieren + duty-board Assignee-Felder aufschieben`
 
 ## 3. Games- & Participants-Paginierung
 
-- [ ] 3.1 `internal/games/handler.go:454` (`ListGames`): `?season_id&limit&offset`, `{items,total}`, Default 50 (kein unbeschränkter Fallback mehr).
-- [ ] 3.2 `internal/games/handler.go:2268` (`GetParticipants`): `?limit&offset`, `{items,total}`, Default 200.
-- [ ] 3.3 Tests: `TestListGames_PaginatedAndSeasonFilter`, `TestParticipants_Paginated`, Auth-Fehlerfall.
-- [ ] 3.4 `TerminePage.tsx`, `KalenderPage.tsx`, Game-Detail: `{items,total}`-Handling.
+- [x] 3.1 `internal/games/handler.go:454` (`ListGames`): `?season_id&limit&offset`, `{items,total}`, Default 50 (kein unbeschränkter Fallback mehr).
+- [x] 3.2 `internal/games/handler.go:2268` (`GetParticipants`): `?limit&offset`, `{items,total}`, Default 200. — total = sichtbare Menge (nach Sichtbarkeitsfilter), Paginierung in Go auf der gefilterten Liste.
+- [x] 3.3 Tests: `TestListGames_PaginatedAndSeasonFilter`, `TestParticipants_Paginated`, Auth-Fehlerfall (`TestListGames_Unauthorized`, `TestParticipants_Unauthorized`).
+- [x] 3.4 `KalenderPage.tsx`, Game-Detail (`TermineDetailPage`), `VideoUploadPage`/`VideoDetailPage`: `{items,total}`-Handling. `TerminePage` nutzt `/games/my` (unverändert, kein `{items,total}`).
 
   _Commit:_ `feat(games): Paginierung für games + participants`
 
 ## 4. Training-Sessions: Paginierung + serverseitiger Filter
 
-- [ ] 4.1 `internal/trainings/handler.go:910` (`ListSessions`): `?limit&offset`, `{items,total}`, Default 100; `?exclude_series=1` (ersetzt Client-`filter(series_id===null)`).
-- [ ] 4.2 Tests: `TestListSessions_Paginated`, `TestListSessions_ExcludeSeriesFilter`.
-- [ ] 4.3 `web/src/pages/AdminTrainingsPage.tsx`: `?exclude_series=1` nutzen, Client-`filter()` entfernen; `{items,total}`.
+- [x] 4.1 `internal/trainings/handler.go:910` (`ListSessions`): `?limit&offset`, `{items,total}`, Default 100; `?exclude_series=1` (ersetzt Client-`filter(series_id===null)`). COUNT(*) mit denselben WHERE-Bedingungen.
+- [x] 4.2 Tests: `TestListSessions_Paginated`, `TestListSessions_ExcludeSeriesFilter` (401-Fehlerfall bereits durch `TestListSessions_Unauthenticated`).
+- [x] 4.3 `web/src/pages/AdminTrainingsPage.tsx`: `?exclude_series=1` nutzen, Client-`filter()` entfernt; `{items,total}`. Auch `TerminePage`/`KalenderPage` auf `.items` umgestellt.
 
   _Commit:_ `feat(trainings): training-sessions paginieren + exclude_series-Filter`
 
 ## 5. Chat: Body-Preview
 
-- [ ] 5.1 `internal/chat/handler.go:426` (`ListMessages`): `preview` (≤280 Zeichen) + `truncated`; gelöschte Nachrichten ohne Body; Volltext nur im Einzel-Pfad.
-- [ ] 5.2 Tests: `TestListMessages_BodyPreviewTruncated`, `TestListMessages_DeletedNoBody`.
-- [ ] 5.3 Chat-Frontend: Preview rendern, Volltext bei Bedarf nachladen.
+- [x] 5.1 `internal/chat/handler.go` (`ListMessages`): `preview` (≤280 Zeichen, rune-genau) + `truncated`; gelöschte Nachrichten ohne Body/Preview. Neuer Einzel-Pfad `GET /api/chat/messages/{id}` (`GetMessage`) für den Volltext (Mitglieds-Check, gelöscht → leerer Body).
+- [x] 5.2 Tests: `TestListMessages_BodyPreviewTruncated`, `TestListMessages_DeletedNoBody`, `TestGetMessage_FullBody` (inkl. 403 für Nicht-Mitglied); Permission-Matrix-Eintrag ergänzt.
+- [x] 5.3 Chat-Frontend (`ChatPage.tsx`): Preview rendern, „Mehr anzeigen" + Volltext bei Edit/Kopieren on-demand nachladen (`fetchFullBody`).
 
   _Commit:_ `feat(chat): Nachrichtenliste liefert Body-Preview statt Volltext`
 
 ## 6. Abschluss
 
-- [ ] 6.1 `/verify-change` (insb. Route→Tests, brand-Tokens, lucide-Icons).
-- [ ] 6.2 `openspec validate list-endpoint-pagination --strict`.
-- [ ] 6.3 Proposal archivieren.
+- [x] 6.1 Gates grün: `go vet ./...`, `go test ./...` (inkl. Arch-Test), `golangci-lint run`, `pnpm build/test/lint` (Route→Tests, brand-Tokens, lucide-Icons geprüft).
+- [x] 6.2 `openspec validate list-endpoint-pagination --strict` → valid.
+- [ ] 6.3 Proposal archivieren. (bewusst offen gelassen)
 
   _Commit:_ `chore(api): archiviere list-endpoint-pagination`

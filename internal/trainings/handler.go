@@ -943,6 +943,24 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		to = time.Now().AddDate(0, 3, 0).Format("2006-01-02")
 	}
 
+	limit := 100
+	if l := q.Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if limit < 1 {
+		limit = 100
+	}
+	offset := 0
+	if o := q.Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	// Serverseitiger Filter: ?exclude_series=1 → nur Einzeltermine (series_id IS NULL),
+	// ersetzt das frühere Client-filter(series_id===null) in AdminTrainingsPage.
+	excludeSeries := q.Get("exclude_series") == "1"
+
 	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -991,13 +1009,35 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	// 3. member_id (extended-check for default), 4. member_id (trainer-check for default),
 	// 5. member_id (my_rsvp_locked subquery),
 	// 5. teamArgs (WHERE), 6. from, 7. to, 8. optional team filter
-	args := append([]any{memberID, memberID, memberID, memberID, memberID}, teamArgs...)
-	args = append(args, from, to)
+	// whereArgs sind die Argumente der reinen WHERE-Bedingung (teamArgs, from, to,
+	// optionaler team-Filter, exclude_series). Sie werden identisch für COUNT(*)
+	// und die Items-Query verwendet — Sichtbarkeit bleibt invariant.
+	whereArgs := append([]any{}, teamArgs...)
+	whereArgs = append(whereArgs, from, to)
 	optTeamFilter := ""
 	if teamFilter != "" {
 		optTeamFilter = "AND ts.team_id = ?"
-		args = append(args, teamFilter)
+		whereArgs = append(whereArgs, teamFilter)
 	}
+	optExcludeSeries := ""
+	if excludeSeries {
+		optExcludeSeries = "AND ts.series_id IS NULL"
+	}
+
+	// COUNT(*) mit denselben WHERE-Bedingungen (ohne die 5 SELECT-Spalten-Args
+	// und ohne LIMIT/OFFSET).
+	var total int
+	countQuery := fmt.Sprintf(
+		`SELECT COUNT(*) FROM training_sessions ts WHERE %s AND ts.date >= ? AND ts.date <= ? %s %s`,
+		teamSQL, optTeamFilter, optExcludeSeries)
+	if err := h.db.QueryRowContext(r.Context(), countQuery, whereArgs...).Scan(&total); err != nil {
+		fmt.Fprintf(os.Stderr, "ListSessions count: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// args für die Items-Query: 5 memberID-Spalten-Args + whereArgs + LIMIT/OFFSET.
+	args := append([]any{memberID, memberID, memberID, memberID, memberID}, whereArgs...)
 
 	query := fmt.Sprintf(`
 		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
@@ -1053,9 +1093,11 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		         WHERE k.team_id = ts.team_id AND k.season_id = ts.season_id
 		     )
 		LEFT JOIN venues v ON v.id = ts.venue_id
-		WHERE %s AND ts.date >= ? AND ts.date <= ? %s
+		WHERE %s AND ts.date >= ? AND ts.date <= ? %s %s
 		GROUP BY ts.id
-		ORDER BY ts.date, ts.start_time`, teamSQL, optTeamFilter)
+		ORDER BY ts.date, ts.start_time, ts.id
+		LIMIT ? OFFSET ?`, teamSQL, optTeamFilter, optExcludeSeries)
+	args = append(args, limit, offset)
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
@@ -1115,7 +1157,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
 }
 
 type sessionResponse struct {

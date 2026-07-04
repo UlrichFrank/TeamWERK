@@ -127,8 +127,11 @@ export default function AdminTrainingsPage() {
   const loadStandalone = () => {
     const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const to = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    api.get(`/training-sessions?from=${from}&to=${to}`).then(r => {
-      setStandalone((r.data ?? []).filter((s: StandaloneSession & { series_id: number | null }) => s.series_id === null))
+    // Serverseitiger Filter (exclude_series=1) statt Client-filter(series_id===null);
+    // Antwort ist {items,total}. Limit großzügig, da hier alle Einzeltermine gebraucht werden.
+    api.get(`/training-sessions?from=${from}&to=${to}&exclude_series=1&limit=500`).then(r => {
+      const items = Array.isArray(r.data?.items) ? r.data.items : (Array.isArray(r.data) ? r.data : [])
+      setStandalone(items)
     })
   }
 

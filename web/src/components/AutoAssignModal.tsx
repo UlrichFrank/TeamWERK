@@ -29,9 +29,9 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setLoading(true)
-    api.get('/kader', { params: { season_id: seasonId } })
+    api.get('/kader', { params: { season_id: seasonId, limit: 200 } })
       .then(r => {
-        const kadersData: Kader[] = r.data ?? []
+        const kadersData: Kader[] = r.data?.items ?? []
         setKader(kadersData)
         setSelectedIds(new Set(kadersData.map(k => k.id)))
         setLoading(false)
