@@ -95,6 +95,40 @@ func CreateKader(t *testing.T, database *sql.DB, teamID, seasonID int) int {
 	return int(id)
 }
 
+// AddKaderMember links a member to a kader as a player (kader_members). Unlike
+// CreatePlayerMembership (which targets the read-only player_memberships view),
+// this writes the source table the team_memberships view is built from.
+func AddKaderMember(t *testing.T, database *sql.DB, kaderID, memberID int) {
+	t.Helper()
+	_, err := database.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`,
+		kaderID, memberID)
+	if err != nil {
+		t.Fatalf("AddKaderMember: %v", err)
+	}
+}
+
+// AddClubFunction grants a Vereinsfunktion to a member (member_club_functions).
+func AddClubFunction(t *testing.T, database *sql.DB, memberID int, function string) {
+	t.Helper()
+	_, err := database.Exec(
+		`INSERT OR IGNORE INTO member_club_functions (member_id, function) VALUES (?, ?)`,
+		memberID, function)
+	if err != nil {
+		t.Fatalf("AddClubFunction: %v", err)
+	}
+}
+
+// AddFamilyLink links a parent user to a member (family_links).
+func AddFamilyLink(t *testing.T, database *sql.DB, parentUserID, memberID int) {
+	t.Helper()
+	_, err := database.Exec(
+		`INSERT OR IGNORE INTO family_links (parent_user_id, member_id) VALUES (?, ?)`,
+		parentUserID, memberID)
+	if err != nil {
+		t.Fatalf("AddFamilyLink: %v", err)
+	}
+}
+
 // AddKaderTrainer links a member to a kader as trainer.
 func AddKaderTrainer(t *testing.T, database *sql.DB, kaderID, memberID int) {
 	t.Helper()
