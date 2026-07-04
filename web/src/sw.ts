@@ -70,12 +70,17 @@ registerRoute(
 // Referenz-Endpunkte: StaleWhileRevalidate — der gecachte Stand wird sofort
 // ausgeliefert und im Hintergrund aus dem Netz erneuert. Quasi-statisch, daher
 // unkritisch, wenn ein Abruf kurz veraltet ist (der In-Memory-TTL-Cache in
-// api.ts + SSE-Invalidierung halten die App-Daten frisch). Exakte Pfade, damit
-// Sub-Routen wie /api/teams/{id}/roster NICHT in diese Strategie fallen.
+// api.ts + SSE-Invalidierung halten die App-Daten frisch).
 // MUSS vor der generischen /api/*-Regel stehen (first match wins).
+//
+// NUR club-weit für ALLE authentifizierten Nutzer identische Routen. `/api/teams`
+// ist bewusst NICHT dabei: `Games.ListTeamsForUser` filtert pro Nutzer → ein
+// geteilter (geräteweiter) SW-Cache würde auf einem gemeinsamen Gerät nach
+// Login-Wechsel die Teams des Vor-Nutzers ausliefern (Cross-User-Leak). `/api/teams`
+// fällt daher auf die NetworkFirst-Regel unten zurück; der nutzerspezifische
+// In-Memory-Cache in api.ts wird bei Identitätswechsel (setAccessToken) geleert.
 const REFERENCE_PATHS = new Set([
   '/api/seasons',
-  '/api/teams',
   '/api/venues',
   '/api/age-class-rules',
   '/api/duty-types',

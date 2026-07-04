@@ -77,6 +77,23 @@ describe('getReference — TTL-Cache + Single-Flight', () => {
     expect(spy).toHaveBeenCalledTimes(2)
   })
 
+  test('Logout (setAccessToken(null)) leert den nutzerspezifischen Cache (Cross-User-Leak-Schutz)', async () => {
+    const spy = vi.spyOn(api, 'get').mockResolvedValue({ data: [{ id: 42 }] } as never)
+
+    // Nutzer A ruft /teams ab (nutzergefiltert), dann Logout, dann Nutzer B.
+    setAccessToken(tokenFor(1))
+    const a = await getReference<{ id: number }[]>('/teams')
+    setAccessToken(null) // Logout → Cache muss weg sein
+    setAccessToken(tokenFor(2))
+    const b = await getReference<{ id: number }[]>('/teams')
+
+    // Zwei echte Requests: Nutzer B bekommt NICHT den gecachten Body von Nutzer A.
+    expect(spy).toHaveBeenCalledTimes(2)
+    // (Werte hier gleich gemockt; entscheidend ist, dass neu geladen wurde.)
+    expect(a).toEqual([{ id: 42 }])
+    expect(b).toEqual([{ id: 42 }])
+  })
+
   test('Token-Refresh desselben Nutzers behält den Cache', async () => {
     const spy = vi.spyOn(api, 'get').mockResolvedValue({ data: [{ id: 1 }] } as never)
 
