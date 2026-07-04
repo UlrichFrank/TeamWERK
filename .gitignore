@@ -61,6 +61,7 @@ web/public/CHANGELOG.md
 
 # Code-Metrics: generierter Report (thresholds.yml und .gitkeep bleiben getrackt)
 metrics/REPORT.md
+metrics/PAYLOAD.md
 
 # Mitglieder-CSV-Exporte im Repo-Root (PII) — testdata/*.csv bleiben getrackt
 /*.csv

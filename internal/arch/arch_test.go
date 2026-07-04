@@ -49,8 +49,10 @@ var domain = map[string]bool{
 var composition = map[string]bool{"app": true}
 
 // exempt = packages excluded from layering rules. testutil builds the full
-// server for tests and therefore legitimately imports everything.
-var exempt = map[string]bool{"testutil": true, "arch": true}
+// server for tests and therefore legitimately imports everything; measure is
+// the (build-tagged, test-only) payload-measurement harness that likewise
+// drives the full production router over HTTP.
+var exempt = map[string]bool{"testutil": true, "arch": true, "measure": true}
 
 func classify(pkg string) string {
 	switch {

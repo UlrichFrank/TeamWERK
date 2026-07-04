@@ -30,7 +30,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -205,6 +205,10 @@ metrics: ## Code-Metriken erheben (Größe, Komplexität, Coverage, Lint-Dichte,
 
 metrics-gate: ## Wie metrics + Schwellwert-Prüfung gegen metrics/thresholds.yml (Exit 1 bei Regression)
 	$(GO) run ./cmd/teamwerk metrics --gate
+
+measure: ## Payload-/Fan-out-Messung erheben → metrics/PAYLOAD.md (build-tagged, nicht Teil von `make test`)
+	$(GO) test -tags measure -run TestMeasure_WritesReport -count=1 ./internal/measure
+	@echo "Payload-Report: metrics/PAYLOAD.md (Baseline: metrics/payload-baseline.md)"
 
 coverage: ## Testabdeckung messen: Coverage-Bericht auf stdout + HTML nach /tmp/teamwerk-coverage.html
 	$(GO) test -coverprofile=/tmp/teamwerk-coverage.out ./internal/...
