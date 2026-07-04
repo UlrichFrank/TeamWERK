@@ -344,8 +344,12 @@ func TestListGames_RsvpLocksAt(t *testing.T) {
 	token := testutil.Token(t, uID, "admin", nil)
 	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
 	defer res.Body.Close()
-	var items []map[string]any
-	json.NewDecoder(res.Body).Decode(&items)
+	var listResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&listResp)
+	items := listResp.Items
 	var got string
 	for _, it := range items {
 		if int(it["id"].(float64)) == gameID {

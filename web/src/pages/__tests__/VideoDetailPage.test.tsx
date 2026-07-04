@@ -30,7 +30,7 @@ function renderDetail(video: typeof VIDEO = VIDEO) {
       initialEntries: ['/videos/42'],
       mocks: [
         { url: /\/videos\/42$/, data: video },
-        { url: /\/games/, data: GAMES },
+        { url: /\/games/, data: { items: GAMES, total: GAMES.length } },
       ],
     },
   )

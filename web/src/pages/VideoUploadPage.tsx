@@ -181,9 +181,9 @@ export default function VideoUploadPage() {
       setGames([])
       return
     }
-    api.get<Game[]>('/games')
+    api.get<{ items: Game[]; total: number }>('/games?limit=500')
       .then(r => {
-        const all = Array.isArray(r.data) ? r.data : []
+        const all = Array.isArray(r.data?.items) ? r.data.items : []
         const tid = Number(teamId)
         setGames(all.filter(g => (g.teams ?? []).some(t => t.id === tid)))
       })

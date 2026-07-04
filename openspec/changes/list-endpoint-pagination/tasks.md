@@ -22,10 +22,10 @@
 
 ## 3. Games- & Participants-Paginierung
 
-- [ ] 3.1 `internal/games/handler.go:454` (`ListGames`): `?season_id&limit&offset`, `{items,total}`, Default 50 (kein unbeschränkter Fallback mehr).
-- [ ] 3.2 `internal/games/handler.go:2268` (`GetParticipants`): `?limit&offset`, `{items,total}`, Default 200.
-- [ ] 3.3 Tests: `TestListGames_PaginatedAndSeasonFilter`, `TestParticipants_Paginated`, Auth-Fehlerfall.
-- [ ] 3.4 `TerminePage.tsx`, `KalenderPage.tsx`, Game-Detail: `{items,total}`-Handling.
+- [x] 3.1 `internal/games/handler.go:454` (`ListGames`): `?season_id&limit&offset`, `{items,total}`, Default 50 (kein unbeschränkter Fallback mehr).
+- [x] 3.2 `internal/games/handler.go:2268` (`GetParticipants`): `?limit&offset`, `{items,total}`, Default 200. — total = sichtbare Menge (nach Sichtbarkeitsfilter), Paginierung in Go auf der gefilterten Liste.
+- [x] 3.3 Tests: `TestListGames_PaginatedAndSeasonFilter`, `TestParticipants_Paginated`, Auth-Fehlerfall (`TestListGames_Unauthorized`, `TestParticipants_Unauthorized`).
+- [x] 3.4 `KalenderPage.tsx`, Game-Detail (`TermineDetailPage`), `VideoUploadPage`/`VideoDetailPage`: `{items,total}`-Handling. `TerminePage` nutzt `/games/my` (unverändert, kein `{items,total}`).
 
   _Commit:_ `feat(games): Paginierung für games + participants`
 

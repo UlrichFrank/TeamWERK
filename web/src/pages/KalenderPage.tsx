@@ -198,9 +198,11 @@ export default function KalenderPage() {
 
   const loadGames = async () => {
     try {
-      const r = await api.get('/games')
+      // Kalender zeigt einen ganzen Monat → großzügiges Limit, damit keine
+      // Spiele fehlen. Antwort ist {items,total}.
+      const r = await api.get('/games?limit=500')
       const data = r.data
-      const payload = Array.isArray(data) ? data : (data?.games ?? [])
+      const payload = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : [])
       setGames(payload)
       return payload
     } catch {

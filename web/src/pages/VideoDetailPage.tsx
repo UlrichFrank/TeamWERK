@@ -232,9 +232,9 @@ export default function VideoDetailPage() {
     setShowEdit(true)
     // Spiele des Video-Teams für den Zuordnungs-Selector laden (clientseitig filtern,
     // wie im Upload-Formular). Fehler still schlucken — der Selector bleibt dann leer.
-    api.get<Game[]>('/games')
+    api.get<{ items: Game[]; total: number }>('/games?limit=500')
       .then(r => {
-        const all = Array.isArray(r.data) ? r.data : []
+        const all = Array.isArray(r.data?.items) ? r.data.items : []
         setGames(all.filter(g => (g.teams ?? []).some(t => t.id === video.team_id)))
       })
       .catch(() => setGames([]))

@@ -36,12 +36,19 @@ func TestListGames_ReturnsGamesInRange(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var games []map[string]any
-	json.NewDecoder(res.Body).Decode(&games)
+	var gamesResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&gamesResp)
+	games := gamesResp.Items
 	res.Body.Close()
 
 	if len(games) != 1 {
 		t.Errorf("expected 1 game, got %d", len(games))
+	}
+	if gamesResp.Total != 1 {
+		t.Errorf("expected total=1, got %d", gamesResp.Total)
 	}
 }
 
@@ -59,12 +66,19 @@ func TestListGames_EmptyRange(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 
-	var result []map[string]any
-	json.NewDecoder(res.Body).Decode(&result)
+	var listResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&listResp)
+	result := listResp.Items
 	res.Body.Close()
 
 	if len(result) != 0 {
 		t.Errorf("expected 0 games, got %d", len(result))
+	}
+	if listResp.Total != 0 {
+		t.Errorf("expected total=0, got %d", listResp.Total)
 	}
 }
 
@@ -94,8 +108,12 @@ func TestListGames_TrainerSeesAllGames(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var games []map[string]any
-	json.NewDecoder(res.Body).Decode(&games)
+	var gamesResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&gamesResp)
+	games := gamesResp.Items
 	res.Body.Close()
 
 	if len(games) != 2 {
@@ -1159,8 +1177,12 @@ func TestListGames_OptOutCountsKaderImplicit(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var games []map[string]any
-	json.NewDecoder(res.Body).Decode(&games)
+	var gamesResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&gamesResp)
+	games := gamesResp.Items
 	if len(games) != 1 {
 		t.Fatalf("expected 1 game, got %d", len(games))
 	}
@@ -1189,8 +1211,12 @@ func TestListGames_OptOutWithDeclinedNotCounted(t *testing.T) {
 
 	res := testutil.Get(t, srv, fmt.Sprintf("/api/games?season_id=%d", seasonID), token)
 	defer res.Body.Close()
-	var games []map[string]any
-	json.NewDecoder(res.Body).Decode(&games)
+	var gamesResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&gamesResp)
+	games := gamesResp.Items
 	if c, _ := games[0]["confirmed_count"].(float64); int(c) != 2 {
 		t.Errorf("expected confirmed_count=2 (3 kader minus 1 declined), got %v", games[0]["confirmed_count"])
 	}
@@ -1427,8 +1453,12 @@ func TestListGames_DoppelheimspielDisplayCSV(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var games []map[string]any
-	json.NewDecoder(res.Body).Decode(&games)
+	var gamesResp struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	json.NewDecoder(res.Body).Decode(&gamesResp)
+	games := gamesResp.Items
 	if len(games) != 1 {
 		t.Fatalf("expected 1 game, got %d", len(games))
 	}

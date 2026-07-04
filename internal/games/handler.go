@@ -450,10 +450,25 @@ const gameRsvpCountCols = `
 	COALESCE((SELECT COUNT(*) FROM game_responses gr_m WHERE gr_m.game_id=g.id AND gr_m.status='maybe'
 	           AND gr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id AND k.season_id=g.season_id WHERE k.team_id IN (SELECT team_id FROM game_teams WHERE game_id=g.id))),0)`
 
-// GET /api/games
+// GET /api/games?season_id=&limit=&offset=
 func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
 	claims := auth.ClaimsFromCtx(r.Context())
+
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	// Event-Sichtbarkeitsregel (Funktionsträger sehen alles, sonst nur Team-
 	// Zugehörigkeit). Ersetzt das alte policy.ScopeGamesQuery, das Trainer auf
@@ -483,19 +498,30 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		FROM games g
 		LEFT JOIN duty_slots ds ON ds.game_id = g.id
 		LEFT JOIN venues v ON v.id = g.venue_id`
-	const suffix = ` GROUP BY g.id ORDER BY g.date, g.time`
+	const suffix = ` GROUP BY g.id ORDER BY g.date, g.time, g.id LIMIT ? OFFSET ?`
 
-	var rows *sql.Rows
+	// where/whereArgs: identisch für COUNT(*) und Items (Sichtbarkeit invariant).
+	var where string
+	var whereArgs []any
 	if seasonID != "" {
-		args := append([]any{seasonID}, scopeArgs...)
-		rows, err = h.db.QueryContext(r.Context(), base+` WHERE g.season_id=?`+andScope+suffix, args...)
+		where = ` WHERE g.season_id=?` + andScope
+		whereArgs = append([]any{seasonID}, scopeArgs...)
 	} else {
 		// Show active-season games plus any future games from other seasons
 		// (prevents games from stranding when seasons are switched).
-		rows, err = h.db.QueryContext(r.Context(),
-			base+` WHERE (g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) OR DATE(g.date) >= DATE('now','-1 day'))`+andScope+suffix,
-			scopeArgs...)
+		where = ` WHERE (g.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1) OR DATE(g.date) >= DATE('now','-1 day'))` + andScope
+		whereArgs = scopeArgs
 	}
+
+	var total int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM games g`+where, whereArgs...).Scan(&total); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(),
+		base+where+suffix, append(append([]any{}, whereArgs...), limit, offset)...)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -614,7 +640,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		result[i] = *g
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
 }
 
 // GET /api/games/{id}
@@ -2253,6 +2279,7 @@ type participantItem struct {
 // für den Footer „Weitere Mitglieder nicht sichtbar" rendern kann.
 type participantsResponse struct {
 	Items         []participantItem `json:"items"`
+	Total         int               `json:"total"`
 	HiddenTeamIDs []int             `json:"hidden_team_ids"`
 }
 
@@ -2278,6 +2305,21 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+	}
+
+	limit := 200
+	if l := r.URL.Query().Get("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if limit < 1 {
+		limit = 200
+	}
+	offset := 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	bypass := claims != nil && (claims.Role == "admin" ||
 		claims.HasFunction("trainer") ||
@@ -2411,8 +2453,21 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		hidden = append(hidden, tid)
 	}
 
+	// total = Gesamtzahl der sichtbaren Teilnehmer (nach Sichtbarkeitsfilter,
+	// vor limit/offset). Paginierung ist ein reiner Umfangs-Schnitt auf der
+	// bereits sichtbaren Menge — dieselben WHERE-/Sichtbarkeitsregeln wie items.
+	total := len(items)
+	if offset > len(items) {
+		offset = len(items)
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	items = items[offset:end]
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(participantsResponse{Items: items, HiddenTeamIDs: hidden})
+	json.NewEncoder(w).Encode(participantsResponse{Items: items, Total: total, HiddenTeamIDs: hidden})
 }
 
 // myTeamsInEvent liefert die Menge der team_ids im Event gameID, in deren
