@@ -50,7 +50,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.slotBelongsToUser(req.DutySlotID, claims.UserID, claims.Role == auth.RoleAdmin) {
+	if !h.slotBelongsToUser(req.DutySlotID, claims.UserID, req.GameID, claims.Role == auth.RoleAdmin) {
 		writeErr(w, http.StatusForbidden, "slot_not_owned")
 		return
 	}
@@ -136,21 +136,36 @@ func isPressTeamOrAdmin(claims *auth.Claims) bool {
 	return claims.Role == auth.RolePressTeam || claims.Role == auth.RoleAdmin
 }
 
-// slotBelongsToUser prüft, ob der Slot dem User gehört. Admin darf immer.
-// Ein Slot „gehört" einem User, wenn in duty_assignments ein Eintrag mit
-// status IN ('assigned','fulfilled') existiert. cash_substitute zählt NICHT —
-// der User hat den Dienst finanziell abgelöst, kann also nicht Autor sein.
-func (h *Handler) slotBelongsToUser(slotID, userID int, isAdmin bool) bool {
+// matchReportDutyTypeName ist der name-Match für den Spielbericht-Duty-Type
+// (Seed in Migration 020) — analog zu duties.matchReportDutyTypeName, per Name
+// statt ID, damit Prod- und Test-DBs mit unterschiedlichen IDs beide greifen.
+const matchReportDutyTypeName = "Spielbericht"
+
+// slotBelongsToUser prüft, ob der Slot den Bericht für genau dieses Spiel
+// autorisiert. Admin darf immer. Für alle anderen müssen drei Bedingungen
+// zusammenkommen:
+//   - der User ist dem Slot zugewiesen (duty_assignments,
+//     status IN ('assigned','fulfilled') — cash_substitute zählt NICHT, der
+//     User hat den Dienst finanziell abgelöst und kann nicht Autor sein),
+//   - der Slot gehört zum übergebenen game_id (sonst könnte ein Reporter mit
+//     seinem Slot für Spiel A den Bericht für ein fremdes Spiel B anlegen —
+//     IDOR/Business-Logic-Lücke), und
+//   - der Slot ist tatsächlich ein „Spielbericht"-Slot.
+func (h *Handler) slotBelongsToUser(slotID, userID, gameID int, isAdmin bool) bool {
 	if isAdmin {
 		return true
 	}
 	var exists int
 	err := h.db.QueryRow(
-		`SELECT 1 FROM duty_assignments
-		 WHERE duty_slot_id=? AND user_id=?
-		   AND status IN ('assigned','fulfilled')
+		`SELECT 1 FROM duty_assignments da
+		 JOIN duty_slots ds ON ds.id = da.duty_slot_id
+		 JOIN duty_types dt ON dt.id = ds.duty_type_id
+		 WHERE da.duty_slot_id=? AND da.user_id=?
+		   AND da.status IN ('assigned','fulfilled')
+		   AND ds.game_id=?
+		   AND dt.name=?
 		 LIMIT 1`,
-		slotID, userID,
+		slotID, userID, gameID, matchReportDutyTypeName,
 	).Scan(&exists)
 	return err == nil
 }

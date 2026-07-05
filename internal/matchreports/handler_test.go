@@ -146,6 +146,30 @@ func TestCreate_ForeignSlot(t *testing.T) {
 	}
 }
 
+// ─── TC-MR03b · Create mit Slot für ein fremdes Spiel → 403 ───────────────────
+//
+// Regression gegen die IDOR-Lücke: der Requester besitzt den Spielbericht-Slot
+// für Spiel A, nennt im Request aber Spiel B. Ohne Slot↔Game-Bindung würde er
+// so Autor des Berichts für ein Spiel, für das er nicht zuständig ist.
+func TestCreate_SlotForDifferentGame(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, teamID, gameA := setupBasicGame(t, db)
+	gameB := testutil.CreateGame(t, db, seasonID, teamID, "2026-05-22")
+	authorID := testutil.CreatePressTeamUser(t, db)
+	// Slot + Assignment gehören zu Spiel A.
+	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameA, authorID)
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	res := testutil.Post(t, srv, "/api/match-reports", token,
+		map[string]int{"game_id": gameB, "duty_slot_id": slotID})
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+}
+
 // ─── TC-MR04 · Zweiter Draft für dasselbe Spiel → 409 ─────────────────────────
 
 func TestCreate_Duplicate(t *testing.T) {
