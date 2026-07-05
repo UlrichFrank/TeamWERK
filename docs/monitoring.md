@@ -102,8 +102,10 @@ Einrichtung in mStudio: Cron-Job `*/2 * * * *` → `php /pfad/zu/teamwerk-monito
 <?php
 // teamwerk-monitor.php — externes Auge, läuft auf mittwald (VPS-unabhängig).
 // Alarmiert per mail(); kein Push (Push hinge am evtl. toten VPS).
-$BASE      = 'https://internal.team-stuttgart.org';
-$HOST      = 'internal.team-stuttgart.org';
+// Monitoring pingt nur den Primärhost; der Übergangs-Alias
+// internal.team-stuttgart.org zeigt auf denselben VPS und wird nicht separat geprüft.
+$BASE      = 'https://teamwerk.team-stuttgart.org';
+$HOST      = 'teamwerk.team-stuttgart.org';
 $ALERT_TO  = 'vorstand@team-stuttgart.org';
 $DISK_MIN  = 15;   // Prozent
 $SCHED_MAX = 180;  // Sekunden
@@ -165,7 +167,7 @@ scrape_configs:
       type: Bearer
       credentials: "<METRICS_TOKEN>"
     static_configs:
-      - targets: ["internal.team-stuttgart.org"]
+      - targets: ["teamwerk.team-stuttgart.org"]
 ```
 
 ## Beispiel: Log-Collector (Vector auf journald)
@@ -190,6 +192,6 @@ source = '. = parse_json!(.message)'
 
 Nach Deploy (manuell, einmalig):
 
-1. `curl -s https://internal.team-stuttgart.org/api/healthz` → `200` + `status:"ok"`.
-2. `curl -s -H "Authorization: Bearer $METRICS_TOKEN" https://internal.team-stuttgart.org/api/metrics` → Prometheus-Text.
+1. `curl -s https://teamwerk.team-stuttgart.org/api/healthz` → `200` + `status:"ok"`.
+2. `curl -s -H "Authorization: Bearer $METRICS_TOKEN" https://teamwerk.team-stuttgart.org/api/metrics` → Prometheus-Text.
 3. Erzwungener Fehl-Poll (z. B. mittwald-Script kurzzeitig gegen falschen Pfad) → Test-Mail kommt an.

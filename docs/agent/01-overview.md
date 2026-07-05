@@ -1,7 +1,9 @@
 # Überblick
 
 TeamWERK — interne Verwaltungsplattform für Team Stuttgart (Handball), läuft unter
-`https://internal.team-stuttgart.org` auf einem IONOS VPS (Linux XS, 1 GB RAM).
+`https://teamwerk.team-stuttgart.org` auf einem VPS (Linux XS, 1 GB RAM).
+`internal.team-stuttgart.org` bleibt als Übergangs-Alias erreichbar; ein späterer
+Flip auf 301 ist möglich, aber nicht datiert.
 
 **Stack:** Go 1.26 + Chi v5 · SQLite (WAL, `modernc.org/sqlite`, kein CGo) · React 19 + Tailwind v3 · Vite · JWT-Auth.
 

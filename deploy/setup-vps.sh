@@ -82,12 +82,12 @@ fi
 # ---------------------------------------------------------------------------
 # SKIP_NGINX=1 überspringt diesen Block (z. B. weil der Aufrufer — etwa
 # bootstrap-new-server.sh — die vhost-Config selbst mit passender Domain +
-# Cert-Pfaden setzt). nginx-intern.conf ist auf `internal.team-stuttgart.org`
-# und einen Let's-Encrypt-Cert hardgekodiert, was auf einem frischen VPS
-# nicht funktioniert.
+# Cert-Pfaden setzt). nginx-teamwerk.conf ist auf `teamwerk.team-stuttgart.org`
+# (plus Übergangs-Alias `internal.team-stuttgart.org`) und einen
+# Let's-Encrypt-Cert hardgekodiert, was auf einem frischen VPS nicht funktioniert.
 if [ "${SKIP_NGINX:-0}" != "1" ]; then
-    cp nginx-intern.conf /etc/nginx/sites-available/intern.team-stuttgart.org
-    ln -sf /etc/nginx/sites-available/intern.team-stuttgart.org /etc/nginx/sites-enabled/intern.team-stuttgart.org
+    cp nginx-teamwerk.conf /etc/nginx/sites-available/teamwerk.team-stuttgart.org
+    ln -sf /etc/nginx/sites-available/teamwerk.team-stuttgart.org /etc/nginx/sites-enabled/teamwerk.team-stuttgart.org
     nginx -t
     systemctl enable nginx
     if systemctl is-active --quiet nginx; then

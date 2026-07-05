@@ -39,3 +39,20 @@ func TestLoad_VideoStreamSecretFailFast(t *testing.T) {
 		}
 	})
 }
+
+// TestConfig_BaseURLDefault verifies that without a BASE_URL environment
+// variable the configured base URL defaults to the primary hostname
+// teamwerk.team-stuttgart.org (nicht mehr internal.*).
+func TestConfig_BaseURLDefault(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-jwt")
+	t.Setenv("LOG_FORMAT", "text")
+	t.Setenv("BASE_URL", "") // empty forces getEnv fallback
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "https://teamwerk.team-stuttgart.org"; c.BaseURL != want {
+		t.Fatalf("BaseURL = %q, want %q", c.BaseURL, want)
+	}
+}

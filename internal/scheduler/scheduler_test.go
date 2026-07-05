@@ -342,6 +342,21 @@ func TestCarpoolingReminder_Exactly3hWindow(t *testing.T) {
 	}
 }
 
+// TestScheduler_DutyReminder_UsesConfigBaseURL verifiziert, dass der
+// Duty-Reminder-Mailbody den Direktlink aus cfg.BaseURL baut und nicht mehr die
+// früher hartkodierte internal.*-URL enthält.
+func TestScheduler_DutyReminder_UsesConfigBaseURL(t *testing.T) {
+	slots := []openSlot{{eventName: "Heimspiel", dutyType: "Kasse", slotsOpen: 2}}
+	body := buildReminderMail("Alex", "2026-07-10", slots, "https://example.test")
+
+	if !strings.Contains(body, "https://example.test/duty-board") {
+		t.Errorf("body missing base-URL deep link, got:\n%s", body)
+	}
+	if strings.Contains(body, "internal.team-stuttgart.org") {
+		t.Errorf("body must not contain the legacy internal.* URL, got:\n%s", body)
+	}
+}
+
 func createDutyTypeWithTarget(t *testing.T, db *sql.DB, name, target string) int {
 	t.Helper()
 	res, err := db.Exec(`INSERT INTO duty_types (name, hours_value, target_role) VALUES (?, 1.0, ?)`, name, target)

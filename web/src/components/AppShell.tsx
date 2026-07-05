@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import ChangelogModal from './ChangelogModal'
+import TransitionalHostnameBanner from './TransitionalHostnameBanner'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
@@ -69,13 +70,22 @@ const navModules: NavModule[] = [
   },
 ]
 
-function initOpenModules(): Record<string, boolean> {
-  const state: Record<string, boolean> = {}
+// Label des Moduls, das die aktuelle Route enthält (für Akkordeon-Default + aktive Hervorhebung).
+function activeModuleLabel(pathname: string): string | null {
   for (const m of navModules) {
-    const stored = localStorage.getItem(`nav-open-${m.label}`)
-    state[m.label] = stored !== null ? stored === 'true' : true
+    if (m.items.some(item => (item.end ? pathname === item.to : pathname.startsWith(item.to)))) {
+      return m.label
+    }
   }
-  return state
+  return null
+}
+
+// Akkordeon: genau ein offenes Modul ('' = alle zu). Beim Start das Modul der aktuellen
+// Route öffnen, sonst den zuletzt gemerkten Zustand, sonst das erste Modul.
+function initOpenModule(): string {
+  const stored = localStorage.getItem('nav-open-module')
+  if (stored !== null) return stored
+  return activeModuleLabel(window.location.pathname) ?? navModules[0].label
 }
 
 interface ChildEntry { id: number; first_name: string; last_name: string }
@@ -93,7 +103,7 @@ export default function AppShell() {
   const [canGoBack, setCanGoBack] = useState(() => (window.history.state?.idx ?? 0) > 0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
-  const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
+  const [openModule, setOpenModule] = useState<string>(initOpenModule)
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
   const navRoutes = new Set(navRouteList)
   const [chatUnread, setChatUnread] = useState(0)
@@ -195,13 +205,26 @@ export default function AppShell() {
     navigate('/login')
   }
 
+  // Akkordeon: das geklickte Modul öffnen und alle anderen schließen; ein erneuter Klick
+  // auf das offene Modul klappt es zu ('').
   const toggleModule = (label: string) => {
-    setOpenModules(prev => {
-      const next = { ...prev, [label]: !prev[label] }
-      localStorage.setItem(`nav-open-${label}`, String(next[label]))
+    setOpenModule(prev => {
+      const next = prev === label ? '' : label
+      localStorage.setItem('nav-open-module', next)
       return next
     })
   }
+
+  // Bei Navigation (auch per Direktlink/navigate) das Modul der aktiven Route aufklappen,
+  // damit der aktive Eintrag sichtbar ist und die Akkordeon-Auswahl der Seite folgt.
+  useEffect(() => {
+    const active = activeModuleLabel(location.pathname)
+    if (active) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Sync an die Route (Akkordeon folgt der aktiven Seite)
+      setOpenModule(active)
+      localStorage.setItem('nav-open-module', active)
+    }
+  }, [location.pathname])
 
   const closeSidebar = () => setSidebarOpen(false)
 
@@ -228,7 +251,7 @@ export default function AppShell() {
           })
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))
-          const isOpen = openModules[mod.label]
+          const isOpen = openModule === mod.label
           return (
             <div key={mod.label}>
               <button
@@ -306,7 +329,9 @@ export default function AppShell() {
   )
 
   return (
-    <div className="h-screen overflow-hidden flex bg-brand-gray">
+    <div className="h-screen overflow-hidden flex flex-col">
+      <TransitionalHostnameBanner />
+      <div className="flex-1 min-h-0 overflow-hidden flex bg-brand-gray">
       {/* Desktop sidebar */}
       <div className="hidden sm:flex">
         {sidebar}
@@ -423,6 +448,7 @@ export default function AppShell() {
       </div>
 
       {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+      </div>
     </div>
   )
 }

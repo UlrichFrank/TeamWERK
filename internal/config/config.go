@@ -82,7 +82,7 @@ func Load() (*Config, error) {
 		Port:            getEnv("PORT", "8080"),
 		DBPath:          getEnv("DB_PATH", "./teamwerk.db"),
 		JWTSecret:       os.Getenv("JWT_SECRET"),
-		BaseURL:         getEnv("BASE_URL", "https://internal.team-stuttgart.org"),
+		BaseURL:         getEnv("BASE_URL", "https://teamwerk.team-stuttgart.org"),
 		UploadDir:       getEnv("UPLOAD_DIR", "./storage/uploads"),
 		FilesDir:        getEnv("FILES_DIR", "./storage/files"),
 		BeitragslaufDir: getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle"),

@@ -4,6 +4,8 @@ IONOS VPS Linux XS · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamw
 
 SSH-Alias `vServer` (in `.env`), direkt `https://217.160.118.39`. Domain + Certbot-Zertifikat noch ausstehend.
 
+**Dual-Serving-Übergang:** Der Primärhost ist `teamwerk.team-stuttgart.org` (VPS `31.70.110.19`). Der Alt-Hostname `internal.team-stuttgart.org` wird als Übergangs-Alias aus **demselben** Nginx-`server`-Block bedient (ein Let's-Encrypt-Zertifikat mit beiden SANs, `deploy/nginx-teamwerk.conf`); ein UI-Banner (`TransitionalHostnameBanner`) weist Nutzer auf `internal.*` auf den Umzug hin. Ablauf + Rollback: `deploy/internal-alias-cutover-runbook.md`. Der spätere Flip von `internal.*` auf ein 301 ist ein eigener Follow-up-Change (`internal-hostname-hard-redirect`), Zeitpunkt bewusst offen.
+
 ```bash
 make migrate-remote-up                               # Migrationen auf VPS
 make create-admin-remote EMAIL=… PASSWORD=… NAME=…   # Admin anlegen
