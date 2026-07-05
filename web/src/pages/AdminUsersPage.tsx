@@ -400,7 +400,14 @@ export default function AdminUsersPage() {
   }
 
   const handleRoleChange = async (u: User, newRole: string) => {
-    await api.put(`/users/${u.id}/role`, { role: newRole })
+    try {
+      await api.put(`/users/${u.id}/role`, { role: newRole })
+    } finally {
+      // Liste explizit neu laden — verlassen wir uns nur auf den
+      // SSE-Broadcast, bleibt der `<select>`-Wert am gecacheden User-Objekt
+      // hängen bis der Event ankommt (spürbar als „das Control hängt").
+      refreshUsers()
+    }
   }
 
   const allowedRoles = (callerRole: string) =>
