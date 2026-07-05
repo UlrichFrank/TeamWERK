@@ -35,5 +35,5 @@
 
 ## 7. Abschluss
 
-- [ ] 7.1 `/verify-change` (Build/Test/Lint + Invarianten), `openspec validate press-photo-consent-field --strict`.
-- [ ] 7.2 Change archivieren.
+- [x] 7.1 `/verify-change` (Build/Test/Lint + Invarianten), `openspec validate press-photo-consent-field --strict`.
+- [x] 7.2 Change archivieren.
