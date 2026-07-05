@@ -6,18 +6,18 @@
 
 ## 2. Backend — Member-API
 
-- [ ] 2.1 `internal/members/handler.go`: `Member`-Struct um `FotoVeroeffentlichung bool` + `FotoVeroeffentlichungDate *string` erweitern (JSON `foto_veroeffentlichung`/`_date`); Request-Struct entsprechend.
-- [ ] 2.2 Alle Scan-Pfade (Get, List, Create-Reload) um die zwei neuen Spalten ergänzen.
-- [ ] 2.3 Create-INSERT und Update-UPDATE (Vorstand-Zweig) schreiben `foto_veroeffentlichung` + `_date`; Server setzt `_date` defensiv beim Wechsel aus→an ohne geliefertes Datum.
+- [x] 2.1 `internal/members/handler.go`: `Member`-Struct um `FotoVeroeffentlichung bool` + `FotoVeroeffentlichungDate *string` erweitern (JSON `foto_veroeffentlichung`/`_date`); Request-Struct entsprechend.
+- [x] 2.2 Alle Scan-Pfade (Get, List, Create-Reload) um die zwei neuen Spalten ergänzen.
+- [x] 2.3 Create-INSERT und Update-UPDATE (Vorstand-Zweig) schreiben `foto_veroeffentlichung` + `_date`; Server setzt `_date` defensiv beim Wechsel aus→an ohne geliefertes Datum.
 
 ## 3. Backend — Draft-Workflow
 
-- [ ] 3.1 `internal/members/drafts.go`: `case "dsgvo"` in `extractFieldValue` um `foto_veroeffentlichung` erweitern.
-- [ ] 3.2 Apply-Zweig `case "dsgvo"` schreibt `foto_veroeffentlichung` (mit `_date`-Logik) auf das Mitglied.
+- [x] 3.1 `internal/members/drafts.go`: `case "dsgvo"` in `extractFieldValue` um `foto_veroeffentlichung` erweitern.
+- [x] 3.2 Apply-Zweig `case "dsgvo"` schreibt `foto_veroeffentlichung` (mit `_date`-Logik) auf das Mitglied.
 
 ## 4. Backend — Spielbericht-Publisher
 
-- [ ] 4.1 `internal/matchreports/photo_consent.go`: `consentMissing`-Query von `photo_visible` auf `foto_veroeffentlichung` umstellen; Notlösungs-Kommentar entfernen.
+- [x] 4.1 `internal/matchreports/photo_consent.go`: `consentMissing`-Query von `photo_visible` auf `foto_veroeffentlichung` umstellen; Notlösungs-Kommentar entfernen.
 
 ## 5. Backend — Tests
 
