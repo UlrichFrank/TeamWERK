@@ -21,9 +21,9 @@
 
 ## 5. Backend — Tests
 
-- [ ] 5.1 Members: Happy-Path (Vorstand setzt `foto_veroeffentlichung`, `_date` wird gesetzt) + Fehlerfall (non-privileged darf nicht direkt schreiben).
-- [ ] 5.2 Draft-Apply: `dsgvo`-Draft mit `foto_veroeffentlichung` wird korrekt übernommen.
-- [ ] 5.3 `matchreports`: Mitglied mit `foto_veroeffentlichung=0` erscheint in Consent-Warnliste, mit `=1` nicht (unabhängig von `photo_visible`).
+- [x] 5.1 Members: Happy-Path (Vorstand setzt `foto_veroeffentlichung`, `_date` wird gesetzt) + Fehlerfall (non-privileged darf nicht direkt schreiben).
+- [x] 5.2 Draft-Apply: `dsgvo`-Draft mit `foto_veroeffentlichung` wird korrekt übernommen.
+- [x] 5.3 `matchreports`: Mitglied mit `foto_veroeffentlichung=0` erscheint in Consent-Warnliste, mit `=1` nicht (unabhängig von `photo_visible`).
 
 ## 6. Frontend
 
