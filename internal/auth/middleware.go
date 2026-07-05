@@ -65,7 +65,9 @@ func CookieMiddleware(db *sql.DB) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireRole gates access by system role (admin|standard). Use for admin-only endpoints.
+// RequireRole gates access by system role (admin|standard|presseteam). Use with
+// the explicit set of allowed roles — RoleAdmin does NOT fall through automatically,
+// hierarchy is expressed at the call site (e.g. RequireRole(RolePressTeam, RoleAdmin)).
 func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(roles))
 	for _, r := range roles {

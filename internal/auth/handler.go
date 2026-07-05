@@ -615,14 +615,14 @@ func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Role == "" {
-		req.Role = "standard"
+		req.Role = RoleStandard
 	}
-	if req.Role != "admin" && req.Role != "standard" {
+	if req.Role != RoleAdmin && req.Role != RoleStandard && req.Role != RolePressTeam {
 		http.Error(w, "invalid role", http.StatusBadRequest)
 		return
 	}
 	caller := ClaimsFromCtx(r.Context())
-	if req.Role == "admin" && (caller == nil || caller.Role != "admin") {
+	if req.Role == RoleAdmin && (caller == nil || caller.Role != RoleAdmin) {
 		http.Error(w, "only admins can invite admins", http.StatusForbidden)
 		return
 	}
@@ -1146,11 +1146,11 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if req.Role != "admin" && req.Role != "standard" {
+	if req.Role != RoleAdmin && req.Role != RoleStandard && req.Role != RolePressTeam {
 		http.Error(w, "invalid role", http.StatusBadRequest)
 		return
 	}
-	if req.Role == "admin" && caller.Role != "admin" {
+	if req.Role == RoleAdmin && caller.Role != RoleAdmin {
 		http.Error(w, "only admins can assign admin role", http.StatusForbidden)
 		return
 	}

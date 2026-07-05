@@ -39,8 +39,8 @@ interface Invitation {
 interface MembershipRequest { id: number; first_name: string; last_name: string; email: string; comment: string; status: string; created_at: string; is_child?: boolean; parent_email?: string }
 interface Member { id: number; first_name: string; last_name: string }
 
-const ROLE_LABELS: Record<string, string> = { admin: 'Admin', standard: 'Standard' }
-const ALL_ROLES = ['admin', 'standard'] as const
+const ROLE_LABELS: Record<string, string> = { admin: 'Admin', presseteam: 'Presseteam', standard: 'Standard' }
+const ALL_ROLES = ['admin', 'presseteam', 'standard'] as const
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
@@ -400,7 +400,14 @@ export default function AdminUsersPage() {
   }
 
   const handleRoleChange = async (u: User, newRole: string) => {
-    await api.put(`/users/${u.id}/role`, { role: newRole })
+    try {
+      await api.put(`/users/${u.id}/role`, { role: newRole })
+    } finally {
+      // Liste explizit neu laden — verlassen wir uns nur auf den
+      // SSE-Broadcast, bleibt der `<select>`-Wert am gecacheden User-Objekt
+      // hängen bis der Event ankommt (spürbar als „das Control hängt").
+      refreshUsers()
+    }
   }
 
   const allowedRoles = (callerRole: string) =>
@@ -495,6 +502,7 @@ export default function AdminUsersPage() {
                   <label className="block text-sm font-medium text-brand-text-muted mb-1">Rolle</label>
                   <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} className={INPUT}>
                     <option value="standard">Standard</option>
+                    <option value="presseteam">Presseteam</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>

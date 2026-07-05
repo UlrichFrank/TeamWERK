@@ -29,6 +29,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/health"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
+	"github.com/teamstuttgart/teamwerk/internal/matchreports"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
@@ -65,6 +66,7 @@ type Handlers struct {
 	Calendar       *calendar.Handler
 	Health         *health.Handler
 	Videos         *videos.Handler
+	MatchReports   *matchreports.Handler
 	// VideosTus ist der gemountete tusd-Upload-Handler (resumable Upload unter
 	// /api/videos/upload/*). In main.go via Videos.NewTusHandler(ctx) erzeugt;
 	// in Tests/ohne Upload-Layer nil — die Mount-Registrierung wird dann
@@ -378,6 +380,24 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Use(auth.RequireRole("admin"))
 			r.Post("/api/impersonate/{id}", h.Auth.Impersonate)
 		})
+
+		// Presseteam (+ Admin fällt hierarchisch durch): Spielberichte
+		// schreiben, mit Bildern anreichern und an die TYPO3-Extension
+		// publizieren. Siehe openspec/changes/spielbericht-typo3-publisher/.
+		if h.MatchReports != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequireRole(auth.RolePressTeam, auth.RoleAdmin))
+				r.Get("/api/match-reports/my", h.MatchReports.MyList)
+				r.Post("/api/match-reports", h.MatchReports.Create)
+				r.Get("/api/match-reports/{id}", h.MatchReports.Get)
+				r.Put("/api/match-reports/{id}", h.MatchReports.Update)
+				r.Delete("/api/match-reports/{id}", h.MatchReports.Delete)
+				r.Post("/api/match-reports/{id}/images", h.MatchReports.UploadImage)
+				r.Get("/api/match-reports/{id}/images/{imgId}/blob", h.MatchReports.ServeImage)
+				r.Delete("/api/match-reports/{id}/images/{imgId}", h.MatchReports.DeleteImage)
+				r.Post("/api/match-reports/{id}/publish", h.MatchReports.Publish)
+			})
+		}
 
 		// Member-Liste (Suche) — Vorstand + Kassierer (Mitgliederverwaltung) sowie
 		// Trainer + sportliche_leitung (Kader-/Trainersuche im /kader). Die

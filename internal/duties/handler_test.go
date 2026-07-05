@@ -1774,23 +1774,30 @@ func TestDutyTypes_ListOmitsInstructionMd(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&items); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 types, got %d", len(items))
-	}
+	// Neben den beiden hier angelegten Typen seedet Migration 020 den
+	// „Spielbericht"-Typ (ohne Anleitung) — die Liste prüft daher pro Name,
+	// nicht positionell und nicht über eine feste Gesamtzahl.
+	byName := make(map[string]map[string]any, len(items))
 	for _, item := range items {
 		if _, ok := item["instruction_md"]; ok {
 			t.Errorf("Liste enthält instruction_md für %v — Volltext gehört nur in den Detail-Pfad", item["name"])
 		}
-		has, ok := item["has_instruction"].(bool)
-		if !ok {
+		if _, ok := item["has_instruction"].(bool); !ok {
 			t.Fatalf("has_instruction fehlt oder ist kein Bool: %v", item)
 		}
-		wantHas := item["name"] == "Kasse"
-		if has != wantHas {
-			t.Errorf("has_instruction für %v = %v, want %v", item["name"], has, wantHas)
+		name, _ := item["name"].(string)
+		byName[name] = item
+	}
+	for name, wantHas := range map[string]bool{"Kasse": true, "Aufbau": false} {
+		item, ok := byName[name]
+		if !ok {
+			t.Fatalf("Typ %q fehlt in der Liste", name)
+		}
+		if has := item["has_instruction"].(bool); has != wantHas {
+			t.Errorf("has_instruction für %v = %v, want %v", name, has, wantHas)
 		}
 	}
-	if _, ok := items[1]["instruction_updated_at"]; !ok && items[1]["name"] == "Kasse" {
+	if _, ok := byName["Kasse"]["instruction_updated_at"]; !ok {
 		t.Errorf("expected instruction_updated_at in response")
 	}
 

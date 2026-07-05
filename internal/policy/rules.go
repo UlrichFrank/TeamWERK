@@ -244,6 +244,10 @@ func NavFor(p *Principal) []NavItem {
 	nav = append(nav, NavItem{"Dienste", "/dienste"})
 	nav = append(nav, NavItem{"Mitfahrten", "/mitfahrgelegenheiten"})
 	nav = append(nav, NavItem{"Nachrichten", "/chat"})
+	// Spielberichte nur für Presseteam (+Admin, hierarchisch).
+	if p.Role == "presseteam" || p.Role == "admin" {
+		nav = append(nav, NavItem{"Spielberichte", "/spielberichte"})
+	}
 
 	// Verwaltung — role-restricted
 	if IsTrainerLike(p) || IsVorstandLike(p) {
