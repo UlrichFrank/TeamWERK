@@ -31,11 +31,19 @@ type PublishRequest struct {
 
 // PublishMeta ist der JSON-Blob, den der TYPO3-Endpoint erwartet.
 // Feld-Namen matchen scripts/spike-match-report-import/fixture-payload.json
-// im Nachbar-Repo.
+// im Nachbar-Repo. Contract-Version nach AC-8: `season` (String
+// "YYYY-YYYY") statt `pid` — die Extension legt den Season-Ordner
+// /spielberichte/{YYYY-YYYY}/ selbst an, falls er noch nicht existiert.
 type PublishMeta struct {
-	Title            string `json:"title"`
-	Slug             string `json:"slug"`
-	PID              int    `json:"pid"`
+	Title string `json:"title"`
+	// Slug ist NUR das letzte Pfad-Segment (title-slug), z. B.
+	// "tws-ma-vs-vfl-kirchheim". Den vollen Pfad
+	// /spielberichte/{YYYY-YYYY}/{slug} baut die Extension.
+	Slug string `json:"slug"`
+	// Season ist das Format-Segment "YYYY-YYYY" (z. B. "2026-2027"). Die
+	// Extension legt darunter einen Ordner-Knoten an, falls er noch nicht
+	// existiert; darunter dann die pages-Zeile (doktype=126).
+	Season           string `json:"season"`
 	Abstract         string `json:"abstract"`
 	MatchDate        int64  `json:"match_date"`
 	MatchScore       string `json:"match_score"`

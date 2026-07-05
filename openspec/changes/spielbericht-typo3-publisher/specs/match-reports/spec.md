@@ -55,7 +55,7 @@ Das System SHALL bei `DELETE /api/match-reports/{id}/images/{imgId}` das Bild au
 ### Requirement: Publish mit atomarem State-Übergang
 Das System SHALL bei `POST /api/match-reports/{id}/publish` folgende Schritte in dieser Reihenfolge ausführen:
 1. Atomarer Übergang `draft → publishing` via `UPDATE match_reports SET state='publishing' WHERE id=? AND state='draft'`. Wenn 0 Zeilen betroffen: HTTP 409 (`already_published` oder `in_progress`).
-2. Season-Pfad, Slug, Meta-Blob und Bilder in Multipart-Payload zusammensetzen.
+2. Season-Segment (`YYYY-YYYY`), title-Slug, Meta-Blob und Bilder in Multipart-Payload zusammensetzen.
 3. HTTP-POST an `TYPO3_IMPORT_URL` mit Bearer-Auth.
 4. Bei HTTP 200 vom Publisher: `state='published'`, `published_url`, `typo3_page_uid`, `published_at` setzen; Duty-Slot als erledigt markieren; Bilder-Dateien + `match_report_images`-Zeilen löschen.
 5. Bei allen anderen Fällen: `state='publish_failed'`, `error_message` befüllen; Bilder liegen lassen.
@@ -95,16 +95,20 @@ Das System SHALL bei `GET /api/match-reports/{id}` in der Response die Liste der
 - **WHEN** das über `game_id → game_teams → team_members` gefundene Team drei Mitglieder mit `photo_consent=false` hat
 - **THEN** enthält die GET-Response `photo_consent_missing` mit drei Einträgen
 
-### Requirement: Season-Pfad-Bildung mit Fallback
-Das System SHALL für den TYPO3-`slug` den Pfad `/spielberichte/{start-year}-{end-year}/{report-slug}` aus `seasons.start_date` und `seasons.end_date` (via `game_id → games.season_id`) bilden. Fehlt die Saison-Referenz oder liefert kein Ergebnis, wird als Fallback `{match_date.year}-{match_date.year+1}` verwendet und eine Warnung geloggt.
+### Requirement: Season-Segment mit Fallback
+Das System SHALL das Feld `season` (Format `"YYYY-YYYY"`) aus `seasons.start_date` und `seasons.end_date` (via `game_id → games.season_id`) bilden und zusammen mit `slug` (nur title-Segment) an die TYPO3-Extension senden. Die Extension baut den vollständigen Pfad `/spielberichte/{season}/{slug}` daraus zusammen und legt den Season-Ordner selbst an, falls er noch nicht existiert. Fehlt die Saison-Referenz, wird als Fallback `{match_date.year}-{match_date.year+1}` (bzw. `-1/year` vor Juli) verwendet und eine Warnung geloggt.
 
 #### Scenario: Reguläre Saison-Bildung
 - **WHEN** ein Spiel gehört zu einer Saison mit `start_date=2025-08-01, end_date=2026-06-30`
-- **THEN** wird der Slug-Pfad `/spielberichte/2025-2026/{report-slug}` erzeugt
+- **THEN** wird `season="2025-2026"` gesendet
 
 #### Scenario: Fallback ohne Saison
 - **WHEN** `games.season_id IS NULL` und `match_date` ist im März 2026
-- **THEN** wird der Fallback-Pfad `/spielberichte/2026-2027/{report-slug}` erzeugt und eine Warnung geloggt
+- **THEN** wird `season="2025-2026"` (Fallback für Frühjahr, Sommer-Sommer-Heuristik) gesendet und eine Warnung geloggt
+
+#### Scenario: Slug enthält nur das title-Segment
+- **WHEN** der Bericht-Titel „Spike-Test — TWS mA vs. VfL Kirchheim" ist
+- **THEN** ist `slug="spike-test-tws-ma-vs-vfl-kirchheim"` (kein `/spielberichte/…`-Präfix)
 
 ### Requirement: HTML-Sanitizer mit Allowlist
 Das System SHALL beim Publish `body_md` durch Markdown-Renderer + Allowlist-Sanitizer laufen lassen. Erlaubte Tags: `p, h2, h3, strong, em, ul, ol, li, a[href], br`. Alle anderen Tags werden gestrippt (Inhalt bleibt). `<script>`, `<iframe>`, `on*`-Attribute werden **immer** entfernt, unabhängig von der Allowlist.

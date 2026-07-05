@@ -74,6 +74,23 @@
 - [ ] 7.4 Verifikation `make build && make test && make lint` grün
 - [ ] 7.5 `openspec validate spielbericht-typo3-publisher` grün
 
+## 7a. Contract-Anpassung nach AC-8
+
+Nach dem grünen Prod-Test im Nachbar-Repo (AC-8) hat sich der Contract
+geändert: statt `pid` (Season-Ordner-UID) sendet TeamWERK ein
+`season`-Segment (`"YYYY-YYYY"`), und der `slug` enthält nur noch das
+title-Segment (kein `/spielberichte/…`-Präfix).
+
+- [x] 7a.1 `PublishMeta.PID (int)` → `Season (string)`; JSON-Tag `season`.
+- [x] 7a.2 `slug`: nur title-Segment (`TitleSlug(title)`); voller Pfad entfällt.
+- [x] 7a.3 `Config.TYPO3SeasonFolderPID` + `TYPO3_SEASON_FOLDER_PID`-Env
+       ersatzlos entfernt (Extension legt Season-Ordner selbst an).
+- [x] 7a.4 `.env.example` erklärt den Contract-Wechsel im Kommentar.
+- [x] 7a.5 spec.md „Season-Segment mit Fallback" + design.md „Season-Segment
+       im Publisher" auf neuen Contract angepasst.
+- [x] 7a.6 Neuer Test `TestTitleSlug_MatchesNachbarContract` fixiert das
+       title-Segment gegen die Fixture des Nachbar-Repos.
+
 ## 8. Manuelles Ende-zu-Ende (nach AC-8 im Nachbar-Repo grün)
 
 - [ ] 8.1 Lokal: Presseteam-User anlegen, Slot ziehen, Bericht schreiben, 2 Bilder, Vorschau prüfen, gegen DDEV-TYPO3 publishen — Ergebnis: Seite auf `team-stuttgart.ddev.site/spielberichte/…` sichtbar

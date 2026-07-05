@@ -189,7 +189,9 @@ func (h *Handler) assemblePublishRequest(reportID int) (*PublishRequest, error) 
 	season := LoadSeasonRange(nullString(seasonStart), nullString(seasonEnd), matchDateUnix)
 
 	title := BuildTitle(matchDateUnix, opponent)
-	slug := BuildSlug(season, title)
+	// Nur der title-slug — die Extension setzt den Pfad-Präfix
+	// /spielberichte/{season}/ selbst zusammen.
+	slug := TitleSlug(title)
 	matchTeams := fmt.Sprintf("%s – %s", nullStringOr(teamName, clubName), opponent)
 
 	// Body sanitisieren (Markdown → allowlist-HTML).
@@ -218,7 +220,7 @@ func (h *Handler) assemblePublishRequest(reportID int) (*PublishRequest, error) 
 		Meta: PublishMeta{
 			Title:            title,
 			Slug:             slug,
-			PID:              h.cfg.TYPO3SeasonFolderPID, // Season-Ordner-UID
+			Season:           season.SeasonSegment(),
 			Abstract:         abstract,
 			MatchDate:        matchDateUnix,
 			MatchScore:       FormatMatchScore(homeInt, awayInt, htHomeInt, htAwayInt, tournamentInt != 0),

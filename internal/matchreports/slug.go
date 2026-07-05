@@ -39,14 +39,13 @@ func (r SeasonRange) SeasonSegment() string {
 	return fmt.Sprintf("%d-%d", r.StartYear, r.EndYear)
 }
 
-// BuildSlug baut den vollständigen TYPO3-slug für einen Bericht:
-//
-//	/spielberichte/{YYYY}-{YYYY}/{title-slug}
-//
-// title-slug wird aus dem Bericht-Titel abgeleitet (Kleinbuchstaben, keine
-// Umlaute, keine Sonderzeichen außer '-').
-func BuildSlug(season SeasonRange, title string) string {
-	return fmt.Sprintf("/spielberichte/%s/%s", season.SeasonSegment(), slugify(title))
+// TitleSlug ist das letzte Pfad-Segment für die TYPO3-Seite, aus dem
+// Bericht-Titel abgeleitet (Kleinbuchstaben, keine Umlaute, keine
+// Sonderzeichen außer '-'). Den vollen Pfad
+// /spielberichte/{YYYY-YYYY}/{title-slug} baut die Extension aus season+slug
+// selbst; TeamWERK schickt nur beide Segmente einzeln.
+func TitleSlug(title string) string {
+	return slugify(title)
 }
 
 // BuildTitle erzeugt einen Default-Titel aus Datum + Gegner, falls der Autor

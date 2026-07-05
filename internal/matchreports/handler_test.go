@@ -52,9 +52,8 @@ func testServer(t *testing.T, h *matchreports.Handler) *httptest.Server {
 
 func newHandlerWithPublisher(db *sql.DB, p matchreports.Publisher) *matchreports.Handler {
 	cfg := &appconfig.Config{
-		JWTSecret:            testutil.TestJWTSecret,
-		MatchReportImageDir:  t_tempDir(),
-		TYPO3SeasonFolderPID: 100,
+		JWTSecret:           testutil.TestJWTSecret,
+		MatchReportImageDir: t_tempDir(),
 	}
 	return matchreports.NewHandlerWithPublisher(db, hub.NewHub(), cfg, p)
 }

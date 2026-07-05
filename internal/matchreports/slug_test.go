@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+func TestTitleSlug_MatchesNachbarContract(t *testing.T) {
+	// Fixture aus spike-match-report-import/fixture-payload.json:
+	// slug ist NUR das title-Segment, kein /spielberichte/YYYY-YYYY/-Präfix.
+	got := TitleSlug("Spike-Test — TWS mA vs. VfL Kirchheim")
+	if got != "spike-test-tws-ma-vs-vfl-kirchheim" {
+		t.Errorf("TitleSlug = %q, want spike-test-tws-ma-vs-vfl-kirchheim", got)
+	}
+}
+
 func TestSlugify_UmlautsAndSpaces(t *testing.T) {
 	cases := map[string]string{
 		"Über die Alb":             "ueber-die-alb",

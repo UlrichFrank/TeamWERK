@@ -109,26 +109,28 @@ Abfolge.
   neuen Token akzeptieren bevor TeamWERK ihn sendet (überlappender Zeitraum
   mit beiden Tokens gibt's nicht — kurzes Ausfall-Fenster in Kauf).
 
-## Season-Pfad-Bildung im Publisher (Detail-Regel)
+## Season-Segment im Publisher (Detail-Regel)
 
-Der Publisher setzt den TYPO3-`slug`
-`/spielberichte/{YYYY}-{YYYY+1}/{report-slug}` zusammen. `report-slug`
-wird aus Titel oder Datum + Gegner deterministisch generiert.
+Contract-Version nach AC-8: TeamWERK sendet zwei getrennte Felder — den
+title-Slug (`spike-test-tws-ma-vs-vfl-kirchheim`) und das Season-Segment
+(`2026-2027`). Die TYPO3-Extension baut daraus den vollständigen Pfad
+`/spielberichte/{season}/{slug}` selbst und **legt den Season-Ordner
+(doktype=1) an**, falls er noch nicht existiert. Damit entfällt die
+frühere `TYPO3_SEASON_FOLDER_PID`-Konfiguration ersatzlos.
 
-Regel für Saison-Zeitraum:
+Regel für Season-Segment:
 
 1. Über `game_id → games.season_id → seasons.start_date/end_date` das
-   Saison-Range holen.
-2. Formatieren als `{start_date.year}-{end_date.year}`.
-3. Wenn kein Season-Match (defensive Sicherung), Fallback auf
-   `{match_date.year}-{match_date.year+1}` (heuristische Saison-Bildung
-   „Sommer bis Sommer"). Nur Warnung loggen, nicht abbrechen.
+   Saison-Range holen und als `{start.year}-{end.year}` formatieren.
+2. Wenn kein Season-Match (defensive Sicherung), Fallback auf die
+   Sommer-zu-Sommer-Heuristik: Spieldatum `>= Juli` →
+   `{year}-{year+1}`, sonst `{year-1}-{year}`. Nur Warnung loggen, nicht
+   abbrechen.
 
-Die entsprechende TYPO3-Seite (Ordner `/spielberichte/YYYY-YYYY/`) MUSS
-im Backend existieren (Redaktion legt Season-Ordner an). Publisher legt
-diese Ordner **nicht** an — das ist Redaktionsaufgabe pro Season-Beginn.
-Fehlt der Ordner, gibt der Publisher 500 mit `detail: season folder
-missing` zurück, State bleibt `publish_failed`.
+Fällt der TYPO3-Endpoint zurück (z. B. weil die Season-Ordner-Anlage in
+der Extension einmal versagt), bekommt der Publisher HTTP 4xx/5xx und
+setzt state=`publish_failed` mit dem Extension-Error im Detail — der
+Autor kann manuell erneut publishen.
 
 ## Bewusst offene / offene-Punkt-Liste
 
