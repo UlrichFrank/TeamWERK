@@ -32,6 +32,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/matchreports"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/settings"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
@@ -67,6 +68,8 @@ type Handlers struct {
 	Health         *health.Handler
 	Videos         *videos.Handler
 	MatchReports   *matchreports.Handler
+	Settings       *settings.Handler
+	SettingsStore  *settings.Store
 	// VideosTus ist der gemountete tusd-Upload-Handler (resumable Upload unter
 	// /api/videos/upload/*). In main.go via Videos.NewTusHandler(ctx) erzeugt;
 	// in Tests/ohne Upload-Layer nil — die Mount-Registrierung wird dann
@@ -104,6 +107,16 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Use(securityHeaders(h.HSTSEnabled))
 	if h.BaseURL != "" {
 		r.Use(corsMiddleware(h.BaseURL))
+	}
+	// Wartungsmodus-Middleware: bewusst VOR den Auth-Middlewares, damit auch
+	// unauthentifizierte Mutations-Routen (z. B. request-membership, register)
+	// erfasst werden. Der Admin-Bypass parst den Bearer-Token selbst. Auth-
+	// Routen (/api/auth/*) sind per Prefix-Whitelist ausgenommen, damit sich
+	// niemand aussperren kann. GET/HEAD/OPTIONS werden nicht angefasst.
+	// SettingsStore darf nil sein (Tests ohne den Store) — Middleware wird
+	// dann übersprungen.
+	if h.SettingsStore != nil {
+		r.Use(settings.MaintenanceMiddleware(h.SettingsStore, h.JWTSecret))
 	}
 
 	// Public routes
@@ -146,6 +159,12 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	// Öffentlicher Gruppen-Schlüssel zum Verschlüsseln von Bankdaten (nicht geheim;
 	// auch das öffentliche Beitritts-Formular braucht ihn zum Verschlüsseln der IBAN).
 	r.Get("/api/encryption-pubkey", h.Config.GetGroupPublicKey)
+	// Wartungsmodus-Status: unauthenticated, weil der Banner auch auf der
+	// Login-Seite (vor Session-Start) sichtbar sein muss. Liefert nur {enabled: bool},
+	// keine Metadaten (Info-Leak-Schutz).
+	if h.Settings != nil {
+		r.Get("/api/maintenance-status", h.Settings.GetPublicStatus)
+	}
 
 	// Cookie-authenticated GETs — Clients ohne Bearer-Header (EventSource für SSE,
 	// <img> für Uploads). Authentifizierung über das HttpOnly-Refresh-Cookie.
@@ -374,6 +393,10 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole("admin"))
 			r.Post("/api/impersonate/{id}", h.Auth.Impersonate)
+			if h.Settings != nil {
+				r.Get("/api/admin/maintenance-mode", h.Settings.GetAdminStatus)
+				r.Post("/api/admin/maintenance-mode", h.Settings.SetMaintenanceMode)
+			}
 		})
 
 		// Presseteam (+ Admin fällt hierarchisch durch): Spielberichte

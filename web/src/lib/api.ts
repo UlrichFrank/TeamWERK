@@ -2,8 +2,20 @@ import axios from 'axios'
 
 let accessToken: string | null = null
 let refreshPromise: Promise<string> | null = null
+let maintenanceHandler: (() => void) | null = null
 
 export const api = axios.create({ baseURL: '/api', withCredentials: true })
+
+/**
+ * Registriert einen Callback, der bei einer Maintenance-503-Antwort
+ * (Status 503 + Header `X-Maintenance-Mode: 1`) aufgerufen wird. Der Aufrufer
+ * (typischerweise der `AppShell`) zeigt darauf einen freundlichen Toast/Dialog.
+ * Reguläre 503-Responses (Upstream-Timeout, LB-Fehler) triggern den Callback
+ * NICHT. Übergabe von `null` löscht die Registrierung (für Tests).
+ */
+export function setMaintenanceHandler(fn: (() => void) | null) {
+  maintenanceHandler = fn
+}
 
 export function setAccessToken(token: string | null) {
   accessToken = token
@@ -59,6 +71,13 @@ api.interceptors.response.use(
         setAccessToken(null)
         window.location.href = '/login'
       }
+    }
+    // Wartungsmodus-503 vom Server: Trennt sich vom generischen 503 durch den
+    // Header `X-Maintenance-Mode: 1`. Der Handler wird bewusst NICHT
+    // aufgerufen, wenn er nicht gesetzt ist — dann fällt der Fehler wie
+    // gewohnt an den Caller durch (der ihn typischerweise als Toast zeigt).
+    if (err.response?.status === 503 && err.response?.headers?.['x-maintenance-mode'] === '1') {
+      if (maintenanceHandler) maintenanceHandler()
     }
     return Promise.reject(err)
   },

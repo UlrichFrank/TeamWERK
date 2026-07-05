@@ -300,3 +300,58 @@ func TestMigration018_ReplacesOptOutWithPerRoleDefaults(t *testing.T) {
 		t.Errorf("nach down: erwartet games (1,0), bekam (%d,%d)", opt10, opt11)
 	}
 }
+
+// TC: Migration 023 legt system_settings idempotent an und schreibt genau eine
+// Default-Row maintenance_mode=off. Zweites Up ist ein No-op.
+func TestMigration023_SystemSettings_Idempotent(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(23); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 23: %v", err)
+	}
+	if !tableExists(t, sqlDB, "system_settings") {
+		t.Fatal("erwartet Tabelle system_settings nach 023 up")
+	}
+
+	var count int
+	if err := sqlDB.QueryRow(`SELECT count(*) FROM system_settings WHERE key='maintenance_mode'`).Scan(&count); err != nil {
+		t.Fatalf("query count: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("erwartet genau 1 Row maintenance_mode, bekam %d", count)
+	}
+
+	var value string
+	if err := sqlDB.QueryRow(`SELECT value FROM system_settings WHERE key='maintenance_mode'`).Scan(&value); err != nil {
+		t.Fatalf("query value: %v", err)
+	}
+	if value != "off" {
+		t.Errorf("erwartet default value 'off', bekam %q", value)
+	}
+
+	// Zweite up-Ausführung derselben Migration darf keinen Konflikt werfen und
+	// die Row-Anzahl nicht ändern (INSERT OR IGNORE + CREATE TABLE IF NOT EXISTS).
+	if _, err := sqlDB.Exec(`CREATE TABLE IF NOT EXISTS system_settings (
+		key TEXT PRIMARY KEY, value TEXT NOT NULL,
+		updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL)`); err != nil {
+		t.Fatalf("re-create idempotent failed: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('maintenance_mode', 'off')`); err != nil {
+		t.Fatalf("re-insert idempotent failed: %v", err)
+	}
+
+	if err := sqlDB.QueryRow(`SELECT count(*) FROM system_settings`).Scan(&count); err != nil {
+		t.Fatalf("query count 2: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("nach doppelter Ausführung erwartet 1 Row, bekam %d", count)
+	}
+
+	// Down entfernt Tabelle wieder.
+	if err := m.Migrate(22); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate down to 22: %v", err)
+	}
+	if tableExists(t, sqlDB, "system_settings") {
+		t.Error("system_settings sollte nach 023 down weg sein")
+	}
+}

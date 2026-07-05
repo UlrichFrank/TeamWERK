@@ -15,6 +15,21 @@ make create-admin-remote EMAIL=… PASSWORD=… NAME=…   # Admin anlegen
 
 Wiederkehrender Ablauf zum Umzug einer TeamWERK-Instanz auf einen anderen VPS steckt in drei Makefile-Targets: `make server-bootstrap NEW_REMOTE=<alias>` (initialer Aufbau + Daten-Klon), `make server-sync-data NEW_REMOTE=<alias>` (beliebig oft wiederholbarer DB-/Storage-Sync während der Testphase), `make server-cutover NEW_REMOTE=<alias>` (Alt-Host auf 301-Redirect umschalten). Voraussetzungen (`REMOTE_NEW`, `REMOTE_NEW_DIR`, `BASE_URL_NEW` in `.env`) und alle manuellen Schritte (DNS, Certbot, Better-Stack-Umhängen, User-Kommunikation, PWA-Neuinstallation, Rollback) stehen in `deploy/server-migration-runbook.md`.
 
+## Wartungsmodus
+
+Toggle für Server-schreibgeschützten Zustand während Migrations-Fenstern, DB-Reparaturen oder Compliance-Freezes. Persistenter Zustand in `system_settings (key='maintenance_mode')`; Middleware `internal/settings.MaintenanceMiddleware` weist bei `on` alle POST/PUT/PATCH/DELETE-Requests mit `HTTP 503` + Header `X-Maintenance-Mode: 1` ab, außer `/api/auth/*` (Selbst-Aussperr-Schutz) und Requester mit System-Rolle `admin` (Bypass). Frontend zeigt persistenten Banner + Toast bei durchgerutschter Mutation.
+
+Toggle-Wege (funktional äquivalent):
+- **UI** (bequem): Admin-Nav → **Wartungsmodus** (`/wartung`). Broadcast via SSE `settings-changed` — alle Sessions aktualisieren sich sofort.
+- **CLI** (Notfall, falls UI nicht erreichbar):
+  ```bash
+  ssh vServer "sudo /usr/local/bin/teamwerk maintenance on --db /var/lib/teamwerk/teamwerk.db"
+  ssh vServer "sudo /usr/local/bin/teamwerk maintenance off --db /var/lib/teamwerk/teamwerk.db"
+  ```
+  Der laufende Prozess übernimmt den Zustand binnen 10 s (Store-Poll). Kein SSE-Broadcast → Sessions erfahren beim nächsten Reload/Status-Refetch davon.
+
+**Bei `server-sync-data` wandert `maintenance_mode=on` mit auf den Ziel-VPS** — bewusstes Feature. Nach dem finalen Sync auf dem Ziel-VPS gezielt deaktivieren, bevor du Nutzer draufloshacken lässt.
+
 ## Zero-Knowledge-Verschlüsselung der Bank-/SEPA-PII (Modell B)
 
 Bank-/SEPA-Felder werden **clientseitig** verschlüsselt (`internal/crypto` ist serverseitig

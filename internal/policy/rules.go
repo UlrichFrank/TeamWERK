@@ -270,6 +270,11 @@ func NavFor(p *Principal) []NavItem {
 		nav = append(nav, NavItem{"Tresor", "/tresor"})
 		nav = append(nav, NavItem{"Einstellungen", "/einstellungen"})
 	}
+	// Wartungsmodus: nur System-Rolle admin (Bypass-Nutzer, kann sich selbst
+	// nicht aussperren, ist verantwortlich für Toggle in Migrations-Fenstern).
+	if p.Role == "admin" {
+		nav = append(nav, NavItem{"Wartungsmodus", "/wartung"})
+	}
 
 	return nav
 }

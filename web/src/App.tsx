@@ -21,6 +21,7 @@ const DutyInstructionPage = lazy(() => import('./pages/DutyInstructionPage'))
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import BeitragslaufPage from './pages/admin/BeitragslaufPage'
 import TresorPage from './pages/admin/TresorPage'
+import WartungsmodusPage from './pages/admin/WartungsmodusPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
@@ -135,6 +136,7 @@ export default function App() {
               <Route path="dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
               <Route path="dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
               <Route path="veranstaltungsorte" element={<RoleRoute roles={['admin','vorstand']}><AdminVenuesPage /></RoleRoute>} />
+              <Route path="wartung" element={<RoleRoute roles={['admin']}><WartungsmodusPage /></RoleRoute>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
