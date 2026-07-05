@@ -813,6 +813,18 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Presseteam-Guard für „Spielbericht"-Slots (siehe
+	// openspec/changes/spielbericht-typo3-publisher/specs/duties/spec.md).
+	// UI filtert die Sichtbarkeit ohnehin; Backend-Check hier verhindert,
+	// dass ein Standard-User den Slot per direktem API-Call zieht.
+	// Ziel-User (nicht Requester) muss die Berechtigung haben, da Eltern
+	// Slots stellvertretend für Kinder-Konten übernehmen — der Bericht
+	// wird aber vom Elternteil geschrieben, dessen Rolle also zählt.
+	if err := h.assertSlotTakePermitted(r.Context(), slotID, claims); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
 	// Atomically increment slots_filled only if capacity remains. This prevents
 	// concurrent over-claim without a transaction (SQLite serializes writes).
 	res, err := h.db.ExecContext(r.Context(),

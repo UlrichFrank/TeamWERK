@@ -50,6 +50,7 @@ const navModules: NavModule[] = [
       { to: '/dienste', label: 'Dienste' },
       { to: '/mitfahrgelegenheiten', label: 'Mitfahrten' },
       { to: '/chat', label: 'Nachrichten' },
+      { to: '/spielberichte', label: 'Spielberichte' },
     ],
   },
   {
