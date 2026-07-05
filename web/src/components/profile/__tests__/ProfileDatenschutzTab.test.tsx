@@ -24,6 +24,8 @@ const baseMember: Member = {
   dsgvo_verarbeitung: true,
   dsgvo_verarbeitung_date: '2024-03-12T00:00:00Z',
   dsgvo_weitergabe: false,
+  foto_veroeffentlichung: true,
+  foto_veroeffentlichung_date: '2026-07-05T00:00:00Z',
 }
 
 describe('ProfileDatenschutzTab', () => {
@@ -72,7 +74,19 @@ describe('ProfileDatenschutzTab', () => {
     expect(weiter.checked).toBe(false)
     expect(weiter.disabled).toBe(true)
 
+    const foto = screen.getByLabelText('Foto-Veröffentlichung eingewilligt') as HTMLInputElement
+    expect(foto.checked).toBe(true)
+    expect(foto.disabled).toBe(true)
+
     // Datum sichtbar (slice auf 10 Zeichen)
     expect(screen.getByText(/seit 2024-03-12/)).toBeTruthy()
+    expect(screen.getByText(/seit 2026-07-05/)).toBeTruthy()
+  })
+
+  test('Erklärtext zu jedem der drei DSGVO-Schalter', () => {
+    render(<ProfileDatenschutzTab ownMember={baseMember} onUpdated={() => {}} />)
+    expect(screen.getByText(/zur Vereinsverwaltung zu verarbeiten/i)).toBeTruthy()
+    expect(screen.getByText(/Weitergabe deiner Mitgliedsdaten an Dritte/i)).toBeTruthy()
+    expect(screen.getByText(/öffentlichen Kanälen des Vereins/i)).toBeTruthy()
   })
 })

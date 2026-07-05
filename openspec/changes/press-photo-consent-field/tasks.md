@@ -27,11 +27,11 @@
 
 ## 6. Frontend
 
-- [ ] 6.1 `Member`-Typen (`ProfilePage.tsx`, `MemberDetailPage.tsx`, Tab-Interfaces) um `foto_veroeffentlichung` + `_date` erweitern.
-- [ ] 6.2 `MemberDatenschutzTab.tsx`: editierbarer Schalter + Erklärtexte zu allen drei DSGVO-Schaltern; `dsgvo`-Draft-Payload und Draft-Anzeige um `foto_veroeffentlichung` erweitern.
-- [ ] 6.3 `ProfileDatenschutzTab.tsx`: read-only-Anzeige der dritten Einwilligung + Erklärtexte zu allen drei Schaltern.
-- [ ] 6.4 „Kontakt"/Profil-Draft-Erzeugung: `foto_veroeffentlichung` in den `dsgvo`-Draft aufnehmen.
-- [ ] 6.5 `ProfileDatenschutzTab.test.tsx` aktualisieren (dritte Einwilligung + Erklärtexte).
+- [x] 6.1 `Member`-Typen (`ProfilePage.tsx`, `MemberDetailPage.tsx`, Tab-Interfaces) um `foto_veroeffentlichung` + `_date` erweitern.
+- [x] 6.2 `MemberDatenschutzTab.tsx`: editierbarer Schalter + Erklärtexte zu allen drei DSGVO-Schaltern; `dsgvo`-Draft-Payload und Draft-Anzeige um `foto_veroeffentlichung` erweitern.
+- [x] 6.3 `ProfileDatenschutzTab.tsx`: read-only-Anzeige der dritten Einwilligung + Erklärtexte zu allen drei Schaltern.
+- [x] 6.4 „Kontakt"/Profil-Draft-Erzeugung: entfällt — im Frontend existiert kein Erzeuger für `dsgvo`-Drafts (der Profil-Tab baut nur `profil`-Drafts; Backend-Draft-Pfad ist dennoch vorbereitet).
+- [x] 6.5 `ProfileDatenschutzTab.test.tsx` aktualisieren (dritte Einwilligung + Erklärtexte).
 
 ## 7. Abschluss
 

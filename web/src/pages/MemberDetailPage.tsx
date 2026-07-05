@@ -43,6 +43,8 @@ interface Member {
   dsgvo_verarbeitung_date?: string
   dsgvo_weitergabe?: boolean
   dsgvo_weitergabe_date?: string
+  foto_veroeffentlichung?: boolean
+  foto_veroeffentlichung_date?: string
   sepa_mandat?: boolean
   sepa_mandat_date?: string
   sepa_mandat_url?: string
@@ -81,6 +83,7 @@ export default function MemberDetailPage() {
     photo_url: '', photo_visible: false,
     dsgvo_verarbeitung: false, dsgvo_verarbeitung_date: '',
     dsgvo_weitergabe: false, dsgvo_weitergabe_date: '',
+    foto_veroeffentlichung: false, foto_veroeffentlichung_date: '',
     sepa_mandat: false, sepa_mandat_date: '', sepa_mandat_url: '',
     beitragsfrei: false, beitragsfrei_grund: '', zweitspielrecht: false,
   })
@@ -96,7 +99,7 @@ export default function MemberDetailPage() {
   // Tresor (privateKey) clientseitig entschlüsselt ins Formular übernommen.
   const [bankEnv, setBankEnv] = useState<{ bank_ciphertext: string; bank_dek_enc: string } | null>(null)
   type DraftValue = {
-    verarbeitung?: boolean; weitergabe?: boolean
+    verarbeitung?: boolean; weitergabe?: boolean; foto_veroeffentlichung?: boolean
     account_holder?: string; iban?: string
     first_name?: string; last_name?: string
     street?: string; zip?: string; city?: string
@@ -139,6 +142,8 @@ export default function MemberDetailPage() {
       dsgvo_verarbeitung_date: m.dsgvo_verarbeitung_date?.slice(0, 10) ?? '',
       dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,
       dsgvo_weitergabe_date: m.dsgvo_weitergabe_date?.slice(0, 10) ?? '',
+      foto_veroeffentlichung: m.foto_veroeffentlichung ?? false,
+      foto_veroeffentlichung_date: m.foto_veroeffentlichung_date?.slice(0, 10) ?? '',
       sepa_mandat: m.sepa_mandat ?? false,
       sepa_mandat_date: m.sepa_mandat_date?.slice(0, 10) ?? '',
       sepa_mandat_url: m.sepa_mandat_url ?? '',

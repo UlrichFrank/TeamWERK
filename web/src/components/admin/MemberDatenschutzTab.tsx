@@ -3,14 +3,23 @@ interface Member {
   dsgvo_verarbeitung_date?: string
   dsgvo_weitergabe?: boolean
   dsgvo_weitergabe_date?: string
+  foto_veroeffentlichung?: boolean
+  foto_veroeffentlichung_date?: string
   cross_team_visible?: boolean
 }
 
 interface Draft {
   id: number
   field_name: string
-  old_value: { verarbeitung?: boolean; weitergabe?: boolean; [k: string]: unknown } | null
-  new_value: { verarbeitung?: boolean; weitergabe?: boolean; [k: string]: unknown } | null
+  old_value: { verarbeitung?: boolean; weitergabe?: boolean; foto_veroeffentlichung?: boolean; [k: string]: unknown } | null
+  new_value: { verarbeitung?: boolean; weitergabe?: boolean; foto_veroeffentlichung?: boolean; [k: string]: unknown } | null
+}
+
+// Erklärtext je DSGVO-Einwilligung — was der Schalter bedeutet.
+const CONSENT_HELP = {
+  verarbeitung: 'Erlaubt dem Verein, die Mitgliedsdaten (Stammdaten, Kontakt) zur Vereinsverwaltung zu verarbeiten.',
+  weitergabe: 'Erlaubt die Weitergabe von Mitgliedsdaten an Dritte (z. B. Verband, Versicherung), soweit für den Vereinsbetrieb erforderlich.',
+  foto: 'Erlaubt die Veröffentlichung von Fotos der Person auf öffentlichen Kanälen des Vereins (Homepage team-stuttgart.org, Spielberichte). Nicht zu verwechseln mit der internen Profilbild-Sichtbarkeit.',
 }
 
 interface Props {
@@ -63,8 +72,9 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
             <span className="text-sm text-brand-text">Datenverarbeitung eingewilligt</span>
             {dsgvoDraft && <span className="text-sm text-brand-text-muted">(Änderung ausstehend)</span>}
           </label>
+          <p className="ml-6 text-xs text-brand-text-muted">{CONSENT_HELP.verarbeitung}</p>
           {form.dsgvo_verarbeitung_date && (
-            <p className="text-xs text-brand-text-muted">seit {form.dsgvo_verarbeitung_date}</p>
+            <p className="ml-6 text-xs text-brand-text-muted">seit {form.dsgvo_verarbeitung_date}</p>
           )}
 
           <label className="flex items-center gap-2 cursor-pointer mt-4">
@@ -77,8 +87,24 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
             <span className="text-sm text-brand-text">Datenweitergabe eingewilligt</span>
             {dsgvoDraft && <span className="text-sm text-brand-text-muted">(Änderung ausstehend)</span>}
           </label>
+          <p className="ml-6 text-xs text-brand-text-muted">{CONSENT_HELP.weitergabe}</p>
           {form.dsgvo_weitergabe_date && (
-            <p className="text-xs text-brand-text-muted">seit {form.dsgvo_weitergabe_date}</p>
+            <p className="ml-6 text-xs text-brand-text-muted">seit {form.dsgvo_weitergabe_date}</p>
+          )}
+
+          <label className="flex items-center gap-2 cursor-pointer mt-4">
+            <input
+              type="checkbox"
+              checked={form.foto_veroeffentlichung || false}
+              onChange={e => onFormChange({ foto_veroeffentlichung: e.target.checked })}
+              className="w-4 h-4 accent-brand-yellow"
+            />
+            <span className="text-sm text-brand-text">Foto-Veröffentlichung eingewilligt</span>
+            {dsgvoDraft && <span className="text-sm text-brand-text-muted">(Änderung ausstehend)</span>}
+          </label>
+          <p className="ml-6 text-xs text-brand-text-muted">{CONSENT_HELP.foto}</p>
+          {form.foto_veroeffentlichung_date && (
+            <p className="ml-6 text-xs text-brand-text-muted">seit {form.foto_veroeffentlichung_date}</p>
           )}
 
           {dsgvoDraft && (
@@ -86,7 +112,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span>
                   <span className="font-medium">Angeforderte DSGVO-Änderung:</span>{' '}
-                  Verarbeitung: {dsgvoDraft.new_value?.verarbeitung ? 'Ja' : 'Nein'}, Weitergabe: {dsgvoDraft.new_value?.weitergabe ? 'Ja' : 'Nein'}
+                  Verarbeitung: {dsgvoDraft.new_value?.verarbeitung ? 'Ja' : 'Nein'}, Weitergabe: {dsgvoDraft.new_value?.weitergabe ? 'Ja' : 'Nein'}, Foto-Veröffentlichung: {dsgvoDraft.new_value?.foto_veroeffentlichung ? 'Ja' : 'Nein'}
                 </span>
                 <div className="flex gap-2">
                   <button

@@ -85,8 +85,11 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
             />
             <span className="text-sm text-brand-text">Datenverarbeitung eingewilligt</span>
           </div>
+          <p className="ml-6 text-xs text-brand-text-muted">
+            Erlaubt dem Verein, deine Mitgliedsdaten (Stammdaten, Kontakt) zur Vereinsverwaltung zu verarbeiten.
+          </p>
           {ownMember.dsgvo_verarbeitung_date && (
-            <p className="-mt-2 ml-6 text-xs text-brand-text-muted">seit {ownMember.dsgvo_verarbeitung_date.slice(0, 10)}</p>
+            <p className="ml-6 text-xs text-brand-text-muted">seit {ownMember.dsgvo_verarbeitung_date.slice(0, 10)}</p>
           )}
 
           <div className="flex items-center gap-2 mt-4">
@@ -100,8 +103,29 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
             />
             <span className="text-sm text-brand-text">Datenweitergabe eingewilligt</span>
           </div>
+          <p className="ml-6 text-xs text-brand-text-muted">
+            Erlaubt die Weitergabe deiner Mitgliedsdaten an Dritte (z. B. Verband, Versicherung), soweit für den Vereinsbetrieb erforderlich.
+          </p>
           {ownMember.dsgvo_weitergabe_date && (
-            <p className="-mt-2 ml-6 text-xs text-brand-text-muted">seit {ownMember.dsgvo_weitergabe_date.slice(0, 10)}</p>
+            <p className="ml-6 text-xs text-brand-text-muted">seit {ownMember.dsgvo_weitergabe_date.slice(0, 10)}</p>
+          )}
+
+          <div className="flex items-center gap-2 mt-4">
+            <input
+              type="checkbox"
+              checked={!!ownMember.foto_veroeffentlichung}
+              readOnly
+              disabled
+              className="w-4 h-4 accent-brand-yellow cursor-default opacity-70"
+              aria-label="Foto-Veröffentlichung eingewilligt"
+            />
+            <span className="text-sm text-brand-text">Foto-Veröffentlichung eingewilligt</span>
+          </div>
+          <p className="ml-6 text-xs text-brand-text-muted">
+            Erlaubt die Veröffentlichung von Fotos auf öffentlichen Kanälen des Vereins (Homepage team-stuttgart.org, Spielberichte). Nicht zu verwechseln mit der internen Profilbild-Sichtbarkeit.
+          </p>
+          {ownMember.foto_veroeffentlichung_date && (
+            <p className="ml-6 text-xs text-brand-text-muted">seit {ownMember.foto_veroeffentlichung_date.slice(0, 10)}</p>
           )}
         </div>
       </div>
