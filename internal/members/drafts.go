@@ -79,6 +79,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       COALESCE(m.cross_team_visible,0),
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
+		       m.foto_veroeffentlichung, m.foto_veroeffentlichung_date,
 		       COALESCE(m.sepa_mandat,0), m.sepa_mandat_date,
 		       (SELECT COUNT(*) FROM member_sensitive WHERE member_id=m.id)
 		FROM members m
@@ -91,6 +92,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	var photoVisible, phonesVisible, addressVisible, emailVisible int64
 	var crossTeamVisible, dsgvoVerarbeitung, dsgvoWeitergabe int64
 	var dsgvoVerarbDate, dsgvoWeiterDate sql.NullString
+	var fotoVeroeff int64
+	var fotoVeroeffDate sql.NullString
 	var sepaMandat int64
 	var sepaMandatDate sql.NullString
 	var hasBankData int64
@@ -106,6 +109,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		&crossTeamVisible,
 		&dsgvoVerarbeitung, &dsgvoVerarbDate,
 		&dsgvoWeitergabe, &dsgvoWeiterDate,
+		&fotoVeroeff, &fotoVeroeffDate,
 		&sepaMandat, &sepaMandatDate,
 		&hasBankData,
 	)
@@ -150,6 +154,10 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	m.DsgvoWeitergabe = dsgvoWeitergabe != 0
 	if dsgvoWeiterDate.Valid {
 		m.DsgvoWeitergabeDate = &dsgvoWeiterDate.String
+	}
+	m.FotoVeroeffentlichung = fotoVeroeff != 0
+	if fotoVeroeffDate.Valid {
+		m.FotoVeroeffentlichungDate = &fotoVeroeffDate.String
 	}
 	m.SepaMandat = sepaMandat != 0
 	if sepaMandatDate.Valid {
