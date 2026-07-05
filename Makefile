@@ -273,10 +273,10 @@ server-bootstrap: _check-remote _check-new-remote _check-base-url-new build ## S
 	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) /storage/videos; do \
 		if ssh $(REMOTE) "sudo test -d $$d"; then \
 			echo "    rsync $$d"; \
-			ssh $(REMOTE) "sudo rsync -az -e ssh $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
+			ssh $(REMOTE) "sudo rsync -az -e 'ssh -o StrictHostKeyChecking=accept-new' $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
 				|| { echo "    Direkt-Rsync fehlgeschlagen, fallback über Laptop-Disk"; \
 				     TMP=$$(mktemp -d); \
-				     rsync -az $(REMOTE):$$d/ $$TMP/ && rsync -az $$TMP/ $(NEW_REMOTE_RESOLVED):$$d/; \
+				     rsync -az --rsync-path='sudo rsync' $(REMOTE):$$d/ $$TMP/ && rsync -az --rsync-path='sudo rsync' $$TMP/ $(NEW_REMOTE_RESOLVED):$$d/; \
 				     rm -rf $$TMP; }; \
 		else \
 			echo "    übersprungen (Quelle hat kein $$d)"; \
@@ -311,6 +311,9 @@ server-sync-data: _check-remote _check-new-remote _check-base-url-new build ## S
 	@echo ">>> Sync: Quelle=$(REMOTE)  Ziel=$(NEW_REMOTE_RESOLVED)"
 	@echo ">>> A) Ziel-Service stoppen"
 	ssh $(NEW_REMOTE_RESOLVED) "sudo systemctl stop teamwerk"
+	@echo ">>> A2) Aktuelles Binary auf Ziel installieren (sonst kennt migrate in Schritt E neuere Schema-Versionen aus dem Snapshot nicht)"
+	rsync -az $(BUILD_DIR)/$(BINARY) $(NEW_REMOTE_RESOLVED):/tmp/$(BINARY).new
+	ssh $(NEW_REMOTE_RESOLVED) "sudo mv /tmp/$(BINARY).new $(NEW_REMOTE_DIR_RESOLVED)/$(BINARY)"
 	@echo ">>> B) DB-Snapshot Quelle → Ziel"
 	ssh $(REMOTE) "sudo sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-migration.db' && sudo chmod 644 /tmp/teamwerk-migration.db"
 	ssh $(REMOTE) "sudo cat /tmp/teamwerk-migration.db" \
@@ -320,16 +323,16 @@ server-sync-data: _check-remote _check-new-remote _check-base-url-new build ## S
 	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) /storage/videos; do \
 		if ssh $(REMOTE) "sudo test -d $$d"; then \
 			echo "    rsync $$d"; \
-			ssh $(REMOTE) "sudo rsync -az --delete -e ssh $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
+			ssh $(REMOTE) "sudo rsync -az --delete -e 'ssh -o StrictHostKeyChecking=accept-new' $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
 				|| { echo "    Direkt-Rsync fehlgeschlagen, fallback über Laptop-Disk"; \
 				     TMP=$$(mktemp -d); \
-				     rsync -az --delete $(REMOTE):$$d/ $$TMP/ && rsync -az --delete $$TMP/ $(NEW_REMOTE_RESOLVED):$$d/; \
+				     rsync -az --delete --rsync-path='sudo rsync' $(REMOTE):$$d/ $$TMP/ && rsync -az --delete --rsync-path='sudo rsync' $$TMP/ $(NEW_REMOTE_RESOLVED):$$d/; \
 				     rm -rf $$TMP; }; \
 		fi \
 	done
 	@echo ">>> D) Owner-Fix auf Ziel"
 	ssh $(NEW_REMOTE_RESOLVED) "sudo chown -R www-data:www-data $(dir $(DB_PATH)) 2>/dev/null || true; sudo chown -R www-data:www-data /storage 2>/dev/null || true"
-	@echo ">>> E) migrate up auf Ziel (nach Snapshot, damit höhere Schema-Version des Ziel-Codes gewinnt)"
+	@echo ">>> E) migrate up auf Ziel (nach Snapshot; das in A2 installierte Binary bringt das Schema auf seinen Stand)"
 	ssh $(NEW_REMOTE_RESOLVED) "$(NEW_REMOTE_DIR_RESOLVED)/$(BINARY) migrate up --db $(DB_PATH)"
 	@echo ">>> F) Ziel-Service starten"
 	ssh $(NEW_REMOTE_RESOLVED) "sudo systemctl start teamwerk"
