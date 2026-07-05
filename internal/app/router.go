@@ -382,6 +382,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		if h.MatchReports != nil {
 			r.Group(func(r chi.Router) {
 				r.Use(auth.RequireRole(auth.RolePressTeam, auth.RoleAdmin))
+				r.Get("/api/match-reports/my", h.MatchReports.MyList)
 				r.Post("/api/match-reports", h.MatchReports.Create)
 				r.Get("/api/match-reports/{id}", h.MatchReports.Get)
 				r.Put("/api/match-reports/{id}", h.MatchReports.Update)

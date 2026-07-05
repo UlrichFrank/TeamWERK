@@ -37,6 +37,7 @@ import TermineDetailPage from './pages/TermineDetailPage'
 import MeinTeamPage from './pages/MeinTeamPage'
 import AdminVenuesPage from './pages/AdminVenuesPage'
 import ChatPage from './pages/ChatPage'
+import MatchReportListPage from './pages/MatchReportListPage'
 import MatchReportFormPage from './pages/MatchReportFormPage'
 import VideosPage from './pages/VideosPage'
 import VideoUploadPage from './pages/VideoUploadPage'
@@ -124,6 +125,7 @@ export default function App() {
               <Route path="termine/:type/:id" element={<TermineDetailPage />} />
               <Route path="mein-team" element={<MeinTeamPage />} />
               <Route path="chat" element={<ChatPage />} />
+              <Route path="spielberichte" element={<RoleRoute roles={['presseteam','admin']}><MatchReportListPage /></RoleRoute>} />
               <Route path="spielberichte/:id" element={<RoleRoute roles={['presseteam','admin']}><MatchReportFormPage /></RoleRoute>} />
               <Route path="videos" element={<VideosPage />} />
               <Route path="videos/upload" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><VideoUploadPage /></RoleRoute>} />
