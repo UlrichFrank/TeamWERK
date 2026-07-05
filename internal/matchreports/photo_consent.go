@@ -10,14 +10,12 @@ type ConsentMember struct {
 // consentMissing liefert die Team-Mitglieder ohne Foto-Freigabe für ein Spiel.
 // Weg: game_id → game_teams.team_id → team_memberships.member_id → members.
 //
-// Als Consent-Proxy nutzen wir members.photo_visible (heute Steuerflag für die
-// öffentliche Sichtbarkeit des Profilbilds — die Semantik „darf abgelichtet
-// werden" ist eng verwandt). Ist ein feineres press_photo_consent-Feld nötig,
-// wird das in einem eigenen Change nachgezogen.
+// Consent ist die dedizierte DSGVO-Einwilligung members.foto_veroeffentlichung
+// („Fotos dürfen auf öffentlichen Kanälen des Vereins veröffentlicht werden").
 //
-// Mitglieder mit photo_visible=0 landen in der Liste. Fehler werden geloggt,
-// Rückgabe ist im Fehlerfall leer (der Warnhinweis fehlt dann, aber der Report
-// bleibt anzeigbar).
+// Mitglieder mit foto_veroeffentlichung=0 landen in der Liste. Fehler werden
+// geloggt, Rückgabe ist im Fehlerfall leer (der Warnhinweis fehlt dann, aber der
+// Report bleibt anzeigbar).
 func (h *Handler) consentMissing(gameID int) []ConsentMember {
 	rows, err := h.db.Query(
 		`SELECT DISTINCT m.first_name, m.last_name
@@ -25,7 +23,7 @@ func (h *Handler) consentMissing(gameID int) []ConsentMember {
 		 JOIN team_memberships tm ON tm.team_id = gt.team_id
 		 JOIN members m ON m.id = tm.member_id
 		 WHERE gt.game_id = ?
-		   AND COALESCE(m.photo_visible, 0) = 0
+		   AND COALESCE(m.foto_veroeffentlichung, 0) = 0
 		 ORDER BY m.last_name, m.first_name`,
 		gameID,
 	)

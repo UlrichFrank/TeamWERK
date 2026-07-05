@@ -65,12 +65,16 @@ type Member struct {
 	DsgvoVerarbeitungDate *string `json:"dsgvo_verarbeitung_date,omitempty"`
 	DsgvoWeitergabe       bool    `json:"dsgvo_weitergabe,omitempty"`
 	DsgvoWeitergabeDate   *string `json:"dsgvo_weitergabe_date,omitempty"`
-	SepaMandat            bool    `json:"sepa_mandat,omitempty"`
-	SepaMandatDate        *string `json:"sepa_mandat_date,omitempty"`
-	SepaMandatURL         *string `json:"sepa_mandat_url,omitempty"`
-	Beitragsfrei          bool    `json:"beitragsfrei,omitempty"`
-	BeitragsfreiGrund     *string `json:"beitragsfrei_grund,omitempty"`
-	Zweitspielrecht       bool    `json:"zweitspielrecht,omitempty"`
+	// Foto-Veröffentlichung: DSGVO-Einwilligung für öffentliche Kanäle
+	// (Homepage, Spielberichte) — abgegrenzt von PhotoVisible (interne Sichtbarkeit).
+	FotoVeroeffentlichung     bool    `json:"foto_veroeffentlichung,omitempty"`
+	FotoVeroeffentlichungDate *string `json:"foto_veroeffentlichung_date,omitempty"`
+	SepaMandat                bool    `json:"sepa_mandat,omitempty"`
+	SepaMandatDate            *string `json:"sepa_mandat_date,omitempty"`
+	SepaMandatURL             *string `json:"sepa_mandat_url,omitempty"`
+	Beitragsfrei              bool    `json:"beitragsfrei,omitempty"`
+	BeitragsfreiGrund         *string `json:"beitragsfrei_grund,omitempty"`
+	Zweitspielrecht           bool    `json:"zweitspielrecht,omitempty"`
 
 	// Linked user contact data (shown when user visibility allows)
 	UserPhones   []UserPhone `json:"user_phones,omitempty"`
@@ -467,6 +471,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
+		       m.foto_veroeffentlichung, m.foto_veroeffentlichung_date,
 		       m.sepa_mandat, m.sepa_mandat_date, m.sepa_mandat_path,
 		       m.welcome_email_sent_at,
 		       m.beitragsfrei, m.beitragsfrei_grund, m.zweitspielrecht
@@ -484,6 +489,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var photoVisible int64
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
 	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
+	var fotoVeroeff int64
+	var fotoVeroeffDate sql.NullString
 	var welcomeEmailSentAt sql.NullString
 	var beitragsfrei, zweitspielrecht int64
 	var beitragsfreiGrund sql.NullString
@@ -496,6 +503,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
+		&fotoVeroeff, &fotoVeroeffDate,
 		&sepaMandat, &sepaMandatDate, &sepaMandatPath,
 		&welcomeEmailSentAt,
 		&beitragsfrei, &beitragsfreiGrund, &zweitspielrecht,
@@ -564,6 +572,10 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		base.DsgvoWeitergabe = dsgvoWeiter == 1
 		if dsgvoWeiterDate.Valid {
 			base.DsgvoWeitergabeDate = &dsgvoWeiterDate.String
+		}
+		base.FotoVeroeffentlichung = fotoVeroeff == 1
+		if fotoVeroeffDate.Valid {
+			base.FotoVeroeffentlichungDate = &fotoVeroeffDate.String
 		}
 		base.SepaMandat = sepaMandat == 1
 		if sepaMandatDate.Valid {
@@ -676,15 +688,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		PhotoVisible     bool `json:"photo_visible"`
 		CrossTeamVisible bool `json:"cross_team_visible"`
 
-		DsgvoVerarbeitung     bool   `json:"dsgvo_verarbeitung"`
-		DsgvoVerarbeitungDate string `json:"dsgvo_verarbeitung_date"`
-		DsgvoWeitergabe       bool   `json:"dsgvo_weitergabe"`
-		DsgvoWeitergabeDate   string `json:"dsgvo_weitergabe_date"`
-		SepaMandat            bool   `json:"sepa_mandat"`
-		SepaMandatDate        string `json:"sepa_mandat_date"`
-		Beitragsfrei          bool   `json:"beitragsfrei"`
-		BeitragsfreiGrund     string `json:"beitragsfrei_grund"`
-		Zweitspielrecht       bool   `json:"zweitspielrecht"`
+		DsgvoVerarbeitung         bool   `json:"dsgvo_verarbeitung"`
+		DsgvoVerarbeitungDate     string `json:"dsgvo_verarbeitung_date"`
+		DsgvoWeitergabe           bool   `json:"dsgvo_weitergabe"`
+		DsgvoWeitergabeDate       string `json:"dsgvo_weitergabe_date"`
+		FotoVeroeffentlichung     bool   `json:"foto_veroeffentlichung"`
+		FotoVeroeffentlichungDate string `json:"foto_veroeffentlichung_date"`
+		SepaMandat                bool   `json:"sepa_mandat"`
+		SepaMandatDate            string `json:"sepa_mandat_date"`
+		Beitragsfrei              bool   `json:"beitragsfrei"`
+		BeitragsfreiGrund         string `json:"beitragsfrei_grund"`
+		Zweitspielrecht           bool   `json:"zweitspielrecht"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.Gender == "" {
@@ -787,17 +801,26 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		if !req.Beitragsfrei {
 			grundVal = nil
 		}
+		// Foto-Veröffentlichung: Datum defensiv setzen, wenn eingewilligt wird und
+		// der Client kein Datum mitliefert (dokumentiert den Einwilligungs-Zeitpunkt).
+		fotoDate := nullableString(req.FotoVeroeffentlichungDate)
+		if req.FotoVeroeffentlichung && fotoDate == nil {
+			today := time.Now().Format("2006-01-02")
+			fotoDate = &today
+		}
 		h.db.ExecContext(r.Context(),
 			`UPDATE members SET
 				join_date=?,
 				dsgvo_verarbeitung=?, dsgvo_verarbeitung_date=?,
 				dsgvo_weitergabe=?, dsgvo_weitergabe_date=?,
+				foto_veroeffentlichung=?, foto_veroeffentlichung_date=?,
 				sepa_mandat=?, sepa_mandat_date=?,
 				beitragsfrei=?, beitragsfrei_grund=?
 			WHERE id=?`,
 			nullableString(req.JoinDate),
 			boolToInt(req.DsgvoVerarbeitung), nullableString(req.DsgvoVerarbeitungDate),
 			boolToInt(req.DsgvoWeitergabe), nullableString(req.DsgvoWeitergabeDate),
+			boolToInt(req.FotoVeroeffentlichung), fotoDate,
 			boolToInt(req.SepaMandat), nullableString(req.SepaMandatDate),
 			boolToInt(req.Beitragsfrei), grundVal,
 			id)
