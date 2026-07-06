@@ -156,6 +156,26 @@ func (h *Handler) gameTeamIDs(gameID any) []int {
 	return ids
 }
 
+// diffTeamIDs returns the team IDs in a that are not present in b (a \ b),
+// preserving the order of a. Used to isolate the teams removed from a game on a
+// team re-assignment so they still receive the live-update / push.
+func diffTeamIDs(a, b []int) []int {
+	if len(a) == 0 {
+		return nil
+	}
+	inB := make(map[int]struct{}, len(b))
+	for _, id := range b {
+		inB[id] = struct{}{}
+	}
+	var out []int
+	for _, id := range a {
+		if _, ok := inB[id]; !ok {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // canEditGameNote reports whether the caller may set a game's note: admin,
 // vorstand, sportliche_leitung, or a trainer of a participating team. Mirrors
 // the canEdit logic of GetGame.
@@ -1143,7 +1163,16 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Erfasse die ALTEN Team-IDs VOR dem game_teams-Rewrite. broadcastGame und der
+	// notify.Send unten lösen das Publikum aus den game_teams auf; würde man das erst
+	// nach dem Rewrite tun, erführen die entfernten (alten) Teams nichts von der
+	// Umhängung und behielten ein Spiel in ihrer Liste, das ihnen nicht mehr gehört.
+	// Nur relevant, wenn TeamIDs im Request stehen (sonst bleibt game_teams unverändert).
+	var oldTeamIDs []int
 	if len(req.TeamIDs) > 0 {
+		gameIDInt := 0
+		fmt.Sscan(id, &gameIDInt)
+		oldTeamIDs = hub.NewAudience(h.db).TeamIDsForGame(r.Context(), gameIDInt)
 		tx.ExecContext(r.Context(), `DELETE FROM game_teams WHERE game_id=?`, id)
 		for _, teamID := range req.TeamIDs {
 			tx.ExecContext(r.Context(),
@@ -1188,10 +1217,24 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	gameIDInt := 0
 	fmt.Sscan(id, &gameIDInt)
+	// broadcastGame/gameTeamIDs adressieren die AKTUELLEN (neuen) game_teams. Bei einer
+	// Team-Umhängung müssen aber auch die ENTFERNTEN Teams erfahren, dass ihnen das Spiel
+	// nicht mehr gehört. Deshalb ein zusätzlicher, gezielter Broadcast/Push an die alten
+	// Teams, die nicht mehr im neuen Set sind (removed = old \ new) — kleinster Eingriff,
+	// keine Doppelung mit dem aktuellen Publikum.
+	removedTeamIDs := diffTeamIDs(oldTeamIDs, req.TeamIDs)
 	h.broadcastGame(r.Context(), gameIDInt, "games")
+	if len(removedTeamIDs) > 0 {
+		h.broadcastGameTeams(r.Context(), removedTeamIDs, "games")
+	}
 	notify.Send(h.db, h.cfg,
 		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)),
 		"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
+	if len(removedTeamIDs) > 0 {
+		notify.Send(h.db, h.cfg,
+			h.teamMembersAndParents(removedTeamIDs),
+			"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
+	}
 	h.dispatchRegenNotifications(summary)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"regen_summary": summary})
