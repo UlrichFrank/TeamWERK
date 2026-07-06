@@ -835,6 +835,15 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if o := r.URL.Query().Get("offset"); o != "" {
 		fmt.Sscanf(o, "%d", &offset)
 	}
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	var conditions []string
 	var filterArgs []any

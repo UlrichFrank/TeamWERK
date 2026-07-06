@@ -835,6 +835,52 @@ func TestListUsers_Pagination(t *testing.T) {
 	}
 }
 
+// TC: limit/offset werden geklemmt. limit<=0 und limit>200 dürfen die
+// Paginierung nicht aushebeln: ?limit=0 (SQLite: 0 Items trotz total>0) und
+// ?limit=-1 (SQLite: unbegrenzt → alle Datensätze, Speicherrisiko) müssen auf
+// den Default 50 zurückfallen; total bleibt unabhängig davon korrekt.
+func TestListUsers_ClampsLimit(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	for i := 0; i < 11; i++ {
+		testutil.CreateUser(t, db, "standard")
+	}
+	srv := newAuthServer(t, db)
+	tok := testutil.Token(t, adminID, "admin", nil)
+
+	decode := func(res *http.Response) (int, int) {
+		t.Helper()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", res.StatusCode)
+		}
+		var body struct {
+			Items []map[string]any `json:"items"`
+			Total int              `json:"total"`
+		}
+		json.NewDecoder(res.Body).Decode(&body)
+		res.Body.Close()
+		return len(body.Items), body.Total
+	}
+
+	// ?limit=0 → SQLite würde LIMIT 0 (0 Items) liefern; Clamp erzwingt Default 50.
+	items, total := decode(testutil.Get(t, srv, "/api/users?limit=0", tok))
+	if total != 12 {
+		t.Errorf("limit=0: expected total=12, got %d", total)
+	}
+	if items != 12 {
+		t.Errorf("limit=0: expected 12 items (clamped to default 50), got %d", items)
+	}
+
+	// ?limit=-1 → SQLite würde LIMIT -1 (unbegrenzt) liefern; Clamp erzwingt Default 50.
+	items, total = decode(testutil.Get(t, srv, "/api/users?limit=-1", tok))
+	if total != 12 {
+		t.Errorf("limit=-1: expected total=12, got %d", total)
+	}
+	if items != 12 {
+		t.Errorf("limit=-1: expected 12 items (clamped to default 50), got %d", items)
+	}
+}
+
 // TC-SEC01: Login — unknown email and wrong password both return 401 with identical messages.
 // The response MUST NOT reveal whether the email is registered (prevents enumeration).
 // Note: The dummy bcrypt call for timing protection is a code-level invariant, not testable
