@@ -99,8 +99,9 @@ func (h *Handler) CreateChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Draft geht an die Finance-Gruppe (prüft/genehmigt) + den Einreicher selbst.
-	h.broadcastMembers(r.Context(), int(claims.UserID))
+	// Draft geht an die Finance-Gruppe (prüft/genehmigt) + die Audience des Mitglieds
+	// (Team-Roster/Profil) + den Einreicher selbst.
+	h.broadcastMembers(r.Context(), []int{memberID}, int(claims.UserID))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(draft)

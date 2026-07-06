@@ -77,3 +77,71 @@ func TestMembersMutation_ScopedToVorstand(t *testing.T) {
 		t.Errorf("plain player must NOT receive members event, got %q", ev)
 	}
 }
+
+// TestMembersMutation_ReachesTeamAndOwner verifies the regression fix: a member
+// field change now also reaches the affected member's audience (its own linked
+// user + a teammate on the same team), not only the finance group. These pages
+// ("Mein Team"-Roster, own profile) subscribe to "members" but are not finance;
+// before the fix they went stale after a foreign field change. A player on a
+// DIFFERENT team must still NOT receive the event.
+func TestMembersMutation_ReachesTeamAndOwner(t *testing.T) {
+	db := testutil.NewDB(t)
+	season := testutil.CreateSeason(t, db, "2025/26")
+
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	kaderA := testutil.CreateKader(t, db, teamA, season)
+	kaderB := testutil.CreateKader(t, db, teamB, season)
+
+	// Vorstand performs the mutation (also in the finance group).
+	vorstandU := testutil.CreateUser(t, db, "standard")
+	vorstandM := testutil.CreateMember(t, db, vorstandU)
+	testutil.AddClubFunction(t, db, vorstandM, "vorstand")
+	vorstandTok := testutil.Token(t, vorstandU, "standard", []string{"vorstand"})
+
+	// The target member is a player on team A, linked to its own (non-finance) user.
+	targetU := testutil.CreateUser(t, db, "standard")
+	targetM := testutil.CreateMember(t, db, targetU)
+	testutil.AddClubFunction(t, db, targetM, "spieler")
+	testutil.AddKaderMember(t, db, kaderA, targetM)
+
+	// A teammate on team A (non-finance) — sees the roster, must receive the event.
+	teammateU := testutil.CreateUser(t, db, "standard")
+	teammateM := testutil.CreateMember(t, db, teammateU)
+	testutil.AddClubFunction(t, db, teammateM, "spieler")
+	testutil.AddKaderMember(t, db, kaderA, teammateM)
+
+	// A player on team B (non-finance) — must NOT receive team A's member event.
+	foreignU := testutil.CreateUser(t, db, "standard")
+	foreignM := testutil.CreateMember(t, db, foreignU)
+	testutil.AddClubFunction(t, db, foreignM, "spieler")
+	testutil.AddKaderMember(t, db, kaderB, foreignM)
+
+	srv, sharedHub := prodserver.NewWithHub(t, db)
+
+	ownerCh := sharedHub.SubscribeUser(targetU)
+	teammateCh := sharedHub.SubscribeUser(teammateU)
+	vorstandCh := sharedHub.SubscribeUser(vorstandU)
+	foreignCh := sharedHub.SubscribeUser(foreignU)
+
+	res := testutil.Do(t, srv, http.MethodPut,
+		"/api/members/"+strconv.Itoa(targetM)+"/status", vorstandTok,
+		map[string]string{"status": "pausiert"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("UpdateStatus: expected 204, got %d", res.StatusCode)
+	}
+
+	for name, ch := range map[string]chan string{
+		"owner":    ownerCh,
+		"teammate": teammateCh,
+		"vorstand": vorstandCh,
+	} {
+		if ev, ok := recvWithin(ch, time.Second); !ok || ev != "members" {
+			t.Errorf("%s stream must receive 'members', got %q ok=%v", name, ev, ok)
+		}
+	}
+	if ev, ok := recvWithin(foreignCh, 300*time.Millisecond); ok {
+		t.Errorf("team-foreign player must NOT receive members event, got %q", ev)
+	}
+}

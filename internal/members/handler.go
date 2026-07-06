@@ -26,18 +26,67 @@ type Handler struct {
 
 func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
-// broadcastMembers sends the "members" live-update event only to the finance
-// group (vorstand/vorstand_beisitzer/kassierer + admin) — the only roles that
-// may read member data. extraUserIDs (e.g. the affected member's own user on a
-// self-service change) are included so the owner still refreshes. Replaces the
-// former global Broadcast("members"): the Frontend contract (topic string
-// "members" + useLiveUpdates) is unchanged, only the recipient set shrinks.
-func (h *Handler) broadcastMembers(ctx context.Context, extraUserIDs ...int) {
+// broadcastMembers sends the "members" live-update event to the union of the
+// finance group (vorstand/vorstand_beisitzer/kassierer + admin — the roles that
+// read the full member CRUD screens) and the audience of the affected members
+// (owner + parents + team players/trainers + club-wide staff). The latter is
+// required because "Mein Team"-Roster, own profile and child profile pages also
+// subscribe to "members" but are usually NOT finance — without the members
+// audience they would go stale after a foreign field change (name/jersey/
+// position/status). The event carries no data (just the topic string
+// "members"); each page reloads via its own authz-checked GET, so widening the
+// recipient set does not widen data visibility. extraUserIDs (e.g. the affected
+// member's own user on a self-service change) are still included. memberIDs is
+// the member(s) the mutating route acted on; nil means finance-only (e.g. bulk
+// import without a single ID). The Frontend contract (topic string "members" +
+// useLiveUpdates) is unchanged.
+func (h *Handler) broadcastMembers(ctx context.Context, memberIDs []int, extraUserIDs ...int) {
 	if h.hub == nil {
 		return
 	}
-	ids := hub.NewAudience(h.db).FinanceGroup(ctx, extraUserIDs...)
-	h.hub.BroadcastToUsers(ids, "members")
+	a := hub.NewAudience(h.db)
+	set := newMemberIDSet()
+	for _, id := range a.FinanceGroup(ctx, extraUserIDs...) {
+		set.add(id)
+	}
+	if len(memberIDs) > 0 {
+		for _, id := range a.MembersAudience(ctx, memberIDs) {
+			set.add(id)
+		}
+	}
+	h.hub.BroadcastToUsers(set.slice(), "members")
+}
+
+// memberIDSet is a small insertion-order-preserving set of user IDs used to
+// union the finance group and the members audience without duplicates.
+type memberIDSet struct {
+	seen  map[int]struct{}
+	order []int
+}
+
+func newMemberIDSet() *memberIDSet { return &memberIDSet{seen: map[int]struct{}{}} }
+
+func (s *memberIDSet) add(id int) {
+	if _, ok := s.seen[id]; ok {
+		return
+	}
+	s.seen[id] = struct{}{}
+	s.order = append(s.order, id)
+}
+
+func (s *memberIDSet) slice() []int { return s.order }
+
+// memberIDsForUser returns the member row(s) linked to the given user (usually
+// one) as a slice — used by self-service routes so their "members" broadcast
+// reaches the owner's team roster, not only the finance group. Returns nil when
+// the user is not linked to any member (e.g. a pure parent account); the caller
+// then falls back to finance-only + the extraUserID.
+func (h *Handler) memberIDsForUser(ctx context.Context, userID int) []int {
+	var id int
+	if err := h.db.QueryRowContext(ctx, `SELECT id FROM members WHERE user_id = ?`, userID).Scan(&id); err != nil || id == 0 {
+		return nil
+	}
+	return []int{id}
 }
 
 type Member struct {
@@ -212,6 +261,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	offset := 0
 	if o := r.URL.Query().Get("offset"); o != "" {
 		fmt.Sscanf(o, "%d", &offset)
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
 	}
 
 	// Build WHERE additions
@@ -465,7 +523,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		break
 	}
 	h.writeClubFunctions(r.Context(), int(id), req.ClubFunctions)
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{int(id)})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
@@ -840,10 +898,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			id)
 	}
 
-	if idInt, err2 := strconv.Atoi(id); err2 == nil {
+	idInt, _ := strconv.Atoi(id)
+	if idInt != 0 {
 		h.writeClubFunctions(r.Context(), idInt, req.ClubFunctions)
 	}
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{idInt})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -863,7 +922,8 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.db.ExecContext(r.Context(), `UPDATE members SET status=?, updated_at=? WHERE id=?`, req.Status, time.Now(), id)
-	h.broadcastMembers(r.Context())
+	idInt, _ := strconv.Atoi(id)
+	h.broadcastMembers(r.Context(), []int{idInt})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -946,7 +1006,8 @@ func (h *Handler) UpdateBankdaten(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	h.broadcastMembers(r.Context())
+	idInt, _ := strconv.Atoi(id)
+	h.broadcastMembers(r.Context(), []int{idInt})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1016,7 +1077,8 @@ func (h *Handler) LinkUser(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE members SET user_id=?, updated_at=? WHERE id=?`,
 		req.UserID, time.Now(), id)
-	h.broadcastMembers(r.Context())
+	idInt, _ := strconv.Atoi(id)
+	h.broadcastMembers(r.Context(), []int{idInt})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1039,7 +1101,7 @@ func (h *Handler) CreateFamilyLink(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`INSERT OR IGNORE INTO family_links (parent_user_id, member_id) VALUES (?,?)`,
 		req.ParentUserID, req.MemberID)
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{req.MemberID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1065,7 +1127,7 @@ func (h *Handler) DeleteFamilyLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{req.MemberID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1301,8 +1363,8 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	// Self-service profile change → finance group + the owner themselves.
-	h.broadcastMembers(r.Context(), claims.UserID)
+	// Self-service profile change → finance group + the owner's team roster + owner.
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1364,7 +1426,7 @@ func (h *Handler) AddPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
-	h.broadcastMembers(r.Context(), claims.UserID)
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
@@ -1394,7 +1456,7 @@ func (h *Handler) UpdatePhone(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	h.broadcastMembers(r.Context(), claims.UserID)
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1413,7 +1475,7 @@ func (h *Handler) DeletePhone(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	h.broadcastMembers(r.Context(), claims.UserID)
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1519,7 +1581,7 @@ func (h *Handler) UpdateVehicle(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO vehicle_info (user_id, seats, notes, updated_at) VALUES (?,?,?,?)
 		 ON CONFLICT(user_id) DO UPDATE SET seats=excluded.seats, notes=excluded.notes, updated_at=excluded.updated_at`,
 		claims.UserID, req.Seats, req.Notes, time.Now())
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2125,7 +2187,9 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 	report.Total = report.Created + report.Updated + report.Unchanged + report.Skipped + report.Errors + report.NotFound
 	if !dryRun && (report.Created > 0 || report.Updated > 0) {
-		h.broadcastMembers(r.Context())
+		// Bulk import: no single member ID to scope to (individual insert/update IDs
+		// are not tracked in the loop), so fall back to finance-only per the design.
+		h.broadcastMembers(r.Context(), nil)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(report)
@@ -2312,7 +2376,7 @@ func (h *Handler) UpdateCrossTeamVisible(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{memberID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2504,7 +2568,7 @@ func (h *Handler) UpdateChildAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{memberID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2544,7 +2608,7 @@ func (h *Handler) UpdateChildMember(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{memberID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2690,7 +2754,7 @@ func (h *Handler) UpdateChildBank(w http.ResponseWriter, r *http.Request) {
 	}
 	if *req.BankCiphertext == "" {
 		h.db.ExecContext(r.Context(), `DELETE FROM member_sensitive WHERE member_id=?`, memberID)
-		h.broadcastMembers(r.Context())
+		h.broadcastMembers(r.Context(), []int{memberID})
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -2705,6 +2769,6 @@ func (h *Handler) UpdateChildBank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{memberID})
 	w.WriteHeader(http.StatusNoContent)
 }
