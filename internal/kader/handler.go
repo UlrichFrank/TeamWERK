@@ -46,6 +46,50 @@ func (h *Handler) broadcastKaderTeams(ctx context.Context, teamIDs []int) {
 	h.hub.BroadcastToUsers(ids, "kader")
 }
 
+// broadcastKaderUpdate broadcasts "kader" to the union of (a) the given team IDs
+// — which must include BOTH the old and new team when UpdateKader repointed
+// team_id via an age-class change — and (b) the audience of members that were
+// removed from the roster. Without (a) an age-class/team switch would only reach
+// the new team; without (b) a removed member (no longer in the team audience)
+// would never learn of their removal and stay on a roster they left. The
+// removed-member audience mirrors absences.broadcastMemberEvents / MembersAudience
+// (member's own user + parents + their teams).
+func (h *Handler) broadcastKaderUpdate(ctx context.Context, teamIDs, removedMemberIDs []int) {
+	if h.hub == nil {
+		return
+	}
+	a := hub.NewAudience(h.db)
+	set := map[int]struct{}{}
+	for _, id := range a.Team(ctx, teamIDs) {
+		set[id] = struct{}{}
+	}
+	if len(removedMemberIDs) > 0 {
+		for _, id := range a.MembersAudience(ctx, removedMemberIDs) {
+			set[id] = struct{}{}
+		}
+	}
+	ids := make([]int, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	h.hub.BroadcastToUsers(ids, "kader")
+}
+
+// unionInts merges several int slices into one with duplicates removed.
+func unionInts(slices ...[]int) []int {
+	set := map[int]struct{}{}
+	out := []int{}
+	for _, s := range slices {
+		for _, v := range s {
+			if _, ok := set[v]; !ok {
+				set[v] = struct{}{}
+				out = append(out, v)
+			}
+		}
+	}
+	return out
+}
+
 type dbq interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
@@ -278,6 +322,12 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Team(s) VOR den Änderungen erfassen: bei einem Age-Class-Wechsel repointet
+	// UPDATE kader.team_id auf ein anderes Team, sodass TeamIDsForKader nach dem
+	// Commit nur noch das NEUE Team liefert. Das ALTE Team muss aber ebenfalls
+	// benachrichtigt werden (sein Roster ändert sich).
+	oldTeamIDs := hub.NewAudience(h.db).TeamIDsForKader(r.Context(), id)
+
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -373,7 +423,15 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	if len(req.MembersAdd) > 0 || len(req.MembersRemove) > 0 {
 		h.db.ExecContext(r.Context(), `UPDATE kader SET updated_at=? WHERE id=?`, time.Now(), id)
 	}
-	h.broadcastKader(r.Context(), id)
+
+	// Publikum = altes ∪ neues Team (deckt Age-Class/Team-Wechsel ab; bei
+	// unverändertem Team fallen beide zusammen) plus die entfernten
+	// Member/Trainer/Extended-Member, damit auch sie (bzw. Besitzer/Eltern) ihren
+	// Rauswurf erfahren, obwohl sie nicht mehr im aktuellen Team-Publikum stehen.
+	newTeamIDs := hub.NewAudience(h.db).TeamIDsForKader(r.Context(), id)
+	teamIDs := unionInts(oldTeamIDs, newTeamIDs)
+	removedMemberIDs := unionInts(req.MembersRemove, req.TrainersRemove, req.ExtendedMembersRemove)
+	h.broadcastKaderUpdate(r.Context(), teamIDs, removedMemberIDs)
 	w.WriteHeader(http.StatusNoContent)
 }
 
