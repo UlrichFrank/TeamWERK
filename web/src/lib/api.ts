@@ -1,4 +1,5 @@
 import axios, { AxiosRequestConfig } from 'axios'
+import { API_CACHE_NAME } from './reload'
 
 let accessToken: string | null = null
 let refreshPromise: Promise<string> | null = null
@@ -33,7 +34,19 @@ export function setAccessToken(token: string | null) {
   // Identitätswechsel (Logout, Login, Impersonation) leert den Referenz-Cache,
   // damit nie nutzergefilterte Daten (z. B. /teams) eines anderen Nutzers aus
   // dem Cache bedient werden. Ein Token-Refresh desselben Nutzers behält ihn.
-  if (tokenUid(token) !== tokenUid(accessToken)) clearReferenceCache()
+  if (tokenUid(token) !== tokenUid(accessToken)) {
+    clearReferenceCache()
+    // Zusätzlich den geräteweiten SW-`api-cache` (NetworkFirst) leeren: er hält
+    // nutzerspezifische Antworten (z. B. /api/teams, /api/members) und würde
+    // sonst auf einem geteilten Gerät nach Nutzerwechsel bei langsamem Netz/
+    // Offline die Daten des Vor-Nutzers ausliefern (Cross-User-Leak). Der SW-
+    // `api-reference-cache` bleibt bewusst unangetastet: er enthält nur
+    // club-weit für ALLE Nutzer identische Referenzrouten (kein Nutzerbezug).
+    // Fire-and-forget, damit setAccessToken synchron bleibt (Aufrufer erwarten das).
+    if (typeof caches !== 'undefined') {
+      caches.delete(API_CACHE_NAME).catch(() => {})
+    }
+  }
   accessToken = token
 }
 
@@ -122,7 +135,7 @@ interface ReferenceRoute {
 // Schlüssel = URL relativ zu `/api` (wie an api.get übergeben), ohne Query.
 const REFERENCE_ROUTES: Record<string, ReferenceRoute> = {
   '/seasons': { ttl: 60 * 60 * 1000, invalidatedBy: ['seasons', 'settings'] },
-  '/teams': { ttl: 5 * 60 * 1000, invalidatedBy: ['settings', 'kader'] },
+  '/teams': { ttl: 5 * 60 * 1000, invalidatedBy: ['settings', 'kader', 'seasons'] },
   '/venues': { ttl: 24 * 60 * 60 * 1000, invalidatedBy: ['venues'] },
   '/age-class-rules': { ttl: 24 * 60 * 60 * 1000, invalidatedBy: ['settings'] },
   '/duty-types': { ttl: 5 * 60 * 1000, invalidatedBy: ['duties'] },

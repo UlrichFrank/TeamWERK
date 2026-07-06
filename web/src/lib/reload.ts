@@ -1,6 +1,6 @@
 const WAITING_POLL_INTERVAL_MS = 250
 const WAITING_POLL_TIMEOUT_MS = 5000
-const API_CACHE_NAME = 'api-cache'
+export const API_CACHE_NAME = 'api-cache'
 const APP_SHELL_CACHE_NAME = 'app-shell'
 const WORKBOX_PRECACHE_PREFIX = 'workbox-precache'
 

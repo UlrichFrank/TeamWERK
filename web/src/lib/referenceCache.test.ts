@@ -94,6 +94,34 @@ describe('getReference — TTL-Cache + Single-Flight', () => {
     expect(b).toEqual([{ id: 42 }])
   })
 
+  test('Identitätswechsel leert zusätzlich den SW-api-cache (caches.delete), aber nicht api-reference-cache', () => {
+    const deleteSpy = vi.fn().mockResolvedValue(true)
+    // jsdom stellt `caches` nicht bereit → für diesen Test einen Stub setzen.
+    vi.stubGlobal('caches', { delete: deleteSpy } as unknown as CacheStorage)
+
+    setAccessToken(tokenFor(1))
+    setAccessToken(tokenFor(2)) // Identitätswechsel
+
+    expect(deleteSpy).toHaveBeenCalledWith('api-cache')
+    // Der club-weite Referenz-SW-Cache wird bewusst NICHT geleert.
+    expect(deleteSpy).not.toHaveBeenCalledWith('api-reference-cache')
+
+    vi.unstubAllGlobals()
+  })
+
+  test('Token-Refresh desselben Nutzers leert den SW-api-cache NICHT', () => {
+    const deleteSpy = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('caches', { delete: deleteSpy } as unknown as CacheStorage)
+
+    setAccessToken(tokenFor(7))
+    deleteSpy.mockClear()
+    setAccessToken(tokenFor(7)) // gleiche uid → kein Identitätswechsel
+
+    expect(deleteSpy).not.toHaveBeenCalled()
+
+    vi.unstubAllGlobals()
+  })
+
   test('Token-Refresh desselben Nutzers behält den Cache', async () => {
     const spy = vi.spyOn(api, 'get').mockResolvedValue({ data: [{ id: 1 }] } as never)
 
