@@ -597,7 +597,8 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
   const isEmpty = effectiveSections.every(s => s.rows.length === 0)
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow overflow-hidden">
+      <div className="h-1 bg-brand-yellow" />
       <div className="px-6 py-4 border-b border-brand-border-subtle">
         <h2 className="font-semibold text-brand-text">Teilnahme</h2>
       </div>
