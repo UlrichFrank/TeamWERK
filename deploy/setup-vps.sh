@@ -210,7 +210,7 @@ token = "$BS_TOKEN"
 [sources.host]
 type = "host_metrics"
 scrape_interval_secs = 30
-collectors = ["cpu", "memory", "disk", "network", "filesystem", "load"]
+collectors = ["host", "cpu", "memory", "disk", "network", "filesystem", "load"]
 
 # App-Metriken: scrapet teamwerk_* aus /api/metrics (Bearer-Token aus /etc/teamwerk/env).
 [sources.teamwerk_app]
