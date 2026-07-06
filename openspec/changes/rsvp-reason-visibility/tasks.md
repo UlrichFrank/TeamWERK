@@ -37,5 +37,5 @@
 - [ ] 6.1 Lokal `go run ./cmd/teamwerk` + `pnpm dev`, mit Test-User auf `/termine` absagen mit Grund → Grund erscheint sofort auf Karte. (offen für Nutzer-seitige Verifikation)
 - [ ] 6.2 Als Trainer-User `/termine/training/{id}` — alle Reasons sichtbar; als Player-User dieselbe Seite — nur eigene Reason; als Elternteil-User — Kind-Reason zusätzlich zur eigenen. (offen für Nutzer-seitige Verifikation)
 - [x] 6.3 Build/Test/Lint durchlaufen: `go test ./...` (1234 grün), `pnpm build` (ok), `pnpm test` (510/510), `golangci-lint run ./...` (no issues), `pnpm lint` (keine neuen Findings in geänderten Dateien).
-- [ ] 6.4 Commit(s) im OpenSpec-Konventions-Format (siehe unten).
+- [x] 6.4 Commit(s) im OpenSpec-Konventions-Format: 7450f47 (Proposal), 6a4623f (Backend + Tests), 0e2f692 (Frontend + Tests).
 - [ ] 6.5 Archive-Change ausführen (Move nach `openspec/changes/archive/`), wenn PR gemerged.
