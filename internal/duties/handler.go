@@ -911,6 +911,9 @@ func (h *Handler) Unclaim(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// Der handelnde User fällt nach dem Freigeben evtl. aus dem Slot-Team heraus
+	// → explizit als extraUserID mitgeben, damit er selbst refresht.
+	h.broadcastDutySlot(r.Context(), slotID, claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -986,6 +989,7 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 		`INSERT OR IGNORE INTO duty_accounts (user_id, season_id, soll, ist)
 		 SELECT ?, id, 0, 0 FROM seasons WHERE is_active = 1`,
 		targetUserID)
+	h.broadcastDutySlot(r.Context(), slotID, claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
