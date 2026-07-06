@@ -86,7 +86,7 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
 	rsync -az deploy/teamwerk.service $(REMOTE):/tmp/teamwerk.service
 	ssh $(REMOTE) "[ -f /etc/teamwerk/env ]" 2>/dev/null || \
 		grep -E '^(PORT|DB_PATH|JWT_SECRET|BASE_URL|SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_PASS|SMTP_FROM)=' .env | \
-		sed 's|DB_PATH=.*|DB_PATH=/var/lib/teamwerk/teamwerk.db|; s|BASE_URL=.*|BASE_URL=https://intern.team-stuttgart.org|' | \
+		sed 's|DB_PATH=.*|DB_PATH=/var/lib/teamwerk/teamwerk.db|; s|BASE_URL=.*|BASE_URL=https://teamwerk.team-stuttgart.org|' | \
 		ssh $(REMOTE) "sudo mkdir -p /etc/teamwerk && sudo tee /etc/teamwerk/env > /dev/null && sudo chmod 600 /etc/teamwerk/env"
 	ssh $(REMOTE) "sudo mkdir -p $(dir $(DB_PATH)) && \
 		if ! [ -f /etc/systemd/system/teamwerk.service ]; then \
