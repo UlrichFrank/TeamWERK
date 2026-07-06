@@ -891,6 +891,7 @@ type childRSVP struct {
 	MemberID int     `json:"member_id"`
 	Name     string  `json:"name"`
 	RSVP     *string `json:"rsvp"`
+	Reason   *string `json:"reason,omitempty"`
 }
 
 type sessionVenueRef struct {
@@ -922,6 +923,7 @@ type sessionListItem struct {
 	MyRSVP              *string          `json:"my_rsvp"`
 	MyRSVPIsDefault     bool             `json:"my_rsvp_is_default,omitempty"`
 	MyRSVPLocked        bool             `json:"my_rsvp_locked"`
+	MyReason            *string          `json:"my_reason,omitempty"`
 	ChildrenRSVP        []childRSVP      `json:"children_rsvp,omitempty"`
 	RsvpDefaultPlayers  string           `json:"rsvp_default_players"`
 	RsvpDefaultExtended string           `json:"rsvp_default_extended"`
@@ -1005,10 +1007,8 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Order must match the ?-markers in the query:
-	// 1. member_id (explicit_rsvp), 2. member_id (stammkader-check for default),
-	// 3. member_id (extended-check for default), 4. member_id (trainer-check for default),
-	// 5. member_id (my_rsvp_locked subquery),
-	// 5. teamArgs (WHERE), 6. from, 7. to, 8. optional team filter
+	// 5. member_id (my_rsvp_locked subquery), 6. member_id (my_reason subquery),
+	// dann teamArgs (WHERE), from, to, optionaler team-Filter.
 	// whereArgs sind die Argumente der reinen WHERE-Bedingung (teamArgs, from, to,
 	// optionaler team-Filter, exclude_series). Sie werden identisch für COUNT(*)
 	// und die Items-Query verwendet — Sichtbarkeit bleibt invariant.
@@ -1036,8 +1036,9 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// args für die Items-Query: 5 memberID-Spalten-Args + whereArgs + LIMIT/OFFSET.
-	args := append([]any{memberID, memberID, memberID, memberID, memberID}, whereArgs...)
+	// args für die Items-Query: 6 memberID-Spalten-Args (explicit_rsvp, default-player,
+	// default-extended, default-trainer, my_rsvp_locked, my_reason) + whereArgs + LIMIT/OFFSET.
+	args := append([]any{memberID, memberID, memberID, memberID, memberID, memberID}, whereArgs...)
 
 	query := fmt.Sprintf(`
 		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
@@ -1082,6 +1083,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		         ELSE NULL
 		       END AS default_rsvp,
 		       (SELECT absence_id IS NOT NULL FROM training_responses WHERE training_id = ts.id AND member_id = ? LIMIT 1),
+		       (SELECT reason FROM training_responses WHERE training_id = ts.id AND member_id = ?) AS explicit_reason,
 		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
@@ -1111,14 +1113,14 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var s sessionListItem
 		var seriesID sql.NullInt64
-		var explicitRSVP, defaultRSVP sql.NullString
+		var explicitRSVP, defaultRSVP, explicitReason sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		err := rows.Scan(
 			&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 			&s.Note, &s.Status, &s.CancelReason,
-			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP, &myRSVPLocked,
+			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP, &myRSVPLocked, &explicitReason,
 			&s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 		if err != nil {
@@ -1132,6 +1134,9 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 		if explicitRSVP.Valid {
 			s.MyRSVP = &explicitRSVP.String
+			if explicitReason.Valid && explicitReason.String != "" {
+				s.MyReason = &explicitReason.String
+			}
 		} else if defaultRSVP.Valid {
 			v := defaultRSVP.String
 			s.MyRSVP = &v
@@ -1506,6 +1511,27 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Reason-Sichtbarkeit: Trainer sehen alle, Mitglied nur eigene Zeile,
+	// Elternteil zusätzlich Zeilen ihrer Kinder (family_links).
+	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	childMemberIDs := map[int]bool{}
+	if claims.IsParent {
+		childRows, err := h.db.QueryContext(r.Context(),
+			`SELECT member_id FROM family_links WHERE parent_user_id = ?`, claims.UserID)
+		if err == nil {
+			defer childRows.Close()
+			for childRows.Next() {
+				var cid int
+				childRows.Scan(&cid)
+				childMemberIDs[cid] = true
+			}
+		}
+	}
+
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, reason, present
 		FROM (
@@ -1603,7 +1629,9 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 				item.RSVPIsDefault = true
 			}
 		}
-		canSeeReason := isTrainerLike
+		canSeeReason := isTrainerLike ||
+			(memberID > 0 && item.MemberID == memberID) ||
+			childMemberIDs[item.MemberID]
 		if canSeeReason && reason.Valid && reason.String != "" {
 			item.Reason = &reason.String
 		}
@@ -1726,7 +1754,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 	// The extended branch excludes members already counted as regular for the same
 	// team/season so a child in both squads appears exactly once (regular wins).
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_players
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_players, tr.reason
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_members km ON km.kader_id = k.id
@@ -1737,7 +1765,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 
 		UNION
 
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_extended
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_extended, tr.reason
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_extended_members kem ON kem.kader_id = k.id
@@ -1762,12 +1790,16 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 	for rows.Next() {
 		var sid int
 		var c childRSVP
-		var rsvp sql.NullString
+		var rsvp, reason sql.NullString
 		var roleDefault string
-		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &roleDefault)
+		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
+			if reason.Valid && reason.String != "" {
+				r := reason.String
+				c.Reason = &r
+			}
 		} else if roleDefault == "confirmed" || roleDefault == "declined" {
 			d := roleDefault
 			c.RSVP = &d

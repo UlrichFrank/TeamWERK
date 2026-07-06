@@ -576,6 +576,40 @@ func TestGetProfile_ReturnsOwnData(t *testing.T) {
 	}
 }
 
+// Regression (#135): GET /api/profile/me muss die dedizierte DSGVO-Foto-Einwilligung
+// mitliefern. Der getMember-Helper (Profil-Pfad) hatte foto_veroeffentlichung anfangs
+// nicht selektiert → Schalter blieb im Profil leer, obwohl /mitglieder ihn zeigte.
+func TestGetProfile_IncludesFotoVeroeffentlichung(t *testing.T) {
+	database := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, database, "standard")
+	memberID := testutil.CreateMember(t, database, userID)
+	database.Exec(
+		`UPDATE members SET foto_veroeffentlichung=1, foto_veroeffentlichung_date='2026-07-05' WHERE id=?`,
+		memberID)
+	srv := newMembersServer(t, database)
+
+	res := testutil.Get(t, srv, "/api/profile/me", testutil.Token(t, userID, "standard", nil))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		OwnMember struct {
+			FotoVeroeffentlichung     bool   `json:"foto_veroeffentlichung"`
+			FotoVeroeffentlichungDate string `json:"foto_veroeffentlichung_date"`
+		} `json:"own_member"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.OwnMember.FotoVeroeffentlichung {
+		t.Error("expected own_member.foto_veroeffentlichung=true, got false (getMember selektiert das Feld nicht)")
+	}
+	if body.OwnMember.FotoVeroeffentlichungDate == "" {
+		t.Error("expected own_member.foto_veroeffentlichung_date to be set")
+	}
+}
+
 // TC: PUT /api/profile/me ändert first_name in DB.
 func TestUpdateProfile_PersistsChange(t *testing.T) {
 	database := testutil.NewDB(t)

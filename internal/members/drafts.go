@@ -79,6 +79,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       COALESCE(m.cross_team_visible,0),
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
+		       m.foto_veroeffentlichung, m.foto_veroeffentlichung_date,
 		       COALESCE(m.sepa_mandat,0), m.sepa_mandat_date,
 		       (SELECT COUNT(*) FROM member_sensitive WHERE member_id=m.id)
 		FROM members m
@@ -91,6 +92,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	var photoVisible, phonesVisible, addressVisible, emailVisible int64
 	var crossTeamVisible, dsgvoVerarbeitung, dsgvoWeitergabe int64
 	var dsgvoVerarbDate, dsgvoWeiterDate sql.NullString
+	var fotoVeroeff int64
+	var fotoVeroeffDate sql.NullString
 	var sepaMandat int64
 	var sepaMandatDate sql.NullString
 	var hasBankData int64
@@ -106,6 +109,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		&crossTeamVisible,
 		&dsgvoVerarbeitung, &dsgvoVerarbDate,
 		&dsgvoWeitergabe, &dsgvoWeiterDate,
+		&fotoVeroeff, &fotoVeroeffDate,
 		&sepaMandat, &sepaMandatDate,
 		&hasBankData,
 	)
@@ -150,6 +154,10 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	m.DsgvoWeitergabe = dsgvoWeitergabe != 0
 	if dsgvoWeiterDate.Valid {
 		m.DsgvoWeitergabeDate = &dsgvoWeiterDate.String
+	}
+	m.FotoVeroeffentlichung = fotoVeroeff != 0
+	if fotoVeroeffDate.Valid {
+		m.FotoVeroeffentlichungDate = &fotoVeroeffDate.String
 	}
 	m.SepaMandat = sepaMandat != 0
 	if sepaMandatDate.Valid {
@@ -280,8 +288,9 @@ func (h *Handler) extractFieldValue(m *Member, fieldName string) (json.RawMessag
 		return json.Marshal(m.PhotoURL)
 	case "dsgvo":
 		return json.Marshal(map[string]bool{
-			"verarbeitung": m.DsgvoVerarbeitung,
-			"weitergabe":   m.DsgvoWeitergabe,
+			"verarbeitung":           m.DsgvoVerarbeitung,
+			"weitergabe":             m.DsgvoWeitergabe,
+			"foto_veroeffentlichung": m.FotoVeroeffentlichung,
 		})
 	case "sepa_mandat":
 		return json.Marshal(m.SepaMandat)
@@ -344,15 +353,23 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 
 	case "dsgvo":
 		var data struct {
-			Verarbeitung bool `json:"verarbeitung"`
-			Weitergabe   bool `json:"weitergabe"`
+			Verarbeitung          bool `json:"verarbeitung"`
+			Weitergabe            bool `json:"weitergabe"`
+			FotoVeroeffentlichung bool `json:"foto_veroeffentlichung"`
 		}
 		if err := json.Unmarshal(newValue, &data); err != nil {
 			return err
 		}
+		// foto_veroeffentlichung_date beim Einwilligen setzen (analog Update-Handler).
+		var fotoDate interface{}
+		if data.FotoVeroeffentlichung {
+			fotoDate = time.Now().Format("2006-01-02")
+		}
 		_, err := h.db.Exec(
-			`UPDATE members SET dsgvo_verarbeitung = ?, dsgvo_weitergabe = ? WHERE id = ?`,
-			boolToInt(data.Verarbeitung), boolToInt(data.Weitergabe), memberID,
+			`UPDATE members SET dsgvo_verarbeitung = ?, dsgvo_weitergabe = ?,
+				foto_veroeffentlichung = ?, foto_veroeffentlichung_date = ? WHERE id = ?`,
+			boolToInt(data.Verarbeitung), boolToInt(data.Weitergabe),
+			boolToInt(data.FotoVeroeffentlichung), fotoDate, memberID,
 		)
 		return err
 

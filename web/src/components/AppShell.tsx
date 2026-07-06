@@ -3,13 +3,15 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import ChangelogModal from './ChangelogModal'
+import TransitionalHostnameBanner from './TransitionalHostnameBanner'
+import MaintenanceBanner from './MaintenanceBanner'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { useChatEvents } from '../hooks/useChatEvents'
 import { useVersion } from '../contexts/VersionContext'
 import { reloadWithSwActivation } from '../lib/reload'
-import { api } from '../lib/api'
+import { api, setMaintenanceHandler } from '../lib/api'
 import {
   setChannelDimension,
   setTeamSlugDimension,
@@ -65,17 +67,27 @@ const navModules: NavModule[] = [
       { to: '/beitragslauf', label: 'Beitragslauf' },
       { to: '/tresor', label: 'Tresor' },
       { to: '/einstellungen', label: 'Einstellungen' },
+      { to: '/wartung', label: 'Wartungsmodus' },
     ],
   },
 ]
 
-function initOpenModules(): Record<string, boolean> {
-  const state: Record<string, boolean> = {}
+// Label des Moduls, das die aktuelle Route enthält (für Akkordeon-Default + aktive Hervorhebung).
+function activeModuleLabel(pathname: string): string | null {
   for (const m of navModules) {
-    const stored = localStorage.getItem(`nav-open-${m.label}`)
-    state[m.label] = stored !== null ? stored === 'true' : true
+    if (m.items.some(item => (item.end ? pathname === item.to : pathname.startsWith(item.to)))) {
+      return m.label
+    }
   }
-  return state
+  return null
+}
+
+// Akkordeon: genau ein offenes Modul ('' = alle zu). Beim Start das Modul der aktuellen
+// Route öffnen, sonst den zuletzt gemerkten Zustand, sonst das erste Modul.
+function initOpenModule(): string {
+  const stored = localStorage.getItem('nav-open-module')
+  if (stored !== null) return stored
+  return activeModuleLabel(window.location.pathname) ?? navModules[0].label
 }
 
 interface ChildEntry { id: number; first_name: string; last_name: string }
@@ -93,10 +105,28 @@ export default function AppShell() {
   const [canGoBack, setCanGoBack] = useState(() => (window.history.state?.idx ?? 0) > 0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
-  const [openModules, setOpenModules] = useState<Record<string, boolean>>(initOpenModules)
+  const [openModule, setOpenModule] = useState<string>(initOpenModule)
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
   const navRoutes = new Set(navRouteList)
   const [chatUnread, setChatUnread] = useState(0)
+  // Kurzer Overlay-Hinweis, wenn ein Mutations-Request durch die
+  // Maintenance-Middleware mit 503 abgewiesen wurde. Der Banner (persistent
+  // oben) bleibt getrennt sichtbar — dieser Toast reagiert auf den konkreten
+  // Klick, damit der Nutzer die Wartungssperre in Verbindung mit seiner
+  // Aktion sieht.
+  const [maintenanceToast, setMaintenanceToast] = useState(false)
+  useEffect(() => {
+    let timer: number | undefined
+    setMaintenanceHandler(() => {
+      setMaintenanceToast(true)
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => setMaintenanceToast(false), 5000)
+    })
+    return () => {
+      setMaintenanceHandler(null)
+      window.clearTimeout(timer)
+    }
+  }, [])
   // Matomo team_slug Custom Dimension. 'none' = kein Team; 'unknown' = Endpoint-Fehler; 'mixed' = mehrere Teams.
   const [teamSlug, setTeamSlug] = useState<string>('none')
 
@@ -195,13 +225,26 @@ export default function AppShell() {
     navigate('/login')
   }
 
+  // Akkordeon: das geklickte Modul öffnen und alle anderen schließen; ein erneuter Klick
+  // auf das offene Modul klappt es zu ('').
   const toggleModule = (label: string) => {
-    setOpenModules(prev => {
-      const next = { ...prev, [label]: !prev[label] }
-      localStorage.setItem(`nav-open-${label}`, String(next[label]))
+    setOpenModule(prev => {
+      const next = prev === label ? '' : label
+      localStorage.setItem('nav-open-module', next)
       return next
     })
   }
+
+  // Bei Navigation (auch per Direktlink/navigate) das Modul der aktiven Route aufklappen,
+  // damit der aktive Eintrag sichtbar ist und die Akkordeon-Auswahl der Seite folgt.
+  useEffect(() => {
+    const active = activeModuleLabel(location.pathname)
+    if (active) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Sync an die Route (Akkordeon folgt der aktiven Seite)
+      setOpenModule(active)
+      localStorage.setItem('nav-open-module', active)
+    }
+  }, [location.pathname])
 
   const closeSidebar = () => setSidebarOpen(false)
 
@@ -228,7 +271,7 @@ export default function AppShell() {
           })
           if (visibleItems.length === 0) return null
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))
-          const isOpen = openModules[mod.label]
+          const isOpen = openModule === mod.label
           return (
             <div key={mod.label}>
               <button
@@ -306,7 +349,10 @@ export default function AppShell() {
   )
 
   return (
-    <div className="h-screen overflow-hidden flex bg-brand-gray">
+    <div className="h-screen overflow-hidden flex flex-col">
+      <MaintenanceBanner />
+      <TransitionalHostnameBanner />
+      <div className="flex-1 min-h-0 overflow-hidden flex bg-brand-gray">
       {/* Desktop sidebar */}
       <div className="hidden sm:flex">
         {sidebar}
@@ -423,6 +469,16 @@ export default function AppShell() {
       </div>
 
       {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+      {maintenanceToast && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md bg-brand-danger-light border border-brand-danger/30 text-brand-text text-sm rounded-lg shadow-lg px-4 py-3 flex items-start gap-2"
+        >
+          <AlertTriangle className="w-5 h-5 shrink-0 text-brand-danger" />
+          <p>Wartungsmodus aktiv — Änderungen sind gerade nicht möglich. Bitte gleich noch einmal versuchen.</p>
+        </div>
+      )}
+      </div>
     </div>
   )
 }

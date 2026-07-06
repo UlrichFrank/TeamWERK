@@ -48,6 +48,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/metrics"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
+	"github.com/teamstuttgart/teamwerk/internal/settings"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
@@ -119,8 +120,52 @@ func main() {
 		runMetrics()
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "maintenance" {
+		runMaintenance()
+		return
+	}
 
 	serve()
+}
+
+// runMaintenance schaltet den Wartungsmodus per DB-Direktschreibzugriff um —
+// unabhängig vom laufenden HTTP-Server. Verwendung als Ausfall-Sicherung,
+// falls das Admin-UI nicht erreichbar ist. Der laufende Server bekommt die
+// Änderung binnen 10 s (settings.Store-Poll) mit; alternativ Restart.
+func runMaintenance() {
+	if err := maintenanceToggle(os.Args[2:]); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+}
+
+// maintenanceToggle enthält die testbare Toggle-Logik. Erwartet die Argument-
+// Liste nach dem Subcommand (also z. B. ["on", "--db", "/pfad"]).
+func maintenanceToggle(args []string) error {
+	if len(args) < 1 || (args[0] != "on" && args[0] != "off") {
+		return errors.New("verwendung: teamwerk maintenance on|off [--db <pfad>]")
+	}
+	enabled := args[0] == "on"
+
+	dbPath := getEnvOrDefault("DB_PATH", "./teamwerk.db")
+	for i, arg := range args {
+		if arg == "--db" && i+1 < len(args) {
+			dbPath = args[i+1]
+		}
+	}
+
+	database, err := db.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("maintenance: open db failed: %w", err)
+	}
+	defer database.Close()
+
+	store := settings.NewStoreForTest(database, 0)
+	if err := store.SetMaintenanceMode(context.Background(), enabled, 0); err != nil {
+		return fmt.Errorf("maintenance: toggle failed: %w", err)
+	}
+	slog.Info("maintenance mode toggled", "enabled", enabled)
+	return nil
 }
 
 func runMetrics() {
@@ -150,12 +195,17 @@ func serve() {
 
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
 	hubInstance := hub.NewHub()
+	// SettingsStore lädt system_settings-Zustand initial und pollt alle 10 s
+	// nach externen Änderungen (CLI-Fallback `teamwerk maintenance on|off`).
+	// Der Poll-Loop hängt am Prozess-Context — endet mit SIGTERM sauber.
 
 	// Prozess-weiter Lebenszyklus-Context: bricht bei SIGINT/SIGTERM ab und
 	// beendet damit die Hintergrund-Goroutinen (tus-Finish-Hook, Transcode-Worker)
 	// sauber (graceful shutdown).
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	settingsStore := settings.NewStore(ctx, database)
 
 	videosHandler := videos.NewHandler(database, hubInstance, cfg)
 	// tusd-Upload-Handler (resumable Upload) + Finish-Hook-Goroutine; an den
@@ -208,6 +258,8 @@ func serve() {
 		Videos:              videosHandler,
 		VideosTus:           videosTus,
 		MatchReports:        matchreports.NewHandler(database, hubInstance, cfg),
+		Settings:            settings.NewHandler(settingsStore, hubInstance),
+		SettingsStore:       settingsStore,
 		Hub:                 hub.NewHandler(hubInstance, buildHash, auth.UserIDFromCtx),
 		JWTSecret:           cfg.JWTSecret,
 		Database:            database,

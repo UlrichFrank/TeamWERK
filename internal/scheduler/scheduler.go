@@ -425,7 +425,7 @@ func (s *Scheduler) sendDutyReminders() {
 			var exists int
 			s.db.QueryRow(`SELECT 1 FROM duty_reminder_log WHERE user_id=? AND event_date=?`, uid, targetDate).Scan(&exists)
 			if exists == 0 {
-				body := buildReminderMail(u.name, targetDate, uSlots)
+				body := buildReminderMail(u.name, targetDate, uSlots, s.cfg.BaseURL)
 				subject := fmt.Sprintf("Offene Dienste am %s", formatDate(targetDate))
 				if err := s.mailer.Send(u.email, subject, body); err != nil {
 					slog.Error("scheduler duty reminders send mail failed", "email", u.email, "error", err)
@@ -819,7 +819,7 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 	return users, nil
 }
 
-func buildReminderMail(name, date string, slots []openSlot) string {
+func buildReminderMail(name, date string, slots []openSlot, baseURL string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Hallo %s,\n\n", name)
 	fmt.Fprintf(&sb, "am %s sind noch folgende Dienste offen, für die du dich eintragen kannst:\n\n", formatDate(date))
@@ -837,7 +837,7 @@ func buildReminderMail(name, date string, slots []openSlot) string {
 		fmt.Fprintf(&sb, "\n    Noch offene Plätze: %d\n\n", sl.slotsOpen)
 	}
 
-	sb.WriteString("Jetzt eintragen: https://internal.team-stuttgart.org/duty-board\n\n")
+	fmt.Fprintf(&sb, "Jetzt eintragen: %s/duty-board\n\n", baseURL)
 	sb.WriteString("Viele Grüße\nDein TeamWERK\n")
 	return sb.String()
 }

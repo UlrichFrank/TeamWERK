@@ -1863,6 +1863,7 @@ type childRSVP struct {
 	MemberID int     `json:"member_id"`
 	Name     string  `json:"name"`
 	RSVP     *string `json:"rsvp"`
+	Reason   *string `json:"reason,omitempty"`
 }
 
 type gameVenueRef struct {
@@ -1892,6 +1893,7 @@ type gameListItem struct {
 	MyRSVP              *string       `json:"my_rsvp"`
 	MyRSVPIsDefault     bool          `json:"my_rsvp_is_default,omitempty"`
 	MyRSVPLocked        bool          `json:"my_rsvp_locked"`
+	MyReason            *string       `json:"my_reason,omitempty"`
 	ChildrenRSVP        []childRSVP   `json:"children_rsvp,omitempty"`
 	RsvpDefaultPlayers  string        `json:"rsvp_default_players"`
 	RsvpDefaultExtended string        `json:"rsvp_default_extended"`
@@ -1981,9 +1983,10 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
 	}
 
-	// Args order: memberID (my_rsvp), memberID (my_rsvp_locked), memberID (in_regular_kader),
-	// memberID (in_extended_kader), memberID (in_trainer_kader), teamArgs, from, to
-	args := append([]any{memberID, memberID, memberID, memberID, memberID}, teamArgs...)
+	// Args order: memberID (my_rsvp), memberID (my_rsvp_locked), memberID (my_reason),
+	// memberID (in_regular_kader), memberID (in_extended_kader), memberID (in_trainer_kader),
+	// teamArgs, from, to
+	args := append([]any{memberID, memberID, memberID, memberID, memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 
 	query := fmt.Sprintf(`
@@ -2001,6 +2004,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       `+gameRsvpCountCols+`,
 		       (SELECT status FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
+		       (SELECT reason FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       g.rsvp_default_players, g.rsvp_default_extended, g.rsvp_require_reason, g.note,
 		       EXISTS(SELECT 1 FROM game_teams gt_r
 		              JOIN kader k_r ON k_r.team_id = gt_r.team_id AND k_r.season_id = g.season_id
@@ -2033,13 +2037,13 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var g gameListItem
 		var isHome, inRegularKader, inExtendedKader, inTrainerKader int
-		var myRSVP sql.NullString
+		var myRSVP, myReason sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var teamNames, teamIDsCSV, teamShortCSV, teamLongCSV sql.NullString
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
-			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked,
+			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked, &myReason,
 			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &inRegularKader, &inExtendedKader, &inTrainerKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
@@ -2063,6 +2067,9 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		// 'none' liefert nichts.
 		if myRSVP.Valid {
 			g.MyRSVP = &myRSVP.String
+			if myReason.Valid && myReason.String != "" {
+				g.MyReason = &myReason.String
+			}
 		} else if inRegularKader == 1 && (g.RsvpDefaultPlayers == "confirmed" || g.RsvpDefaultPlayers == "declined") {
 			v := g.RsvpDefaultPlayers
 			g.MyRSVP = &v
@@ -2636,7 +2643,7 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 	// applies (rsvp_default_players for regular, rsvp_default_extended for
 	// extended); 'none' leaves the RSVP empty.
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_players
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_players, gr.reason
 		FROM game_teams gt
 		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
@@ -2649,7 +2656,7 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 
 		UNION
 
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_extended
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_extended, gr.reason
 		FROM game_teams gt
 		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
@@ -2677,12 +2684,16 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 	for rows.Next() {
 		var gid int
 		var c childRSVP
-		var rsvp sql.NullString
+		var rsvp, reason sql.NullString
 		var roleDefault string
-		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &roleDefault)
+		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
+			if reason.Valid && reason.String != "" {
+				r := reason.String
+				c.Reason = &r
+			}
 		} else if roleDefault == "confirmed" || roleDefault == "declined" {
 			d := roleDefault
 			c.RSVP = &d
@@ -2909,6 +2920,28 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reason-Sichtbarkeit: Trainer sehen alle, Mitglied nur eigene Zeile,
+	// Elternteil zusätzlich Zeilen ihrer Kinder (family_links).
+	isTrainerLike := claims.Role == "admin" || claims.HasFunction("trainer")
+	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	childMemberIDs := map[int]bool{}
+	if claims.IsParent {
+		childRows, err := h.db.QueryContext(r.Context(),
+			`SELECT member_id FROM family_links WHERE parent_user_id = ?`, claims.UserID)
+		if err == nil {
+			defer childRows.Close()
+			for childRows.Next() {
+				var cid int
+				childRows.Scan(&cid)
+				childMemberIDs[cid] = true
+			}
+		}
+	}
+
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, reason, present
 		FROM (
@@ -3023,7 +3056,10 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 				item.RSVPIsDefault = true
 			}
 		}
-		if reason.Valid && reason.String != "" {
+		canSeeReason := isTrainerLike ||
+			(memberID > 0 && item.MemberID == memberID) ||
+			childMemberIDs[item.MemberID]
+		if canSeeReason && reason.Valid && reason.String != "" {
 			item.Reason = &reason.String
 		}
 		// Trainer haben keine Anwesenheitserfassung.

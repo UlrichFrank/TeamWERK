@@ -5,10 +5,26 @@
  * Backend-Äquivalent: internal/permissions/matrix_test.go
  */
 import { describe, test, expect, vi, beforeAll } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import AppShell from '../AppShell'
 import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
+
+// Die Sidebar ist ein Akkordeon: es ist immer genau EIN Modul offen (Default auf
+// Route '/' ist "Nutzer"), die Items geschlossener Module sind nicht im DOM.
+// Für Sichtbarkeits-Assertions muss daher zuerst das Modul des Items geöffnet
+// werden. Der Modul-Header (ein <button>) ist unabhängig vom Auf-/Zu-Zustand
+// immer gerendert, solange das Modul mindestens ein sichtbares Item hat.
+async function queryItemInModule(moduleName: string, itemLabel: string): Promise<HTMLElement | null> {
+  let el = screen.queryByText(itemLabel)
+  if (el) return el
+  const header = screen.queryByRole('button', { name: moduleName })
+  if (!header) return null // Persona hat kein Item in diesem Modul → Header fehlt
+  fireEvent.click(header)
+  await flushAsync()
+  el = screen.queryByText(itemLabel)
+  return el
+}
 
 vi.mock('../../hooks/usePushSubscription', () => ({
   usePushSubscription: vi.fn(),
@@ -29,8 +45,18 @@ beforeAll(() => {
   vi.spyOn(window.localStorage.__proto__, 'setItem').mockImplementation(() => {})
 })
 
-// Items sichtbar für ALLE Personas (roles: [])
-const ALWAYS_VISIBLE = ['Dashboard', 'Kalender', 'Termine', 'Mein Team', 'Dokumente', 'Dienste', 'Mitfahrten', 'Nachrichten']
+// Items sichtbar für ALLE Personas (roles: []) — mit ihrem Akkordeon-Modul,
+// damit der Test das Modul vor der Assertion aufklappen kann.
+const ALWAYS_VISIBLE: { label: string; module: string }[] = [
+  { label: 'Dashboard', module: 'Nutzer' },
+  { label: 'Kalender', module: 'Spielbetrieb' },
+  { label: 'Termine', module: 'Spielbetrieb' },
+  { label: 'Mein Team', module: 'Verein' },
+  { label: 'Dokumente', module: 'Verein' },
+  { label: 'Dienste', module: 'Verein' },
+  { label: 'Mitfahrten', module: 'Verein' },
+  { label: 'Nachrichten', module: 'Verein' },
+]
 
 // Verwaltungs-Items und ihre erlaubten Personas
 const VERWALTUNG_ITEMS: { label: string; allowedIds: string[] }[] = [
@@ -82,18 +108,20 @@ describe('AppShell — Sidebar-Items pro Persona', () => {
   test.each(PERSONAS)('Persona $id: immer sichtbare Items vorhanden', async (persona) => {
     renderAsPersona(<AppShell />, persona.id, { route: '/' })
     await flushAsync()
-    for (const label of ALWAYS_VISIBLE) {
-      expect(screen.queryByText(label), `"${label}" für ${persona.id}`).not.toBeNull()
+    for (const { label, module } of ALWAYS_VISIBLE) {
+      const el = await queryItemInModule(module, label)
+      expect(el, `"${label}" für ${persona.id}`).not.toBeNull()
     }
   })
 
   test.each(PERSONAS)('Persona $id: "Mein Profil" (nicht für admin)', async (persona) => {
     renderAsPersona(<AppShell />, persona.id, { route: '/' })
     await flushAsync()
+    const el = await queryItemInModule('Nutzer', 'Mein Profil')
     if (persona.id === 'admin') {
-      expect(screen.queryByText('Mein Profil')).toBeNull()
+      expect(el).toBeNull()
     } else {
-      expect(screen.queryByText('Mein Profil')).not.toBeNull()
+      expect(el).not.toBeNull()
     }
   })
 
@@ -114,7 +142,7 @@ describe('AppShell — Sidebar-Items pro Persona', () => {
       test.each(PERSONAS)(`Persona $id: "${item.label}"`, async (persona) => {
         renderAsPersona(<AppShell />, persona.id, { route: '/' })
         await flushAsync()
-        const el = screen.queryByText(item.label)
+        const el = await queryItemInModule('Verwaltung', item.label)
         if (item.allowedIds.includes(persona.id)) {
           expect(el, `"${item.label}" muss für ${persona.id} sichtbar sein`).not.toBeNull()
         } else {

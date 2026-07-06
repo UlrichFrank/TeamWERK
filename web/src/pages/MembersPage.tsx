@@ -185,14 +185,15 @@ export default function MembersPage() {
   const [showNew, setShowNew] = useState(false)
   const [newFirstName, setNewFirstName] = useState('')
   const [newLastName, setNewLastName] = useState('')
+  const [newJoinDate, setNewJoinDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [creating, setCreating] = useState(false)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newFirstName.trim() || !newLastName.trim()) return
+    if (!newFirstName.trim() || !newLastName.trim() || !newJoinDate) return
     setCreating(true)
     try {
-      const res = await api.post<{ id: number }>('/members', { first_name: newFirstName.trim(), last_name: newLastName.trim() })
+      const res = await api.post<{ id: number }>('/members', { first_name: newFirstName.trim(), last_name: newLastName.trim(), join_date: newJoinDate })
       navigate(`/mitglieder/${res.data.id}`)
     } catch {
       alert('Anlegen fehlgeschlagen.')
@@ -204,6 +205,7 @@ export default function MembersPage() {
     setShowNew(false)
     setNewFirstName('')
     setNewLastName('')
+    setNewJoinDate(new Date().toISOString().slice(0, 10))
     setCreating(false)
   }
 
@@ -566,8 +568,9 @@ export default function MembersPage() {
             </div>
             <form onSubmit={handleCreate} className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+                <label htmlFor="new-member-first-name" className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
                 <input
+                  id="new-member-first-name"
                   autoFocus
                   type="text"
                   value={newFirstName}
@@ -577,14 +580,27 @@ export default function MembersPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+                <label htmlFor="new-member-last-name" className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
                 <input
+                  id="new-member-last-name"
                   type="text"
                   value={newLastName}
                   onChange={e => setNewLastName(e.target.value)}
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                   required
                 />
+              </div>
+              <div>
+                <label htmlFor="new-member-join-date" className="block text-sm font-medium text-brand-text-muted mb-1">Mitglied seit</label>
+                <input
+                  id="new-member-join-date"
+                  type="date"
+                  value={newJoinDate}
+                  onChange={e => setNewJoinDate(e.target.value)}
+                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  required
+                />
+                <p className="text-xs text-brand-text-subtle mt-1">Eintrittsdatum — steuert die Beitrags-Halbierung bei unterjährigem Eintritt.</p>
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={resetNew} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
