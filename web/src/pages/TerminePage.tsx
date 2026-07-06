@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History } from 'lucide-react'
+import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History, MessageCircle } from 'lucide-react'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
@@ -24,6 +24,7 @@ interface ChildRSVP {
   member_id: number
   name: string
   rsvp: string | null
+  reason?: string
 }
 
 interface VenueRef {
@@ -51,6 +52,7 @@ interface Session {
   maybe_count: number
   my_rsvp: string | null
   my_rsvp_is_default?: boolean
+  my_reason?: string
   children_rsvp?: ChildRSVP[]
   rsvp_default_players: RsvpDefault
   rsvp_default_extended: RsvpDefault
@@ -75,6 +77,7 @@ interface Game {
   maybe_count: number
   my_rsvp: string | null
   my_rsvp_is_default?: boolean
+  my_reason?: string
   children_rsvp?: ChildRSVP[]
   rsvp_default_players: RsvpDefault
   rsvp_default_extended: RsvpDefault
@@ -526,6 +529,12 @@ export default function TerminePage() {
                               <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'maybe') : respondTraining(s.id, 'maybe')} />
                               <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'declined') : respondTraining(s.id, 'declined')} />
                             </div>
+                            {s.my_reason && (s.my_rsvp === 'declined' || s.my_rsvp === 'maybe') && (
+                              <p className="text-xs text-brand-text-muted flex items-start gap-1">
+                                <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                                <span>{s.my_reason}</span>
+                              </p>
+                            )}
                           </div>
                         )}
                         {childRows.map(child => {
@@ -542,6 +551,12 @@ export default function TerminePage() {
                                 <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
                                 <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                               </div>
+                              {child.reason && (child.rsvp === 'declined' || child.rsvp === 'maybe') && (
+                                <p className="text-xs text-brand-text-muted flex items-start gap-1">
+                                  <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                                  <span>{child.reason}</span>
+                                </p>
+                              )}
                             </div>
                           )
                         })}
@@ -620,6 +635,12 @@ export default function TerminePage() {
                             <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
                             <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
                           </div>
+                          {g.my_reason && (g.my_rsvp === 'declined' || g.my_rsvp === 'maybe') && (
+                            <p className="text-xs text-brand-text-muted flex items-start gap-1">
+                              <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                              <span>{g.my_reason}</span>
+                            </p>
+                          )}
                         </div>
                       )}
                       {childRows.map(child => {
@@ -636,6 +657,12 @@ export default function TerminePage() {
                               <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
                               <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                             </div>
+                            {child.reason && (child.rsvp === 'declined' || child.rsvp === 'maybe') && (
+                              <p className="text-xs text-brand-text-muted flex items-start gap-1">
+                                <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                                <span>{child.reason}</span>
+                              </p>
+                            )}
                           </div>
                         )
                       })}
