@@ -84,7 +84,7 @@ func (h *Handler) BulkImportSepaMandate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if anyImported {
-		h.broadcastMembers(r.Context())
+		h.broadcastMembers(r.Context(), nil)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
