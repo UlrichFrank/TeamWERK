@@ -25,13 +25,27 @@ import (
 )
 
 // State-Konstanten der match_reports.state-Spalte. CHECK-Constraint in
-// Migration 019 spiegelt diese Menge.
+// Migrationen 019 + 024 spiegelt diese Menge. Vorwärtsflow:
+//
+//	draft → pending_review → publishing → published
+//	                              │
+//	                              └─(4xx/5xx)─▶ publish_failed ─retry─▶ publishing
+//
+// Kein Rückweg — kein Reject, kein Withdraw (siehe design.md D-3 des
+// spielbericht-medien-gate-Change).
 const (
 	StateDraft         = "draft"
+	StatePendingReview = "pending_review"
 	StatePublishing    = "publishing"
 	StatePublished     = "published"
 	StatePublishFailed = "publish_failed"
 )
+
+// ClubFunctionMedien ist die Vereinsfunktion, die die Match-Report-Freigabe
+// (POST /submit-for-review → POST /publish) durch nicht-Autor-Nutzer erlaubt.
+// Vorstand hat identische Rechte als Fallback-Freigeber (`vorstand` ist der
+// bestehende Vereinsfunktions-Konstante-Wert; keine eigene Konstante nötig).
+const ClubFunctionMedien = "medien"
 
 // EventCategory ist die SSE-Event-Kategorie, die Frontend-Seiten via
 // useLiveUpdates abonnieren, um auf Draft-/Publish-Änderungen zu reagieren.

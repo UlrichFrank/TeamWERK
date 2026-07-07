@@ -1,13 +1,13 @@
-## 1. Datenbank (Migration 020)
+## 1. Datenbank (Migration 024)
 
-- [ ] 1.1 `internal/db/migrations/020_medien_gate.up.sql`:
+- [ ] 1.1 `internal/db/migrations/024_medien_gate.up.sql`:
   - `match_reports.state` CHECK erweitern um `'pending_review'`
     (SQLite: neue Tabelle mit erweitertem CHECK + `INSERT … SELECT` + Drop).
   - `match_reports` ergänzen: `submitted_at TIMESTAMP NULL`,
     `reviewer_user_id INTEGER NULL REFERENCES users(id)`.
   - `member_club_functions.function` CHECK erweitern um `'medien'`
     (analog: Tabellen-Rebuild).
-- [ ] 1.2 `020_medien_gate.down.sql` — reverse (nur Struktur; Datenverlust
+- [ ] 1.2 `024_medien_gate.down.sql` — reverse (nur Struktur; Datenverlust
        bei `pending_review`-Zeilen und `medien`-Fkt-Einträgen dokumentieren).
 - [ ] 1.3 `internal/db/migrations_test.go` bzw. Testutil-Fixtures — neue
        Werte akzeptiert, alte Werte weiter akzeptiert.

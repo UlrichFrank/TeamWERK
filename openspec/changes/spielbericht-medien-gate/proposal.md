@@ -42,7 +42,7 @@ Medien-Person hängt.
 - **Reminder-Job:** Berichte, die länger als 5 Tage in
   `pending_review` liegen, lösen einen erneuten Push an alle
   Freigeber aus (einmalig, idempotent via `notification_log`).
-- **DB-Migration 020**:
+- **DB-Migration 024**:
   - `match_reports.state` CHECK erweitern um `pending_review`.
   - `match_reports.submitted_at TIMESTAMP NULL` — für Reminder-Job.
   - `match_reports.reviewer_user_id INTEGER NULL` — Audit-Feld, welcher
@@ -64,7 +64,7 @@ Keine — das Gate ist Erweiterung der bestehenden `match-reports`-Domain.
 
 ## Impact
 
-- **Datenbank**: Migration 020; erweiterte CHECK-Constraints,
+- **Datenbank**: Migration 024; erweiterte CHECK-Constraints,
   zwei neue Spalten auf `match_reports`.
 - **Backend**: `internal/matchreports/`:
   - Neuer Handler `POST submit-for-review`.
