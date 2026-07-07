@@ -4,7 +4,7 @@
 - [x] 1.2 Private Methode `resolveCategoryUidByName(string $name): int` mit `SELECT uid FROM sys_category WHERE title = ? AND deleted = 0 LIMIT 1`, wirft `RuntimeException` bei No-Match
 - [x] 1.3 Aufruf-Site vor `attachTeamCategory`: erst Name auflösen; No-Match → HTTP 422 mit `{"error":"category_not_found","detail":"<name>"}`
 - [x] 1.4 Fixture-Payload `scripts/spike-match-report-import/fixture-payload.json` auf `team_category_name` umstellen
-- [ ] 1.5 OpenSpec-Proposal auf `team-stuttgart-org`-Seite spiegeln (kurzer Change, verweist auf TeamWERK-Proposal)
+- [x] 1.5 OpenSpec-Proposal auf `team-stuttgart-org`-Seite spiegeln (kurzer Change, verweist auf TeamWERK-Proposal) — `openspec/changes/spielbericht-team-category-name/` in team-stuttgart-org, `openspec validate` grün
 - [ ] 1.6 PR erstellen, mergen, auf Produktion deployen; sys_category-Titel prüfen (jedes aktive Team-Kürzel muss dort existieren)
 
 ## 2. Datenbank-Migration (TeamWERK)

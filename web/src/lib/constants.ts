@@ -5,6 +5,7 @@ export const CLUB_FUNCTION_OPTIONS = [
   { value: 'vorstand', label: 'Vorstand' },
   { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
   { value: 'kassierer', label: 'Kassierer' },
+  { value: 'medien', label: 'Medien' },
 ] as const
 
 export const AUDIENCE_OPTIONS = [
@@ -14,6 +15,7 @@ export const AUDIENCE_OPTIONS = [
   { value: 'vorstand', label: 'Vorstand' },
   { value: 'vorstand_beisitzer', label: 'Vorstands-Beisitzer' },
   { value: 'kassierer', label: 'Kassierer' },
+  { value: 'medien', label: 'Medien' },
   { value: 'eltern', label: 'Eltern' },
 ] as const
 

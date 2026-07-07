@@ -57,14 +57,12 @@ export default function MatchReportPendingListPage() {
                 <h1 className="text-2xl font-bold text-brand-text">Berichte zur Prüfung</h1>
             </div>
 
-            {error && (
+            {loading ? (
+                <div className="text-brand-text-muted">Lade…</div>
+            ) : error ? (
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
                     {error}
                 </div>
-            )}
-
-            {loading ? (
-                <div className="text-brand-text-muted">Lade…</div>
             ) : items.length === 0 ? (
                 <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 text-brand-text-muted">
                     Aktuell wartet kein Bericht auf Freigabe.

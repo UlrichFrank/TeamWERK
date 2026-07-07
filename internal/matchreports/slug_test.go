@@ -1,6 +1,7 @@
 package matchreports
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -53,6 +54,46 @@ func TestLoadSeasonRange_FallbackBeforeJuly(t *testing.T) {
 	r := LoadSeasonRange("", "", ts)
 	if r.StartYear != 2025 || r.EndYear != 2026 || !r.Fallback {
 		t.Errorf("expected 2025-2026 fallback, got %+v", r)
+	}
+}
+
+func TestParseSeasonName_Standard(t *testing.T) {
+	got, err := ParseSeasonName("2026/27")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "2026-2027" {
+		t.Errorf("ParseSeasonName(%q) = %q, want %q", "2026/27", got, "2026-2027")
+	}
+}
+
+func TestParseSeasonName_CenturyBoundary(t *testing.T) {
+	got, err := ParseSeasonName("1999/00")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "1999-2000" {
+		t.Errorf("ParseSeasonName(%q) = %q, want %q", "1999/00", got, "1999-2000")
+	}
+}
+
+func TestParseSeasonName_Invalid(t *testing.T) {
+	cases := []string{
+		"",
+		"2026-27",
+		"foo",
+		"2026/28", // End nicht Start+1
+	}
+	for _, in := range cases {
+		t.Run(in, func(t *testing.T) {
+			got, err := ParseSeasonName(in)
+			if err == nil {
+				t.Fatalf("ParseSeasonName(%q) = %q, want error", in, got)
+			}
+			if !errors.Is(err, ErrInvalidSeasonName) {
+				t.Errorf("ParseSeasonName(%q) error = %v, want ErrInvalidSeasonName", in, err)
+			}
+		})
 	}
 }
 

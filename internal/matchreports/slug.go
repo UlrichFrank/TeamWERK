@@ -1,11 +1,55 @@
 package matchreports
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 )
+
+// ErrInvalidSeasonName wird von ParseSeasonName zurückgegeben, wenn der
+// Saison-Name nicht dem erwarteten Format "YYYY/YY" entspricht oder das
+// End-Jahr nicht auf Start-Jahr+1 folgt.
+var ErrInvalidSeasonName = errors.New("invalid season name")
+
+var seasonNameRe = regexp.MustCompile(`^(\d{4})/(\d{2})$`)
+
+// ParseSeasonName wandelt einen Saison-Namen im Format "YYYY/YY" in das
+// Slug-Segment "YYYY-YYYY" um. Beispiele:
+//
+//	"2026/27" -> "2026-2027"
+//	"1999/00" -> "1999-2000" (Jahrhundert-Wechsel)
+//
+// Der zweite Teil muss Start-Jahr+1 modulo 100 entsprechen; ansonsten wird
+// ErrInvalidSeasonName gewrappt zurückgegeben.
+func ParseSeasonName(name string) (string, error) {
+	m := seasonNameRe.FindStringSubmatch(name)
+	if m == nil {
+		return "", fmt.Errorf("%w: %q", ErrInvalidSeasonName, name)
+	}
+	startYear, err := strconv.Atoi(m[1])
+	if err != nil {
+		return "", fmt.Errorf("%w: %q", ErrInvalidSeasonName, name)
+	}
+	endTwo, err := strconv.Atoi(m[2])
+	if err != nil {
+		return "", fmt.Errorf("%w: %q", ErrInvalidSeasonName, name)
+	}
+	expectedEndTwo := (startYear + 1) % 100
+	if endTwo != expectedEndTwo {
+		return "", fmt.Errorf("%w: %q (end year must be start+1)", ErrInvalidSeasonName, name)
+	}
+	// Century-Handling: Wenn End-Jahres-Kurzform < Start-Jahres-Kurzform,
+	// dann Jahrhundertwechsel (z. B. 1999/00 -> 2000).
+	endYear := (startYear/100)*100 + endTwo
+	if endTwo < startYear%100 {
+		endYear += 100
+	}
+	return fmt.Sprintf("%d-%d", startYear, endYear), nil
+}
 
 // SeasonRange liefert das Saisonfenster für ein Spiel.
 // Bei fehlender Saison-Referenz wird per Fallback aus match_date das
