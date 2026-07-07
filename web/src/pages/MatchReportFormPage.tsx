@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import MarkdownRenderer from '../components/MarkdownRenderer'
@@ -67,6 +67,14 @@ export default function MatchReportFormPage() {
 
     const reportID = Number(id)
 
+    // Die editierbaren Felder (Titel/Ergebnis/Abstract/Body) werden nur beim
+    // ERSTEN Laden pro reportID aus dem Server geseedet. Spätere Reloads
+    // (SSE `match-report-event`, Bild-Upload via ImagesSection.onChange)
+    // aktualisieren nur die nicht-editierbaren Teile (Status, Bilder, Consent) —
+    // sonst würden ungespeicherte Eingaben mit dem (noch leeren) Serverstand
+    // überschrieben und der Bericht käme leer zur Prüfung an.
+    const seededRef = useRef(false)
+
     const load = () => {
         if (!reportID) return
         api
@@ -74,18 +82,25 @@ export default function MatchReportFormPage() {
             .then(res => {
                 const r = res.data as MatchReport
                 setReport(r)
-                setTitle(r.title ?? '')
-                setHomeGoals(r.home_goals?.toString() ?? '')
-                setAwayGoals(r.away_goals?.toString() ?? '')
-                setHomeGoalsHT(r.home_goals_ht?.toString() ?? '')
-                setAwayGoalsHT(r.away_goals_ht?.toString() ?? '')
-                setTournament(r.tournament)
-                setAbstract(r.abstract)
-                setBodyMd(r.body_md)
+                if (!seededRef.current) {
+                    setTitle(r.title ?? '')
+                    setHomeGoals(r.home_goals?.toString() ?? '')
+                    setAwayGoals(r.away_goals?.toString() ?? '')
+                    setHomeGoalsHT(r.home_goals_ht?.toString() ?? '')
+                    setAwayGoalsHT(r.away_goals_ht?.toString() ?? '')
+                    setTournament(r.tournament)
+                    setAbstract(r.abstract)
+                    setBodyMd(r.body_md)
+                    seededRef.current = true
+                }
             })
             .catch(err => setError(err.response?.data?.error ?? 'Bericht nicht gefunden'))
     }
-    useEffect(load, [reportID])
+    useEffect(() => {
+        seededRef.current = false
+        load()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reportID])
 
     useLiveUpdates(evt => {
         if (evt === 'match-report-event') load()
@@ -118,7 +133,11 @@ export default function MatchReportFormPage() {
     }
     const readOnly = !canEdit
 
-    const saveDraft = async () => {
+    // Liefert true bei Erfolg, false bei Fehler. submitForReview/publish MÜSSEN
+    // den Rückgabewert prüfen und abbrechen, wenn das Speichern scheitert —
+    // sonst würde ein Bericht mit nicht-persistierten (leeren) Feldern
+    // eingereicht/veröffentlicht.
+    const saveDraft = async (): Promise<boolean> => {
         setSaving(true)
         try {
             await api.put(`/match-reports/${reportID}`, {
@@ -131,8 +150,10 @@ export default function MatchReportFormPage() {
                 abstract,
                 body_md: bodyMd,
             })
+            return true
         } catch (err) {
             setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Speichern fehlgeschlagen')
+            return false
         } finally {
             setSaving(false)
         }
@@ -142,7 +163,7 @@ export default function MatchReportFormPage() {
         if (!confirm('Bericht zur Prüfung senden? Nach dem Absenden kannst du ihn nicht mehr bearbeiten — nur Medien oder Vorstand veröffentlichen oder korrigieren dann noch.')) return
         setSubmitting(true)
         try {
-            await saveDraft()
+            if (!(await saveDraft())) return
             await api.post(`/match-reports/${reportID}/submit-for-review`)
             load()
         } catch (err) {
@@ -157,7 +178,7 @@ export default function MatchReportFormPage() {
         if (!confirm('Bericht veröffentlichen? Nach dem Publish sind Änderungen nur direkt in Typo3 möglich.')) return
         setPublishing(true)
         try {
-            await saveDraft()
+            if (!(await saveDraft())) return
             const res = await api.post(`/match-reports/${reportID}/publish`)
             const { url } = res.data as { pageUid: number; url: string }
             alert(`Veröffentlicht: ${url}`)
