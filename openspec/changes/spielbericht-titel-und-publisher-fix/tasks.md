@@ -49,8 +49,8 @@
 
 ## 7. Backend — Publish no-active-season Fehlerfall
 
-- [ ] 7.1 Test `handler_test.go`: `Publish` ohne aktive Saison (Fixture setzt `seasons.is_active=0` überall) → HTTP 500 mit `{"error":"no_active_season"}`, State bleibt `pending_review`
-- [ ] 7.2 Commit: `test(matchreports): Publish schlägt fehl ohne aktive Saison`
+- [x] 7.1 Test `handler_test.go`: `Publish` ohne aktive Saison (Fixture setzt `seasons.is_active=0` überall) → HTTP 500 mit `{"error":"no_active_season"}`, State bleibt `pending_review` — als `TestPublish_NoActiveSeason` in `publish_test.go` in Group 4 mit-implementiert
+- [x] 7.2 Commit: `test(matchreports): Publish schlägt fehl ohne aktive Saison` — bereits in Group-4-Commit `feat(matchreports): Publisher-Payload — Titel/Saison/Kürzel-Kategorie` enthalten
 
 ## 8. Frontend — Titel-Feld
 
