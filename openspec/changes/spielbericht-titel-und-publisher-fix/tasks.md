@@ -61,12 +61,12 @@
 
 ## 9. Frontend — Bild-Preview per Blob
 
-- [ ] 9.1 `ImageTile` in `MatchReportFormPage.tsx`: `useState<string|null>` für Blob-URL; `useEffect(() => { … }, [props.image.id])` lädt via `api.get(image.url, { responseType: 'blob' })`
-- [ ] 9.2 Cleanup mit `URL.revokeObjectURL(url)` beim Unmount und bei Wechsel `image.id`
-- [ ] 9.3 `<a href>` durch `<img src={previewUrl} alt="Bild {position}" />` ersetzen; grauer Kasten weg
-- [ ] 9.4 Doppelter `/api`-Prefix in `MatchReportFormPage.tsx:436` entfernen (URL kommt jetzt ohne Prefix vom Server; Axios setzt ihn)
-- [ ] 9.5 Fehlerfall: wenn `api.get` fehlschlägt → `<div>` mit brand-danger-Icon anzeigen statt kaputtem Bild
-- [ ] 9.6 Commit: `fix(matchreports): Bild-Preview via Blob-URL statt totem Link`
+- [x] 9.1 `ImageTile` in `MatchReportFormPage.tsx`: `useState<string|null>` für Blob-URL; `useEffect(() => { … }, [props.image.id])` lädt via `api.get(image.url, { responseType: 'blob' })`
+- [x] 9.2 Cleanup mit `URL.revokeObjectURL(url)` beim Unmount und bei Wechsel `image.id`
+- [x] 9.3 `<a href>` durch `<img src={previewUrl} alt="Bild {position}" />` ersetzen; grauer Kasten weg
+- [x] 9.4 Doppelter `/api`-Prefix in `MatchReportFormPage.tsx:436` entfernen (URL kommt jetzt ohne Prefix vom Server; Axios setzt ihn)
+- [x] 9.5 Fehlerfall: wenn `api.get` fehlschlägt → `<div>` mit brand-danger-Icon anzeigen statt kaputtem Bild
+- [x] 9.6 Commit: `fix(matchreports): Bild-Preview via Blob-URL statt totem Link`
 
 ## 10. Frontend — Fehlermeldungen sichtbar machen
 

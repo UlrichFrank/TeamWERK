@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import MarkdownRenderer from '../components/MarkdownRenderer'
-import { AlertTriangle, Trash2, Upload, X, Eye, EyeOff, Send } from 'lucide-react'
+import { AlertTriangle, ImageOff, Trash2, Upload, X, Eye, EyeOff, Send } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -444,19 +444,57 @@ function ImageTile(props: {
 }) {
     const [caption, setCaption] = useState(props.image.caption)
     const [dirty, setDirty] = useState(false)
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+    const [previewError, setPreviewError] = useState(false)
 
-    // Bilder-Endpoints erwarten Bearer — <img src> nutzt Cookie-Auth (SSE-Stil) nicht.
-    // Für den Draft-Zweck reicht ein einfacher <a>-Link (öffnet mit Session-Auth).
+    // Bilder-Endpoints erwarten Bearer-Auth — <img src> würde ohne Header laufen.
+    // Deshalb via api.get(..., responseType:'blob') laden und Object-URL anzeigen.
+    useEffect(() => {
+        let revoked = false
+        let objectUrl: string | null = null
+        setPreviewError(false)
+        setPreviewUrl(null)
+        // Server liefert URL jetzt OHNE `/api`-Prefix (baseURL setzt der axios-Client).
+        // Sanity-Check: falls doch mit `/api` reingekommen, warnen — nicht crashen.
+        const url = props.image.url
+        if (url.startsWith('/api/')) {
+            // eslint-disable-next-line no-console
+            console.warn('ReportImage.url sollte kein /api-Prefix haben:', url)
+        }
+        api.get(url, { responseType: 'blob' })
+            .then(res => {
+                if (revoked) return
+                objectUrl = URL.createObjectURL(res.data as Blob)
+                setPreviewUrl(objectUrl)
+            })
+            .catch(() => {
+                if (revoked) return
+                setPreviewError(true)
+            })
+        return () => {
+            revoked = true
+            if (objectUrl) URL.revokeObjectURL(objectUrl)
+        }
+    }, [props.image.id, props.image.url])
+
     return (
         <div className="border border-brand-border-subtle rounded-md p-2 bg-brand-surface-card space-y-2">
-            <a
-                href={`/api${props.image.url}`}
-                target="_blank"
-                rel="noreferrer"
-                className="block aspect-square bg-brand-border-subtle rounded overflow-hidden text-xs text-brand-text-muted flex items-center justify-center"
-            >
-                Bild {props.image.position} anzeigen
-            </a>
+            {previewError ? (
+                <div className="aspect-square w-full bg-brand-surface-card rounded overflow-hidden flex flex-col items-center justify-center text-brand-danger gap-1">
+                    <ImageOff className="w-6 h-6" />
+                    <span className="text-xs">Bild konnte nicht geladen werden</span>
+                </div>
+            ) : previewUrl ? (
+                <img
+                    src={previewUrl}
+                    alt={`Bild ${props.image.position}`}
+                    className="aspect-square object-cover w-full rounded"
+                />
+            ) : (
+                <div className="aspect-square w-full bg-brand-border-subtle rounded overflow-hidden flex items-center justify-center text-xs text-brand-text-muted">
+                    Lade…
+                </div>
+            )}
             <input
                 type="text"
                 className="w-full text-xs border border-brand-border rounded px-2 py-1"
