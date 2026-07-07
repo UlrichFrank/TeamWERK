@@ -42,11 +42,15 @@ func (f *fakePublisher) Publish(_ context.Context, req *matchreports.PublishRequ
 func testServer(t *testing.T, h *matchreports.Handler) *httptest.Server {
 	t.Helper()
 	return testutil.NewServer(t, func(r chi.Router) {
+		// Reihenfolge wichtig: statische Segmente (/pending, /my) VOR den
+		// {id}-Routen registrieren, sonst matcht chi „pending" als id.
+		r.Get("/api/match-reports/pending", h.Pending)
 		r.Post("/api/match-reports", h.Create)
 		r.Get("/api/match-reports/{id}", h.Get)
 		r.Put("/api/match-reports/{id}", h.Update)
 		r.Delete("/api/match-reports/{id}", h.Delete)
 		r.Post("/api/match-reports/{id}/publish", h.Publish)
+		r.Post("/api/match-reports/{id}/submit-for-review", h.SubmitForReview)
 	})
 }
 

@@ -114,6 +114,7 @@ export default function MatchReportPendingListPage() {
                                                 </span>
                                             )}
                                             <button
+                                                type="button"
                                                 className={btnSmall}
                                                 onClick={e => {
                                                     e.stopPropagation()

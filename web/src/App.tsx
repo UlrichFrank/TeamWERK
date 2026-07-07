@@ -128,8 +128,8 @@ export default function App() {
               <Route path="mein-team" element={<MeinTeamPage />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="spielberichte" element={<RoleRoute roles={['presseteam','admin']}><MatchReportListPage /></RoleRoute>} />
+              <Route path="spielberichte/pruefen" element={<RoleRoute roles={['admin','medien','vorstand']}><MatchReportPendingListPage /></RoleRoute>} />
               <Route path="spielberichte/:id" element={<RoleRoute roles={['presseteam','admin','medien','vorstand']}><MatchReportFormPage /></RoleRoute>} />
-              <Route path="berichte/pruefen" element={<RoleRoute roles={['admin','medien','vorstand']}><MatchReportPendingListPage /></RoleRoute>} />
               <Route path="videos" element={<VideosPage />} />
               <Route path="videos/upload" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><VideoUploadPage /></RoleRoute>} />
               <Route path="videos/:id" element={<VideoDetailPage />} />

@@ -257,7 +257,7 @@ func NavFor(p *Principal) []NavItem {
 	}
 	// Berichte zur Prüfung — Freigeber (Vereinsfunktion medien/vorstand + Admin).
 	if IsMatchReportReviewer(p) {
-		nav = append(nav, NavItem{"Berichte prüfen", "/berichte/pruefen"})
+		nav = append(nav, NavItem{"Berichte prüfen", "/spielberichte/pruefen"})
 	}
 
 	// Verwaltung — role-restricted
