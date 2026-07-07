@@ -15,6 +15,7 @@ type Report struct {
 	DutySlotID          *int            `json:"duty_slot_id"`
 	AuthorUserID        int             `json:"author_user_id"`
 	State               string          `json:"state"`
+	Title               string          `json:"title"`
 	HomeGoals           *int            `json:"home_goals"`
 	AwayGoals           *int            `json:"away_goals"`
 	HomeGoalsHT         *int            `json:"home_goals_ht"`
@@ -110,13 +111,13 @@ func (h *Handler) loadReport(id int) (*Report, error) {
 		errorMessageText sql.NullString
 	)
 	err := h.db.QueryRow(
-		`SELECT id, game_id, duty_slot_id, author_user_id, state,
+		`SELECT id, game_id, duty_slot_id, author_user_id, state, title,
 		        home_goals, away_goals, home_goals_ht, away_goals_ht,
 		        tournament, abstract, body_md,
 		        published_url, typo3_page_uid, error_message
 		 FROM match_reports WHERE id=?`, id,
 	).Scan(
-		&r.ID, &r.GameID, &dutySlotID, &r.AuthorUserID, &r.State,
+		&r.ID, &r.GameID, &dutySlotID, &r.AuthorUserID, &r.State, &r.Title,
 		&homeGoals, &awayGoals, &homeGoalsHT, &awayGoalsHT,
 		&tournamentInt, &r.Abstract, &r.BodyMarkdown,
 		&publishedURL, &typo3PageUID, &errorMessageText,

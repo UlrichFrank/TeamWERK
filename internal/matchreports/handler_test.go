@@ -358,6 +358,107 @@ func TestPublish_AlreadyPublished(t *testing.T) {
 	}
 }
 
+// ─── TC-MR10 · Create liefert Default-Titel; GET zeigt ihn ────────────────────
+
+func TestCreate_SetsDefaultTitle(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, teamID, gameID := setupBasicGame(t, db) // date="2026-05-15", opponent="Test Opponent"
+	authorID := testutil.CreatePressTeamUser(t, db)
+	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+
+	res := testutil.Post(t, srv, "/api/match-reports", token,
+		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+	var created struct{ ID int }
+	if err := json.NewDecoder(res.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+
+	// GET liefert Default-Titel „15.05.2026 — Test Opponent".
+	getRes := testutil.Do(t, srv, http.MethodGet, fmt.Sprintf("/api/match-reports/%d", created.ID), token, nil)
+	if getRes.StatusCode != http.StatusOK {
+		t.Fatalf("get: expected 200, got %d", getRes.StatusCode)
+	}
+	var got struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(getRes.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	want := "15.05.2026 — Test Opponent"
+	if got.Title != want {
+		t.Errorf("title = %q, want %q", got.Title, want)
+	}
+}
+
+// ─── TC-MR11 · Update mit Custom-Titel → GET zeigt neuen Titel ────────────────
+
+func TestUpdate_CustomTitle(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, teamID, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreatePressTeamUser(t, db)
+	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/match-reports/%d", reportID), token,
+		map[string]any{"title": "Neuer Titel"})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("put: expected 200, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+
+	getRes := testutil.Do(t, srv, http.MethodGet, fmt.Sprintf("/api/match-reports/%d", reportID), token, nil)
+	if getRes.StatusCode != http.StatusOK {
+		t.Fatalf("get: expected 200, got %d", getRes.StatusCode)
+	}
+	var got struct {
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(getRes.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "Neuer Titel" {
+		t.Errorf("title = %q, want %q", got.Title, "Neuer Titel")
+	}
+}
+
+// ─── TC-MR12 · Update mit 201-Zeichen-Titel → 400 title_too_long ──────────────
+
+func TestUpdate_TitleTooLong(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, teamID, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreatePressTeamUser(t, db)
+	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+
+	longTitle := strings.Repeat("a", 201)
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/match-reports/%d", reportID), token,
+		map[string]any{"title": longTitle})
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+	var body map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] != "title_too_long" {
+		t.Errorf("error = %q, want title_too_long", body["error"])
+	}
+}
+
 func readBody(t *testing.T, res *http.Response) string {
 	t.Helper()
 	defer res.Body.Close()

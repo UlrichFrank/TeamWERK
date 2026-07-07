@@ -55,10 +55,32 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default-Titel aus Spieldatum + Gegner. Der Autor kann ihn im Formular
+	// überschreiben; der User-Titel läuft dann durch `PUT /match-reports/{id}`.
+	var matchDate, opponent string
+	if err := h.db.QueryRow(
+		`SELECT date, opponent FROM games WHERE id=?`, req.GameID,
+	).Scan(&matchDate, &opponent); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, http.StatusBadRequest, "game_not_found")
+			return
+		}
+		logErr("matchreports.Create load game", err, "game", req.GameID)
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	matchDateUnix, err := parseMatchDate(matchDate)
+	if err != nil {
+		// Ungültiges Datum in games sollte nie vorkommen — Notfall-Fallback.
+		logErr("matchreports.Create parse match_date", err, "game", req.GameID)
+		matchDateUnix = 0
+	}
+	defaultTitle := BuildTitle(matchDateUnix, opponent)
+
 	res, err := h.db.Exec(
-		`INSERT INTO match_reports (game_id, duty_slot_id, author_user_id, state)
-		 VALUES (?, ?, ?, ?)`,
-		req.GameID, req.DutySlotID, claims.UserID, StateDraft)
+		`INSERT INTO match_reports (game_id, duty_slot_id, author_user_id, state, title)
+		 VALUES (?, ?, ?, ?, ?)`,
+		req.GameID, req.DutySlotID, claims.UserID, StateDraft, defaultTitle)
 	if err != nil {
 		if isUniqueViolation(err) {
 			writeErr(w, http.StatusConflict, "report_exists")

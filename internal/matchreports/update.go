@@ -10,13 +10,14 @@ import (
 )
 
 type updateReq struct {
-	HomeGoals    *int   `json:"home_goals"`
-	AwayGoals    *int   `json:"away_goals"`
-	HomeGoalsHT  *int   `json:"home_goals_ht"`
-	AwayGoalsHT  *int   `json:"away_goals_ht"`
-	Tournament   *bool  `json:"tournament"`
-	Abstract     string `json:"abstract"`
-	BodyMarkdown string `json:"body_md"`
+	Title        *string `json:"title"`
+	HomeGoals    *int    `json:"home_goals"`
+	AwayGoals    *int    `json:"away_goals"`
+	HomeGoalsHT  *int    `json:"home_goals_ht"`
+	AwayGoalsHT  *int    `json:"away_goals_ht"`
+	Tournament   *bool   `json:"tournament"`
+	Abstract     string  `json:"abstract"`
+	BodyMarkdown string  `json:"body_md"`
 }
 
 // Update patcht einen Bericht. Zugriff nach der State-/Rollen-Matrix
@@ -54,6 +55,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "abstract_too_long")
 		return
 	}
+	if req.Title != nil && len(*req.Title) > 200 {
+		writeErr(w, http.StatusBadRequest, "title_too_long")
+		return
+	}
 
 	var authorID int
 	var state string
@@ -82,12 +87,22 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		tournament = 1
 	}
 
+	// title ist optional im Request: fehlt das Feld, bleibt der bisherige
+	// Wert stehen (COALESCE mit NULL). Damit muss das Frontend nicht bei
+	// jedem Metadaten-Save den Titel mitschicken.
+	var titleArg any
+	if req.Title != nil {
+		titleArg = *req.Title
+	}
+
 	_, err = h.db.Exec(
 		`UPDATE match_reports
-		 SET home_goals=?, away_goals=?, home_goals_ht=?, away_goals_ht=?,
+		 SET title=COALESCE(?, title),
+		     home_goals=?, away_goals=?, home_goals_ht=?, away_goals_ht=?,
 		     tournament=?, abstract=?, body_md=?,
 		     updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
+		titleArg,
 		nullableInt(req.HomeGoals), nullableInt(req.AwayGoals),
 		nullableInt(req.HomeGoalsHT), nullableInt(req.AwayGoalsHT),
 		tournament, req.Abstract, req.BodyMarkdown,

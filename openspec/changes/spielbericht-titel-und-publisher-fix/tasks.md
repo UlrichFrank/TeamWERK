@@ -33,12 +33,12 @@
 
 ## 5. Backend — Handler-Anpassungen
 
-- [ ] 5.1 `internal/matchreports/create.go`: nach Draft-INSERT `UPDATE match_reports SET title = ? WHERE id = ?` mit `BuildTitle(matchDate, opponent)` (oder direkt im INSERT)
-- [ ] 5.2 `internal/matchreports/update.go`: `title` in Whitelist; Validierung `len(title) <= 200` → HTTP 400 `{"error":"title_too_long"}`
-- [ ] 5.3 `internal/matchreports/get.go`: `title` in SELECT + Response-Struct
-- [ ] 5.4 `internal/matchreports/list.go`: falls Listen-Response `title` benötigt → dazunehmen (nur wenn UI's List-Ansicht das braucht; ansonsten skippen)
-- [ ] 5.5 Handler-Tests (`handler_test.go`): Happy-Path `POST` → `GET` liefert Default-Titel; `PUT` mit Custom-Titel → `GET` zeigt neuen Titel; `PUT` mit 201-Zeichen-Titel → 400
-- [ ] 5.6 Commit: `feat(matchreports): title-Feld in Create/Update/Get`
+- [x] 5.1 `internal/matchreports/create.go`: nach Draft-INSERT `UPDATE match_reports SET title = ? WHERE id = ?` mit `BuildTitle(matchDate, opponent)` (oder direkt im INSERT)
+- [x] 5.2 `internal/matchreports/update.go`: `title` in Whitelist; Validierung `len(title) <= 200` → HTTP 400 `{"error":"title_too_long"}`
+- [x] 5.3 `internal/matchreports/get.go`: `title` in SELECT + Response-Struct
+- [x] 5.4 `internal/matchreports/list.go`: falls Listen-Response `title` benötigt → dazunehmen (nur wenn UI's List-Ansicht das braucht; ansonsten skippen) — geskippt (kein UI-Bedarf)
+- [x] 5.5 Handler-Tests (`handler_test.go`): Happy-Path `POST` → `GET` liefert Default-Titel; `PUT` mit Custom-Titel → `GET` zeigt neuen Titel; `PUT` mit 201-Zeichen-Titel → 400
+- [x] 5.6 Commit: `feat(matchreports): title-Feld in Create/Update/Get`
 
 ## 6. Backend — Bild-URL-Format
 
