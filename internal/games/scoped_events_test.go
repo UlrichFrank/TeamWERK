@@ -155,3 +155,36 @@ func TestUpdateGame_TeamReassign_NotifiesOldTeam(t *testing.T) {
 		t.Errorf("new-team player must receive 'games' after re-assign, got %q ok=%v", ev, ok)
 	}
 }
+
+// TestRegenerateDaySlots_BroadcastsDuties verifies that regenerating a day's
+// duty slots (POST /api/games/regenerate-day) emits a global "duties" event so
+// the Dienstbörse (useLiveUpdates('duties')) refreshes. A day-scoped regen can
+// touch slots of multiple teams, hence a global Broadcast is used. Guards the
+// CLAUDE.md Broadcast hard rule for the regen route.
+func TestRegenerateDaySlots_BroadcastsDuties(t *testing.T) {
+	db := testutil.NewDB(t)
+	season := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+
+	// A trainer of team A may hit the regen route (vorstand/trainer/sL tier).
+	trainerU := makeTrainer(t, db, teamA, season)
+
+	srv, sharedHub := prodserver.NewWithHub(t, db)
+
+	// Global subscribe — Broadcast reaches both global clients and per-user streams.
+	ch := sharedHub.Subscribe()
+	defer sharedHub.Unsubscribe(ch)
+
+	token := testutil.Token(t, trainerU, "standard", []string{"trainer"})
+	res := testutil.Post(t, srv,
+		fmt.Sprintf("/api/games/regenerate-day?date=2026-06-14&season_id=%d", season),
+		token, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("RegenerateDaySlots: expected 200, got %d", res.StatusCode)
+	}
+
+	if ev, ok := recvWithin(ch, time.Second); !ok || ev != "duties" {
+		t.Errorf("must receive 'duties' event after RegenerateDaySlots, got %q ok=%v", ev, ok)
+	}
+}

@@ -1859,6 +1859,11 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.dispatchRegenNotifications(summary)
+	// Regen kann Slots mehrerer Teams betreffen (alle Events des Datums) → globaler
+	// duties-Broadcast, damit die Dienstbörse (useLiveUpdates('duties')) neu lädt.
+	if h.hub != nil {
+		h.hub.Broadcast("duties")
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)
 }
@@ -1896,6 +1901,11 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.dispatchRegenNotifications(summary)
+	// Regen betrifft die Dienst-Slots des Spieltags → globaler duties-Broadcast,
+	// damit die Dienstbörse (useLiveUpdates('duties')) neu lädt.
+	if h.hub != nil {
+		h.hub.Broadcast("duties")
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)
 }

@@ -1142,6 +1142,9 @@ func (h *Handler) SetSeasonTargets(w http.ResponseWriter, r *http.Request) {
 			 ON CONFLICT(season_id, duty_type_id) DO UPDATE SET target_hours=excluded.target_hours`,
 			seasonID, t.DutyTypeID, t.TargetHours)
 	}
+	// Season-weite Ziel-Änderung ohne slot-spezifisches Team → globaler
+	// duties-Broadcast, damit alle Dienst-Konten-Ansichten neu laden.
+	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
@@ -159,5 +161,54 @@ func TestUnclaim_BroadcastsToActingUser(t *testing.T) {
 
 	if ev, ok := recvWithin(userCh, time.Second); !ok || ev != "duties" {
 		t.Errorf("acting user must receive 'duties' event after unclaim, got %q ok=%v", ev, ok)
+	}
+}
+
+// TestSetSeasonTargets_BroadcastsDuties verifies that updating the season-wide
+// duty-hour targets (PUT /api/seasons/{id}/duty-targets) emits a global "duties"
+// event so every duty-account view refreshes. The change is not slot- or
+// team-scoped, hence a global Broadcast is correct. Guards the CLAUDE.md
+// Broadcast hard rule.
+func TestSetSeasonTargets_BroadcastsDuties(t *testing.T) {
+	db := testutil.NewDB(t)
+	season := testutil.CreateSeason(t, db, "2025/26")
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+
+	sharedHub := hub.NewHub()
+	h := duties.NewHandler(db, testutil.TestConfig(), sharedHub)
+
+	// The route lives on the vorstand tier in router.go; mount it identically.
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireClubFunction("vorstand"))
+			r.Put("/api/seasons/{id}/duty-targets", h.SetSeasonTargets)
+		})
+	})
+
+	// Global subscribe — Broadcast reaches both global clients and per-user streams.
+	ch := sharedHub.Subscribe()
+	defer sharedHub.Unsubscribe(ch)
+
+	vorstandU := testutil.CreateUser(t, db, "standard")
+	vorstandM := testutil.CreateMember(t, db, vorstandU)
+	testutil.AddClubFunction(t, db, vorstandM, "vorstand")
+
+	token := testutil.Token(t, vorstandU, "standard", []string{"vorstand"})
+	body := []map[string]any{{"duty_type_id": dtID, "target_hours": 5.0}}
+	res := testutil.Do(t, srv, http.MethodPut,
+		"/api/seasons/"+itoa(season)+"/duty-targets", token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("SetSeasonTargets: expected 204, got %d", res.StatusCode)
+	}
+
+	// Target row persisted (functional invariant, not just the broadcast).
+	if n := countRows(t, db, "duty_season_targets",
+		"season_id=? AND duty_type_id=? AND target_hours=5.0", season, dtID); n != 1 {
+		t.Errorf("expected 1 persisted target row, got %d", n)
+	}
+
+	if ev, ok := recvWithin(ch, time.Second); !ok || ev != "duties" {
+		t.Errorf("must receive 'duties' event after SetSeasonTargets, got %q ok=%v", ev, ok)
 	}
 }

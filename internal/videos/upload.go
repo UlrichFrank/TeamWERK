@@ -185,6 +185,11 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := res.LastInsertId()
 
+	// Die Videos-Seite reagiert auf "video-queued" und lädt die Liste neu, sobald
+	// ein neuer Upload angelegt wurde (Platzhalterzeile status='uploading'). Stil
+	// wie die übrigen videos-Broadcasts im Package: ungeguarded.
+	h.hub.Broadcast("video-queued")
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{
