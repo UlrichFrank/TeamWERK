@@ -3,9 +3,7 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `duty-assignee-display`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-
 ## Requirements
-
 ### Requirement: Assignee-Namen im Duty-Slot sichtbar
 Das System SHALL für jeden Duty-Slot die Namen der eingetragenen Personen anzeigen. Diese Information ist für alle authentifizierten Nutzer sichtbar, die den Slot sehen können.
 
@@ -22,13 +20,22 @@ Das System SHALL für jeden Duty-Slot die Namen der eingetragenen Personen anzei
 - **THEN** werden alle Namen angezeigt, auch wenn keine Vakanzen mehr vorhanden sind
 
 ### Requirement: Profilbild im Assignee-Eintrag
-Das System SHALL das Profilbild einer Person als Avatar neben dem Namen anzeigen, sofern die Person `photo_visible` freigegeben hat.
 
-#### Scenario: Profilbild sichtbar freigegeben
-- **WHEN** eine eingetragene Person `photo_visible = true` gesetzt hat und ein Profilbild hinterlegt ist
-- **THEN** wird das Bild als kleiner Avatar neben dem Namen angezeigt
+Das System SHALL das Profilbild einer Person als Avatar neben dem Namen anzeigen, sofern die Person `photo_visible` freigegeben hat. In der Dienstbörsen-**Liste** (`GET /api/duty-board`) SHALL das Profilbild jedoch NICHT inline pro Assignee ausgeliefert werden; `photo_url` wird stattdessen bei Bedarf (beim Öffnen eines Slots/Assignees) über einen On-Demand-Pfad nachgeladen. Die sichtbaren **Namen** bleiben inline Teil der Board-Antwort.
+
+#### Scenario: Namen inline, Avatar on-demand
+
+- **WHEN** ein eingeloggter Nutzer die Dienstbörse öffnet
+- **THEN** enthält jeder Slot die Namen der eingetragenen Personen inline
+- **AND** die Board-Antwort enthält KEIN `photo_url` pro Assignee
+
+#### Scenario: Profilbild sichtbar freigegeben (on-demand)
+
+- **WHEN** ein Nutzer einen Slot/Assignee öffnet und die Person `photo_visible = true` gesetzt und ein Bild hinterlegt hat
+- **THEN** wird das Bild als kleiner Avatar neben dem Namen nachgeladen und angezeigt
 
 #### Scenario: Profilbild nicht freigegeben
+
 - **WHEN** eine Person `photo_visible = false` gesetzt hat oder kein Bild hinterlegt ist
 - **THEN** wird kein Avatar angezeigt; nur der Name erscheint
 
@@ -58,3 +65,4 @@ Das System SHALL einen Tooltip pro Assignee bereitstellen, der auf Desktop per H
 #### Scenario: Tooltip auf Mobile schließen
 - **WHEN** ein Nutzer auf Mobile einen Tooltip geöffnet hat und außerhalb tippt
 - **THEN** schließt sich der Tooltip
+
