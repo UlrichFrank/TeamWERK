@@ -5,7 +5,7 @@
 - [x] 1.3 Aufruf-Site vor `attachTeamCategory`: erst Name auflösen; No-Match → HTTP 422 mit `{"error":"category_not_found","detail":"<name>"}`
 - [x] 1.4 Fixture-Payload `scripts/spike-match-report-import/fixture-payload.json` auf `team_category_name` umstellen
 - [x] 1.5 OpenSpec-Proposal auf `team-stuttgart-org`-Seite spiegeln (kurzer Change, verweist auf TeamWERK-Proposal) — `openspec/changes/spielbericht-team-category-name/` in team-stuttgart-org, `openspec validate` grün
-- [ ] 1.6 PR erstellen, mergen, auf Produktion deployen; sys_category-Titel prüfen (jedes aktive Team-Kürzel muss dort existieren)
+- [x] 1.6 PR erstellen, mergen, auf Produktion deployen; sys_category-Titel prüfen (jedes aktive Team-Kürzel muss dort existieren)
 
 ## 2. Datenbank-Migration (TeamWERK)
 
@@ -76,15 +76,15 @@
 
 ## 11. Verifikation & Deploy
 
-- [ ] 11.1 `make test` — alle Server-Tests grün (inkl. neue Payload-, Titel-, Season-Tests)
-- [ ] 11.2 `pnpm -C web test` — Frontend-Tests grün (falls vorhanden für MatchReportForm)
-- [ ] 11.3 `make lint` grün
-- [ ] 11.4 `openspec validate spielbericht-titel-und-publisher-fix` grün
-- [ ] 11.5 `/verify-change` durchlaufen — brand-Tokens, lucide-Icons, Broadcast+useLiveUpdates, Migrationsnummer, Route→Tests-Coverage
-- [ ] 11.6 Lokaler End-to-End-Test: Draft anlegen → Titel überschreiben → Bild hochladen (Preview sichtbar) → Submit → Publish → URL enthält aktive Saison + user-Titel-Slug + sys_category-Verknüpfung auf TYPO3 sichtbar
-- [ ] 11.7 Deploy team-stuttgart-org (falls in 1.6 noch nicht erledigt), dann `make deploy` für TeamWERK
+- [x] 11.1 `make test` — alle Server-Tests grün (inkl. neue Payload-, Titel-, Season-Tests)
+- [x] 11.2 `pnpm -C web test` — Frontend-Tests grün (falls vorhanden für MatchReportForm)
+- [x] 11.3 `make lint` grün
+- [x] 11.4 `openspec validate spielbericht-titel-und-publisher-fix` grün
+- [x] 11.5 `/verify-change` durchlaufen — brand-Tokens, lucide-Icons, Broadcast+useLiveUpdates, Migrationsnummer, Route→Tests-Coverage
+- [ ] 11.6 Lokaler End-to-End-Test: Draft anlegen → Titel überschreiben → Bild hochladen (Preview sichtbar) → Submit → Publish → URL enthält aktive Saison + user-Titel-Slug + sys_category-Verknüpfung auf TYPO3 sichtbar — **offen, auf Follow-up verschoben** (Archivierung vor Deploy auf Nutzer-Entscheidung 2026-07-07)
+- [ ] 11.7 Deploy team-stuttgart-org (falls in 1.6 noch nicht erledigt), dann `make deploy` für TeamWERK — team-stuttgart-org bereits live; TeamWERK-`make deploy` **offen, auf Follow-up verschoben** (Nutzer-Entscheidung 2026-07-07)
 
 ## 12. Archivierung
 
-- [ ] 12.1 Nach erfolgreicher Verifikation: `openspec archive spielbericht-titel-und-publisher-fix` (schlägt die MODIFIED-Requirements auf `openspec/specs/match-reports/spec.md` durch)
-- [ ] 12.2 Commit: `docs(openspec): spielbericht-titel-und-publisher-fix archiviert`
+- [x] 12.1 Nach erfolgreicher Verifikation: `openspec archive spielbericht-titel-und-publisher-fix` (schlägt die MODIFIED-Requirements auf `openspec/specs/match-reports/spec.md` durch)
+- [x] 12.2 Commit: `docs(openspec): spielbericht-titel-und-publisher-fix archiviert`

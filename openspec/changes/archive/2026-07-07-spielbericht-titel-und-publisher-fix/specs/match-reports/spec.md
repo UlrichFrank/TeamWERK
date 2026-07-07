@@ -55,6 +55,11 @@ die Axios-Instanz mit `baseURL='/api'`, die den Prefix zentral setzt.
 - **WHEN** `POST /api/match-reports/42/images` erfolgreich ein Bild mit ID 7 anlegt
 - **THEN** enthält die Response `url="/match-reports/42/images/7/blob"` (nicht `"/api/match-reports/…"`)
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: Season-Segment mit Fallback`
+- TO: `### Requirement: Season-Segment aus aktiver Saison (ohne Fallback)`
+
 ## MODIFIED Requirements
 
 ### Requirement: Draft-Update nur durch Autor im State `draft`
