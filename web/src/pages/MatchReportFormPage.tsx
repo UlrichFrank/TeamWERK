@@ -21,6 +21,7 @@ type MatchReport = {
     duty_slot_id: number | null
     author_user_id: number
     state: 'draft' | 'pending_review' | 'publishing' | 'published' | 'publish_failed'
+    title: string
     home_goals: number | null
     away_goals: number | null
     home_goals_ht: number | null
@@ -59,6 +60,7 @@ export default function MatchReportFormPage() {
     const [awayGoals, setAwayGoals] = useState('')
     const [homeGoalsHT, setHomeGoalsHT] = useState('')
     const [awayGoalsHT, setAwayGoalsHT] = useState('')
+    const [title, setTitle] = useState<string>('')
     const [tournament, setTournament] = useState(false)
     const [abstract, setAbstract] = useState('')
     const [bodyMd, setBodyMd] = useState('')
@@ -72,6 +74,7 @@ export default function MatchReportFormPage() {
             .then(res => {
                 const r = res.data as MatchReport
                 setReport(r)
+                setTitle(r.title ?? '')
                 setHomeGoals(r.home_goals?.toString() ?? '')
                 setAwayGoals(r.away_goals?.toString() ?? '')
                 setHomeGoalsHT(r.home_goals_ht?.toString() ?? '')
@@ -119,6 +122,7 @@ export default function MatchReportFormPage() {
         setSaving(true)
         try {
             await api.put(`/match-reports/${reportID}`, {
+                title,
                 home_goals: numOrNull(homeGoals),
                 away_goals: numOrNull(awayGoals),
                 home_goals_ht: numOrNull(homeGoalsHT),
@@ -211,6 +215,19 @@ export default function MatchReportFormPage() {
                     </div>
                 </div>
             )}
+
+            <div className="space-y-2">
+                <label className="block text-sm font-medium text-brand-text">Titel</label>
+                <input
+                    type="text"
+                    className={input}
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    disabled={readOnly}
+                    maxLength={200}
+                    placeholder="Kurzer, aussagekräftiger Titel"
+                />
+            </div>
 
             <ScoreFieldset
                 tournament={tournament}

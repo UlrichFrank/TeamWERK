@@ -1,9 +1,9 @@
 ## 1. TYPO3-Middleware (team-stuttgart-org, separates Repo, ZUERST deployen)
 
-- [ ] 1.1 `MatchReportImportMiddleware.php`: required-Feldliste — `team_category_uid` durch `team_category_name` ersetzen
-- [ ] 1.2 Private Methode `resolveCategoryUidByName(string $name): int` mit `SELECT uid FROM sys_category WHERE title = ? AND deleted = 0 LIMIT 1`, wirft `RuntimeException` bei No-Match
-- [ ] 1.3 Aufruf-Site vor `attachTeamCategory`: erst Name auflösen; No-Match → HTTP 422 mit `{"error":"category_not_found","detail":"<name>"}`
-- [ ] 1.4 Fixture-Payload `scripts/spike-match-report-import/fixture-payload.json` auf `team_category_name` umstellen
+- [x] 1.1 `MatchReportImportMiddleware.php`: required-Feldliste — `team_category_uid` durch `team_category_name` ersetzen
+- [x] 1.2 Private Methode `resolveCategoryUidByName(string $name): int` mit `SELECT uid FROM sys_category WHERE title = ? AND deleted = 0 LIMIT 1`, wirft `RuntimeException` bei No-Match
+- [x] 1.3 Aufruf-Site vor `attachTeamCategory`: erst Name auflösen; No-Match → HTTP 422 mit `{"error":"category_not_found","detail":"<name>"}`
+- [x] 1.4 Fixture-Payload `scripts/spike-match-report-import/fixture-payload.json` auf `team_category_name` umstellen
 - [ ] 1.5 OpenSpec-Proposal auf `team-stuttgart-org`-Seite spiegeln (kurzer Change, verweist auf TeamWERK-Proposal)
 - [ ] 1.6 PR erstellen, mergen, auf Produktion deployen; sys_category-Titel prüfen (jedes aktive Team-Kürzel muss dort existieren)
 
@@ -12,7 +12,7 @@
 - [x] 2.1 `internal/db/migrations/025_match_report_title_und_typo3_cat_drop.up.sql`: `ALTER TABLE match_reports ADD COLUMN title TEXT NOT NULL DEFAULT ''`, `ALTER TABLE teams DROP COLUMN typo3_category_uid`
 - [x] 2.2 `025_match_report_title_und_typo3_cat_drop.down.sql`: umgekehrt (`title` DROP, `typo3_category_uid INTEGER` wieder ADD)
 - [x] 2.3 Migration lokal testen: `make migrate-up && make migrate-down && make migrate-up` — keine Fehler
-- [ ] 2.4 Commit: `feat(db): match_reports.title + teams.typo3_category_uid entfernt`
+- [x] 2.4 Commit: `feat(db): match_reports.title + teams.typo3_category_uid entfernt`
 
 ## 3. Backend — Slug/Season-Helper
 
@@ -54,10 +54,10 @@
 
 ## 8. Frontend — Titel-Feld
 
-- [ ] 8.1 `web/src/pages/MatchReportFormPage.tsx`: `MatchReport`-Typ um `title: string`; neuer `useState<string>('')` für Titel
-- [ ] 8.2 `load()` befüllt `setTitle(r.title)`; `saveDraft()` sendet `title` mit
-- [ ] 8.3 Neuer `<input>` als erstes Formularfeld — brand-Tokens, disabled bei readOnly
-- [ ] 8.4 Commit: `feat(matchreports): Titel-Feld im Bericht-Formular`
+- [x] 8.1 `web/src/pages/MatchReportFormPage.tsx`: `MatchReport`-Typ um `title: string`; neuer `useState<string>('')` für Titel
+- [x] 8.2 `load()` befüllt `setTitle(r.title)`; `saveDraft()` sendet `title` mit
+- [x] 8.3 Neuer `<input>` als erstes Formularfeld — brand-Tokens, disabled bei readOnly
+- [x] 8.4 Commit: `feat(matchreports): Titel-Feld im Bericht-Formular`
 
 ## 9. Frontend — Bild-Preview per Blob
 
