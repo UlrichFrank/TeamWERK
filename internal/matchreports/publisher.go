@@ -49,7 +49,7 @@ type PublishMeta struct {
 	MatchScore       string `json:"match_score"`
 	MatchTeams       string `json:"match_teams"`
 	Tournament       bool   `json:"tournament"`
-	TeamCategoryUID  int    `json:"team_category_uid"`
+	TeamCategoryName string `json:"team_category_name"`
 	BodyHTML         string `json:"body_html"`
 	ExternalReportID string `json:"external_report_id"`
 

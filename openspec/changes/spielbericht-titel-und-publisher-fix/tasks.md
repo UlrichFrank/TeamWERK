@@ -22,14 +22,14 @@
 
 ## 4. Backend — Publisher-Payload
 
-- [ ] 4.1 `internal/matchreports/publisher.go`: `PublishMeta.TeamCategoryUID int` → `PublishMeta.TeamCategoryName string`; JSON-Tag `team_category_name`
-- [ ] 4.2 `internal/matchreports/publish.go` `assemblePublishRequest`: SQL-Query erweitern um `db.TeamDisplayShort("t")`-Ausdruck (Alias `team_short_name`); statt `typo3_category_uid` selecten
-- [ ] 4.3 `assemblePublishRequest`: SQL erweitern um `title` aus `match_reports`
-- [ ] 4.4 `assemblePublishRequest`: Aktive-Saison-Query hinzufügen: `SELECT name FROM seasons WHERE is_active = 1 LIMIT 1`; Ergebnis via `ParseSeasonName`; kein Match → `ErrNoActiveSeason`
-- [ ] 4.5 `Publish`-Handler: `ErrNoActiveSeason` → HTTP 500 `{"error":"no_active_season"}` OHNE `finalizeFailed` (State bleibt `pending_review`/`publish_failed`, kein zusätzlicher State-Wechsel)
-- [ ] 4.6 `assemblePublishRequest`: statt `BuildTitle(...)` den gespeicherten `title` aus DB nutzen; `TitleSlug(title)` bleibt
-- [ ] 4.7 Publisher-Tests: neue Payload-Form (TeamCategoryName, Season aus aktiver Saison, Titel aus DB)
-- [ ] 4.8 Commit: `feat(matchreports): Publisher-Payload — Titel/Saison/Kürzel-Kategorie`
+- [x] 4.1 `internal/matchreports/publisher.go`: `PublishMeta.TeamCategoryUID int` → `PublishMeta.TeamCategoryName string`; JSON-Tag `team_category_name`
+- [x] 4.2 `internal/matchreports/publish.go` `assemblePublishRequest`: SQL-Query erweitern um `db.TeamDisplayShort("t")`-Ausdruck (Alias `team_short_name`); statt `typo3_category_uid` selecten
+- [x] 4.3 `assemblePublishRequest`: SQL erweitern um `title` aus `match_reports`
+- [x] 4.4 `assemblePublishRequest`: Aktive-Saison-Query hinzufügen: `SELECT name FROM seasons WHERE is_active = 1 LIMIT 1`; Ergebnis via `ParseSeasonName`; kein Match → `ErrNoActiveSeason`
+- [x] 4.5 `Publish`-Handler: `ErrNoActiveSeason` → HTTP 500 `{"error":"no_active_season"}` OHNE `finalizeFailed` (State bleibt `pending_review`/`publish_failed`, kein zusätzlicher State-Wechsel)
+- [x] 4.6 `assemblePublishRequest`: statt `BuildTitle(...)` den gespeicherten `title` aus DB nutzen; `TitleSlug(title)` bleibt
+- [x] 4.7 Publisher-Tests: neue Payload-Form (TeamCategoryName, Season aus aktiver Saison, Titel aus DB)
+- [x] 4.8 Commit: `feat(matchreports): Publisher-Payload — Titel/Saison/Kürzel-Kategorie`
 
 ## 5. Backend — Handler-Anpassungen
 

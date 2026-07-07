@@ -10,7 +10,15 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/db"
 )
+
+// ErrNoActiveSeason signalisiert, dass keine `seasons.is_active=1`-Zeile
+// existiert. Der Publisher braucht die aktive Saison für den Slug-Pfad; ohne
+// sie ist der Publish nicht durchführbar. Der Handler mappt das auf HTTP 500
+// `no_active_season` — bewusst VOR dem State-Wechsel `→ publishing`, damit der
+// Bericht in `pending_review` bleibt (siehe design.md dieses Change).
+var ErrNoActiveSeason = errors.New("no_active_season")
 
 type publishResp struct {
 	PageUID int    `json:"pageUid"`
@@ -78,6 +86,24 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Vorab-Check: aktive Saison muss existieren. Bewusst VOR dem
+	// State-Wechsel `→ publishing`, damit der Bericht in seinem aktuellen
+	// State (`pending_review` / `publish_failed`) bleibt und der Freigeber
+	// nach dem Anlegen der Saison einfach nochmal drücken kann. Danach
+	// dieselben Fehler nochmal in `assemblePublishRequest` (Kanonische
+	// Fehlerquelle), aber dieser hier verhindert das eklige `publish_failed`
+	// wegen fehlender Saison.
+	var seasonExists int
+	if err := h.db.QueryRow(`SELECT 1 FROM seasons WHERE is_active = 1 LIMIT 1`).Scan(&seasonExists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, http.StatusInternalServerError, "no_active_season")
+			return
+		}
+		logErr("matchreports.Publish season precheck", err, "id", id)
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+
 	// Atomarer Übergang zu 'publishing'. Ausgangszustände: pending_review
 	// (Regelfall) oder publish_failed (Retry). Bei Race verliert der zweite
 	// Requester (0 Zeilen betroffen).
@@ -142,45 +168,51 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 }
 
 // assemblePublishRequest lädt alle Daten aus der DB und baut das PublishRequest.
+//
+// Fehler-Semantik: `ErrNoActiveSeason` wird durchgereicht, wenn keine
+// aktive Saison existiert — der Handler muss das VOR dem State-Wechsel
+// `→ publishing` abfangen (siehe `Publish`).
 func (h *Handler) assemblePublishRequest(reportID int) (*PublishRequest, error) {
-	// Bericht + verlinktes Spiel + Season + Team-Kategorie.
+	// Bericht + verlinktes Spiel + Team-Kürzel (aus Kader-Konvention).
 	var (
-		gameID          int
-		abstract        string
-		bodyMD          string
-		tournamentInt   int
-		homeGoals       sql.NullInt64
-		awayGoals       sql.NullInt64
-		homeGoalsHT     sql.NullInt64
-		awayGoalsHT     sql.NullInt64
-		opponent        string
-		matchDate       string
-		seasonStart     sql.NullString
-		seasonEnd       sql.NullString
-		teamCategoryUID sql.NullInt64
-		teamName        sql.NullString
-		clubName        string
+		gameID        int
+		title         string
+		abstract      string
+		bodyMD        string
+		tournamentInt int
+		homeGoals     sql.NullInt64
+		awayGoals     sql.NullInt64
+		homeGoalsHT   sql.NullInt64
+		awayGoalsHT   sql.NullInt64
+		opponent      string
+		matchDate     string
+		teamShortName sql.NullString
+		teamName      sql.NullString
+		clubName      string
 	)
 
-	err := h.db.QueryRow(
-		`SELECT r.game_id, r.abstract, r.body_md, r.tournament,
-		        r.home_goals, r.away_goals, r.home_goals_ht, r.away_goals_ht,
-		        g.opponent, g.date, s.start_date, s.end_date,
-		        t.typo3_category_uid, t.name,
-		        COALESCE((SELECT name FROM clubs LIMIT 1), 'Team Stuttgart')
-		 FROM match_reports r
-		 JOIN games g ON g.id = r.game_id
-		 LEFT JOIN seasons s ON s.id = g.season_id
-		 LEFT JOIN game_teams gt ON gt.game_id = g.id
-		 LEFT JOIN teams t ON t.id = gt.team_id
-		 WHERE r.id = ?
-		 LIMIT 1`,
-		reportID,
-	).Scan(
-		&gameID, &abstract, &bodyMD, &tournamentInt,
+	// `db.TeamDisplayShort("t")` referenziert `t.id` und die kader-Tabelle intern.
+	// `ORDER BY t.id LIMIT 1` sichert Determinismus, wenn mehrere game_teams
+	// existieren (bewusst gleiche Konvention wie andere Publisher-Selects).
+	query := `SELECT r.game_id, r.title, r.abstract, r.body_md, r.tournament,
+	        r.home_goals, r.away_goals, r.home_goals_ht, r.away_goals_ht,
+	        g.opponent, g.date,
+	        ` + db.TeamDisplayShort("t") + ` AS team_short_name,
+	        t.name,
+	        COALESCE((SELECT name FROM clubs LIMIT 1), 'Team Stuttgart')
+	 FROM match_reports r
+	 JOIN games g ON g.id = r.game_id
+	 LEFT JOIN game_teams gt ON gt.game_id = g.id
+	 LEFT JOIN teams t ON t.id = gt.team_id
+	 WHERE r.id = ?
+	 ORDER BY t.id
+	 LIMIT 1`
+
+	err := h.db.QueryRow(query, reportID).Scan(
+		&gameID, &title, &abstract, &bodyMD, &tournamentInt,
 		&homeGoals, &awayGoals, &homeGoalsHT, &awayGoalsHT,
-		&opponent, &matchDate, &seasonStart, &seasonEnd,
-		&teamCategoryUID, &teamName,
+		&opponent, &matchDate,
+		&teamShortName, &teamName,
 		&clubName,
 	)
 	if err != nil {
@@ -192,9 +224,25 @@ func (h *Handler) assemblePublishRequest(reportID int) (*PublishRequest, error) 
 		return nil, err
 	}
 
-	season := LoadSeasonRange(nullString(seasonStart), nullString(seasonEnd), matchDateUnix)
+	// Aktive Saison → Slug-Segment "YYYY-YYYY".
+	var seasonName string
+	err = h.db.QueryRow(`SELECT name FROM seasons WHERE is_active = 1 LIMIT 1`).Scan(&seasonName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNoActiveSeason
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load active season: %w", err)
+	}
+	seasonSegment, err := ParseSeasonName(seasonName)
+	if err != nil {
+		return nil, fmt.Errorf("parse active season %q: %w", seasonName, err)
+	}
 
-	title := BuildTitle(matchDateUnix, opponent)
+	// Fallback: falls `title` leer ist (Altbestand aus vor-Migration-025), aus
+	// Datum + Gegner ableiten. Neu angelegte Berichte haben `title` gesetzt.
+	if title == "" {
+		title = BuildTitle(matchDateUnix, opponent)
+	}
 	// Nur der title-slug — die Extension setzt den Pfad-Präfix
 	// /spielberichte/{season}/ selbst zusammen.
 	slug := TitleSlug(title)
@@ -226,13 +274,13 @@ func (h *Handler) assemblePublishRequest(reportID int) (*PublishRequest, error) 
 		Meta: PublishMeta{
 			Title:            title,
 			Slug:             slug,
-			Season:           season.SeasonSegment(),
+			Season:           seasonSegment,
 			Abstract:         abstract,
 			MatchDate:        matchDateUnix,
 			MatchScore:       FormatMatchScore(homeInt, awayInt, htHomeInt, htAwayInt, tournamentInt != 0),
 			MatchTeams:       matchTeams,
 			Tournament:       tournamentInt != 0,
-			TeamCategoryUID:  int(teamCategoryUID.Int64),
+			TeamCategoryName: nullString(teamShortName),
 			BodyHTML:         bodyHTML,
 			ExternalReportID: fmt.Sprintf("teamwerk-report-%d", reportID),
 			Images:           imageMetas,
