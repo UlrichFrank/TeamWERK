@@ -70,9 +70,9 @@
 
 ## 10. Frontend — Fehlermeldungen sichtbar machen
 
-- [ ] 10.1 `MatchReportFormPage.tsx`: `error_message`-Anzeige bei `publish_failed`-State soll den Publisher-Fehler klar zeigen (auch TYPO3-422-Detail)
-- [ ] 10.2 Falls TeamWERK-Publish HTTP 500 `no_active_season` liefert: Toast oder `error`-State setzen mit dt. Übersetzung „Keine aktive Saison — bitte im Verein/Saisonen setzen"
-- [ ] 10.3 Commit: `feat(matchreports): klare Fehleranzeige bei publish_failed / no_active_season`
+- [x] 10.1 `MatchReportFormPage.tsx`: `error_message`-Anzeige bei `publish_failed`-State soll den Publisher-Fehler klar zeigen (auch TYPO3-422-Detail)
+- [x] 10.2 Falls TeamWERK-Publish HTTP 500 `no_active_season` liefert: Toast oder `error`-State setzen mit dt. Übersetzung „Keine aktive Saison — bitte im Verein/Saisonen setzen"
+- [x] 10.3 Commit: `feat(matchreports): klare Fehleranzeige bei publish_failed / no_active_season`
 
 ## 11. Verifikation & Deploy
 

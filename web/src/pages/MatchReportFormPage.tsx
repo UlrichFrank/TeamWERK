@@ -164,7 +164,11 @@ export default function MatchReportFormPage() {
             load()
         } catch (err) {
             const detail = (err as { response?: { data?: { detail?: string; error?: string } } })?.response?.data
-            setError(detail?.detail || detail?.error || 'Publish fehlgeschlagen')
+            if (detail?.error === 'no_active_season') {
+                setError('Keine aktive Saison — bitte im Verein/Saisonen setzen.')
+            } else {
+                setError(detail?.detail || detail?.error || 'Publish fehlgeschlagen')
+            }
         } finally {
             setPublishing(false)
         }
@@ -198,8 +202,9 @@ export default function MatchReportFormPage() {
                 </div>
             )}
             {report.state === 'publish_failed' && report.error_message && (
-                <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
-                    Letzter Publish-Fehler: {report.error_message}
+                <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger space-y-1">
+                    <div className="font-medium">Letzter Publish-Fehler:</div>
+                    <pre className="whitespace-pre-wrap break-words font-mono text-xs">{report.error_message}</pre>
                 </div>
             )}
 
