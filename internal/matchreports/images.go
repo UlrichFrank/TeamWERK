@@ -54,12 +54,8 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if authorID != claims.UserID && claims.Role != auth.RoleAdmin {
-		writeErr(w, http.StatusForbidden, "forbidden")
-		return
-	}
-	if state == StatePublished || state == StatePublishing {
-		writeErr(w, http.StatusConflict, "already_published")
+	if code, status := guardMutation(claims, authorID, state); code != "" {
+		writeErr(w, status, code)
 		return
 	}
 
@@ -191,12 +187,8 @@ func (h *Handler) DeleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if authorID != claims.UserID && claims.Role != auth.RoleAdmin {
-		writeErr(w, http.StatusForbidden, "forbidden")
-		return
-	}
-	if state == StatePublished || state == StatePublishing {
-		writeErr(w, http.StatusConflict, "already_published")
+	if code, status := guardMutation(claims, authorID, state); code != "" {
+		writeErr(w, status, code)
 		return
 	}
 
@@ -257,7 +249,9 @@ func (h *Handler) ServeImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if authorID != claims.UserID && claims.Role != auth.RoleAdmin {
+	// Autor darf sein eigenes Bild sehen. Freigeber (medien/vorstand/admin)
+	// dürfen jedes Bild sehen — sie müssen den Bericht ja prüfen.
+	if authorID != claims.UserID && !isReviewer(claims) {
 		writeErr(w, http.StatusForbidden, "forbidden")
 		return
 	}

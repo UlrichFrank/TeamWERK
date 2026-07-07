@@ -221,13 +221,20 @@ func TestPublish_HappyPath(t *testing.T) {
 	authorID := testutil.CreatePressTeamUser(t, db)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
+	// Publish erwartet State=pending_review — Bericht muss zuerst eingereicht sein.
+	if _, err := db.Exec(
+		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
+		reportID); err != nil {
+		t.Fatal(err)
+	}
+	reviewerID := testutil.CreateMedienUser(t, db)
 
 	fp := &fakePublisher{
 		Result: &matchreports.PublishResult{PageUID: 1234, URL: "https://ts.org/spielberichte/x"},
 	}
 	h := newHandlerWithPublisher(db, fp)
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, reviewerID, auth.RoleStandard, []string{"medien"})
 
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/publish", reportID), token, nil)
 	if res.StatusCode != http.StatusOK {
@@ -240,6 +247,14 @@ func TestPublish_HappyPath(t *testing.T) {
 	}
 	if state != "published" {
 		t.Errorf("expected state=published, got %s", state)
+	}
+	// reviewer_user_id gesetzt.
+	var reviewerUID sql.NullInt64
+	if err := db.QueryRow(`SELECT reviewer_user_id FROM match_reports WHERE id=?`, reportID).Scan(&reviewerUID); err != nil {
+		t.Fatal(err)
+	}
+	if !reviewerUID.Valid || int(reviewerUID.Int64) != reviewerID {
+		t.Errorf("expected reviewer_user_id=%d, got %v", reviewerID, reviewerUID)
 	}
 	// Duty-Assignment fulfilled.
 	var assignStatus string
@@ -269,9 +284,10 @@ func TestPublish_AlreadyPublishing(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	reviewerID := testutil.CreateMedienUser(t, db)
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, reviewerID, auth.RoleStandard, []string{"medien"})
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/publish", reportID), token, nil)
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", res.StatusCode)
@@ -286,11 +302,17 @@ func TestPublish_PublisherError(t *testing.T) {
 	authorID := testutil.CreatePressTeamUser(t, db)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
+	if _, err := db.Exec(
+		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
+		reportID); err != nil {
+		t.Fatal(err)
+	}
+	reviewerID := testutil.CreateMedienUser(t, db)
 
 	fp := &fakePublisher{Err: errors.New("typo3 unreachable")}
 	h := newHandlerWithPublisher(db, fp)
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, reviewerID, auth.RoleStandard, []string{"medien"})
 
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/publish", reportID), token, nil)
 	if res.StatusCode != http.StatusBadGateway {
@@ -322,9 +344,10 @@ func TestPublish_AlreadyPublished(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	reviewerID := testutil.CreateMedienUser(t, db)
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, reviewerID, auth.RoleStandard, []string{"medien"})
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/publish", reportID), token, nil)
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", res.StatusCode)

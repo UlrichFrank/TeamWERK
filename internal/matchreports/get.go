@@ -37,18 +37,22 @@ type Image struct {
 	URL      string `json:"url"`
 }
 
-// Get liefert einen Bericht. Autor und Admin sehen alles; andere Presseteam-User
-// sehen nur `published`-Berichte (die sind ohnehin öffentlich auf der Homepage).
+// Get liefert einen Bericht. Sichtbarkeitsregeln:
 //
-//	GET /api/match-reports/{id}
+//   - state=published: alle Authenticated (Referenz auf öffentliche Homepage).
+//
+//   - state=draft: nur Autor + Admin.
+//
+//   - state=pending_review: Autor (read-only) + Freigeber (Prüfung) + Admin.
+//
+//   - state=publishing / publish_failed: Autor + Freigeber + Admin
+//     (Freigeber muss Fehler sehen und retryen können).
+//
+//     GET /api/match-reports/{id}
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	if claims == nil {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	if !isPressTeamOrAdmin(claims) {
-		writeErr(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
@@ -69,8 +73,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Drafts nur für Autor sichtbar (published ist immer sichtbar).
-	if rep.State != StatePublished && rep.AuthorUserID != claims.UserID && claims.Role != auth.RoleAdmin {
+	if !canReadReport(claims, rep) {
 		writeErr(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -145,4 +148,27 @@ func nullInt64Ptr(n sql.NullInt64) *int {
 	}
 	v := int(n.Int64)
 	return &v
+}
+
+// canReadReport implementiert die Read-Sichtbarkeits-Matrix. Nicht zu
+// verwechseln mit guardMutation (das ist für Schreib-Rechte).
+func canReadReport(claims *auth.Claims, rep *Report) bool {
+	if claims.Role == auth.RoleAdmin {
+		return true
+	}
+	// Published-Berichte sind Referenz — jeder Authenticated darf sehen.
+	if rep.State == StatePublished {
+		return true
+	}
+	// Autor sieht seinen eigenen Bericht in allen States.
+	if rep.AuthorUserID == claims.UserID {
+		return true
+	}
+	// Freigeber (medien|vorstand) sehen alle Nicht-Draft-Berichte —
+	// Draft ist Privatzone des Autors, sonst würden auch Halb-Sätze im UI
+	// der Freigeber landen.
+	if isReviewer(claims) && rep.State != StateDraft {
+		return true
+	}
+	return false
 }

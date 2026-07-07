@@ -17,16 +17,21 @@ type publishResp struct {
 	URL     string `json:"url"`
 }
 
-// Publish transitioniert einen Draft (oder publish_failed-Bericht) über die
-// State-Machine draft→publishing→published|publish_failed und ruft den
-// TYPO3-Publisher auf.
+// Publish transitioniert einen eingereichten Bericht (State pending_review
+// oder publish_failed-Retry) über die State-Machine → publishing → published
+// | publish_failed und ruft den TYPO3-Publisher auf.
 //
 //	POST /api/match-reports/{id}/publish
 //
-// Der atomare State-Wechsel `draft → publishing` verhindert Doppel-POST bei
-// paralleler Ausführung (zweiter Aufruf bekommt 409).
+// Guard: Vereinsfunktion 'medien' oder 'vorstand' oder Admin (siehe
+// spielbericht-medien-gate spec.md, D-1). Der Autor **ohne** Freigeber-Fkt darf
+// NICHT publishen — auch nicht seinen eigenen Bericht (F2: Vier-Augen weich,
+// aber die Freigabe-Autorität liegt strukturell beim Freigeber).
+//
+// Der atomare State-Wechsel `pending_review|publish_failed → publishing`
+// verhindert Doppel-Publish bei paralleler Ausführung (zweiter Aufruf 409).
 // Nach erfolgreichem 2xx vom Publisher:
-//   - state=published, published_url + typo3_page_uid + published_at gesetzt
+//   - state=published, published_url + typo3_page_uid + published_at + reviewer_user_id gesetzt
 //   - Duty-Slot auf fulfilled
 //   - Bilder-Dateien + DB-Zeilen gelöscht
 func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
@@ -35,8 +40,8 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if !isPressTeamOrAdmin(claims) {
-		writeErr(w, http.StatusForbidden, "forbidden")
+	if !isReviewer(claims) {
+		writeErr(w, http.StatusForbidden, "role_required")
 		return
 	}
 
@@ -46,12 +51,12 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Autor-/State-Check vor State-Übergang.
-	var authorID int
+	// State-Check vor Übergang. Autor-Check entfällt — Guard läuft über die
+	// Freigeber-Rolle, nicht über Ownership.
 	var state string
 	err := h.db.QueryRow(
-		`SELECT author_user_id, state FROM match_reports WHERE id=?`, id,
-	).Scan(&authorID, &state)
+		`SELECT state FROM match_reports WHERE id=?`, id,
+	).Scan(&state)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not_found")
 		return
@@ -61,11 +66,10 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	if authorID != claims.UserID && claims.Role != auth.RoleAdmin {
-		writeErr(w, http.StatusForbidden, "forbidden")
-		return
-	}
 	switch state {
+	case StateDraft:
+		writeErr(w, http.StatusConflict, "not_submitted")
+		return
 	case StatePublished:
 		writeErr(w, http.StatusConflict, "already_published")
 		return
@@ -74,12 +78,13 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Atomarer Übergang zu 'publishing'. Beide Ausgangszustände (draft, publish_failed)
-	// dürfen. Bei Race verliert der zweite Requester (0 Zeilen betroffen).
+	// Atomarer Übergang zu 'publishing'. Ausgangszustände: pending_review
+	// (Regelfall) oder publish_failed (Retry). Bei Race verliert der zweite
+	// Requester (0 Zeilen betroffen).
 	res, err := h.db.Exec(
 		`UPDATE match_reports SET state=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=? AND state IN (?, ?)`,
-		StatePublishing, id, StateDraft, StatePublishFailed,
+		StatePublishing, id, StatePendingReview, StatePublishFailed,
 	)
 	if err != nil {
 		logErr("matchreports.Publish state transition", err, "id", id)
@@ -124,8 +129,9 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Erfolgs-Finalisierung.
-	if err := h.finalizePublished(id, result); err != nil {
+	// Erfolgs-Finalisierung. Reviewer_user_id wird auf den aktuellen Requester
+	// gesetzt (letzter Publisher gewinnt — siehe design.md D-6).
+	if err := h.finalizePublished(id, claims.UserID, result); err != nil {
 		// Report ist auf TYPO3 live, aber Nachbereitung schlug fehl.
 		// State geht trotzdem auf 'published' — der Bericht steht ja online.
 		logErr("matchreports.Publish finalize", err, "id", id)
@@ -258,9 +264,10 @@ func (h *Handler) loadPublishImages(reportID int) ([]PublishImage, error) {
 	return out, rows.Err()
 }
 
-// finalizePublished markiert den Bericht als veröffentlicht, quittiert den
-// zugehörigen Duty-Slot und räumt die Bilder auf.
-func (h *Handler) finalizePublished(reportID int, result *PublishResult) error {
+// finalizePublished markiert den Bericht als veröffentlicht, hält den
+// freigebenden User als reviewer_user_id fest, quittiert den zugehörigen
+// Duty-Slot und räumt die Bilder auf.
+func (h *Handler) finalizePublished(reportID, reviewerUserID int, result *PublishResult) error {
 	tx, err := h.db.Begin()
 	if err != nil {
 		return err
@@ -270,9 +277,9 @@ func (h *Handler) finalizePublished(reportID int, result *PublishResult) error {
 	if _, err := tx.Exec(
 		`UPDATE match_reports
 		 SET state=?, published_url=?, typo3_page_uid=?, published_at=CURRENT_TIMESTAMP,
-		     error_message=NULL, updated_at=CURRENT_TIMESTAMP
+		     reviewer_user_id=?, error_message=NULL, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
-		StatePublished, result.URL, result.PageUID, reportID,
+		StatePublished, result.URL, result.PageUID, reviewerUserID, reportID,
 	); err != nil {
 		return err
 	}

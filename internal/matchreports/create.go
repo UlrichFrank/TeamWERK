@@ -136,6 +136,50 @@ func isPressTeamOrAdmin(claims *auth.Claims) bool {
 	return claims.Role == auth.RolePressTeam || claims.Role == auth.RoleAdmin
 }
 
+// isReviewer prüft, ob der Requester Match-Report-Freigaben durchführen darf:
+// Vereinsfunktion 'medien' oder 'vorstand' oder System-Rolle 'admin'. Admin
+// bypasst alle Vereinsfunktions-Checks (konsistent mit RequireClubFunction).
+func isReviewer(claims *auth.Claims) bool {
+	if claims == nil {
+		return false
+	}
+	if claims.Role == auth.RoleAdmin {
+		return true
+	}
+	return claims.HasFunction(ClubFunctionMedien) || claims.HasFunction("vorstand")
+}
+
+// guardMutation setzt die State-/Rollen-Matrix für alle mutierenden Handler
+// (Update, Bild-Upload/Delete) durch. Liefert ("", 0), wenn der Zugriff erlaubt
+// ist, sonst (errorCode, httpStatus) für writeErr.
+//
+// Regeln (spec.md des spielbericht-medien-gate):
+//   - state=draft            → nur Autor (oder Admin)
+//   - state=pending_review   → nur Freigeber (medien|vorstand|admin), NICHT Autor
+//   - state=publish_failed   → nur Freigeber (analog pending_review)
+//   - state=publishing       → 409 in_progress (niemand)
+//   - state=published        → 409 already_published (niemand)
+func guardMutation(claims *auth.Claims, authorID int, state string) (string, int) {
+	switch state {
+	case StateDraft:
+		if authorID == claims.UserID || claims.Role == auth.RoleAdmin {
+			return "", 0
+		}
+		return "forbidden", http.StatusForbidden
+	case StatePendingReview, StatePublishFailed:
+		if isReviewer(claims) {
+			return "", 0
+		}
+		return "forbidden", http.StatusForbidden
+	case StatePublishing:
+		return "in_progress", http.StatusConflict
+	case StatePublished:
+		return "already_published", http.StatusConflict
+	default:
+		return "invalid_state", http.StatusConflict
+	}
+}
+
 // matchReportDutyTypeName ist der name-Match für den Spielbericht-Duty-Type
 // (Seed in Migration 020) — analog zu duties.matchReportDutyTypeName, per Name
 // statt ID, damit Prod- und Test-DBs mit unterschiedlichen IDs beide greifen.

@@ -19,9 +19,19 @@ type updateReq struct {
 	BodyMarkdown string `json:"body_md"`
 }
 
-// Update patcht ein Draft. Nur der Autor (oder Admin) darf; nur im State 'draft'.
+// Update patcht einen Bericht. Zugriff nach der State-/Rollen-Matrix
+// (spielbericht-medien-gate spec.md, Requirement „Draft-Update nur durch
+// Autor im State draft"):
 //
-//	PUT /api/match-reports/{id}
+//   - state=draft: nur Autor (oder Admin)
+//
+//   - state=pending_review / publish_failed: nur Freigeber (medien|vorstand|admin)
+//
+//   - state=publishing: 409 in_progress
+//
+//   - state=published: 409 already_published
+//
+//     PUT /api/match-reports/{id}
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	if claims == nil {
@@ -60,16 +70,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if authorID != claims.UserID && claims.Role != auth.RoleAdmin {
-		writeErr(w, http.StatusForbidden, "forbidden")
-		return
-	}
-	switch state {
-	case StatePublished:
-		writeErr(w, http.StatusConflict, "already_published")
-		return
-	case StatePublishing:
-		writeErr(w, http.StatusConflict, "in_progress")
+	// State-/Rollen-Matrix. `guardMutation` liefert bei Verboten den passenden
+	// HTTP-Fehler; bei Erlaubnis nil.
+	if code, status := guardMutation(claims, authorID, state); code != "" {
+		writeErr(w, status, code)
 		return
 	}
 

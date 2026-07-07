@@ -404,22 +404,39 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			}
 		})
 
-		// Presseteam (+ Admin fällt hierarchisch durch): Spielberichte
-		// schreiben, mit Bildern anreichern und an die TYPO3-Extension
-		// publizieren. Siehe openspec/changes/spielbericht-typo3-publisher/.
+		// Match-Reports — Autor-Workflow (Presseteam) und Freigeber-Workflow
+		// (Vereinsfunktion medien/vorstand). Die Freigabe-Trennung stammt aus
+		// spielbericht-medien-gate: Autor reicht ein („Zur Prüfung"), Freigeber
+		// veröffentlicht. Feinere State-/Rollen-Regeln setzt der Handler
+		// per guardMutation() durch (Autor darf draft, Freigeber darf
+		// pending_review + publish_failed).
 		if h.MatchReports != nil {
+			// Autor-Aktionen: Draft anlegen, eigene Liste, Löschen, Einreichen.
 			r.Group(func(r chi.Router) {
 				r.Use(auth.RequireRole(auth.RolePressTeam, auth.RoleAdmin))
 				r.Get("/api/match-reports/my", h.MatchReports.MyList)
 				r.Post("/api/match-reports", h.MatchReports.Create)
-				r.Get("/api/match-reports/{id}", h.MatchReports.Get)
-				r.Put("/api/match-reports/{id}", h.MatchReports.Update)
 				r.Delete("/api/match-reports/{id}", h.MatchReports.Delete)
-				r.Post("/api/match-reports/{id}/images", h.MatchReports.UploadImage)
-				r.Get("/api/match-reports/{id}/images/{imgId}/blob", h.MatchReports.ServeImage)
-				r.Delete("/api/match-reports/{id}/images/{imgId}", h.MatchReports.DeleteImage)
+				r.Post("/api/match-reports/{id}/submit-for-review", h.MatchReports.SubmitForReview)
+			})
+
+			// Freigeber-Aktionen: Pending-Liste, Publish. Admin fällt in
+			// RequireClubFunction ohnehin durch.
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequireClubFunction("medien", "vorstand"))
+				r.Get("/api/match-reports/pending", h.MatchReports.Pending)
 				r.Post("/api/match-reports/{id}/publish", h.MatchReports.Publish)
 			})
+
+			// Gemischte Routen (Update, Bilder, Detail-Get): Zugriff hängt vom
+			// State + Rolle des Requesters ab — der Handler entscheidet feinkörnig.
+			// Middleware nur „authenticated", also bereits durch den äußeren
+			// r.Use(auth.RequireAuth) im übergeordneten Block abgedeckt.
+			r.Get("/api/match-reports/{id}", h.MatchReports.Get)
+			r.Put("/api/match-reports/{id}", h.MatchReports.Update)
+			r.Post("/api/match-reports/{id}/images", h.MatchReports.UploadImage)
+			r.Get("/api/match-reports/{id}/images/{imgId}/blob", h.MatchReports.ServeImage)
+			r.Delete("/api/match-reports/{id}/images/{imgId}", h.MatchReports.DeleteImage)
 		}
 
 		// Member-Liste (Suche) — Vorstand + Kassierer (Mitgliederverwaltung) sowie
