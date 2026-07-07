@@ -116,9 +116,19 @@ func (h *Handler) AcceptChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// member_id VOR dem Accept lesen: AcceptDraft löscht den Entwurf, danach ist die
+	// betroffene Mitglieds-ID nicht mehr auflösbar.
+	var memberID int
+	h.db.QueryRowContext(r.Context(), `SELECT member_id FROM member_change_drafts WHERE id=?`, draftID).Scan(&memberID)
+
 	if err := h.AcceptDraft(draftID); err != nil {
 		http.Error(w, "Failed to accept draft", http.StatusInternalServerError)
 		return
+	}
+
+	// Annahme ändert die Mitgliedsdaten → Roster/Profil der Audience + Finance-Gruppe neu laden.
+	if memberID != 0 {
+		h.broadcastMembers(r.Context(), []int{memberID})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -135,9 +145,19 @@ func (h *Handler) RejectChangeRequestHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// member_id VOR dem Reject lesen: RejectDraft löscht den Entwurf.
+	var memberID int
+	h.db.QueryRowContext(r.Context(), `SELECT member_id FROM member_change_drafts WHERE id=?`, draftID).Scan(&memberID)
+
 	if err := h.RejectDraft(draftID); err != nil {
 		http.Error(w, "Failed to reject draft", http.StatusInternalServerError)
 		return
+	}
+
+	// Ablehnung entfernt den pending-Draft → HasPendingProfilDraft/Bank-Flags in der
+	// Mitglieder-/Profil-Ansicht ändern sich, Audience + Finance-Gruppe neu laden.
+	if memberID != 0 {
+		h.broadcastMembers(r.Context(), []int{memberID})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
