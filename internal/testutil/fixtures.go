@@ -316,6 +316,27 @@ func CreatePressTeamUser(t *testing.T, database *sql.DB) int {
 	return CreateUser(t, database, auth.RolePressTeam)
 }
 
+// CreateMedienUser inserts a User+Member with Vereinsfunktion 'medien' and returns
+// the user ID. Shortcut for the review-gate tests.
+func CreateMedienUser(t *testing.T, database *sql.DB) int {
+	t.Helper()
+	uid := CreateUser(t, database, auth.RoleStandard)
+	mid := CreateMember(t, database, uid)
+	AddClubFunction(t, database, mid, "medien")
+	return uid
+}
+
+// CreateVorstandUser inserts a User+Member with Vereinsfunktion 'vorstand' and
+// returns the user ID. Vorstand hat im match-report-Kontext dieselben Freigabe-
+// Rechte wie 'medien' (Fallback-Freigeber).
+func CreateVorstandUser(t *testing.T, database *sql.DB) int {
+	t.Helper()
+	uid := CreateUser(t, database, auth.RoleStandard)
+	mid := CreateMember(t, database, uid)
+	AddClubFunction(t, database, mid, "vorstand")
+	return uid
+}
+
 // CreateMatchReport inserts a match_reports row in state='draft' and returns its ID.
 // dutySlotID may be 0 to omit the FK (NULL).
 func CreateMatchReport(t *testing.T, database *sql.DB, gameID, authorUserID, dutySlotID int) int {
