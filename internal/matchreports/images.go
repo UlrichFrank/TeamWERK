@@ -143,7 +143,7 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		ID:       int(id),
 		Position: position,
 		Caption:  caption,
-		URL:      fmt.Sprintf("/api/match-reports/%d/images/%d/blob", reportID, id),
+		URL:      fmt.Sprintf("/match-reports/%d/images/%d/blob", reportID, id),
 	})
 }
 
@@ -285,7 +285,7 @@ func (h *Handler) listImages(reportID int) ([]Image, error) {
 		if err := rows.Scan(&img.ID, &img.Position, &img.Caption); err != nil {
 			return nil, err
 		}
-		img.URL = fmt.Sprintf("/api/match-reports/%d/images/%d/blob", reportID, img.ID)
+		img.URL = fmt.Sprintf("/match-reports/%d/images/%d/blob", reportID, img.ID)
 		out = append(out, img)
 	}
 	return out, rows.Err()

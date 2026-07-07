@@ -459,6 +459,56 @@ func TestUpdate_TitleTooLong(t *testing.T) {
 	}
 }
 
+// ─── TC-MR13 · Image-URL ohne /api-Prefix ─────────────────────────────────────
+//
+// Der Client (axios) hat `baseURL='/api'` und würde `/api/api/…` bauen, wenn
+// der Server den Prefix nochmal draufsetzt. GET liefert die URL also relativ
+// zum axios-baseURL — ohne `/api`-Prefix.
+func TestGet_ImageURLWithoutAPIPrefix(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, teamID, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreatePressTeamUser(t, db)
+	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
+
+	// Bild-Zeile direkt in DB — Datei-IO braucht der URL-Format-Test nicht.
+	res, err := db.Exec(
+		`INSERT INTO match_report_images (report_id, position, caption, storage_path)
+		 VALUES (?, 1, 'test', '/tmp/nowhere.jpg')`, reportID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imgID, _ := res.LastInsertId()
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+
+	getRes := testutil.Do(t, srv, http.MethodGet, fmt.Sprintf("/api/match-reports/%d", reportID), token, nil)
+	if getRes.StatusCode != http.StatusOK {
+		t.Fatalf("get: expected 200, got %d — %s", getRes.StatusCode, readBody(t, getRes))
+	}
+	var got struct {
+		Images []struct {
+			URL string `json:"url"`
+		} `json:"images"`
+	}
+	if err := json.NewDecoder(getRes.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Images) != 1 {
+		t.Fatalf("expected 1 image, got %d", len(got.Images))
+	}
+	want := fmt.Sprintf("/match-reports/%d/images/%d/blob", reportID, imgID)
+	if got.Images[0].URL != want {
+		t.Errorf("URL = %q, want %q", got.Images[0].URL, want)
+	}
+	// Explizit: KEIN /api-Prefix.
+	if strings.HasPrefix(got.Images[0].URL, "/api/") {
+		t.Errorf("URL should not start with /api/, got %q", got.Images[0].URL)
+	}
+}
+
 func readBody(t *testing.T, res *http.Response) string {
 	t.Helper()
 	defer res.Body.Close()

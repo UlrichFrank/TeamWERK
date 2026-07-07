@@ -42,10 +42,10 @@
 
 ## 6. Backend — Bild-URL-Format
 
-- [ ] 6.1 `internal/matchreports/images.go` (`UploadImage`-Response, `listImages`): `img.URL = fmt.Sprintf("/match-reports/%d/images/%d/blob", reportID, imgID)` (ohne `/api`-Prefix)
-- [ ] 6.2 Tests `handler_test.go` / `images_test.go` (falls vorhanden): URL-Format prüfen
-- [ ] 6.3 Publisher-Test: Test-fixture aktualisieren, falls betroffen (Bilder gehen als Multipart, nicht per URL)
-- [ ] 6.4 Commit: `fix(matchreports): image URL ohne /api-Prefix (baseURL setzt der Client)`
+- [x] 6.1 `internal/matchreports/images.go` (`UploadImage`-Response, `listImages`): `img.URL = fmt.Sprintf("/match-reports/%d/images/%d/blob", reportID, imgID)` (ohne `/api`-Prefix)
+- [x] 6.2 Tests `handler_test.go` / `images_test.go` (falls vorhanden): URL-Format prüfen
+- [x] 6.3 Publisher-Test: Test-fixture aktualisieren, falls betroffen (Bilder gehen als Multipart, nicht per URL) — nicht betroffen, Bilder gehen als Multipart
+- [x] 6.4 Commit: `fix(matchreports): image URL ohne /api-Prefix (baseURL setzt der Client)`
 
 ## 7. Backend — Publish no-active-season Fehlerfall
 
