@@ -40,6 +40,13 @@ func IsVorstandLike(p *Principal) bool {
 	return p.Role == "admin" || p.hasFunction("vorstand")
 }
 
+// IsMatchReportReviewer returns true for match-report Freigeber:
+// Vereinsfunktion 'medien' oder 'vorstand' oder Admin. Gedanklich der
+// Frontend-Spiegel des Backend-Guards in matchreports.isReviewer.
+func IsMatchReportReviewer(p *Principal) bool {
+	return p.Role == "admin" || p.hasAnyFunction("medien", "vorstand")
+}
+
 // IsKassiererLike returns true for kassierer (plus vorstand/admin pass-through).
 // Kassierer dürfen Mitglieder lesen/Bankdaten pflegen und den Beitragslauf ausführen.
 func IsKassiererLike(p *Principal) bool {
@@ -247,6 +254,10 @@ func NavFor(p *Principal) []NavItem {
 	// Spielberichte nur für Presseteam (+Admin, hierarchisch).
 	if p.Role == "presseteam" || p.Role == "admin" {
 		nav = append(nav, NavItem{"Spielberichte", "/spielberichte"})
+	}
+	// Berichte zur Prüfung — Freigeber (Vereinsfunktion medien/vorstand + Admin).
+	if IsMatchReportReviewer(p) {
+		nav = append(nav, NavItem{"Berichte prüfen", "/berichte/pruefen"})
 	}
 
 	// Verwaltung — role-restricted

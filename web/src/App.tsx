@@ -40,6 +40,7 @@ import AdminVenuesPage from './pages/AdminVenuesPage'
 import ChatPage from './pages/ChatPage'
 import MatchReportListPage from './pages/MatchReportListPage'
 import MatchReportFormPage from './pages/MatchReportFormPage'
+import MatchReportPendingListPage from './pages/MatchReportPendingListPage'
 import VideosPage from './pages/VideosPage'
 import VideoUploadPage from './pages/VideoUploadPage'
 import VideoDetailPage from './pages/VideoDetailPage'
@@ -127,7 +128,8 @@ export default function App() {
               <Route path="mein-team" element={<MeinTeamPage />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="spielberichte" element={<RoleRoute roles={['presseteam','admin']}><MatchReportListPage /></RoleRoute>} />
-              <Route path="spielberichte/:id" element={<RoleRoute roles={['presseteam','admin']}><MatchReportFormPage /></RoleRoute>} />
+              <Route path="spielberichte/:id" element={<RoleRoute roles={['presseteam','admin','medien','vorstand']}><MatchReportFormPage /></RoleRoute>} />
+              <Route path="berichte/pruefen" element={<RoleRoute roles={['admin','medien','vorstand']}><MatchReportPendingListPage /></RoleRoute>} />
               <Route path="videos" element={<VideosPage />} />
               <Route path="videos/upload" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><VideoUploadPage /></RoleRoute>} />
               <Route path="videos/:id" element={<VideoDetailPage />} />

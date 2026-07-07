@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { AlertTriangle, Trash2, Upload, X, Eye, EyeOff, Send } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { useAuth } from '../contexts/AuthContext'
 
 type ReportImage = {
     id: number
@@ -19,7 +20,7 @@ type MatchReport = {
     game_id: number
     duty_slot_id: number | null
     author_user_id: number
-    state: 'draft' | 'publishing' | 'published' | 'publish_failed'
+    state: 'draft' | 'pending_review' | 'publishing' | 'published' | 'publish_failed'
     home_goals: number | null
     away_goals: number | null
     home_goals_ht: number | null
@@ -46,10 +47,12 @@ const input =
 export default function MatchReportFormPage() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
+    const { user } = useAuth()
     const [report, setReport] = useState<MatchReport | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [saving, setSaving] = useState(false)
     const [publishing, setPublishing] = useState(false)
+    const [submitting, setSubmitting] = useState(false)
     const [preview, setPreview] = useState(false)
 
     const [homeGoals, setHomeGoals] = useState('')
@@ -88,7 +91,29 @@ export default function MatchReportFormPage() {
     if (error) return <div className="p-6 text-brand-danger">{error}</div>
     if (!report) return <div className="p-6 text-brand-text-muted">Lade Bericht…</div>
 
-    const readOnly = report.state === 'published' || report.state === 'publishing'
+    // Rollen des aktuellen Users im Bericht-Kontext:
+    // - Autor: darf im Draft editieren, danach nur noch lesen.
+    // - Freigeber (medien|vorstand|admin): darf pending_review + publish_failed
+    //   editieren und publishen.
+    const isAuthor = user?.id === report.author_user_id
+    const isReviewer =
+        user?.role === 'admin' ||
+        user?.clubFunctions?.includes('medien') ||
+        user?.clubFunctions?.includes('vorstand') ||
+        false
+
+    // Wer darf gerade schreiben?
+    let canEdit = false
+    let canSubmit = false
+    let canPublish = false
+    if (report.state === 'draft') {
+        canEdit = isAuthor || user?.role === 'admin'
+        canSubmit = canEdit
+    } else if (report.state === 'pending_review' || report.state === 'publish_failed') {
+        canEdit = isReviewer
+        canPublish = isReviewer
+    }
+    const readOnly = !canEdit
 
     const saveDraft = async () => {
         setSaving(true)
@@ -106,6 +131,21 @@ export default function MatchReportFormPage() {
             setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Speichern fehlgeschlagen')
         } finally {
             setSaving(false)
+        }
+    }
+
+    const submitForReview = async () => {
+        if (!confirm('Bericht zur Prüfung senden? Nach dem Absenden kannst du ihn nicht mehr bearbeiten — nur Medien oder Vorstand veröffentlichen oder korrigieren dann noch.')) return
+        setSubmitting(true)
+        try {
+            await saveDraft()
+            await api.post(`/match-reports/${reportID}/submit-for-review`)
+            load()
+        } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string; error?: string } } })?.response?.data
+            setError(detail?.detail || detail?.error || 'Einreichen fehlgeschlagen')
+        } finally {
+            setSubmitting(false)
         }
     }
 
@@ -229,19 +269,36 @@ export default function MatchReportFormPage() {
                 onChange={load}
             />
 
-            {!readOnly && (
+            {/* Hinweis-Banner nach Submit für den Autor */}
+            {report.state === 'pending_review' && isAuthor && !isReviewer && (
+                <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                    Zur Prüfung eingereicht — nur Medien oder Vorstand kann jetzt bearbeiten oder veröffentlichen.
+                </div>
+            )}
+
+            {canEdit && (
                 <div className="flex flex-wrap gap-3 pt-4 border-t border-brand-border-subtle">
                     <button className={btnPrimary} onClick={saveDraft} disabled={saving}>
                         {saving ? 'Speichere…' : 'Entwurf speichern'}
                     </button>
-                    <button className={btnPrimary} onClick={publish} disabled={publishing}>
-                        <Send className="inline-block w-4 h-4 mr-1" />
-                        {publishing ? 'Veröffentliche…' : 'Veröffentlichen'}
-                    </button>
-                    <button className={btnDanger} onClick={deleteDraft}>
-                        <Trash2 className="inline-block w-4 h-4 mr-1" />
-                        Draft löschen
-                    </button>
+                    {canSubmit && (
+                        <button className={btnPrimary} onClick={submitForReview} disabled={submitting}>
+                            <Send className="inline-block w-4 h-4 mr-1" />
+                            {submitting ? 'Sende…' : 'Zur Prüfung senden'}
+                        </button>
+                    )}
+                    {canPublish && (
+                        <button className={btnPrimary} onClick={publish} disabled={publishing}>
+                            <Send className="inline-block w-4 h-4 mr-1" />
+                            {publishing ? 'Veröffentliche…' : 'Veröffentlichen'}
+                        </button>
+                    )}
+                    {isAuthor && report.state === 'draft' && (
+                        <button className={btnDanger} onClick={deleteDraft}>
+                            <Trash2 className="inline-block w-4 h-4 mr-1" />
+                            Draft löschen
+                        </button>
+                    )}
                 </div>
             )}
         </div>

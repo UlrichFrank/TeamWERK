@@ -7,7 +7,7 @@ import { FileText, Plus, ExternalLink } from 'lucide-react'
 type ReportItem = {
     id: number
     game_id: number
-    state: 'draft' | 'publishing' | 'published' | 'publish_failed'
+    state: 'draft' | 'pending_review' | 'publishing' | 'published' | 'publish_failed'
     match_date: string
     opponent: string
     published_url: string | null
@@ -27,6 +27,7 @@ const btnSmall =
 
 const STATE_LABEL: Record<string, string> = {
     draft: 'Entwurf',
+    pending_review: 'Wartet auf Freigabe',
     publishing: 'Wird veröffentlicht…',
     published: 'Veröffentlicht',
     publish_failed: 'Fehler',

@@ -113,7 +113,7 @@ func (s *Scheduler) sendMatchReportReviewReminders() {
 	for _, pr := range reports {
 		title := "Spielbericht wartet auf Freigabe"
 		body := fmt.Sprintf("„%s\" liegt seit über 5 Tagen zur Prüfung.", pr.opponent)
-		url := fmt.Sprintf("/berichte/%d", pr.id)
+		url := fmt.Sprintf("/spielberichte/%d", pr.id)
 		for _, uid := range reviewers {
 			res, err := s.db.Exec(
 				`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
