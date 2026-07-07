@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Spielbericht-Duty-Slot nur für Presseteam sichtbar
 Das System SHALL Duty-Slots des Typs „Spielbericht" (identifiziert per `duty_types.name='Spielbericht'` oder dedizierter Flag) im `GET /api/duty-board`-Response nur für User mit `role IN ('presseteam','admin')` ausliefern. Für andere User wird der Slot herausgefiltert, als wäre er nicht vorhanden.

@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: users.role akzeptiert `presseteam`
 Das System SHALL im `users.role`-CHECK-Constraint die Werte `admin`, `standard` und `presseteam` akzeptieren. Die Rolle ist hierarchisch: `admin ⊇ presseteam ⊇ standard`. Ein Presseteam-User kann alles, was ein Standard-User kann, plus die auf Presseteam eingeschränkten Match-Report-Aktionen. Ein Admin kann alles.
