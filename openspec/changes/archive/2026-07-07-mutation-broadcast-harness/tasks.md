@@ -27,4 +27,4 @@
 ## 5. Doku
 
 - [x] 5.1 `docs/agent/08-verification.md` um das Broadcast-Gate ergänzt (neben Architektur-Test und `/verify-change`).
-- [ ] 5.2 `openspec validate mutation-broadcast-harness --strict` grün; Change nach Merge archivieren.
+- [x] 5.2 `openspec validate mutation-broadcast-harness --strict` grün; Change archiviert (in PR #136, Spec nach openspec/specs/ übernommen).
