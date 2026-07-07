@@ -9,9 +9,9 @@
 
 ## 2. Datenbank-Migration (TeamWERK)
 
-- [ ] 2.1 `internal/db/migrations/025_match_report_title_und_typo3_cat_drop.up.sql`: `ALTER TABLE match_reports ADD COLUMN title TEXT NOT NULL DEFAULT ''`, `ALTER TABLE teams DROP COLUMN typo3_category_uid`
-- [ ] 2.2 `025_match_report_title_und_typo3_cat_drop.down.sql`: umgekehrt (`title` DROP, `typo3_category_uid INTEGER` wieder ADD)
-- [ ] 2.3 Migration lokal testen: `make migrate-up && make migrate-down && make migrate-up` — keine Fehler
+- [x] 2.1 `internal/db/migrations/025_match_report_title_und_typo3_cat_drop.up.sql`: `ALTER TABLE match_reports ADD COLUMN title TEXT NOT NULL DEFAULT ''`, `ALTER TABLE teams DROP COLUMN typo3_category_uid`
+- [x] 2.2 `025_match_report_title_und_typo3_cat_drop.down.sql`: umgekehrt (`title` DROP, `typo3_category_uid INTEGER` wieder ADD)
+- [x] 2.3 Migration lokal testen: `make migrate-up && make migrate-down && make migrate-up` — keine Fehler
 - [ ] 2.4 Commit: `feat(db): match_reports.title + teams.typo3_category_uid entfernt`
 
 ## 3. Backend — Slug/Season-Helper
