@@ -61,7 +61,102 @@ func (s *Scheduler) Run() {
 	s.cleanFailedVideoRaw()
 	s.runVideoRetention()
 	s.sendAttendanceReminders()
+	s.sendMatchReportReviewReminders()
 	s.recordHeartbeat()
+}
+
+// sendMatchReportReviewReminders erinnert die Freigeber (Vereinsfunktion
+// 'medien' oder 'vorstand'), wenn ein Spielbericht länger als 5 Tage im
+// State 'pending_review' liegt. Genau eine Reminder-Notification pro
+// (user, report) — idempotent via notification_log.
+//
+// Query-Logik (siehe spielbericht-medien-gate design.md D-5):
+//   - Alle Berichte state='pending_review' AND submitted_at < now - 5 days
+//   - × alle aktuellen Freigeber (users mit member_club_functions IN medien/vorstand)
+//   - INSERT OR IGNORE INTO notification_log für Idempotenz.
+func (s *Scheduler) sendMatchReportReviewReminders() {
+	rows, err := s.db.Query(`
+		SELECT r.id, g.opponent
+		FROM match_reports r
+		JOIN games g ON g.id = r.game_id
+		WHERE r.state = 'pending_review'
+		  AND r.submitted_at IS NOT NULL
+		  AND datetime(r.submitted_at) < datetime('now','-5 days')`)
+	if err != nil {
+		logIfBusy(err, "sendMatchReportReviewReminders.query")
+		slog.Error("scheduler match-report reminder query failed", "error", err)
+		return
+	}
+	type pendingReport struct {
+		id       int
+		opponent string
+	}
+	var reports []pendingReport
+	for rows.Next() {
+		var pr pendingReport
+		if err := rows.Scan(&pr.id, &pr.opponent); err != nil {
+			continue
+		}
+		reports = append(reports, pr)
+	}
+	rows.Close()
+	if len(reports) == 0 {
+		return
+	}
+
+	reviewers := s.matchReportReviewers()
+	if len(reviewers) == 0 {
+		return
+	}
+
+	sent := 0
+	for _, pr := range reports {
+		title := "Spielbericht wartet auf Freigabe"
+		body := fmt.Sprintf("„%s\" liegt seit über 5 Tagen zur Prüfung.", pr.opponent)
+		url := fmt.Sprintf("/berichte/%d", pr.id)
+		for _, uid := range reviewers {
+			res, err := s.db.Exec(
+				`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+				uid, "match_report_review_reminder", pr.id)
+			if err != nil {
+				logIfBusy(err, "sendMatchReportReviewReminders.claim")
+				continue
+			}
+			if n, _ := res.RowsAffected(); n == 1 {
+				go push.SendToUsers(s.db, s.cfg, []int{uid}, title, body, url)
+				sent++
+			}
+		}
+	}
+	if sent > 0 {
+		slog.Info("scheduler match-report review reminders sent", "count", sent)
+	}
+}
+
+// matchReportReviewers listet aktuelle Freigeber (User mit Vereinsfunktion
+// 'medien' oder 'vorstand'). Rein lesende Query — keine Notification-Nebenwirkung.
+func (s *Scheduler) matchReportReviewers() []int {
+	rows, err := s.db.Query(`
+		SELECT DISTINCT u.id
+		FROM users u
+		JOIN members m ON m.user_id = u.id
+		JOIN member_club_functions mcf ON mcf.member_id = m.id
+		WHERE mcf.function IN ('medien','vorstand')`)
+	if err != nil {
+		logIfBusy(err, "matchReportReviewers.query")
+		slog.Error("scheduler match-report reviewers query failed", "error", err)
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // cleanStaleVideoUploads entfernt unfertige tus-Sessions (>24 h) im
