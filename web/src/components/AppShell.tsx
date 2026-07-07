@@ -22,7 +22,7 @@ import {
 
 interface NavModule {
   label: string
-  items: { to: string; label: string; end?: boolean }[]
+  items: { to: string; label: string; end?: boolean; indent?: boolean }[]
 }
 
 // Static layout descriptor — defines grouping, labels, and ordering.
@@ -53,7 +53,7 @@ const navModules: NavModule[] = [
       { to: '/mitfahrgelegenheiten', label: 'Mitfahrten' },
       { to: '/chat', label: 'Nachrichten' },
       { to: '/spielberichte', label: 'Spielberichte' },
-      { to: '/spielberichte/pruefen', label: 'Berichte prüfen' },
+      { to: '/spielberichte/pruefen', label: 'Berichte prüfen', indent: true },
     ],
   },
   {
@@ -292,7 +292,7 @@ export default function AppShell() {
                   end={item.end}
                   onClick={closeSidebar}
                   className={({ isActive }) =>
-                    `flex items-center justify-between pl-7 pr-4 py-2 text-sm transition-colors ${isActive ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-black/60 hover:bg-brand-black hover:text-brand-yellow'}`
+                    `flex items-center justify-between ${item.indent ? 'pl-10' : 'pl-7'} pr-4 py-2 text-sm transition-colors ${isActive ? 'bg-brand-yellow text-brand-black font-medium' : 'text-brand-black/60 hover:bg-brand-black hover:text-brand-yellow'}`
                   }
                 >
                   <span>{item.label}</span>
