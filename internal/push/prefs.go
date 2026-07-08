@@ -11,7 +11,7 @@ import (
 // notification_preferences.category (migration 026). Callers that persist a
 // category (e.g. the preferences PUT handler) validate against this set so an
 // unknown category is rejected before it hits the DB CHECK.
-var ValidCategories = []string{"games", "trainings", "duties", "duty_reminders", "carpooling", "membership", "chat"}
+var ValidCategories = []string{"games", "trainings", "duties", "duty_reminders", "carpooling", "membership", "chat", "operativ", "sonstiges"}
 
 // IsValidCategory reports whether category is a known notification category.
 func IsValidCategory(category string) bool {
