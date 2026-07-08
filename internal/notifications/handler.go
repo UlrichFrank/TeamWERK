@@ -42,6 +42,24 @@ func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Unbekannte Kategorien vorab ablehnen (400 statt 500 am DB-CHECK) — und
+	// bevor irgendetwas geschrieben wird, damit kein Teil-Write entsteht.
+	for category := range body {
+		if !push.IsValidCategory(category) {
+			http.Error(w, "unknown category: "+category, http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Transaktional: alles-oder-nichts. Vermeidet, dass bei einem Fehler ein
+	// nichtdeterministischer Teil der Kategorien persistiert.
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
 	for category, pref := range body {
 		pushVal := 0
 		if pref.Push {
@@ -51,7 +69,7 @@ func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 		if pref.Email {
 			emailVal = 1
 		}
-		_, err := h.db.ExecContext(r.Context(), `
+		_, err := tx.ExecContext(r.Context(), `
 			INSERT INTO notification_preferences (user_id, category, push_enabled, email_enabled)
 			VALUES (?, ?, ?, ?)
 			ON CONFLICT(user_id, category) DO UPDATE SET
@@ -63,6 +81,10 @@ func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

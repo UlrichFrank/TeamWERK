@@ -1,8 +1,10 @@
 package notifications_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -54,6 +56,69 @@ func TestVapidKey_CacheControlImmutable(t *testing.T) {
 	defer res2.Body.Close()
 	if res2.StatusCode != http.StatusNotModified {
 		t.Errorf("revalidierter Abruf: status %d, want 304", res2.StatusCode)
+	}
+}
+
+// prefsServer verdrahtet die notification-preferences-Routen für die Tests.
+func prefsServer(t *testing.T, database *sql.DB) *httptest.Server {
+	t.Helper()
+	cfg := &appconfig.Config{JWTSecret: testutil.TestJWTSecret}
+	h := notifications.NewHandler(database, cfg)
+	return testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/profile/notification-preferences", h.GetNotificationPreferences)
+		r.Put("/api/profile/notification-preferences", h.UpdateNotificationPreferences)
+	})
+}
+
+// TestUpdatePreferences_ChatPersists — Regression Defekt 1: die Kategorie 'chat'
+// darf gespeichert werden (früher 500 am DB-CHECK). PUT → 204, Zeile persistiert.
+func TestUpdatePreferences_ChatPersists(t *testing.T) {
+	database := testutil.NewDB(t)
+	srv := prefsServer(t, database)
+	uid := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, uid, "standard", nil)
+
+	body := map[string]map[string]bool{"chat": {"push": false, "email": false}}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/profile/notification-preferences", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("status %d, want 204", res.StatusCode)
+	}
+
+	var push int
+	err := database.QueryRow(
+		`SELECT push_enabled FROM notification_preferences WHERE user_id = ? AND category = 'chat'`, uid,
+	).Scan(&push)
+	if err != nil {
+		t.Fatalf("chat-Präferenz nicht persistiert: %v", err)
+	}
+	if push != 0 {
+		t.Errorf("push_enabled = %d, want 0", push)
+	}
+}
+
+// TestUpdatePreferences_UnknownCategoryRejected — unbekannte Kategorie ⇒ 400
+// (nicht 500) UND kein Teil-Write (transaktional/vorab abgelehnt).
+func TestUpdatePreferences_UnknownCategoryRejected(t *testing.T) {
+	database := testutil.NewDB(t)
+	srv := prefsServer(t, database)
+	uid := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, uid, "standard", nil)
+
+	body := map[string]map[string]bool{
+		"games":     {"push": false},
+		"bogus_cat": {"push": true},
+	}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/profile/notification-preferences", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", res.StatusCode)
+	}
+
+	var n int
+	database.QueryRow(`SELECT COUNT(*) FROM notification_preferences WHERE user_id = ?`, uid).Scan(&n)
+	if n != 0 {
+		t.Errorf("Teil-Write: %d Zeilen persistiert, want 0", n)
 	}
 }
 
