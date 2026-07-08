@@ -21,7 +21,11 @@ import (
 //
 // Send is fire-and-forget for email (one goroutine per recipient).
 // Push runs synchronously inside push.SendToUsers, matching prior behavior.
-func Send(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, title, body, url string) {
+//
+// Send is a package var (not a plain func) so tests can capture which category
+// and recipients a domain handler dispatches, without standing up the full
+// push/email path. Production callers use notify.Send(...) unchanged.
+var Send = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, title, body, url string) {
 	if len(userIDs) == 0 {
 		return
 	}
