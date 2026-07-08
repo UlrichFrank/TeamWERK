@@ -5,6 +5,21 @@ const longDateFormatter = new Intl.DateTimeFormat('de-DE', {
   year: 'numeric',
 })
 
+const timeFormatter = new Intl.DateTimeFormat('de-DE', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+const weekdayFormatter = new Intl.DateTimeFormat('de-DE', {
+  weekday: 'long',
+})
+
+const shortDateFormatter = new Intl.DateTimeFormat('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+})
+
 function dayKey(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -23,6 +38,19 @@ export function daySeparatorLabel(date: Date, now: Date): string {
   if (d === 0) return 'Heute'
   if (d === 1) return 'Gestern'
   return longDateFormatter.format(date)
+}
+
+// Aktivitäts-Label für die Chat-Übersichtsliste. Anders als daySeparatorLabel
+// (Thread-Tagestrenner) folgt es dem Messenger-Schema nach zeitlichem Abstand:
+//   heute → Uhrzeit · gestern → "Gestern" · 2–6 Tage → Wochentag · ≥7 → Datum.
+// Strikte Grenze < 7 Kalendertage, damit ein Wochentag nie mit dem heutigen
+// Wochentag der Vorwoche kollidiert.
+export function conversationTimeLabel(date: Date, now: Date): string {
+  const d = diffDays(now, date)
+  if (d <= 0) return timeFormatter.format(date)
+  if (d === 1) return 'Gestern'
+  if (d < 7) return weekdayFormatter.format(date)
+  return shortDateFormatter.format(date)
 }
 
 export function shouldRenderSeparator(prevSentAt: string | null, currentSentAt: string): boolean {

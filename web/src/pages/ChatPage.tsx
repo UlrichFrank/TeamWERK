@@ -25,6 +25,7 @@ import {
 import { api } from "../lib/api";
 import { buildTeamShortNames } from "../lib/teamName";
 import {
+  conversationTimeLabel,
   daySeparatorLabel,
   shouldRenderSeparator,
 } from "../lib/chatDateFormat";
@@ -672,16 +673,26 @@ export default function ChatPage() {
                         <span className="text-sm font-medium text-brand-text truncate">
                           {convName(conv)}
                         </span>
-                        {conv.unreadCount > 0 && (
-                          <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 shrink-0">
-                            {conv.unreadCount}
+                        {conv.lastMessage && (
+                          <span className="text-xs text-brand-text-muted shrink-0">
+                            {conversationTimeLabel(
+                              new Date(conv.lastMessage.sentAt),
+                              new Date(),
+                            )}
                           </span>
                         )}
                       </div>
                       {conv.lastMessage && (
-                        <p className="text-xs text-brand-text-muted truncate mt-0.5">
-                          {conv.lastMessage.body}
-                        </p>
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <p className="text-xs text-brand-text-muted truncate">
+                            {conv.lastMessage.body}
+                          </p>
+                          {conv.unreadCount > 0 && (
+                            <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 shrink-0">
+                              {conv.unreadCount}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </button>
                     <button

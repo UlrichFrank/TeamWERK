@@ -3,9 +3,7 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `chat-konversationen`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-
 ## Requirements
-
 ### Requirement: Teilnehmer einer Gruppen-Konversation einsehen
 
 Das System SHALL jedem aktiven Mitglied einer Gruppen-Konversation erlauben, die vollständige Teilnehmerliste über ein UI-Element im Chat-Header einzusehen. Die Liste enthält pro aktiver Teilnahme: `id`, `name` und eine Kennzeichnung des Erstellers (`createdBy === user.id`). Bereits ausgetretene Mitglieder (`left_at IS NOT NULL`) erscheinen NICHT.
@@ -170,3 +168,20 @@ Das System SHALL für Mutations-Aktionen an einer Gruppen-Konversation jenseits 
 
 - **WHEN** ein Client das SSE-Event `chat:conv-deleted:<id>` empfängt und die Konversation nur in der Liste, aber nicht aktiv geöffnet hat
 - **THEN** entfernt der Client die Konversation aus der Liste ohne Toast
+
+### Requirement: Konversationsliste nach letzter Aktivität sortiert
+
+`GET /api/chat/conversations` SHALL die Konversationen des anfragenden Nutzers absteigend nach dem Zeitpunkt der letzten Aktivität zurückgeben — die zuletzt aktive Konversation zuerst. Die letzte Aktivität MUST der `sent_at`-Zeitpunkt der jüngsten Nachricht der Konversation sein; für Konversationen ohne Nachricht MUST als Sortierschlüssel `conversations.created_at` verwendet werden.
+
+Diese Anforderung formalisiert bestehendes Verhalten und sichert es gegen Regression; sie ändert das Verhalten nicht.
+
+#### Scenario: Neue Nachricht hebt Konversation an die Spitze
+
+- **WHEN** in einer weiter unten stehenden Konversation eine neue Nachricht eintrifft und die Liste erneut geladen wird
+- **THEN** steht diese Konversation an erster Stelle der zurückgegebenen Liste
+
+#### Scenario: Konversation ohne Nachrichten wird nach Erstellzeit einsortiert
+
+- **WHEN** eine Konversation noch keine Nachricht enthält
+- **THEN** wird sie anhand von `created_at` in die nach letzter Aktivität absteigend sortierte Liste einsortiert
+
