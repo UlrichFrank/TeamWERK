@@ -3,7 +3,7 @@ import { api } from '../../lib/api'
 import Toggle from '../Toggle'
 import { useAuth, MapsProvider } from '../../contexts/AuthContext'
 
-type Category = 'games' | 'trainings' | 'duties' | 'carpooling' | 'chat'
+type Category = 'games' | 'trainings' | 'duties' | 'carpooling' | 'chat' | 'operativ' | 'sonstiges'
 
 interface Pref {
   push: boolean
@@ -18,6 +18,8 @@ const defaults: Prefs = {
   duties: { push: true, email: false },
   carpooling: { push: true, email: false },
   chat: { push: true, email: false },
+  operativ: { push: true, email: false },
+  sonstiges: { push: true, email: false },
 }
 
 const categoryLabels: Record<Category, string> = {
@@ -26,6 +28,20 @@ const categoryLabels: Record<Category, string> = {
   duties: 'Dienste',
   carpooling: 'Fahrgemeinschaften',
   chat: 'Nachrichten',
+  operativ: 'Vereinsaufgaben',
+  sonstiges: 'Sonstige Events',
+}
+
+// Kurzbeschreibung unter dem Label (nur wo hilfreich).
+const categoryDescriptions: Partial<Record<Category, string>> = {
+  operativ: 'Erinnerungen an deine Vereinsaufgaben, z. B. Anwesenheiten nachtragen oder Spielberichte freigeben.',
+  sonstiges: 'Sonstige Ereignisse, z. B. wenn ein hochgeladenes Video fertig verarbeitet ist.',
+}
+
+// Kategorien ohne E-Mail-Pfad (reine Push-Benachrichtigung) — kein E-Mail-Toggle.
+const pushOnly: Partial<Record<Category, boolean>> = {
+  operativ: true,
+  sonstiges: true,
 }
 
 export default function ProfileMiscTab() {
@@ -131,17 +147,26 @@ export default function ProfileMiscTab() {
         <div className="divide-y divide-brand-border-subtle">
           {(Object.keys(defaults) as Category[]).map(cat => (
             <div key={cat} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 px-6 py-3">
-              <p className="text-sm font-medium text-brand-text">{categoryLabels[cat]}</p>
+              <div>
+                <p className="text-sm font-medium text-brand-text">{categoryLabels[cat]}</p>
+                {categoryDescriptions[cat] && (
+                  <p className="text-xs text-brand-text-subtle mt-0.5">{categoryDescriptions[cat]}</p>
+                )}
+              </div>
               <Toggle
                 enabled={prefs[cat].push}
                 onToggle={() => togglePush(cat)}
                 label={`Push ${categoryLabels[cat]}`}
               />
-              <Toggle
-                enabled={prefs[cat].email}
-                onToggle={() => toggleEmail(cat)}
-                label={`E-Mail ${categoryLabels[cat]}`}
-              />
+              {pushOnly[cat] ? (
+                <span className="w-11" aria-hidden="true" />
+              ) : (
+                <Toggle
+                  enabled={prefs[cat].email}
+                  onToggle={() => toggleEmail(cat)}
+                  label={`E-Mail ${categoryLabels[cat]}`}
+                />
+              )}
             </div>
           ))}
         </div>

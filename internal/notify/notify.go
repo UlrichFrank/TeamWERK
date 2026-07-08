@@ -21,7 +21,11 @@ import (
 //
 // Send is fire-and-forget for email (one goroutine per recipient).
 // Push runs synchronously inside push.SendToUsers, matching prior behavior.
-func Send(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, title, body, url string) {
+//
+// Send is a package var (not a plain func) so tests can capture which category
+// and recipients a domain handler dispatches, without standing up the full
+// push/email path. Production callers use notify.Send(...) unchanged.
+var Send = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, title, body, url string) {
 	if len(userIDs) == 0 {
 		return
 	}
@@ -83,7 +87,13 @@ func sendCategoryEmail(db *sql.DB, cfg *appconfig.Config, userID int, title, bod
 		fullBody = body + "\n\nDirektlink: " + cfg.BaseURL + url
 	}
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
-	if err := m.Send(email, title, fullBody); err != nil {
+	if err := sendMail(m, email, title, fullBody); err != nil {
 		slog.Error("send mail failed", "user", userID, "error", err)
 	}
+}
+
+// sendMail is the seam over Mailer.Send. Tests override it to capture the
+// composed message (subject/body) without a real SMTP dial.
+var sendMail = func(m *mailer.Mailer, to, subject, body string) error {
+	return m.Send(to, subject, body)
 }

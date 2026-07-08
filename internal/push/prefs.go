@@ -6,6 +6,23 @@ import (
 	"strings"
 )
 
+// ValidCategories is the single source of truth for notification_preferences
+// categories. It MUST stay in sync with the CHECK constraint on
+// notification_preferences.category (migration 026). Callers that persist a
+// category (e.g. the preferences PUT handler) validate against this set so an
+// unknown category is rejected before it hits the DB CHECK.
+var ValidCategories = []string{"games", "trainings", "duties", "duty_reminders", "carpooling", "membership", "chat", "operativ", "sonstiges"}
+
+// IsValidCategory reports whether category is a known notification category.
+func IsValidCategory(category string) bool {
+	for _, c := range ValidCategories {
+		if c == category {
+			return true
+		}
+	}
+	return false
+}
+
 // FilterByPushPref returns only the user IDs from userIDs that have push enabled
 // for the given category. Users without a preference row are included (default: enabled).
 func FilterByPushPref(db *sql.DB, userIDs []int, category string) []int {
@@ -65,9 +82,8 @@ func HasEmailEnabled(db *sql.DB, userID int, category string) bool {
 // GetAllPreferences returns all notification preferences for a user as a map.
 // Categories without a row get their defaults (push=true, email=false).
 func GetAllPreferences(db *sql.DB, userID int) map[string]map[string]bool {
-	categories := []string{"games", "trainings", "duties", "duty_reminders", "carpooling", "membership", "chat"}
-	result := make(map[string]map[string]bool, len(categories))
-	for _, c := range categories {
+	result := make(map[string]map[string]bool, len(ValidCategories))
+	for _, c := range ValidCategories {
 		result[c] = map[string]bool{"push": true, "email": false}
 	}
 

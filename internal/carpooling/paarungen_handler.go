@@ -214,7 +214,10 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 		} else {
 			msg = fmt.Sprintf("%s bietet dir einen Platz an — %s, %s", actorName, opponent, date)
 		}
-		push.SendToUsers(h.db, h.cfg, []int{oppositeUserID}, "Mitfahranfrage", msg, "/mitfahrgelegenheiten")
+		// Präferenz respektieren — konsistent mit ConfirmPairing/RejectPairing.
+		if recips := push.FilterByPushPref(h.db, []int{oppositeUserID}, "carpooling"); len(recips) > 0 {
+			push.SendToUsers(h.db, h.cfg, recips, "Mitfahranfrage", msg, "/mitfahrgelegenheiten")
+		}
 	}()
 }
 

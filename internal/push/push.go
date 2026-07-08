@@ -11,9 +11,30 @@ import (
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 )
 
+// sendNotification is the seam over webpush.SendNotification. Tests override it
+// to drive per-status behavior (e.g. the cleanup switch) without real HTTP.
+var sendNotification = webpush.SendNotification
+
+// handlePushResponse applies Web Push §7 cleanup: delete the subscription only
+// on PERMANENT failures (404 Not Found, 410 Gone). Transient failures
+// (400/401 and 5xx) are logged but the subscription is RETAINED — a transient
+// VAPID-signing or payload fault must never wipe a still-valid subscription.
+func handlePushResponse(db *sql.DB, subID, statusCode int) {
+	switch statusCode {
+	case http.StatusGone, http.StatusNotFound:
+		db.Exec(`DELETE FROM push_subscriptions WHERE id = ?`, subID)
+	case http.StatusBadRequest, http.StatusUnauthorized:
+		slog.Warn("push transient failure, keeping subscription", "subscription", subID, "status", statusCode)
+	}
+}
+
 // SendToUsers sends a push notification to all subscriptions of the given users.
 // Runs as fire-and-forget — call via `go push.SendToUsers(...)`.
-func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, url string) {
+//
+// SendToUsers is a package var (not a plain func) so tests can capture the
+// recipients a caller dispatches — notably the sites that bypass
+// FilterByPushPref. Production callers use push.SendToUsers(...) unchanged.
+var SendToUsers = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, url string) {
 	if len(userIDs) == 0 || cfg.VAPIDPrivateKey == "" {
 		return
 	}
@@ -56,7 +77,7 @@ func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, 
 	})
 
 	for _, s := range subs {
-		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
+		resp, err := sendNotification(payload, &webpush.Subscription{
 			Endpoint: s.endpoint,
 			Keys: webpush.Keys{
 				P256dh: s.p256dh,
@@ -73,12 +94,7 @@ func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, 
 			continue
 		}
 		resp.Body.Close()
-		// Web Push Spec §7: remove subscriptions on permanent failure codes.
-		switch resp.StatusCode {
-		case http.StatusGone, http.StatusNotFound,
-			http.StatusUnauthorized, http.StatusBadRequest:
-			db.Exec(`DELETE FROM push_subscriptions WHERE id = ?`, s.id)
-		}
+		handlePushResponse(db, s.id, resp.StatusCode)
 	}
 }
 
@@ -127,7 +143,7 @@ func SendToUserWithBadge(db *sql.DB, cfg *appconfig.Config, userID int, title, b
 	payload := BuildBadgePayload(title, body, url, badge)
 
 	for _, s := range subs {
-		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
+		resp, err := sendNotification(payload, &webpush.Subscription{
 			Endpoint: s.endpoint,
 			Keys: webpush.Keys{
 				P256dh: s.p256dh,
@@ -144,10 +160,6 @@ func SendToUserWithBadge(db *sql.DB, cfg *appconfig.Config, userID int, title, b
 			continue
 		}
 		resp.Body.Close()
-		switch resp.StatusCode {
-		case http.StatusGone, http.StatusNotFound,
-			http.StatusUnauthorized, http.StatusBadRequest:
-			db.Exec(`DELETE FROM push_subscriptions WHERE id = ?`, s.id)
-		}
+		handlePushResponse(db, s.id, resp.StatusCode)
 	}
 }

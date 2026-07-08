@@ -1,33 +1,4 @@
-# web-push-subscriptions Specification
-
-## Purpose
-
-Diese Spezifikation beschreibt die Capability `web-push-subscriptions`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-## Requirements
-### Requirement: VAPID Public Key verfügbar
-Das Backend SHALL den VAPID Public Key über einen öffentlichen Endpunkt bereitstellen, damit das Frontend eine Push-Subscription anlegen kann.
-
-#### Scenario: Frontend ruft Public Key ab
-- **WHEN** `GET /api/push/vapid-public-key` aufgerufen wird (ohne Authentifizierung)
-- **THEN** antwortet die API mit dem Base64url-kodierten VAPID Public Key
-
-### Requirement: Subscription registrieren
-Ein authentifizierter Nutzer SHALL seine Browser-Push-Subscription im Backend speichern können.
-
-#### Scenario: Subscription anlegen
-- **WHEN** `POST /api/push/subscribe` mit dem PushSubscription-Objekt (endpoint, keys) aufgerufen wird
-- **THEN** wird die Subscription für den aktuellen Nutzer gespeichert (upsert anhand des Endpoints) und die API antwortet mit 201
-
-#### Scenario: Doppelte Subscription
-- **WHEN** derselbe Endpoint bereits für denselben Nutzer registriert ist
-- **THEN** wird die bestehende Subscription aktualisiert (keys bleiben gleich oder werden erneuert) ohne Fehler
-
-### Requirement: Subscription löschen
-Ein authentifizierter Nutzer SHALL seine Push-Subscription widerrufen können.
-
-#### Scenario: Subscription entfernen
-- **WHEN** `DELETE /api/push/subscribe` mit dem Endpoint im Body aufgerufen wird
-- **THEN** wird die Subscription aus der Datenbank entfernt und die API antwortet mit 204
+## MODIFIED Requirements
 
 ### Requirement: Tote Endpoints bereinigen
 Das Backend MUST Subscriptions automatisch entfernen, deren Endpoint beim Versuch einer Push-Nachricht mit **HTTP 410 Gone** oder **HTTP 404 Not Found** antwortet — diese Codes zeigen laut Web-Push-Spezifikation an, dass die Subscription endgültig ungültig ist. Bei **transienten** Fehlerantworten (insbesondere HTTP 400 Bad Request, 401 Unauthorized sowie 5xx/Netzwerkfehler) MUST das Backend die Subscription **erhalten** und den Vorfall protokollieren (`slog.Warn`), da diese Codes auf vorübergehende VAPID-Signatur-/Payload-Probleme hindeuten und ein gültiges Abo sonst dauerhaft verloren ginge.
@@ -58,4 +29,3 @@ Das Frontend MUST beim App-Start (nach Login) prüfen, ob eine Push-Subscription
 #### Scenario: Abonnieren schlägt fehl — Fehler wird protokolliert
 - **WHEN** beim Abonnieren ein Fehler auftritt (z.B. `applicationServerKey`-Mismatch/`InvalidStateError`, Netzwerkfehler beim `POST /api/push/subscribe`)
 - **THEN** wird der Fehler beobachtbar in der Konsole protokolliert (nicht still verworfen), sodass der Abo-Verlust nachvollziehbar ist
-

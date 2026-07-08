@@ -105,6 +105,10 @@ func (s *Scheduler) sendMatchReportReviewReminders() {
 	}
 
 	reviewers := s.matchReportReviewers()
+	// Präferenz respektieren: Freigeber mit deaktiviertem 'operativ' vorab
+	// aussortieren (vor notification_log), damit ein späteres Wieder-Aktivieren
+	// künftige Läufe wieder erfasst.
+	reviewers = push.FilterByPushPref(s.db, reviewers, "operativ")
 	if len(reviewers) == 0 {
 		return
 	}
