@@ -83,7 +83,13 @@ func sendCategoryEmail(db *sql.DB, cfg *appconfig.Config, userID int, title, bod
 		fullBody = body + "\n\nDirektlink: " + cfg.BaseURL + url
 	}
 	m := mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)
-	if err := m.Send(email, title, fullBody); err != nil {
+	if err := sendMail(m, email, title, fullBody); err != nil {
 		slog.Error("send mail failed", "user", userID, "error", err)
 	}
+}
+
+// sendMail is the seam over Mailer.Send. Tests override it to capture the
+// composed message (subject/body) without a real SMTP dial.
+var sendMail = func(m *mailer.Mailer, to, subject, body string) error {
+	return m.Send(to, subject, body)
 }
