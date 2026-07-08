@@ -111,6 +111,42 @@ const TEAM_GROUP_KIND_LABEL: Record<TeamGroup["kind"], string> = {
 
 type Tab = "chats" | "broadcasts";
 
+// Nicht abgesendete Nachrichten-Entwürfe pro Konversation überleben Reload,
+// Tab-Wechsel und App-Schließen via localStorage (pro Nutzer gescoped, damit
+// Entwürfe auf einem geteilten Gerät nicht zwischen Konten lecken).
+function loadChatDrafts(key: string | null): Map<number, string> {
+  if (!key) return new Map();
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Map();
+    const obj = JSON.parse(raw) as Record<string, string>;
+    return new Map(
+      Object.entries(obj)
+        .filter(([, v]) => typeof v === "string" && v.length > 0)
+        .map(([k, v]) => [Number(k), v]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+function saveChatDrafts(key: string | null, map: Map<number, string>): void {
+  if (!key) return;
+  try {
+    if (map.size === 0) {
+      localStorage.removeItem(key);
+      return;
+    }
+    const obj: Record<string, string> = {};
+    map.forEach((v, k) => {
+      obj[String(k)] = v;
+    });
+    localStorage.setItem(key, JSON.stringify(obj));
+  } catch {
+    /* localStorage nicht verfügbar (Privatmodus/Quota) → Entwurf bleibt in-memory */
+  }
+}
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -155,6 +191,22 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const draftsRef = useRef<Map<number, string>>(new Map());
+  const draftsKey = user ? `teamwerk:chat-drafts:${user.id}` : null;
+
+  // Persistierte Entwürfe laden, sobald der Nutzer feststeht (Reload/App-Start).
+  useEffect(() => {
+    draftsRef.current = loadChatDrafts(draftsKey);
+  }, [draftsKey]);
+
+  // Aktuellen Entwurf der aktiven Konversation bei jeder Änderung persistieren,
+  // damit er auch ohne Konversationswechsel Reload/App-Schließen überlebt.
+  // Während einer Edit-Session hält msgInput den Nachrichtentext, keinen Entwurf.
+  useEffect(() => {
+    if (!activeConv || editingMessage) return;
+    if (msgInput) draftsRef.current.set(activeConv.id, msgInput);
+    else draftsRef.current.delete(activeConv.id);
+    saveChatDrafts(draftsKey, draftsRef.current);
+  }, [msgInput, activeConv, editingMessage, draftsKey]);
 
   useEffect(() => {
     const el = inputRef.current;
