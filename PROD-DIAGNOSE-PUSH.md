@@ -29,11 +29,12 @@ ssh vServer 'sqlite3 -readonly /var/lib/teamwerk/teamwerk.db "SELECT 1;"'
 
 ```bash
 ssh vServer 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
-  "SELECT id, email, role, is_active FROM users WHERE email LIKE '\''%andrea%'\'';"'
+  "SELECT id, email, role, can_login FROM users WHERE email LIKE '\''%andrea%'\'';"'
 ```
 
-Merke dir die `id` (im Folgenden `<UID>`). Prüfe `is_active=1` — ein inaktives
-Konto erklärt fehlende Pushes trivial.
+Merke dir die `id` (im Folgenden `<UID>`). Prüfe `can_login=1` — ein Konto mit
+`can_login=0` kann sich nicht anmelden (erklärt fehlende Pushes trivial). Die
+`users`-Tabelle hat **kein** `is_active`; das Anmelde-Gate heißt `can_login`.
 
 ---
 
