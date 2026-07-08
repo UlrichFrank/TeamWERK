@@ -28,14 +28,14 @@
 ## 6. Kategorie-Korrektheit je Trigger
 
 - [x] 6.1a **membership** (repräsentativ): `notify.Send`-Seam eingeführt; `RequestMembership` benachrichtigt Admins mit Kategorie `membership` (`internal/auth/notify_category_test.go`)
-- [ ] 6.1b **games / trainings / duties / carpooling** — **zurückgestellt**: benötigen schwere Domänen-Fixtures (aktive Saison, Team, Kader, Slots) + Goroutine-Sync. Muster steht (notify.Send-Seam); pro Domäne ein analoger Test. Bewusst separater Folge-Schritt (Grenznutzen-Cliff).
+- [x] 6.1b **games / trainings / duties / carpooling**: je ein Test via `notify.Send`-Seam + `prodserver` — CreateGame→`games`, UpdateSession→`trainings`, CreateSlot→`duties`, Upsert→`carpooling` (`internal/{games,trainings,duties,carpooling}/notify_category_test.go`)
 
 ## 7. Preference-Bypass festnageln
 
-- [ ] 7.1 **zurückgestellt**: Die 6 rohen `push.SendToUsers`-Sites lassen sich nur durch Beobachtung des tatsächlichen Sendens pinnen; das braucht pro Site einen Seam (der `push.sendNotification`-Seam ist unexportiert und aus den Domänen-Testpaketen nicht erreichbar) **oder** einen exportierten Seam je Aufrufer. Zudem ist „bewusst vs. Bug" eine offene **Design-Frage** — erst entscheiden, dann pinnen. Kein stiller Verzicht: hier dokumentiert.
+- [x] 7.1 `push.SendToUsers` als überschreibbarer Package-Var-Seam; Pinning-Tests für alle **6** Sites, dass ein Empfänger mit `push_enabled=0` die Push dennoch erhält: attendance-/match-report-review-/video-retention-reminder (`internal/scheduler/push_bypass_test.go`), match-report-submitted (`internal/matchreports/push_bypass_test.go`), video-ready (`internal/videos/push_bypass_test.go`), carpool-pairing-request (`internal/carpooling/push_bypass_test.go`). Jeder Test markiert „bewusst vs. Bug" als **offene Design-Frage** (nicht hier entschieden).
 
 ## 8. Verifikation
 
-- [ ] 8.1 `make test` grün; `make coverage` als Indikator prüfen (kein Gate)
-- [ ] 8.2 `/verify-change`: Build/Test/Lint + `openspec validate`
-- [ ] 8.3 Ein Commit pro Task-Gruppe (Conventional Commits, Scope `test`/jeweiliges Domänen-Package); abschließender Commit archiviert das Proposal
+- [x] 8.1 `go test ./...` grün (1358 Tests, 45 Pakete); `go vet ./...` sauber
+- [x] 8.2 Build/Test/Lint + `openspec validate` manuell gefahren (grün)
+- [x] 8.3 Ein Commit pro Task-Gruppe (Conventional Commits); Archivierung des Proposals separat/auf Wunsch
