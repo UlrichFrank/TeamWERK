@@ -261,10 +261,12 @@ export default function TermineDetailPage() {
   const toggleAttendance = async (memberId: number, newValue: boolean) => {
     setAttendanceMap(prev => ({ ...prev, [memberId]: newValue }))
     // Member-Universum: Trainings über die Anwesenheitsliste, Spiele über die
-    // (deduplizierten) Teilnehmer.
+    // (deduplizierten) Teilnehmer. Trainer-Zeilen (is_trainer) haben bewusst keine
+    // Checkbox und dürfen NICHT ins Speicher-Paket — der Server lehnt Trainer-Einträge
+    // ab, und ein einzelner Trainer im Paket ließe sonst das ganze Speichern scheitern.
     const ids = isTraining
-      ? attendances.map(a => a.member_id)
-      : Array.from(new Set(participants.map(p => p.member_id)))
+      ? attendances.filter(a => !a.is_trainer).map(a => a.member_id)
+      : Array.from(new Set(participants.filter(p => !p.is_trainer).map(p => p.member_id)))
     const entries = ids.map(mid => ({
       member_id: mid,
       present: mid === memberId ? newValue : (attendanceMap[mid] ?? false),
