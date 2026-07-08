@@ -54,6 +54,12 @@ func (s *Scheduler) sendAttendanceRemindersAt(now time.Time) {
 	sent := 0
 	for _, perTrainer := range groupByTrainer(openEvents) {
 		userID := perTrainer.userID
+		// Präferenz respektieren: Trainer mit deaktiviertem 'operativ' vorab
+		// aussortieren (vor notification_log), damit ein späteres Wieder-
+		// Aktivieren künftige Läufe wieder erfasst.
+		if len(push.FilterByPushPref(s.db, []int{userID}, "operativ")) == 0 {
+			continue
+		}
 		// Idempotenz: pro User+heute genau eine Push, INSERT OR IGNORE.
 		res, err := s.db.Exec(
 			`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,

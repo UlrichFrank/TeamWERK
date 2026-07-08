@@ -45,6 +45,7 @@ func notifyReviewers(db *sql.DB, cfg *appconfig.Config, title, body, url string)
 		slog.Error("matchreports.notifyReviewers query", "err", err)
 		return
 	}
+	ids = push.FilterByPushPref(db, ids, "operativ")
 	if len(ids) == 0 {
 		return
 	}

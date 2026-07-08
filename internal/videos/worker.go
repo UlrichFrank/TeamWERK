@@ -285,6 +285,7 @@ func (wk *Worker) notifyReady(id int) {
 		slog.Error("video worker: collect push recipients failed", "video_id", id, "error", err)
 		return
 	}
+	uids = push.FilterByPushPref(wk.db, uids, "sonstiges")
 	if len(uids) == 0 {
 		return
 	}
