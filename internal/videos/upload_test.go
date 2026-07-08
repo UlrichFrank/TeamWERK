@@ -92,6 +92,51 @@ func TestCreateUpload_HappyPath(t *testing.T) {
 	}
 }
 
+// TestCreateUpload_BroadcastsVideoQueued belegt, dass ein erfolgreicher
+// Upload-Init das "video-queued"-Event auslöst, damit die Videos-Seite
+// (useLiveUpdates('video-queued')) die neue Platzhalterzeile sofort nachlädt.
+// Sichert die CLAUDE.md-Broadcast-Regel für CreateUpload ab.
+func TestCreateUpload_BroadcastsVideoQueued(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	// Global subscriben — Broadcast erreicht sowohl clients als auch per-user
+	// Streams (siehe hub.Broadcast).
+	ch := h.hub.Subscribe()
+	defer h.hub.Unsubscribe(ch)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	kader := testutil.CreateKader(t, db, team, season)
+
+	trainerUser := testutil.CreateUser(t, db, "standard")
+	trainerMember := testutil.CreateMember(t, db, trainerUser)
+	testutil.AddKaderTrainer(t, db, kader, trainerMember)
+
+	tok := testutil.Token(t, trainerUser, "standard", []string{"trainer"})
+	body := map[string]any{
+		"title":      "Spiel gegen X",
+		"team_id":    team,
+		"season_id":  season,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", res.StatusCode)
+	}
+
+	select {
+	case ev := <-ch:
+		if ev != "video-queued" {
+			t.Errorf("event = %q, want video-queued", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no broadcast received after CreateUpload; want video-queued")
+	}
+}
+
 // Leerer Titel + Spiel-ID → Titel wird aus Datum + Gegner abgeleitet.
 // CreateGame nutzt opponent="Test Opponent", date wie übergeben.
 func TestCreateUpload_DerivesTitleFromGame(t *testing.T) {

@@ -496,6 +496,9 @@ func (h *Handler) ApproveMembershipRequest(w http.ResponseWriter, r *http.Reques
 		`UPDATE membership_requests SET status='approved', handled_by=?, handled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		claims.UserID, id,
 	)
+	// Antrag genehmigt: Einladung angelegt (Einladungsliste) und Antrag aus der
+	// Pending-Liste entfernt → AdminUsersPage aktualisieren.
+	h.broadcastFinance(r.Context(), "users")
 	link := fmt.Sprintf("%s/register?token=%s", h.baseURL, plain)
 	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK wurde bestätigt",
 		fmt.Sprintf("Hallo %s,\n\nDeine Anfrage wurde genehmigt. Registriere dich hier:\n%s\n\nDer Link ist 48 Stunden gültig.", firstName, link)); err != nil {
@@ -597,6 +600,8 @@ func (h *Handler) RejectMembershipRequest(w http.ResponseWriter, r *http.Request
 		`UPDATE membership_requests SET status='rejected', handled_by=?, handled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		claims.UserID, id,
 	)
+	// Antrag abgelehnt → aus Pending-Liste entfernt → AdminUsersPage aktualisieren.
+	h.broadcastFinance(r.Context(), "users")
 	if err := h.mailer.Send(email, "Deine Anmeldung bei TeamWERK",
 		fmt.Sprintf("Hallo %s,\n\nLeider konnte deine Anfrage nicht bestätigt werden. Wende dich an den Vereinsvorstand.", firstName)); err != nil {
 		slog.Error("reject membership send mail failed", "email", email, "error", err)
@@ -658,6 +663,8 @@ Team Stuttgart`, link)
 		http.Error(w, "mail delivery failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
+	// Neue Einladung → Einladungsliste (AdminUsersPage) aktualisieren.
+	h.broadcastFinance(r.Context(), "users")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1077,6 +1084,11 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			h.mailer.Send(*req.Email, "Dein TeamWERK-Konto wurde aktiviert", //nolint:errcheck
 				fmt.Sprintf("Hallo %s,\n\ndein Konto wurde aktiviert. Bitte setze jetzt dein Passwort:\n%s\n\nDer Link ist 1 Stunde gültig.", fullName, link))
 		}()
+		// Proxy-Konto aktiviert (can_login/email geändert) → Nutzerliste, und da
+		// das Konto i.d.R. an ein Mitglied gekoppelt ist auch die Mitgliederliste;
+		// der Betroffene sieht seine Aktivierung sofort.
+		h.broadcastFinance(r.Context(), "users", targetID)
+		h.broadcastFinance(r.Context(), "members", targetID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1102,6 +1114,8 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newID, _ := res.LastInsertId()
+	// Neuer Nutzer → Nutzerliste (AdminUsersPage) aktualisieren.
+	h.broadcastFinance(r.Context(), "users", int(newID))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int64{"id": newID}) //nolint:errcheck
@@ -1172,6 +1186,9 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// Rolle geändert → Nutzerliste; der Betroffene (targetID) sieht seine neue
+	// Rolle sofort.
+	h.broadcastFinance(r.Context(), "users", targetID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1284,6 +1301,8 @@ func (h *Handler) DeleteInvitation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	// Einladung gelöscht → Einladungsliste geändert → AdminUsersPage aktualisieren.
+	h.broadcastFinance(r.Context(), "users")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1303,6 +1322,8 @@ func (h *Handler) DeleteMembershipRequest(w http.ResponseWriter, r *http.Request
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	// Antrag gelöscht → Pending-Liste geändert → AdminUsersPage aktualisieren.
+	h.broadcastFinance(r.Context(), "users")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1688,6 +1709,12 @@ func (h *Handler) ImportCSV(w http.ResponseWriter, r *http.Request) {
 		created++
 	}
 
+	// Neue Einladungen angelegt → Einladungsliste (AdminUsersPage). Der Import
+	// legt ausschließlich invitation_tokens an (keine users/members), daher nur
+	// das "users"-Event.
+	if created > 0 {
+		h.broadcastFinance(r.Context(), "users")
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"created": created, "skipped": skipped})
 }
@@ -1746,6 +1773,8 @@ Team Stuttgart`, link)
 		http.Error(w, "mail delivery failed", http.StatusBadGateway)
 		return
 	}
+	// Einladung neu versendet (Token/Ablauf aktualisiert) → Einladungsliste.
+	h.broadcastFinance(r.Context(), "users")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1796,6 +1825,20 @@ func (h *Handler) LinkInvitationMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Einladung mit Mitglied verknüpft/entkoppelt → Einladungsliste (member_name)
+	// und Mitglieder-/unlinked-Ansicht. Falls ein Mitglied betroffen ist, dessen
+	// Owner als zusätzlichen Empfänger aufnehmen.
+	var extra []int
+	if req.MemberID != nil {
+		var ownerID sql.NullInt64
+		h.db.QueryRowContext(r.Context(),
+			`SELECT user_id FROM members WHERE id = ?`, *req.MemberID).Scan(&ownerID)
+		if ownerID.Valid {
+			extra = append(extra, int(ownerID.Int64))
+		}
+	}
+	h.broadcastFinance(r.Context(), "users", extra...)
+	h.broadcastFinance(r.Context(), "members", extra...)
 	w.WriteHeader(http.StatusNoContent)
 }
 

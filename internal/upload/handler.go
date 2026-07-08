@@ -41,14 +41,35 @@ func NewHandler(db *sql.DB, uploadDir, secret string, h *hub.EventHub) *Handler 
 	return &Handler{db: db, uploadDir: uploadDir, secret: secret, hub: h}
 }
 
-// broadcastMembers sends the "members" live-update event only to the finance
-// group (vorstand/vorstand_beisitzer/kassierer + admin). Replaces the former
-// global Broadcast("members"); topic string and Frontend contract unchanged.
-func (h *Handler) broadcastMembers(ctx context.Context) {
+// broadcastMembers sends the "members" live-update event to the finance group
+// (vorstand/vorstand_beisitzer/kassierer + admin) and — when memberIDs are given
+// — additionally to each affected member's audience (its teams' players/trainers/
+// parents/staff plus the member's own linked user), so a photo change surfaces
+// live on rosters and profiles that subscribe to "members" but are not finance.
+// Replaces the former global Broadcast("members"); topic string and Frontend
+// contract unchanged. extraUserIDs are always included (e.g. the acting user).
+func (h *Handler) broadcastMembers(ctx context.Context, memberIDs []int, extraUserIDs ...int) {
 	if h.hub == nil {
 		return
 	}
-	ids := hub.NewAudience(h.db).FinanceGroup(ctx)
+	a := hub.NewAudience(h.db)
+	seen := make(map[int]struct{})
+	var ids []int
+	add := func(id int) {
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	for _, id := range a.FinanceGroup(ctx, extraUserIDs...) {
+		add(id)
+	}
+	if len(memberIDs) > 0 {
+		for _, id := range a.MembersAudience(ctx, memberIDs) {
+			add(id)
+		}
+	}
 	h.hub.BroadcastToUsers(ids, "members")
 }
 
@@ -166,6 +187,7 @@ func (h *Handler) UploadMemberPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.broadcastMembers(r.Context(), memberIDs(id))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"photo_url": h.photoURL(filename)})
 }
@@ -202,6 +224,7 @@ func (h *Handler) UploadChildPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.broadcastMembers(r.Context(), memberIDs(memberID), claims.UserID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"photo_url": h.photoURL(filename)})
 }
@@ -228,6 +251,7 @@ func (h *Handler) UploadUserPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"photo_url": h.photoURL(filename)})
 }
@@ -241,6 +265,7 @@ func (h *Handler) DeleteUserPhoto(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(h.uploadDir, path.String))
 	}
 	h.db.ExecContext(r.Context(), `UPDATE users SET photo_path=NULL WHERE id=?`, claims.UserID)
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -262,6 +287,7 @@ func (h *Handler) DeleteChildPhoto(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(h.uploadDir, path.String))
 	}
 	h.db.ExecContext(r.Context(), `UPDATE members SET photo_path=NULL WHERE id=?`, memberID)
+	h.broadcastMembers(r.Context(), memberIDs(memberID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -274,6 +300,7 @@ func (h *Handler) DeleteMemberPhoto(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(h.uploadDir, path.String))
 	}
 	h.db.ExecContext(r.Context(), `UPDATE members SET photo_path=NULL WHERE id=?`, id)
+	h.broadcastMembers(r.Context(), memberIDs(id))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -284,6 +311,7 @@ func (h *Handler) DeleteMemberPhoto(w http.ResponseWriter, r *http.Request) {
 // Der Server speichert beides unverändert und entschlüsselt nie.
 func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	memberID, _ := strconv.Atoi(id)
 
 	filename, err := h.saveEncryptedBlob(r, "sepa-mandats", maxSepaBytes)
 	if err != nil {
@@ -310,7 +338,7 @@ func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.broadcastMembers(r.Context())
+	h.broadcastMembers(r.Context(), []int{memberID})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"sepa_mandat_url": "/api/uploads/" + filename})
 }
@@ -450,6 +478,36 @@ func (h *Handler) DeleteSepaMandat(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`UPDATE members SET sepa_mandat_path=NULL, sepa_mandat=0, sepa_mandat_date=NULL WHERE id=?`, memberID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// memberIDs converts a string path-value member ID into a single-element slice
+// for broadcastMembers. A non-numeric ID yields nil (finance-only broadcast).
+func memberIDs(id string) []int {
+	n, err := strconv.Atoi(id)
+	if err != nil {
+		return nil
+	}
+	return []int{n}
+}
+
+// memberIDsForUser returns the member IDs linked to a user (a user photo may
+// surface via that user's own member row on rosters/profiles). Empty when the
+// user has no linked member — the broadcast then reaches the finance group and
+// the acting user (passed as extraUserID).
+func (h *Handler) memberIDsForUser(ctx context.Context, userID int) []int {
+	rows, err := h.db.QueryContext(ctx, `SELECT id FROM members WHERE user_id=?`, userID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 func (h *Handler) memberUserID(r *http.Request, memberID int) int {

@@ -1062,6 +1062,9 @@ func (h *Handler) CreateProxyAccount(w http.ResponseWriter, r *http.Request) {
 		`UPDATE members SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 		newUserID, memberID)
 
+	// Der frisch verknüpfte Account (newUserID) ist noch nicht Teil der MembersAudience-
+	// Abfrage-Sicht des Requesters; als extraUserID mitgeben, damit auch er neu lädt.
+	h.broadcastMembers(r.Context(), []int{memberID}, int(newUserID))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]int64{"user_id": newUserID})
@@ -1384,6 +1387,9 @@ func (h *Handler) UpdateAbsenceVisibility(w http.ResponseWriter, r *http.Request
 	}
 	h.db.ExecContext(r.Context(),
 		`UPDATE members SET absences_public = ? WHERE user_id = ?`, val, claims.UserID)
+	// Sichtbarkeit der eigenen Abwesenheiten beeinflusst, was Team/Trainer sehen —
+	// deren Ansichten müssen neu laden.
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1497,6 +1503,9 @@ func (h *Handler) UpdateVisibility(w http.ResponseWriter, r *http.Request) {
 		   email_visible=excluded.email_visible,
 		   whatsapp_visible=excluded.whatsapp_visible`,
 		claims.UserID, boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible), boolToInt(req.WhatsAppVisible))
+	// Sichtbarkeit steuert, welche Kontaktdaten Team/Trainer im Roster/Profil sehen —
+	// deren Ansichten müssen neu laden.
+	h.broadcastMembers(r.Context(), h.memberIDsForUser(r.Context(), claims.UserID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2229,6 +2238,7 @@ func (h *Handler) CreateMemberFromUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	memberID, _ := res.LastInsertId()
+	h.broadcastMembers(r.Context(), []int{int(memberID)})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"member_id": memberID})
@@ -2236,6 +2246,11 @@ func (h *Handler) CreateMemberFromUser(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	memberID, _ := strconv.Atoi(id)
+	// Audience VOR dem DELETE auflösen: nach dem Löschen findet MembersAudience keine
+	// Team-/Owner-Verknüpfung mehr (member-Zeile weg) und die Roster-Seiten der
+	// Mitspieler blieben stumm. Die Empfänger-Liste wird hier eingefroren.
+	audience := hub.NewAudience(h.db).MembersAudience(r.Context(), []int{memberID})
 	res, err := h.db.ExecContext(r.Context(), `DELETE FROM members WHERE id=?`, id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -2246,6 +2261,9 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	// finance-only Broadcast + die vor dem Löschen ermittelte Audience als extraUserIDs,
+	// damit Team-Roster/Profil der Betroffenen ebenfalls neu laden.
+	h.broadcastMembers(r.Context(), nil, audience...)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2646,6 +2664,7 @@ func (h *Handler) AddChildPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	h.broadcastMembers(r.Context(), []int{memberID}, claims.UserID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
@@ -2674,6 +2693,7 @@ func (h *Handler) DeleteChildPhone(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`DELETE FROM user_phones WHERE id=? AND user_id=?`, phoneID, childUserID.Int64)
+	h.broadcastMembers(r.Context(), []int{memberID}, claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2716,6 +2736,8 @@ func (h *Handler) UpdateChildVisibility(w http.ResponseWriter, r *http.Request) 
 		   whatsapp_visible=excluded.whatsapp_visible`,
 		childUserID.Int64,
 		boolToInt(req.PhonesVisible), boolToInt(req.AddressVisible), boolToInt(req.PhotoVisible), boolToInt(req.EmailVisible), boolToInt(req.WhatsAppVisible))
+	// Sichtbarkeit des Kindes steuert, was Team/Trainer im Roster/Profil sehen.
+	h.broadcastMembers(r.Context(), []int{memberID}, claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
