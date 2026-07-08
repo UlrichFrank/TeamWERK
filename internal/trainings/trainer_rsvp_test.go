@@ -149,8 +149,10 @@ func TestGetSession_ConfirmedCount_ExcludesTrainer(t *testing.T) {
 	}
 }
 
-// SaveAttendances lehnt Trainer-Ziel-Member mit HTTP 400 ab.
-func TestSaveAttendances_TrainerRejected(t *testing.T) {
+// SaveAttendances überspringt Trainer-Ziel-Member still (No-op, HTTP 204) statt
+// das Paket abzulehnen — die Regel „keine Anwesenheit für Trainer" bleibt, aber
+// ein Trainer im Paket blockiert das Speichern nicht mehr.
+func TestSaveAttendances_TrainerSkipped(t *testing.T) {
 	db, sessionID, teamID, seasonID, trainerMemberID, _ := setupTrainerSession(t)
 	_ = teamID
 	_ = seasonID
@@ -169,8 +171,8 @@ func TestSaveAttendances_TrainerRejected(t *testing.T) {
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token,
 		[]map[string]any{{"member_id": trainerMemberID, "present": true}})
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for trainer as attendance target, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 (trainer entry skipped), got %d", res.StatusCode)
 	}
 	// training_attendances soll leer bleiben.
 	var n int

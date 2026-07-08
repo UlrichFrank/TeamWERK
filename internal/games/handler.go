@@ -2884,7 +2884,9 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die als Trainer eines
 		// beteiligten Teams eingetragen sind und nicht auch als Spieler geführt werden,
-		// werden mit 400 abgelehnt.
+		// werden still übersprungen. Die Teilnehmer-Antwort enthält Trainer-Zeilen (eigene
+		// Sektion), die der Bulk-Save des Frontends mitschicken kann; ein Trainer-Eintrag
+		// darf das Speichern der Spieler nicht blockieren (leeres/trainer-only-Paket → 204).
 		var isTrainerOnly int
 		if err := tx.QueryRowContext(r.Context(), `
 			SELECT CASE
@@ -2904,8 +2906,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if isTrainerOnly == 1 {
-			http.Error(w, "attendance cannot be recorded for trainers", http.StatusBadRequest)
-			return
+			continue
 		}
 		present := 0
 		if e.Present {

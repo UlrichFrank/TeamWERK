@@ -1696,7 +1696,10 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 
 	for _, e := range entries {
 		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die zum Kader-Trainerstab
-		// gehören und nicht als Spieler im Kader stehen, werden mit 400 abgelehnt.
+		// gehören und nicht als Spieler im Kader stehen, werden still übersprungen. Die
+		// Roster-Antwort enthält Trainer-Zeilen (eigene Sektion), die der Bulk-Save des
+		// Frontends mitschicken kann; ein Trainer-Eintrag darf das Speichern der Spieler
+		// nicht blockieren (ein leeres/trainer-only-Paket ist damit ein No-op → 204).
 		var isTrainerOnly int
 		if err := tx.QueryRowContext(r.Context(), `
 			SELECT CASE
@@ -1710,8 +1713,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if isTrainerOnly == 1 {
-			http.Error(w, "attendance cannot be recorded for trainers", http.StatusBadRequest)
-			return
+			continue
 		}
 		present := 0
 		if e.Present {
