@@ -136,3 +136,115 @@ func TestVapidKey_Unauthenticated(t *testing.T) {
 		t.Errorf("status %d, want 401", res.StatusCode)
 	}
 }
+
+// subServer verdrahtet die Abo-Routen.
+func subServer(t *testing.T, database *sql.DB) *httptest.Server {
+	t.Helper()
+	cfg := &appconfig.Config{JWTSecret: testutil.TestJWTSecret}
+	h := notifications.NewHandler(database, cfg)
+	return testutil.NewServer(t, func(r chi.Router) {
+		r.Post("/api/push/subscribe", h.Subscribe)
+		r.Delete("/api/push/subscribe", h.Unsubscribe)
+	})
+}
+
+// TestSubscribe_CreatesAndUpserts — POST legt ein Abo an (204); ein zweiter
+// POST mit demselben Endpoint aktualisiert statt zu duplizieren.
+func TestSubscribe_CreatesAndUpserts(t *testing.T) {
+	database := testutil.NewDB(t)
+	srv := subServer(t, database)
+	uid := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, uid, "standard", nil)
+
+	body := map[string]string{"endpoint": "https://push.test/abc", "p256dh": "k1", "auth": "a1"}
+	res := testutil.Do(t, srv, http.MethodPost, "/api/push/subscribe", tok, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("status %d, want 204", res.StatusCode)
+	}
+
+	// Zweiter POST, gleicher Endpoint, neue Keys → Upsert, kein Duplikat.
+	body2 := map[string]string{"endpoint": "https://push.test/abc", "p256dh": "k2", "auth": "a2"}
+	res2 := testutil.Do(t, srv, http.MethodPost, "/api/push/subscribe", tok, body2)
+	res2.Body.Close()
+
+	var n int
+	database.QueryRow(`SELECT COUNT(*) FROM push_subscriptions WHERE endpoint = ?`, "https://push.test/abc").Scan(&n)
+	if n != 1 {
+		t.Fatalf("Abo-Zeilen = %d, want 1 (Upsert)", n)
+	}
+	var p256 string
+	database.QueryRow(`SELECT p256dh FROM push_subscriptions WHERE endpoint = ?`, "https://push.test/abc").Scan(&p256)
+	if p256 != "k2" {
+		t.Errorf("p256dh = %q, want k2 (aktualisiert)", p256)
+	}
+}
+
+// TestSubscribe_MissingField — fehlendes Pflichtfeld ⇒ 400.
+func TestSubscribe_MissingField(t *testing.T) {
+	database := testutil.NewDB(t)
+	srv := subServer(t, database)
+	uid := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, uid, "standard", nil)
+
+	body := map[string]string{"p256dh": "k1", "auth": "a1"} // kein endpoint
+	res := testutil.Do(t, srv, http.MethodPost, "/api/push/subscribe", tok, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", res.StatusCode)
+	}
+}
+
+// TestUnsubscribe_CrossUserProtected — B darf das Abo von A nicht löschen.
+func TestUnsubscribe_CrossUserProtected(t *testing.T) {
+	database := testutil.NewDB(t)
+	srv := subServer(t, database)
+	a := testutil.CreateUser(t, database, "standard")
+	b := testutil.CreateUser(t, database, "standard")
+	database.Exec(`INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, 'https://push.test/a', 'k', 'x')`, a)
+	tokB := testutil.Token(t, b, "standard", nil)
+
+	body := map[string]string{"endpoint": "https://push.test/a"}
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/push/subscribe", tokB, body)
+	res.Body.Close()
+
+	var n int
+	database.QueryRow(`SELECT COUNT(*) FROM push_subscriptions WHERE endpoint = 'https://push.test/a'`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("A's Abo wurde von B gelöscht (n=%d)", n)
+	}
+}
+
+// TestGetPreferences_Defaults — ohne gespeicherte Zeilen liefert GET alle
+// Kategorien mit push=true/email=false.
+func TestGetPreferences_Defaults(t *testing.T) {
+	database := testutil.NewDB(t)
+	srv := prefsServer(t, database)
+	uid := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, uid, "standard", nil)
+
+	res := testutil.Get(t, srv, "/api/profile/notification-preferences", tok)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	var prefs map[string]map[string]bool
+	json.NewDecoder(res.Body).Decode(&prefs)
+	if _, ok := prefs["chat"]; !ok {
+		t.Errorf("chat fehlt in Preferences-Response")
+	}
+	if !prefs["games"]["push"] || prefs["games"]["email"] {
+		t.Errorf("games = %v, want push=true/email=false", prefs["games"])
+	}
+}
+
+// TestGetPreferences_Unauthenticated — ohne Token 401.
+func TestGetPreferences_Unauthenticated(t *testing.T) {
+	database := testutil.NewDB(t)
+	srv := prefsServer(t, database)
+	res := testutil.Get(t, srv, "/api/profile/notification-preferences", "")
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status %d, want 401", res.StatusCode)
+	}
+}
