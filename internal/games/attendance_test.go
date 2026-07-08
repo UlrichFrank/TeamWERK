@@ -307,3 +307,64 @@ func TestGetGameAttendances_Spieler_403(t *testing.T) {
 		t.Fatalf("expected 403, got %d", res.StatusCode)
 	}
 }
+
+// TestSaveGameAttendances_TrainerInBatch_Skipped verifies the regression fix:
+// the bulk save batch sent by the frontend contains a trainer roster row
+// alongside a player. The trainer entry must be skipped (no game_attendances
+// row) WITHOUT failing the whole request, so the player's attendance persists
+// and the response is 204.
+func TestSaveGameAttendances_TrainerInBatch_Skipped(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	// Trainer of the team (kader_trainer, not a player).
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	if _, err := db.Exec(
+		`INSERT INTO member_club_functions (member_id, function) VALUES (?, ?)`,
+		trainerMemberID, "trainer"); err != nil {
+		t.Fatalf("club function: %v", err)
+	}
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+
+	// Player (kader member).
+	playerMemberID := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderID, playerMemberID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	// Batch as the frontend sends it: player + trainer together.
+	body := []map[string]any{
+		{"member_id": playerMemberID, "present": true},
+		{"member_id": trainerMemberID, "present": false},
+	}
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", gameID), token, body)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	// Player attendance persisted.
+	var present int
+	if err := db.QueryRow(
+		`SELECT present FROM game_attendances WHERE game_id=? AND member_id=?`,
+		gameID, playerMemberID).Scan(&present); err != nil {
+		t.Fatalf("player row not persisted: %v", err)
+	}
+	if present != 1 {
+		t.Errorf("expected player present=1, got %d", present)
+	}
+	// Trainer entry skipped — no row written.
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM game_attendances WHERE game_id=? AND member_id=?`,
+		gameID, trainerMemberID).Scan(&n); err != nil {
+		t.Fatalf("count trainer rows: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected no attendance row for trainer, got %d", n)
+	}
+}

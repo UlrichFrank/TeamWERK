@@ -344,6 +344,66 @@ func TestSaveAttendances_PlayerForbidden(t *testing.T) {
 	}
 }
 
+// TestSaveAttendances_TrainerInBatch_Skipped verifies the regression fix: a
+// bulk save batch containing a trainer roster row alongside a player skips the
+// trainer (no training_attendances row) without failing the request, so the
+// player's attendance persists and the response is 204.
+func TestSaveAttendances_TrainerInBatch_Skipped(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2025-01-10") // past
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	// Trainer of the team (kader_trainer, not a player).
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	if _, err := db.Exec(
+		`INSERT INTO member_club_functions (member_id, function) VALUES (?, ?)`,
+		trainerMemberID, "trainer"); err != nil {
+		t.Fatalf("club function: %v", err)
+	}
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+
+	// Player (kader member; player_memberships is a view over kader_members).
+	playerMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, playerMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	// Batch as the frontend sends it: player + trainer together.
+	body := []map[string]any{
+		{"member_id": playerMemberID, "present": true},
+		{"member_id": trainerMemberID, "present": false},
+	}
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	// Player attendance persisted.
+	var present int
+	if err := db.QueryRow(
+		`SELECT present FROM training_attendances WHERE training_id=? AND member_id=?`,
+		sessionID, playerMemberID).Scan(&present); err != nil {
+		t.Fatalf("player row not persisted: %v", err)
+	}
+	if present != 1 {
+		t.Errorf("expected player present=1, got %d", present)
+	}
+	// Trainer entry skipped — no row written.
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM training_attendances WHERE training_id=? AND member_id=?`,
+		sessionID, trainerMemberID).Scan(&n); err != nil {
+		t.Fatalf("count trainer rows: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected no attendance row for trainer, got %d", n)
+	}
+}
+
 // TC-T-EXT01: GetAttendances returns saved attendance records.
 func TestGetAttendances_ReadsBack(t *testing.T) {
 	db := testutil.NewDB(t)

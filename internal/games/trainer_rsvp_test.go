@@ -134,20 +134,22 @@ func TestGetGame_ConfirmedCount_ExcludesTrainer(t *testing.T) {
 	}
 }
 
-// SaveAttendances lehnt Trainer-Ziel-Member mit HTTP 400 ab.
-func TestSaveGameAttendances_TrainerRejected(t *testing.T) {
+// SaveAttendances überspringt Trainer-Ziel-Member still (No-op, HTTP 204) statt
+// das Paket abzulehnen — die Regel „keine Anwesenheit für Trainer" bleibt, aber
+// ein Trainer im Paket blockiert das Speichern nicht mehr.
+func TestSaveGameAttendances_TrainerSkipped(t *testing.T) {
 	db, gameID, teamID, seasonID, trainerMemberID, trainerUserID := setupTrainerGame(t)
 	_ = teamID
 	_ = seasonID
 
 	srv := testServer(t, db)
-	// Trainer selbst darf Anwesenheit erfassen — auch er darf keine Anwesenheit für sich setzen.
+	// Trainer selbst darf Anwesenheit erfassen — auch er bekommt keine Anwesenheit gesetzt.
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
 	body := []map[string]any{{"member_id": trainerMemberID, "present": true}}
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", gameID), token, body)
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for trainer as attendance target, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 (trainer entry skipped), got %d", res.StatusCode)
 	}
 	var n int
 	db.QueryRow(`SELECT COUNT(*) FROM game_attendances WHERE game_id=? AND member_id=?`,
