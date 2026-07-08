@@ -33,8 +33,12 @@ export function usePushSubscription() {
           p256dh: keys.p256dh,
           auth: keys.auth,
         })
-      } catch {
-        // silent fail — push not available or user denied
+      } catch (err) {
+        // Beobachtbar loggen statt still verwerfen: ein fehlgeschlagenes
+        // (Re-)Subscribe — z.B. applicationServerKey-Mismatch (InvalidStateError)
+        // oder Netzwerkfehler beim POST /push/subscribe — bleibt sonst
+        // unbemerkt und der Nutzer erhält dauerhaft keine Pushes mehr.
+        console.warn('[push] subscribe failed', err)
       }
     }
 
