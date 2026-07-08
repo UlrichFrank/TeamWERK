@@ -366,3 +366,39 @@ func AssignDutySlot(t *testing.T, database *sql.DB, slotID, userID int) {
 		t.Fatalf("AssignDutySlot: %v", err)
 	}
 }
+
+// CreatePushSubscription inserts a push_subscriptions row for the user with a
+// unique endpoint and returns the row ID. Keys are dummy values — tests that
+// exercise the send path override the push send seam rather than encrypting.
+func CreatePushSubscription(t *testing.T, database *sql.DB, userID int) int {
+	t.Helper()
+	endpoint := fmt.Sprintf("https://push.test.local/%d", nextID())
+	res, err := database.Exec(
+		`INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)`,
+		userID, endpoint, "test-p256dh", "test-auth")
+	if err != nil {
+		t.Fatalf("CreatePushSubscription: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// CreateNotificationPreference upserts a notification_preferences row for the
+// given user and category with explicit push/email flags.
+func CreateNotificationPreference(t *testing.T, database *sql.DB, userID int, category string, push, email bool) {
+	t.Helper()
+	b := func(v bool) int {
+		if v {
+			return 1
+		}
+		return 0
+	}
+	if _, err := database.Exec(
+		`INSERT INTO notification_preferences (user_id, category, push_enabled, email_enabled)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(user_id, category) DO UPDATE SET
+		   push_enabled = excluded.push_enabled, email_enabled = excluded.email_enabled`,
+		userID, category, b(push), b(email)); err != nil {
+		t.Fatalf("CreateNotificationPreference: %v", err)
+	}
+}
