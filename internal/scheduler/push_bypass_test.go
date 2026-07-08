@@ -10,15 +10,6 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
-// Diese Tests nageln bewusst das AKTUELLE Verhalten fest: Die folgenden
-// Scheduler-Jobs rufen push.SendToUsers OHNE push.FilterByPushPref auf und
-// stellen daher an Empfänger mit push_enabled=0 dennoch zu.
-//
-// OFFENE DESIGN-FRAGE (nicht in diesem Change entschieden): Ist dieser
-// Preference-Bypass gewollt (operativ wichtige Erinnerungen an Verantwortliche)
-// oder ein Bug? Diese Tests schützen nur vor UNBEABSICHTIGTER Änderung — wird
-// der Bypass bewusst korrigiert, sind sie entsprechend anzupassen.
-
 // capturePush ersetzt den push.SendToUsers-Seam durch einen Recorder der
 // Empfänger-Listen und stellt das Original per Cleanup wieder her.
 func capturePush(t *testing.T) chan []int {
@@ -49,15 +40,45 @@ func waitPushContains(t *testing.T, ch chan []int, uid int) {
 	}
 }
 
-// TestAttendanceReminder_BypassesPushPref — Trainer mit push_enabled=0 erhält
-// die Anwesenheits-Erinnerung trotzdem.
-func TestAttendanceReminder_BypassesPushPref(t *testing.T) {
+func assertNoPush(t *testing.T, ch chan []int, uid int, within time.Duration) {
+	t.Helper()
+	deadline := time.After(within)
+	for {
+		select {
+		case uids := <-ch:
+			for _, u := range uids {
+				if u == uid {
+					t.Fatalf("unerwarteter Push an user %d (Opt-out sollte greifen)", uid)
+				}
+			}
+		case <-deadline:
+			return
+		}
+	}
+}
+
+// --- attendance-reminder: respektiert jetzt 'operativ' ---
+
+func TestAttendanceReminder_RespectsOperativOptOut(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	trainerUserID, _ := makeTrainerInSeason(t, db, teamID, seasonID)
 	testutil.CreateTrainingSession(t, db, teamID, seasonID, past(30))
-	testutil.CreateNotificationPreference(t, db, trainerUserID, "duty_reminders", false, false)
+	testutil.CreateNotificationPreference(t, db, trainerUserID, "operativ", false, false)
+
+	pushes := capturePush(t)
+	New(db, testutil.TestConfig(), nil).sendAttendanceRemindersAt(at19())
+
+	assertNoPush(t, pushes, trainerUserID, 300*time.Millisecond)
+}
+
+func TestAttendanceReminder_DefaultSends(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	trainerUserID, _ := makeTrainerInSeason(t, db, teamID, seasonID)
+	testutil.CreateTrainingSession(t, db, teamID, seasonID, past(30))
 
 	pushes := capturePush(t)
 	New(db, testutil.TestConfig(), nil).sendAttendanceRemindersAt(at19())
@@ -65,11 +86,11 @@ func TestAttendanceReminder_BypassesPushPref(t *testing.T) {
 	waitPushContains(t, pushes, trainerUserID)
 }
 
-// TestMatchReportReviewReminder_BypassesPushPref — Freigeber mit push_enabled=0
-// erhält die Review-Erinnerung trotzdem.
-func TestMatchReportReviewReminder_BypassesPushPref(t *testing.T) {
-	db := testutil.NewDB(t)
-	reviewerID := testutil.CreateMedienUser(t, db)
+// --- match-report-review-reminder: respektiert jetzt 'operativ' ---
+
+func setupPendingReview(t *testing.T, db *sql.DB) (reviewerID int) {
+	t.Helper()
+	reviewerID = testutil.CreateMedienUser(t, db)
 	authorID := testutil.CreateUser(t, db, "standard")
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
@@ -80,7 +101,23 @@ func TestMatchReportReviewReminder_BypassesPushPref(t *testing.T) {
 		reportID); err != nil {
 		t.Fatalf("prepare pending_review: %v", err)
 	}
-	testutil.CreateNotificationPreference(t, db, reviewerID, "games", false, false)
+	return reviewerID
+}
+
+func TestMatchReportReviewReminder_RespectsOperativOptOut(t *testing.T) {
+	db := testutil.NewDB(t)
+	reviewerID := setupPendingReview(t, db)
+	testutil.CreateNotificationPreference(t, db, reviewerID, "operativ", false, false)
+
+	pushes := capturePush(t)
+	New(db, testutil.TestConfig(), nil).sendMatchReportReviewReminders()
+
+	assertNoPush(t, pushes, reviewerID, 300*time.Millisecond)
+}
+
+func TestMatchReportReviewReminder_DefaultSends(t *testing.T) {
+	db := testutil.NewDB(t)
+	reviewerID := setupPendingReview(t, db)
 
 	pushes := capturePush(t)
 	New(db, testutil.TestConfig(), nil).sendMatchReportReviewReminders()
@@ -88,8 +125,11 @@ func TestMatchReportReviewReminder_BypassesPushPref(t *testing.T) {
 	waitPushContains(t, pushes, reviewerID)
 }
 
-// TestVideoRetentionWarning_BypassesPushPref — Trainer mit push_enabled=0 erhält
-// die T-7-Löschwarnung trotzdem.
+// --- video-retention-warning: BEWUSST harter Bypass (Datenverlust-Warnung) ---
+
+// TestVideoRetentionWarning_BypassesPushPref nagelt fest, dass die T-7-Lösch-
+// warnung UNABHÄNGIG von Push-Präferenzen zustellt — auch wenn der Trainer
+// 'sonstiges' (oder alles andere) deaktiviert hat. Das ist bewusst (Datenverlust).
 func TestVideoRetentionWarning_BypassesPushPref(t *testing.T) {
 	db := testutil.NewDB(t)
 	cfg := retentionConfig(t)
@@ -99,7 +139,7 @@ func TestVideoRetentionWarning_BypassesPushPref(t *testing.T) {
 	creator := testutil.CreateUser(t, db, "standard")
 	trainerUserID, _ := addTrainer(t, db, teamID, seasonID)
 	testutil.CreateVideo(t, db, teamID, seasonID, creator, "ready")
-	testutil.CreateNotificationPreference(t, db, trainerUserID, "games", false, false)
+	testutil.CreateNotificationPreference(t, db, trainerUserID, "sonstiges", false, false)
 
 	pushes := capturePush(t)
 	New(db, cfg, nil).runVideoRetention()
