@@ -30,7 +30,11 @@ func handlePushResponse(db *sql.DB, subID, statusCode int) {
 
 // SendToUsers sends a push notification to all subscriptions of the given users.
 // Runs as fire-and-forget — call via `go push.SendToUsers(...)`.
-func SendToUsers(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, url string) {
+//
+// SendToUsers is a package var (not a plain func) so tests can capture the
+// recipients a caller dispatches — notably the sites that bypass
+// FilterByPushPref. Production callers use push.SendToUsers(...) unchanged.
+var SendToUsers = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, body, url string) {
 	if len(userIDs) == 0 || cfg.VAPIDPrivateKey == "" {
 		return
 	}
