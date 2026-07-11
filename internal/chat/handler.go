@@ -442,6 +442,12 @@ func previewBody(body string) (string, bool) {
 // (voll, ?after=, ?before=); nur WHERE/ORDER/LIMIT unterscheiden sich. Die
 // vierte Spalte ist der (bei gelöschten Nachrichten leere) Body, aus dem der
 // Handler rune-genau den Preview (messagePreviewLen) ableitet.
+// mediaURL baut den relativen Abrufpfad eines Bildes (ohne /api-Prefix; der
+// axios-Client im Frontend ergänzt ihn — Konvention wie bei Match-Report-Bildern).
+func mediaURL(id int) string {
+	return fmt.Sprintf("/media/%d", id)
+}
+
 const messageSelect = `
 	SELECT m.id, m.sender_id, u.first_name || ' ' || u.last_name,
 	       CASE WHEN m.deleted_at IS NOT NULL THEN '' ELSE m.body END,
@@ -455,7 +461,8 @@ const messageSelect = `
 	       CASE WHEN m.reply_to_id IS NOT NULL THEN ru.first_name || ' ' || ru.last_name ELSE NULL END,
 	       m.edited_at,
 	       m.deleted_at,
-	       m.is_system
+	       m.is_system,
+	       m.media_id
 	FROM messages m
 	JOIN users u ON u.id = m.sender_id
 	LEFT JOIN messages rm ON rm.id = m.reply_to_id
@@ -516,6 +523,8 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		EditedAt          *string           `json:"editedAt"`
 		DeletedAt         *string           `json:"deletedAt"`
 		IsSystem          bool              `json:"isSystem"`
+		MediaID           *int              `json:"mediaId"`
+		MediaURL          *string           `json:"mediaUrl"`
 		Reactions         []messageReaction `json:"reactions"`
 	}
 
@@ -559,10 +568,16 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var msg Message
 		var body string
-		var replyToID sql.NullInt64
+		var replyToID, mediaID sql.NullInt64
 		var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
 		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &body, &msg.SentAt,
-			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem)
+			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem, &mediaID)
+		if mediaID.Valid {
+			id := int(mediaID.Int64)
+			msg.MediaID = &id
+			url := mediaURL(id)
+			msg.MediaURL = &url
+		}
 		// Body ist bei gelöschten Nachrichten bereits '' (SQL-CASE) → Preview leer,
 		// truncated=false. Sonst rune-genau auf messagePreviewLen kürzen.
 		msg.Preview, msg.Truncated = previewBody(body)
@@ -712,9 +727,16 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Body      string `json:"body"`
 		ReplyToID *int   `json:"replyToId"`
+		MediaID   *int   `json:"mediaId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Body) == "" {
-		http.Error(w, "body required", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	body.Body = strings.TrimSpace(body.Body)
+	// Mindestens nicht-leerer Text ODER ein Bild.
+	if body.Body == "" && body.MediaID == nil {
+		http.Error(w, "body or mediaId required", http.StatusBadRequest)
 		return
 	}
 
@@ -731,9 +753,21 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		replyToID = sql.NullInt64{Int64: int64(*body.ReplyToID), Valid: true}
 	}
 
+	var mediaID sql.NullInt64
+	if body.MediaID != nil {
+		var count int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM media WHERE id = ?`, *body.MediaID).Scan(&count)
+		if count == 0 {
+			http.Error(w, "invalid mediaId", http.StatusBadRequest)
+			return
+		}
+		mediaID = sql.NullInt64{Int64: int64(*body.MediaID), Valid: true}
+	}
+
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO messages (conversation_id, sender_id, body, reply_to_id) VALUES (?, ?, ?, ?)`,
-		convID, claims.UserID, body.Body, replyToID)
+		`INSERT INTO messages (conversation_id, sender_id, body, reply_to_id, media_id) VALUES (?, ?, ?, ?, ?)`,
+		convID, claims.UserID, body.Body, replyToID, mediaID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -758,6 +792,9 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	pushRecipients := push.FilterByPushPref(h.db, h.activeMembers(r, convID, claims.UserID), "chat")
 	title := h.senderName(r, claims.UserID, claims.Email)
 	preview := truncate(body.Body, 80)
+	if preview == "" {
+		preview = "Bild"
+	}
 	for _, uid := range pushRecipients {
 		badge, err := ComputeUnreadForUser(h.db, uid)
 		if err != nil {
@@ -916,13 +953,15 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 		IsRead     bool    `json:"isRead"`
 		IsSent     bool    `json:"isSent"`
 		EditedAt   *string `json:"editedAt"`
+		MediaID    *int    `json:"mediaId"`
+		MediaURL   *string `json:"mediaUrl"`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT b.id, u.first_name || ' ' || u.last_name, b.body, b.sent_at,
 		       CASE WHEN br.read_at IS NOT NULL THEN 1 ELSE 0 END AS is_read,
 		       CASE WHEN b.sender_id = ? THEN 1 ELSE 0 END AS is_sent,
-		       b.edited_at
+		       b.edited_at, b.media_id
 		FROM broadcasts b
 		JOIN users u ON u.id = b.sender_id
 		JOIN broadcast_reads br ON br.broadcast_id = b.id AND br.user_id = ?
@@ -940,11 +979,18 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 		var b Broadcast
 		var isRead, isSent int
 		var editedAt sql.NullString
-		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent, &editedAt)
+		var mediaID sql.NullInt64
+		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent, &editedAt, &mediaID)
 		b.IsRead = isRead == 1
 		b.IsSent = isSent == 1
 		if editedAt.Valid {
 			b.EditedAt = &editedAt.String
+		}
+		if mediaID.Valid {
+			id := int(mediaID.Int64)
+			b.MediaID = &id
+			url := mediaURL(id)
+			b.MediaURL = &url
 		}
 		broadcasts = append(broadcasts, b)
 	}
@@ -1001,18 +1047,33 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 		TargetType string `json:"targetType"`
 		TargetID   int    `json:"targetId"`
 		TargetRole string `json:"targetRole"`
+		MediaID    *int   `json:"mediaId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if strings.TrimSpace(body.Body) == "" {
-		http.Error(w, "body required", http.StatusBadRequest)
+	body.Body = strings.TrimSpace(body.Body)
+	// Mindestens nicht-leerer Text ODER ein Bild.
+	if body.Body == "" && body.MediaID == nil {
+		http.Error(w, "body or mediaId required", http.StatusBadRequest)
 		return
 	}
 	if body.TargetType != "all" && body.TargetType != "team" && body.TargetType != "role" {
 		http.Error(w, "targetType must be all, team or role", http.StatusBadRequest)
 		return
+	}
+
+	var mediaID sql.NullInt64
+	if body.MediaID != nil {
+		var count int
+		h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM media WHERE id = ?`, *body.MediaID).Scan(&count)
+		if count == 0 {
+			http.Error(w, "invalid mediaId", http.StatusBadRequest)
+			return
+		}
+		mediaID = sql.NullInt64{Int64: int64(*body.MediaID), Valid: true}
 	}
 
 	// Trainer may only send to their own team
@@ -1044,8 +1105,8 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO broadcasts (sender_id, target_type, target_id, target_role, body) VALUES (?, ?, ?, ?, ?)`,
-		claims.UserID, body.TargetType, targetID, targetRole, body.Body)
+		`INSERT INTO broadcasts (sender_id, target_type, target_id, target_role, body, media_id) VALUES (?, ?, ?, ?, ?, ?)`,
+		claims.UserID, body.TargetType, targetID, targetRole, body.Body, mediaID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1089,6 +1150,9 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	pushRecipients := push.FilterByPushPref(h.db, pushIDs, "chat")
 	title := h.senderName(r, claims.UserID, claims.Email)
 	preview := truncate(body.Body, 80)
+	if preview == "" {
+		preview = "Bild"
+	}
 	for _, uid := range pushRecipients {
 		badge, err := ComputeUnreadForUser(h.db, uid)
 		if err != nil {
