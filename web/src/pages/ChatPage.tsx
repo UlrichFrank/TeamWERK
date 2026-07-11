@@ -21,8 +21,11 @@ import {
   Pencil,
   SmilePlus,
   Copy,
+  Paperclip,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { compressImage } from "../lib/imageCompress";
+import AuthImage from "../components/AuthImage";
 import { buildTeamShortNames } from "../lib/teamName";
 import {
   conversationTimeLabel,
@@ -76,6 +79,8 @@ interface Message {
   editedAt: string | null;
   deletedAt: string | null;
   isSystem: boolean;
+  mediaId: number | null;
+  mediaUrl: string | null;
   reactions: Reaction[];
 }
 
@@ -91,6 +96,8 @@ interface Broadcast {
   isRead: boolean;
   isSent: boolean;
   editedAt: string | null;
+  mediaId: number | null;
+  mediaUrl: string | null;
 }
 interface ChatUser {
   id: number;
@@ -178,6 +185,14 @@ export default function ChatPage() {
   const [showBroadcastEdit, setShowBroadcastEdit] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  // Ausgewähltes, noch nicht gesendetes Bild (Chat-Tab) inkl. lokaler Vorschau.
+  const [pendingImage, setPendingImage] = useState<{
+    file: File;
+    previewUrl: string;
+  } | null>(null);
+  // Bild im Vollbild-Overlay (Lightbox), url ohne /api-Prefix.
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [mobileOverlay, setMobileOverlay] = useState<{
     message: Message;
@@ -491,30 +506,83 @@ export default function ChatPage() {
     };
   }, [contextMenu, emojiPickerMsgId]);
 
-  const sendMessage = async () => {
-    if (!activeConv || !msgInput.trim() || sending) return;
-    setSending(true);
+  const clearPendingImage = useCallback(() => {
+    setPendingImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }, []);
+
+  const setPendingFromFile = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setPendingImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return { file, previewUrl: URL.createObjectURL(file) };
+    });
+  }, []);
+
+  // Bei Konversationswechsel ein noch nicht gesendetes Bild verwerfen, damit es
+  // nicht versehentlich in eine andere Konversation gerät.
+  useEffect(() => {
+    clearPendingImage();
+  }, [activeConv?.id, clearPendingImage]);
+
+  // uploadImage verkleinert das Bild clientseitig (≤ 1 MB) und lädt es hoch;
+  // liefert die media-ID oder null bei Fehler.
+  const uploadImage = async (file: File): Promise<number | null> => {
     try {
-      if (editingMessage) {
+      const { blob, fileName } = await compressImage(file);
+      const form = new FormData();
+      form.append("image", blob, fileName);
+      const r = await api.post("/media/upload", form);
+      return r.data?.mediaId ?? null;
+    } catch {
+      setToast("Bild konnte nicht hochgeladen werden");
+      return null;
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!activeConv || sending) return;
+    const hasText = msgInput.trim().length > 0;
+
+    // Bearbeiten ändert nur Text; Bilder sind hier nicht Teil des Edit-Flows.
+    if (editingMessage) {
+      if (!hasText) return;
+      setSending(true);
+      try {
         await api.put(`/chat/messages/${editingMessage.id}`, {
           body: msgInput.trim(),
         });
         setEditingMessage(null);
-      } else {
-        await api.post(`/chat/conversations/${activeConv.id}/messages`, {
-          body: msgInput.trim(),
-          replyToId: replyTo?.id ?? null,
-        });
-        setReplyTo(null);
-      }
-      setMsgInput("");
-      draftsRef.current.delete(activeConv.id);
-      if (editingMessage) {
-        // Edit ändert eine bestehende Nachricht → Voll-Reload nötig
+        setMsgInput("");
+        draftsRef.current.delete(activeConv.id);
         await loadMessages(activeConv.id);
-      } else {
-        await appendNewMessages(activeConv.id);
+      } catch {
+      } finally {
+        setSending(false);
       }
+      return;
+    }
+
+    if (!hasText && !pendingImage) return;
+    setSending(true);
+    try {
+      let mediaId: number | null = null;
+      if (pendingImage) {
+        mediaId = await uploadImage(pendingImage.file);
+        if (mediaId === null) return; // Upload fehlgeschlagen → Abbruch
+      }
+      await api.post(`/chat/conversations/${activeConv.id}/messages`, {
+        body: msgInput.trim(),
+        replyToId: replyTo?.id ?? null,
+        mediaId,
+      });
+      setReplyTo(null);
+      setMsgInput("");
+      clearPendingImage();
+      draftsRef.current.delete(activeConv.id);
+      await appendNewMessages(activeConv.id);
     } catch {
     } finally {
       setSending(false);
@@ -937,6 +1005,9 @@ export default function ChatPage() {
                           }}
                           onClosePicker={() => setEmojiPickerMsgId(null)}
                           onToggleReaction={toggleReaction}
+                          onImageClick={() => {
+                            if (msg.mediaUrl) setLightboxUrl(msg.mediaUrl);
+                          }}
                         />
                       </div>
                     );
@@ -974,11 +1045,62 @@ export default function ChatPage() {
                 </div>
               )}
 
+              {/* Bild-Vorschau vor dem Senden */}
+              {pendingImage && !editingMessage && (
+                <div className="px-4 py-2 border-t border-brand-border-subtle bg-white flex items-center gap-3">
+                  <img
+                    src={pendingImage.previewUrl}
+                    alt="Vorschau"
+                    className="h-16 w-16 object-cover rounded-md border border-brand-border-subtle"
+                  />
+                  <span className="flex-1 min-w-0 text-xs text-brand-text-muted truncate">
+                    {pendingImage.file.name}
+                  </span>
+                  <button
+                    onClick={clearPendingImage}
+                    aria-label="Bild entfernen"
+                    className="text-brand-text-muted hover:text-brand-text shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="px-4 py-3 border-t border-brand-border-subtle flex gap-2 items-end">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) setPendingFromFile(file);
+                  }}
+                />
+                {!editingMessage && (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                    className="text-brand-text-muted hover:text-brand-text transition-colors shrink-0 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    aria-label="Bild anhängen"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+                )}
                 <textarea
                   ref={inputRef}
                   value={msgInput}
                   onChange={(e) => setMsgInput(e.target.value)}
+                  onPaste={(e) => {
+                    const img = Array.from(e.clipboardData.files).find((f) =>
+                      f.type.startsWith("image/"),
+                    );
+                    if (img && !editingMessage) {
+                      e.preventDefault();
+                      setPendingFromFile(img);
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                       if (isMobile) return;
@@ -1009,7 +1131,7 @@ export default function ChatPage() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={!msgInput.trim() || sending}
+                  disabled={(!msgInput.trim() && !pendingImage) || sending}
                   className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label={editingMessage ? "Speichern" : "Senden"}
                 >
@@ -1062,6 +1184,14 @@ export default function ChatPage() {
               <p className="text-sm text-brand-text whitespace-pre-wrap break-words">
                 {renderWithLinks(activeBroadcast.body, false)}
               </p>
+              {activeBroadcast.mediaUrl && (
+                <AuthImage
+                  url={activeBroadcast.mediaUrl}
+                  alt="Bild der Mitteilung"
+                  className="mt-3 max-w-xs rounded-lg cursor-pointer"
+                  onClick={() => setLightboxUrl(activeBroadcast.mediaUrl)}
+                />
+              )}
             </div>
           )}
 
@@ -1236,6 +1366,26 @@ export default function ChatPage() {
         />
       )}
 
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            aria-label="Schließen"
+            className="absolute top-4 right-4 text-white hover:text-brand-yellow transition-colors"
+          >
+            <X className="w-7 h-7" />
+          </button>
+          <AuthImage
+            url={lightboxUrl}
+            alt="Bild"
+            className="max-h-[90vh] max-w-full object-contain rounded-lg"
+          />
+        </div>
+      )}
+
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-brand-text text-white text-sm rounded-md shadow-lg px-4 py-2">
           {toast}
@@ -1279,6 +1429,7 @@ function MessageBubble({
   onOpenPicker,
   onClosePicker,
   onToggleReaction,
+  onImageClick,
 }: {
   msg: Message;
   body: string;
@@ -1292,6 +1443,7 @@ function MessageBubble({
   onOpenPicker: (e: React.MouseEvent) => void;
   onClosePicker: () => void;
   onToggleReaction: (msgId: number, emoji: string) => void;
+  onImageClick: () => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
@@ -1437,9 +1589,19 @@ function MessageBubble({
               <p className="truncate">{(msg.replyToBody ?? "").slice(0, 60)}</p>
             </div>
           )}
-          <span className="whitespace-pre-wrap break-words">
-            {renderWithLinks(body, isOwn)}
-          </span>
+          {body && (
+            <span className="whitespace-pre-wrap break-words">
+              {renderWithLinks(body, isOwn)}
+            </span>
+          )}
+          {msg.mediaUrl && (
+            <AuthImage
+              url={msg.mediaUrl}
+              alt="Bild"
+              className={`${body ? "mt-2 " : ""}max-w-full rounded-lg cursor-pointer`}
+              onClick={onImageClick}
+            />
+          )}
           {showExpand && (
             <button
               onClick={onExpand}
@@ -1886,6 +2048,10 @@ function BroadcastModal({
   const [targetRole, setTargetRole] = useState("spieler");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [image, setImage] = useState<{ file: File; previewUrl: string } | null>(
+    null,
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api
@@ -1894,16 +2060,40 @@ function BroadcastModal({
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (image) URL.revokeObjectURL(image.previewUrl);
+    };
+  }, [image]);
+
+  const pickImage = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return { file, previewUrl: URL.createObjectURL(file) };
+    });
+  };
+
   const submit = async () => {
-    if (!body.trim()) return;
+    if (!body.trim() && !image) return;
     setLoading(true);
     setError("");
     try {
+      let mediaId: number | null = null;
+      if (image) {
+        const { blob, fileName } = await compressImage(image.file);
+        const form = new FormData();
+        form.append("image", blob, fileName);
+        const r = await api.post("/media/upload", form);
+        mediaId = r.data?.mediaId ?? null;
+        if (mediaId === null) throw new Error("upload failed");
+      }
       await api.post("/chat/broadcasts", {
         body: body.trim(),
         targetType,
         targetId,
         targetRole,
+        mediaId,
       });
       onSent();
     } catch (e) {
@@ -1978,16 +2168,57 @@ function BroadcastModal({
           placeholder="Deine Mitteilung…"
           className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none mb-1"
         />
-        <p className="text-xs text-brand-text-subtle text-right mb-3">
+        <p className="text-xs text-brand-text-subtle text-right mb-2">
           {body.length}/2000
         </p>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) pickImage(file);
+          }}
+        />
+        {image ? (
+          <div className="flex items-center gap-3 mb-3">
+            <img
+              src={image.previewUrl}
+              alt="Vorschau"
+              className="h-16 w-16 object-cover rounded-md border border-brand-border-subtle"
+            />
+            <span className="flex-1 min-w-0 text-xs text-brand-text-muted truncate">
+              {image.file.name}
+            </span>
+            <button
+              onClick={() => setImage(null)}
+              aria-label="Bild entfernen"
+              className="text-brand-text-muted hover:text-brand-text shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-3"
+          >
+            <Paperclip className="w-4 h-4" />
+            Bild anhängen
+          </button>
+        )}
 
         {error && <p className="text-brand-danger text-sm mb-3">{error}</p>}
 
         <button
           onClick={submit}
           disabled={
-            loading || !body.trim() || (targetType === "team" && !targetId)
+            loading ||
+            (!body.trim() && !image) ||
+            (targetType === "team" && !targetId)
           }
           className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
