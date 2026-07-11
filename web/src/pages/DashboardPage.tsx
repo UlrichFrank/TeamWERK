@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Calendar, BarChart2, Users, Car, ArrowRight,
-  Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check, Search, Info
+  Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check, Search, Info,
+  MessageSquare, MessageCircle, Megaphone
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { useChatEvents } from '../hooks/useChatEvents'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -412,6 +414,116 @@ function FahrgemeinschaftenSection({ confirmed, openGroups }: { confirmed: Carpo
   )
 }
 
+// ── Nachrichten ─────────────────────────────────────────────────────────────
+
+// Schlanke lokale Shapes der Chat-Endpunkte (Quelle: ChatPage.tsx).
+interface ConvMemberLite { id: number; name: string }
+interface ConversationLite {
+  id: number
+  type: 'direct' | 'group'
+  name: string | null
+  unreadCount: number
+  lastMessage: { body: string; sentAt: string } | null
+  members: ConvMemberLite[]
+}
+interface BroadcastLite {
+  id: number
+  senderName: string
+  body: string
+  sentAt: string
+  isRead: boolean
+  isSent: boolean
+}
+
+interface NachrichtRow {
+  kind: 'conv' | 'bc'
+  id: number
+  date: string
+  title: string
+  subtitle: string
+}
+
+function convTitle(c: ConversationLite, myId: number | undefined): string {
+  if (c.type === 'group') return c.name ?? 'Gruppe'
+  const other = c.members.find(m => m.id !== myId) ?? c.members[0]
+  return other?.name ?? 'Direktnachricht'
+}
+
+function MeineNachrichtenSection() {
+  const { user } = useAuth()
+  const [rows, setRows] = useState<NachrichtRow[]>([])
+
+  const load = useCallback(() => {
+    Promise.all([
+      api.get('/chat/conversations'),
+      api.get('/chat/broadcasts'),
+    ]).then(([convs, bcs]) => {
+      const convRows: NachrichtRow[] = (convs.data ?? [])
+        .filter((c: ConversationLite) => c.unreadCount > 0 && c.lastMessage)
+        .map((c: ConversationLite) => ({
+          kind: 'conv' as const,
+          id: c.id,
+          date: c.lastMessage!.sentAt,
+          title: convTitle(c, user?.id),
+          subtitle: c.lastMessage!.body,
+        }))
+      const bcRows: NachrichtRow[] = (bcs.data ?? [])
+        .filter((b: BroadcastLite) => !b.isRead && !b.isSent)
+        .map((b: BroadcastLite) => ({
+          kind: 'bc' as const,
+          id: b.id,
+          date: b.sentAt,
+          title: b.senderName,
+          subtitle: b.body,
+        }))
+      setRows([...convRows, ...bcRows]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 5))
+    }).catch(() => {})
+  }, [user?.id])
+
+  useEffect(() => { load() }, [load])
+
+  useChatEvents(event => {
+    if (event.startsWith('chat:new-message') || event === 'chat:new-broadcast' || event === 'chat:conversation-read') load()
+  })
+
+  if (rows.length === 0) {
+    return (
+      <div>
+        <p className="text-sm text-brand-text-muted py-1">Keine ungelesenen Nachrichten.</p>
+        <Link to="/chat" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 mt-1">
+          Zum Chat <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1 mt-1">
+      <ul className="space-y-1">
+        {rows.map(row => (
+          <li key={`${row.kind}-${row.id}`}>
+            <DashboardRow
+              to={row.kind === 'conv' ? '/chat' : '/chat?tab=broadcasts'}
+              dateISO={row.date}
+              icon={row.kind === 'conv'
+                ? <MessageCircle className="w-4 h-4" />
+                : <Megaphone className="w-4 h-4" />}
+              title={row.title}
+              subtitle={row.subtitle}
+            />
+          </li>
+        ))}
+      </ul>
+
+      <Link to="/chat" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 pt-2">
+        Zum Chat <ArrowRight className="w-3 h-3" />
+      </Link>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -425,7 +537,7 @@ export default function DashboardPage() {
 
   const [openSection, setOpenSection] = useState<string>('termine')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    termine: true, dienste: true, team: true, fahrt: true,
+    termine: true, nachrichten: true, dienste: true, team: true, fahrt: true,
   })
 
   const isOpen = (id: string) => isMobile ? openSection === id : openSections[id]
@@ -483,6 +595,10 @@ export default function DashboardPage() {
       <div className="space-y-2">
         <Accordion id="termine" title="Meine Termine" icon={Calendar} isOpen={isOpen('termine')} onToggle={() => toggle('termine')}>
           <MeineTermineSection events={data.meineTermine} />
+        </Accordion>
+
+        <Accordion id="nachrichten" title="Nachrichten" icon={MessageSquare} isOpen={isOpen('nachrichten')} onToggle={() => toggle('nachrichten')}>
+          <MeineNachrichtenSection />
         </Accordion>
 
         {showDienste && (
