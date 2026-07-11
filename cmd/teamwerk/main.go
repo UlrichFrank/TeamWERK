@@ -44,6 +44,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/matchreports"
+	"github.com/teamstuttgart/teamwerk/internal/media"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/metrics"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
@@ -242,6 +243,7 @@ func serve() {
 		Kader:               kader.NewHandler(database, hubInstance),
 		Upload:              upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret, hubInstance),
 		Files:               files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret),
+		Media:               media.NewHandler(database, cfg.MediaDir),
 		Carpool:             carpooling.NewHandler(database, cfg, hubInstance),
 		Chat:                chat.NewHandler(database, hubInstance, cfg),
 		Notif:               notifications.NewHandler(database, cfg),

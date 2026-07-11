@@ -30,6 +30,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/matchreports"
+	"github.com/teamstuttgart/teamwerk/internal/media"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/settings"
@@ -53,6 +54,7 @@ type Handlers struct {
 	Kader          *kader.Handler
 	Upload         *upload.Handler
 	Files          *files.Handler
+	Media          *media.Handler
 	Carpool        *carpooling.Handler
 	Chat           *chat.Handler
 	Notif          *notifications.Handler
@@ -205,6 +207,10 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Delete("/api/chat/broadcasts/{id}", h.Chat.DeleteBroadcast)
 		r.Get("/api/chat/team-groups", h.Chat.ListTeamGroups)
 		r.Get("/api/chat/team-groups/{teamId}/{kind}/members", h.Chat.ResolveTeamGroup)
+
+		// Media (Bild-Upload/-Abruf für Chat + Mitteilungen)
+		r.Post("/api/media/upload", h.Media.Upload)
+		r.Get("/api/media/{id}", h.Media.Serve)
 
 		// Members
 		r.Get("/api/users/{id}/contact", h.Members.GetContact)

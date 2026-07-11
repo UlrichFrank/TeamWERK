@@ -58,6 +58,7 @@ var broadcastAllowlist = map[string]string{
 	// Dokumente: die Dokumente-Seite hat kein Hub-Live-Update (kein 'files'-Event).
 	"Files.CreateFolder":     "kein 'files'-Hub-Event; Dokumente-Seite lädt ohne Live-Update",
 	"Files.UploadFile":       "kein 'files'-Hub-Event; Dokumente-Seite lädt ohne Live-Update",
+	"Media.Upload":           "Upload-Vorstufe, kein Live-Update; der nachfolgende SendMessage/SendBroadcast broadcastet",
 	"Files.DeleteFile":       "kein 'files'-Hub-Event; Dokumente-Seite lädt ohne Live-Update",
 	"Files.DeleteFolder":     "kein 'files'-Hub-Event; Dokumente-Seite lädt ohne Live-Update",
 	"Files.RenameFile":       "kein 'files'-Hub-Event; Dokumente-Seite lädt ohne Live-Update",

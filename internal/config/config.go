@@ -13,6 +13,7 @@ type Config struct {
 	BaseURL         string
 	UploadDir       string
 	FilesDir        string
+	MediaDir        string
 	BeitragslaufDir string
 	SMTP            SMTPConfig
 	VAPIDPublicKey  string
@@ -85,6 +86,7 @@ func Load() (*Config, error) {
 		BaseURL:         getEnv("BASE_URL", "https://teamwerk.team-stuttgart.org"),
 		UploadDir:       getEnv("UPLOAD_DIR", "./storage/uploads"),
 		FilesDir:        getEnv("FILES_DIR", "./storage/files"),
+		MediaDir:        getEnv("MEDIA_DIR", "./storage/media"),
 		BeitragslaufDir: getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle"),
 		SMTP: SMTPConfig{
 			Host:     getEnv("SMTP_HOST", "mail.agenturserver.de"),
