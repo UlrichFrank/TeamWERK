@@ -597,15 +597,15 @@ export default function DashboardPage() {
           <MeineTermineSection events={data.meineTermine} />
         </Accordion>
 
-        <Accordion id="nachrichten" title="Nachrichten" icon={MessageSquare} isOpen={isOpen('nachrichten')} onToggle={() => toggle('nachrichten')}>
-          <MeineNachrichtenSection />
-        </Accordion>
-
         {showDienste && (
           <Accordion id="dienste" title="Meine Dienste" icon={BarChart2} isOpen={isOpen('dienste')} onToggle={() => toggle('dienste')}>
             <MeineDiensteSection dienste={data.meineDienste} />
           </Accordion>
         )}
+
+        <Accordion id="nachrichten" title="Nachrichten" icon={MessageSquare} isOpen={isOpen('nachrichten')} onToggle={() => toggle('nachrichten')}>
+          <MeineNachrichtenSection />
+        </Accordion>
 
         {showFahrt && (
           <Accordion id="fahrt" title="Fahrgemeinschaften" icon={Car} isOpen={isOpen('fahrt')} onToggle={() => toggle('fahrt')}>
