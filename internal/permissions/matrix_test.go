@@ -230,6 +230,10 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/chat/team-groups", expected: exAuth},
 	{method: "GET", path: "/api/chat/team-groups/{teamId}/{kind}/members", expected: exPublic},
 
+	// Media (Bild-Upload/-Abruf für Chat + Mitteilungen): nur authentifiziert.
+	{method: "POST", path: "/api/media/upload", expected: exAuth},
+	{method: "GET", path: "/api/media/{id}", expected: exAuth},
+
 	// Members (self-service)
 	{method: "GET", path: "/api/users/{id}/contact", expected: exAuth},
 	// Änderungsanträge: Handler-Level-Ownership-Gate (B-1) — Eigentümer/Eltern/admin/vorstand/kassierer.
