@@ -90,15 +90,24 @@ export async function compressImage(
   if ("close" in bitmap && typeof bitmap.close === "function") bitmap.close();
 
   // WebP bewahrt Transparenz (PNG) und komprimiert gut; vom Server erlaubt.
-  const outName = stripExt(file.name) + ".webp";
-  let smallest: Blob | null = null;
-  for (const q of QUALITY_STEPS) {
-    const blob = await toBlob(canvas, "image/webp", q);
-    if (!blob) continue;
-    if (!smallest || blob.size < smallest.size) smallest = blob;
-    if (blob.size <= targetBytes) return { blob, fileName: outName };
+  // Fallback auf JPEG, weil iOS Safari erst ab Version 16 WebP per canvas.toBlob
+  // liefert und dort intermittierend `null` zurückgibt — sonst würde ein 3–8 MB
+  // Kamerafoto ungekürzt weitergereicht und der Server mit 413 ablehnen.
+  const stem = stripExt(file.name);
+  const attempts: { mime: string; ext: string }[] = [
+    { mime: "image/webp", ext: ".webp" },
+    { mime: "image/jpeg", ext: ".jpg" },
+  ];
+  let smallest: { blob: Blob; ext: string } | null = null;
+  for (const { mime, ext } of attempts) {
+    for (const q of QUALITY_STEPS) {
+      const blob = await toBlob(canvas, mime, q);
+      if (!blob) break; // MIME wird vom Browser nicht encodiert → nächstes Format
+      if (!smallest || blob.size < smallest.blob.size) smallest = { blob, ext };
+      if (blob.size <= targetBytes) return { blob, fileName: stem + ext };
+    }
   }
   // Keine Qualitätsstufe reichte → kleinste Variante (Server-Backstop greift ggf.).
-  if (smallest) return { blob: smallest, fileName: outName };
+  if (smallest) return { blob: smallest.blob, fileName: stem + smallest.ext };
   return { blob: file, fileName: file.name };
 }
