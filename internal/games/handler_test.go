@@ -155,6 +155,85 @@ func TestGetGame_NotFound(t *testing.T) {
 	}
 }
 
+// TestGetGame_CanEdit_ByRole verifies that GET /api/games/{id} returns
+// can.edit=true for admin/vorstand/trainer/sportliche_leitung and false for
+// a regular spieler. The frontend gates the slot-CRUD UI on this field, so a
+// silent rename here would hide the CRUD from every user.
+func TestGetGame_CanEdit_ByRole(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	srv := testServer(t, db)
+
+	readCanEdit := func(t *testing.T, token string) bool {
+		t.Helper()
+		res := testutil.Get(t, srv, fmt.Sprintf("/api/games/%d", gameID), token)
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", res.StatusCode)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		game, _ := body["game"].(map[string]any)
+		can, ok := game["can"].(map[string]any)
+		if !ok {
+			t.Fatalf("response missing `can` object: %v", game["can"])
+		}
+		edit, _ := can["edit"].(bool)
+		return edit
+	}
+
+	t.Run("admin", func(t *testing.T) {
+		uid := testutil.CreateUser(t, db, "admin")
+		if !readCanEdit(t, testutil.Token(t, uid, "admin", nil)) {
+			t.Errorf("admin: expected can.edit=true")
+		}
+	})
+
+	t.Run("vorstand", func(t *testing.T) {
+		uid := testutil.CreateUser(t, db, "standard")
+		mid := testutil.CreateMember(t, db, uid)
+		testutil.AddClubFunction(t, db, mid, "vorstand")
+		if !readCanEdit(t, testutil.Token(t, uid, "standard", []string{"vorstand"})) {
+			t.Errorf("vorstand: expected can.edit=true")
+		}
+	})
+
+	t.Run("sportliche_leitung", func(t *testing.T) {
+		uid := testutil.CreateUser(t, db, "standard")
+		mid := testutil.CreateMember(t, db, uid)
+		testutil.AddClubFunction(t, db, mid, "sportliche_leitung")
+		if !readCanEdit(t, testutil.Token(t, uid, "standard", []string{"sportliche_leitung"})) {
+			t.Errorf("sportliche_leitung: expected can.edit=true")
+		}
+	})
+
+	t.Run("trainer_of_team", func(t *testing.T) {
+		uid := testutil.CreateUser(t, db, "standard")
+		mid := testutil.CreateMember(t, db, uid)
+		testutil.AddClubFunction(t, db, mid, "trainer")
+		testutil.AddKaderTrainer(t, db, kaderID, mid)
+		if !readCanEdit(t, testutil.Token(t, uid, "standard", []string{"trainer"})) {
+			t.Errorf("trainer of participating team: expected can.edit=true")
+		}
+	})
+
+	t.Run("spieler", func(t *testing.T) {
+		uid := testutil.CreateUser(t, db, "standard")
+		mid := testutil.CreateMember(t, db, uid)
+		testutil.AddClubFunction(t, db, mid, "spieler")
+		testutil.AddKaderMember(t, db, kaderID, mid)
+		if readCanEdit(t, testutil.Token(t, uid, "standard", []string{"spieler"})) {
+			t.Errorf("spieler: expected can.edit=false")
+		}
+	})
+}
+
 // TestUpdateGame_Forbidden verifies non-vorstand/trainer cannot update games.
 func TestUpdateGame_Forbidden(t *testing.T) {
 	db := testutil.NewDB(t)
