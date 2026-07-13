@@ -64,19 +64,26 @@ describe('ProfileDatenschutzTab', () => {
     expect(onUpdated).toHaveBeenCalled()
   })
 
-  test('DSGVO-Status wird read-only angezeigt', () => {
+  test('DSGVO-Status wird editierbar via Change-Request angezeigt', () => {
     render(<ProfileDatenschutzTab ownMember={baseMember} onUpdated={() => {}} />)
+    // Seit 7e1a91e sind die Schalter aktiv — Änderungen laufen aber weiterhin
+    // NICHT direkt aufs Member, sondern über einen Draft (POST /change-request).
     const verarb = screen.getByLabelText('Datenverarbeitung eingewilligt') as HTMLInputElement
     expect(verarb.checked).toBe(true)
-    expect(verarb.disabled).toBe(true)
+    expect(verarb.disabled).toBe(false)
 
     const weiter = screen.getByLabelText('Datenweitergabe eingewilligt') as HTMLInputElement
     expect(weiter.checked).toBe(false)
-    expect(weiter.disabled).toBe(true)
+    expect(weiter.disabled).toBe(false)
 
     const foto = screen.getByLabelText('Foto-Veröffentlichung eingewilligt') as HTMLInputElement
     expect(foto.checked).toBe(true)
-    expect(foto.disabled).toBe(true)
+    expect(foto.disabled).toBe(false)
+
+    // Ohne lokale Änderung ist der Anfrage-Button gesperrt — sichert zu, dass die
+    // aktivierten Checkboxen NICHT zu direktem Schreiben ohne Draft führen.
+    const requestBtn = screen.getByRole('button', { name: /Änderung anfragen/i }) as HTMLButtonElement
+    expect(requestBtn.disabled).toBe(true)
 
     // Datum sichtbar (slice auf 10 Zeichen)
     expect(screen.getByText(/seit 2024-03-12/)).toBeTruthy()
