@@ -357,6 +357,18 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
                   In Terminen öffnen
                 </button>
               )}
+              {type === 'game' && (
+                <button
+                  disabled={(game?.slot_count ?? 0) === 0}
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    onClose()
+                    navigate('/dienste')
+                  }}
+                >
+                  In Diensten öffnen
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="flex-1 border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
