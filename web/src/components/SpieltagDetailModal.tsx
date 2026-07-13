@@ -265,6 +265,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 canEdit={canEdit}
                 onReload={reloadAfterMutation}
                 onEdit={canEdit ? (id) => { const s = slots.find(x => x.id === id); if (s) openEditSlot(s) } : undefined}
+                hideClaimActions
               />
             )}
           </div>

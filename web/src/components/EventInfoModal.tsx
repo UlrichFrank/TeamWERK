@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList, Trash2, BriefcaseMedical } from 'lucide-react'
+import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList, Trash2, BriefcaseMedical, AlertTriangle } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { formatTeamList } from '../lib/teamName'
 import MapsLink from './MapsLink'
@@ -227,7 +227,8 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
             <RsvpRow confirmed={game.confirmed_count} declined={game.declined_count} maybe={game.maybe_count} />
             <EventNoteIndicator variant="inline" note={game.note ?? ''} className="pt-1" />
             {(game.slot_count ?? 0) > 0 && (game.filled_count ?? 0) < (game.total_count ?? 0) && (
-              <p className="text-sm text-brand-text-muted mt-1">
+              <p className="text-sm text-brand-text-muted mt-1 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-brand-danger shrink-0" />
                 {(game.total_count ?? 0) - (game.filled_count ?? 0)} offene Dienst-Slots
               </p>
             )}

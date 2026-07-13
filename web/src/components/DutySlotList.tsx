@@ -42,9 +42,10 @@ interface DutySlotListProps {
   onSlotDeleted?: (id: number) => void
   onEdit?: (slotId: number) => void
   proxyChildren?: ProxyChild[]
+  hideClaimActions?: boolean
 }
 
-export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit, proxyChildren = [] }: DutySlotListProps) {
+export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit, proxyChildren = [], hideClaimActions = false }: DutySlotListProps) {
   const { user } = useAuth()
   // Windowing der Slot-Zeilen: bei sehr vielen Slots nur sichtbare im DOM.
   // Scroll-Quelle ist die Seite (Duty-Board scrollt als Ganzes).
@@ -182,12 +183,12 @@ onSlotDeleted?.(slotId)
                 <td className="px-4 py-2.5 text-right">
                   {/* Desktop buttons */}
                   <div className="hidden sm:flex items-center justify-end gap-2">
-                    {s.claimed_by_me && !isPast && (
+                    {!hideClaimActions && s.claimed_by_me && !isPast && (
                       <button onClick={() => unclaim(s.id)} className="text-xs bg-brand-danger text-white font-medium px-2 py-1 rounded hover:bg-brand-danger/90 transition-colors">
                         Austragen
                       </button>
                     )}
-                    {!s.claimed_by_me && s.vacancies > 0 && !isPast && (
+                    {!hideClaimActions && !s.claimed_by_me && s.vacancies > 0 && !isPast && (
                       <button onClick={() => claim(s.id)} className="text-xs bg-brand-yellow text-brand-black font-medium px-2 py-1 rounded hover:bg-brand-black hover:text-brand-yellow transition-colors">
                         Eintragen
                       </button>
@@ -207,8 +208,8 @@ onSlotDeleted?.(slotId)
                   <div className="sm:hidden">
                     {(() => {
                       const actions = [
-                        ...(!s.claimed_by_me && s.vacancies > 0 && !isPast ? [{ label: 'Eintragen', onClick: () => claim(s.id) }] : []),
-                        ...(s.claimed_by_me && !isPast ? [{ label: 'Austragen', onClick: () => unclaim(s.id), variant: 'danger' as const }] : []),
+                        ...(!hideClaimActions && !s.claimed_by_me && s.vacancies > 0 && !isPast ? [{ label: 'Eintragen', onClick: () => claim(s.id) }] : []),
+                        ...(!hideClaimActions && s.claimed_by_me && !isPast ? [{ label: 'Austragen', onClick: () => unclaim(s.id), variant: 'danger' as const }] : []),
                         ...(canEdit && onEdit ? [{ label: 'Bearbeiten', onClick: () => onEdit(s.id) }] : []),
                         ...(canEdit ? [{ label: 'Löschen', onClick: () => handleDeleteClick(s), variant: 'danger' as const }] : []),
                       ]
