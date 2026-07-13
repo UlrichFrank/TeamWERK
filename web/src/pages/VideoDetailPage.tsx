@@ -89,27 +89,43 @@ function VideoPlayer({ id }: { id: number }) {
       setMasterURL(new URL(url, window.location.origin).toString())
 
       if (Hls.isSupported()) {
-        const hls = new Hls()
+        // Buffer großzügiger als Default (30 s vorwärts): 60 s Vorlauf verkraftet
+        // kurze Netz-Aussetzer, ohne dass der Puffer leerläuft. maxBufferHole
+        // erlaubt hls.js, kleine Segment-Löcher zu überspringen, statt beim
+        // ersten Fehl-Frame in einen Retry-Loop zu kippen (mit sichtbarem
+        // Zurückspringen als Symptom).
+        const hls = new Hls({
+          maxBufferLength: 60,
+          maxBufferSize: 30 * 1024 * 1024,
+          maxBufferHole: 0.5,
+        })
+        let mediaRecoveryAttempts = 0
         hls.loadSource(masterURL)
         hls.attachMedia(video)
         hls.on(Hls.Events.ERROR, (_e, data) => {
           if (cancelled) return
-          // Nicht-fatale Stalls: hls.js hebt sich ohne Nudge nicht raus. Buffer-
-          // Stall/Nudge, Nachlade-Bump.
-          if (!data.fatal) {
-            if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
-              const v = videoRef.current
-              if (v && !v.paused && !v.seeking) v.currentTime = v.currentTime + 0.1
-              hls.startLoad()
-            }
-            return
-          }
+          // Nicht-fatale Fehler behandelt hls.js selbst (interner nudgeOffset/
+          // nudgeMaxRetry für BUFFER_STALLED, automatisches Retry auf 5xx).
+          // Manuelle Eingriffe hier haben in der Vergangenheit doppelte Nudges
+          // und Playhead-Sprünge verursacht.
+          if (!data.fatal) return
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               hls.startLoad()
               break
             case Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError()
+              // Offizielle zweistufige Recovery (hls.js API-Doku):
+              // 1. recoverMediaError(); 2. bei Rückfall swapAudioCodec + recoverMediaError.
+              if (mediaRecoveryAttempts === 0) {
+                mediaRecoveryAttempts++
+                hls.recoverMediaError()
+              } else if (mediaRecoveryAttempts === 1) {
+                mediaRecoveryAttempts++
+                hls.swapAudioCodec()
+                hls.recoverMediaError()
+              } else {
+                setError('Das Video konnte nicht abgespielt werden.')
+              }
               break
             default:
               setError('Das Video konnte nicht abgespielt werden.')
