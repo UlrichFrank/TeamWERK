@@ -1511,20 +1511,16 @@ func (h *Handler) UpdateVisibility(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/admin/members/{id}/parents
 func (h *Handler) GetMemberParents(w http.ResponseWriter, r *http.Request) {
-	claims := auth.ClaimsFromCtx(r.Context())
 	id := r.PathValue("id")
 
-	query := `SELECT u.id, u.first_name || ' ' || u.last_name, u.email
+	// Route ist auf admin/vorstand/kassierer gegated — immer alle Eltern zurückgeben.
+	// (Frühere IsParent-Einschränkung hat Vorstand/Kassierer, die selbst Elternteil sind,
+	// versehentlich alle fremden Eltern ausgeblendet.)
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT u.id, u.first_name || ' ' || u.last_name, u.email
 		 FROM users u
 		 JOIN family_links fl ON fl.parent_user_id = u.id
-		 WHERE fl.member_id=?`
-	args := []any{id}
-	if claims.IsParent {
-		query += ` AND fl.parent_user_id=?`
-		args = append(args, claims.UserID)
-	}
-
-	rows, err := h.db.QueryContext(r.Context(), query, args...)
+		 WHERE fl.member_id=?`, id)
 	result := []ProfileParent{}
 	if err == nil {
 		defer rows.Close()

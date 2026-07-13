@@ -498,6 +498,51 @@ func TestFamilyLink_DeleteNotFound(t *testing.T) {
 	}
 }
 
+// ── TC-M-Parents01: admin who is also a parent sees ALL parents of another member ──
+// Regression: die frühere IsParent-Verengung in GetMemberParents hat Vorstand-/
+// Kassierer-/Admin-Personen, die selbst eigene family_links haben, unbeabsichtigt
+// die tatsächlichen Eltern fremder Mitglieder ausgeblendet.
+
+func TestGetMemberParents_AdminWhoIsParentSeesAllParents(t *testing.T) {
+	database := testutil.NewDB(t)
+	adminUserID := testutil.CreateUser(t, database, "admin")
+
+	// Admin ist selbst Elternteil eines anderen Mitglieds → JWT setzt IsParent=true.
+	ownChildMemberID := testutil.CreateMember(t, database, 0)
+	database.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, adminUserID, ownChildMemberID)
+
+	// Fremdes Mitglied mit zwei Eltern.
+	targetMemberID := testutil.CreateMember(t, database, 0)
+	parent1 := testutil.CreateUser(t, database, "standard")
+	parent2 := testutil.CreateUser(t, database, "standard")
+	database.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parent1, targetMemberID)
+	database.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parent2, targetMemberID)
+
+	tok := testutil.TokenWithIsParent(t, adminUserID, "admin", nil, true)
+	srv := newMembersServer(t, database)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/members/%d/parents", targetMemberID), tok)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var body []struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected 2 parents for target member, got %d", len(body))
+	}
+	got := map[int]bool{body[0].ID: true, body[1].ID: true}
+	if !got[parent1] || !got[parent2] {
+		t.Errorf("expected parents [%d,%d], got %+v", parent1, parent2, body)
+	}
+}
+
 // ── TC-M09: create proxy account ─────────────────────────────────────────────
 
 func TestProxyAccount_Create(t *testing.T) {
