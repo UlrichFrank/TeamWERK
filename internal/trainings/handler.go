@@ -974,34 +974,52 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") {
 		teamSQL = "1=1"
 	} else {
+		// Sichtbarkeit ist saison-gebunden: die Kader-Zugehörigkeit muss aus
+		// derselben Saison stammen wie der Termin (ts.season_id). Alt-Saison-
+		// Zugehörigkeiten sonst leaken Termine der neuen Saison ins gleiche
+		// team_id (Bug: Elternteil sah gD-Training, weil das Kind eine Saison
+		// vorher im gD-Kader stand).
 		var conds []string
 		if claims.HasFunction("trainer") {
-			conds = append(conds, `ts.team_id IN (
-				SELECT DISTINCT k.team_id FROM kader k
+			conds = append(conds, `EXISTS (
+				SELECT 1 FROM kader k
 				JOIN kader_trainers kt ON kt.kader_id = k.id
 				JOIN members m ON m.id = kt.member_id
-				WHERE m.user_id = ?)`)
+				WHERE m.user_id = ?
+				  AND k.team_id = ts.team_id
+				  AND k.season_id = ts.season_id)`)
 			teamArgs = append(teamArgs, claims.UserID)
 		}
 		if claims.IsParent {
-			conds = append(conds, `ts.team_id IN (
-				SELECT DISTINCT tm.team_id FROM player_memberships tm
-				JOIN members m ON m.id = tm.member_id
+			conds = append(conds, `(EXISTS (
+				SELECT 1 FROM player_memberships pm
+				JOIN members m ON m.id = pm.member_id
 				JOIN family_links fl ON fl.member_id = m.id
 				WHERE fl.parent_user_id = ?
-				UNION
-				SELECT DISTINCT k.team_id FROM kader_extended_members kem
+				  AND pm.team_id = ts.team_id
+				  AND pm.season_id = ts.season_id)
+				OR EXISTS (
+				SELECT 1 FROM kader_extended_members kem
 				JOIN kader k ON k.id = kem.kader_id
 				JOIN family_links fl ON fl.member_id = kem.member_id
-				WHERE fl.parent_user_id = ?)`)
+				WHERE fl.parent_user_id = ?
+				  AND k.team_id = ts.team_id
+				  AND k.season_id = ts.season_id))`)
 			teamArgs = append(teamArgs, claims.UserID, claims.UserID)
 		}
-		conds = append(conds, `ts.team_id IN (
-				SELECT DISTINCT tm.team_id FROM player_memberships tm JOIN members m ON m.id = tm.member_id WHERE m.user_id = ?
-				UNION
-				SELECT DISTINCT k.team_id FROM kader_extended_members kem
+		conds = append(conds, `(EXISTS (
+				SELECT 1 FROM player_memberships pm
+				JOIN members m ON m.id = pm.member_id
+				WHERE m.user_id = ?
+				  AND pm.team_id = ts.team_id
+				  AND pm.season_id = ts.season_id)
+				OR EXISTS (
+				SELECT 1 FROM kader_extended_members kem
 				JOIN kader k ON k.id = kem.kader_id
-				JOIN members m2 ON m2.id = kem.member_id WHERE m2.user_id = ?)`)
+				JOIN members m2 ON m2.id = kem.member_id
+				WHERE m2.user_id = ?
+				  AND k.team_id = ts.team_id
+				  AND k.season_id = ts.season_id))`)
 		teamArgs = append(teamArgs, claims.UserID, claims.UserID)
 		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
 	}
