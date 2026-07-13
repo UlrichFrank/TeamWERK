@@ -1528,7 +1528,7 @@ export default function KalenderPage() {
             if (infoItem.type === 'game' && infoItem.game) { setInfoItem(null); setEditingGame(infoItem.game) }
             else if (infoItem.type === 'training' && infoItem.training) { setInfoItem(null); setEditingTraining(infoItem.training) }
           } : undefined}
-          onDienste={infoItem.type === 'game' && infoItem.game
+          onDienste={canEdit && infoItem.type === 'game' && infoItem.game
             ? () => { const id = infoItem.game!.id; setInfoItem(null); setDetailGameId(id) }
             : undefined}
           canEditAbsence={infoItem.type === 'absence' && !!infoItem.absence && infoItem.absence.can_edit}
