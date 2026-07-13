@@ -20,7 +20,7 @@ interface GameDetail {
   team_display_long_csv?: string
   season_id: number
   template_id?: number | null
-  can_edit?: boolean
+  can?: { edit: boolean; delete: boolean; manage_lineup: boolean }
 }
 
 interface SlotDetail {
@@ -51,7 +51,7 @@ const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm t
 
 export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDeleted }: Props) {
   const [game, setGame] = useState<GameDetail | null>(null)
-  const canEdit = game?.can_edit === true
+  const canEdit = game?.can?.edit === true
   const [slots, setSlots] = useState<SlotDetail[]>([])
   const [boardSlots, setBoardSlots] = useState<BoardSlot[]>([])
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
@@ -111,7 +111,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
   useEffect(() => {
     (async () => {
       const g = await loadGame()
-      const mayEdit = g?.can_edit === true
+      const mayEdit = g?.can?.edit === true
       await Promise.all([
         loadBoard(mayEdit),
         mayEdit ? api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])) : Promise.resolve(),
