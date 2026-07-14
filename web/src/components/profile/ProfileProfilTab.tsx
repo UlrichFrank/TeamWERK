@@ -231,8 +231,9 @@ export default function ProfileProfilTab({
         : '/upload/user-photo'
       const r = await api.post(endpoint, fd)
       setPhotoURL(r.data.photo_url ?? '')
-    } catch {
-      setError('Foto-Upload fehlgeschlagen')
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      setError(status === 409 ? 'Foto benötigt einen Account' : 'Foto-Upload fehlgeschlagen')
     } finally {
       setPhotoUploading(false)
     }
@@ -246,8 +247,9 @@ export default function ProfileProfilTab({
         : '/upload/user-photo'
       await api.delete(endpoint)
       setPhotoURL('')
-    } catch {
-      setError('Foto konnte nicht gelöscht werden')
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      setError(status === 409 ? 'Foto benötigt einen Account' : 'Foto konnte nicht gelöscht werden')
     }
   }
 

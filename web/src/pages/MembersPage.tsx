@@ -20,7 +20,7 @@ interface Member {
   has_pending_bank_draft?: boolean
   member_number_conflict?: string
   user_id?: number
-  user_photo_url?: string
+  photo_url?: string
   can?: { edit: boolean; delete: boolean }
 }
 
@@ -512,7 +512,7 @@ export default function MembersPage() {
             renderRow={m => (
               <tr key={m.id} className="hover:bg-brand-table-select transition-colors cursor-pointer" onClick={() => navigate(`/mitglieder/${m.id}`)}>
                 <td className="px-4 py-3 font-medium text-brand-text">
-                  <PersonChip userId={m.user_id} name={`${m.last_name}, ${m.first_name}`} photoUrl={m.user_photo_url} />
+                  <PersonChip userId={m.user_id} name={`${m.last_name}, ${m.first_name}`} photoUrl={m.photo_url} />
                   {m.can?.edit && (
                     <>
                       {m.has_pending_profil_draft && <User size={14} className="inline ml-2 text-brand-text-muted" aria-label="Persönliche Daten ausstehend" />}

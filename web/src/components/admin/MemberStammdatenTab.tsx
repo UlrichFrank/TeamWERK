@@ -26,6 +26,7 @@ interface Member {
   city?: string
   join_date?: string
   exit_date?: string
+  user_id?: number
   photo_url?: string
   photo_visible?: boolean
 }
@@ -70,6 +71,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [photoDropdown, setPhotoDropdown] = useState(false)
   const [photoURL, setPhotoURL] = useState(form.photo_url || '')
+  const [photoError, setPhotoError] = useState('')
   const [stammvereine, setStammvereine] = useState<{ id: number; name: string; aktiv: boolean }[]>([])
 
   useEffect(() => {
@@ -129,14 +131,20 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
     if (!memberId) return
     setCropFile(null)
     setPhotoUploading(true)
+    setPhotoError('')
     try {
       const fd = new FormData()
       fd.append('file', blob, 'photo.jpg')
       const r = await api.post(`/upload/member-photo/${memberId}`, fd)
       setPhotoURL(r.data.photo_url || '')
       onFormChange({ photo_url: r.data.photo_url || '' })
-    } catch {
-      // error handled by parent
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 409) {
+        setPhotoError('Mitglied hat keinen Account — Foto ist erst nach der Kontoanlage möglich.')
+      } else {
+        setPhotoError('Foto-Upload fehlgeschlagen.')
+      }
     } finally {
       setPhotoUploading(false)
     }
@@ -145,12 +153,18 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const handlePhotoDelete = async () => {
     if (!memberId) return
     setPhotoDropdown(false)
+    setPhotoError('')
     try {
       await api.delete(`/upload/member-photo/${memberId}`)
       setPhotoURL('')
       onFormChange({ photo_url: '' })
-    } catch {
-      // error handled by parent
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 409) {
+        setPhotoError('Mitglied hat keinen Account — kein Foto zum Löschen.')
+      } else {
+        setPhotoError('Foto konnte nicht gelöscht werden.')
+      }
     }
   }
 
@@ -465,7 +479,12 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         <div className="flex items-center gap-4">
           {photoURL && <img src={photoURL} alt="Passfoto" className="w-20 h-20 rounded-full object-cover" />}
           {!photoURL && <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Kein Bild</div>}
-          {!isNew && (
+          {!isNew && !form.user_id && (
+            <div className="text-sm text-brand-text-muted">
+              Foto ist erst verfügbar, sobald ein Nutzer-Konto verknüpft ist.
+            </div>
+          )}
+          {!isNew && form.user_id && (
             <>
               <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
               <div ref={photoDropdownRef} className="relative inline-flex">
@@ -503,15 +522,20 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
             </>
           )}
         </div>
-        <label className="flex items-center gap-2 cursor-pointer mt-4">
-          <input
-            type="checkbox"
-            checked={form.photo_visible || false}
-            onChange={e => onFormChange({ photo_visible: e.target.checked })}
-            className="w-4 h-4 accent-brand-yellow"
-          />
-          <span className="text-sm text-gray-700">Sichtbar für Mitglieder</span>
-        </label>
+        {photoError && (
+          <div className="mt-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{photoError}</div>
+        )}
+        {form.user_id && (
+          <label className="flex items-center gap-2 cursor-pointer mt-4">
+            <input
+              type="checkbox"
+              checked={form.photo_visible || false}
+              onChange={e => onFormChange({ photo_visible: e.target.checked })}
+              className="w-4 h-4 accent-brand-yellow"
+            />
+            <span className="text-sm text-gray-700">Sichtbar für Mitglieder</span>
+          </label>
+        )}
       </div>
 
       {/* Save Button */}
