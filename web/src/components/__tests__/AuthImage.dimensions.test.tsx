@@ -23,10 +23,10 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
     // Wenn wir aus Server-Dims rendern, darf KEIN Image()-Objekt erzeugt
     // werden (das war der Client-seitige Preload-Weg, der nur als Fallback
     // gebraucht wird). Wir überwachen den globalen Image-Constructor.
-    const originalImage = global.Image
+    const originalImage = globalThis.Image
     const imageSpy = vi.fn(function (this: unknown) {})
     imageSpy.prototype = originalImage.prototype
-    global.Image = imageSpy as unknown as typeof Image
+    globalThis.Image = imageSpy as unknown as typeof Image
 
     const { container } = render(
       <AuthImage
@@ -46,13 +46,13 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
     })
 
     expect(imageSpy).not.toHaveBeenCalled()
-    global.Image = originalImage
+    globalThis.Image = originalImage
   })
 
   test('ohne Server-Dims fällt auf Image()-Probe zurück und setzt aspect-ratio nachträglich', async () => {
     // Wir stellen sicher, dass ein Image() erzeugt und sein onload synchron
     // getriggert wird — dann muss AuthImage genau diese Dims verwenden.
-    const originalImage = global.Image
+    const originalImage = globalThis.Image
     class FakeImage {
       onload: (() => void) | null = null
       onerror: (() => void) | null = null
@@ -62,7 +62,7 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
         setTimeout(() => this.onload?.(), 0)
       }
     }
-    global.Image = FakeImage as unknown as typeof Image
+    globalThis.Image = FakeImage as unknown as typeof Image
 
     const { container } = render(
       <AuthImage url="/media/99" alt="test" className="rounded" />,
@@ -74,6 +74,6 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
       expect(img?.getAttribute('style')).toMatch(/aspect-ratio:\s*640\s*\/\s*480/)
     })
 
-    global.Image = originalImage
+    globalThis.Image = originalImage
   })
 })
