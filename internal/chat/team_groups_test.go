@@ -227,6 +227,9 @@ func TestListTeamGroups_ShortNameKeepsNumberWhenSeasonHasMultiple(t *testing.T) 
 		t.Fatalf("trainer should see own team groups, got none")
 	}
 	for _, g := range groups {
+		if g.Kind == "alle_trainer" {
+			continue // synthetische teamübergreifende Kachel (teamId 0)
+		}
 		if g.TeamID != f.team1 {
 			t.Fatalf("trainer should only see team1, got team %d", g.TeamID)
 		}

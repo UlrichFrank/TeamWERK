@@ -107,7 +107,7 @@ interface ChatUser {
 interface TeamGroup {
   teamId: number;
   displayShort: string;
-  kind: "trainer" | "spieler" | "eltern";
+  kind: "trainer" | "spieler" | "eltern" | "alle_trainer";
   count: number;
 }
 
@@ -115,6 +115,7 @@ const TEAM_GROUP_KIND_LABEL: Record<TeamGroup["kind"], string> = {
   trainer: "Trainer",
   spieler: "Spieler",
   eltern: "Eltern",
+  alle_trainer: "Alle Trainer",
 };
 
 type Tab = "chats" | "broadcasts";
@@ -1992,6 +1993,10 @@ function NewConversationModal({
               {visibleTeamGroups.map((tg) => {
                 const key = tagKey(tg);
                 const short = tg.displayShort || `Team ${tg.teamId}`;
+                const label =
+                  tg.kind === "alle_trainer"
+                    ? TEAM_GROUP_KIND_LABEL[tg.kind]
+                    : `${TEAM_GROUP_KIND_LABEL[tg.kind]} ${short}`;
                 return (
                   <button
                     key={key}
@@ -2001,7 +2006,7 @@ function NewConversationModal({
                   >
                     <span className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-brand-text-muted" />
-                      {TEAM_GROUP_KIND_LABEL[tg.kind]} {short}
+                      {label}
                     </span>
                     <span className="text-xs text-brand-text-muted">
                       {tg.count}
