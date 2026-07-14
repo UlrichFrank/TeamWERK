@@ -232,6 +232,16 @@ func serve() {
 		}
 	}()
 
+	// Einmaliger Cleanup verwaister Foto-Dateien nach Migration 029
+	// (unified-user-photo). Löscht Dateien im uploadDir/member-photos/, die
+	// nach der Konsolidierung auf users.photo_path von keinem User mehr
+	// referenziert werden. Idempotent — ein späterer Lauf ist ein No-Op.
+	go func() {
+		if err := upload.RunPhotoCleanupBackfill(ctx, database, cfg.UploadDir); err != nil && ctx.Err() == nil {
+			slog.Error("photo cleanup backfill failed", "error", err)
+		}
+	}()
+
 	handlers := &app.Handlers{
 		Auth:                auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
 		Config:              appconfig.NewHandler(database, hubInstance),
