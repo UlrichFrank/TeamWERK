@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import axios from 'axios'
 import { AlertTriangle, Ban, CheckSquare, Percent, X } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useVault } from '../../contexts/VaultContext'
@@ -248,8 +249,17 @@ export default function BeitragslaufPage() {
       if (skipped.length > 0) {
         setToast(`${skipped.length} Mitglied(er) mit ungültiger IBAN übersprungen: ${skipped.join(', ')}`)
       }
-    } catch {
-      setToast('Export fehlgeschlagen — Tresor entsperrt? Vereins-SEPA-Stammdaten gepflegt?')
+    } catch (err) {
+      // Server-Fehler (http.Error) durchreichen, damit die eigentliche Ursache sichtbar
+      // ist — z. B. „faelligkeit liegt in der Vergangenheit". Nur wenn keine Server-Meldung
+      // da ist, generisch fallbacken.
+      let msg = 'Export fehlgeschlagen — Tresor entsperrt? Vereins-SEPA-Stammdaten gepflegt?'
+      if (axios.isAxiosError(err) && typeof err.response?.data === 'string' && err.response.data.trim()) {
+        msg = err.response.data.trim()
+      } else if (err instanceof Error && err.message) {
+        msg = err.message
+      }
+      setToast(msg)
     }
   }
 

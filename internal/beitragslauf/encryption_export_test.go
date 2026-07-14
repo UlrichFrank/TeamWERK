@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
@@ -84,6 +85,37 @@ func TestExportData_FaelligkeitDefault(t *testing.T) {
 	res.Body.Close()
 	if resp.Faelligkeit != "2027-07-01" {
 		t.Errorf("Default-Fälligkeit: got %q, want 2027-07-01", resp.Faelligkeit)
+	}
+}
+
+// Liegt der Saison-Stichtag (01.07.) bereits in der Vergangenheit, muss die
+// Preview eine Default-Fälligkeit >= heute liefern — sonst würde der Client den
+// per Default zurückgesendeten Wert an /export-data schicken und ein 400
+// „faelligkeit liegt in der Vergangenheit" auslösen. Regression zu einem
+// gemeldeten Fall, in dem der Beitragslauf im laufenden Betrieb abbrach.
+func TestPreview_FaelligkeitNichtInVergangenheit(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	// Saison, deren 01.07.-Stichtag garantiert in der Vergangenheit liegt.
+	res, err := db.Exec(`INSERT INTO seasons (name, start_date, end_date, is_active) VALUES ('2020/21','2020-08-01','2021-06-30',0)`)
+	if err != nil {
+		t.Fatalf("insertSeason past: %v", err)
+	}
+	sid64, _ := res.LastInsertId()
+	sid := int(sid64)
+
+	resp := testutil.Get(t, srv, "/api/fee-run/preview?saison_id="+itoa(sid), tok(t))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("preview status %d", resp.StatusCode)
+	}
+	var pv struct {
+		Faelligkeit string `json:"faelligkeit"`
+	}
+	json.NewDecoder(resp.Body).Decode(&pv)
+	resp.Body.Close()
+
+	today := time.Now().UTC().Format("2006-01-02")
+	if pv.Faelligkeit < today {
+		t.Errorf("Preview-Fälligkeit %q liegt vor heute (%s) — export-data würde 400 werfen", pv.Faelligkeit, today)
 	}
 }
 

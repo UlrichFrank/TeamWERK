@@ -79,7 +79,7 @@ func (h *Handler) buildPreview(ctx context.Context, saisonID int) (*previewResul
 	if err != nil {
 		return nil, err
 	}
-	res := &previewResult{SaisonID: saisonID, SaisonLabel: season.Label, SaisonKurz: season.Label, Faelligkeit: season.Stichtag}
+	res := &previewResult{SaisonID: saisonID, SaisonLabel: season.Label, SaisonKurz: season.Label, Faelligkeit: effectiveFaelligkeit(season.Stichtag, time.Now())}
 	for _, m := range members {
 		// Früher (oder ohne Austrittsdatum) ausgetretene Mitglieder gar nicht
 		// anzeigen — wie honorar/anwaerter. Nur unterjährige Austritte
@@ -158,6 +158,19 @@ func computeItem(m MemberRow, saetze map[string][]Satz, season SeasonInfo) Previ
 
 	it.Included = len(it.Exclusions) == 0
 	return it
+}
+
+// effectiveFaelligkeit liefert den Default-SEPA-Einzugstermin (ReqdColltnDt):
+// 01.07. der Saison, aber nicht in der Vergangenheit — SEPA-XSD lehnt
+// Vergangenheits-Daten ab, und die Server-Validierung in ExportData ebenso.
+// Der Satz-Stichtag bleibt unverändert (siehe SeasonInfo.Stichtag), damit ein
+// verschobenes Fälligkeitsdatum nicht in einen anderen Beitragssatz rutscht.
+func effectiveFaelligkeit(stichtag, now time.Time) time.Time {
+	today := now.UTC().Truncate(24 * time.Hour)
+	if stichtag.Before(today) {
+		return today
+	}
+	return stichtag
 }
 
 // loadSeason liefert das Abrechnungsjahr: Label, Saisonfenster (start/end),
