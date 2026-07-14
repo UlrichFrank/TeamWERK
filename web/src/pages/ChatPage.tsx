@@ -216,6 +216,17 @@ export default function ChatPage() {
   // (nach eigenem Senden / Öffnen einer Konversation), unabhängig davon, ob
   // der Nutzer gerade hochgescrollt ist.
   const forceScrollToEndRef = useRef(false);
+  // Index (in messages[]) der ersten ungelesenen Nachricht — beim Öffnen
+  // einmal fixiert, danach unverändert, damit später eintreffende SSE-
+  // Nachrichten den UnreadDivider nicht unter dem Nutzer verschieben.
+  // -1 = „alles ungelesen, erster ungelesener liegt vor der geladenen
+  // Seite" (Chip statt Divider), null = kein Divider (unreadCount war 0).
+  const unreadDividerIndexRef = useRef<number | null>(null);
+  // Callback-Ref auf den DOM-Knoten des UnreadDividers für scrollIntoView.
+  const unreadDividerElRef = useRef<HTMLDivElement | null>(null);
+  // Analog zu forceScrollToEndRef: signalisiert dem messages-Effekt, dass
+  // beim nächsten Update auf den UnreadDivider gescrollt werden soll.
+  const scrollToUnreadRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const draftsRef = useRef<Map<number, string>>(new Map());
@@ -271,10 +282,27 @@ export default function ChatPage() {
     } catch {}
   }, []);
 
-  const loadMessages = async (convId: number) => {
+  // loadMessages nimmt optional den unreadCount der geöffneten Konversation
+  // entgegen — daraus fixieren wir für openConversation den
+  // UnreadDivider-Index (frisch aus msgs.length, nicht aus dem alten
+  // messages-State), der später stabil bleibt (statischer Divider).
+  //
+  //   unreadCount === 0           → kein Divider (null)
+  //   unreadCount > msgs.length   → alles geladene ungelesen → -1 (Chip)
+  //   sonst                       → msgs.length - unreadCount
+  const loadMessages = async (convId: number, unreadCount?: number) => {
     try {
       const r = await api.get(`/chat/conversations/${convId}/messages`);
       const msgs: Message[] = r.data ?? [];
+      if (unreadCount !== undefined) {
+        if (unreadCount <= 0) {
+          unreadDividerIndexRef.current = null;
+        } else if (unreadCount > msgs.length) {
+          unreadDividerIndexRef.current = -1;
+        } else {
+          unreadDividerIndexRef.current = msgs.length - unreadCount;
+        }
+      }
       setMessages(msgs);
       setHasOlder(msgs.length === MESSAGE_PAGE_SIZE);
       setEmojiPickerMsgId(null);
@@ -358,10 +386,19 @@ export default function ChatPage() {
     setReplyTo(null);
     setEditingMessage(null);
     setMsgInput(draftsRef.current.get(conv.id) ?? "");
-    // Beim Öffnen einer Konversation den Sticky-Guard einmalig überstimmen,
-    // damit der loadMessages-State-Update in jedem Fall ans Ende scrollt.
-    forceScrollToEndRef.current = true;
-    await loadMessages(conv.id);
+    // Öffnungs-Positionierung: bei ungelesenen Nachrichten am
+    // UnreadDivider landen, sonst am Ende. Beides überstimmt den
+    // Sticky-Guard, damit der loadMessages-State-Update zur richtigen
+    // Position scrollt.
+    if (conv.unreadCount > 0) {
+      scrollToUnreadRef.current = true;
+      forceScrollToEndRef.current = false;
+    } else {
+      forceScrollToEndRef.current = true;
+      scrollToUnreadRef.current = false;
+      unreadDividerIndexRef.current = null;
+    }
+    await loadMessages(conv.id, conv.unreadCount);
   };
 
   useEffect(() => {
@@ -471,6 +508,23 @@ export default function ChatPage() {
     // Beim Voranstellen älterer Nachrichten (?before=) nicht ans Ende springen
     if (suppressAutoScrollRef.current) {
       suppressAutoScrollRef.current = false;
+      return;
+    }
+    // Divider-Ziel (chat-open-at-unread): beim Öffnen einer Konversation
+    // mit unreadCount > 0 landen wir am UnreadDivider statt am Ende.
+    // Sonderfall unreadDividerIndexRef=-1 (alles ungelesen, erster
+    // ungelesener liegt vor der Seite): oben im Container landen, wo der
+    // „N weitere ungelesene älter"-Chip sitzt.
+    if (scrollToUnreadRef.current) {
+      scrollToUnreadRef.current = false;
+      if (unreadDividerIndexRef.current === -1) {
+        const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
+          "[data-windowed-scroll]",
+        );
+        if (box) box.scrollTop = 0;
+      } else if (unreadDividerElRef.current) {
+        unreadDividerElRef.current.scrollIntoView({ block: "start" });
+      }
       return;
     }
     // Sticky-to-Bottom: nur automatisch ans Ende scrollen, wenn der Nutzer
@@ -981,6 +1035,19 @@ export default function ChatPage() {
                     </button>
                   </div>
                 )}
+                {/* chat-open-at-unread: wenn ALLE geladenen Nachrichten
+                    ungelesen sind und der erste ungelesene älter als die
+                    Seite liegt, informieren wir statt über einen Divider
+                    (der wäre am obersten Eintrag redundant zum Chip). */}
+                {activeConv.unreadCount > messages.length && (
+                  <div
+                    role="status"
+                    className="mx-4 mt-2 p-2 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text text-center shrink-0"
+                  >
+                    {activeConv.unreadCount - messages.length} weitere
+                    ungelesene Nachrichten älter — „Ältere laden" klicken
+                  </div>
+                )}
                 {/* Chat-Bubbles haben extrem variable Höhen (~30 px kurzer Text
                     bis 300 px+ mit Bild/Reply/Reaktionen). Windowing mit fixer
                     estimatedRowHeight verschiebt beim Scrollen scrollHeight
@@ -1008,10 +1075,37 @@ export default function ChatPage() {
                         label={daySeparatorLabel(new Date(msg.sentAt), now)}
                       />
                     ) : null;
+                    // chat-open-at-unread: UnreadDivider unmittelbar VOR
+                    // der ersten ungelesenen Nachricht. Index ist beim
+                    // Öffnen einmal fixiert (unreadDividerIndexRef), damit
+                    // spätere SSE-Nachrichten die Grenze nicht verschieben.
+                    // -1 = Chip-Fall (kein Divider, siehe oben); null =
+                    // keine Ungelesenen.
+                    const dividerIdx = unreadDividerIndexRef.current;
+                    const unreadCountAtOpen = activeConv.unreadCount;
+                    const unread =
+                      dividerIdx !== null &&
+                      dividerIdx >= 0 &&
+                      index === dividerIdx ? (
+                        <div
+                          key={`unread-${msg.id}`}
+                          ref={(el) => {
+                            unreadDividerElRef.current = el;
+                          }}
+                          className="flex items-center gap-2 my-1"
+                        >
+                          <div className="flex-1 h-px bg-brand-border-subtle" />
+                          <span className="text-xs text-brand-text-muted">
+                            {unreadCountAtOpen} ungelesene Nachrichten
+                          </span>
+                          <div className="flex-1 h-px bg-brand-border-subtle" />
+                        </div>
+                      ) : null;
                     if (msg.isSystem) {
                       return (
                         <div key={msg.id} className="contents">
                           {sep}
+                          {unread}
                           <div className="flex justify-center my-1">
                             <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
                               {msg.senderName} {msg.preview}
@@ -1024,6 +1118,7 @@ export default function ChatPage() {
                     return (
                       <div key={msg.id} className="contents">
                         {sep}
+                        {unread}
                         <MessageBubble
                           msg={msg}
                           body={bodyOf(msg)}
