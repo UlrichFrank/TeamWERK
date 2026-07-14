@@ -18,19 +18,28 @@ NEW_REMOTE_DIR_RESOLVED := $(or $(REMOTE_NEW_DIR),/usr/local/bin)
 SOURCE_DOMAIN := $(patsubst https://%,%,$(BASE_URL))
 NEW_DOMAIN    := $(patsubst https://%,%,$(BASE_URL_NEW))
 DB_PATH        := /var/lib/teamwerk/teamwerk.db
-UPLOAD_DIR_REMOTE        := /var/lib/teamwerk/uploads
-FILES_DIR_REMOTE         := /var/lib/teamwerk/files
-BEITRAGSLAUF_DIR_REMOTE  := /var/lib/teamwerk/beitragslauf-protokolle
-UPLOAD_DIR_LOCAL         := $(REPO_ROOT)/storage/uploads
-FILES_DIR_LOCAL          := $(REPO_ROOT)/storage/files
-BEITRAGSLAUF_DIR_LOCAL   := $(REPO_ROOT)/storage/beitragslauf-protokolle
+# Storage-Verzeichnisse auf dem VPS (Prod-Pfade aus deploy/setup-vps.sh).
+# UPLOAD_DIR enthält Profilfotos + SEPA-Mandat-PDFs (Tresor-Blobs) und gehört
+# semantisch zum `backup`-Target neben der DB. Die anderen sind File-Bulk.
+UPLOAD_DIR_REMOTE                 := /var/lib/teamwerk/uploads
+FILES_DIR_REMOTE                  := /var/lib/teamwerk/files
+MEDIA_DIR_REMOTE                  := /var/lib/teamwerk/media
+BEITRAGSLAUF_DIR_REMOTE           := /var/lib/teamwerk/beitragslauf-protokolle
+MATCH_REPORT_IMAGE_DIR_REMOTE     := /var/lib/teamwerk/match-report-images
+VIDEO_STORAGE_DIR_REMOTE          := /storage/videos
+UPLOAD_DIR_LOCAL                  := $(REPO_ROOT)/storage/uploads
+FILES_DIR_LOCAL                   := $(REPO_ROOT)/storage/files
+MEDIA_DIR_LOCAL                   := $(REPO_ROOT)/storage/media
+BEITRAGSLAUF_DIR_LOCAL            := $(REPO_ROOT)/storage/beitragslauf-protokolle
+MATCH_REPORT_IMAGE_DIR_LOCAL      := $(REPO_ROOT)/storage/match-report-images
+VIDEO_STORAGE_DIR_LOCAL           := $(REPO_ROOT)/storage/videos
 EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files restore-local restore-local-files pull-db pull-files test test-race lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -121,7 +130,7 @@ create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
 push-test-remote: ## Test-Push an User senden (USER=<id> TITLE=... BODY=... URL=...)
 	ssh $(REMOTE) "/usr/local/bin/teamwerk push-test --env=/etc/teamwerk/env --db=$(DB_PATH) --user=$(USER) --title='$(TITLE)' --body='$(BODY)' --url='$(or $(URL),/)'"
 
-backup: ## Prod-DB + Bilder (uploads) auf VPS sichern (./backup/<timestamp>/)
+backup: ## Prod-DB + Tresor-Blobs (uploads: Profilfotos + SEPA-Mandat-PDFs) auf VPS sichern (./backup/<timestamp>/)
 	@echo "Erstelle DB-Backup auf VPS → $(BACKUP_DIR)/"
 	@mkdir -p $(BACKUP_DIR)/uploads
 	ssh $(REMOTE) "sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-backup.db'"
@@ -130,16 +139,41 @@ backup: ## Prod-DB + Bilder (uploads) auf VPS sichern (./backup/<timestamp>/)
 	rsync -az $(REMOTE):$(UPLOAD_DIR_REMOTE)/ $(BACKUP_DIR)/uploads/
 	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
-backup-files: ## Dokumente + Beitragslauf-Protokolle vom VPS sichern (./backup/<timestamp>/)
-	@echo "Synchronisiere Dokumente + Protokolle → $(BACKUP_DIR)/"
-	@mkdir -p $(BACKUP_DIR)/files $(BACKUP_DIR)/beitragslauf-protokolle
+backup-files: ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragslauf, Chat-Media, Match-Report-Bilder) → ./backup/<timestamp>/
+	@echo "Synchronisiere Datei-Blobs → $(BACKUP_DIR)/"
+	@mkdir -p $(BACKUP_DIR)/files $(BACKUP_DIR)/beitragslauf-protokolle $(BACKUP_DIR)/media $(BACKUP_DIR)/match-report-images
+	@# files-Ordner (Dokumente-UI) — auf Prod immer vorhanden.
 	rsync -az $(REMOTE):$(FILES_DIR_REMOTE)/ $(BACKUP_DIR)/files/
+	@# Optionale Ordner mit test -d gaten, damit noch nicht angelegte
+	@# Verzeichnisse den Backup-Lauf nicht abbrechen (Muster wie
+	@# BEITRAGSLAUF_DIR).
 	@if ssh $(REMOTE) "test -d $(BEITRAGSLAUF_DIR_REMOTE)"; then \
 		rsync -az $(REMOTE):$(BEITRAGSLAUF_DIR_REMOTE)/ $(BACKUP_DIR)/beitragslauf-protokolle/; \
 	else \
 		echo "  ($(BEITRAGSLAUF_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
 	fi
+	@if ssh $(REMOTE) "test -d $(MEDIA_DIR_REMOTE)"; then \
+		rsync -az $(REMOTE):$(MEDIA_DIR_REMOTE)/ $(BACKUP_DIR)/media/; \
+	else \
+		echo "  ($(MEDIA_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
+	fi
+	@if ssh $(REMOTE) "test -d $(MATCH_REPORT_IMAGE_DIR_REMOTE)"; then \
+		rsync -az $(REMOTE):$(MATCH_REPORT_IMAGE_DIR_REMOTE)/ $(BACKUP_DIR)/match-report-images/; \
+	else \
+		echo "  ($(MATCH_REPORT_IMAGE_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
+	fi
 	@echo "Backup gespeichert: $(BACKUP_DIR)/"
+
+backup-videos: ## Video-HLS-Transkodes vom VPS sichern (GB-Bereich; bewusst separat) → ./backup/<timestamp>/
+	@echo "Prüfe Größe von $(VIDEO_STORAGE_DIR_REMOTE) auf $(REMOTE) …"
+	@ssh $(REMOTE) "test -d $(VIDEO_STORAGE_DIR_REMOTE) && sudo du -sh $(VIDEO_STORAGE_DIR_REMOTE) 2>/dev/null || echo '  ($(VIDEO_STORAGE_DIR_REMOTE) existiert nicht)'"
+	@mkdir -p $(BACKUP_DIR)/videos
+	@if ssh $(REMOTE) "sudo test -d $(VIDEO_STORAGE_DIR_REMOTE)"; then \
+		rsync -az --rsync-path='sudo rsync' $(REMOTE):$(VIDEO_STORAGE_DIR_REMOTE)/ $(BACKUP_DIR)/videos/; \
+		echo "Videos gesichert: $(BACKUP_DIR)/videos/"; \
+	else \
+		echo "  Kein Video-Verzeichnis auf VPS — übersprungen."; \
+	fi
 
 restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
 	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
@@ -161,12 +195,12 @@ restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKU
 		exit 1; \
 	fi
 
-restore-local-files: ## Letztes Backup (Dokumente + Protokolle) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
+restore-local-files: ## Letztes Backup (Dokumente + Protokolle + Chat-Media + Match-Report-Bilder) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
 	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
-	if [ -z "$$RESTORE" ] || { [ ! -d "$$RESTORE/files" ] && [ ! -d "$$RESTORE/beitragslauf-protokolle" ]; }; then \
+	if [ -z "$$RESTORE" ] || { [ ! -d "$$RESTORE/files" ] && [ ! -d "$$RESTORE/beitragslauf-protokolle" ] && [ ! -d "$$RESTORE/media" ] && [ ! -d "$$RESTORE/match-report-images" ]; }; then \
 		echo "Fehler: kein Backup gefunden. Zuerst 'make backup-files' ausführen."; exit 1; \
 	fi; \
-	echo "WARNUNG: $(FILES_DIR_LOCAL) und $(BEITRAGSLAUF_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
+	echo "WARNUNG: $(FILES_DIR_LOCAL), $(BEITRAGSLAUF_DIR_LOCAL), $(MEDIA_DIR_LOCAL) und $(MATCH_REPORT_IMAGE_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
 	printf "Fortfahren? [y/N] "; \
 	read ans; \
 	if [ "$$ans" = "y" ]; then \
@@ -176,15 +210,39 @@ restore-local-files: ## Letztes Backup (Dokumente + Protokolle) lokal einspielen
 		if [ -d "$$RESTORE/beitragslauf-protokolle" ]; then \
 			mkdir -p $(BEITRAGSLAUF_DIR_LOCAL) && rsync -a --delete "$$RESTORE/beitragslauf-protokolle/" $(BEITRAGSLAUF_DIR_LOCAL)/; \
 		fi; \
+		if [ -d "$$RESTORE/media" ]; then \
+			mkdir -p $(MEDIA_DIR_LOCAL) && rsync -a --delete "$$RESTORE/media/" $(MEDIA_DIR_LOCAL)/; \
+		fi; \
+		if [ -d "$$RESTORE/match-report-images" ]; then \
+			mkdir -p $(MATCH_REPORT_IMAGE_DIR_LOCAL) && rsync -a --delete "$$RESTORE/match-report-images/" $(MATCH_REPORT_IMAGE_DIR_LOCAL)/; \
+		fi; \
 		echo "Restore abgeschlossen aus $$RESTORE."; \
 	else \
 		echo "Abgebrochen."; \
 		exit 1; \
 	fi
 
-pull-db: backup restore-local ## Prod-DB in einem Schritt sichern und lokal einspielen
+restore-local-videos: ## Letztes Backup (Videos) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
+	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
+	if [ -z "$$RESTORE" ] || [ ! -d "$$RESTORE/videos" ]; then \
+		echo "Fehler: kein Video-Backup gefunden. Zuerst 'make backup-videos' ausführen."; exit 1; \
+	fi; \
+	echo "WARNUNG: $(VIDEO_STORAGE_DIR_LOCAL) wird mit Backup aus $$RESTORE überschrieben (potentiell mehrere GB)."; \
+	printf "Fortfahren? [y/N] "; \
+	read ans; \
+	if [ "$$ans" = "y" ]; then \
+		mkdir -p $(VIDEO_STORAGE_DIR_LOCAL) && rsync -a --delete "$$RESTORE/videos/" $(VIDEO_STORAGE_DIR_LOCAL)/; \
+		echo "Restore abgeschlossen aus $$RESTORE."; \
+	else \
+		echo "Abgebrochen."; \
+		exit 1; \
+	fi
 
-pull-files: backup-files restore-local-files ## Dokumente + Protokolle in einem Schritt sichern und lokal einspielen
+pull-db: backup restore-local ## Prod-DB + Tresor-Blobs (uploads) in einem Schritt sichern und lokal einspielen
+
+pull-files: backup-files restore-local-files ## Alle kleinen Datei-Blobs in einem Schritt sichern und lokal einspielen
+
+pull-videos: backup-videos restore-local-videos ## Videos in einem Schritt sichern und lokal einspielen (GB-Bereich, bewusst separates Target)
 
 test: ## Backend + Frontend (vitest) Tests ausführen — schnell, ohne Race-Detector
 	$(GO) test ./...
@@ -274,7 +332,7 @@ server-bootstrap: _check-remote _check-new-remote _check-base-url-new build ## S
 		| ssh $(NEW_REMOTE_RESOLVED) "sudo mkdir -p $(dir $(DB_PATH)) && sudo tee $(DB_PATH) > /dev/null && sudo rm -f $(DB_PATH)-wal $(DB_PATH)-shm"
 	ssh $(REMOTE) "sudo rm -f /tmp/teamwerk-migration.db"
 	@echo ">>> F) Storage-Ordner synchronisieren (Direkt-Rsync zwischen Remotes)"
-	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) /storage/videos; do \
+	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(MEDIA_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) $(MATCH_REPORT_IMAGE_DIR_REMOTE) $(VIDEO_STORAGE_DIR_REMOTE); do \
 		if ssh $(REMOTE) "sudo test -d $$d"; then \
 			echo "    rsync $$d"; \
 			ssh $(REMOTE) "sudo rsync -az -e 'ssh -o StrictHostKeyChecking=accept-new' $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
@@ -324,7 +382,7 @@ server-sync-data: _check-remote _check-new-remote _check-base-url-new build ## S
 		| ssh $(NEW_REMOTE_RESOLVED) "sudo tee $(DB_PATH) > /dev/null && sudo rm -f $(DB_PATH)-wal $(DB_PATH)-shm"
 	ssh $(REMOTE) "sudo rm -f /tmp/teamwerk-migration.db"
 	@echo ">>> C) Storage-Ordner synchronisieren"
-	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) /storage/videos; do \
+	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(MEDIA_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) $(MATCH_REPORT_IMAGE_DIR_REMOTE) $(VIDEO_STORAGE_DIR_REMOTE); do \
 		if ssh $(REMOTE) "sudo test -d $$d"; then \
 			echo "    rsync $$d"; \
 			ssh $(REMOTE) "sudo rsync -az --delete -e 'ssh -o StrictHostKeyChecking=accept-new' $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
