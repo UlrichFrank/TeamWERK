@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -24,9 +25,78 @@ type TeamGroupMember struct {
 }
 
 var teamGroupKinds = map[string]bool{
-	"trainer": true,
-	"spieler": true,
-	"eltern":  true,
+	"trainer":      true,
+	"spieler":      true,
+	"eltern":       true,
+	"alle_trainer": true,
+}
+
+// allTrainersMemberQuery liefert DISTINCT (user_id, name) für die Mitgliedermenge
+// der "Alle Trainer"-Gruppe (= T): alle Trainer aller Kader der aktiven Saison.
+// Identisch zu teamGroupMemberQuery("trainer"), nur ohne den team_id-Filter.
+// Nimmt keine Platzhalter.
+func allTrainersMemberQuery() string {
+	return `
+		SELECT DISTINCT m.user_id AS user_id,
+		       u.first_name || ' ' || u.last_name AS name
+		FROM kader_trainers kt
+		JOIN kader k ON k.id = kt.kader_id
+		JOIN seasons s ON s.id = k.season_id
+		JOIN members m ON m.id = kt.member_id
+		JOIN users u ON u.id = m.user_id
+		WHERE s.is_active = 1 AND m.user_id IS NOT NULL`
+}
+
+// trainerCircleMemberQuery liefert DISTINCT (user_id, name) für den Zugriffskreis
+// (= Z): Kader-Trainer der aktiven Saison ∪ vorstand ∪ sportliche_leitung ∪
+// vorstand_beisitzer. Nur für die Nutzersuche-Erweiterung, nicht für die
+// Gruppenauflösung. Nimmt keine Platzhalter.
+func trainerCircleMemberQuery() string {
+	return `
+		SELECT DISTINCT user_id, name FROM (
+			` + allTrainersMemberQuery() + `
+			UNION
+			SELECT m.user_id AS user_id,
+			       u.first_name || ' ' || u.last_name AS name
+			FROM member_club_functions mcf
+			JOIN members m ON m.id = mcf.member_id
+			JOIN users u ON u.id = m.user_id
+			WHERE mcf.function IN ('vorstand', 'sportliche_leitung', 'vorstand_beisitzer')
+			  AND m.user_id IS NOT NULL
+		)`
+}
+
+// isInTrainerCircle prüft die Zugehörigkeit zum Zugriffskreis Z:
+// (a) Kader-Trainer der aktiven Saison ODER (b) vorstand ODER
+// (c) sportliche_leitung ODER (d) vorstand_beisitzer.
+func (h *Handler) isInTrainerCircle(ctx context.Context, userID int) (bool, error) {
+	var exists bool
+	err := h.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM kader_trainers kt
+			JOIN kader k ON k.id = kt.kader_id
+			JOIN seasons s ON s.id = k.season_id
+			JOIN members m ON m.id = kt.member_id
+			WHERE s.is_active = 1 AND m.user_id = ?
+			UNION ALL
+			SELECT 1 FROM member_club_functions mcf
+			JOIN members m ON m.id = mcf.member_id
+			WHERE m.user_id = ?
+			  AND mcf.function IN ('vorstand', 'sportliche_leitung', 'vorstand_beisitzer')
+		)`, userID, userID).Scan(&exists)
+	return exists, err
+}
+
+// callerInTrainerCircle prüft die Zugriffskreis-Zugehörigkeit des Callers.
+// Vereinsfunktionen werden — wie im übrigen Chat-Code — aus den JWT-Claims
+// gelesen; die Kader-Trainer-Zugehörigkeit (nicht in der Claim) aus der DB.
+// admin ist stets berechtigt.
+func (h *Handler) callerInTrainerCircle(ctx context.Context, claims *auth.Claims) (bool, error) {
+	if claims.Role == "admin" ||
+		claims.HasAnyFunction("vorstand", "sportliche_leitung", "vorstand_beisitzer") {
+		return true, nil
+	}
+	return h.isInTrainerCircle(ctx, claims.UserID)
 }
 
 // hasGlobalTeamGroupAccess returns true if the caller may see every team's
@@ -112,6 +182,21 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	teamRows.Close()
 
 	results := []TeamGroup{}
+
+	// "Alle Trainer": synthetische, teamübergreifende Kachel für den
+	// Zugriffskreis (Trainer/Vorstand/sL/Beisitzer) + admin. Vorangestellt.
+	eligible, _ := h.callerInTrainerCircle(r.Context(), claims)
+	if eligible {
+		if count, err := h.countTeamGroupMembers(r, 0, "alle_trainer", claims.UserID); err == nil && count > 0 {
+			results = append(results, TeamGroup{
+				TeamID:       0,
+				DisplayShort: "Alle Trainer",
+				Kind:         "alle_trainer",
+				Count:        count,
+			})
+		}
+	}
+
 	for _, t := range teams {
 		for _, kind := range []string{"trainer", "spieler", "eltern"} {
 			count, err := h.countTeamGroupMembers(r, t.id, kind, claims.UserID)
@@ -132,6 +217,13 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) countTeamGroupMembers(r *http.Request, teamID int, kind string, excludeUserID int) (int, error) {
+	if kind == "alle_trainer" {
+		var count int
+		err := h.db.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM (`+allTrainersMemberQuery()+`) WHERE user_id != ?`,
+			excludeUserID).Scan(&count)
+		return count, err
+	}
 	q := teamGroupMemberQuery(kind)
 	if q == "" {
 		return 0, nil
@@ -224,6 +316,11 @@ func (h *Handler) ResolveTeamGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if kind == "alle_trainer" {
+		h.resolveAllTrainers(w, r, claims)
+		return
+	}
+
 	ok, err := h.canSeeTeamGroup(r, claims, teamID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -249,6 +346,42 @@ func (h *Handler) ResolveTeamGroup(w http.ResponseWriter, r *http.Request) {
 			`SELECT user_id, name FROM (`+q+`) WHERE user_id != ? ORDER BY name`,
 			teamID, teamID, claims.UserID)
 	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	members := []TeamGroupMember{}
+	for rows.Next() {
+		var m TeamGroupMember
+		if err := rows.Scan(&m.ID, &m.Name); err != nil {
+			continue
+		}
+		members = append(members, m)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(members)
+}
+
+// resolveAllTrainers liefert die Mitgliedermenge der "Alle Trainer"-Gruppe
+// (= alle Kader-Trainer der aktiven Saison, ohne den Caller). Zugriff nur für
+// den Zugriffskreis (Trainer/Vorstand/sL/Beisitzer) oder admin.
+func (h *Handler) resolveAllTrainers(w http.ResponseWriter, r *http.Request, claims *auth.Claims) {
+	eligible, err := h.callerInTrainerCircle(r.Context(), claims)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !eligible {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT user_id, name FROM (`+allTrainersMemberQuery()+`) WHERE user_id != ? ORDER BY name`,
+		claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

@@ -105,12 +105,39 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 	var rows *sql.Rows
 	var err error
 
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+	inCircle := false
+	if claims.Role != "admin" && !claims.HasFunction("vorstand") {
+		inCircle, err = h.callerInTrainerCircle(r.Context(), claims)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	switch {
+	case claims.Role == "admin" || claims.HasFunction("vorstand"):
 		rows, err = h.db.QueryContext(r.Context(), `
 			SELECT id, first_name || ' ' || last_name AS name FROM users
 			WHERE id != ? AND (first_name || ' ' || last_name LIKE ? OR email LIKE ?)
 			ORDER BY first_name, last_name LIMIT 50`, claims.UserID, q, q)
-	} else {
+	case inCircle:
+		// Zugriffskreis-Mitglied: User mit gemeinsamem Team ∪ gesamter Zugriffskreis.
+		rows, err = h.db.QueryContext(r.Context(), `
+			SELECT id, name FROM (
+				SELECT u.id AS id, u.first_name || ' ' || u.last_name AS name
+				FROM users u
+				JOIN user_accessible_teams uat ON uat.user_id = u.id
+				WHERE u.id != ?
+				  AND (u.first_name || ' ' || u.last_name LIKE ? OR u.email LIKE ?)
+				  AND uat.team_id IN (
+				    SELECT team_id FROM user_accessible_teams WHERE user_id = ?
+				  )
+				UNION
+				SELECT user_id AS id, name FROM (`+trainerCircleMemberQuery()+`)
+				WHERE user_id != ? AND name LIKE ?
+			)
+			ORDER BY name LIMIT 50`, claims.UserID, q, q, claims.UserID, claims.UserID, q)
+	default:
 		rows, err = h.db.QueryContext(r.Context(), `
 			SELECT DISTINCT u.id, u.first_name || ' ' || u.last_name AS name FROM users u
 			JOIN user_accessible_teams uat ON uat.user_id = u.id
@@ -333,8 +360,23 @@ func (h *Handler) canContactUser(r *http.Request, claims *auth.Claims, targetUse
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		return true, nil
 	}
+	// Zugriffskreis (Trainer/Vorstand/sL/Beisitzer): zwei Mitglieder dürfen sich
+	// teamübergreifend kontaktieren. Caller-Funktionen aus Claims, Ziel aus DB.
+	callerInCircle, err := h.callerInTrainerCircle(r.Context(), claims)
+	if err != nil {
+		return false, err
+	}
+	if callerInCircle {
+		targetInCircle, err := h.isInTrainerCircle(r.Context(), targetUserID)
+		if err != nil {
+			return false, err
+		}
+		if targetInCircle {
+			return true, nil
+		}
+	}
 	var count int
-	err := h.db.QueryRowContext(r.Context(), `
+	err = h.db.QueryRowContext(r.Context(), `
 		SELECT COUNT(*) FROM user_accessible_teams uat1
 		JOIN user_accessible_teams uat2 ON uat1.team_id = uat2.team_id
 		WHERE uat1.user_id = ? AND uat2.user_id = ?`,
