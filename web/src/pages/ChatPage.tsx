@@ -533,10 +533,10 @@ export default function ChatPage() {
     // jeder Reactions-Toggle / eingehende SSE-Message den hochgescrollten
     // Nutzer zurück ans Ende (Symptom „Position springt ständig") — messages
     // ändert sich häufig, auch ohne dass etwas Neues am Ende dazugekommen ist.
+    const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
+      "[data-windowed-scroll]",
+    );
     if (!forceScrollToEndRef.current) {
-      const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
-        "[data-windowed-scroll]",
-      );
       if (box) {
         const distanceFromBottom =
           box.scrollHeight - box.scrollTop - box.clientHeight;
@@ -544,7 +544,18 @@ export default function ChatPage() {
       }
     }
     forceScrollToEndRef.current = false;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Direkter Container-Scroll (instant) statt scrollIntoView(smooth) auf
+    // dem messagesEndRef: die Smooth-Animation kann durch nachfolgende
+    // Renders (SSE, loadConversations-Response, verzögerte Bild-Loads)
+    // unterbrochen werden und uns dann mittendrin stehen lassen. Instant
+    // + direkter scrollTop = scrollHeight ist nicht abbrechbar und braucht
+    // keinen Ref-Roundtrip. Fallback auf scrollIntoView, wenn der Container
+    // (noch) nicht im DOM ist.
+    if (box) {
+      box.scrollTop = box.scrollHeight;
+    } else {
+      messagesEndRef.current?.scrollIntoView();
+    }
   }, [messages]);
 
   // Clamp context menu to viewport after render (runs before paint → no flicker)

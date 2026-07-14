@@ -135,15 +135,10 @@ describe('ChatPage — Öffnen positioniert am ersten Ungelesenen', () => {
     // Kein Divider im DOM.
     expect(screen.queryByText(/ungelesene Nachrichten$/)).toBeNull()
 
-    // End-Scroll ist behavior:'smooth', NICHT block:'start'.
-    const spy = Element.prototype.scrollIntoView as unknown as {
-      mock: { calls: Array<unknown[]> }
-    }
-    const hasSmooth = spy.mock.calls.some((args) => {
-      const opts = args[0] as { behavior?: string } | undefined
-      return opts?.behavior === 'smooth'
-    })
-    expect(hasSmooth).toBe(true)
+    // End-Scroll setzt scrollTop des Windowed-Containers direkt auf
+    // scrollHeight (nicht mehr scrollIntoView(smooth) — die animierte
+    // Variante konnte in Prod von nachfolgenden Renders unterbrochen werden).
+    expect(scrollBox.value).toBe(CONTENT_HEIGHT)
   })
 
   test('unreadCount > geladene Seite → Chip "N weitere ungelesene älter" sichtbar, kein Divider', async () => {
