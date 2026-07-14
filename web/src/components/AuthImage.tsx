@@ -4,6 +4,12 @@ import { api } from "../lib/api";
 // AuthImage lädt ein JWT-geschütztes Bild per axios (Bearer kommt automatisch mit)
 // als Blob und zeigt es über eine Object-URL an. Nötig, weil <img src> keine
 // Authorization-Header sendet. Muster wie ReportImage in MatchReportFormPage.
+//
+// Um Layout-Shifts zu vermeiden (relevant im Chat-Verlauf, wo Bild-Loads sonst
+// die Scroll-Position verschieben), wird das Bild vor dem Rendern per
+// `Image()` in den natürlichen Dimensionen probiert; die Aspect-Ratio setzen
+// wir dann sowohl auf den Placeholder als auch auf das finale `<img>`. Nach
+// dem Bild-Load ändert sich die Zeilenhöhe damit nicht mehr.
 export default function AuthImage({
   url,
   alt,
@@ -16,25 +22,38 @@ export default function AuthImage({
   onClick?: () => void;
 }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    let revoked = false;
+    let cancelled = false;
     let objectUrl: string | null = null;
     setError(false);
     setSrc(null);
+    setDims(null);
     api
       .get(url, { responseType: "blob" })
       .then((res) => {
-        if (revoked) return;
-        objectUrl = URL.createObjectURL(res.data as Blob);
-        setSrc(objectUrl);
+        if (cancelled) return;
+        const created = URL.createObjectURL(res.data as Blob);
+        objectUrl = created;
+        const probe = new Image();
+        probe.onload = () => {
+          if (cancelled) return;
+          setDims({ w: probe.naturalWidth, h: probe.naturalHeight });
+          setSrc(created);
+        };
+        probe.onerror = () => {
+          if (cancelled) return;
+          setError(true);
+        };
+        probe.src = created;
       })
       .catch(() => {
-        if (!revoked) setError(true);
+        if (!cancelled) setError(true);
       });
     return () => {
-      revoked = true;
+      cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [url]);
@@ -46,14 +65,27 @@ export default function AuthImage({
       </div>
     );
   }
-  if (!src) {
+
+  const style = dims
+    ? { aspectRatio: `${dims.w} / ${dims.h}` }
+    : { minHeight: "6rem" };
+
+  if (!src || !dims) {
     return (
       <div
         className={`${className ?? ""} bg-brand-surface-card animate-pulse`}
-        style={{ minHeight: "6rem" }}
+        style={style}
         aria-busy="true"
       />
     );
   }
-  return <img src={src} alt={alt ?? ""} className={className} onClick={onClick} />;
+  return (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      className={className}
+      style={style}
+      onClick={onClick}
+    />
+  );
 }

@@ -204,6 +204,10 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesBoxRef = useRef<HTMLDivElement>(null);
   const suppressAutoScrollRef = useRef(false);
+  // Erzwingt einmalig einen Scroll ans Ende beim nächsten messages-Update
+  // (nach eigenem Senden / Öffnen einer Konversation), unabhängig davon, ob
+  // der Nutzer gerade hochgescrollt ist.
+  const forceScrollToEndRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const draftsRef = useRef<Map<number, string>>(new Map());
@@ -346,11 +350,10 @@ export default function ChatPage() {
     setReplyTo(null);
     setEditingMessage(null);
     setMsgInput(draftsRef.current.get(conv.id) ?? "");
+    // Beim Öffnen einer Konversation den Sticky-Guard einmalig überstimmen,
+    // damit der loadMessages-State-Update in jedem Fall ans Ende scrollt.
+    forceScrollToEndRef.current = true;
     await loadMessages(conv.id);
-    setTimeout(
-      () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }),
-      50,
-    );
   };
 
   useEffect(() => {
@@ -460,6 +463,23 @@ export default function ChatPage() {
       suppressAutoScrollRef.current = false;
       return;
     }
+    // Sticky-to-Bottom: nur automatisch ans Ende scrollen, wenn der Nutzer
+    // eh in der Nähe des Endes steht (oder wir explizit forcieren, z. B. beim
+    // eigenen Senden / beim Öffnen einer Konversation). Ohne diesen Guard reißt
+    // jeder Reactions-Toggle / eingehende SSE-Message den hochgescrollten
+    // Nutzer zurück ans Ende (Symptom „Position springt ständig") — messages
+    // ändert sich häufig, auch ohne dass etwas Neues am Ende dazugekommen ist.
+    if (!forceScrollToEndRef.current) {
+      const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
+        "[data-windowed-scroll]",
+      );
+      if (box) {
+        const distanceFromBottom =
+          box.scrollHeight - box.scrollTop - box.clientHeight;
+        if (distanceFromBottom > 100) return;
+      }
+    }
+    forceScrollToEndRef.current = false;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -582,6 +602,9 @@ export default function ChatPage() {
       setMsgInput("");
       clearPendingImage();
       draftsRef.current.delete(activeConv.id);
+      // Nach dem eigenen Senden soll die eigene Nachricht in den Blick — auch
+      // wenn der Nutzer kurz vorher hochgescrollt hatte.
+      forceScrollToEndRef.current = true;
       await appendNewMessages(activeConv.id);
     } catch {
     } finally {
@@ -948,12 +971,18 @@ export default function ChatPage() {
                     </button>
                   </div>
                 )}
-                {/* Windowing der Chat-Historie: bei langen Verläufen nur sichtbare
-                    Nachrichten (+ Puffer) im DOM. `messagesEndRef` bleibt unterhalb des
-                    Fensters, damit Auto-Scroll ans Ende weiter greift. */}
+                {/* Chat-Bubbles haben extrem variable Höhen (~30 px kurzer Text
+                    bis 300 px+ mit Bild/Reply/Reaktionen). Windowing mit fixer
+                    estimatedRowHeight verschiebt beim Scrollen scrollHeight
+                    gegenüber der Realität → Sichtbereich springt. Bei einer
+                    100er-Seite bleibt der reine DOM ohnehin billig, deshalb
+                    hier über die threshold explizit deaktiviert.
+                    WindowedRows bleibt als Wrapper (setzt data-windowed-scroll,
+                    das die Sticky-Scroll- und loadOlderMessages-Logik nutzt). */}
                 <WindowedRows
                   items={messages}
                   estimatedRowHeight={64}
+                  threshold={Number.MAX_SAFE_INTEGER}
                   className="flex-1 overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-2"
                   footer={<div ref={messagesEndRef} />}
                   renderRow={(msg, index) => {
