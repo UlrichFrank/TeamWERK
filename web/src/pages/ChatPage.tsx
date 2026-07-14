@@ -81,6 +81,11 @@ interface Message {
   isSystem: boolean;
   mediaId: number | null;
   mediaUrl: string | null;
+  // Server-Dimensionen des Bildes (falls bekannt) — erlauben AuthImage,
+  // aspect-ratio ab dem ersten Frame zu setzen und Layout-Shifts beim
+  // Bild-Load zu vermeiden.
+  mediaWidth?: number;
+  mediaHeight?: number;
   reactions: Reaction[];
 }
 
@@ -98,6 +103,8 @@ interface Broadcast {
   editedAt: string | null;
   mediaId: number | null;
   mediaUrl: string | null;
+  mediaWidth?: number;
+  mediaHeight?: number;
 }
 interface ChatUser {
   id: number;
@@ -374,10 +381,12 @@ export default function ChatPage() {
         setConversations((prev) =>
           prev.some((c) => c.id === conv.id) ? prev : [conv, ...prev],
         );
-        setActiveConv(conv);
         setTab("chats");
-        if (isMobile) setMobileShowChat(true);
-        loadMessages(conv.id);
+        // Über openConversation öffnen, damit forceScrollToEndRef gesetzt
+        // wird und der Deep-Link zuverlässig am Ende der Konversation landet
+        // (statt eigenem setActiveConv+loadMessages-Duplikat, das den
+        // Sticky-Guard umging und bei Verlauf ganz oben landete).
+        openConversation(conv);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1220,6 +1229,8 @@ export default function ChatPage() {
                   alt="Bild der Mitteilung"
                   className="mt-3 max-w-xs rounded-lg cursor-pointer"
                   onClick={() => setLightboxUrl(activeBroadcast.mediaUrl)}
+                  naturalWidth={activeBroadcast.mediaWidth}
+                  naturalHeight={activeBroadcast.mediaHeight}
                 />
               )}
             </div>
@@ -1630,6 +1641,8 @@ function MessageBubble({
               alt="Bild"
               className={`${body ? "mt-2 " : ""}max-w-full rounded-lg cursor-pointer`}
               onClick={onImageClick}
+              naturalWidth={msg.mediaWidth}
+              naturalHeight={msg.mediaHeight}
             />
           )}
           {showExpand && (

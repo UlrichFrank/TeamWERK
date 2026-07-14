@@ -37,10 +37,27 @@ func insertMedia(t *testing.T, db *sql.DB, uploader int, diskName string) int {
 }
 
 type mediaMsg struct {
-	ID       int     `json:"id"`
-	Preview  string  `json:"preview"`
-	MediaID  *int    `json:"mediaId"`
-	MediaURL *string `json:"mediaUrl"`
+	ID          int     `json:"id"`
+	Preview     string  `json:"preview"`
+	MediaID     *int    `json:"mediaId"`
+	MediaURL    *string `json:"mediaUrl"`
+	MediaWidth  *int    `json:"mediaWidth,omitempty"`
+	MediaHeight *int    `json:"mediaHeight,omitempty"`
+}
+
+// insertMediaWithDims legt eine media-Zeile MIT gesetzten width/height an —
+// simuliert ein Bild, das entweder durch den neuen Upload-Handler mit Probe
+// oder durch den Backfill befüllt wurde.
+func insertMediaWithDims(t *testing.T, db *sql.DB, uploader int, diskName string, w, h int) int {
+	t.Helper()
+	res, err := db.Exec(
+		`INSERT INTO media (disk_name, mime_type, size, uploaded_by, width, height) VALUES (?, 'image/png', 10, ?, ?, ?)`,
+		diskName, uploader, w, h)
+	if err != nil {
+		t.Fatalf("insertMediaWithDims: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
 }
 
 // Invariante: Eine reine Bildnachricht (leerer body + mediaId) wird gespeichert.
@@ -119,6 +136,75 @@ func TestListMessages_Media(t *testing.T) {
 	want := "/media/" + itoa(mediaID)
 	if m.MediaURL == nil || *m.MediaURL != want {
 		t.Errorf("expected mediaUrl %q, got %v", want, m.MediaURL)
+	}
+}
+
+// Invariante: ListMessages liefert mediaWidth/mediaHeight, wenn das Bild
+// bekannte Dimensionen hat (Upload-Probe oder Backfill).
+func TestListMessages_IncludesMediaDimensions(t *testing.T) {
+	db := testutil.NewDB(t)
+	owner := testutil.CreateUser(t, db, "standard")
+	member := testutil.CreateUser(t, db, "standard")
+	convID := createGroupConv(t, db, "G", owner, member)
+	mediaID := insertMediaWithDims(t, db, member, "with-dims.png", 1920, 1080)
+
+	srv := newMediaMsgServer(t, db)
+	tok := testutil.Token(t, member, "standard", nil)
+
+	post := testutil.Post(t, srv, "/api/chat/conversations/"+itoa(convID)+"/messages", tok,
+		map[string]any{"body": "", "mediaId": mediaID})
+	post.Body.Close()
+
+	res := testutil.Get(t, srv, "/api/chat/conversations/"+itoa(convID)+"/messages", tok)
+	defer res.Body.Close()
+	var msgs []mediaMsg
+	if err := json.NewDecoder(res.Body).Decode(&msgs); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(msgs))
+	}
+	m := msgs[0]
+	if m.MediaWidth == nil || *m.MediaWidth != 1920 {
+		t.Errorf("expected mediaWidth 1920, got %v", m.MediaWidth)
+	}
+	if m.MediaHeight == nil || *m.MediaHeight != 1080 {
+		t.Errorf("expected mediaHeight 1080, got %v", m.MediaHeight)
+	}
+}
+
+// Invariante: ListMessages lässt mediaWidth/mediaHeight weg, wenn das Bild
+// keine bekannten Dimensionen hat (Bestand vor Backfill oder unlesbarer
+// Header). Für den Client bleibt der AuthImage-Probe der Fallback.
+func TestListMessages_OmitsMediaDimensionsWhenNull(t *testing.T) {
+	db := testutil.NewDB(t)
+	owner := testutil.CreateUser(t, db, "standard")
+	member := testutil.CreateUser(t, db, "standard")
+	convID := createGroupConv(t, db, "G", owner, member)
+	// insertMedia (ohne Dims) → media.width IS NULL.
+	mediaID := insertMedia(t, db, member, "no-dims.png")
+
+	srv := newMediaMsgServer(t, db)
+	tok := testutil.Token(t, member, "standard", nil)
+
+	post := testutil.Post(t, srv, "/api/chat/conversations/"+itoa(convID)+"/messages", tok,
+		map[string]any{"body": "", "mediaId": mediaID})
+	post.Body.Close()
+
+	res := testutil.Get(t, srv, "/api/chat/conversations/"+itoa(convID)+"/messages", tok)
+	defer res.Body.Close()
+	var raw []map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(raw))
+	}
+	if _, ok := raw[0]["mediaWidth"]; ok {
+		t.Errorf("expected no mediaWidth field when NULL in DB, got %v", raw[0]["mediaWidth"])
+	}
+	if _, ok := raw[0]["mediaHeight"]; ok {
+		t.Errorf("expected no mediaHeight field when NULL in DB, got %v", raw[0]["mediaHeight"])
 	}
 }
 

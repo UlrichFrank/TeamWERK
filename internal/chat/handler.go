@@ -504,11 +504,14 @@ const messageSelect = `
 	       m.edited_at,
 	       m.deleted_at,
 	       m.is_system,
-	       m.media_id
+	       m.media_id,
+	       med.width,
+	       med.height
 	FROM messages m
 	JOIN users u ON u.id = m.sender_id
 	LEFT JOIN messages rm ON rm.id = m.reply_to_id
 	LEFT JOIN users ru ON ru.id = rm.sender_id
+	LEFT JOIN media med ON med.id = m.media_id
 	WHERE m.conversation_id = ?`
 
 // messagePageSize begrenzt jede ListMessages-Antwort (voll, after, before).
@@ -567,6 +570,8 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		IsSystem          bool              `json:"isSystem"`
 		MediaID           *int              `json:"mediaId"`
 		MediaURL          *string           `json:"mediaUrl"`
+		MediaWidth        *int              `json:"mediaWidth,omitempty"`
+		MediaHeight       *int              `json:"mediaHeight,omitempty"`
 		Reactions         []messageReaction `json:"reactions"`
 	}
 
@@ -610,15 +615,21 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var msg Message
 		var body string
-		var replyToID, mediaID sql.NullInt64
+		var replyToID, mediaID, mediaWidth, mediaHeight sql.NullInt64
 		var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
 		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &body, &msg.SentAt,
-			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem, &mediaID)
+			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem, &mediaID, &mediaWidth, &mediaHeight)
 		if mediaID.Valid {
 			id := int(mediaID.Int64)
 			msg.MediaID = &id
 			url := mediaURL(id)
 			msg.MediaURL = &url
+			if mediaWidth.Valid && mediaHeight.Valid {
+				w := int(mediaWidth.Int64)
+				h := int(mediaHeight.Int64)
+				msg.MediaWidth = &w
+				msg.MediaHeight = &h
+			}
 		}
 		// Body ist bei gelöschten Nachrichten bereits '' (SQL-CASE) → Preview leer,
 		// truncated=false. Sonst rune-genau auf messagePreviewLen kürzen.
@@ -988,25 +999,28 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 
 	type Broadcast struct {
-		ID         int     `json:"id"`
-		SenderName string  `json:"senderName"`
-		Body       string  `json:"body"`
-		SentAt     string  `json:"sentAt"`
-		IsRead     bool    `json:"isRead"`
-		IsSent     bool    `json:"isSent"`
-		EditedAt   *string `json:"editedAt"`
-		MediaID    *int    `json:"mediaId"`
-		MediaURL   *string `json:"mediaUrl"`
+		ID          int     `json:"id"`
+		SenderName  string  `json:"senderName"`
+		Body        string  `json:"body"`
+		SentAt      string  `json:"sentAt"`
+		IsRead      bool    `json:"isRead"`
+		IsSent      bool    `json:"isSent"`
+		EditedAt    *string `json:"editedAt"`
+		MediaID     *int    `json:"mediaId"`
+		MediaURL    *string `json:"mediaUrl"`
+		MediaWidth  *int    `json:"mediaWidth,omitempty"`
+		MediaHeight *int    `json:"mediaHeight,omitempty"`
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT b.id, u.first_name || ' ' || u.last_name, b.body, b.sent_at,
 		       CASE WHEN br.read_at IS NOT NULL THEN 1 ELSE 0 END AS is_read,
 		       CASE WHEN b.sender_id = ? THEN 1 ELSE 0 END AS is_sent,
-		       b.edited_at, b.media_id
+		       b.edited_at, b.media_id, med.width, med.height
 		FROM broadcasts b
 		JOIN users u ON u.id = b.sender_id
 		JOIN broadcast_reads br ON br.broadcast_id = b.id AND br.user_id = ?
+		LEFT JOIN media med ON med.id = b.media_id
 		WHERE br.hidden_at IS NULL
 		ORDER BY b.sent_at DESC
 		LIMIT 100`, claims.UserID, claims.UserID)
@@ -1021,8 +1035,8 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 		var b Broadcast
 		var isRead, isSent int
 		var editedAt sql.NullString
-		var mediaID sql.NullInt64
-		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent, &editedAt, &mediaID)
+		var mediaID, mediaWidth, mediaHeight sql.NullInt64
+		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent, &editedAt, &mediaID, &mediaWidth, &mediaHeight)
 		b.IsRead = isRead == 1
 		b.IsSent = isSent == 1
 		if editedAt.Valid {
@@ -1033,6 +1047,12 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 			b.MediaID = &id
 			url := mediaURL(id)
 			b.MediaURL = &url
+			if mediaWidth.Valid && mediaHeight.Valid {
+				w := int(mediaWidth.Int64)
+				h := int(mediaHeight.Int64)
+				b.MediaWidth = &w
+				b.MediaHeight = &h
+			}
 		}
 		broadcasts = append(broadcasts, b)
 	}

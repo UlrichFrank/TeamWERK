@@ -89,6 +89,12 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Header-Probe für Bild-Dimensionen (Aspect-Ratio ab dem ersten Frame
+	// im Frontend, kein Layout-Shift beim späteren Bild-Load). Scheitert die
+	// Probe, wird der Upload trotzdem akzeptiert; Dims bleiben NULL und der
+	// AuthImage-Client-Probe greift als Fallback.
+	width, height, dimsOK := decodeDimensions(data, mimeType)
+
 	diskName := uuid.New().String() + ext
 	dst := filepath.Join(h.mediaDir, diskName)
 	if err := os.WriteFile(dst, data, 0644); err != nil {
@@ -96,9 +102,13 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var widthArg, heightArg any
+	if dimsOK {
+		widthArg, heightArg = width, height
+	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO media (disk_name, mime_type, size, uploaded_by) VALUES (?, ?, ?, ?)`,
-		diskName, mimeType, len(data), uid)
+		`INSERT INTO media (disk_name, mime_type, size, uploaded_by, width, height) VALUES (?, ?, ?, ?, ?, ?)`,
+		diskName, mimeType, len(data), uid, widthArg, heightArg)
 	if err != nil {
 		os.Remove(dst)
 		http.Error(w, "db error", http.StatusInternalServerError)
@@ -106,12 +116,17 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := res.LastInsertId()
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"mediaId": id,
 		"url":     fmt.Sprintf("/media/%d", id),
-	})
+	}
+	if dimsOK {
+		resp["width"] = width
+		resp["height"] = height
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // Serve liefert die Bild-Bytes anhand der media-ID aus.

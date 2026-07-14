@@ -242,6 +242,16 @@ func serve() {
 		}
 	}()
 
+	// Einmaliger, idempotenter Backfill für media-Zeilen ohne width/height
+	// (chat-image-dimensions). Neue Uploads füllen die Felder direkt beim
+	// INSERT; dieser Job zieht Bestandsbilder aus vor der Migration 030 nach.
+	// Läuft im Hintergrund — Startup nicht blockieren.
+	go func() {
+		if err := media.Backfill(ctx, database, cfg.MediaDir); err != nil && ctx.Err() == nil {
+			slog.Error("media dimensions backfill failed", "error", err)
+		}
+	}()
+
 	handlers := &app.Handlers{
 		Auth:                auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
 		Config:              appconfig.NewHandler(database, hubInstance),
