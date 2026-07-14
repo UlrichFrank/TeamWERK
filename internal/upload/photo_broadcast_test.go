@@ -199,7 +199,9 @@ func TestUploadChildPhoto_BroadcastsMembers(t *testing.T) {
 	db := testutil.NewDB(t)
 
 	parentU := testutil.CreateUser(t, db, "standard")
-	childM := testutil.CreateMember(t, db, 0)
+	// Foto lebt am User (unified-user-photo, Migration 029) — Kind braucht Account.
+	childU := testutil.CreateUser(t, db, "standard")
+	childM := testutil.CreateMember(t, db, childU)
 	testutil.AddFamilyLink(t, db, parentU, childM)
 	parentTok := testutil.TokenWithIsParent(t, parentU, "standard", nil, true)
 
@@ -227,7 +229,9 @@ func TestDeleteChildPhoto_BroadcastsMembers(t *testing.T) {
 	db := testutil.NewDB(t)
 
 	parentU := testutil.CreateUser(t, db, "standard")
-	childM := testutil.CreateMember(t, db, 0)
+	// Foto lebt am User (unified-user-photo, Migration 029) — Kind braucht Account.
+	childU := testutil.CreateUser(t, db, "standard")
+	childM := testutil.CreateMember(t, db, childU)
 	testutil.AddFamilyLink(t, db, parentU, childM)
 	parentTok := testutil.TokenWithIsParent(t, parentU, "standard", nil, true)
 

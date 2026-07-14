@@ -165,9 +165,43 @@ func (h *Handler) photoURL(path string) string {
 	return "/api/uploads/" + path
 }
 
+// userIDForMember liefert die user_id eines Members oder 0 wenn kein
+// User-Account verknüpft ist. Zweiter Rückgabewert kennzeichnet, ob der
+// Member überhaupt existiert.
+func (h *Handler) userIDForMember(ctx context.Context, memberID string) (int, bool) {
+	var uid sql.NullInt64
+	err := h.db.QueryRowContext(ctx, `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&uid)
+	if err != nil {
+		return 0, false
+	}
+	if !uid.Valid {
+		return 0, true
+	}
+	return int(uid.Int64), true
+}
+
+// writeNoAccountError antwortet mit HTTP 409 wenn ein Mitglied kein
+// verknüpftes User-Konto hat und deshalb kein Foto tragen kann
+// (Modell: users.photo_path ist die einzige Foto-Quelle).
+func writeNoAccountError(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	json.NewEncoder(w).Encode(map[string]string{"error": "member_has_no_user_account"})
+}
+
 // POST /api/upload/member-photo/{id} — Admin only
 func (h *Handler) UploadMemberPhoto(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+
+	userID, exists := h.userIDForMember(r.Context(), id)
+	if !exists {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if userID == 0 {
+		writeNoAccountError(w)
+		return
+	}
 
 	filename, err := h.saveFile(r, "member-photos", imageTypes, maxPhotoBytes)
 	if err != nil {
@@ -176,12 +210,12 @@ func (h *Handler) UploadMemberPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldPath sql.NullString
-	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM members WHERE id=?`, id).Scan(&oldPath)
+	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM users WHERE id=?`, userID).Scan(&oldPath)
 	if oldPath.Valid && oldPath.String != "" {
 		os.Remove(filepath.Join(h.uploadDir, oldPath.String))
 	}
 
-	if _, err := h.db.ExecContext(r.Context(), `UPDATE members SET photo_path=? WHERE id=?`, filename, id); err != nil {
+	if _, err := h.db.ExecContext(r.Context(), `UPDATE users SET photo_path=? WHERE id=?`, filename, userID); err != nil {
 		os.Remove(filepath.Join(h.uploadDir, filename))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -206,6 +240,16 @@ func (h *Handler) UploadChildPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID, exists := h.userIDForMember(r.Context(), memberID)
+	if !exists {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if userID == 0 {
+		writeNoAccountError(w)
+		return
+	}
+
 	filename, err := h.saveFile(r, "member-photos", imageTypes, maxPhotoBytes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -213,12 +257,12 @@ func (h *Handler) UploadChildPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldPath sql.NullString
-	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM members WHERE id=?`, memberID).Scan(&oldPath)
+	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM users WHERE id=?`, userID).Scan(&oldPath)
 	if oldPath.Valid && oldPath.String != "" {
 		os.Remove(filepath.Join(h.uploadDir, oldPath.String))
 	}
 
-	if _, err := h.db.ExecContext(r.Context(), `UPDATE members SET photo_path=? WHERE id=?`, filename, memberID); err != nil {
+	if _, err := h.db.ExecContext(r.Context(), `UPDATE users SET photo_path=? WHERE id=?`, filename, userID); err != nil {
 		os.Remove(filepath.Join(h.uploadDir, filename))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -281,12 +325,21 @@ func (h *Handler) DeleteChildPhoto(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	userID, exists := h.userIDForMember(r.Context(), memberID)
+	if !exists {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if userID == 0 {
+		writeNoAccountError(w)
+		return
+	}
 	var path sql.NullString
-	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM members WHERE id=?`, memberID).Scan(&path)
+	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM users WHERE id=?`, userID).Scan(&path)
 	if path.Valid && path.String != "" {
 		os.Remove(filepath.Join(h.uploadDir, path.String))
 	}
-	h.db.ExecContext(r.Context(), `UPDATE members SET photo_path=NULL WHERE id=?`, memberID)
+	h.db.ExecContext(r.Context(), `UPDATE users SET photo_path=NULL WHERE id=?`, userID)
 	h.broadcastMembers(r.Context(), memberIDs(memberID), claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -294,12 +347,21 @@ func (h *Handler) DeleteChildPhoto(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/upload/member-photo/{id} — Admin only
 func (h *Handler) DeleteMemberPhoto(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID, exists := h.userIDForMember(r.Context(), id)
+	if !exists {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if userID == 0 {
+		writeNoAccountError(w)
+		return
+	}
 	var path sql.NullString
-	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM members WHERE id=?`, id).Scan(&path)
+	h.db.QueryRowContext(r.Context(), `SELECT photo_path FROM users WHERE id=?`, userID).Scan(&path)
 	if path.Valid && path.String != "" {
 		os.Remove(filepath.Join(h.uploadDir, path.String))
 	}
-	h.db.ExecContext(r.Context(), `UPDATE members SET photo_path=NULL WHERE id=?`, id)
+	h.db.ExecContext(r.Context(), `UPDATE users SET photo_path=NULL WHERE id=?`, userID)
 	h.broadcastMembers(r.Context(), memberIDs(id))
 	w.WriteHeader(http.StatusNoContent)
 }

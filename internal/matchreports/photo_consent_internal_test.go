@@ -8,8 +8,9 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
-// consentMissing listet Team-Mitglieder anhand von foto_veroeffentlichung=0 —
-// unabhängig von photo_visible.
+// consentMissing listet Team-Mitglieder anhand von foto_veroeffentlichung=0.
+// (Der interne photo_visible-Toggle lebt seit unified-user-photo auf
+// user_visibility und ist für diesen Konsens-Check ohnehin ohne Belang.)
 func TestConsentMissing_NutztFotoVeroeffentlichung(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -17,17 +18,17 @@ func TestConsentMissing_NutztFotoVeroeffentlichung(t *testing.T) {
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-03-01")
 
-	// Ohne Einwilligung (foto=0), aber intern sichtbar (photo_visible=1) → MUSS gelistet werden.
+	// Ohne Einwilligung (foto=0) → MUSS gelistet werden.
 	mNoConsent := testutil.CreateMember(t, db, 0)
 	if _, err := db.Exec(
-		`UPDATE members SET first_name='Ohne', last_name='Freigabe', foto_veroeffentlichung=0, photo_visible=1 WHERE id=?`,
+		`UPDATE members SET first_name='Ohne', last_name='Freigabe', foto_veroeffentlichung=0 WHERE id=?`,
 		mNoConsent); err != nil {
 		t.Fatalf("seed mNoConsent: %v", err)
 	}
-	// Mit Einwilligung (foto=1), aber intern unsichtbar (photo_visible=0) → darf NICHT gelistet werden.
+	// Mit Einwilligung (foto=1) → darf NICHT gelistet werden.
 	mConsent := testutil.CreateMember(t, db, 0)
 	if _, err := db.Exec(
-		`UPDATE members SET first_name='Mit', last_name='Freigabe', foto_veroeffentlichung=1, photo_visible=0 WHERE id=?`,
+		`UPDATE members SET first_name='Mit', last_name='Freigabe', foto_veroeffentlichung=1 WHERE id=?`,
 		mConsent); err != nil {
 		t.Fatalf("seed mConsent: %v", err)
 	}

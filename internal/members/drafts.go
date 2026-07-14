@@ -73,7 +73,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.join_date,
-		       m.photo_visible, m.photo_path,
+		       COALESCE(uv.photo_visible, 0), u.photo_path,
 		       COALESCE(m.phones_visible,0), COALESCE(m.address_visible,0), COALESCE(m.email_visible,0),
 		       COALESCE(m.absences_public,0),
 		       COALESCE(m.cross_team_visible,0),
@@ -83,6 +83,8 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       COALESCE(m.sepa_mandat,0), m.sepa_mandat_date,
 		       (SELECT COUNT(*) FROM member_sensitive WHERE member_id=m.id)
 		FROM members m
+		LEFT JOIN users u ON u.id = m.user_id
+		LEFT JOIN user_visibility uv ON uv.user_id = m.user_id
 		WHERE m.id=?`, memberID)
 
 	var m Member
@@ -138,6 +140,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	if joinDate.Valid {
 		m.JoinDate = &joinDate.String
 	}
+	// Foto lebt am User (users.photo_path); Members ohne user_id haben keins.
 	m.PhotoVisible = photoVisible != 0
 	if photoPath.Valid && photoPath.String != "" {
 		u := "/api/uploads/" + photoPath.String

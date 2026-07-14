@@ -140,8 +140,7 @@ type Member struct {
 	Zweitspielrecht           bool    `json:"zweitspielrecht,omitempty"`
 
 	// Linked user contact data (shown when user visibility allows)
-	UserPhones   []UserPhone `json:"user_phones,omitempty"`
-	UserPhotoURL *string     `json:"user_photo_url,omitempty"`
+	UserPhones []UserPhone `json:"user_phones,omitempty"`
 
 	WelcomeEmailSentAt *string `json:"welcome_email_sent_at,omitempty"`
 
@@ -540,7 +539,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.home_club, m.home_club_id, COALESCE(sv.name,''), m.join_date, m.exit_date,
-		       m.photo_path, m.photo_visible,
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
 		       m.foto_veroeffentlichung, m.foto_veroeffentlichung_date,
@@ -557,8 +555,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var clubFunctionsStr string
 	var mStreet, mZip, mCity, mHomeClub, mHomeClubName sql.NullString
 	var joinDate, exitDate sql.NullString
-	var photoPath sql.NullString
-	var photoVisible int64
 	var dsgvoVerarb, dsgvoWeiter, sepaMandat int64
 	var dsgvoVerarbDate, dsgvoWeiterDate, sepaMandatDate, sepaMandatPath sql.NullString
 	var fotoVeroeff int64
@@ -572,7 +568,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		&base.MemberNumber, &base.PassNumber,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunctionsStr,
 		&mStreet, &mZip, &mCity, &mHomeClub, &homeClubID, &mHomeClubName, &joinDate, &exitDate,
-		&photoPath, &photoVisible,
 		&dsgvoVerarb, &dsgvoVerarbDate,
 		&dsgvoWeiter, &dsgvoWeiterDate,
 		&fotoVeroeff, &fotoVeroeffDate,
@@ -619,15 +614,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	base.Zweitspielrecht = zweitspielrecht == 1
-
-	// Photo: always for privileged roles; others only if photo_visible=1
-	base.PhotoVisible = photoVisible == 1
-	if photoPath.Valid && photoPath.String != "" {
-		if isPrivileged || base.PhotoVisible {
-			url := "/api/uploads/" + photoPath.String
-			base.PhotoURL = &url
-		}
-	}
 
 	// Admin/own-user fields
 	if isAdmin || isOwn {
@@ -684,7 +670,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		base.SepaMandatURL = &url
 	}
 
-	// Linked user contact data — shown to admin/own, or based on user_visibility
+	// Linked user contact data — shown to admin/own, or based on user_visibility.
+	// Foto: users.photo_path ist die einzige Quelle; ohne user_id kein Foto.
 	if base.UserID != nil {
 		var pv, av, phv int
 		var userPhotoPath sql.NullString
@@ -693,8 +680,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 			 FROM users u LEFT JOIN user_visibility uv ON uv.user_id=u.id WHERE u.id=?`, *base.UserID).
 			Scan(&pv, &av, &phv, &userPhotoPath)
 
+		base.PhotoVisible = phv == 1
 		showPhones := isAdmin || isOwn || pv == 1
-		showUserPhoto := isPrivileged || isOwn || phv == 1
+		showPhoto := isPrivileged || isOwn || phv == 1
 
 		if showPhones {
 			phoneRows, err := h.db.QueryContext(r.Context(),
@@ -711,9 +699,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if showUserPhoto && userPhotoPath.Valid && userPhotoPath.String != "" {
+		if showPhoto && userPhotoPath.Valid && userPhotoPath.String != "" {
 			url := "/api/uploads/" + userPhotoPath.String
-			base.UserPhotoURL = &url
+			base.PhotoURL = &url
 		}
 	}
 
@@ -845,7 +833,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			street=?, zip=?, city=?, home_club=?, home_club_id=?,
 			status=?,
 			join_date=?, exit_date=?,
-			photo_visible=?,
 			cross_team_visible=?,
 			zweitspielrecht=?,
 			updated_at=?
@@ -855,13 +842,24 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub), req.HomeClubID,
 		req.Status,
 		req.JoinDate, nullableString(req.ExitDate),
-		boolToInt(req.PhotoVisible),
 		boolToInt(req.CrossTeamVisible),
 		boolToInt(req.Zweitspielrecht),
 		time.Now(), id)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	// PhotoVisible lebt auf user_visibility (Foto ist users.photo_path).
+	// Ohne verknüpften User-Account gibt es kein Foto → das Flag wird ignoriert.
+	var memberUID sql.NullInt64
+	h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, id).Scan(&memberUID)
+	if memberUID.Valid {
+		h.db.ExecContext(r.Context(),
+			`INSERT INTO user_visibility (user_id, photo_visible)
+			 VALUES (?, ?)
+			 ON CONFLICT(user_id) DO UPDATE SET photo_visible=excluded.photo_visible`,
+			memberUID.Int64, boolToInt(req.PhotoVisible))
 	}
 
 	pu := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
