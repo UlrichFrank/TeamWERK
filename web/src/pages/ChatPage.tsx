@@ -170,6 +170,39 @@ interface ContextMenuState {
   selectedText?: string;
 }
 
+// smoothScrollToBottom animiert den Container per rAF-Loop ans Ende. Anders
+// als scrollTo({behavior:'smooth'}) fixiert der Loop das Ziel NICHT — bei
+// jedem Frame wird der aktuelle scrollHeight als Ziel genommen. So bleibt
+// die Animation robust, wenn Content während des Scrolls nachlädt (Bilder,
+// Blob-Decodes, SSE). Abbruch, wenn der Nutzer selbst hochscrollt
+// (isAtBottomRef=false). Duration bewusst kurz (250 ms), damit die
+// Animation nicht als „lang" wirkt und Follow-up-Snaps (instant im
+// MutationObserver/load-Event) unauffällig bleiben.
+function smoothScrollToBottom(
+  box: HTMLElement,
+  isAtBottomRef: React.MutableRefObject<boolean>,
+  programmaticScrollUntilRef: React.MutableRefObject<number>,
+) {
+  const start = performance.now();
+  const startTop = box.scrollTop;
+  const duration = 250;
+  const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+  const step = (now: number) => {
+    if (!isAtBottomRef.current) return;
+    // Clamp auf [0, 1] — in jsdom-Tests kann (now - start) negativ werden
+    // je nachdem, wie performance.now vs. rAF-Zeitmarken tickern.
+    const t = Math.max(0, Math.min((now - start) / duration, 1));
+    const target = box.scrollHeight - box.clientHeight;
+    // Fenster für den Scroll-Listener verlängern, damit die vielen scroll-
+    // Events aus rAF-frames nicht als User-Scrolls interpretiert werden.
+    programmaticScrollUntilRef.current = Date.now() + 100;
+    box.scrollTop = startTop + (target - startTop) * easeOut(t);
+    if (t < 1) requestAnimationFrame(step);
+    else box.scrollTop = box.scrollHeight; // Finaler Snap gegen sub-pixel-Rest
+  };
+  requestAnimationFrame(step);
+}
+
 export default function ChatPage() {
   const { user, hasCapability } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -216,6 +249,29 @@ export default function ChatPage() {
   // (nach eigenem Senden / Öffnen einer Konversation), unabhängig davon, ob
   // der Nutzer gerade hochgescrollt ist.
   const forceScrollToEndRef = useRef(false);
+  // Sticky-to-Bottom-Zustand: true → jede spätere DOM-Änderung im Chat-
+  // Container snappt ans neue Ende (fängt Bild-Load-Nachschub und
+  // Reactions-Insert ab, die scrollHeight nach dem initial-Scroll noch
+  // wachsen lassen). Wird durch Scroll-Events des Nutzers aktualisiert:
+  // hochscrollen → false, wieder ans Ende → true.
+  const isAtBottomRef = useRef(true);
+  // Timestamp bis zu dem alle Scroll-Events als „programmatisch" gelten und
+  // isAtBottomRef NICHT verändern. Ohne diesen Guard würde ein Divider-Scroll
+  // bei wenigen Ungelesenen (distance < 100) fälschlich isAtBottomRef=true
+  // setzen — bei nachfolgenden Bild-Loads snappen wir dann ans Ende und
+  // verlieren den Divider aus dem Viewport.
+  const programmaticScrollUntilRef = useRef(0);
+  // Index (in messages[]) der ersten ungelesenen Nachricht — beim Öffnen
+  // einmal fixiert, danach unverändert, damit später eintreffende SSE-
+  // Nachrichten den UnreadDivider nicht unter dem Nutzer verschieben.
+  // -1 = „alles ungelesen, erster ungelesener liegt vor der geladenen
+  // Seite" (Chip statt Divider), null = kein Divider (unreadCount war 0).
+  const unreadDividerIndexRef = useRef<number | null>(null);
+  // Callback-Ref auf den DOM-Knoten des UnreadDividers für scrollIntoView.
+  const unreadDividerElRef = useRef<HTMLDivElement | null>(null);
+  // Analog zu forceScrollToEndRef: signalisiert dem messages-Effekt, dass
+  // beim nächsten Update auf den UnreadDivider gescrollt werden soll.
+  const scrollToUnreadRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const draftsRef = useRef<Map<number, string>>(new Map());
@@ -271,10 +327,27 @@ export default function ChatPage() {
     } catch {}
   }, []);
 
-  const loadMessages = async (convId: number) => {
+  // loadMessages nimmt optional den unreadCount der geöffneten Konversation
+  // entgegen — daraus fixieren wir für openConversation den
+  // UnreadDivider-Index (frisch aus msgs.length, nicht aus dem alten
+  // messages-State), der später stabil bleibt (statischer Divider).
+  //
+  //   unreadCount === 0           → kein Divider (null)
+  //   unreadCount > msgs.length   → alles geladene ungelesen → -1 (Chip)
+  //   sonst                       → msgs.length - unreadCount
+  const loadMessages = async (convId: number, unreadCount?: number) => {
     try {
       const r = await api.get(`/chat/conversations/${convId}/messages`);
       const msgs: Message[] = r.data ?? [];
+      if (unreadCount !== undefined) {
+        if (unreadCount <= 0) {
+          unreadDividerIndexRef.current = null;
+        } else if (unreadCount > msgs.length) {
+          unreadDividerIndexRef.current = -1;
+        } else {
+          unreadDividerIndexRef.current = msgs.length - unreadCount;
+        }
+      }
       setMessages(msgs);
       setHasOlder(msgs.length === MESSAGE_PAGE_SIZE);
       setEmojiPickerMsgId(null);
@@ -358,10 +431,21 @@ export default function ChatPage() {
     setReplyTo(null);
     setEditingMessage(null);
     setMsgInput(draftsRef.current.get(conv.id) ?? "");
-    // Beim Öffnen einer Konversation den Sticky-Guard einmalig überstimmen,
-    // damit der loadMessages-State-Update in jedem Fall ans Ende scrollt.
-    forceScrollToEndRef.current = true;
-    await loadMessages(conv.id);
+    // Öffnungs-Positionierung: bei ungelesenen Nachrichten am
+    // UnreadDivider landen, sonst am Ende. Beides überstimmt den
+    // Sticky-Guard, damit der loadMessages-State-Update zur richtigen
+    // Position scrollt.
+    if (conv.unreadCount > 0) {
+      scrollToUnreadRef.current = true;
+      forceScrollToEndRef.current = false;
+      isAtBottomRef.current = false;
+    } else {
+      forceScrollToEndRef.current = true;
+      scrollToUnreadRef.current = false;
+      unreadDividerIndexRef.current = null;
+      isAtBottomRef.current = true;
+    }
+    await loadMessages(conv.id, conv.unreadCount);
   };
 
   useEffect(() => {
@@ -473,16 +557,38 @@ export default function ChatPage() {
       suppressAutoScrollRef.current = false;
       return;
     }
+    // Divider-Ziel (chat-open-at-unread): beim Öffnen einer Konversation
+    // mit unreadCount > 0 landen wir am UnreadDivider statt am Ende.
+    // Sonderfall unreadDividerIndexRef=-1 (alles ungelesen, erster
+    // ungelesener liegt vor der Seite): oben im Container landen, wo der
+    // „N weitere ungelesene älter"-Chip sitzt.
+    if (scrollToUnreadRef.current) {
+      scrollToUnreadRef.current = false;
+      // Divider-Scroll ist programmatisch; onScroll darf isAtBottomRef
+      // dadurch NICHT auf true setzen, sonst reißt der nächste Bild-Load-
+      // Snap uns weg vom Divider ans Ende (bei wenigen Ungelesenen wäre
+      // distance < 100 → falsche sticky-Erkennung).
+      programmaticScrollUntilRef.current = Date.now() + 1000;
+      if (unreadDividerIndexRef.current === -1) {
+        const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
+          "[data-windowed-scroll]",
+        );
+        if (box) box.scrollTop = 0;
+      } else if (unreadDividerElRef.current) {
+        unreadDividerElRef.current.scrollIntoView({ block: "start" });
+      }
+      return;
+    }
     // Sticky-to-Bottom: nur automatisch ans Ende scrollen, wenn der Nutzer
     // eh in der Nähe des Endes steht (oder wir explizit forcieren, z. B. beim
     // eigenen Senden / beim Öffnen einer Konversation). Ohne diesen Guard reißt
     // jeder Reactions-Toggle / eingehende SSE-Message den hochgescrollten
     // Nutzer zurück ans Ende (Symptom „Position springt ständig") — messages
     // ändert sich häufig, auch ohne dass etwas Neues am Ende dazugekommen ist.
+    const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
+      "[data-windowed-scroll]",
+    );
     if (!forceScrollToEndRef.current) {
-      const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
-        "[data-windowed-scroll]",
-      );
       if (box) {
         const distanceFromBottom =
           box.scrollHeight - box.scrollTop - box.clientHeight;
@@ -490,8 +596,89 @@ export default function ChatPage() {
       }
     }
     forceScrollToEndRef.current = false;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Direkter Container-Scroll (instant) statt scrollIntoView(smooth) auf
+    // dem messagesEndRef: die Smooth-Animation kann durch nachfolgende
+    // Renders (SSE, loadConversations-Response, verzögerte Bild-Loads)
+    // unterbrochen werden und uns dann mittendrin stehen lassen. Instant
+    // + direkter scrollTop = scrollHeight ist nicht abbrechbar und braucht
+    // keinen Ref-Roundtrip. Fallback auf scrollIntoView, wenn der Container
+    // (noch) nicht im DOM ist.
+    if (box) {
+      smoothScrollToBottom(box, isAtBottomRef, programmaticScrollUntilRef);
+    } else {
+      messagesEndRef.current?.scrollIntoView();
+    }
   }, [messages]);
+
+  // Sticky-to-Bottom-Wächter für den aktiven Chat-Container. Bilder in
+  // Chat-Nachrichten laden asynchron und expandieren erst NACH dem initialen
+  // End-Scroll ihre Höhe (Placeholder → echte Dimension bei Server-Dims oder
+  // Client-Probe). Dasselbe gilt für nachgeladene Reactions, expandierte
+  // „Mehr anzeigen"-Bodies etc. Ohne diesen Wächter bliebe der Container
+  // sichtbar vor dem Ende stehen.
+  //
+  // Muster:
+  //   - Scroll-Listener aktualisiert isAtBottomRef bei jedem User-Scroll
+  //     (hoch → false, wieder ans Ende → true).
+  //   - MutationObserver auf childList/subtree/style beobachtet DOM-
+  //     Änderungen im Container. Wenn wir „sticky" sind, snap ans neue Ende.
+  //     Divider-Scroll (scrollToUnreadRef) wird respektiert — solange der
+  //     Ref true ist, unterbrechen wir den Divider-Scroll nicht.
+  useEffect(() => {
+    if (!activeConv) return;
+    const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
+      "[data-windowed-scroll]",
+    );
+    if (!box) return;
+
+    const onScroll = () => {
+      // Programmatic scrolls sollen isAtBottomRef nicht überschreiben —
+      // sonst würde ein Divider-Scroll bei wenigen Ungelesenen fälschlich
+      // sticky machen und der Nutzer würde durch Bild-Loads ans Ende
+      // geschleudert.
+      if (Date.now() < programmaticScrollUntilRef.current) return;
+      const dist = box.scrollHeight - box.scrollTop - box.clientHeight;
+      isAtBottomRef.current = dist < 100;
+    };
+    box.addEventListener("scroll", onScroll, { passive: true });
+
+    const snap = () => {
+      if (scrollToUnreadRef.current) return;
+      if (isAtBottomRef.current) {
+        // Nach dem initial-Smooth ist der User schon (fast) am Ende — kleine
+        // Anpassungen durch Bild-Loads etc. instant snappen, damit sich der
+        // Chain aus Layout-Updates nicht zu einer wackligen Kette von
+        // Mini-Animationen aufaddiert.
+        programmaticScrollUntilRef.current = Date.now() + 200;
+        box.scrollTop = box.scrollHeight;
+      }
+    };
+
+    const mo = new MutationObserver(snap);
+    mo.observe(box, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+
+    // Bild-Decode-Kompensation: `<img>` wendet aspect-ratio zwar früh, aber
+    // die tatsächliche Layout-Höhe kann erst nach dem Image-Decode stabil
+    // sein (Chrome sub-pixel-Delta bis ~300 px am unteren Container-Rand).
+    // Das ist KEINE DOM-Mutation und wird vom MutationObserver nicht gefangen.
+    // Der `load`-Event feuert nach Decode → snap. `capture: true`, weil
+    // load-Events nicht bubbeln.
+    const onImgLoad = (e: Event) => {
+      if ((e.target as HTMLElement)?.tagName === "IMG") snap();
+    };
+    box.addEventListener("load", onImgLoad, true);
+
+    return () => {
+      box.removeEventListener("scroll", onScroll);
+      box.removeEventListener("load", onImgLoad, true);
+      mo.disconnect();
+    };
+  }, [activeConv?.id]);
 
   // Clamp context menu to viewport after render (runs before paint → no flicker)
   useLayoutEffect(() => {
@@ -613,8 +800,12 @@ export default function ChatPage() {
       clearPendingImage();
       draftsRef.current.delete(activeConv.id);
       // Nach dem eigenen Senden soll die eigene Nachricht in den Blick — auch
-      // wenn der Nutzer kurz vorher hochgescrollt hatte.
+      // wenn der Nutzer kurz vorher hochgescrollt hatte. Beide Refs: der
+      // force-Flag kickt den initialen End-Scroll im messages-Effekt, der
+      // sticky-Ref lässt den MutationObserver weiter am Ende halten während
+      // Bilder etc. async nachladen.
       forceScrollToEndRef.current = true;
+      isAtBottomRef.current = true;
       await appendNewMessages(activeConv.id);
     } catch {
     } finally {
@@ -981,6 +1172,19 @@ export default function ChatPage() {
                     </button>
                   </div>
                 )}
+                {/* chat-open-at-unread: wenn ALLE geladenen Nachrichten
+                    ungelesen sind und der erste ungelesene älter als die
+                    Seite liegt, informieren wir statt über einen Divider
+                    (der wäre am obersten Eintrag redundant zum Chip). */}
+                {activeConv.unreadCount > messages.length && (
+                  <div
+                    role="status"
+                    className="mx-4 mt-2 p-2 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text text-center shrink-0"
+                  >
+                    {activeConv.unreadCount - messages.length} weitere
+                    ungelesene Nachrichten älter — „Ältere laden" klicken
+                  </div>
+                )}
                 {/* Chat-Bubbles haben extrem variable Höhen (~30 px kurzer Text
                     bis 300 px+ mit Bild/Reply/Reaktionen). Windowing mit fixer
                     estimatedRowHeight verschiebt beim Scrollen scrollHeight
@@ -1008,10 +1212,37 @@ export default function ChatPage() {
                         label={daySeparatorLabel(new Date(msg.sentAt), now)}
                       />
                     ) : null;
+                    // chat-open-at-unread: UnreadDivider unmittelbar VOR
+                    // der ersten ungelesenen Nachricht. Index ist beim
+                    // Öffnen einmal fixiert (unreadDividerIndexRef), damit
+                    // spätere SSE-Nachrichten die Grenze nicht verschieben.
+                    // -1 = Chip-Fall (kein Divider, siehe oben); null =
+                    // keine Ungelesenen.
+                    const dividerIdx = unreadDividerIndexRef.current;
+                    const unreadCountAtOpen = activeConv.unreadCount;
+                    const unread =
+                      dividerIdx !== null &&
+                      dividerIdx >= 0 &&
+                      index === dividerIdx ? (
+                        <div
+                          key={`unread-${msg.id}`}
+                          ref={(el) => {
+                            unreadDividerElRef.current = el;
+                          }}
+                          className="flex items-center gap-2 my-1"
+                        >
+                          <div className="flex-1 h-px bg-brand-border-subtle" />
+                          <span className="text-xs text-brand-text-muted">
+                            {unreadCountAtOpen} ungelesene Nachrichten
+                          </span>
+                          <div className="flex-1 h-px bg-brand-border-subtle" />
+                        </div>
+                      ) : null;
                     if (msg.isSystem) {
                       return (
                         <div key={msg.id} className="contents">
                           {sep}
+                          {unread}
                           <div className="flex justify-center my-1">
                             <span className="text-xs text-brand-text-muted bg-brand-surface-card px-3 py-1 rounded-full">
                               {msg.senderName} {msg.preview}
@@ -1024,6 +1255,7 @@ export default function ChatPage() {
                     return (
                       <div key={msg.id} className="contents">
                         {sep}
+                        {unread}
                         <MessageBubble
                           msg={msg}
                           body={bodyOf(msg)}

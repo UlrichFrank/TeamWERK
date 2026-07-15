@@ -20,6 +20,10 @@ const scrollBox = { value: 0 }
 beforeAll(() => {
   // scrollIntoView existiert in jsdom nicht.
   Element.prototype.scrollIntoView = vi.fn()
+  Element.prototype.scrollTo = function (this: HTMLElement, arg: unknown) {
+    const opts = typeof arg === 'object' && arg !== null ? (arg as { top?: number }) : null
+    if (opts && typeof opts.top === 'number') this.scrollTop = opts.top
+  } as unknown as Element['scrollTo']
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = class {
       observe() {}

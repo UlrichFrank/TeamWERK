@@ -1,15 +1,32 @@
 import { describe, test, expect, vi, beforeAll } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import ChatPage from '../ChatPage'
 import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
 vi.mock('../../hooks/useChatEvents', () => ({ useChatEvents: vi.fn() }))
 
+// Layout-Mocks für den Windowed-Scroll-Container, damit der End-Scroll
+// (box.scrollTop = box.scrollHeight) beobachtbar ist.
+const VIEWPORT = 300
+const CONTENT_HEIGHT = 5000
+const scrollBox = { value: 0 }
+
 beforeAll(() => {
-  // scrollIntoView existiert in jsdom nicht — brauchen wir aber, um zu
-  // verifizieren, dass der Deep-Link am Ende der Konversation landet.
   Element.prototype.scrollIntoView = vi.fn()
+  Element.prototype.scrollTo = function (this: HTMLElement, arg: unknown) {
+    const opts = typeof arg === 'object' && arg !== null ? (arg as { top?: number }) : null
+    if (opts && typeof opts.top === 'number') this.scrollTop = opts.top
+  } as unknown as Element['scrollTo']
+  // Synchroner rAF-Mock: der Custom-Smooth-Loop in ChatPage schließt sich
+  // damit in einem Tick statt über ~16 Frames verteilt. Ohne diesen Mock
+  // sitzt der Loop in jsdom fest (kein echter Frame-Callback).
+  let t = 0
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+    t += 400
+    cb(t)
+    return 0
+  }
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = class {
       observe() {}
@@ -17,6 +34,27 @@ beforeAll(() => {
       disconnect() {}
     } as unknown as typeof ResizeObserver
   }
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+    configurable: true,
+    get() {
+      return this.hasAttribute('data-windowed-scroll') ? VIEWPORT : 0
+    },
+  })
+  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+    configurable: true,
+    get() {
+      return this.hasAttribute('data-windowed-scroll') ? CONTENT_HEIGHT : 0
+    },
+  })
+  Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+    configurable: true,
+    get() {
+      return this.hasAttribute('data-windowed-scroll') ? scrollBox.value : 0
+    },
+    set(v: number) {
+      if (this.hasAttribute('data-windowed-scroll')) scrollBox.value = v
+    },
+  })
 })
 
 const CONV = {
@@ -53,11 +91,9 @@ describe('ChatPage — Deep-Link ?openUser=', () => {
     // Regression: früher rief der openUser-Effekt setActiveConv+loadMessages
     // direkt und umging damit forceScrollToEndRef → man landete bei
     // Direktnachrichten mit Verlauf ganz oben. Nach der Konsolidierung auf
-    // openConversation muss scrollIntoView aufgerufen werden.
-    const scrollSpy = Element.prototype.scrollIntoView as unknown as {
-      mock: { calls: unknown[] }
-    }
-    scrollSpy.mock.calls.length = 0
+    // openConversation muss der Container-scrollTop auf scrollHeight
+    // gesetzt werden (End-Scroll).
+    scrollBox.value = 0
 
     renderAsPersona(<ChatPage />, 'spieler', {
       route: '/chat?openUser=42',
@@ -85,10 +121,11 @@ describe('ChatPage — Deep-Link ?openUser=', () => {
     // durchlaufen hat.
     expect(screen.getByText('Alt-1')).toBeInTheDocument()
 
-    // Sticky-Guard wurde übersteuert (forceScrollToEndRef=true), also fährt
-    // der Auto-Scroll ans Ende. Vor dem Fix passierte das NICHT, weil der
-    // openUser-Handler direkt setActiveConv+loadMessages aufrief und den
-    // Force-Flag umging.
-    expect(scrollSpy.mock.calls.length).toBeGreaterThan(0)
+    // Sticky-Guard wurde übersteuert, also fährt der Auto-Scroll ans Ende.
+    // smoothScrollToBottom läuft als rAF-Loop (~250 ms in jsdom), deshalb
+    // waitFor statt sofort assert.
+    await waitFor(() => {
+      expect(scrollBox.value).toBe(CONTENT_HEIGHT)
+    })
   })
 })
