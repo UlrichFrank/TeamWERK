@@ -141,11 +141,13 @@ export function buildPainXML(input: SepaBuildInput): string {
     if (it.zip) pstlAdr.push(leaf('PstCd', ascii(it.zip)))
     if (it.city) pstlAdr.push(leaf('TwnNm', ascii(it.city)))
     pstlAdr.push(leaf('Ctry', 'DE'))
+    const mndtChildren: Node[] = [leaf('MndtId', ascii(it.mandatRef))]
+    if (it.mandatDatum) mndtChildren.push(leaf('DtOfSgntr', it.mandatDatum))
     return el('DrctDbtTxInf', [
       el('PmtId', [leaf('EndToEndId', ascii(`TW-${it.memberNumber}-${saisonStamp(input.saisonKurz)}`))]),
       leaf('InstdAmt', euro(it.betragCent), { Ccy: 'EUR' }),
       el('DrctDbtTx', [
-        el('MndtRltdInf', [leaf('MndtId', ascii(it.mandatRef)), leaf('DtOfSgntr', it.mandatDatum)]),
+        el('MndtRltdInf', mndtChildren),
       ]),
       el('DbtrAgt', [el('FinInstnId', [el('Othr', [leaf('Id', 'NOTPROVIDED')])])]),
       el('Dbtr', [leaf('Nm', ascii(it.name)), el('PstlAdr', pstlAdr)]),

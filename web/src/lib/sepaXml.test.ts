@@ -57,6 +57,21 @@ describe('buildPainXML (Parität zu internal/beitragslauf/xml.go)', () => {
   })
 })
 
+describe('DtOfSgntr weglassen, wenn kein Mandatsdatum vorliegt', () => {
+  it('fehlendes Mandatsdatum → kein leeres <DtOfSgntr>-Element (XSD-Verstoß bei Banken)', () => {
+    const input = sampleInput()
+    input.items[0].mandatDatum = ''
+    const xml = buildPainXML(input)
+    expect(xml).not.toContain('<DtOfSgntr>')
+    expect(xml).toContain('<MndtId>1042</MndtId>')
+  })
+
+  it('mit Mandatsdatum → <DtOfSgntr> mit ISODate', () => {
+    const xml = buildPainXML(sampleInput())
+    expect(xml).toContain('<DtOfSgntr>2026-05-01</DtOfSgntr>')
+  })
+})
+
 describe('nextBusinessDay', () => {
   it('verschiebt Samstag/Sonntag auf Montag', () => {
     expect(nextBusinessDay('2026-07-04')).toBe('2026-07-06') // Sa → Mo
