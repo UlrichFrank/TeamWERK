@@ -225,3 +225,61 @@ Das System SHALL in `GET /api/chat/users` einem Caller, der im Zugriffskreis ist
 - **WHEN** ein Spieler ohne Trainer-/Vorstand-/sL-Zugehörigkeit nach einem Trainer eines fremden Teams sucht
 - **THEN** ist dieser nicht im Ergebnis enthalten
 
+### Requirement: Nachrichten einer Konversation abrufen
+
+Das System SHALL die letzten 100 Nachrichten einer Konversation zurückgeben (absteigend nach `sent_at`, im Frontend umgekehrt angezeigt). Zu jeder Nachricht werden geliefert: `id`, `senderId`, `senderName`, `body`/`preview` (leer wenn gelöscht oder reine Bildnachricht), `mediaId` (null wenn kein Bild), `mediaUrl` (null wenn kein Bild; sonst `"/media/<mediaId>"` ohne `/api`-Prefix), `mediaWidth` (nur bei Bild-Nachrichten mit bekannter Dimension; sonst weggelassen), `mediaHeight` (nur bei Bild-Nachrichten mit bekannter Dimension; sonst weggelassen), `sentAt`, `replyToId`, `replyToBody`, `replyToSenderName`, `editedAt`, `deletedAt`, `isSystem`, `reactions`.
+
+#### Scenario: Mitglied ruft Nachrichten ab
+
+- **WHEN** ein Mitglied `GET /api/chat/conversations/{id}/messages` aufruft
+- **THEN** gibt der Server bis zu 100 Nachrichten zurück, jeweils inkl. `mediaId` und `mediaUrl`
+
+#### Scenario: Nachricht mit Bild und bekannten Dimensionen
+
+- **WHEN** eine Nachricht mit `media_id` abgerufen wird, deren `media`-Zeile `width=1200`, `height=800` hat
+- **THEN** enthält das Nachrichtenobjekt `mediaId`, `mediaUrl = "/media/<mediaId>"`, `mediaWidth=1200`, `mediaHeight=800`
+
+#### Scenario: Nachricht mit Bild ohne bekannte Dimensionen (Bestand vor Backfill oder unlesbarer Header)
+
+- **WHEN** eine Nachricht mit `media_id` abgerufen wird, deren `media`-Zeile `width IS NULL` hat
+- **THEN** enthält das Nachrichtenobjekt `mediaId`, `mediaUrl`; `mediaWidth` und `mediaHeight` fehlen im JSON-Objekt
+
+#### Scenario: Nachricht ohne Bild
+
+- **WHEN** eine Nachricht ohne `media_id` abgerufen wird
+- **THEN** sind `mediaId` und `mediaUrl` beide null; `mediaWidth`/`mediaHeight` fehlen
+
+#### Scenario: Nicht-Mitglied wird abgewiesen
+
+- **WHEN** ein User der nicht Mitglied der Konversation ist die Nachrichten abruft
+- **THEN** antwortet der Server mit HTTP 403
+
+### Requirement: Nachricht senden
+
+Das System SHALL das Senden einer Nachricht erlauben. Der Request kann optional `replyToId` und/oder `mediaId` enthalten. Mindestens `body` (nicht leer) **oder** `mediaId` MUSS vorhanden sein. Ein angegebenes `mediaId` MUSS auf eine existierende `media`-Zeile verweisen. Die referenzierte Nachricht bei `replyToId` MUSS zur selben Konversation gehören. Nach erfolgreichem Speichern SHALL der Server via SSE alle aktiven Mitglieder benachrichtigen und Push an Offline-Mitglieder senden.
+
+#### Scenario: Textnachricht erfolgreich gesendet
+
+- **WHEN** ein Mitglied `POST /api/chat/conversations/{id}/messages` mit `{ "body": "Hallo!" }` aufruft
+- **THEN** wird die Nachricht gespeichert, HTTP 201 zurückgegeben und ein SSE-Event `chat:new-message:<id>` verteilt
+
+#### Scenario: Reine Bildnachricht erfolgreich gesendet
+
+- **WHEN** ein Mitglied `POST /api/chat/conversations/{id}/messages` mit `{ "body": "", "mediaId": <id> }` aufruft
+- **THEN** wird die Nachricht mit `media_id` und leerem Body gespeichert und HTTP 201 zurückgegeben
+
+#### Scenario: Bild mit Text kombiniert
+
+- **WHEN** ein Mitglied `{ "body": "Schaut mal", "mediaId": <id> }` sendet
+- **THEN** wird eine Nachricht mit `body` und `media_id` gespeichert
+
+#### Scenario: Leere Nachricht ohne Bild wird abgelehnt
+
+- **WHEN** ein User eine Nachricht mit leerem `body` und ohne `mediaId` sendet
+- **THEN** antwortet der Server mit HTTP 400
+
+#### Scenario: Ausgetretenes Mitglied kann nicht senden
+
+- **WHEN** ein User der die Gruppe verlassen hat eine Nachricht sendet
+- **THEN** antwortet der Server mit HTTP 403
+

@@ -5,59 +5,46 @@ Einweg-Mitteilungen an Zielgruppen (alle, Team, Rolle). Sender kann Broadcasts b
 ## Requirements
 ### Requirement: Broadcast senden
 
-Das System SHALL es Usern mit der Rolle admin, vorstand oder trainer erlauben eine einweg Mitteilung an eine Zielgruppe zu senden. Trainer dürfen nur an ihr eigenes Team senden (`target_type: team` mit ihrer `target_id`). Admin und Vorstand dürfen `target_type: all`, `team` oder `role` verwenden. Nach dem Senden werden alle matching User benachrichtigt (SSE + Push).
+Das System SHALL es Usern mit Rolle admin, vorstand oder trainer erlauben, eine Mitteilung an eine Zielgruppe zu senden. Trainer dürfen nur an ihr eigenes Team senden (`target_type: team`). Admin und Vorstand dürfen `target_type: all`, `team` oder `role`. Der Request kann optional `mediaId` enthalten; mindestens `body` (nicht leer) **oder** `mediaId` MUSS vorhanden sein. Ein angegebenes `mediaId` MUSS auf eine existierende `media`-Zeile verweisen. Nach dem Senden werden alle matching User benachrichtigt (SSE `chat:new-broadcast` + Push).
 
-#### Scenario: Admin sendet Broadcast an alle
+#### Scenario: Admin sendet Text-Broadcast an alle
 
-- **WHEN** ein Admin `POST /api/chat/broadcasts` mit `{ body: "Wichtige Info", target_type: "all" }` aufruft
-- **THEN** wird der Broadcast gespeichert und alle aktiven User erhalten ein SSE-Event `chat:new-broadcast`
-- **THEN** gibt der Server HTTP 201 zurück
+- **WHEN** ein Admin `POST /api/chat/broadcasts` mit `{ "body": "Wichtige Info", "targetType": "all" }` aufruft
+- **THEN** wird der Broadcast gespeichert, alle aktiven User erhalten ein SSE-Event `chat:new-broadcast`, HTTP 201
 
-#### Scenario: Trainer sendet Broadcast an eigenes Team
+#### Scenario: Reine Bild-Mitteilung senden
 
-- **WHEN** ein Trainer `POST /api/chat/broadcasts` mit `{ body: "Training morgen abgesagt", target_type: "team", target_id: 3 }` aufruft und Team 3 sein Team ist
-- **THEN** wird der Broadcast gespeichert und alle Mitglieder von Team 3 erhalten eine Benachrichtigung
+- **WHEN** ein Vorstand `POST /api/chat/broadcasts` mit `{ "body": "", "mediaId": <id>, "targetType": "all" }` aufruft
+- **THEN** wird der Broadcast mit `media_id` und leerem Body gespeichert, HTTP 201
 
-#### Scenario: Trainer kann nicht an fremdes Team senden
+#### Scenario: Leere Mitteilung ohne Bild wird abgelehnt
 
-- **WHEN** ein Trainer versucht einen Broadcast mit `target_id` eines fremden Teams zu senden
-- **THEN** antwortet der Server mit HTTP 403
-
-#### Scenario: Spieler kann keinen Broadcast senden
-
-- **WHEN** ein User mit Rolle spieler oder elternteil `POST /api/chat/broadcasts` aufruft
-- **THEN** antwortet der Server mit HTTP 403
-
-#### Scenario: Leerer Broadcast wird abgelehnt
-
-- **WHEN** ein berechtigter User einen Broadcast mit leerem `body` sendet
+- **WHEN** ein berechtigter User einen Broadcast mit leerem `body` und ohne `mediaId` sendet
 - **THEN** antwortet der Server mit HTTP 400
+
+#### Scenario: Unberechtigter User
+
+- **WHEN** ein User ohne admin/vorstand/trainer einen Broadcast sendet
+- **THEN** antwortet der Server mit HTTP 403
 
 ### Requirement: Empfangene Broadcasts abrufen
 
-Das System SHALL für jeden User eine Liste der für ihn bestimmten Broadcasts zurückgeben, sortiert nach `sent_at` absteigend. Der Sender ist namentlich sichtbar. Andere Empfänger sind NICHT sichtbar (anonym). Jeder Broadcast zeigt ob er gelesen wurde. Das Feld `editedAt` (null wenn nie bearbeitet) wird ebenfalls zurückgegeben.
+Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Broadcast werden geliefert: `id`, `senderName`, `body`, `mediaId` (null wenn kein Bild), `mediaUrl` (null wenn kein Bild; sonst `"/media/<mediaId>"`), `mediaWidth` (nur bei Bild-Broadcasts mit bekannter Dimension; sonst weggelassen), `mediaHeight` (nur bei Bild-Broadcasts mit bekannter Dimension; sonst weggelassen), `sentAt`, `isRead`, `isSent`, `editedAt`.
 
-#### Scenario: User ruft empfangene Broadcasts ab
+#### Scenario: Broadcast mit Bild und bekannten Dimensionen
 
-- **WHEN** ein User `GET /api/chat/broadcasts` aufruft
-- **THEN** gibt der Server alle Broadcasts zurück die für diesen User bestimmt waren
-- **THEN** jeder Broadcast enthält `senderName`, `body`, `sentAt`, `isRead`, `editedAt`
-- **THEN** andere Empfänger sind NICHT im Response enthalten
+- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und ein Broadcast `media_id` gesetzt hat, dessen `media`-Zeile `width=800`, `height=600` hat
+- **THEN** enthält das Broadcast-Objekt `mediaId`, `mediaUrl = "/media/<mediaId>"`, `mediaWidth=800`, `mediaHeight=600`
 
-#### Scenario: Gesendete Broadcasts für Sender
+#### Scenario: Broadcast mit Bild ohne bekannte Dimensionen
 
-- **WHEN** ein Admin `GET /api/chat/broadcasts` aufruft
-- **THEN** erscheinen auch selbst gesendete Broadcasts in der Liste (mit Markierung `isSent: true`)
+- **WHEN** ein Broadcast mit `media_id` abgerufen wird, dessen `media`-Zeile `width IS NULL` hat
+- **THEN** enthält das Broadcast-Objekt `mediaId`, `mediaUrl`; `mediaWidth` und `mediaHeight` fehlen im JSON-Objekt
 
-#### Scenario: Unbearbeiteter Broadcast
+#### Scenario: Broadcast ohne Bild abrufen
 
-- **WHEN** ein Broadcast nie bearbeitet wurde
-- **THEN** ist `editedAt: null` in der Antwort
-
-#### Scenario: Bearbeiteter Broadcast
-
-- **WHEN** ein Broadcast bearbeitet wurde
-- **THEN** enthält `editedAt` den Timestamp der letzten Bearbeitung
+- **WHEN** ein Broadcast ohne `media_id` abgerufen wird
+- **THEN** sind `mediaId` und `mediaUrl` beide null; `mediaWidth`/`mediaHeight` fehlen
 
 ### Requirement: Broadcast als gelesen markieren
 

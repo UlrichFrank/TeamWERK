@@ -24,7 +24,7 @@ Das System SHALL es Usern mit Rolle admin, vorstand oder trainer erlauben, eine 
 - **WHEN** ein User ohne admin/vorstand/trainer einen Broadcast sendet
 - **THEN** antwortet der Server mit HTTP 403
 
-### Requirement: Broadcasts abrufen
+### Requirement: Empfangene Broadcasts abrufen
 
 Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Broadcast werden geliefert: `id`, `senderName`, `body`, `mediaId` (null wenn kein Bild), `mediaUrl` (null wenn kein Bild; sonst `"/media/<mediaId>"`), `sentAt`, `isRead`, `isSent`, `editedAt`.
 
