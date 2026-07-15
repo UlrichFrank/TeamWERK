@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import ChatPage from '../ChatPage'
 import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 
@@ -15,6 +15,19 @@ const scrollBox = { value: 0 }
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn()
+  // jsdom implementiert scrollTo nicht — Polyfill, der scrollTop setzt.
+  Element.prototype.scrollTo = function (this: HTMLElement, arg: unknown) {
+    const opts = typeof arg === 'object' && arg !== null ? (arg as { top?: number }) : null
+    if (opts && typeof opts.top === 'number') this.scrollTop = opts.top
+  } as unknown as Element['scrollTo']
+  // Synchroner rAF-Mock: der Custom-Smooth-Loop in ChatPage schließt sich
+  // damit in einem Tick statt über ~16 Frames verteilt.
+  let rafTime = 0
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+    rafTime += 400
+    cb(rafTime)
+    return 0
+  }
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = class {
       observe() {}
@@ -135,10 +148,11 @@ describe('ChatPage — Öffnen positioniert am ersten Ungelesenen', () => {
     // Kein Divider im DOM.
     expect(screen.queryByText(/ungelesene Nachrichten$/)).toBeNull()
 
-    // End-Scroll setzt scrollTop des Windowed-Containers direkt auf
-    // scrollHeight (nicht mehr scrollIntoView(smooth) — die animierte
-    // Variante konnte in Prod von nachfolgenden Renders unterbrochen werden).
-    expect(scrollBox.value).toBe(CONTENT_HEIGHT)
+    // End-Scroll läuft als rAF-basierter Smooth-Loop; das finale Ziel ist
+    // scrollHeight (der Loop endet mit einem harten Snap gegen sub-pixel-Rest).
+    await waitFor(() => {
+      expect(scrollBox.value).toBe(CONTENT_HEIGHT)
+    })
   })
 
   test('unreadCount > geladene Seite → Chip "N weitere ungelesene älter" sichtbar, kein Divider', async () => {

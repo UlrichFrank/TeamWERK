@@ -170,6 +170,39 @@ interface ContextMenuState {
   selectedText?: string;
 }
 
+// smoothScrollToBottom animiert den Container per rAF-Loop ans Ende. Anders
+// als scrollTo({behavior:'smooth'}) fixiert der Loop das Ziel NICHT — bei
+// jedem Frame wird der aktuelle scrollHeight als Ziel genommen. So bleibt
+// die Animation robust, wenn Content während des Scrolls nachlädt (Bilder,
+// Blob-Decodes, SSE). Abbruch, wenn der Nutzer selbst hochscrollt
+// (isAtBottomRef=false). Duration bewusst kurz (250 ms), damit die
+// Animation nicht als „lang" wirkt und Follow-up-Snaps (instant im
+// MutationObserver/load-Event) unauffällig bleiben.
+function smoothScrollToBottom(
+  box: HTMLElement,
+  isAtBottomRef: React.MutableRefObject<boolean>,
+  programmaticScrollUntilRef: React.MutableRefObject<number>,
+) {
+  const start = performance.now();
+  const startTop = box.scrollTop;
+  const duration = 250;
+  const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+  const step = (now: number) => {
+    if (!isAtBottomRef.current) return;
+    // Clamp auf [0, 1] — in jsdom-Tests kann (now - start) negativ werden
+    // je nachdem, wie performance.now vs. rAF-Zeitmarken tickern.
+    const t = Math.max(0, Math.min((now - start) / duration, 1));
+    const target = box.scrollHeight - box.clientHeight;
+    // Fenster für den Scroll-Listener verlängern, damit die vielen scroll-
+    // Events aus rAF-frames nicht als User-Scrolls interpretiert werden.
+    programmaticScrollUntilRef.current = Date.now() + 100;
+    box.scrollTop = startTop + (target - startTop) * easeOut(t);
+    if (t < 1) requestAnimationFrame(step);
+    else box.scrollTop = box.scrollHeight; // Finaler Snap gegen sub-pixel-Rest
+  };
+  requestAnimationFrame(step);
+}
+
 export default function ChatPage() {
   const { user, hasCapability } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -222,6 +255,12 @@ export default function ChatPage() {
   // wachsen lassen). Wird durch Scroll-Events des Nutzers aktualisiert:
   // hochscrollen → false, wieder ans Ende → true.
   const isAtBottomRef = useRef(true);
+  // Timestamp bis zu dem alle Scroll-Events als „programmatisch" gelten und
+  // isAtBottomRef NICHT verändern. Ohne diesen Guard würde ein Divider-Scroll
+  // bei wenigen Ungelesenen (distance < 100) fälschlich isAtBottomRef=true
+  // setzen — bei nachfolgenden Bild-Loads snappen wir dann ans Ende und
+  // verlieren den Divider aus dem Viewport.
+  const programmaticScrollUntilRef = useRef(0);
   // Index (in messages[]) der ersten ungelesenen Nachricht — beim Öffnen
   // einmal fixiert, danach unverändert, damit später eintreffende SSE-
   // Nachrichten den UnreadDivider nicht unter dem Nutzer verschieben.
@@ -525,6 +564,11 @@ export default function ChatPage() {
     // „N weitere ungelesene älter"-Chip sitzt.
     if (scrollToUnreadRef.current) {
       scrollToUnreadRef.current = false;
+      // Divider-Scroll ist programmatisch; onScroll darf isAtBottomRef
+      // dadurch NICHT auf true setzen, sonst reißt der nächste Bild-Load-
+      // Snap uns weg vom Divider ans Ende (bei wenigen Ungelesenen wäre
+      // distance < 100 → falsche sticky-Erkennung).
+      programmaticScrollUntilRef.current = Date.now() + 1000;
       if (unreadDividerIndexRef.current === -1) {
         const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
           "[data-windowed-scroll]",
@@ -560,7 +604,7 @@ export default function ChatPage() {
     // keinen Ref-Roundtrip. Fallback auf scrollIntoView, wenn der Container
     // (noch) nicht im DOM ist.
     if (box) {
-      box.scrollTop = box.scrollHeight;
+      smoothScrollToBottom(box, isAtBottomRef, programmaticScrollUntilRef);
     } else {
       messagesEndRef.current?.scrollIntoView();
     }
@@ -588,6 +632,11 @@ export default function ChatPage() {
     if (!box) return;
 
     const onScroll = () => {
+      // Programmatic scrolls sollen isAtBottomRef nicht überschreiben —
+      // sonst würde ein Divider-Scroll bei wenigen Ungelesenen fälschlich
+      // sticky machen und der Nutzer würde durch Bild-Loads ans Ende
+      // geschleudert.
+      if (Date.now() < programmaticScrollUntilRef.current) return;
       const dist = box.scrollHeight - box.scrollTop - box.clientHeight;
       isAtBottomRef.current = dist < 100;
     };
@@ -595,7 +644,14 @@ export default function ChatPage() {
 
     const snap = () => {
       if (scrollToUnreadRef.current) return;
-      if (isAtBottomRef.current) box.scrollTop = box.scrollHeight;
+      if (isAtBottomRef.current) {
+        // Nach dem initial-Smooth ist der User schon (fast) am Ende — kleine
+        // Anpassungen durch Bild-Loads etc. instant snappen, damit sich der
+        // Chain aus Layout-Updates nicht zu einer wackligen Kette von
+        // Mini-Animationen aufaddiert.
+        programmaticScrollUntilRef.current = Date.now() + 200;
+        box.scrollTop = box.scrollHeight;
+      }
     };
 
     const mo = new MutationObserver(snap);

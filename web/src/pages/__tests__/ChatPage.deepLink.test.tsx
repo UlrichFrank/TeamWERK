@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeAll } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import ChatPage from '../ChatPage'
 import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 
@@ -14,6 +14,19 @@ const scrollBox = { value: 0 }
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn()
+  Element.prototype.scrollTo = function (this: HTMLElement, arg: unknown) {
+    const opts = typeof arg === 'object' && arg !== null ? (arg as { top?: number }) : null
+    if (opts && typeof opts.top === 'number') this.scrollTop = opts.top
+  } as unknown as Element['scrollTo']
+  // Synchroner rAF-Mock: der Custom-Smooth-Loop in ChatPage schließt sich
+  // damit in einem Tick statt über ~16 Frames verteilt. Ohne diesen Mock
+  // sitzt der Loop in jsdom fest (kein echter Frame-Callback).
+  let t = 0
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+    t += 400
+    cb(t)
+    return 0
+  }
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = class {
       observe() {}
@@ -108,8 +121,11 @@ describe('ChatPage — Deep-Link ?openUser=', () => {
     // durchlaufen hat.
     expect(screen.getByText('Alt-1')).toBeInTheDocument()
 
-    // Sticky-Guard wurde übersteuert (forceScrollToEndRef=true), also fährt
-    // der Auto-Scroll ans Ende — direkter Container-scrollTop = scrollHeight.
-    expect(scrollBox.value).toBe(CONTENT_HEIGHT)
+    // Sticky-Guard wurde übersteuert, also fährt der Auto-Scroll ans Ende.
+    // smoothScrollToBottom läuft als rAF-Loop (~250 ms in jsdom), deshalb
+    // waitFor statt sofort assert.
+    await waitFor(() => {
+      expect(scrollBox.value).toBe(CONTENT_HEIGHT)
+    })
   })
 })
