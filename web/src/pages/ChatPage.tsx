@@ -593,10 +593,12 @@ export default function ChatPage() {
     };
     box.addEventListener("scroll", onScroll, { passive: true });
 
-    const mo = new MutationObserver(() => {
+    const snap = () => {
       if (scrollToUnreadRef.current) return;
       if (isAtBottomRef.current) box.scrollTop = box.scrollHeight;
-    });
+    };
+
+    const mo = new MutationObserver(snap);
     mo.observe(box, {
       childList: true,
       subtree: true,
@@ -604,8 +606,20 @@ export default function ChatPage() {
       attributeFilter: ["style"],
     });
 
+    // Bild-Decode-Kompensation: `<img>` wendet aspect-ratio zwar früh, aber
+    // die tatsächliche Layout-Höhe kann erst nach dem Image-Decode stabil
+    // sein (Chrome sub-pixel-Delta bis ~300 px am unteren Container-Rand).
+    // Das ist KEINE DOM-Mutation und wird vom MutationObserver nicht gefangen.
+    // Der `load`-Event feuert nach Decode → snap. `capture: true`, weil
+    // load-Events nicht bubbeln.
+    const onImgLoad = (e: Event) => {
+      if ((e.target as HTMLElement)?.tagName === "IMG") snap();
+    };
+    box.addEventListener("load", onImgLoad, true);
+
     return () => {
       box.removeEventListener("scroll", onScroll);
+      box.removeEventListener("load", onImgLoad, true);
       mo.disconnect();
     };
   }, [activeConv?.id]);
