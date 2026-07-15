@@ -216,6 +216,12 @@ export default function ChatPage() {
   // (nach eigenem Senden / Öffnen einer Konversation), unabhängig davon, ob
   // der Nutzer gerade hochgescrollt ist.
   const forceScrollToEndRef = useRef(false);
+  // Sticky-to-Bottom-Zustand: true → jede spätere DOM-Änderung im Chat-
+  // Container snappt ans neue Ende (fängt Bild-Load-Nachschub und
+  // Reactions-Insert ab, die scrollHeight nach dem initial-Scroll noch
+  // wachsen lassen). Wird durch Scroll-Events des Nutzers aktualisiert:
+  // hochscrollen → false, wieder ans Ende → true.
+  const isAtBottomRef = useRef(true);
   // Index (in messages[]) der ersten ungelesenen Nachricht — beim Öffnen
   // einmal fixiert, danach unverändert, damit später eintreffende SSE-
   // Nachrichten den UnreadDivider nicht unter dem Nutzer verschieben.
@@ -393,10 +399,12 @@ export default function ChatPage() {
     if (conv.unreadCount > 0) {
       scrollToUnreadRef.current = true;
       forceScrollToEndRef.current = false;
+      isAtBottomRef.current = false;
     } else {
       forceScrollToEndRef.current = true;
       scrollToUnreadRef.current = false;
       unreadDividerIndexRef.current = null;
+      isAtBottomRef.current = true;
     }
     await loadMessages(conv.id, conv.unreadCount);
   };
@@ -558,6 +566,50 @@ export default function ChatPage() {
     }
   }, [messages]);
 
+  // Sticky-to-Bottom-Wächter für den aktiven Chat-Container. Bilder in
+  // Chat-Nachrichten laden asynchron und expandieren erst NACH dem initialen
+  // End-Scroll ihre Höhe (Placeholder → echte Dimension bei Server-Dims oder
+  // Client-Probe). Dasselbe gilt für nachgeladene Reactions, expandierte
+  // „Mehr anzeigen"-Bodies etc. Ohne diesen Wächter bliebe der Container
+  // sichtbar vor dem Ende stehen.
+  //
+  // Muster:
+  //   - Scroll-Listener aktualisiert isAtBottomRef bei jedem User-Scroll
+  //     (hoch → false, wieder ans Ende → true).
+  //   - MutationObserver auf childList/subtree/style beobachtet DOM-
+  //     Änderungen im Container. Wenn wir „sticky" sind, snap ans neue Ende.
+  //     Divider-Scroll (scrollToUnreadRef) wird respektiert — solange der
+  //     Ref true ist, unterbrechen wir den Divider-Scroll nicht.
+  useEffect(() => {
+    if (!activeConv) return;
+    const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
+      "[data-windowed-scroll]",
+    );
+    if (!box) return;
+
+    const onScroll = () => {
+      const dist = box.scrollHeight - box.scrollTop - box.clientHeight;
+      isAtBottomRef.current = dist < 100;
+    };
+    box.addEventListener("scroll", onScroll, { passive: true });
+
+    const mo = new MutationObserver(() => {
+      if (scrollToUnreadRef.current) return;
+      if (isAtBottomRef.current) box.scrollTop = box.scrollHeight;
+    });
+    mo.observe(box, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+
+    return () => {
+      box.removeEventListener("scroll", onScroll);
+      mo.disconnect();
+    };
+  }, [activeConv?.id]);
+
   // Clamp context menu to viewport after render (runs before paint → no flicker)
   useLayoutEffect(() => {
     if (!contextMenu || !contextMenuRef.current) return;
@@ -678,8 +730,12 @@ export default function ChatPage() {
       clearPendingImage();
       draftsRef.current.delete(activeConv.id);
       // Nach dem eigenen Senden soll die eigene Nachricht in den Blick — auch
-      // wenn der Nutzer kurz vorher hochgescrollt hatte.
+      // wenn der Nutzer kurz vorher hochgescrollt hatte. Beide Refs: der
+      // force-Flag kickt den initialen End-Scroll im messages-Effekt, der
+      // sticky-Ref lässt den MutationObserver weiter am Ende halten während
+      // Bilder etc. async nachladen.
       forceScrollToEndRef.current = true;
+      isAtBottomRef.current = true;
       await appendNewMessages(activeConv.id);
     } catch {
     } finally {
