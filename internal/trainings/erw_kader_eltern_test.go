@@ -5,11 +5,21 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 )
+
+// futureDate liefert ein Datum 60 Tage in der Zukunft im ISODate-Format —
+// vermeidet Time-Bomb-Tests: statische Datums-Konstanten in Tests werden mit
+// der Zeit von der realen Wanduhr eingeholt und liefern dann durch die
+// Cutoff-Regel im Respond-Handler unerwartete 422er.
+func futureDate(t *testing.T) string {
+	t.Helper()
+	return time.Now().AddDate(0, 0, 60).Format("2006-01-02")
+}
 
 // childRSVPResp mirrors the children_rsvp entries in the /api/training-sessions response.
 type childRSVPResp struct {
@@ -30,7 +40,7 @@ func TestSessions_ParentExtendedChild_InChildrenRSVP(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-07-15")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, futureDate(t))
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	childMemberID := testutil.CreateMember(t, db, 0)
@@ -78,7 +88,7 @@ func TestSessions_ExtendedChild_NoAutoConfirm(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-07-15")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, futureDate(t))
 	db.Exec(`UPDATE training_sessions SET rsvp_default_players='confirmed' WHERE id=?`, sessionID)
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
@@ -129,7 +139,7 @@ func TestSessions_ChildInBothKaders_SingleEntry(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-07-15")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, futureDate(t))
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	childMemberID := testutil.CreateMember(t, db, 0)
@@ -176,7 +186,7 @@ func TestRespond_ParentForExtendedChild_OK(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-07-15")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, futureDate(t))
 
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	childMemberID := testutil.CreateMember(t, db, 0)
