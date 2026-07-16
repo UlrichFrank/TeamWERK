@@ -33,6 +33,13 @@ fi
 echo "▸ pre-push: Frontend build (tsc + vite)"
 pnpm -C web build
 
+if ! command -v xmllint >/dev/null 2>&1; then
+	echo "⚠ pre-push: xmllint (libxml2) nicht gefunden — SEPA-XSD-Gate wird bei den"
+	echo "  Frontend-Tests lokal übersprungen. Installation: 'brew install libxml2'"
+	echo "  (macOS) bzw. 'apt-get install libxml2-utils' (Debian). Das CI-Gate"
+	echo "  prüft es verpflichtend — Push wird nicht blockiert."
+fi
+
 echo "▸ pre-push: Frontend tests (vitest)"
 pnpm -C web test
 

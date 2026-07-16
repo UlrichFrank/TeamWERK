@@ -227,7 +227,7 @@ export default function BeitragslaufPage() {
         return
       }
 
-      const xml = buildPainXML({
+      const { xml, warnings } = buildPainXML({
         saisonKurz: data.saison_kurz,
         clubName: data.club_name,
         glaeubigerId: club.glaeubiger_id,
@@ -238,6 +238,21 @@ export default function BeitragslaufPage() {
         createdAt: new Date(),
         items,
       })
+
+      // Truncation-Warnings zeigen, bevor die Datei heruntergeladen wird — bei Debitor-
+      // Nm ist die Kürzung bank-relevant (Identifikation beim Zahler), stille Mutation
+      // wäre gefährlich.
+      if (warnings.length > 0) {
+        const lines = warnings.map(w => {
+          const who = w.memberNumber ? `Mitglied ${w.memberNumber}` : 'Verein'
+          return `• ${who} (${w.location}): ${w.original.length} → ${w.maxLen} Zeichen`
+        }).join('\n')
+        const proceed = window.confirm(
+          `Für ${warnings.length} Feld(er) wird auf DK-TVS-Länge gekürzt:\n\n${lines}\n\n` +
+          `Trotzdem herunterladen?`,
+        )
+        if (!proceed) return
+      }
 
       const url = URL.createObjectURL(new Blob([xml], { type: 'application/xml' }))
       const a = document.createElement('a')

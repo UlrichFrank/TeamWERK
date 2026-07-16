@@ -45,6 +45,11 @@ jobs:
 
       - run: pnpm -C web install --frozen-lockfile
 
+      # libxml2-utils (xmllint) fürs SEPA-XSD-Gate in sepaXml.xsd.test.ts.
+      # Ohne xmllint würde der Test skippen und schema-brüchige Änderungen am
+      # SEPA-Generator (web/src/lib/sepaXml.ts) unbemerkt durch das Gate rutschen.
+      - run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
       # Frontend zuerst bauen: vite schreibt nach cmd/teamwerk/web/dist/
       # (gitignored). //go:embed all:web/dist braucht das Verzeichnis, sonst
       # schlagen go vet/test mit "pattern all:web/dist: no matching files" fehl.
@@ -57,5 +62,11 @@ jobs:
         with:
           version: v2.12.2
 
+      # TEAMWERK_REQUIRE_XSD=1 verhindert, dass sepaXml.xsd.test.ts still
+      # skippt, wenn xmllint fehlt — hart failen, damit ein kaputtes
+      # libxml2-Runner-Image das Gate nicht zur No-Op macht.
       - run: pnpm -C web test
+        env:
+          TEAMWERK_REQUIRE_XSD: '1'
+
       - run: pnpm -C web lint
