@@ -1,5 +1,24 @@
 # Implementation Tasks
 
+> **Status-Vermerk (2026-07-16):** Von den drei geplanten EPC-Ergänzungen
+> wurde nur **2.1 (`CreDtTm` mit `Z`)** übernommen. **2.2 (`Cdtr/PstlAdr` mit
+> nur `<Ctry>DE</Ctry>`)** und **2.3 (`InitgPty/Id` mit `SchmeNm/Prtry=SEPA`)**
+> wurden nach genauer Analyse gegen das DK-TVS `pain.008.001.08_GBIC_5.xsd`
+> **verworfen**:
+>
+> - 2.2 ist XSD-invalid unter GBIC_5 — `<TwnNm>` ist [1..1] Pflicht, sobald
+>   `<PstlAdr>` überhaupt vorkommt; ein `<PstlAdr>` mit nur `<Ctry>` bricht
+>   die Schema-Prüfung. Die passende Härtung (`<PstlAdr>` all-or-nothing im
+>   Debtor) wurde stattdessen im Nachfolger-Change umgesetzt.
+> - 2.3 wird von der DK ausdrücklich nicht empfohlen — die Gläubiger-ID
+>   gehört ausschließlich in `<CdtrSchmeId>` (Anlage 3 V26.11 Kap. 2.2.2.4).
+>
+> Die eigentliche Ursache (Bank-Reject-Loop ohne mechanische Prüfung) wird
+> vom Nachfolger-Change [[sepa-xml-xsd-gate]] adressiert: offizielles
+> DK-TVS-XSD eingecheckt, mechanische Validierung im CI-Gate. Dieser Change
+> hier kann nach dem `CreDtTm`-Z-Fix archiviert werden.
+
+
 ## 1. Bank-Test der manuell gefixten Datei (Voraussetzung)
 
 - [ ] 1.1 Nutzer lädt `/Users/ulrich/Downloads/beitragslauf_2026-27.fixed.xml` bei der BW-Bank hoch und meldet Ergebnis zurück.
