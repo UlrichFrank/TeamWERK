@@ -919,7 +919,15 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid status", http.StatusBadRequest)
 		return
 	}
-	h.db.ExecContext(r.Context(), `UPDATE members SET status=?, updated_at=? WHERE id=?`, req.Status, time.Now(), id)
+	res, err := h.db.ExecContext(r.Context(), `UPDATE members SET status=?, updated_at=? WHERE id=?`, req.Status, time.Now(), id)
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "Mitglied nicht gefunden", http.StatusNotFound)
+		return
+	}
 	idInt, _ := strconv.Atoi(id)
 	h.broadcastMembers(r.Context(), []int{idInt})
 	w.WriteHeader(http.StatusNoContent)

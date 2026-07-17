@@ -829,6 +829,22 @@ func TestMemberStatus_Invalid(t *testing.T) {
 	}
 }
 
+// TestMemberStatus_NotFound404 nagelt den Vorab-Bugfix fest: eine gültige Status-Mutation
+// auf eine nicht-existente Mitglieds-ID darf nicht still mit 204 durchrutschen (RowsAffected==0).
+func TestMemberStatus_NotFound404(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+
+	srv := newStatusServer(t, database)
+	res := testutil.Do(t, srv, http.MethodPut,
+		"/api/members/999999/status", tok,
+		map[string]string{"status": "aktiv"})
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown member, got %d", res.StatusCode)
+	}
+}
+
 func TestMemberStatus_Anwaerter_Create(t *testing.T) {
 	database := testutil.NewDB(t)
 	vorstandID := testutil.CreateUser(t, database, "standard")
