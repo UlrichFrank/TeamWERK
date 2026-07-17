@@ -1,10 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { compressImage } from '../lib/imageCompress'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { AlertTriangle, ImageOff, Trash2, Upload, X, Eye, EyeOff, Send } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
+
+const MAX_IMAGES = 10
+
+// Server-Fehlercodes aus internal/matchreports/images.go → deutsche User-Meldung.
+// Netzfehler (keine Response) und unbekannte Codes bekommen den Fallback-Text.
+function translateUploadError(status: number | undefined, code: string | undefined): string {
+  switch (code) {
+    case 'too_many_images':
+      return 'Limit von 10 Bildern erreicht'
+    case 'unsupported_mime':
+      return 'Format nicht unterstützt (nur JPG/PNG)'
+    case 'image_too_large':
+      return 'Datei ist zu groß nach Verkleinerung'
+    case 'bad_multipart':
+      return 'Datei konnte nicht gelesen werden'
+    case 'in_progress':
+    case 'already_published':
+    case 'not_found':
+      return 'Bericht ist nicht mehr editierbar'
+  }
+  if (status && status >= 400) return 'Upload fehlgeschlagen — bitte erneut versuchen'
+  return 'Upload fehlgeschlagen — bitte erneut versuchen'
+}
 
 type ReportImage = {
     id: number
@@ -407,21 +431,85 @@ function ImagesSection(props: {
     readOnly: boolean
     onChange: () => void
 }) {
-    const [uploading, setUploading] = useState(false)
+    // Multi-Select-Upload: `progress` steuert das Button-Label (`Lade x/y…`).
+    // `errors` und `trimInfo` sind sichtbare, persistente Meldungen — kein Toast,
+    // damit die/der Nutzer:in bei 10 Files noch sieht, welche fehlgeschlagen sind.
+    const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
+    const [errors, setErrors] = useState<{ name: string; reason: string }[]>([])
+    const [trimInfo, setTrimInfo] = useState<string | null>(null)
 
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-        e.target.value = ''
-        setUploading(true)
+    const uploading = progress.total > 0
+    const remaining = Math.max(0, MAX_IMAGES - props.images.length)
+
+    const uploadOne = async (file: File): Promise<{ ok: true } | { ok: false; reason: string }> => {
+        // Server-Whitelist ist image/jpeg+image/png — deshalb JPEG-only.
+        // Bei Decoder-Fehlern (HEIC etc.) reicht compressImage die Original-
+        // Datei durch; der Server lehnt dann mit unsupported_mime ab, was
+        // per translateUploadError als klare User-Meldung landet.
+        let blob: Blob = file
+        let fileName = file.name
+        try {
+            const r = await compressImage(file, {
+                formats: [{ mime: 'image/jpeg', ext: '.jpg' }],
+            })
+            blob = r.blob
+            fileName = r.fileName
+        } catch {
+            /* Original-Datei nutzen, Server entscheidet */
+        }
         try {
             const form = new FormData()
-            form.append('file', file)
+            form.append('file', blob, fileName)
             form.append('caption', '')
             await api.post(`/match-reports/${props.reportID}/images`, form)
-            props.onChange()
+            return { ok: true }
+        } catch (err) {
+            const resp = (err as { response?: { status?: number; data?: { error?: string } } })?.response
+            return { ok: false, reason: translateUploadError(resp?.status, resp?.data?.error) }
+        }
+    }
+
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const picked = Array.from(e.target.files ?? [])
+        // Sofort clearen: gleiche Datei kann so nach Fehler erneut ausgewählt werden.
+        e.target.value = ''
+        if (picked.length === 0) return
+
+        // Alte Meldungen wegräumen — der aktuelle Upload liefert eine frische Sicht.
+        setErrors([])
+        setTrimInfo(null)
+
+        // Vorab-Trim: Client-Sicht auf `remaining` kürzen. Der Server-Cap
+        // MaxImages=10 bleibt der Backstop; im Race-Fall (zweiter Autor lädt
+        // parallel) übernimmt die 400-Antwort die Fehleranzeige.
+        let files = picked
+        if (picked.length > remaining) {
+            files = picked.slice(0, remaining)
+            const dropped = picked.length - remaining
+            setTrimInfo(
+                remaining === 0
+                    ? 'Limit von 10 Bildern bereits erreicht — keine weiteren Uploads.'
+                    : `Nur die ersten ${remaining} Bild${remaining === 1 ? '' : 'er'} werden hochgeladen — Limit 10 erreicht (${dropped} übersprungen).`,
+            )
+            if (files.length === 0) {
+                return
+            }
+        }
+
+        setProgress({ done: 0, total: files.length })
+        const collected: { name: string; reason: string }[] = []
+        try {
+            for (let i = 0; i < files.length; i++) {
+                setProgress({ done: i, total: files.length })
+                const file = files[i]
+                const res = await uploadOne(file)
+                if (!res.ok) collected.push({ name: file.name, reason: res.reason })
+            }
         } finally {
-            setUploading(false)
+            setProgress({ done: 0, total: 0 })
+            if (collected.length > 0) setErrors(collected)
+            // Ein einziges Reload am Ende reicht — bei 10 Uploads sonst 10× Reload.
+            props.onChange()
         }
     }
 
@@ -431,20 +519,53 @@ function ImagesSection(props: {
         props.onChange()
     }
 
+    const buttonLabel = uploading
+        ? `Lade ${progress.done + 1}/${progress.total}…`
+        : 'Bilder wählen'
+
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-brand-text">
-                    Bilder ({props.images.length}/10)
+                    Bilder ({props.images.length}/{MAX_IMAGES})
                 </label>
-                {!props.readOnly && props.images.length < 10 && (
-                    <label className={btnSmall + ' cursor-pointer'}>
+                {!props.readOnly && remaining > 0 && (
+                    <label
+                        className={
+                            btnSmall +
+                            (uploading ? ' opacity-40 cursor-not-allowed' : ' cursor-pointer')
+                        }
+                    >
                         <Upload className="inline-block w-3 h-3 mr-1" />
-                        {uploading ? 'Lade…' : 'Bild wählen'}
-                        <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleUpload} />
+                        {buttonLabel}
+                        <input
+                            type="file"
+                            accept="image/jpeg,image/png"
+                            multiple
+                            className="hidden"
+                            onChange={handleUpload}
+                            disabled={uploading}
+                        />
                     </label>
                 )}
             </div>
+            {trimInfo && (
+                <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                    {trimInfo}
+                </div>
+            )}
+            {errors.length > 0 && (
+                <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+                    <div className="font-medium mb-1">Nicht hochgeladen:</div>
+                    <ul className="list-disc list-inside space-y-0.5">
+                        {errors.map((e, i) => (
+                            <li key={i}>
+                                <span className="font-mono text-xs">{e.name}</span> — {e.reason}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {props.images.map(img => (
                     <ImageTile

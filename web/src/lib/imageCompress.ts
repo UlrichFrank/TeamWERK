@@ -10,6 +10,26 @@ const TARGET_BYTES = 1 << 20; // 1 MB
 const MAX_EDGE = 1920; // px, längste Kante
 const QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55, 0.45];
 
+// Default-Ausgabeformate: WebP zuerst (bessere Kompression), JPEG als Fallback
+// wenn der Browser WebP nicht liefert (iOS Safari < 16). Aufrufer, deren
+// Server-MIME-Filter WebP nicht akzeptiert (z. B. match-reports mit
+// image/jpeg+image/png-only), übergeben eine engere Liste via opts.formats.
+const DEFAULT_FORMATS: OutputFormat[] = [
+  { mime: "image/webp", ext: ".webp" },
+  { mime: "image/jpeg", ext: ".jpg" },
+];
+
+export interface OutputFormat {
+  mime: string;
+  ext: string;
+}
+
+export interface CompressOptions {
+  targetBytes?: number;
+  maxEdge?: number;
+  formats?: OutputFormat[];
+}
+
 export interface CompressResult {
   blob: Blob;
   fileName: string;
@@ -59,12 +79,17 @@ function stripExt(name: string): string {
 
 // compressImage verkleinert file auf ≤ targetBytes. Kann bei Nicht-Bild- oder
 // nicht darstellbaren Dateien die Originaldatei zurückgeben — der Server prüft
-// MIME + Größe erneut.
+// MIME + Größe erneut. `opts.formats` steuert die Ausgabe-MIME-Reihenfolge
+// (Default WebP → JPEG); Aufrufer mit engerer Server-Whitelist übergeben z. B.
+// nur JPEG.
 export async function compressImage(
   file: File,
-  targetBytes = TARGET_BYTES,
-  maxEdge = MAX_EDGE,
+  opts: CompressOptions = {},
 ): Promise<CompressResult> {
+  const targetBytes = opts.targetBytes ?? TARGET_BYTES;
+  const maxEdge = opts.maxEdge ?? MAX_EDGE;
+  const formats = opts.formats ?? DEFAULT_FORMATS;
+
   // Schon klein genug → unverändert (bewahrt u.a. animierte GIFs).
   if (file.size <= targetBytes) {
     return { blob: file, fileName: file.name };
@@ -89,17 +114,9 @@ export async function compressImage(
   ctx.drawImage(bitmap as CanvasImageSource, 0, 0, width, height);
   if ("close" in bitmap && typeof bitmap.close === "function") bitmap.close();
 
-  // WebP bewahrt Transparenz (PNG) und komprimiert gut; vom Server erlaubt.
-  // Fallback auf JPEG, weil iOS Safari erst ab Version 16 WebP per canvas.toBlob
-  // liefert und dort intermittierend `null` zurückgibt — sonst würde ein 3–8 MB
-  // Kamerafoto ungekürzt weitergereicht und der Server mit 413 ablehnen.
   const stem = stripExt(file.name);
-  const attempts: { mime: string; ext: string }[] = [
-    { mime: "image/webp", ext: ".webp" },
-    { mime: "image/jpeg", ext: ".jpg" },
-  ];
   let smallest: { blob: Blob; ext: string } | null = null;
-  for (const { mime, ext } of attempts) {
+  for (const { mime, ext } of formats) {
     for (const q of QUALITY_STEPS) {
       const blob = await toBlob(canvas, mime, q);
       if (!blob) break; // MIME wird vom Browser nicht encodiert → nächstes Format
