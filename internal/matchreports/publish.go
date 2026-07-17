@@ -239,9 +239,9 @@ func (h *Handler) assemblePublishRequest(reportID int) (*PublishRequest, error) 
 	}
 
 	// Fallback: falls `title` leer ist (Altbestand aus vor-Migration-025), aus
-	// Datum + Gegner ableiten. Neu angelegte Berichte haben `title` gesetzt.
+	// dem Gegnernamen ableiten. Neu angelegte Berichte haben `title` gesetzt.
 	if title == "" {
-		title = BuildTitle(matchDateUnix, opponent)
+		title = BuildTitle(opponent)
 	}
 	// Nur der title-slug — die Extension setzt den Pfad-Präfix
 	// /spielberichte/{season}/ selbst zusammen.

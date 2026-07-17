@@ -92,11 +92,12 @@ func TitleSlug(title string) string {
 	return slugify(title)
 }
 
-// BuildTitle erzeugt einen Default-Titel aus Datum + Gegner, falls der Autor
-// keinen expliziten Titel angegeben hat.
-func BuildTitle(matchDateUnix int64, opponent string) string {
-	d := time.Unix(matchDateUnix, 0).UTC().Format("02.01.2006")
-	return fmt.Sprintf("%s — %s", d, opponent)
+// BuildTitle erzeugt einen Default-Titel aus dem Gegnernamen, falls der Autor
+// keinen expliziten Titel angegeben hat. Ohne Datums-Präfix — das Datum
+// steht sowieso im Meta-Bereich des Berichts und würde im Titel doppelt und
+// unnötig sperrig auftauchen.
+func BuildTitle(opponent string) string {
+	return opponent
 }
 
 // slugify normalisiert einen String zu einem TYPO3-kompatiblen slug-Segment.

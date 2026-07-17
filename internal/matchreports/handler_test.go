@@ -380,7 +380,7 @@ func TestCreate_SetsDefaultTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// GET liefert Default-Titel „15.05.2026 — Test Opponent".
+	// GET liefert Default-Titel = Gegnername (ohne Datums-Präfix).
 	getRes := testutil.Do(t, srv, http.MethodGet, fmt.Sprintf("/api/match-reports/%d", created.ID), token, nil)
 	if getRes.StatusCode != http.StatusOK {
 		t.Fatalf("get: expected 200, got %d", getRes.StatusCode)
@@ -391,7 +391,7 @@ func TestCreate_SetsDefaultTitle(t *testing.T) {
 	if err := json.NewDecoder(getRes.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	want := "15.05.2026 — Test Opponent"
+	want := "Test Opponent"
 	if got.Title != want {
 		t.Errorf("title = %q, want %q", got.Title, want)
 	}
