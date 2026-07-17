@@ -44,6 +44,24 @@ Test-Ergänzungen SHALL in OpenSpec-Changes zerlegt werden, die eine einzelne Do
 - **WHEN** ein Change fachliche Tests (Handler-Level) und einen Arch-Test-Gate im selben Proposal bündelt
 - **THEN** die zwei Teile SHALL in separate Changes zerlegt werden (der Arch-Test-Gate ist konzeptionell orthogonal zur Fach-Testsuite)
 
+### Requirement: Bug-Verdacht vor Charakterisierung verifizieren
+Wenn eine Test-Lücken-Analyse einen möglichen Fehler im Produktionscode aufdeckt (z.B. „Route liefert 204 statt 404"), SHALL der Verdacht am Code verifiziert werden, BEVOR ein Test geschrieben wird. Ein Test, der versehentlich fehlerhaftes Ist-Verhalten festnagelt, zementiert den Bug.
+
+#### Scenario: Analyse meldet Silent-Failure
+- **WHEN** eine Analyse meldet „`members.UpdateStatus` liefert 204 auch für ein nicht-existentes Mitglied und verschluckt den DB-Fehler"
+- **THEN** der Code-Fix (RowsAffected → 404, Fehlerprüfung) SHALL zuerst erfolgen; erst der korrigierte Handler wird mit einem Test (404 bei unbekannter ID) abgesichert — nicht umgekehrt
+
+#### Scenario: Verdacht bestätigt sich nicht
+- **WHEN** ein gemeldeter Verdacht (z.B. „Bearer-Download-Pfad ist ein Leck") sich bei Prüfung als fail-closed (401) erweist
+- **THEN** wird kein Fix erzwungen; der Befund SHALL ehrlich als „kein Bug, ggf. Dead-Code-Cleanup" reklassifiziert werden statt als Bug gezählt zu bleiben
+
+### Requirement: Autorisierungs-Tests laufen über den Produktions-Router
+Mechanische Autorisierungs-Prüfungen (Persona-Matrix, Authz-Arch-Gate) SHALL gegen den echten `app.BuildRouter` mit vollständig verdrahteten Handlern laufen. Ein Handler, der im Test-Router (`internal/testutil/prodserver`) nil bleibt, macht seine gated Routen für den Gate unsichtbar — der Gate ist nur so vollständig wie die Handler-Verdrahtung.
+
+#### Scenario: Handler fehlt im Test-Router
+- **WHEN** ein neuer Handler in `cmd/teamwerk/main.go` verdrahtet und in `router.go` hinter `RequireRole`/`RequireClubFunction` gemountet wird, aber `internal/testutil/prodserver` das Feld nicht setzt
+- **THEN** der Drift-Detektor SHALL fehlschlagen und die unverdrahtete Domäne benennen, statt die Routen still zu überspringen (ein nil-Handler darf nicht als HTTP 500 „bestanden" durchrutschen)
+
 ### Requirement: Frontend-Test-Investition priorisiert E2E vor Vitest-Coverage
 Neue Frontend-Test-Investitionen SHALL vorrangig in Playwright-E2Es fließen, nicht in Vitest-Rendering-Tests, solange die Vitest-Suite browser-spezifische Bugs prinzipiell nicht catchen kann (Scroll, Focus, Layout-Physik).
 

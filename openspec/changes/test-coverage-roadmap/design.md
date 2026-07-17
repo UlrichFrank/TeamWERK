@@ -1,24 +1,28 @@
 ## Context
 
-Ist-Stand (aus `metrics/REPORT.md` vom 2026-06-22, Git `4aa81cc`):
+Ist-Stand (aus `metrics/REPORT.md`, Go `go test -cover ./internal/...`):
 
-| Stack    | Coverage | Tests / Prod-LOC |
-|----------|---------:|-----------------:|
-| Go       |  42,3 %  | 0,63             |
-| Frontend |  17,9 %  | —                |
+| Stack    | Coverage | Notiz                                   |
+|----------|---------:|-----------------------------------------|
+| Go       |  43,0 %  | ~flach ggü. 42,3 % vor 4 Wochen         |
+| Frontend |    n/a   | Vitest-Coverage ungemessen (D4)         |
 
-Per-Package LOC/Testfile-Ratio (grob, top-Blindspots):
+Per-Package Prod-LOC + Test-Stand + **90-Tage-Churn** (Grundwahrheit Juli 2026, Analyse-Fleet):
 
-| Package        | Prod-LOC | Testfiles | Kritikalität                                    |
-|----------------|---------:|----------:|-------------------------------------------------|
-| files          |      938 |         1 | Berechtigungen · PII-Leak-Risiko                |
-| absences       |      743 |         2 | Autorisierung · Kalender-Aggregation            |
-| attendance     |      730 |         2 | RSVP, Eltern-Sichtbarkeit                       |
-| duties         |    1 207 |         4 | (in-flight in `test-coverage-fachlich`)         |
-| matchreports   |    2 255 |         7 | aktuell Dirty im Git · eigener Change läuft     |
-| members        |    3 538 |        16 | (Handler ok, `Import` cog=177 → Refactor first) |
+| Package        | Prod-LOC | Testfiles | Churn (90d) | Kritikalität                                             |
+|----------------|---------:|----------:|------------:|----------------------------------------------------------|
+| members        |    3 538 |        16 | **158**     | Handler ok; `Import` ~532 LOC/cog~177 → Refactor first; Authz-Grenze ungetestet (alle Tests nutzen admin) |
+| games          |    3 752 |        15 | **126**     | Auto-Duty-Regen (`regenSingleDay` ~125 cog) — Refactor-Vorbehalt |
+| auth           |    2 448 |        13 |      96     | gut abgedeckt; Rest-Fehlerpfade (Session/Reauth/Token)   |
+| matchreports   |    2 255 |         7 |      50     | `images.go` 0 Tests · Router-Tier via prodserver unsichtbar |
+| duties         |    1 207 |         4 |      62     | 18 Roadmap-Tests real **schon erledigt** (tasks-Drift); `match_report_guard` 0 Tests |
+| files          |      938 |         1 |       8     | Berechtigungen · **höchstes PII-Leak-Risiko** · 9/12 Routen nur via reine Funktion |
+| beitragslauf   |      821 |         4 |      14     | `confirm`/`protocol` (rechtl. Audit) + `export-data`-400 ungetestet |
+| absences       |      743 |         2 |       8     | `Calendar?show_team` PII ungetestet · Update/Delete keine Tests |
+| attendance     |      730 |         2 |       6     | Cross-Family/Trainer-falsches-Team (Kinder-PII)          |
+| venues         |      360 |         1 |       4     | **von Roadmap übersehen** — 5/6 Routen nie getestet (Delete/DeleteAll/Import) |
 
-Zusätzlich existieren zwei Test-Changes bereits: `test-coverage-fachlich` (58 Tests spezifiziert, ~15 % umgesetzt) und `frontend-e2e-tests` (Playwright-Setup).
+Bereits existierende Test-Changes: `test-coverage-fachlich` (Duties-Section **de facto fertig**, tasks.md nur Drift) und `frontend-e2e-tests` (Playwright-Setup, 0/38).
 
 ## Goals / Non-Goals
 
@@ -70,6 +74,39 @@ Konsequenz: Nach `frontend-e2e-tests`-Setup werden **E2Es** hinzugefügt (Login,
 Jeder Prio-Punkt (files, absences+attendance, arch-gate) bekommt einen eigenen OpenSpec-Change mit eigenem Proposal-Zyklus. Kein „Coverage-Sprint"-Change mit 200 Tasks.
 
 Begründung: Kleine Changes werden fertig, große verschimmeln (siehe die 14 In-Flight-Changes). Ein Test-Change pro Domäne ≈ 1–3 Sitzungen, überschaubar.
+
+**D6 — Churn als zweite Achse: Risiko × Churn statt Risiko allein**
+
+Die ursprüngliche Reihenfolge sortierte rein nach Schadenspotenzial (LOC × Kritikalität) und ließ die im Goals-Abschnitt genannte „change-hot"-Achse ungenutzt. Bugs clustern aber empirisch dort, wo Code sich ändert. Risiko und Churn sind orthogonal:
+
+```
+                    RISIKO (Schaden wenn kaputt)
+                    niedrig                 hoch
+         ┌────────────────────────┬──────────────────────────┐
+    hoch │ games (126)            │ members (158)             │  ← Regressions-
+  CHURN  │ trainings (73)         │ auth (96)                 │    Magnete
+ (90 Tg) │ duties (62)            │ matchreports (50)         │
+         ├────────────────────────┼──────────────────────────┤
+  niedr. │ videos (46)            │ files (8) · beitragslauf  │  ← Write-once-
+         │ metrics                │ absences (8) · venues (4) │    Versicherung
+         └────────────────────────┴──────────────────────────┘
+```
+
+Konsequenz: `files`/`absences`/`beitragslauf` sind **hoch-Risiko × niedrig-Churn** → Write-once-Versicherung (Test rottet kaum, super ROI, aber selten aktiver Bug). `members`/`games`/`auth` sind **hoch-Churn** → dort landet der *nächste* Bug. Die Roadmap adressiert beide, aber die **Vorbedingungs- und Hebel-Achse gewinnt**: Welle 0 (prodserver-Fix + Fixtures + Drift-Detektor) zuerst, weil sie mehrere Wellen erst testbar macht und einen strukturellen Backstop für die Churn-Ecke liefert. Innerhalb der Fach-Wellen zieht der PII-Cluster (Schadenspotenzial) vor.
+
+**D7 — Bug-Verdacht vor Charakterisierung verifizieren**
+
+Die Analyse-Fleet meldet drei mögliche Code-Bugs. Ein Test, der fehlerhaftes Ist-Verhalten festnagelt, zementiert den Bug. Daher: erst am Code verifizieren, dann fixen, dann testen. Verifiziertes Ergebnis:
+
+| Verdacht | Verdikt | Konsequenz |
+|---|---|---|
+| `members.UpdateStatus` liefert 204 bei unbekannter ID + verschluckt Exec-Fehler | **Bug bestätigt (P1)** | Code-Fix (RowsAffected→404, err-Check) VOR Test |
+| `files.checkAntiEscalation` prüft `newRead` nicht gegen eigenen `can_read` | **Gap bestätigt (P2)** | Entscheidung fix-vs-dokumentieren vor Test |
+| `files.DownloadFile` Bearer-Pfad ist ein Leck | **kein Bug** — fail-closed 401 | reklassifiziert als Dead-Code-Cleanup; Token-Pfad-Tests fehlen aber wirklich |
+
+**D8 — Der Authz-Gate existiert bereits; das Loch ist die Handler-Verdrahtung**
+
+`internal/permissions/matrix_test.go` läuft schon über `BuildRouter`. Der Blindspot ist `internal/testutil/prodserver`, das `MatchReports`/`Settings`/`Stammvereine` nie verdrahtet (→ gated Routen unsichtbar) und fehlender Nil-Guard bei `/api/stammvereine` (→ 500 wird als „bestanden" gewertet). Welle 0 fixt die Verdrahtung und ergänzt einen Drift-Detektor (analog `TestBroadcastAllowlist_NoOrphans`), der Erwartungs-Maps und `router.go` synchron hält. Damit ist der ursprünglich als „Phase 4" geplante `authz-arch-gate` weitgehend ein **Vervollständigen des Bestehenden**, nicht ein Neubau.
 
 ## Risks / Trade-offs
 
