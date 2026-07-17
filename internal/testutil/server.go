@@ -3,6 +3,7 @@ package testutil
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -87,4 +88,47 @@ func Get(t *testing.T, srv *httptest.Server, path, token string) *http.Response 
 // Post sends a POST request with a JSON body to the test server.
 func Post(t *testing.T, srv *httptest.Server, path, token string, body any) *http.Response {
 	return Do(t, srv, http.MethodPost, path, token, body)
+}
+
+// Put sends a PUT request with a JSON body to the test server.
+func Put(t *testing.T, srv *httptest.Server, path, token string, body any) *http.Response {
+	return Do(t, srv, http.MethodPut, path, token, body)
+}
+
+// Delete sends a DELETE request to the test server.
+func Delete(t *testing.T, srv *httptest.Server, path, token string) *http.Response {
+	return Do(t, srv, http.MethodDelete, path, token, nil)
+}
+
+// PostMultipart sends a multipart/form-data POST with a single file field to
+// the test server. It sets the Authorization Bearer header (if token != "")
+// and the multipart Content-Type with the generated boundary. Consistent with
+// Do/Post, the returned response body is NOT closed by this helper.
+func PostMultipart(t *testing.T, srv *httptest.Server, path, token, fieldName, filename string, content []byte) *http.Response {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile(fieldName, filename)
+	if err != nil {
+		t.Fatalf("testutil.PostMultipart create form file: %v", err)
+	}
+	if _, err := fw.Write(content); err != nil {
+		t.Fatalf("testutil.PostMultipart write content: %v", err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("testutil.PostMultipart close writer: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, srv.URL+path, &buf)
+	if err != nil {
+		t.Fatalf("testutil.PostMultipart new request: %v", err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", token)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("testutil.PostMultipart: %v", err)
+	}
+	return res
 }

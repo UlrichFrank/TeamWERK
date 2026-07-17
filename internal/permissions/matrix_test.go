@@ -154,6 +154,41 @@ var exMemberDraftAccess = map[string]int{
 	"spieler": 403, "elternteil": 403,
 }
 
+// RequireRole(auth.RolePressTeam, auth.RoleAdmin) — Match-Report-Autor-Tier.
+// In der aktuellen Persona-Menge gibt es KEINE press_team-Persona, daher kommt
+// effektiv nur admin durch. Sobald eine press_team-Persona ergänzt wird (siehe
+// Welle 1 test-pii-route-authz), MUSS diese Map um press_team: httpAllowed erweitert werden.
+var exPressTeam = map[string]int{
+	"admin":    httpAllowed,
+	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
+	"kassierer": 403, "trainer": 403, "trainer_elternteil": 403,
+	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
+	"spieler": 403, "elternteil": 403,
+}
+
+// RequireClubFunction("medien","vorstand") — Match-Report-Freigeber-Tier.
+// Es gibt keine medien-Persona; daher effektiv admin (Bypass) + vorstand.
+// Bei Ergänzung einer medien-Persona MUSS medien: httpAllowed hinzukommen.
+var exMatchReportPublisher = map[string]int{
+	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
+	"vorstand_beisitzer": 403, "kassierer": 403,
+	"trainer": 403, "trainer_elternteil": 403,
+	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
+	"spieler": 403, "elternteil": 403,
+}
+
+// Match-Report-Routen ohne eigenes Middleware-Gate: nur RequireAuth, die
+// feinkörnige Autorisierung (State + Rolle) macht der Handler via guardMutation().
+// Ohne Report-Fixture ist jeder Code (404/403/…) zulässig — die echte Handler-Logik
+// prüfen die matchreports-Package-Tests, nicht diese Middleware-Matrix.
+var exMatchReportMixed = map[string]int{
+	"admin": httpAnyOK, "vorstand": httpAnyOK, "vorstand_elternteil": httpAnyOK,
+	"vorstand_beisitzer": httpAnyOK, "kassierer": httpAnyOK,
+	"trainer": httpAnyOK, "trainer_elternteil": httpAnyOK,
+	"sportliche_leitung": httpAnyOK, "sportliche_leitung_elternteil": httpAnyOK,
+	"spieler": httpAnyOK, "elternteil": httpAnyOK,
+}
+
 // endpointCase beschreibt einen einzelnen Endpoint in der Permission-Matrix.
 type endpointCase struct {
 	method   string
@@ -193,6 +228,7 @@ var matrix = []endpointCase{
 	// mit Token Bearer-geschützt — beides ohne Auth-Middleware → exPublic.
 	{method: "GET", path: "/api/healthz", expected: exPublic},
 	{method: "GET", path: "/api/metrics", expected: exPublic},
+	{method: "GET", path: "/api/maintenance-status", expected: exPublic},
 
 	// ── Authenticated ───────────────────────────────────────────────────────────
 	// Chat (einfache Operationen ohne Konversations-Membership)
@@ -446,6 +482,25 @@ var matrix = []endpointCase{
 
 	// ── Admin only ───────────────────────────────────────────────────────────────
 	{method: "POST", path: "/api/impersonate/{id}", expected: exAdmin},
+	{method: "GET", path: "/api/admin/maintenance-mode", expected: exAdmin},
+	{method: "POST", path: "/api/admin/maintenance-mode", expected: exAdmin},
+
+	// ── Match-Reports: Autor-Tier (RequireRole press_team/admin) ─────────────────
+	{method: "GET", path: "/api/match-reports/my", expected: exPressTeam},
+	{method: "POST", path: "/api/match-reports", expected: exPressTeam},
+	{method: "DELETE", path: "/api/match-reports/{id}", expected: exPressTeam},
+	{method: "POST", path: "/api/match-reports/{id}/submit-for-review", expected: exPressTeam},
+
+	// ── Match-Reports: Freigeber-Tier (RequireClubFunction medien/vorstand) ──────
+	{method: "GET", path: "/api/match-reports/pending", expected: exMatchReportPublisher},
+	{method: "POST", path: "/api/match-reports/{id}/publish", expected: exMatchReportPublisher},
+
+	// ── Match-Reports: nur RequireAuth, Handler entscheidet via guardMutation ────
+	{method: "GET", path: "/api/match-reports/{id}", expected: exMatchReportMixed},
+	{method: "PUT", path: "/api/match-reports/{id}", expected: exMatchReportMixed},
+	{method: "POST", path: "/api/match-reports/{id}/images", expected: exMatchReportMixed},
+	{method: "GET", path: "/api/match-reports/{id}/images/{imgId}/blob", expected: exMatchReportMixed},
+	{method: "DELETE", path: "/api/match-reports/{id}/images/{imgId}", expected: exMatchReportMixed},
 
 	// ── Vorstand + Kassierer ─────────────────────────────────────────────────────
 	{method: "GET", path: "/api/members", expected: exMembersList},

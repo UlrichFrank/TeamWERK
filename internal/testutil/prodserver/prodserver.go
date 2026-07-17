@@ -27,8 +27,11 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
+	"github.com/teamstuttgart/teamwerk/internal/matchreports"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/settings"
+	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
@@ -42,6 +45,8 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 	cfg := testutil.TestConfig()
 	hubInstance := hub.NewHub()
 	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
+	// SettingsStore ohne Poll-Loop (Tests stoßen den Poll bei Bedarf selbst an).
+	settingsStore := settings.NewStoreForTest(database, 0)
 	return &app.Handlers{
 		Auth:           auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost", hubInstance),
 		Config:         appconfig.NewHandler(database, hubInstance),
@@ -65,6 +70,10 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, t.TempDir()),
 		Calendar:       calendar.NewHandler(database),
 		Videos:         videos.NewHandler(database, hubInstance, cfg),
+		MatchReports:   matchreports.NewHandler(database, hubInstance, cfg),
+		Settings:       settings.NewHandler(settingsStore, hubInstance),
+		SettingsStore:  settingsStore,
+		Stammvereine:   stammvereine.NewHandler(database, hubInstance),
 		Hub:            hub.NewHandler(hubInstance, "test", auth.UserIDFromCtx),
 		JWTSecret:      testutil.TestJWTSecret,
 		Database:       database,

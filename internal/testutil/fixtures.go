@@ -383,6 +383,211 @@ func CreatePushSubscription(t *testing.T, database *sql.DB, userID int) int {
 	return int(id)
 }
 
+// nullableString returns nil for an empty string so the column is stored as
+// SQL NULL, else the string itself. Mirrors the 0-sentinel pattern used for
+// nullable IDs elsewhere in this package.
+func nullableString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// nullableID returns nil for a non-positive id (→ SQL NULL), else the id.
+func nullableID(id int) any {
+	if id <= 0 {
+		return nil
+	}
+	return id
+}
+
+// boolToInt maps a Go bool to SQLite's 0/1 integer boolean representation.
+func boolToInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+// CreateFolder inserts a file_folders row and returns its ID. Pass parentID=0
+// to create a root folder (parent_id NULL).
+func CreateFolder(t *testing.T, database *sql.DB, name string, parentID, createdBy int) int {
+	t.Helper()
+	res, err := database.Exec(
+		`INSERT INTO file_folders (name, parent_id, created_by) VALUES (?, ?, ?)`,
+		name, nullableID(parentID), createdBy)
+	if err != nil {
+		t.Fatalf("CreateFolder: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// SetFolderPermission inserts a folder_permissions row. principalType is one of
+// everyone|role|club_function|user; pass principalRef="" (→ NULL) for the
+// 'everyone' principal. canRead/canWrite are mapped to 0/1.
+func SetFolderPermission(t *testing.T, database *sql.DB, folderID int, principalType, principalRef string, canRead, canWrite bool) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT INTO folder_permissions (folder_id, principal_type, principal_ref, can_read, can_write)
+		 VALUES (?, ?, ?, ?, ?)`,
+		folderID, principalType, nullableString(principalRef), boolToInt(canRead), boolToInt(canWrite)); err != nil {
+		t.Fatalf("SetFolderPermission: %v", err)
+	}
+}
+
+// CreateFile inserts a files row with a unique disk_name (no actual disk write)
+// and returns its ID.
+func CreateFile(t *testing.T, database *sql.DB, folderID, uploadedBy int, originalName string) int {
+	t.Helper()
+	n := nextID()
+	diskName := fmt.Sprintf("file_%d.bin", n)
+	res, err := database.Exec(
+		`INSERT INTO files (folder_id, original_name, disk_name, size, mime_type, uploaded_by)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		folderID, originalName, diskName, 1024, "application/octet-stream", uploadedBy)
+	if err != nil {
+		t.Fatalf("CreateFile: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// CreateAbsence inserts a member_absences row and returns its ID.
+// absenceType is one of vacation|injury; dates in "2006-01-02" format.
+func CreateAbsence(t *testing.T, database *sql.DB, memberID int, absenceType, startDate, endDate string, createdBy int) int {
+	t.Helper()
+	res, err := database.Exec(
+		`INSERT INTO member_absences (member_id, type, start_date, end_date, created_by)
+		 VALUES (?, ?, ?, ?, ?)`,
+		memberID, absenceType, startDate, endDate, createdBy)
+	if err != nil {
+		t.Fatalf("CreateAbsence: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// RecordTrainingAttendance inserts (or replaces) a training_attendances row for
+// the given session/member. present is mapped to 0/1. The (training_id,
+// member_id) UNIQUE constraint is honoured via upsert.
+func RecordTrainingAttendance(t *testing.T, database *sql.DB, sessionID, memberID int, present bool) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT INTO training_attendances (training_id, member_id, present)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(training_id, member_id) DO UPDATE SET present = excluded.present`,
+		sessionID, memberID, boolToInt(present)); err != nil {
+		t.Fatalf("RecordTrainingAttendance: %v", err)
+	}
+}
+
+// RecordGameAttendance inserts (or replaces) a game_attendances row for the
+// given game/member. present is mapped to 0/1. The (game_id, member_id) UNIQUE
+// constraint is honoured via upsert.
+func RecordGameAttendance(t *testing.T, database *sql.DB, gameID, memberID int, present bool) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT INTO game_attendances (game_id, member_id, present)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(game_id, member_id) DO UPDATE SET present = excluded.present`,
+		gameID, memberID, boolToInt(present)); err != nil {
+		t.Fatalf("RecordGameAttendance: %v", err)
+	}
+}
+
+// SetMemberBankEnvelope inserts a member_sensitive row with dummy envelope
+// values (ciphertext + gewrappter DEK), so the member reads as HasBank=true.
+// The server never decrypts these — the values are opaque placeholders.
+func SetMemberBankEnvelope(t *testing.T, database *sql.DB, memberID int) {
+	t.Helper()
+	if _, err := database.Exec(
+		`INSERT INTO member_sensitive (member_id, ciphertext, dek_enc_vorstand)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(member_id) DO UPDATE SET
+		   ciphertext = excluded.ciphertext, dek_enc_vorstand = excluded.dek_enc_vorstand`,
+		memberID, "dummy-ciphertext", "dummy-dek-enc-vorstand"); err != nil {
+		t.Fatalf("SetMemberBankEnvelope: %v", err)
+	}
+}
+
+// SetClubSepaEnvelope stores the clubs SEPA envelope (sepa_ciphertext +
+// sepa_dek_enc). It updates the single clubs row, inserting one if none exists
+// yet (the base seed has no clubs row).
+func SetClubSepaEnvelope(t *testing.T, database *sql.DB, ciphertext, dekEnc string) {
+	t.Helper()
+	res, err := database.Exec(
+		`UPDATE clubs SET sepa_ciphertext=?, sepa_dek_enc=? WHERE id=(SELECT id FROM clubs LIMIT 1)`,
+		ciphertext, dekEnc)
+	if err != nil {
+		t.Fatalf("SetClubSepaEnvelope update: %v", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, err := database.Exec(
+			`INSERT INTO clubs (name, sepa_ciphertext, sepa_dek_enc) VALUES (?, ?, ?)`,
+			"Test Club", ciphertext, dekEnc); err != nil {
+			t.Fatalf("SetClubSepaEnvelope insert: %v", err)
+		}
+	}
+}
+
+// MemberOpts parametrises CreateMemberWithFields. Zero values fall back to
+// sensible defaults (Status "aktiv", generated first/last name); empty strings
+// and non-positive IDs become SQL NULL for the respective nullable columns.
+type MemberOpts struct {
+	UserID         int    // 0 → NULL (no user link)
+	FirstName      string // "" → "Test"
+	LastName       string // "" → generated "MemberN"
+	Status         string // "" → "aktiv"; CHECK: aktiv|verletzt|pausiert|ausgetreten|passiv|honorar|anwaerter
+	JoinDate       string // "" → NULL
+	ExitDate       string // "" → NULL (Pflicht bei Status ausgetreten, hier nicht erzwungen)
+	HomeClubID     int    // 0 → NULL (FK stammvereine)
+	Beitragsfrei   bool   // → 0/1
+	MemberNumber   string // "" → NULL (partial-UNIQUE)
+	SepaMandat     bool   // → 0/1
+	SepaMandatDate string // "" → NULL
+	SepaMandatPath string // "" → NULL
+	Street         string // "" → NULL
+	Zip            string // "" → NULL
+	City           string // "" → NULL
+}
+
+// CreateMemberWithFields inserts a members row from a MemberOpts struct and
+// returns its ID. It is the generalised sibling of CreateMember for tests that
+// need to control status, dates, home club, SEPA and address fields.
+func CreateMemberWithFields(t *testing.T, database *sql.DB, opts MemberOpts) int {
+	t.Helper()
+	n := nextID()
+	firstName := opts.FirstName
+	if firstName == "" {
+		firstName = "Test"
+	}
+	lastName := opts.LastName
+	if lastName == "" {
+		lastName = fmt.Sprintf("Member%d", n)
+	}
+	status := opts.Status
+	if status == "" {
+		status = "aktiv"
+	}
+	res, err := database.Exec(
+		`INSERT INTO members
+		   (first_name, last_name, status, user_id, join_date, exit_date, home_club_id,
+		    beitragsfrei, member_number, sepa_mandat, sepa_mandat_date, sepa_mandat_path,
+		    street, zip, city)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		firstName, lastName, status, nullableID(opts.UserID),
+		nullableString(opts.JoinDate), nullableString(opts.ExitDate), nullableID(opts.HomeClubID),
+		boolToInt(opts.Beitragsfrei), nullableString(opts.MemberNumber),
+		boolToInt(opts.SepaMandat), nullableString(opts.SepaMandatDate), nullableString(opts.SepaMandatPath),
+		nullableString(opts.Street), nullableString(opts.Zip), nullableString(opts.City))
+	if err != nil {
+		t.Fatalf("CreateMemberWithFields: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
 // CreateNotificationPreference upserts a notification_preferences row for the
 // given user and category with explicit push/email flags.
 func CreateNotificationPreference(t *testing.T, database *sql.DB, userID int, category string, push, email bool) {

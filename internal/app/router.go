@@ -331,7 +331,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/teams/{id}/roster", h.Teams.GetRoster)
 
 		// Stammvereine (Liste für Mitglied-Dropdown; alle Eingeloggten)
-		r.Get("/api/stammvereine", h.Stammvereine.List)
+		if h.Stammvereine != nil {
+			r.Get("/api/stammvereine", h.Stammvereine.List)
+		}
 
 		// Spielvideos — Stream-Token-Ausgabe (weitere Video-Routen folgen separat).
 		// CanViewVideo prüft die Team-Berechtigung; die HLS-Auslieferung selbst
@@ -534,9 +536,11 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/upload/member-photo/{id}", h.Upload.UploadMemberPhoto)
 			r.Delete("/api/upload/member-photo/{id}", h.Upload.DeleteMemberPhoto)
 			r.Put("/api/age-class-rules/{ageClass}", h.Config.UpdateAgeClassRuleHandler)
-			r.Post("/api/stammvereine", h.Stammvereine.Create)
-			r.Put("/api/stammvereine/{id}", h.Stammvereine.Update)
-			r.Delete("/api/stammvereine/{id}", h.Stammvereine.Delete)
+			if h.Stammvereine != nil {
+				r.Post("/api/stammvereine", h.Stammvereine.Create)
+				r.Put("/api/stammvereine/{id}", h.Stammvereine.Update)
+				r.Delete("/api/stammvereine/{id}", h.Stammvereine.Delete)
+			}
 		})
 
 		// Saisons lesen — Vorstand/Trainer/sportliche_leitung (Kader) + Kassierer (Beitragslauf braucht die Saisonliste)
