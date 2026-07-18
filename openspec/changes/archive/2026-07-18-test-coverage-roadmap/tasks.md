@@ -62,4 +62,4 @@
 
 - [x] 9.1 Rückblick nach jeder Welle erfolgt — Scope wurde mehrfach am realen Code geschärft (W1: attendance-Stats schon abgedeckt; W2: games-Recording schon durch; Nachgelagert: venues-Authz via matrix_test). Adversariale Reviews fingen pro Welle echte Mängel (False-Green W1, geldnahe Gaps W2, Charakterisierungs-Lücken W3, **zwei Broken-Access-Control-Bugs** im Nachgelagert-Teil).
 - [x] 9.2 Roadmap wurde durchgehend explizit fortgeschrieben statt sklavisch abgearbeitet — u.a. Duplikate weggelassen, `regenSingleDay`-Refactor bewusst als eigener Folge-Change (nicht in 8.3 gequetscht), Frontend-E2E bewusst als eigene Session abgegrenzt.
-- [ ] 9.3 Roadmap archivieren — **noch offen**: einziger Rest ist Abschnitt 7 (Frontend-E2E). Archivierung erst, wenn Welle 7 abgeschlossen ODER bewusst verworfen ist.
+- [x] 9.3 Roadmap archiviert — alle Wellen (0–3, Nachgelagert, 7) abgeschlossen und gemergt; Welle 7 real grün (`7 passed`, PR #161/#162). Delta-Spec `test-strategy` in die Haupt-Spec appliziert.
