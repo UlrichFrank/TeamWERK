@@ -2005,6 +2005,120 @@ func (h *Handler) insertNewMember(ctx context.Context, pc *parsedCSV, row []stri
 	return ibanWarn, nil
 }
 
+// memberUpdate is the computed diff for an existing member: the SQL SET clauses
+// + args, the human-readable change list, and an optional bank-data hint. The
+// caller runs the UPDATE and builds the report row.
+type memberUpdate struct {
+	setClauses []string
+	setArgs    []any
+	changes    []string
+	ibanWarn   string
+}
+
+// buildMemberUpdate computes the field-level diff between a CSV row and an
+// existing member (db). enrichOnly never overwrites a populated value. Bank
+// data (IBAN/Kontoinhaber) is never written via CSV — a present column only
+// sets ibanWarn.
+func buildMemberUpdate(pc *parsedCSV, row []string, dob string, enrichOnly bool, fieldAllowed func(string) bool, db dbMember) memberUpdate {
+	col := pc.col
+	var mu memberUpdate
+
+	addChange := func(csvVal, dbVal, label, column string) {
+		if !fieldAllowed(column) {
+			return // Feld nicht in der Auswahl
+		}
+		if csvVal == "" || csvVal == dbVal {
+			return
+		}
+		if enrichOnly && dbVal != "" {
+			return // enrich: never overwrite existing values
+		}
+		mu.setClauses = append(mu.setClauses, column+"=?")
+		mu.setArgs = append(mu.setArgs, csvVal)
+		mu.changes = append(mu.changes, fmt.Sprintf("%s: %q → %q", label, dbVal, csvVal))
+	}
+	addNullableChange := func(csvVal string, dbVal sql.NullString, label, column string) {
+		if !fieldAllowed(column) {
+			return // Feld nicht in der Auswahl
+		}
+		if csvVal == "" || csvVal == dbVal.String {
+			return
+		}
+		if enrichOnly && dbVal.Valid && dbVal.String != "" {
+			return // enrich: never overwrite existing values
+		}
+		mu.setClauses = append(mu.setClauses, column+"=?")
+		mu.setArgs = append(mu.setArgs, csvVal)
+		mu.changes = append(mu.changes, fmt.Sprintf("%s: %q → %q", label, dbVal.String, csvVal))
+	}
+
+	addNullableChange(col(row, "Mitgliedsnummer"), db.memberNum, "Mitgliedsnummer", "member_number")
+	addChange(dob, db.dob, "Geburtsdatum", "date_of_birth")
+	addChange(normalizeGender(col(row, "Geschlecht")), db.gender, "Geschlecht", "gender")
+	addNullableChange(col(row, "Passnummer"), db.passNum, "Passnummer", "pass_number")
+	addNullableChange(col(row, "Position"), db.position, "Position", "position")
+	addChange(normalizeStatus(col(row, "Status TeamWERK")), db.status, "Status", "status")
+	addNullableChange(col(row, "Stammverein"), db.homeClub, "Stammverein", "home_club")
+
+	if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" && fieldAllowed("jersey_number") {
+		dbJerseyStr := ""
+		if db.jerseyNum.Valid {
+			dbJerseyStr = fmt.Sprintf("%d", db.jerseyNum.Int64)
+		}
+		if jerseyRaw != dbJerseyStr && (!enrichOnly || !db.jerseyNum.Valid) {
+			n, _ := parseOptionalInt(jerseyRaw)
+			mu.setClauses = append(mu.setClauses, "jersey_number=?")
+			mu.setArgs = append(mu.setArgs, n)
+			mu.changes = append(mu.changes, fmt.Sprintf("Trikotnummer: %q → %q", dbJerseyStr, jerseyRaw))
+		}
+	}
+
+	// New fields: address, join_date, sepa_mandat. Bankdaten (IBAN/Kontoinhaber)
+	// werden per CSV NICHT importiert (Zero-Knowledge, Modell B — separat im Tresor).
+	joinDate := normalizeDate(col(row, "join_date"))
+	addChange(col(row, "Adresse"), db.street, "Adresse", "street")
+	addChange(col(row, "PLZ"), db.zip, "PLZ", "zip")
+	addChange(col(row, "Ort"), db.city, "Ort", "city")
+	addChange(joinDate, db.joinDate, "Mitglied seit", "join_date")
+
+	if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly && fieldAllowed("sepa_mandat") {
+		sepaVal := normalizeSepa(sepaRaw)
+		if sepaVal != db.sepaMandat {
+			mu.setClauses = append(mu.setClauses, "sepa_mandat=?")
+			mu.setArgs = append(mu.setArgs, sepaVal)
+			mu.changes = append(mu.changes, fmt.Sprintf("SEPA Mandat: %d → %d", db.sepaMandat, sepaVal))
+		}
+	}
+
+	// beitragsfrei kommt ausschließlich aus der gleichnamigen CSV-Spalte.
+	// Enrich-Modus: nur 0 → 1 erlauben, niemals ein bestehendes 1 zurücksetzen
+	// (siehe design.md D6).
+	if bfVal, bfPresent := normalizeBeitragsfrei(col(row, "beitragsfrei")); bfPresent && fieldAllowed("beitragsfrei") {
+		if bfVal != db.beitragsfrei && (!enrichOnly || (db.beitragsfrei == 0 && bfVal == 1)) {
+			mu.setClauses = append(mu.setClauses, "beitragsfrei=?")
+			mu.setArgs = append(mu.setArgs, bfVal)
+			mu.changes = append(mu.changes, fmt.Sprintf("Beitragsfrei: %v → %v", db.beitragsfrei == 1, bfVal == 1))
+		}
+	}
+
+	// Grund für Beitragsfreiheit: Enrich überschreibt belegten Grund nicht.
+	if grundRaw := col(row, "Grund für Beitragsfreiheit"); grundRaw != "" && fieldAllowed("beitragsfrei_grund") {
+		if grundRaw != db.beitragsfreiGrund && (!enrichOnly || db.beitragsfreiGrund == "") {
+			mu.setClauses = append(mu.setClauses, "beitragsfrei_grund=?")
+			mu.setArgs = append(mu.setArgs, grundRaw)
+			mu.changes = append(mu.changes, fmt.Sprintf("Grund für Beitragsfreiheit: %q → %q", db.beitragsfreiGrund, grundRaw))
+		}
+	}
+
+	// Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT aktualisiert; vorhandene
+	// CSV-Bankspalten lösen nur einen Hinweis aus (separat im Tresor erfassen).
+	if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+		mu.ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
+	}
+
+	return mu
+}
+
 // POST /api/members/import
 func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -2157,130 +2271,19 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 
 		existingID := lr.member.id
-		dbMemberNum := lr.member.memberNum
-		dbDOB := lr.member.dob
-		dbPassNum := lr.member.passNum
-		dbJerseyNum := lr.member.jerseyNum
-		dbPosition := lr.member.position
-		dbStatus := lr.member.status
-		dbGender := lr.member.gender
-		dbHomeClub := lr.member.homeClub
-		dbStreet := lr.member.street
-		dbZip := lr.member.zip
-		dbCity := lr.member.city
-		dbJoinDate := lr.member.joinDate
-		dbSepaMandat := lr.member.sepaMandat
-		dbBeitragsfrei := lr.member.beitragsfrei
-		dbBeitragsfreiGrund := lr.member.beitragsfreiGrund
 
 		// mode == "update", "enrich", or legacy preview: apply non-empty changed fields
 		enrichOnly := mode == "enrich"
-		var setClauses []string
-		var setArgs []interface{}
-		var changes []string
-
-		addChange := func(csvVal, dbVal, label, column string) {
-			if !fieldAllowed(column) {
-				return // Feld nicht in der Auswahl
-			}
-			if csvVal == "" || csvVal == dbVal {
-				return
-			}
-			if enrichOnly && dbVal != "" {
-				return // enrich: never overwrite existing values
-			}
-			setClauses = append(setClauses, column+"=?")
-			setArgs = append(setArgs, csvVal)
-			changes = append(changes, fmt.Sprintf("%s: %q → %q", label, dbVal, csvVal))
-		}
-		addNullableChange := func(csvVal string, dbVal sql.NullString, label, column string) {
-			if !fieldAllowed(column) {
-				return // Feld nicht in der Auswahl
-			}
-			if csvVal == "" || csvVal == dbVal.String {
-				return
-			}
-			if enrichOnly && dbVal.Valid && dbVal.String != "" {
-				return // enrich: never overwrite existing values
-			}
-			setClauses = append(setClauses, column+"=?")
-			setArgs = append(setArgs, csvVal)
-			changes = append(changes, fmt.Sprintf("%s: %q → %q", label, dbVal.String, csvVal))
-		}
-
-		addNullableChange(col(row, "Mitgliedsnummer"), dbMemberNum, "Mitgliedsnummer", "member_number")
-		addChange(dob, dbDOB, "Geburtsdatum", "date_of_birth")
-		addChange(normalizeGender(col(row, "Geschlecht")), dbGender, "Geschlecht", "gender")
-		addNullableChange(col(row, "Passnummer"), dbPassNum, "Passnummer", "pass_number")
-		addNullableChange(col(row, "Position"), dbPosition, "Position", "position")
-		addChange(normalizeStatus(col(row, "Status TeamWERK")), dbStatus, "Status", "status")
-		addNullableChange(col(row, "Stammverein"), dbHomeClub, "Stammverein", "home_club")
-
-		if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" && fieldAllowed("jersey_number") {
-			dbJerseyStr := ""
-			if dbJerseyNum.Valid {
-				dbJerseyStr = fmt.Sprintf("%d", dbJerseyNum.Int64)
-			}
-			if jerseyRaw != dbJerseyStr && (!enrichOnly || !dbJerseyNum.Valid) {
-				n, _ := parseOptionalInt(jerseyRaw)
-				setClauses = append(setClauses, "jersey_number=?")
-				setArgs = append(setArgs, n)
-				changes = append(changes, fmt.Sprintf("Trikotnummer: %q → %q", dbJerseyStr, jerseyRaw))
-			}
-		}
-
-		// New fields: address, join_date, sepa_mandat. Bankdaten (IBAN/Kontoinhaber)
-		// werden per CSV NICHT importiert (Zero-Knowledge, Modell B — separat im Tresor).
-		joinDate := normalizeDate(col(row, "join_date"))
-		addChange(col(row, "Adresse"), dbStreet, "Adresse", "street")
-		addChange(col(row, "PLZ"), dbZip, "PLZ", "zip")
-		addChange(col(row, "Ort"), dbCity, "Ort", "city")
-		addChange(joinDate, dbJoinDate, "Mitglied seit", "join_date")
-
-		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly && fieldAllowed("sepa_mandat") {
-			sepaVal := normalizeSepa(sepaRaw)
-			if sepaVal != dbSepaMandat {
-				setClauses = append(setClauses, "sepa_mandat=?")
-				setArgs = append(setArgs, sepaVal)
-				changes = append(changes, fmt.Sprintf("SEPA Mandat: %d → %d", dbSepaMandat, sepaVal))
-			}
-		}
-
-		// beitragsfrei kommt ausschließlich aus der gleichnamigen CSV-Spalte.
-		// Enrich-Modus: nur 0 → 1 erlauben, niemals ein bestehendes 1 zurücksetzen
-		// (siehe design.md D6).
-		if bfVal, bfPresent := normalizeBeitragsfrei(col(row, "beitragsfrei")); bfPresent && fieldAllowed("beitragsfrei") {
-			if bfVal != dbBeitragsfrei && (!enrichOnly || (dbBeitragsfrei == 0 && bfVal == 1)) {
-				setClauses = append(setClauses, "beitragsfrei=?")
-				setArgs = append(setArgs, bfVal)
-				changes = append(changes, fmt.Sprintf("Beitragsfrei: %v → %v", dbBeitragsfrei == 1, bfVal == 1))
-			}
-		}
-
-		// Grund für Beitragsfreiheit: Enrich überschreibt belegten Grund nicht.
-		if grundRaw := col(row, "Grund für Beitragsfreiheit"); grundRaw != "" && fieldAllowed("beitragsfrei_grund") {
-			if grundRaw != dbBeitragsfreiGrund && (!enrichOnly || dbBeitragsfreiGrund == "") {
-				setClauses = append(setClauses, "beitragsfrei_grund=?")
-				setArgs = append(setArgs, grundRaw)
-				changes = append(changes, fmt.Sprintf("Grund für Beitragsfreiheit: %q → %q", dbBeitragsfreiGrund, grundRaw))
-			}
-		}
-
-		// Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT aktualisiert; vorhandene
-		// CSV-Bankspalten lösen nur einen Hinweis aus (separat im Tresor erfassen).
-		var ibanWarn string
-		if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
-			ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
-		}
+		mu := buildMemberUpdate(pc, row, dob, enrichOnly, fieldAllowed, lr.member)
 
 		// Mitglieder-Auswahl: außerhalb des Dry-Runs nur ausgewählte Zeilen anwenden.
 		selected := applyLines == nil || applyLines[lineNum]
 
-		if len(setClauses) > 0 && !dryRun && selected {
-			setArgs = append(setArgs, existingID)
+		if len(mu.setClauses) > 0 && !dryRun && selected {
+			mu.setArgs = append(mu.setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
-				"UPDATE members SET "+strings.Join(setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
-				setArgs...)
+				"UPDATE members SET "+strings.Join(mu.setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
+				mu.setArgs...)
 			if updErr != nil {
 				report.Rows = append(report.Rows, ImportRow{
 					Line: lineNum, Status: "error", Name: displayName,
@@ -2291,16 +2294,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		hasChanges := len(changes) > 0 || ibanWarn != ""
+		hasChanges := len(mu.changes) > 0 || mu.ibanWarn != ""
 		switch {
 		case hasChanges && (dryRun || selected):
 			report.Rows = append(report.Rows, ImportRow{
-				Line: lineNum, Status: "updated", Name: displayName, Changes: changes, IBANWarning: ibanWarn,
+				Line: lineNum, Status: "updated", Name: displayName, Changes: mu.changes, IBANWarning: mu.ibanWarn,
 			})
 			report.Updated++
 		case hasChanges: // !dryRun && !selected: bewusst abgewählt
 			report.Rows = append(report.Rows, ImportRow{
-				Line: lineNum, Status: "skipped", Name: displayName, Changes: changes, IBANWarning: ibanWarn,
+				Line: lineNum, Status: "skipped", Name: displayName, Changes: mu.changes, IBANWarning: mu.ibanWarn,
 			})
 			report.Skipped++
 		default:
