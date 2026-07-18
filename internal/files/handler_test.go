@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 
@@ -299,5 +300,201 @@ func TestCheckAntiEscalation_WriteOnlyCannotGrantRead(t *testing.T) {
 	}
 	if !ok {
 		t.Error("write-without-read caller may still grant write they hold")
+	}
+}
+
+// ── Route-level authz: folder/file CRUD + download-token ─────────────────────
+
+func filesRouteServer(t *testing.T, h *Handler) *httptest.Server {
+	t.Helper()
+	return testutil.NewServer(t, func(r chi.Router) {
+		r.Post("/api/folders", h.CreateFolder)
+		r.Delete("/api/folders/{id}", h.DeleteFolder)
+		r.Post("/api/folders/{folderId}/files", h.UploadFile)
+		r.Post("/api/folders/{id}/permissions", h.AddPermission)
+		r.Delete("/api/folders/{id}/permissions/{permId}", h.DeletePermission)
+		r.Get("/api/files/{id}/download-token", h.HandleDownloadToken)
+	})
+}
+
+func TestCreateFolder_NoWriteForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	parent := testutil.CreateFolder(t, db, "Root", 0, adminID)
+	testutil.SetFolderPermission(t, db, parent, "user", itoa(userID), true, false) // read only
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, "/api/folders", tok, map[string]any{"name": "Sub", "parent_id": parent})
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 creating subfolder without can_write, got %d", res.StatusCode)
+	}
+}
+
+func TestCreateFolder_HappyPath(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	parent := testutil.CreateFolder(t, db, "Root", 0, adminID)
+	testutil.SetFolderPermission(t, db, parent, "user", itoa(userID), true, true)
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, "/api/folders", tok, map[string]any{"name": "Sub", "parent_id": parent})
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("expected 201 creating subfolder with can_write, got %d", res.StatusCode)
+	}
+}
+
+func TestDeleteFolder_NoWriteForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+	testutil.SetFolderPermission(t, db, folder, "user", itoa(userID), true, false) // read only
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Delete(t, srv, "/api/folders/"+itoa(folder), tok)
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 deleting folder without can_write, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM file_folders WHERE id = ?`, folder).Scan(&n)
+	if n != 1 {
+		t.Error("folder must not be deleted on forbidden request")
+	}
+}
+
+func TestUploadFile_NoWriteForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+	testutil.SetFolderPermission(t, db, folder, "user", itoa(userID), true, false) // read only
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.PostMultipart(t, srv, "/api/folders/"+itoa(folder)+"/files", tok, "file", "note.txt", []byte("hello"))
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 uploading without can_write, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM files WHERE folder_id = ?`, folder).Scan(&n)
+	if n != 0 {
+		t.Error("no file may be persisted on forbidden upload")
+	}
+}
+
+func TestUploadFile_HappyPath(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+	testutil.SetFolderPermission(t, db, folder, "user", itoa(userID), true, true)
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.PostMultipart(t, srv, "/api/folders/"+itoa(folder)+"/files", tok, "file", "note.txt", []byte("hello"))
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("expected 201 uploading with can_write, got %d", res.StatusCode)
+	}
+}
+
+// TestAddPermission_EscalationForbidden exercises the read-escalation guard through the HTTP
+// route (complements the checkAntiEscalation unit tests): a caller with can_write but not
+// can_read must not be able to grant read access via the API.
+func TestAddPermission_EscalationForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	otherID := testutil.CreateUser(t, db, "standard")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+	testutil.SetFolderPermission(t, db, folder, "user", itoa(userID), false, true) // write without read
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, "/api/folders/"+itoa(folder)+"/permissions", tok, map[string]any{
+		"principal_type": "user", "principal_ref": itoa(otherID), "can_read": true, "can_write": false,
+	})
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 granting read without holding read, got %d", res.StatusCode)
+	}
+}
+
+func TestDeletePermission_NoWriteForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+	testutil.SetFolderPermission(t, db, folder, "user", itoa(userID), true, false) // read only
+	testutil.SetFolderPermission(t, db, folder, "everyone", "", true, false)
+	var permID int
+	db.QueryRow(`SELECT id FROM folder_permissions WHERE folder_id = ? AND principal_type = 'everyone'`, folder).Scan(&permID)
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Delete(t, srv, "/api/folders/"+itoa(folder)+"/permissions/"+itoa(permID), tok)
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 deleting permission without can_write, got %d", res.StatusCode)
+	}
+}
+
+func TestDownloadToken_NoReadForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := testutil.CreateFolder(t, db, "Restricted", 0, adminID)
+	// folder has NO permission for userID → resolveAccess returns no read
+	fileID := testutil.CreateFile(t, db, folder, adminID, "secret.pdf")
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/files/"+itoa(fileID)+"/download-token", tok)
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 download-token without can_read (fail-closed), got %d", res.StatusCode)
+	}
+}
+
+func TestDownloadToken_HappyPath(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := testutil.CreateFolder(t, db, "Shared", 0, adminID)
+	testutil.SetFolderPermission(t, db, folder, "user", itoa(userID), true, false)
+	fileID := testutil.CreateFile(t, db, folder, adminID, "shared.pdf")
+
+	tok := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/files/"+itoa(fileID)+"/download-token", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 download-token with can_read, got %d", res.StatusCode)
+	}
+	var body struct {
+		Token string `json:"token"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	if body.Token == "" {
+		t.Error("expected a non-empty download token")
 	}
 }

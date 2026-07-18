@@ -1,15 +1,15 @@
 ## 1. files — Route-Ebenen-Authz (`internal/files/handler_test.go`)
 
-- [ ] 1.1 `TestCreateFolder_NoWriteForbidden` — `POST /api/folders` bzw. Subfolder ohne `can_write` → 403
-- [ ] 1.2 `TestCreateFolder_HappyPath` — Nutzer mit `can_write` legt Ordner an → 201, Zeile in `file_folders`
-- [ ] 1.3 `TestDeleteFolder_NoWriteForbidden` — `DELETE /api/folders/{id}` ohne `can_write` → 403; Ordner bleibt
-- [ ] 1.4 `TestUploadFile_NoWriteForbidden` — `POST /api/folders/{id}/files` (via `testutil.PostMultipart`) ohne `can_write` → 403, keine Datei gespeichert
-- [ ] 1.5 `TestUploadFile_HappyPath` — mit `can_write` → 201/200, Datei in `files`
-- [ ] 1.6 `TestAddPermission_EscalationForbidden` — HTTP-403, wenn ein Nutzer ein Recht vergibt, das er nicht hält (ergänzt die vorhandenen `checkAntiEscalation`-Units auf Route-Ebene)
-- [ ] 1.7 `TestDeletePermission_NoWriteForbidden` — `DELETE /api/folders/{id}/permissions/{permId}` ohne `can_write` → 403
-- [ ] 1.8 `TestDownloadToken_NoReadForbidden` — `GET /api/files/{id}/download-token` ohne Leserecht → 403 (fail-closed, kein Token). **Vor dem Test Verhalten am Code verifizieren (D3);** liefert die Route fälschlich einen Token, erst `fix(files)`, dann Test.
-- [ ] 1.9 `TestDownloadToken_HappyPath` — mit Leserecht → 200 + Token
-- [ ] 1.10 Commit: `test(files): Route-Authz für Ordner-/Datei-CRUD + Download-Token`
+- [x] 1.1 `TestCreateFolder_NoWriteForbidden` — `POST /api/folders` bzw. Subfolder ohne `can_write` → 403
+- [x] 1.2 `TestCreateFolder_HappyPath` — Nutzer mit `can_write` legt Ordner an → 201, Zeile in `file_folders`
+- [x] 1.3 `TestDeleteFolder_NoWriteForbidden` — `DELETE /api/folders/{id}` ohne `can_write` → 403; Ordner bleibt
+- [x] 1.4 `TestUploadFile_NoWriteForbidden` — `POST /api/folders/{id}/files` (via `testutil.PostMultipart`) ohne `can_write` → 403, keine Datei gespeichert
+- [x] 1.5 `TestUploadFile_HappyPath` — mit `can_write` → 201/200, Datei in `files`
+- [x] 1.6 `TestAddPermission_EscalationForbidden` — HTTP-403, wenn ein Nutzer ein Recht vergibt, das er nicht hält (ergänzt die vorhandenen `checkAntiEscalation`-Units auf Route-Ebene)
+- [x] 1.7 `TestDeletePermission_NoWriteForbidden` — `DELETE /api/folders/{id}/permissions/{permId}` ohne `can_write` → 403
+- [x] 1.8 `TestDownloadToken_NoReadForbidden` — `GET /api/files/{id}/download-token` ohne Leserecht → 403 (fail-closed, kein Token). **Vor dem Test Verhalten am Code verifizieren (D3);** liefert die Route fälschlich einen Token, erst `fix(files)`, dann Test.
+- [x] 1.9 `TestDownloadToken_HappyPath` — mit Leserecht → 200 + Token
+- [x] 1.10 Commit: `test(files): Route-Authz für Ordner-/Datei-CRUD + Download-Token`
 
 ## 2. matchreports — ServeImage-Authz (`internal/matchreports/`)
 
