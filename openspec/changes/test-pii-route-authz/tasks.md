@@ -13,13 +13,13 @@
 
 ## 2. matchreports — ServeImage-Authz (`internal/matchreports/`)
 
-- [ ] 2.1 Testserver mit `GET /api/match-reports/{id}/images/{imgId}/blob` verdrahten (Handler `ServeImage`)
-- [ ] 2.2 `TestServeImage_Unauthenticated` — kein Claim → 401
-- [ ] 2.3 `TestServeImage_ForeignForbidden` — eingeloggt, weder Autor noch Reviewer → 403
-- [ ] 2.4 `TestServeImage_NotFound` — unbekannte Report-/Image-ID → 404
-- [ ] 2.5 `TestServeImage_AuthorOK` — Autor ruft eigenes Bild ab → 200
-- [ ] 2.6 `TestServeImage_ReviewerOK` — Reviewer (medien/vorstand/admin) → 200
-- [ ] 2.7 Commit: `test(matchreports): ServeImage nur Autor/Reviewer`
+- [x] 2.1 Testserver mit `GET /api/match-reports/{id}/images/{imgId}/blob` verdrahten (Handler `ServeImage`)
+- [x] 2.2 `TestServeImage_Unauthenticated` — kein Claim → 401
+- [x] 2.3 `TestServeImage_ForeignForbidden` — eingeloggt, weder Autor noch Reviewer → 403
+- [x] 2.4 `TestServeImage_NotFound` — unbekannte Report-/Image-ID → 404
+- [x] 2.5 `TestServeImage_AuthorOK` — Autor ruft eigenes Bild ab → 200
+- [x] 2.6 `TestServeImage_ReviewerOK` — Reviewer (medien/vorstand/admin) → 200
+- [x] 2.7 Commit: `test(matchreports): ServeImage nur Autor/Reviewer`
 
 ## 3. duties — Spielbericht-Slot-Guard (`internal/duties/`)
 
