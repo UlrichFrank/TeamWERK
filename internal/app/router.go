@@ -335,6 +335,28 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/teams/my", h.Teams.ListMyTeams)
 		r.Get("/api/teams/{id}/roster", h.Teams.GetRoster)
 
+		// Mannschafts-Aufgaben (Responsibilities). Gates handler-inline
+		// (Trainer des Kaders); Anzeige reitet auf der Roster-Response mit.
+		r.Get("/api/teams/{id}/responsibility-types", h.Teams.ListResponsibilityTypes)
+		r.Post("/api/teams/{id}/responsibility-types", h.Teams.CreateResponsibilityType)
+		r.Delete("/api/teams/{id}/responsibility-types/{typeId}", h.Teams.DeleteResponsibilityType)
+		r.Post("/api/teams/{id}/responsibilities", h.Teams.CreateResponsibility)
+		r.Delete("/api/teams/{id}/responsibilities/{respId}", h.Teams.DeleteResponsibility)
+
+		// Mannschafts-Strafen (Penalties). Eigener Endpoint mit teaminternem
+		// Read-Gate (Spieler+Trainer+Erweitert, KEINE Eltern); Schreiben nur
+		// für den Strafenwart des Kaders, Katalog/Ernennung nur für Trainer.
+		r.Get("/api/teams/{id}/penalties", h.Teams.ListPenalties)
+		r.Post("/api/teams/{id}/penalties", h.Teams.CreatePenalty)
+		r.Delete("/api/teams/{id}/penalties/{penaltyId}", h.Teams.DeletePenalty)
+		r.Delete("/api/teams/{id}/penalties", h.Teams.ResetMemberPenalties)
+		r.Get("/api/teams/{id}/penalty-types", h.Teams.ListPenaltyTypes)
+		r.Post("/api/teams/{id}/penalty-types", h.Teams.CreatePenaltyType)
+		r.Delete("/api/teams/{id}/penalty-types/{typeId}", h.Teams.DeletePenaltyType)
+		r.Get("/api/teams/{id}/strafenwarte", h.Teams.ListStrafenwarte)
+		r.Post("/api/teams/{id}/strafenwarte", h.Teams.AppointStrafenwart)
+		r.Delete("/api/teams/{id}/strafenwarte/{memberId}", h.Teams.RemoveStrafenwart)
+
 		// Stammvereine (Liste für Mitglied-Dropdown; alle Eingeloggten)
 		if h.Stammvereine != nil {
 			r.Get("/api/stammvereine", h.Stammvereine.List)

@@ -313,13 +313,15 @@ func (h *Handler) ResetMemberPenalties(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid team id", http.StatusBadRequest)
 		return
 	}
+	// Gate VOR der Input-Validierung: ein Nicht-Strafenwart bekommt 403, nicht 400
+	// (konsistente Autorisierungs-Semantik, unabhängig vom fehlenden member-Param).
+	if ok, err := h.isStrafenwartOfTeam(ctx, claims, teamID); err != nil || !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	memberID, err := strconv.Atoi(r.URL.Query().Get("member"))
 	if err != nil || memberID <= 0 {
 		http.Error(w, "member query param required", http.StatusBadRequest)
-		return
-	}
-	if ok, err := h.isStrafenwartOfTeam(ctx, claims, teamID); err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 

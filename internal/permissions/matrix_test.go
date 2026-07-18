@@ -113,6 +113,14 @@ var exAdmin = map[string]int{
 	"spieler": 403, "elternteil": 403,
 }
 
+// Handler-Level-Gates der team-internen Aufgaben/Strafen-Routen (internal/teams).
+// Alle Checks sind DB-Lookups auf Kader-Mitgliedschaft der aktiven Saison
+// (isTrainerOfTeam / isStrafenwartOfTeam / canReadPenalties). Ohne Kader-/Season-
+// Fixture in der Test-DB kommt nur der System-Admin (Bypass) durch; jede andere
+// Persona wird mit 403 geblockt — unabhängig von Rolle/Vereinsfunktion (der
+// Strafenwart ist bewusst KEINE Vereinsfunktion, sondern ein per-Kader-Appointment).
+var exTeamInternalGate = exAdmin
+
 // Handler-Level-Gate: chat.SendBroadcast — admin || vorstand || trainer || sportliche_leitung
 var exBroadcastSend = map[string]int{
 	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
@@ -409,6 +417,23 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/teams/my", expected: exAuth},
 	// roster: user_accessible_teams-Check → 403 wenn kein Season/Membership-Fixture
 	{method: "GET", path: "/api/teams/{id}/roster", expected: exPublic},
+	// Mannschafts-Aufgaben (Handler-inline Trainer-Gate; ohne Kader-Fixture nur admin).
+	{method: "GET", path: "/api/teams/{id}/responsibility-types", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/responsibility-types", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/responsibility-types/{typeId}", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/responsibilities", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/responsibilities/{respId}", expected: exTeamInternalGate},
+	// Mannschafts-Strafen (Handler-inline Read-/Strafenwart-/Trainer-Gates; ohne Fixture nur admin).
+	{method: "GET", path: "/api/teams/{id}/penalties", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/penalties", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/penalties/{penaltyId}", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/penalties", expected: exTeamInternalGate},
+	{method: "GET", path: "/api/teams/{id}/penalty-types", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/penalty-types", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/penalty-types/{typeId}", expected: exTeamInternalGate},
+	{method: "GET", path: "/api/teams/{id}/strafenwarte", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/strafenwarte", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/strafenwarte/{memberId}", expected: exTeamInternalGate},
 	{method: "GET", path: "/api/stammvereine", expected: exAuth},
 
 	// Videos (Spielvideo-Ablage) — Lese-/CRUD-Routen im Authenticated-Tier;
