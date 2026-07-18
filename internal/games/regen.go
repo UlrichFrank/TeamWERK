@@ -189,44 +189,57 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		summary.Conflicts = append(summary.Conflicts, gameSummary.Conflicts...)
 
 		// Step 5: turn deleted-slot user assignments into notification intents.
-		notifiedSeen := map[int]bool{}
-		for _, ds := range slotsByID {
-			if len(ds.UserIDs) == 0 {
-				continue
-			}
-			outcome, ok := outcomeByOriginalType[ds.DutyTypeID]
-			kind := "removed"
-			newType := ""
-			if ok {
-				switch outcome.kind {
-				case "skipped":
-					kind = "removed"
-				case "reduced":
-					kind = "variant_changed"
-					newType = outcome.newType
-				case "created":
-					// Slot recreated identical-type — user assignment still gone (we deleted
-					// the slot), so treat as removed. Could be no-op-noisy in rare edge case
-					// but better than silent loss.
-					kind = "removed"
-				}
-			}
-			for _, uid := range ds.UserIDs {
-				if notifiedSeen[uid] {
-					continue
-				}
-				notifiedSeen[uid] = true
-				summary.NotifiedUsers = append(summary.NotifiedUsers, uid)
-				summary.Notifications = append(summary.Notifications, NotificationIntent{
-					UserID: uid, Kind: kind,
-					EventName: eventName, EventDate: date,
-					NewType: newType,
-				})
-			}
-		}
+		notifiedUsers, notifications := buildNotificationIntents(slotsByID, outcomeByOriginalType, eventName, date)
+		summary.NotifiedUsers = append(summary.NotifiedUsers, notifiedUsers...)
+		summary.Notifications = append(summary.Notifications, notifications...)
 	}
 
 	return summary, nil
+}
+
+// buildNotificationIntents maps the users of the deleted (is_custom=0) slots to notification
+// intents, using the per-original-type outcomes: a slot whose type was reduced yields a
+// "variant_changed" intent (carrying the new type name), everything else (skipped, or
+// recreated identical) yields "removed". Each user is notified at most once per game.
+func buildNotificationIntents(slotsByID map[int]*deletedSlot, outcomeByOriginalType map[int]itemOutcome, eventName, date string) ([]int, []NotificationIntent) {
+	var notifiedUsers []int
+	var notifications []NotificationIntent
+	notifiedSeen := map[int]bool{}
+	for _, ds := range slotsByID {
+		if len(ds.UserIDs) == 0 {
+			continue
+		}
+		outcome, ok := outcomeByOriginalType[ds.DutyTypeID]
+		kind := "removed"
+		newType := ""
+		if ok {
+			switch outcome.kind {
+			case "skipped":
+				kind = "removed"
+			case "reduced":
+				kind = "variant_changed"
+				newType = outcome.newType
+			case "created":
+				// Slot recreated identical-type — user assignment still gone (we deleted
+				// the slot), so treat as removed. Could be no-op-noisy in rare edge case
+				// but better than silent loss.
+				kind = "removed"
+			}
+		}
+		for _, uid := range ds.UserIDs {
+			if notifiedSeen[uid] {
+				continue
+			}
+			notifiedSeen[uid] = true
+			notifiedUsers = append(notifiedUsers, uid)
+			notifications = append(notifications, NotificationIntent{
+				UserID: uid, Kind: kind,
+				EventName: eventName, EventDate: date,
+				NewType: newType,
+			})
+		}
+	}
+	return notifiedUsers, notifications
 }
 
 // customKey identifies an is_custom=1 slot for conflict detection. TeamID/HasTeam
