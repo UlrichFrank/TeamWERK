@@ -322,6 +322,21 @@ func TestImport_EnrichAmbiguousNoDOB_NichtBefuellt(t *testing.T) {
 		t.Fatalf("import status %d, want 200", res.StatusCode)
 	}
 
+	// Meldung B positiv pinnen (emptyCnt>=2-Zweig): beide DB-Mitglieder haben leeres
+	// date_of_birth, die CSV liefert ein DOB → Zweig 1939-1948, Text "… ohne Geburtsdatum …".
+	rep := decodeReport(t, res)
+	if rep.Errors != 1 {
+		t.Errorf("errors = %d, want 1", rep.Errors)
+	}
+	if len(rep.Rows) != 1 || !strings.Contains(rep.Rows[0].Message, "ohne Geburtsdatum") {
+		t.Errorf("rows[0].Message = %q, want Substring %q", func() string {
+			if len(rep.Rows) > 0 {
+				return rep.Rows[0].Message
+			}
+			return "<keine Row>"
+		}(), "ohne Geburtsdatum")
+	}
+
 	var withNum int
 	db.QueryRow(`SELECT COUNT(*) FROM members WHERE first_name='Max' AND member_number IS NOT NULL`).Scan(&withNum)
 	if withNum != 0 {
@@ -842,6 +857,26 @@ func TestImport_CSVInternalDuplicate(t *testing.T) {
 	}
 }
 
+// TestImport_CSVDuplicateCaseInsensitive pinnt, dass der Dedup-Key case-insensitiv ist
+// (strings.ToLower auf Vor-/Nachname). Ohne diesen Test bliebe ein Refactor, der das ToLower
+// aus dem dupKey entfernt, unentdeckt (beide Zeilen würden fälschlich als distinct gelten).
+func TestImport_CSVDuplicateCaseInsensitive(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;Name\nPetra;Test\npetra;test\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if rep.Errors != 2 {
+		t.Errorf("errors = %d, want 2 (case-insensitiver Dedup-Key)", rep.Errors)
+	}
+	if rep.Created != 0 {
+		t.Errorf("created = %d, want 0", rep.Created)
+	}
+}
+
 func TestImport_CSVDuplicateDistinctByDOB(t *testing.T) {
 	_, srv, token := adminServer(t)
 	csv := "Vorname;Name;geboren am\nPetra;Test;14.10.2007\nPetra;Test;15.10.2007\n"
@@ -1059,6 +1094,12 @@ func TestImport_AppendStatusFallbackAktiv(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	// Erfolgspfad explizit: ohne dies bliebe der Test bei einem "status weglassen,
+	// DB-DEFAULT nutzen"-Refactor grün (der Handler-Fallback verschwände unbemerkt).
+	rep := decodeReport(t, res)
+	if rep.Created != 1 {
+		t.Fatalf("created = %d, want 1", rep.Created)
 	}
 	if got := statusOf(t, db, "Max"); got != "aktiv" {
 		t.Errorf("status = %q, want %q (Fallback)", got, "aktiv")
