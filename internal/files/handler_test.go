@@ -224,3 +224,80 @@ func TestListPermissions_DisplayName(t *testing.T) {
 	}
 	t.Error("no user-type permission found in response")
 }
+
+// ── checkAntiEscalation: a grant may not exceed the caller's own rights ───────
+
+func TestCheckAntiEscalation_AdminGrantsAnything(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	folder := mkFolder(t, db, "Root", nil, adminID)
+	// No permission rows for the caller at all — admin bypasses regardless.
+	ok, err := checkAntiEscalation(db, &auth.Claims{UserID: adminID, Role: "admin"}, folder, true, true)
+	if err != nil {
+		t.Fatalf("checkAntiEscalation: %v", err)
+	}
+	if !ok {
+		t.Error("admin must be allowed to grant read+write on any folder")
+	}
+}
+
+func TestCheckAntiEscalation_ReadWriteCallerGrantsReadWrite(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := mkFolder(t, db, "Root", nil, adminID)
+	mkPerm(t, db, folder, "user", itoa(userID), 1, 1) // caller holds read+write
+
+	ok, err := checkAntiEscalation(db, stdClaims(userID), folder, true, true)
+	if err != nil {
+		t.Fatalf("checkAntiEscalation: %v", err)
+	}
+	if !ok {
+		t.Error("a read+write manager must be allowed to grant read+write")
+	}
+}
+
+func TestCheckAntiEscalation_NoWriteCannotManage(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := mkFolder(t, db, "Root", nil, adminID)
+	mkPerm(t, db, folder, "user", itoa(userID), 1, 0) // read-only caller
+
+	ok, err := checkAntiEscalation(db, stdClaims(userID), folder, true, false)
+	if err != nil {
+		t.Fatalf("checkAntiEscalation: %v", err)
+	}
+	if ok {
+		t.Error("a read-only caller must not be able to manage permissions (needs write)")
+	}
+}
+
+// TestCheckAntiEscalation_WriteOnlyCannotGrantRead nails the closed gap: a caller who holds
+// write but not read on a folder may still manage permissions, but must NOT be able to hand
+// out read access they don't themselves have.
+func TestCheckAntiEscalation_WriteOnlyCannotGrantRead(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	userID := testutil.CreateUser(t, db, "standard")
+	folder := mkFolder(t, db, "Root", nil, adminID)
+	mkPerm(t, db, folder, "user", itoa(userID), 0, 1) // write without read
+
+	// Granting a read right the caller lacks → denied.
+	ok, err := checkAntiEscalation(db, stdClaims(userID), folder, true, false)
+	if err != nil {
+		t.Fatalf("checkAntiEscalation: %v", err)
+	}
+	if ok {
+		t.Error("write-without-read caller must not grant read access they don't hold")
+	}
+
+	// Granting only write (which the caller holds) → allowed.
+	ok, err = checkAntiEscalation(db, stdClaims(userID), folder, false, true)
+	if err != nil {
+		t.Fatalf("checkAntiEscalation: %v", err)
+	}
+	if !ok {
+		t.Error("write-without-read caller may still grant write they hold")
+	}
+}

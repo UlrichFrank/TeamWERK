@@ -156,21 +156,28 @@ func resolveAccess(db *sql.DB, claims *auth.Claims, folderID int) (canRead, canW
 }
 
 // checkAntiEscalation returns true if the caller is allowed to grant the requested rights.
-// Admin may always grant anything. Others may only grant rights they themselves hold.
+// Admin may always grant anything. Everyone else may only grant rights they themselves
+// hold on this folder: managing permissions at all requires can_write, and neither a read
+// nor a write grant may exceed the caller's own effective access (resolved along the folder
+// path). This closes a read-escalation gap for the degenerate write-without-read case, where
+// a caller could otherwise hand out read access they don't have.
 func checkAntiEscalation(db *sql.DB, claims *auth.Claims, folderID int, newRead, newWrite bool) (bool, error) {
 	if claims.Role == "admin" {
 		return true, nil
 	}
-	_, callerWrite, err := resolveAccess(db, claims, folderID)
+	callerRead, callerWrite, err := resolveAccess(db, claims, folderID)
 	if err != nil {
 		return false, err
 	}
-	// Caller needs can_write to manage permissions at all.
-	// Additionally, can only grant write if they have write themselves.
+	// Managing permissions requires can_write.
 	if !callerWrite {
 		return false, nil
 	}
+	// A grant may not exceed the caller's own rights.
 	if newWrite && !callerWrite {
+		return false, nil
+	}
+	if newRead && !callerRead {
 		return false, nil
 	}
 	return true, nil
