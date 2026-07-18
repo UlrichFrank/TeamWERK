@@ -25,4 +25,4 @@
 - [x] 4.1 `go test ./...` grün — 41 Pakete, keine Fehler; gofmt + golangci-lint sauber
 - [x] 4.2 Drift-Lücken geschlossen: Die neu verdrahteten Handler machten **14** zuvor unsichtbare Routen sichtbar (maintenance-mode GET/POST, maintenance-status, alle match-reports-Routen). Klassifiziert in `matrix_test.go`: Autor-Tier → `exPressTeam` (nur admin, da keine press_team-Persona), Freigeber → `exMatchReportPublisher` (admin+vorstand, keine medien-Persona), Handler-entscheidet-Routen → `exMatchReportMixed` (httpAnyOK), maintenance-mode → `exAdmin`, maintenance-status → `exPublic`. **Offen für Welle 1:** press_team-/medien-Persona ergänzen, um die Positiv-Pfade (press_team DARF) echt zu prüfen.
 - [x] 4.3 `openspec validate test-harness-preconditions` grün
-- [ ] 4.4 Archivieren (nach Review durch den Menschen)
+- [x] 4.4 Archivieren (nach Review durch den Menschen)
