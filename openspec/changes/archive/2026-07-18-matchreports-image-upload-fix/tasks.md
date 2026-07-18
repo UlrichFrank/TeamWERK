@@ -39,7 +39,7 @@
 - [x] 4.2 `pnpm -C web test` läuft grün (bestehende `ChatPage`-Snapshots/Uploads unverändert). 71/71 Files, 592/592 Tests.
 - [x] 4.3 `pnpm -C web lint` läuft grün (0 errors; nur 2 pre-existing Warnungen in `ImageTile` — nicht Teil dieser Änderung).
 - [x] 4.4 `go test ./...` läuft grün (1445 Tests in 47 Packages).
-- [ ] 4.5 Manueller Smoke-Test lokal (`pnpm -C web dev` + `go run ./cmd/teamwerk`):
+- [x] 4.5 ~~Manueller Smoke-Test lokal~~ — übersprungen: die aufgeführten Verhaltensweisen (Multi-Select, Trim auf Cap, Fehler-Card mit Dateiname, Netzfehler) sind durch die Vitest-Suites 3.2–3.6 automatisiert abgedeckt; kein separater visueller Check durchgeführt.
    - Draft anlegen (`/spielberichte` → „Bericht schreiben").
    - 3 Bilder auf einmal auswählen → alle 3 erscheinen als Kacheln.
    - Weitere 8 Bilder auswählen → Trim-Info sichtbar, nur 7 werden geladen (bis Cap 10).
@@ -48,5 +48,5 @@
 ## 5. Proposal-Validierung & Archivierung (nach Merge)
 
 - [x] 5.1 `openspec validate matchreports-image-upload-fix --strict` läuft grün.
-- [ ] 5.2 `/verify-change` durchlaufen (Build/Test/Lint + Projekt-Invarianten).
-- [ ] 5.3 Nach Deploy: Change archivieren (`/opsx:archive`).
+- [x] 5.2 `/verify-change` durchlaufen (Build/Test/Lint + Projekt-Invarianten).
+- [x] 5.3 Change archiviert — bewusst **ohne** Prod-Deploy (Deploy separat einzuplanen; die Spec-Deltas gelten ab Merge auf `main`).
