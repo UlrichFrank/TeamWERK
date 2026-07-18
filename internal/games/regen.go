@@ -116,34 +116,10 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		return RegenSummary{}, fmt.Errorf("loadSameDayContext: %w", err)
 	}
 
-	rows, err := tx.QueryContext(ctx,
-		`SELECT id, time, end_time, opponent, is_home, event_type, template_id
-		 FROM games WHERE date=? AND season_id=? ORDER BY time, id`,
-		date, seasonID)
+	dayGames, err := h.loadDayGames(ctx, tx, date, seasonID)
 	if err != nil {
-		return RegenSummary{}, fmt.Errorf("load games: %w", err)
+		return RegenSummary{}, err
 	}
-	type dayGame struct {
-		ID         int
-		Time       string
-		EndTime    sql.NullString
-		Opponent   string
-		IsHome     bool
-		EventType  string
-		TemplateID sql.NullInt64
-	}
-	var dayGames []dayGame
-	for rows.Next() {
-		var g dayGame
-		var isHome int
-		if err := rows.Scan(&g.ID, &g.Time, &g.EndTime, &g.Opponent, &isHome, &g.EventType, &g.TemplateID); err != nil {
-			rows.Close()
-			return RegenSummary{}, err
-		}
-		g.IsHome = isHome == 1
-		dayGames = append(dayGames, g)
-	}
-	rows.Close()
 
 	var summary RegenSummary
 	for _, g := range dayGames {
@@ -400,6 +376,41 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 	}
 
 	return summary, nil
+}
+
+// dayGame is one row of games for the regen target date+season.
+type dayGame struct {
+	ID         int
+	Time       string
+	EndTime    sql.NullString
+	Opponent   string
+	IsHome     bool
+	EventType  string
+	TemplateID sql.NullInt64
+}
+
+// loadDayGames loads all games for the given date+season, ordered by time then id.
+func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, seasonID int) ([]dayGame, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT id, time, end_time, opponent, is_home, event_type, template_id
+		 FROM games WHERE date=? AND season_id=? ORDER BY time, id`,
+		date, seasonID)
+	if err != nil {
+		return nil, fmt.Errorf("load games: %w", err)
+	}
+	var dayGames []dayGame
+	for rows.Next() {
+		var g dayGame
+		var isHome int
+		if err := rows.Scan(&g.ID, &g.Time, &g.EndTime, &g.Opponent, &isHome, &g.EventType, &g.TemplateID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		g.IsHome = isHome == 1
+		dayGames = append(dayGames, g)
+	}
+	rows.Close()
+	return dayGames, nil
 }
 
 func composeEventName(eventType string, isHome bool, opponent string) string {
