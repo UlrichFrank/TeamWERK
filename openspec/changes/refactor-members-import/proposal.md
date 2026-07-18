@@ -3,8 +3,11 @@
 Welle 3 der `test-coverage-roadmap` — der funktionserhalt-kritische Fall. `members.Import`
 (`internal/members/handler.go:1675`, ~533 LOC, gocognit ~177) ist die komplexeste Funktion des
 Codebase und der Kern des Mitglieder-Imports (append/update/enrich/preview × dryRun × selected).
-Sie ist heute nur punktuell getestet: BOM-Handling, Delimiter-Detection, CSV-interne Dedup, die
-400-Fehlerpfade und der not_found-Pfad haben **keinen** Test. Ein Refactor dieser Funktion ohne
+Sie ist heute nur punktuell getestet: BOM-Handling, CSV-interne Dedup, die 400-Fehlerpfade und
+der not_found-Pfad haben **keinen** Test; Delimiter und Spalten-Aliase sind nur **implizit**
+(über Happy-Path-Bestandstests) abgedeckt, aber nie als expliziter Contract festgehalten.
+Kritischer: die `changes[]`-Report-Reihenfolge und der frühe enrich-Mehrdeutigkeits-Ausgang —
+beide entstehen in den riskantesten Extract-Stufen — haben **null** Absicherung. Ein Refactor dieser Funktion ohne
 Sicherheitsnetz wäre fahrlässig. `test-strategy` schreibt hier ausdrücklich „erst Extract-Method-
 Refactoring, dann Tests" **nicht** vor, sondern das Gegenteil für Sicherheit: **erst
 Charakterisierungstests, dann Refactor** — die Tests sind die Abnahme-Instanz jedes Schritts.

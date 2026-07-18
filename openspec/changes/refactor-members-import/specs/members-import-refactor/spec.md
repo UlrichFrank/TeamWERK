@@ -22,6 +22,14 @@ Fehlerpfade, den not_found-Pfad und Row-Fehler bei leeren Pflichtfeldern.
 - **WHEN** eine Datenzeile leere Pflichtfelder hat
 - **THEN** ein Test SHALL festhalten, dass die Zeile als Row-Fehler (Status 200 gesamt) behandelt wird und valide Zeilen weiterhin verarbeitet werden
 
+#### Scenario: changes[]-Report ist als Contract festgehalten
+- **WHEN** ein Update mehrere Felder eines Mitglieds ändert
+- **THEN** ein Test SHALL die exakten `changes`-Strings (`"Feld: alt → neu"`) und ihre Reihenfolge festhalten, da dieser beobachtbare Report vollständig in der zu extrahierenden `buildMemberUpdate`-Einheit entsteht
+
+#### Scenario: Beide Ambiguitäts-Ausgänge sind abgedeckt
+- **WHEN** eine enrich-Zeile ohne Geburtsdatum auf mehrere gleichnamige Mitglieder trifft
+- **THEN** ein Test SHALL den frühen Mehrdeutigkeits-Ausgang („… Treffer – Geburtsdatum in CSV fehlt") festhalten, getrennt vom Ausgang über gleichnamige Datensätze ohne Geburtsdatum
+
 ### Requirement: Import ist verhaltenserhaltend in benannte Einheiten unter der Komplexitätsschwelle zerlegt
 `members.Import` SHALL in benannte Funktionen/Methoden zerlegt sein (`parseImportCSV`,
 `detectCSVDuplicates`, `lookupExistingMember`, `insertNewMember`, `buildMemberUpdate`, Top-Level-

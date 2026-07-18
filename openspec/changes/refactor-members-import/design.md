@@ -49,6 +49,9 @@ Nebenwirkungen bleiben im Handler, die Helfer geben diskriminierte Ergebnisse/St
 - `detectCSVDuplicates(rows, col) csvDupes`.
 - `lookupExistingMember(ctx, first,last,dob,mode) lookupResult{outcome, member dbMember, message, dbErr}`.
 - `insertNewMember(...) (ibanWarn string, err error)`, `buildMemberUpdate(...) memberUpdate`.
+  Der `ibanWarn`-String (dupliziert in Insert- und Update-Pfad) wird **im jeweiligen Helfer
+  berechnet und zurückgegeben** (`memberUpdate.ibanWarn` für Stufe 6); der Handler schreibt ihn
+  ins `iban_warning`-Row-Feld — vor Stufe 6 festgelegt, damit der Contract nicht driftet.
 
 **D6 — Wörtlich zu erhaltende Contracts (Refactor-Guards).** (a) englische 400-Texte; (b)
 deutsche Row-`message`-Strings inkl. Dedup-Zeilennummern (`"Mehrfach in CSV (auch Zeile %d)"` /

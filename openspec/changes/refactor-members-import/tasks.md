@@ -5,11 +5,14 @@
 - [ ] 1.3 BOM: `TestImport_StripsUTF8BOM` (BOM vor Header → 200, Created==1), optional `TestImport_BOMWithCommaDelimiter`
 - [ ] 1.4 Delimiter: `TestImport_DelimiterSemicolon`, `TestImport_DelimiterComma`, `TestImport_DelimiterDetectedFromFirstLineOnly` (Detection nur erste Zeile)
 - [ ] 1.5 Aliase: `TestImport_ColumnAliasName` (`Name`→`Nachname`), `TestImport_ColumnAliasGeborenAmUndMitgliedSeit`
-- [ ] 1.6 Dedup: `TestImport_CSVInternalDuplicate` (beide Zeilen error, Meldungen „auch/zuerst Zeile N"), optional `TestImport_CSVDuplicateDistinctByDOB`
+- [ ] 1.6 Dedup: `TestImport_CSVInternalDuplicate` (beide Zeilen error, Meldungen „auch/zuerst Zeile N") **und** `TestImport_CSVDuplicateDistinctByDOB` (verschiedene DOB ⇒ kein Dup — sichert die DOB-Komponente des Dedup-Keys, Stufe 3; **verpflichtend**, nicht optional)
 - [ ] 1.7 400-Pfade: `TestImport_MissingRequiredColumnVorname`, `_MissingRequiredColumnNachname`, `_BrokenCSVFieldCount`, `_EmptyFileNoHeader`, `_MissingFileField` (text/plain-Body prüfen, kein decode)
 - [ ] 1.8 `TestImport_EmptyNameCellIsRowError` (leerer Vorname → Row-error, 200 gesamt, valide Zeile trotzdem created)
 - [ ] 1.9 `TestImport_EnrichNotFound` (enrich + unbekannt → not_found, kein Insert, `name="Neu, Max"`, `dob="2007-10-14"`)
-- [ ] 1.10 `go test ./internal/members/` grün; Commit: `test(members): Charakterisierungstests für Import (BOM/Delimiter/Dedup/400/not_found)`
+- [ ] 1.10 **Stufe-4-Guard** `TestImport_EnrichAmbiguousNoDOB_MeldungA` — enrich, DOB in CSV fehlt, ≥2 gleichnamige DB-Treffer → Meldung **A** `"Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt"` (handler.go:1886-1901; anderer Zweig als der emptyCnt-Pfad von `_EnrichAmbiguousNoDOB_NichtBefuellt`), nicht befüllt
+- [ ] 1.11 **Stufe-6-Guard** `TestImport_UpdateChangesContract` — Multi-Feld-Update → `Rows[0].Changes` enthält die exakten `"Feld: alt → neu"`-Strings in der erzeugten Reihenfolge (der einzige Test, der den beobachtbaren `changes[]`-Report-Contract festnagelt — Format entsteht komplett in `buildMemberUpdate`)
+- [ ] 1.12 **Stufe-5-Guard** `TestImport_AppendStatusFallbackAktiv` — append ohne/mit unbekanntem `Status TeamWERK` → `member.status == "aktiv"` (Fallback `""→"aktiv"` lebt nur im Insert)
+- [ ] 1.13 `go test ./internal/members/` grün; Commit: `test(members): Charakterisierungstests für Import (BOM/Delimiter/Dedup/400/not_found + Stufen-Guards 3-6)`
 
 ## 2. Phase 2 · Stufe 1 — `normalize*` → Top-Level
 
@@ -67,3 +70,7 @@ SIND die Abnahme-Instanz für jeden Refactor-Schritt (Suite nach jedem Schritt g
 - `TestImport_MissingFileField` → 400 → Multipart ohne `file` → „missing file"
 - `TestImport_EmptyNameCellIsRowError` → 200 → leere Pflichtzelle → Row-error, valide Zeile weiterhin created
 - `TestImport_EnrichNotFound` → 200 → enrich + unbekannt → not_found, kein Insert
+- `TestImport_CSVDuplicateDistinctByDOB` → 200 → gleiche Namen, verschiedene DOB ⇒ kein Dup (Stufe-3-Guard: DOB im Dedup-Key)
+- `TestImport_EnrichAmbiguousNoDOB_MeldungA` → 200 → enrich ohne CSV-DOB + ≥2 gleichnamige → „Mehrdeutig (N Treffer) – Geburtsdatum in CSV fehlt" (Stufe-4-Guard)
+- `TestImport_UpdateChangesContract` → 200 → Multi-Feld-Update → exakte `changes[]`-Strings/Reihenfolge (Stufe-6-Guard)
+- `TestImport_AppendStatusFallbackAktiv` → 200 → append ohne/unbekannter Status → `status=="aktiv"` (Stufe-5-Guard)
