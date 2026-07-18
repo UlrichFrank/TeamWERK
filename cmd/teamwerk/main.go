@@ -270,7 +270,7 @@ func serve() {
 		Training:            trainings.NewHandler(database, cfg, hubInstance),
 		Absences:            absences.NewHandler(database, hubInstance),
 		Attendance:          attendance.NewHandler(database, hubInstance),
-		Teams:               teams.NewHandler(database),
+		Teams:               teams.NewHandler(database, hubInstance),
 		Venues:              venues.NewHandler(database, hubInstance),
 		Beitragssaetze:      beitragssaetze.NewHandler(database, hubInstance),
 		Beitragslauf:        beitragslauf.NewHandler(database, hubInstance, cfg.BeitragslaufDir),

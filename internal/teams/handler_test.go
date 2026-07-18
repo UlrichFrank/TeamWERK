@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
@@ -38,7 +39,7 @@ func TestGetRoster_ExtendedPlayers(t *testing.T) {
 	extMemberID := testutil.CreateMember(t, db, extUserID)
 	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID)
 
-	h := teams.NewHandler(db)
+	h := teams.NewHandler(db, hub.NewHub())
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, regularUserID, "standard", nil)
@@ -83,7 +84,7 @@ func TestGetRoster_ExtendedPlayerCanAccessRoster(t *testing.T) {
 	extMemberID := testutil.CreateMember(t, db, extUserID)
 	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID)
 
-	h := teams.NewHandler(db)
+	h := teams.NewHandler(db, hub.NewHub())
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, extUserID, "standard", nil)
@@ -118,7 +119,7 @@ func TestGetRoster_ExtendedParents(t *testing.T) {
 	extParentUserID := testutil.CreateUser(t, db, "standard")
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, extParentUserID, extChildMemberID)
 
-	h := teams.NewHandler(db)
+	h := teams.NewHandler(db, hub.NewHub())
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, regParentUserID, "standard", nil)
@@ -165,7 +166,7 @@ func TestGetRoster_ParentWithRegularAndExtendedChild(t *testing.T) {
 	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extChildMemberID)
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, extChildMemberID)
 
-	h := teams.NewHandler(db)
+	h := teams.NewHandler(db, hub.NewHub())
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, parentUserID, "standard", nil)
@@ -209,7 +210,7 @@ func TestListMyTeams_IsExtended(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, userID)
 	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
 
-	h := teams.NewHandler(db)
+	h := teams.NewHandler(db, hub.NewHub())
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, userID, "standard", nil)
@@ -242,7 +243,7 @@ func TestListMyTeams_IsNotExtended(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, userID)
 	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
 
-	h := teams.NewHandler(db)
+	h := teams.NewHandler(db, hub.NewHub())
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, userID, "standard", nil)
@@ -275,7 +276,7 @@ func TestGetRoster_NoExtendedPlayers(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, userID)
 	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
 
-	h := teams.NewHandler(db)
+	h := teams.NewHandler(db, hub.NewHub())
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, userID, "standard", nil)

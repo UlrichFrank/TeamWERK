@@ -64,7 +64,7 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Training:       trainings.NewHandler(database, cfg, hubInstance),
 		Absences:       absences.NewHandler(database, hubInstance),
 		Attendance:     attendance.NewHandler(database, hubInstance),
-		Teams:          teams.NewHandler(database),
+		Teams:          teams.NewHandler(database, hubInstance),
 		Venues:         venues.NewHandler(database, hubInstance),
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
 		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, t.TempDir()),
