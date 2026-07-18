@@ -39,7 +39,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -250,6 +250,11 @@ test: ## Backend + Frontend (vitest) Tests ausführen — schnell, ohne Race-Det
 
 test-race: ## Backend-Tests mit Race-Detector (~10× langsamer; vor Merge in heikle nebenläufige Bereiche)
 	$(GO) test -race ./...
+
+test-e2e: ## Playwright-E2E (echter Chromium gegen Prod-Binary + Seed-DB) — ~2–4 min, NICHT Teil von `make test`
+	cd web && CI=true pnpm build
+	cd web && CI=true ./node_modules/.bin/playwright test --config e2e/playwright.config.ts
+	@rm -f e2e.db e2e.db-wal e2e.db-shm
 
 lint: ## Statische Codeanalyse mit golangci-lint
 	@if ! command -v golangci-lint > /dev/null 2>&1; then \

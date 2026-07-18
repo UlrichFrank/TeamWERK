@@ -109,6 +109,10 @@ func main() {
 		runCreateAdmin()
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "e2e-seed" {
+		runE2ESeed()
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "gen-vapid" {
 		runGenVapid()
 		return

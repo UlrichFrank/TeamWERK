@@ -69,3 +69,12 @@ metrics/PAYLOAD.md
 # Affinity-Designer-Arbeitsdateien im Repo-Root (Icon-/Asset-Exporte)
 /*.af
 /*.af~lock~
+
+# Playwright E2E
+web/e2e/.playwright/
+web/e2e/test-results/
+web/e2e/playwright-report/
+web/e2e/*.db*
+e2e.db*
+bin/teamwerk-e2e
+web/test-results/
