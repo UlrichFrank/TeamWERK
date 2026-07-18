@@ -13,7 +13,8 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/tus/tusd/v2 v2.10.0
 	github.com/yuin/goldmark v1.8.2
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
+	golang.org/x/image v0.44.0
 	golang.org/x/text v0.40.0
 	modernc.org/sqlite v1.50.1
 )
@@ -42,7 +43,6 @@ require (
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
-	golang.org/x/image v0.44.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
