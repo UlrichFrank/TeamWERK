@@ -2,14 +2,15 @@
 
 - [ ] 1.1 Imports ergänzen: `os`, `path/filepath`, `strings`, `io` (Datei-/Body-Lesen, Substring-Asserts)
 - [ ] 1.2 `TestConfirm_HappyPath_SchreibtProtokoll` — 200 + JSON (`saison_label`, `erfolgreich=1`, `summe_erfolgreich_cent`), Datei `beitragslauf_<label>.txt` enthält `Mitgl.-Nr`, Name, Euro-Betrag (`dir` aus `setupSrv`)
-- [ ] 1.3 `TestConfirm_ProtokollOhneIBAN` — Dateiinhalt enthält **nicht** `validIBAN`/`DE89`, wohl aber die Mitgliedsnummer (Guard gegen versehentliche Bankdaten im Protokoll)
-- [ ] 1.4 `TestConfirm_AppendOnly_ZweiLaeufe` — zwei Confirm-POSTs → `strings.Count(..., "=== Lauf bestätigt")==2`, erster Block bleibt
-- [ ] 1.5 `TestConfirm_UnbekannteSaison404` — Saison-ID 99999 → 404, keine Datei
-- [ ] 1.6 `TestConfirm_UngueltigerBody400` — typ-fehlpassendes/kaputtes JSON → 400, Body `"ungültiger Body"`
-- [ ] 1.7 `TestProtocol_RueckleseNachConfirm` — nach Confirm 200, `text/plain`, Body enthält Lauf-Block, **keine** IBAN
-- [ ] 1.8 `TestProtocol_UnbekannteSaison404` — 404
-- [ ] 1.9 `TestProtocol_OhneDateiLeer200` — gültige Saison ohne Lauf → 200 + leerer Body (nicht 404)
-- [ ] 1.10 Commit: `test(beitragslauf): fee-run confirm/protocol — Protokoll, Append-Only, keine IBAN`
+- [ ] 1.3 `TestConfirm_ProtokollOhneIBAN` — **Struktur-Guard** (nicht Security-Kern; der Body trägt keine IBAN): Dateiinhalt enthält **nicht** `validIBAN`/`DE89`, **wohl aber** Mitgliedsnummer **und** Euro-Betrag (positive Inhaltsprüfung nagelt das Format mit)
+- [ ] 1.4 `TestConfirm_MixedSuccessFailure` — ein Erfolg + ein Fehlschlag in einem Batch → JSON `erfolgreich=1`, `nicht_erfolgreich=1`; Protokoll enthält **beide** Blöcke (`"Erfolgreich (1)"` + `"Nicht erfolgreich (1)"`, `protokoll.go:55-60`) — geldnaher als die Halbierungs-Zelle
+- [ ] 1.5 `TestConfirm_AppendOnly_ZweiLaeufe` — zwei Confirm-POSTs → `strings.Count(..., "=== Lauf bestätigt")==2`, erster Block bleibt
+- [ ] 1.6 `TestConfirm_UnbekannteSaison404` — Saison-ID 99999 → 404, keine Datei
+- [ ] 1.7 `TestConfirm_UngueltigerBody400` — typ-fehlpassendes/kaputtes JSON → 400, Body `"ungültiger Body"`
+- [ ] 1.8 `TestProtocol_RueckleseNachConfirm` — nach Confirm 200, `text/plain`, Body enthält Lauf-Block, **keine** IBAN
+- [ ] 1.9 `TestProtocol_UnbekannteSaison404` — 404
+- [ ] 1.10 `TestProtocol_OhneDateiLeer200` — gültige Saison ohne Lauf → 200 + leerer Body (nicht 404)
+- [ ] 1.11 Commit: `test(beitragslauf): fee-run confirm/protocol — Protokoll, Append-Only, keine IBAN`
 
 ## 2. fee-run/export-data 400-Fälle (`internal/beitragslauf/encryption_export_test.go`)
 
@@ -19,10 +20,11 @@
 - [ ] 2.4 `TestExportData_UngueltigerBody400` — `saison_id:"keine-zahl"` (Decode-Fehler) → 400, Body `"ungültiger Body"`
 - [ ] 2.5 Commit: `test(beitragslauf): export-data lehnt Mitglied ohne Mandat/Bankdaten/unbekannt ab`
 
-## 3. Halbierungsmatrix-Restfall (`internal/beitragslauf/handler_test.go`)
+## 3. Preview — Halbierung-Restfall + Summen (`internal/beitragslauf/handler_test.go`)
 
 - [ ] 3.1 `TestPreview_UnterjaehrigerAustrittMitStammvereinAktivMit` — `status=ausgetreten`, `exit_date` im Fenster, `home_club_id` gesetzt, `join_date` vor Saison → `kategorie=aktiv_mit`, `half=true`, `half_reason=austritt`, `betrag_cent=4800`
-- [ ] 3.2 Commit: `test(beitragslauf): Halbierung aktiv_mit bei unterjährigem Austritt mit Stammverein`
+- [ ] 3.2 `TestPreview_SummaryTotals` — Preview-Aggregation (`handler.go:217-229`): definiertes Set aus einbezogenen + ausgeschlossenen Mitgliedern → `included_count`, `total_cent` (= Summe der einbezogenen Beträge), `excluded_cent`, `gesamtsumme_cent` korrekt. Der Kassierer-lesbare Einzugsbetrag ist bisher ungetestet (geldnahe Aggregation).
+- [ ] 3.3 Commit: `test(beitragslauf): Preview Halbierung aktiv_mit + Summen-Aggregation`
 
 ## 4. Abschluss
 
@@ -36,7 +38,8 @@ Route → Testname → erwarteter Status → garantierte Invariante.
 
 **fee-run/confirm** (`internal/beitragslauf`)
 - `POST /api/fee-run/confirm` → `TestConfirm_HappyPath_SchreibtProtokoll` → 200 → Lauf schreibt Protokoll (Nr/Betrag/Erfolg)
-- `POST …/confirm` → `TestConfirm_ProtokollOhneIBAN` → 200 → Protokoll enthält keine IBAN/Bankdaten
+- `POST …/confirm` → `TestConfirm_ProtokollOhneIBAN` → 200 → Protokoll enthält keine IBAN/Bankdaten (Struktur-Guard)
+- `POST …/confirm` → `TestConfirm_MixedSuccessFailure` → 200 → Erfolg- und Fehlschlag-Block + Counts korrekt
 - `POST …/confirm` → `TestConfirm_AppendOnly_ZweiLaeufe` → 200 → append-only, kein Überschreiben
 - `POST …/confirm` → `TestConfirm_UnbekannteSaison404` → 404 → keine Datei bei unbekannter Saison
 - `POST …/confirm` → `TestConfirm_UngueltigerBody400` → 400 → ungültiger Body
@@ -52,5 +55,6 @@ Route → Testname → erwarteter Status → garantierte Invariante.
 - `POST …/export-data` → `TestExportData_UnbekannteMemberID400` → 400 → unbekannte Member-ID abgelehnt
 - `POST …/export-data` → `TestExportData_UngueltigerBody400` → 400 → ungültiger Body
 
-**Halbierung** (`internal/beitragslauf`)
+**Preview** (`internal/beitragslauf`)
 - `GET /api/fee-run/preview` → `TestPreview_UnterjaehrigerAustrittMitStammvereinAktivMit` → 200 → Austritt + home_club → `aktiv_mit`, halbiert (4800), `half_reason=austritt`
+- `GET /api/fee-run/preview` → `TestPreview_SummaryTotals` → 200 → Summen-Aggregation (`total_cent`/`excluded_cent`/`gesamtsumme_cent`/`included_count`) korrekt

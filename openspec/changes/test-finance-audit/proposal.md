@@ -17,17 +17,20 @@ nutzen die bereits vorhandenen lokalen Helfer des Packages (`setupSrv`, `insertM
 nötig**.
 
 - **`fee-run/confirm`** (`internal/beitragslauf/handler.go`): Happy-Path (200 + Protokoll-Datei
-  geschrieben), Protokoll enthält Mitgliedsnummer/Betrag/Erfolg aber **keine IBAN**, Append-Only
-  (zwei Läufe → beide Blöcke), 404 bei unbekannter Saison, 400 bei ungültigem Body.
+  geschrieben), Protokoll enthält Mitgliedsnummer/Betrag/Erfolg aber **keine IBAN**, gemischter
+  Batch (Erfolg + Fehlschlag → beide Protokoll-Blöcke + Counts), Append-Only (zwei Läufe → beide
+  Blöcke), 404 bei unbekannter Saison, 400 bei ungültigem Body.
 - **`fee-run/protocol`**: Rücklesen nach Confirm (200, `text/plain`), 404 bei unbekannter Saison,
   und die bewusste Invariante „gültige Saison ohne Lauf → 200 mit leerem Body (nicht 404)".
 - **`fee-run/export-data`**: die ungetesteten member-bezogenen 400-Fälle — Mitglied ohne
   SEPA-Mandat, Mitglied ohne Bankdaten-Envelope, unbekannte Member-ID, ungültiger Body. (Die
   Vereins-SEPA- und Fälligkeits-400 sind bereits abgedeckt → nicht dupliziert; liefert weiterhin
   nur Ciphertext.)
-- **Halbierungsmatrix**: der fehlende Restfall „unterjähriger Austritt **+** `home_club_id`
+- **Preview**: der fehlende Halbierungs-Restfall „unterjähriger Austritt **+** `home_club_id`
   gesetzt → Kategorie `aktiv_mit`, halbiert" (die drei Halbierungs-Bedingungen selbst und die
-  `aktiv_ohne`-Variante sind bereits getestet → nur die `aktiv_mit`-Zelle fehlt).
+  `aktiv_ohne`-Variante sind bereits getestet → nur die `aktiv_mit`-Zelle fehlt), plus die bisher
+  ungetestete **Summen-Aggregation** (`included_count`/`total_cent`/`gesamtsumme_cent`) — der vom
+  Kassierer gelesene Einzugsbetrag.
 
 ## Capabilities
 

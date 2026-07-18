@@ -18,6 +18,10 @@ IBAN oder andere Klartext-Bankdaten**. Ein zweiter Lauf SHALL den vorherigen Blo
 - **WHEN** zwei Läufe für dieselbe Saison bestätigt werden
 - **THEN** die Datei SHALL beide Lauf-Blöcke enthalten (append-only, kein Überschreiben)
 
+#### Scenario: Erfolgreiche und fehlgeschlagene Einträge getrennt
+- **WHEN** ein Lauf mit einem Erfolg und einem Fehlschlag bestätigt wird
+- **THEN** die Antwort SHALL `erfolgreich=1` und `nicht_erfolgreich=1` liefern und das Protokoll SHALL einen „Erfolgreich"- und einen „Nicht erfolgreich"-Block enthalten
+
 #### Scenario: Unbekannte Saison
 - **WHEN** eine unbekannte Saison-ID bestätigt wird
 - **THEN** die Route SHALL 404 liefern und keine Datei schreiben
@@ -55,6 +59,15 @@ ungültigem Body. Die Antwort SHALL weiterhin nur Ciphertext-Envelopes liefern (
 #### Scenario: Unbekannte Mitglieds-ID
 - **WHEN** der Export eine Mitglieds-ID anfordert, die nicht im Lauf enthalten ist
 - **THEN** die Route SHALL 400 liefern
+
+### Requirement: Beitragslauf-Vorschau summiert den Einzugsbetrag korrekt
+Die Vorschau (`GET /api/fee-run/preview`) SHALL neben den Einzelposten korrekte Summen liefern:
+Anzahl einbezogener Mitglieder, Gesamtbetrag der einbezogenen Posten sowie die für den
+Kassierer sichtbare Einzugssumme.
+
+#### Scenario: Summen über einbezogene und ausgeschlossene Mitglieder
+- **WHEN** die Vorschau ein Set aus einbezogenen und ausgeschlossenen Mitgliedern berechnet
+- **THEN** `included_count` und `total_cent` SHALL nur die einbezogenen Posten aggregieren, und die ausgewiesene Gesamtsumme SHALL dieser Aggregation entsprechen
 
 ### Requirement: Halbierungsmatrix ist vollständig für unterjährigen Austritt mit Stammverein
 Die Beitragsberechnung SHALL für ein unterjährig ausgetretenes Mitglied mit gesetztem
