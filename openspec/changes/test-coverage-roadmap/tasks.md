@@ -31,7 +31,7 @@
 - [x] 5.1 Proposal: `fee-run/confirm` (Happy/404/400 + Protokoll-Schreiben, keine Bankdaten), `fee-run/protocol` (Rücklesen/404), `export-data`-400 (Mitglied ohne Mandat, unbekannte ID) + Halbierungsmatrix-Restfälle (unterjähriger Austritt + home_club)
 - [ ] 5.2 Optional als eigener kleiner Change / in `test-coverage-fachlich`: `auth`-Fehlerpfade (Session-Invalidierung nach E-Mail-Änderung, Passwort-Reauth, abgelaufener/manipulierter Token)
 - [x] 5.3 `openspec validate` grün
-- [ ] 5.4 Umsetzen, testen, archivieren
+- [x] 5.4 Umgesetzt, getestet, archiviert — 15 neue Tests in `internal/beitragslauf` (confirm/protocol + export-data-400 + Preview-Halbierung/Summen); keine neuen Fixtures. Zwei parallele Review-Agenten: keine False-Greens, drei geldnahe Härtungen eingearbeitet (summe_erfolgreich_cent, Confirm-404-keine-Datei, IBAN-Tripwire ehrlich kommentiert).
 
 ## 6. Welle 3 — `refactor-members-import` (Funktionserhalt-kritisch)
 

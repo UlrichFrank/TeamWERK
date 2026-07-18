@@ -29,8 +29,8 @@
 ## 4. Abschluss
 
 - [x] 4.1 `go test ./internal/beitragslauf/...` grün, dann `go test ./...` grün; `openspec validate test-finance-audit --strict` grün
-- [ ] 4.2 Rückblick (Roadmap 9.1): Risiko-/Churn-Bild nach Welle 2 neu bewerten; Roadmap-Section 5 abhaken
-- [ ] 4.3 Change archivieren (`openspec archive`) — appliziert Capability `fee-run-audit`
+- [x] 4.2 Rückblick (Roadmap 9.1): Risiko-/Churn-Bild nach Welle 2 neu bewerten; Roadmap-Section 5 abhaken
+- [x] 4.3 Change archivieren (`openspec archive`) — appliziert Capability `fee-run-audit`
 
 ## Test-Anforderungen
 
