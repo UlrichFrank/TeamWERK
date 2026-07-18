@@ -42,17 +42,15 @@
 
 ## 7. Parallel — Frontend
 
-> **Status (2026-07-18):** einziger noch offener Roadmap-Teil. Bewusst NICHT im Backend-Durchlauf
-> mitgemacht — Greenfield-Infra: Playwright ist nicht installiert (keine Config/Specs), braucht
-> Browser-Binaries + Orchestrierung von Go-Backend + Vite + Test-DB und einen echten (headed/
-> headless) Lauf zur Verifikation. Nicht sinnvoll agenten-getrieben „blind" grün zu bekommen →
-> eigene, interaktive Session mit real gestarteter App. Der Change `frontend-e2e-tests` (Proposal/
-> Design/Tasks) liegt vor; 7.1 beginnt mit `pnpm -C web add -D @playwright/test` + `playwright.config`.
+> **Status (2026-07-18):** Fundament aufgesetzt & real verifiziert (echtes Chromium gegen
+> Prod-Binary + Seed-DB, `2 passed`). Single-Origin-Setup (kein Vite-Proxy): `webServer` baut die
+> Test-Binary, seedet via Go-Subcommand `e2e-seed`, serviert die eingebettete SPA + API auf :18080.
+> `make test-e2e` verdrahtet. Restliche Killer-Cases bauen trivial auf dem laufenden Fundament auf.
 
-- [ ] 7.1 `frontend-e2e-tests` Playwright-Setup abschließen (existierender Change)
-- [ ] 7.2 Golden-Path-E2E: Login → Dashboard → Dienstbörse → Slot claimen → Logout
-- [ ] 7.3 Golden-Path-E2E: Mitglied bearbeiten (Vorstand), Bank-Daten-Envelope schreiben (kein Klartext) — Zero-Knowledge-Pfad
-- [ ] 7.4 Nach Abschluss: entscheiden, ob eine eigene Frontend-Roadmap-Change nötig ist (Open Question in design.md)
+- [x] 7.1 `frontend-e2e-tests` Playwright-Setup: Playwright + Chromium installiert, `web/e2e/` (config/fixtures/tsconfig), `e2e-seed`-Subcommand, `make test-e2e` + `test:e2e`-Script, `.gitignore`, Doku. **Real grün.**
+- [ ] 7.2 Golden-Path-E2E: **Login-Pfad steht** (`auth-login.spec.ts`, Login + Fehlerpfad). Offen: Dashboard → Dienstbörse → Slot claimen → Logout (braucht Duty-Slot-Seed).
+- [ ] 7.3 Golden-Path-E2E: Mitglied bearbeiten (Vorstand), Bank-Daten-Envelope schreiben (kein Klartext) — Zero-Knowledge-Pfad. Offen.
+- [ ] 7.4 Zusätzlich offen (auf dem Fundament): chat-scroll-Killer-Cases (Bild-Decode-Scroll — der ursprüngliche Bug-Vector; braucht Bild-Seed 2.4–2.6), CI-`e2e`-Job. Entscheidung eigener Frontend-Roadmap-Change bleibt offen (Open Question in design.md).
 
 ## 8. Nachgelagert (bewusst nach den Wellen)
 

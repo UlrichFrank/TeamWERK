@@ -1,3 +1,21 @@
+## Status (2026-07-18) — Fundament steht & verifiziert
+
+**Umgesetzt & real grün** (echtes Chromium, Prod-Binary + Seed-DB, `2 passed`):
+- Playwright installiert (`@playwright/test` devDep + Chromium-Binary). [1.1, 1.2]
+- `web/e2e/`: `playwright.config.ts` (Single-Origin, `webServer` = `go build` → `e2e-seed` → serve :18080), `fixtures.ts` (`loginAsAdmin`), `tsconfig.json`. [1.4, 1.5]
+- `.gitignore`-Einträge. [1.6]
+- Go-Subcommand `e2e-seed` (`cmd/teamwerk/e2e_seed.go`): migrate + Admin + 3 Standard-User + Chat-Konversation (Text). [2.1, 2.2, 2.3 (Text-Teil)]
+- `make test-e2e` + `web/package.json` `test:e2e`. [3.1, 3.2, 3.4]
+- Tests: `auth-login.spec.ts` (Login-Golden-Path + Fehlerpfad). [4.1, 4.5]
+- Doku `07-testing.md` „E2E — wann statt Vitest". [6.1 (Kern)]
+
+**Noch offen (auf dem laufenden Fundament trivial nachrüstbar):**
+- Seed um **Bild-Nachrichten** erweitern (deterministische PNGs) [2.4–2.6] — Voraussetzung für die chat-scroll-Killer-Cases.
+- chat-scroll-Tests [4.2–4.4] (der ursprüngliche Bug-Vector: scrollTop nach Bild-Decode), chat-send [4.6], Dienstbörse-Golden-Path (Roadmap 7.2), Bank-Envelope-Zero-Knowledge (Roadmap 7.3).
+- CI-Job `e2e` [5.x], `make init`-Schritt [1.3], Restdoku [6.2–6.5].
+
+**Hinweis lokale Ausführung:** `make test-e2e` nutzt `pnpm build`; auf Maschinen mit zwei pnpm-Versionen (Homebrew 11 + Corepack/Standalone 10) muss die pnpm die zum Lockfile passt (v10) auf dem PATH vorn stehen — sonst bricht `pnpm` mit `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` ab. In CI (eine pnpm) unkritisch.
+
 ## 1. Playwright-Setup
 
 - [ ] 1.1 `pnpm -C web add -D @playwright/test` (neue devDependency, ~150 MB)
