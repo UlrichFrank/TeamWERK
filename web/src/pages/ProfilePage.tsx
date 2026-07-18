@@ -92,7 +92,10 @@ export default function ProfilePage() {
     !!m?.club_functions?.includes('spieler')
 
   const showMemberTabs = ownMember !== null
-  const showAttendanceTab = hasPlayerFunction(ownMember) || children.some(hasPlayerFunction)
+  // Anwesenheit im eigenen /profil NUR für die eigene Spieler-Mitgliedschaft.
+  // Die Anwesenheit verlinkter Spieler-Kinder liegt auf deren Kind-Seite
+  // (/profil/kind/:memberId), nicht mehr aggregiert im Eltern-Profil.
+  const showAttendanceTab = hasPlayerFunction(ownMember)
 
   const handleDraftWithdrawn = () => {
     setDraftRefreshKey(k => k + 1)
@@ -156,7 +159,9 @@ export default function ProfilePage() {
       {showMemberTabs && activeTab === 'banking' && (
         <ProfileBankTab ownMember={ownMember} />
       )}
-      {showAttendanceTab && activeTab === 'anwesenheit' && <ProfilAnwesenheitContent />}
+      {showAttendanceTab && activeTab === 'anwesenheit' && ownMember && (
+        <ProfilAnwesenheitContent forcedMemberId={ownMember.id} />
+      )}
       {activeTab === 'kalender' && <ProfileKalenderTab />}
       {showMemberTabs && activeTab === 'datenschutz' && ownMember && (
         <ProfileDatenschutzTab ownMember={ownMember} onUpdated={loadProfile} />

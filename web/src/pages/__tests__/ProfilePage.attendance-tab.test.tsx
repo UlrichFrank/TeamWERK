@@ -1,7 +1,8 @@
 /**
- * Sichtbarkeit des Anwesenheit-Tabs in /profil ist an die Vereinsfunktion `spieler`
- * gekoppelt (eigenes Mitglied oder verlinktes Kind). Trainer/Vorstand ohne Spieler-
- * Funktion sehen den Tab nicht — Anwesenheit ist ein Spieler-Konzept, ihre Sicht ist
+ * Sichtbarkeit des Anwesenheit-Tabs im EIGENEN /profil ist an die Vereinsfunktion
+ * `spieler` des eigenen Mitglieds gekoppelt — verlinkte Spieler-Kinder machen den Tab
+ * NICHT sichtbar (deren Anwesenheit liegt auf der Kind-Seite /profil/kind/:memberId).
+ * Trainer/Vorstand ohne eigene Spieler-Funktion sehen den Tab nicht — ihre Sicht ist
  * /team/{id}/anwesenheit. Regel liegt in openspec/specs/attendance-statistics/spec.md,
  * Requirement "Trainer- und Spieler-Sichten im Frontend".
  */
@@ -74,9 +75,18 @@ describe('ProfilePage — Anwesenheit-Tab-Sichtbarkeit', () => {
     expect(screen.getByRole('button', { name: 'Anwesenheit' })).toBeInTheDocument()
   })
 
-  test('own=[trainer] + kid=[spieler]: Tab sichtbar', async () => {
+  test('own=[trainer] + kid=[spieler]: Tab im eigenen Profil NICHT sichtbar (Kind-Anwesenheit liegt auf der Kind-Seite)', async () => {
     renderProfile(<ProfilePage />, 'trainer_elternteil', {
       own_member: OWN_TRAINER,
+      children: [KID_SPIELER],
+    }, '/profil')
+    await flushAsync()
+    expect(screen.queryByRole('button', { name: 'Anwesenheit' })).toBeNull()
+  })
+
+  test('own=[spieler] + kid=[spieler]: Tab sichtbar (wegen eigener Spieler-Funktion)', async () => {
+    renderProfile(<ProfilePage />, 'spieler', {
+      own_member: OWN_SPIELER,
       children: [KID_SPIELER],
     }, '/profil')
     await flushAsync()
