@@ -1,18 +1,18 @@
 ## 1. Phase 1 — Charakterisierungstests (`internal/members/import_test.go`)
 
-- [ ] 1.1 Test-Response-Struct `importReport` erweitern: pro Row `Message` (`json:"message"`), `DOB` (`json:"dob"`), `IBANWarning` (`json:"iban_warning"`) — additiv, bricht keinen Bestandstest
-- [ ] 1.2 Inline-Multipart-Helfer für „ohne Datei-Feld" (nur `WriteField("mode","append")`), da `postImport`/`PostMultipart` immer ein `file`-Feld schreiben
-- [ ] 1.3 BOM: `TestImport_StripsUTF8BOM` (BOM vor Header → 200, Created==1), optional `TestImport_BOMWithCommaDelimiter`
-- [ ] 1.4 Delimiter: `TestImport_DelimiterSemicolon`, `TestImport_DelimiterComma`, `TestImport_DelimiterDetectedFromFirstLineOnly` (Detection nur erste Zeile)
-- [ ] 1.5 Aliase: `TestImport_ColumnAliasName` (`Name`→`Nachname`), `TestImport_ColumnAliasGeborenAmUndMitgliedSeit`
-- [ ] 1.6 Dedup: `TestImport_CSVInternalDuplicate` (beide Zeilen error, Meldungen „auch/zuerst Zeile N") **und** `TestImport_CSVDuplicateDistinctByDOB` (verschiedene DOB ⇒ kein Dup — sichert die DOB-Komponente des Dedup-Keys, Stufe 3; **verpflichtend**, nicht optional)
-- [ ] 1.7 400-Pfade: `TestImport_MissingRequiredColumnVorname`, `_MissingRequiredColumnNachname`, `_BrokenCSVFieldCount`, `_EmptyFileNoHeader`, `_MissingFileField` (text/plain-Body prüfen, kein decode)
-- [ ] 1.8 `TestImport_EmptyNameCellIsRowError` (leerer Vorname → Row-error, 200 gesamt, valide Zeile trotzdem created)
-- [ ] 1.9 `TestImport_EnrichNotFound` (enrich + unbekannt → not_found, kein Insert, `name="Neu, Max"`, `dob="2007-10-14"`)
-- [ ] 1.10 **Stufe-4-Guard** `TestImport_EnrichAmbiguousNoDOB_MeldungA` — enrich, DOB in CSV fehlt, ≥2 gleichnamige DB-Treffer → Meldung **A** `"Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt"` (handler.go:1886-1901; anderer Zweig als der emptyCnt-Pfad von `_EnrichAmbiguousNoDOB_NichtBefuellt`), nicht befüllt
-- [ ] 1.11 **Stufe-6-Guard** `TestImport_UpdateChangesContract` — Multi-Feld-Update → `Rows[0].Changes` enthält die exakten `"Feld: alt → neu"`-Strings in der erzeugten Reihenfolge (der einzige Test, der den beobachtbaren `changes[]`-Report-Contract festnagelt — Format entsteht komplett in `buildMemberUpdate`)
-- [ ] 1.12 **Stufe-5-Guard** `TestImport_AppendStatusFallbackAktiv` — append ohne/mit unbekanntem `Status TeamWERK` → `member.status == "aktiv"` (Fallback `""→"aktiv"` lebt nur im Insert)
-- [ ] 1.13 `go test ./internal/members/` grün; Commit: `test(members): Charakterisierungstests für Import (BOM/Delimiter/Dedup/400/not_found + Stufen-Guards 3-6)`
+- [x] 1.1 Test-Response-Struct `importReport` erweitern: pro Row `Message` (`json:"message"`), `DOB` (`json:"dob"`), `IBANWarning` (`json:"iban_warning"`) — additiv, bricht keinen Bestandstest
+- [x] 1.2 Inline-Multipart-Helfer für „ohne Datei-Feld" (nur `WriteField("mode","append")`), da `postImport`/`PostMultipart` immer ein `file`-Feld schreiben
+- [x] 1.3 BOM: `TestImport_StripsUTF8BOM` (BOM vor Header → 200, Created==1), optional `TestImport_BOMWithCommaDelimiter`
+- [x] 1.4 Delimiter: `TestImport_DelimiterSemicolon`, `TestImport_DelimiterComma`, `TestImport_DelimiterDetectedFromFirstLineOnly` (Detection nur erste Zeile)
+- [x] 1.5 Aliase: `TestImport_ColumnAliasName` (`Name`→`Nachname`), `TestImport_ColumnAliasGeborenAmUndMitgliedSeit`
+- [x] 1.6 Dedup: `TestImport_CSVInternalDuplicate` (beide Zeilen error, Meldungen „auch/zuerst Zeile N") **und** `TestImport_CSVDuplicateDistinctByDOB` (verschiedene DOB ⇒ kein Dup — sichert die DOB-Komponente des Dedup-Keys, Stufe 3; **verpflichtend**, nicht optional)
+- [x] 1.7 400-Pfade: `TestImport_MissingRequiredColumnVorname`, `_MissingRequiredColumnNachname`, `_BrokenCSVFieldCount`, `_EmptyFileNoHeader`, `_MissingFileField` (text/plain-Body prüfen, kein decode)
+- [x] 1.8 `TestImport_EmptyNameCellIsRowError` (leerer Vorname → Row-error, 200 gesamt, valide Zeile trotzdem created)
+- [x] 1.9 `TestImport_EnrichNotFound` (enrich + unbekannt → not_found, kein Insert, `name="Neu, Max"`, `dob="2007-10-14"`)
+- [x] 1.10 **Stufe-4-Guard** `TestImport_EnrichAmbiguousNoDOB_MeldungA` — enrich, DOB in CSV fehlt, ≥2 gleichnamige DB-Treffer → Meldung **A** `"Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt"` (handler.go:1886-1901; anderer Zweig als der emptyCnt-Pfad von `_EnrichAmbiguousNoDOB_NichtBefuellt`), nicht befüllt
+- [x] 1.11 **Stufe-6-Guard** `TestImport_UpdateChangesContract` — Multi-Feld-Update → `Rows[0].Changes` enthält die exakten `"Feld: alt → neu"`-Strings in der erzeugten Reihenfolge (der einzige Test, der den beobachtbaren `changes[]`-Report-Contract festnagelt — Format entsteht komplett in `buildMemberUpdate`)
+- [x] 1.12 **Stufe-5-Guard** `TestImport_AppendStatusFallbackAktiv` — append ohne/mit unbekanntem `Status TeamWERK` → `member.status == "aktiv"` (Fallback `""→"aktiv"` lebt nur im Insert)
+- [x] 1.13 `go test ./internal/members/` grün; Commit: `test(members): Charakterisierungstests für Import (BOM/Delimiter/Dedup/400/not_found + Stufen-Guards 3-6)`
 
 ## 2. Phase 2 · Stufe 1 — `normalize*` → Top-Level
 
