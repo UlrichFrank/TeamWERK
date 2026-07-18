@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"regexp"
 	"time"
@@ -133,11 +134,15 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	r.Post("/api/auth/register", h.Auth.Register)
 	r.Get("/api/auth/token-info", h.Auth.GetTokenInfo)
 	// Unauthenticated, bruteforce-/DoS-exponierte Auth-Routen: IP-Rate-Limiting vor
-	// der teuren Verarbeitung (bcrypt, Mailversand). LimitByRealIP keyt auf
-	// X-Forwarded-For/X-Real-IP (korrekt hinter nginx). 0 ⇒ deaktiviert (Tests).
+	// der teuren Verarbeitung (bcrypt, Mailversand). 0 ⇒ deaktiviert (Tests).
+	// nginx setzt X-Real-IP unbedingt auf $remote_addr (den echten TCP-Peer) und
+	// überschreibt jeden vom Client gesendeten Wert — anders als das deprecatete,
+	// spoofbare httprate.LimitByRealIP (GHSA-9g5q-2w5x-hmxf). ClientIPFromHeader
+	// legt die aufgelöste IP in den Context, der Limiter keyt darüber.
 	r.Group(func(r chi.Router) {
 		if h.AuthRateLimitPerMin > 0 {
-			r.Use(httprate.LimitByRealIP(h.AuthRateLimitPerMin, time.Minute))
+			r.Use(middleware.ClientIPFromHeader("X-Real-IP"))
+			r.Use(httprate.LimitBy(h.AuthRateLimitPerMin, time.Minute, rateLimitKeyByClientIP))
 		}
 		r.Post("/api/auth/login", h.Auth.Login)
 		r.Post("/api/auth/refresh", h.Auth.Refresh)
@@ -574,6 +579,23 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 	}
 
 	return r
+}
+
+// rateLimitKeyByClientIP keyt den Auth-Rate-Limiter auf die vom Reverse-Proxy
+// aufgelöste Client-IP (chi ClientIPFrom*-Middleware, im Request-Context).
+// Fehlt sie — kein Proxy davor, z.B. Tests oder Direktzugriff — fällt es auf die
+// TCP-RemoteAddr zurück (nicht spoofbar; ohne Proxy landet zwar alles hinter
+// demselben Peer in einem Bucket, aber dieser Pfad greift nur ohne Reverse-Proxy).
+// CanonicalizeIP bucketet IPv6 auf /64.
+func rateLimitKeyByClientIP(r *http.Request) (string, error) {
+	if ip := middleware.GetClientIP(r.Context()); ip != "" {
+		return httprate.CanonicalizeIP(ip), nil
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	return httprate.CanonicalizeIP(host), nil
 }
 
 func corsMiddleware(baseURL string) func(http.Handler) http.Handler {
