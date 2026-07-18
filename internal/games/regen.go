@@ -116,34 +116,10 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		return RegenSummary{}, fmt.Errorf("loadSameDayContext: %w", err)
 	}
 
-	rows, err := tx.QueryContext(ctx,
-		`SELECT id, time, end_time, opponent, is_home, event_type, template_id
-		 FROM games WHERE date=? AND season_id=? ORDER BY time, id`,
-		date, seasonID)
+	dayGames, err := h.loadDayGames(ctx, tx, date, seasonID)
 	if err != nil {
-		return RegenSummary{}, fmt.Errorf("load games: %w", err)
+		return RegenSummary{}, err
 	}
-	type dayGame struct {
-		ID         int
-		Time       string
-		EndTime    sql.NullString
-		Opponent   string
-		IsHome     bool
-		EventType  string
-		TemplateID sql.NullInt64
-	}
-	var dayGames []dayGame
-	for rows.Next() {
-		var g dayGame
-		var isHome int
-		if err := rows.Scan(&g.ID, &g.Time, &g.EndTime, &g.Opponent, &isHome, &g.EventType, &g.TemplateID); err != nil {
-			rows.Close()
-			return RegenSummary{}, err
-		}
-		g.IsHome = isHome == 1
-		dayGames = append(dayGames, g)
-	}
-	rows.Close()
 
 	var summary RegenSummary
 	for _, g := range dayGames {
@@ -183,76 +159,16 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		eventName := composeEventName(g.EventType, g.IsHome, g.Opponent)
 
 		// Step 1: snapshot to-be-deleted slots with their assignments.
-		type deletedSlot struct {
-			DutyTypeID int
-			EventTime  string
-			TeamID     sql.NullInt64
-			UserIDs    []int
-		}
-		snapRows, err := tx.QueryContext(ctx, `
-			SELECT ds.id, ds.duty_type_id, ds.event_time, ds.team_id, da.user_id
-			FROM duty_slots ds
-			LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id
-			WHERE ds.game_id=? AND ds.is_custom=0`, g.ID)
+		slotsByID, err := h.snapshotDeletedSlots(ctx, tx, g.ID)
 		if err != nil {
-			return RegenSummary{}, fmt.Errorf("snapshot deleted: %w", err)
+			return RegenSummary{}, err
 		}
-		slotsByID := map[int]*deletedSlot{}
-		for snapRows.Next() {
-			var slotID int
-			var s deletedSlot
-			var et sql.NullString
-			var uid sql.NullInt64
-			if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.TeamID, &uid); err != nil {
-				snapRows.Close()
-				return RegenSummary{}, err
-			}
-			if et.Valid {
-				s.EventTime = et.String
-			}
-			existing, ok := slotsByID[slotID]
-			if !ok {
-				existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, TeamID: s.TeamID}
-				slotsByID[slotID] = existing
-			}
-			if uid.Valid {
-				existing.UserIDs = append(existing.UserIDs, int(uid.Int64))
-			}
-		}
-		snapRows.Close()
 
 		// Step 2: load is_custom=1 slots so we can detect conflicts before inserting.
-		customRows, err := tx.QueryContext(ctx, `
-			SELECT duty_type_id, event_time, team_id
-			FROM duty_slots WHERE game_id=? AND is_custom=1`, g.ID)
+		customSlots, err := h.snapshotCustomSlots(ctx, tx, g.ID)
 		if err != nil {
-			return RegenSummary{}, fmt.Errorf("snapshot custom: %w", err)
+			return RegenSummary{}, err
 		}
-		type customKey struct {
-			DutyTypeID int
-			EventTime  string
-			TeamID     int64
-			HasTeam    bool
-		}
-		customSlots := map[customKey]bool{}
-		for customRows.Next() {
-			var k customKey
-			var et sql.NullString
-			var tid sql.NullInt64
-			if err := customRows.Scan(&k.DutyTypeID, &et, &tid); err != nil {
-				customRows.Close()
-				return RegenSummary{}, err
-			}
-			if et.Valid {
-				k.EventTime = et.String
-			}
-			if tid.Valid {
-				k.TeamID = tid.Int64
-				k.HasTeam = true
-			}
-			customSlots[k] = true
-		}
-		customRows.Close()
 
 		// Step 3: delete is_custom=0 slots (assignments cascade).
 		if _, err := tx.ExecContext(ctx,
@@ -261,145 +177,306 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		}
 
 		// Step 4: per template item, compute behavior and insert.
-		type itemOutcome struct {
-			kind    string // "created" | "reduced" | "skipped"
-			newType string // duty_type name after reduction (for "reduced")
+		gameSummary, outcomeByOriginalType, err := h.regenGameItems(
+			ctx, tx, g, items, durationMins, allGameTimes,
+			hasPrevDay, hasNextDay, teamIDs, customSlots, eventName, date, seasonID)
+		if err != nil {
+			return RegenSummary{}, err
 		}
-		outcomeByOriginalType := map[int]itemOutcome{}
-
-		for _, it := range items {
-			var eventTime string
-			if it.Anchor == "end" && g.EndTime.Valid {
-				eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
-			} else {
-				offset := it.OffsetMinutes
-				if it.Anchor == "end" {
-					offset += durationMins
-				}
-				eventTime = addMinutes(g.Time, offset)
-			}
-
-			isBefore, isAfter, isBetween := classifySlotPosition(eventTime, g.Time, allGameTimes)
-			resultDutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes,
-				hasPrevDay, hasNextDay, isBefore, isAfter, isBetween)
-
-			if resultDutyTypeID == -1 {
-				outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "skipped"}
-				summary.Skipped = append(summary.Skipped, SkippedEntry{
-					Date: date, DutyType: it.DutyTypeName,
-				})
-				continue
-			}
-
-			resultTypeName := it.DutyTypeName
-			isReduce := resultDutyTypeID != it.DutyTypeID
-			if isReduce {
-				name, lerr := h.lookupDutyTypeNameTx(ctx, tx, resultDutyTypeID)
-				if lerr == nil {
-					resultTypeName = name
-				}
-			}
-
-			n := it.SlotsCount
-			if n <= 0 {
-				n = 1
-			}
-			slotAudiences := audiencesToDB(audiencesFromDB(it.Audiences))
-
-			insertOne := func(teamID sql.NullInt64) error {
-				k := customKey{DutyTypeID: resultDutyTypeID, EventTime: eventTime}
-				if teamID.Valid {
-					k.TeamID = teamID.Int64
-					k.HasTeam = true
-				}
-				if customSlots[k] {
-					summary.Conflicts = append(summary.Conflicts, ConflictEntry{
-						Date: date, DutyTypeID: resultDutyTypeID,
-						EventTime: eventTime, GameIDs: []int{g.ID},
-					})
-					return nil
-				}
-				var teamVal any
-				if teamID.Valid {
-					teamVal = teamID.Int64
-				}
-				_, err := tx.ExecContext(ctx, `
-					INSERT INTO duty_slots
-					  (event_name, event_date, event_time, duty_type_id, role_desc,
-					   slots_total, team_id, season_id, game_id, audiences, is_custom)
-					VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
-					eventName, date, eventTime, resultDutyTypeID, "",
-					n, teamVal, seasonID, g.ID, slotAudiences)
-				return err
-			}
-
-			if g.EventType == "generisch" {
-				// generisch never reaches here (skipped above), but kept defensive.
-				if err := insertOne(sql.NullInt64{}); err != nil {
-					return RegenSummary{}, err
-				}
-			} else {
-				for _, tid := range teamIDs {
-					if err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}); err != nil {
-						return RegenSummary{}, err
-					}
-				}
-			}
-
-			if isReduce {
-				outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "reduced", newType: resultTypeName}
-				summary.Reduced = append(summary.Reduced, ReducedEntry{
-					Date: date, From: it.DutyTypeName, To: resultTypeName,
-					Count: max(1, len(teamIDs)) * n,
-				})
-			} else {
-				outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "created"}
-				summary.Created = append(summary.Created, CreatedEntry{
-					Date: date, DutyType: it.DutyTypeName,
-					Count: max(1, len(teamIDs)) * n,
-				})
-			}
-		}
+		summary.Created = append(summary.Created, gameSummary.Created...)
+		summary.Reduced = append(summary.Reduced, gameSummary.Reduced...)
+		summary.Skipped = append(summary.Skipped, gameSummary.Skipped...)
+		summary.Conflicts = append(summary.Conflicts, gameSummary.Conflicts...)
 
 		// Step 5: turn deleted-slot user assignments into notification intents.
-		notifiedSeen := map[int]bool{}
-		for _, ds := range slotsByID {
-			if len(ds.UserIDs) == 0 {
-				continue
-			}
-			outcome, ok := outcomeByOriginalType[ds.DutyTypeID]
-			kind := "removed"
-			newType := ""
-			if ok {
-				switch outcome.kind {
-				case "skipped":
-					kind = "removed"
-				case "reduced":
-					kind = "variant_changed"
-					newType = outcome.newType
-				case "created":
-					// Slot recreated identical-type — user assignment still gone (we deleted
-					// the slot), so treat as removed. Could be no-op-noisy in rare edge case
-					// but better than silent loss.
-					kind = "removed"
-				}
-			}
-			for _, uid := range ds.UserIDs {
-				if notifiedSeen[uid] {
-					continue
-				}
-				notifiedSeen[uid] = true
-				summary.NotifiedUsers = append(summary.NotifiedUsers, uid)
-				summary.Notifications = append(summary.Notifications, NotificationIntent{
-					UserID: uid, Kind: kind,
-					EventName: eventName, EventDate: date,
-					NewType: newType,
-				})
-			}
-		}
+		notifiedUsers, notifications := buildNotificationIntents(slotsByID, outcomeByOriginalType, eventName, date)
+		summary.NotifiedUsers = append(summary.NotifiedUsers, notifiedUsers...)
+		summary.Notifications = append(summary.Notifications, notifications...)
 	}
 
 	return summary, nil
+}
+
+// buildNotificationIntents maps the users of the deleted (is_custom=0) slots to notification
+// intents, using the per-original-type outcomes: a slot whose type was reduced yields a
+// "variant_changed" intent (carrying the new type name), everything else (skipped, or
+// recreated identical) yields "removed". Each user is notified at most once per game.
+func buildNotificationIntents(slotsByID map[int]*deletedSlot, outcomeByOriginalType map[int]itemOutcome, eventName, date string) ([]int, []NotificationIntent) {
+	var notifiedUsers []int
+	var notifications []NotificationIntent
+	notifiedSeen := map[int]bool{}
+	for _, ds := range slotsByID {
+		if len(ds.UserIDs) == 0 {
+			continue
+		}
+		outcome, ok := outcomeByOriginalType[ds.DutyTypeID]
+		kind := "removed"
+		newType := ""
+		if ok {
+			switch outcome.kind {
+			case "skipped":
+				kind = "removed"
+			case "reduced":
+				kind = "variant_changed"
+				newType = outcome.newType
+			case "created":
+				// Slot recreated identical-type — user assignment still gone (we deleted
+				// the slot), so treat as removed. Could be no-op-noisy in rare edge case
+				// but better than silent loss.
+				kind = "removed"
+			}
+		}
+		for _, uid := range ds.UserIDs {
+			if notifiedSeen[uid] {
+				continue
+			}
+			notifiedSeen[uid] = true
+			notifiedUsers = append(notifiedUsers, uid)
+			notifications = append(notifications, NotificationIntent{
+				UserID: uid, Kind: kind,
+				EventName: eventName, EventDate: date,
+				NewType: newType,
+			})
+		}
+	}
+	return notifiedUsers, notifications
+}
+
+// customKey identifies an is_custom=1 slot for conflict detection. TeamID/HasTeam
+// distinguish team-scoped slots from team-agnostic ones.
+type customKey struct {
+	DutyTypeID int
+	EventTime  string
+	TeamID     int64
+	HasTeam    bool
+}
+
+// snapshotCustomSlots reads the is_custom=1 slots of a game into a set keyed by customKey,
+// so the regen can skip inserting a template slot that would collide with a manual one.
+func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[customKey]bool, error) {
+	customRows, err := tx.QueryContext(ctx, `
+		SELECT duty_type_id, event_time, team_id
+		FROM duty_slots WHERE game_id=? AND is_custom=1`, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot custom: %w", err)
+	}
+	customSlots := map[customKey]bool{}
+	for customRows.Next() {
+		var k customKey
+		var et sql.NullString
+		var tid sql.NullInt64
+		if err := customRows.Scan(&k.DutyTypeID, &et, &tid); err != nil {
+			customRows.Close()
+			return nil, err
+		}
+		if et.Valid {
+			k.EventTime = et.String
+		}
+		if tid.Valid {
+			k.TeamID = tid.Int64
+			k.HasTeam = true
+		}
+		customSlots[k] = true
+	}
+	customRows.Close()
+	return customSlots, nil
+}
+
+// deletedSlot captures an is_custom=0 slot (and its assigned users) before deletion,
+// so removed assignments can be turned into notification intents.
+type deletedSlot struct {
+	DutyTypeID int
+	EventTime  string
+	TeamID     sql.NullInt64
+	UserIDs    []int
+}
+
+// snapshotDeletedSlots reads the is_custom=0 slots of a game together with their
+// assignments, keyed by slot id. Multiple assignment rows per slot accumulate into UserIDs.
+func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[int]*deletedSlot, error) {
+	snapRows, err := tx.QueryContext(ctx, `
+		SELECT ds.id, ds.duty_type_id, ds.event_time, ds.team_id, da.user_id
+		FROM duty_slots ds
+		LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id
+		WHERE ds.game_id=? AND ds.is_custom=0`, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot deleted: %w", err)
+	}
+	slotsByID := map[int]*deletedSlot{}
+	for snapRows.Next() {
+		var slotID int
+		var s deletedSlot
+		var et sql.NullString
+		var uid sql.NullInt64
+		if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.TeamID, &uid); err != nil {
+			snapRows.Close()
+			return nil, err
+		}
+		if et.Valid {
+			s.EventTime = et.String
+		}
+		existing, ok := slotsByID[slotID]
+		if !ok {
+			existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, TeamID: s.TeamID}
+			slotsByID[slotID] = existing
+		}
+		if uid.Valid {
+			existing.UserIDs = append(existing.UserIDs, int(uid.Int64))
+		}
+	}
+	snapRows.Close()
+	return slotsByID, nil
+}
+
+// dayGame is one row of games for the regen target date+season.
+type dayGame struct {
+	ID         int
+	Time       string
+	EndTime    sql.NullString
+	Opponent   string
+	IsHome     bool
+	EventType  string
+	TemplateID sql.NullInt64
+}
+
+// loadDayGames loads all games for the given date+season, ordered by time then id.
+func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, seasonID int) ([]dayGame, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT id, time, end_time, opponent, is_home, event_type, template_id
+		 FROM games WHERE date=? AND season_id=? ORDER BY time, id`,
+		date, seasonID)
+	if err != nil {
+		return nil, fmt.Errorf("load games: %w", err)
+	}
+	var dayGames []dayGame
+	for rows.Next() {
+		var g dayGame
+		var isHome int
+		if err := rows.Scan(&g.ID, &g.Time, &g.EndTime, &g.Opponent, &isHome, &g.EventType, &g.TemplateID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		g.IsHome = isHome == 1
+		dayGames = append(dayGames, g)
+	}
+	rows.Close()
+	return dayGames, nil
+}
+
+// itemOutcome records what happened to one template item's duty type, keyed by the
+// item's original DutyTypeID, so notification intents can distinguish removed vs. variant-changed.
+type itemOutcome struct {
+	kind    string // "created" | "reduced" | "skipped"
+	newType string // duty_type name after reduction (for "reduced")
+}
+
+// regenGameItems runs the per-template-item insertion loop for a single game (after its
+// is_custom=0 slots were deleted). It returns a gameSummary carrying only the
+// Created/Reduced/Skipped/Conflicts deltas for this game plus the per-original-type outcomes
+// used downstream to build notification intents. It performs all duty_slots INSERTs on tx.
+func (h *Handler) regenGameItems(
+	ctx context.Context, tx *sql.Tx, g dayGame, items []templateItemRow, durationMins int,
+	allGameTimes []string, hasPrevDay, hasNextDay bool, teamIDs []int,
+	customSlots map[customKey]bool, eventName, date string, seasonID int,
+) (RegenSummary, map[int]itemOutcome, error) {
+	var summary RegenSummary
+	outcomeByOriginalType := map[int]itemOutcome{}
+
+	for _, it := range items {
+		var eventTime string
+		if it.Anchor == "end" && g.EndTime.Valid {
+			eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
+		} else {
+			offset := it.OffsetMinutes
+			if it.Anchor == "end" {
+				offset += durationMins
+			}
+			eventTime = addMinutes(g.Time, offset)
+		}
+
+		isBefore, isAfter, isBetween := classifySlotPosition(eventTime, g.Time, allGameTimes)
+		resultDutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes,
+			hasPrevDay, hasNextDay, isBefore, isAfter, isBetween)
+
+		if resultDutyTypeID == -1 {
+			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "skipped"}
+			summary.Skipped = append(summary.Skipped, SkippedEntry{
+				Date: date, DutyType: it.DutyTypeName,
+			})
+			continue
+		}
+
+		resultTypeName := it.DutyTypeName
+		isReduce := resultDutyTypeID != it.DutyTypeID
+		if isReduce {
+			name, lerr := h.lookupDutyTypeNameTx(ctx, tx, resultDutyTypeID)
+			if lerr == nil {
+				resultTypeName = name
+			}
+		}
+
+		n := it.SlotsCount
+		if n <= 0 {
+			n = 1
+		}
+		slotAudiences := audiencesToDB(audiencesFromDB(it.Audiences))
+
+		insertOne := func(teamID sql.NullInt64) error {
+			k := customKey{DutyTypeID: resultDutyTypeID, EventTime: eventTime}
+			if teamID.Valid {
+				k.TeamID = teamID.Int64
+				k.HasTeam = true
+			}
+			if customSlots[k] {
+				summary.Conflicts = append(summary.Conflicts, ConflictEntry{
+					Date: date, DutyTypeID: resultDutyTypeID,
+					EventTime: eventTime, GameIDs: []int{g.ID},
+				})
+				return nil
+			}
+			var teamVal any
+			if teamID.Valid {
+				teamVal = teamID.Int64
+			}
+			_, err := tx.ExecContext(ctx, `
+				INSERT INTO duty_slots
+				  (event_name, event_date, event_time, duty_type_id, role_desc,
+				   slots_total, team_id, season_id, game_id, audiences, is_custom)
+				VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
+				eventName, date, eventTime, resultDutyTypeID, "",
+				n, teamVal, seasonID, g.ID, slotAudiences)
+			return err
+		}
+
+		if g.EventType == "generisch" {
+			// generisch never reaches here (skipped above), but kept defensive.
+			if err := insertOne(sql.NullInt64{}); err != nil {
+				return RegenSummary{}, nil, err
+			}
+		} else {
+			for _, tid := range teamIDs {
+				if err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}); err != nil {
+					return RegenSummary{}, nil, err
+				}
+			}
+		}
+
+		if isReduce {
+			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "reduced", newType: resultTypeName}
+			summary.Reduced = append(summary.Reduced, ReducedEntry{
+				Date: date, From: it.DutyTypeName, To: resultTypeName,
+				Count: max(1, len(teamIDs)) * n,
+			})
+		} else {
+			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "created"}
+			summary.Created = append(summary.Created, CreatedEntry{
+				Date: date, DutyType: it.DutyTypeName,
+				Count: max(1, len(teamIDs)) * n,
+			})
+		}
+	}
+
+	return summary, outcomeByOriginalType, nil
 }
 
 func composeEventName(eventType string, isHome bool, opponent string) string {
