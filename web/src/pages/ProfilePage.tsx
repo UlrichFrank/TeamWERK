@@ -88,8 +88,11 @@ export default function ProfilePage() {
 
   useLiveUpdates((event) => { if (event === 'members') loadProfile() })
 
+  const hasPlayerFunction = (m: { club_functions?: string[] } | null | undefined) =>
+    !!m?.club_functions?.includes('spieler')
+
   const showMemberTabs = ownMember !== null
-  const showAttendanceTab = ownMember !== null || children.length > 0
+  const showAttendanceTab = hasPlayerFunction(ownMember) || children.some(hasPlayerFunction)
 
   const handleDraftWithdrawn = () => {
     setDraftRefreshKey(k => k + 1)

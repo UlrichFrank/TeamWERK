@@ -3,7 +3,10 @@ import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import AttendanceStatsView from '../components/AttendanceStatsView'
 
-interface MemberRef { id: number; first_name: string; last_name: string }
+interface MemberRef { id: number; first_name: string; last_name: string; club_functions?: string[] }
+
+const isPlayer = (m: MemberRef | null | undefined) =>
+  !!m?.club_functions?.includes('spieler')
 
 // Auswahl- und Lade-Logik für die Spieler-/Eltern-Anwesenheit. Wird sowohl von
 // der eigenständigen Seite (/profil/anwesenheit) als auch als Profil-Tab genutzt.
@@ -22,16 +25,22 @@ export function ProfilAnwesenheitContent({ forcedMemberId }: { forcedMemberId?: 
       setChildren(kids)
       setLoaded(true)
       if (forcedMemberId == null) {
-        setSelectedId(ownMember?.id ?? kids[0]?.id ?? null)
+        const ownFallback = isPlayer(ownMember) ? ownMember?.id : undefined
+        const kidFallback = kids.find(isPlayer)?.id
+        setSelectedId(ownFallback ?? kidFallback ?? null)
       }
     }).catch(() => setLoaded(true))
   }, [forcedMemberId])
 
-  // Auswählbare Mitglieder: eigenes Mitglied (falls Spieler) + alle verlinkten Kinder.
+  // Auswählbare Mitglieder: eigenes Mitglied und Kinder — jeweils nur wenn Vereinsfunktion `spieler`.
+  // Trainer/Vorstand ohne Spieler-Funktion tauchen hier nicht auf; der forcedMemberId-Pfad
+  // (Trainer-Drilldown aus der Team-Sicht) umgeht diese Filterung bewusst.
   const options = useMemo(() => {
     const list: { id: number; label: string }[] = []
-    if (own) list.push({ id: own.id, label: `${own.first_name} ${own.last_name}` })
-    for (const k of children) list.push({ id: k.id, label: `${k.first_name} ${k.last_name}` })
+    if (isPlayer(own)) list.push({ id: own!.id, label: `${own!.first_name} ${own!.last_name}` })
+    for (const k of children) {
+      if (isPlayer(k)) list.push({ id: k.id, label: `${k.first_name} ${k.last_name}` })
+    }
     return list
   }, [own, children])
 
