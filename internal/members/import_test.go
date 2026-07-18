@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
@@ -21,10 +23,13 @@ type importReport struct {
 	Errors    int `json:"errors"`
 	NotFound  int `json:"not_found"`
 	Rows      []struct {
-		Line    int      `json:"line"`
-		Status  string   `json:"status"`
-		Name    string   `json:"name"`
-		Changes []string `json:"changes"`
+		Line        int      `json:"line"`
+		Status      string   `json:"status"`
+		Name        string   `json:"name"`
+		Changes     []string `json:"changes"`
+		Message     string   `json:"message"`
+		DOB         string   `json:"dob"`
+		IBANWarning string   `json:"iban_warning"`
 	} `json:"rows"`
 }
 
@@ -315,6 +320,21 @@ func TestImport_EnrichAmbiguousNoDOB_NichtBefuellt(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("import status %d, want 200", res.StatusCode)
+	}
+
+	// Meldung B positiv pinnen (emptyCnt>=2-Zweig): beide DB-Mitglieder haben leeres
+	// date_of_birth, die CSV liefert ein DOB → Zweig 1939-1948, Text "… ohne Geburtsdatum …".
+	rep := decodeReport(t, res)
+	if rep.Errors != 1 {
+		t.Errorf("errors = %d, want 1", rep.Errors)
+	}
+	if len(rep.Rows) != 1 || !strings.Contains(rep.Rows[0].Message, "ohne Geburtsdatum") {
+		t.Errorf("rows[0].Message = %q, want Substring %q", func() string {
+			if len(rep.Rows) > 0 {
+				return rep.Rows[0].Message
+			}
+			return "<keine Row>"
+		}(), "ohne Geburtsdatum")
 	}
 
 	var withNum int
@@ -629,5 +649,459 @@ func TestImport_GekuendigtBleibtAlias(t *testing.T) {
 	}
 	if got := statusOf(t, db, "Petra"); got != "ausgetreten" {
 		t.Errorf("status = %q, want %q (gekündigt → ausgetreten Alias)", got, "ausgetreten")
+	}
+}
+
+// ── Charakterisierungstests: nageln das AKTUELLE Verhalten von Import fest ──────
+// (test/members-import) Vor dem Refactor. Assertions locken das REALE Verhalten.
+
+// lastNameOf liefert last_name eines Mitglieds anhand des Vornamens.
+func lastNameOf(t *testing.T, db *sql.DB, firstName string) string {
+	t.Helper()
+	var s string
+	if err := db.QueryRow(`SELECT last_name FROM members WHERE first_name=?`, firstName).Scan(&s); err != nil {
+		t.Fatalf("query last_name: %v", err)
+	}
+	return s
+}
+
+// adminServer richtet DB + Server + Admin-Token in einem Schritt ein.
+func adminServer(t *testing.T) (*sql.DB, string, string) {
+	t.Helper()
+	db := testutil.NewDB(t)
+	srv := newMembersServer(t, db)
+	token := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+	return db, srv.URL, token
+}
+
+// read400 liest StatusCode + Body eines erwarteten 400-Fehlers (NICHT decoden).
+func read400(t *testing.T, res *http.Response) string {
+	t.Helper()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	return string(body)
+}
+
+// postImportNoFile lädt ein multipart/form-data OHNE "file"-Feld hoch (nur "mode").
+func postImportNoFile(t *testing.T, srv, token string) *http.Response {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.WriteField("mode", "append"); err != nil {
+		t.Fatalf("WriteField: %v", err)
+	}
+	mw.Close()
+	req, err := http.NewRequest(http.MethodPost, srv+"/api/members/import", &buf)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", token)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("import request: %v", err)
+	}
+	return res
+}
+
+// ── BOM ─────────────────────────────────────────────────────────────────────
+
+func TestImport_StripsUTF8BOM(t *testing.T) {
+	db, srv, token := adminServer(t)
+	csv := "\xef\xbb\xbfVorname;Name\nMax;Muster\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	if rep := decodeReport(t, res); rep.Created != 1 {
+		t.Errorf("created = %d, want 1", rep.Created)
+	}
+	if got := lastNameOf(t, db, "Max"); got != "Muster" {
+		t.Errorf("last_name = %q, want %q", got, "Muster")
+	}
+}
+
+func TestImport_BOMWithCommaDelimiter(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "\xef\xbb\xbfVorname,Name\nMax,Muster\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	if rep := decodeReport(t, res); rep.Created != 1 {
+		t.Errorf("created = %d, want 1", rep.Created)
+	}
+}
+
+// ── Delimiter ─────────────────────────────────────────────────────────────────
+
+func TestImport_DelimiterSemicolon(t *testing.T) {
+	db, srv, token := adminServer(t)
+	csv := "Vorname;Name\nMax;Muster\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	if rep := decodeReport(t, res); rep.Created != 1 {
+		t.Errorf("created = %d, want 1", rep.Created)
+	}
+	if got := statusOf(t, db, "Max"); got != "aktiv" {
+		t.Errorf("status = %q, want %q", got, "aktiv")
+	}
+}
+
+func TestImport_DelimiterComma(t *testing.T) {
+	db, srv, token := adminServer(t)
+	csv := "Vorname,Name\nMax,Muster\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	if rep := decodeReport(t, res); rep.Created != 1 {
+		t.Errorf("created = %d, want 1", rep.Created)
+	}
+	if got := statusOf(t, db, "Max"); got != "aktiv" {
+		t.Errorf("status = %q, want %q", got, "aktiv")
+	}
+}
+
+// Delimiter wird NUR aus der ersten Zeile bestimmt: Header ",", eine Datenzeile
+// mit gequotetem ";" ändert den Delimiter nicht — das ";" landet im Nachnamen.
+func TestImport_DelimiterDetectedFromFirstLineOnly(t *testing.T) {
+	db, srv, token := adminServer(t)
+	csv := "Vorname,Name\nMax,\"Muster;Test\"\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	if rep := decodeReport(t, res); rep.Created != 1 {
+		t.Errorf("created = %d, want 1", rep.Created)
+	}
+	if got := lastNameOf(t, db, "Max"); got != "Muster;Test" {
+		t.Errorf("last_name = %q, want %q (Delimiter bleibt \",\")", got, "Muster;Test")
+	}
+}
+
+// ── Column-Aliase ─────────────────────────────────────────────────────────────
+
+func TestImport_ColumnAliasName(t *testing.T) {
+	db, srv, token := adminServer(t)
+	csv := "Vorname;Name\nMax;Muster\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	if rep := decodeReport(t, res); rep.Created != 1 {
+		t.Errorf("created = %d, want 1", rep.Created)
+	}
+	if got := lastNameOf(t, db, "Max"); got != "Muster" {
+		t.Errorf("last_name = %q, want %q (Alias Name→Nachname)", got, "Muster")
+	}
+}
+
+func TestImport_ColumnAliasGeborenAmUndMitgliedSeit(t *testing.T) {
+	db, srv, token := adminServer(t)
+	csv := "Vorname;Name;geboren am;Mitglied seit\nMax;Muster;14.10.2007;01.09.2020\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	var dob, joinDate sql.NullString
+	if err := db.QueryRow(
+		`SELECT substr(date_of_birth,1,10), substr(join_date,1,10) FROM members WHERE first_name='Max'`,
+	).Scan(&dob, &joinDate); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if dob.String != "2007-10-14" {
+		t.Errorf("date_of_birth = %q, want %q (Alias geboren am)", dob.String, "2007-10-14")
+	}
+	if joinDate.String != "2020-09-01" {
+		t.Errorf("join_date = %q, want %q (Alias Mitglied seit)", joinDate.String, "2020-09-01")
+	}
+}
+
+// ── Dedup ─────────────────────────────────────────────────────────────────────
+
+func TestImport_CSVInternalDuplicate(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;Name\nPetra;Test\nPetra;Test\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if rep.Errors != 2 {
+		t.Errorf("errors = %d, want 2", rep.Errors)
+	}
+	if rep.Created != 0 {
+		t.Errorf("created = %d, want 0", rep.Created)
+	}
+	if len(rep.Rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rep.Rows))
+	}
+	if rep.Rows[0].Message != "Mehrfach in CSV (auch Zeile 3)" {
+		t.Errorf("rows[0].Message = %q, want %q", rep.Rows[0].Message, "Mehrfach in CSV (auch Zeile 3)")
+	}
+	if rep.Rows[1].Message != "Mehrfach in CSV (zuerst Zeile 2)" {
+		t.Errorf("rows[1].Message = %q, want %q", rep.Rows[1].Message, "Mehrfach in CSV (zuerst Zeile 2)")
+	}
+}
+
+// TestImport_CSVDuplicateCaseInsensitive pinnt, dass der Dedup-Key case-insensitiv ist
+// (strings.ToLower auf Vor-/Nachname). Ohne diesen Test bliebe ein Refactor, der das ToLower
+// aus dem dupKey entfernt, unentdeckt (beide Zeilen würden fälschlich als distinct gelten).
+func TestImport_CSVDuplicateCaseInsensitive(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;Name\nPetra;Test\npetra;test\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if rep.Errors != 2 {
+		t.Errorf("errors = %d, want 2 (case-insensitiver Dedup-Key)", rep.Errors)
+	}
+	if rep.Created != 0 {
+		t.Errorf("created = %d, want 0", rep.Created)
+	}
+}
+
+func TestImport_CSVDuplicateDistinctByDOB(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;Name;geboren am\nPetra;Test;14.10.2007\nPetra;Test;15.10.2007\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if rep.Errors != 0 {
+		t.Errorf("errors = %d, want 0 (verschiedene Geburtsdaten → kein Dup)", rep.Errors)
+	}
+	if rep.Created != 2 {
+		t.Errorf("created = %d, want 2", rep.Created)
+	}
+}
+
+// ── 400-Fehler (kein decode, nur StatusCode + Body-Substring) ─────────────────
+
+func TestImport_MissingRequiredColumnVorname(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Name;geboren am\nMuster;14.10.2007\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", res.StatusCode)
+	}
+	if body := read400(t, res); !strings.Contains(body, "missing required column: Vorname") {
+		t.Errorf("body = %q, want substring %q", body, "missing required column: Vorname")
+	}
+}
+
+func TestImport_MissingRequiredColumnNachname(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;geboren am\nMax;14.10.2007\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", res.StatusCode)
+	}
+	if body := read400(t, res); !strings.Contains(body, "missing required column: Nachname") {
+		t.Errorf("body = %q, want substring %q", body, "missing required column: Nachname")
+	}
+}
+
+func TestImport_BrokenCSVFieldCount(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;Name\nMax;Muster;Extra\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", res.StatusCode)
+	}
+	if body := read400(t, res); !strings.Contains(body, "cannot parse CSV") {
+		t.Errorf("body = %q, want substring %q", body, "cannot parse CSV")
+	}
+}
+
+func TestImport_EmptyFileNoHeader(t *testing.T) {
+	_, srv, token := adminServer(t)
+	res := postImport(t, srv, token, "", "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", res.StatusCode)
+	}
+	if body := read400(t, res); !strings.Contains(body, "cannot read CSV header") {
+		t.Errorf("body = %q, want substring %q", body, "cannot read CSV header")
+	}
+}
+
+func TestImport_MissingFileField(t *testing.T) {
+	_, srv, token := adminServer(t)
+	res := postImportNoFile(t, srv, token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", res.StatusCode)
+	}
+	if body := read400(t, res); !strings.Contains(body, "missing file") {
+		t.Errorf("body = %q, want substring %q", body, "missing file")
+	}
+}
+
+// ── Row-Fehler ────────────────────────────────────────────────────────────────
+
+func TestImport_EmptyNameCellIsRowError(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;Name\n;Test\nMax;Muster\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if rep.Errors != 1 {
+		t.Errorf("errors = %d, want 1", rep.Errors)
+	}
+	if rep.Created != 1 {
+		t.Errorf("created = %d, want 1", rep.Created)
+	}
+	if len(rep.Rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rep.Rows))
+	}
+	if rep.Rows[0].Message != "Vorname und Nachname sind Pflichtfelder" {
+		t.Errorf("rows[0].Message = %q, want %q", rep.Rows[0].Message, "Vorname und Nachname sind Pflichtfelder")
+	}
+	if rep.Rows[1].Status != "created" {
+		t.Errorf("rows[1].Status = %q, want %q", rep.Rows[1].Status, "created")
+	}
+}
+
+// ── not_found ─────────────────────────────────────────────────────────────────
+
+func TestImport_EnrichNotFound(t *testing.T) {
+	_, srv, token := adminServer(t)
+	csv := "Vorname;Name;geboren am\nMax;Neu;14.10.2007\n"
+	res := postImport(t, srv, token, csv, "enrich")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if rep.NotFound != 1 {
+		t.Errorf("not_found = %d, want 1", rep.NotFound)
+	}
+	if rep.Created != 0 {
+		t.Errorf("created = %d, want 0", rep.Created)
+	}
+	if len(rep.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rep.Rows))
+	}
+	if rep.Rows[0].Status != "not_found" {
+		t.Errorf("rows[0].Status = %q, want %q", rep.Rows[0].Status, "not_found")
+	}
+	if rep.Rows[0].Name != "Neu, Max" {
+		t.Errorf("rows[0].Name = %q, want %q", rep.Rows[0].Name, "Neu, Max")
+	}
+	if rep.Rows[0].DOB != "2007-10-14" {
+		t.Errorf("rows[0].DOB = %q, want %q", rep.Rows[0].DOB, "2007-10-14")
+	}
+}
+
+// ── Stufen-Guards ─────────────────────────────────────────────────────────────
+
+// Enrich, gleichnamige Bestandsmitglieder MIT Geburtsdatum, CSV OHNE
+// Geburtsdatum-Spalte → früher cnt>=2-Zweig (Meldung A, nicht B).
+func TestImport_EnrichAmbiguousNoDOB_MeldungA(t *testing.T) {
+	db, srv, token := adminServer(t)
+	if _, err := db.Exec(`INSERT INTO members (first_name, last_name, status, date_of_birth) VALUES ('Max','Muster','aktiv','2007-10-14')`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO members (first_name, last_name, status, date_of_birth) VALUES ('Max','Muster','aktiv','2008-01-01')`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	// KEINE Geburtsdatum-Spalte → dob=="" → früher enrich-Zweig.
+	csv := "Vorname;Name\nMax;Muster\n"
+	res := postImport(t, srv, token, csv, "enrich")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if rep.Errors != 1 {
+		t.Errorf("errors = %d, want 1", rep.Errors)
+	}
+	if len(rep.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rep.Rows))
+	}
+	msg := rep.Rows[0].Message
+	if !strings.Contains(msg, "Treffer") || !strings.Contains(msg, "Geburtsdatum in CSV fehlt") {
+		t.Errorf("rows[0].Message = %q, want Meldung A (enthält \"Treffer\" und \"Geburtsdatum in CSV fehlt\")", msg)
+	}
+	// Abgrenzung zu Meldung B (Zweig 1939): darf NICHT getroffen sein.
+	if strings.Contains(msg, "ohne Geburtsdatum") {
+		t.Errorf("rows[0].Message = %q, das ist Meldung B — erwartet war Meldung A", msg)
+	}
+}
+
+// Exakter changes[]-Vertrag (Reihenfolge + Format) bei mehreren geänderten Feldern.
+func TestImport_UpdateChangesContract(t *testing.T) {
+	db, srv, token := adminServer(t)
+	if _, err := db.Exec(`INSERT INTO members (first_name, last_name, status, gender) VALUES ('Max','Muster','aktiv','f')`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	csv := "Vorname;Name;Geschlecht;Position;Passnummer\nMax;Muster;m;TW;P123\n"
+	res := postImportOpts(t, srv, token, csv, "update", nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	rep := decodeReport(t, res)
+	if len(rep.Rows) != 1 || rep.Rows[0].Status != "updated" {
+		t.Fatalf("rows = %+v, want 1 updated row", rep.Rows)
+	}
+	want := []string{
+		`Geschlecht: "f" → "m"`,
+		`Passnummer: "" → "P123"`,
+		`Position: "" → "TW"`,
+	}
+	got := rep.Rows[0].Changes
+	if len(got) != len(want) {
+		t.Fatalf("changes = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("changes[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// Append ohne "Status TeamWERK"-Spalte → Status-Fallback "aktiv".
+func TestImport_AppendStatusFallbackAktiv(t *testing.T) {
+	db, srv, token := adminServer(t)
+	csv := "Vorname;Name\nMax;Muster\n"
+	res := postImport(t, srv, token, csv, "append")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	// Erfolgspfad explizit: ohne dies bliebe der Test bei einem "status weglassen,
+	// DB-DEFAULT nutzen"-Refactor grün (der Handler-Fallback verschwände unbemerkt).
+	rep := decodeReport(t, res)
+	if rep.Created != 1 {
+		t.Fatalf("created = %d, want 1", rep.Created)
+	}
+	if got := statusOf(t, db, "Max"); got != "aktiv" {
+		t.Errorf("status = %q, want %q (Fallback)", got, "aktiv")
 	}
 }
