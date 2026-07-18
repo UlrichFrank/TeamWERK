@@ -2201,46 +2201,41 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Autorisierung keyed auf echte Claim-Signale (own member / parent-of-child / staff) —
+	// NICHT den System-Rollen-String. `claims.Role` ist nur admin/standard/presseteam;
+	// "spieler"/"elternteil" sind Vereinsfunktionen, nie Rollen. Der frühere Rollen-Switch
+	// ließ jeden Request in den ungeprüften default-Zweig fallen → jeder eingeloggte Nutzer
+	// (mit Spiel-Sichtbarkeit) konnte fremde Spiel-RSVP setzen (Broken Access Control).
+	ownMemberID, err := h.memberIDForUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	var memberID int
-	switch claims.Role {
-	case "spieler":
-		memberID, err = h.memberIDForUser(r.Context(), claims.UserID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if memberID == 0 {
+	if req.MemberID == 0 || req.MemberID == ownMemberID {
+		if ownMemberID == 0 {
 			http.Error(w, "your account is not linked to a member record", http.StatusUnprocessableEntity)
 			return
 		}
-	case "elternteil":
-		if req.MemberID == 0 {
-			http.Error(w, "member_id required for elternteil", http.StatusBadRequest)
-			return
-		}
-		ok, err := h.parentHasChild(r.Context(), claims.UserID, req.MemberID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if !ok {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+		memberID = ownMemberID
+	} else {
 		memberID = req.MemberID
-	default:
-		if req.MemberID == 0 {
-			memberID, err = h.memberIDForUser(r.Context(), claims.UserID)
-			if err != nil {
+		staff := claims.Role == auth.RoleAdmin || claims.HasFunction("vorstand") || claims.IsTrainerLike()
+		if !staff {
+			if !claims.IsParent {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			okParent, perr := h.parentHasChild(r.Context(), claims.UserID, req.MemberID)
+			if perr != nil {
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			if memberID == 0 {
-				http.Error(w, "member_id required", http.StatusBadRequest)
+			if !okParent {
+				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
-		} else {
-			memberID = req.MemberID
 		}
 	}
 

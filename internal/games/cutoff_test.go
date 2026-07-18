@@ -274,6 +274,33 @@ func TestRespondToGame_Cutoff_KassiererAfter_422(t *testing.T) {
 	}
 }
 
+// Broken-Access-Control-Guard: ein Nutzer ohne Staff-/Eltern-/Owner-Bezug darf die
+// Spiel-RSVP eines FREMDEN Mitglieds nicht setzen (403, vor dem Cutoff). Ohne das
+// Ownership-Gate in RespondToGame wäre dies 204 — das behobene Loch.
+func TestRespondToGame_ForeignMember_Forbidden(t *testing.T) {
+	db, gameID, _, _, kaderID := setupCutoffGame(t)
+	uID := testutil.CreateUser(t, db, "standard")
+	mID := testutil.CreateMember(t, db, uID)
+	addKaderMember(t, db, kaderID, mID) // UserCanSeeGame passiert
+	foreign := testutil.CreateMember(t, db, 0)
+
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-14 18:00")) // vor Cutoff
+	srv := cutoffServer(t, h)
+
+	token := testutil.Token(t, uID, "standard", []string{"spieler"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/respond", gameID), token,
+		map[string]any{"status": "declined", "member_id": foreign})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM game_responses WHERE game_id=? AND member_id=?`, gameID, foreign).Scan(&n)
+	if n != 0 {
+		t.Errorf("no game_response row must be written for foreign member, got %d", n)
+	}
+}
+
 // Absence-Lock hat Vorrang vor Cutoff (403, nicht 422).
 func TestRespondToGame_Cutoff_AbsenceLockTakesPrecedence_403(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)

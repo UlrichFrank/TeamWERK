@@ -1378,48 +1378,45 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve the target member and authorize. Authorization keys on real claim signals
+	// (own member / parent-of-child / staff) — NOT the system role string. `claims.Role` is
+	// only admin/standard/presseteam; "spieler"/"elternteil" are club functions, never roles.
+	// The previous role-switch therefore left every real request in the unchecked default
+	// branch, so any authenticated user could set an arbitrary member's RSVP (broken access
+	// control). This resolves the member and enforces ownership before mutating.
+	ownMemberID, err := h.memberIDForUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	var memberID int
-	switch claims.Role {
-	case "spieler":
-		memberID, err = h.memberIDForUser(r.Context(), claims.UserID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if memberID == 0 {
+	if req.MemberID == 0 || req.MemberID == ownMemberID {
+		// Responding for oneself.
+		if ownMemberID == 0 {
 			http.Error(w, "your account is not linked to a member record", http.StatusUnprocessableEntity)
 			return
 		}
-	case "elternteil":
-		if req.MemberID == 0 {
-			http.Error(w, "member_id required for elternteil", http.StatusBadRequest)
-			return
-		}
-		ok, err := h.parentHasChild(r.Context(), claims.UserID, req.MemberID)
-		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if !ok {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+		memberID = ownMemberID
+	} else {
+		// Responding for someone else: allowed for staff (admin/vorstand/trainer-like) or a
+		// parent of that member; everyone else is forbidden.
 		memberID = req.MemberID
-	default:
-		// trainer/admin: can respond for any member if member_id is provided
-		if req.MemberID == 0 {
-			// try own member record
-			memberID, err = h.memberIDForUser(r.Context(), claims.UserID)
-			if err != nil {
+		staff := claims.Role == auth.RoleAdmin || claims.HasFunction("vorstand") || claims.IsTrainerLike()
+		if !staff {
+			if !claims.IsParent {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			okParent, perr := h.parentHasChild(r.Context(), claims.UserID, req.MemberID)
+			if perr != nil {
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			if memberID == 0 {
-				http.Error(w, "member_id required", http.StatusBadRequest)
+			if !okParent {
+				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
-		} else {
-			memberID = req.MemberID
 		}
 	}
 

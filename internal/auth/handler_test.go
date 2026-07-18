@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
@@ -1304,5 +1305,190 @@ func TestListMembershipRequests_Trainer_Forbidden(t *testing.T) {
 
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("Trainer-MembershipRequests: erwartet 403, got %d", res.StatusCode)
+	}
+}
+
+// ── ConfirmEmailChange (GAP1) ────────────────────────────────────────────────
+// Der Bestätigungslink liegt öffentlich (ohne Auth) unter
+// GET /api/profile/email/confirm?token=<plain>. Ein gültiges Token muss die
+// E-Mail umschreiben, ALLE aktiven Sessions (refresh_tokens) invalidieren und
+// per 302 auf /login umleiten — das Frontend erzwingt so einen Neu-Login mit
+// der neuen Adresse.
+func TestConfirmEmailChange_InvalidatesSessions(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateRefreshToken(t, db, userID) // aktive Session, die gekappt werden muss
+
+	plain, hash, err := auth.GenerateOpaqueToken()
+	if err != nil {
+		t.Fatalf("GenerateOpaqueToken: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO email_change_tokens (user_id, token, new_email, expires_at, field) VALUES (?,?,?,?, 'email')`,
+		userID, hash, "neu@test.local", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("insert email_change_token: %v", err)
+	}
+
+	srv := newAuthServer(t, db)
+
+	// Dem 302 NICHT folgen — wir wollen Status + Location prüfen, nicht die SPA laden.
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/profile/email/confirm?token="+plain, nil)
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("confirm request: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302, got %d", res.StatusCode)
+	}
+	if loc := res.Header.Get("Location"); loc != "/login" {
+		t.Errorf("expected Location=/login, got %q", loc)
+	}
+	if refreshTokenCount(t, db, userID) != 0 {
+		t.Error("all refresh_tokens must be invalidated after email confirmation")
+	}
+	var email string
+	db.QueryRow(`SELECT email FROM users WHERE id=?`, userID).Scan(&email)
+	if email != "neu@test.local" {
+		t.Errorf("expected users.email='neu@test.local', got %q", email)
+	}
+}
+
+// ── RequestEmailChange (GAP2) ────────────────────────────────────────────────
+// POST /api/profile/email verlangt eine Passwort-Reauth: falsches Passwort → 403,
+// kein Token angelegt.
+func TestRequestEmailChange_WrongPassword(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard") // password = "test"
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/profile/email",
+		testutil.Token(t, userID, "standard", nil),
+		map[string]string{"new_email": "neu@test.local", "password": "falsch"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM email_change_tokens WHERE user_id=?`, userID).Scan(&n)
+	if n != 0 {
+		t.Errorf("wrong password must not create an email_change_token, got %d", n)
+	}
+}
+
+// Korrektes Passwort + freie neue Adresse → 204, genau ein noch offenes Token.
+func TestRequestEmailChange_Valid(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard") // password = "test"
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/profile/email",
+		testutil.Token(t, userID, "standard", nil),
+		map[string]string{"new_email": "neu@test.local", "password": "test"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM email_change_tokens WHERE user_id=? AND field='email' AND used_at IS NULL`, userID).Scan(&n)
+	if n != 1 {
+		t.Errorf("expected exactly 1 open email_change_token, got %d", n)
+	}
+}
+
+// ── Access-Token-Middleware (GAP3) ───────────────────────────────────────────
+// signAccessToken baut einen HS256-Access-Token inline aus beliebigen Claims und
+// einem beliebigen Secret — nötig, um abgelaufene bzw. mit falschem Secret
+// signierte Token zu erzeugen, die die regulären Test-Helfer (immer gültig +
+// TestJWTSecret) nicht liefern können.
+func signAccessToken(t *testing.T, claims auth.Claims, secret string) string {
+	t.Helper()
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("sign access token: %v", err)
+	}
+	return tok
+}
+
+// Ein abgelaufener Access-Token wird von der Middleware mit 401 abgewiesen.
+func TestMiddleware_ExpiredAccessToken(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	claims := auth.Claims{
+		UserID: userID,
+		Email:  "x@test.local",
+		Role:   "standard",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		},
+	}
+	tok := signAccessToken(t, claims, testutil.TestJWTSecret)
+
+	res := testutil.Get(t, srv, "/api/profile/account", "Bearer "+tok)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expired access token: expected 401, got %d", res.StatusCode)
+	}
+}
+
+// Ein mit dem falschen Secret signierter (manipulierter) Access-Token → 401.
+func TestMiddleware_TamperedSignature(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	claims := auth.Claims{
+		UserID: userID,
+		Email:  "x@test.local",
+		Role:   "standard",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}
+	tok := signAccessToken(t, claims, "wrong-secret")
+
+	res := testutil.Get(t, srv, "/api/profile/account", "Bearer "+tok)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("tampered signature: expected 401, got %d", res.StatusCode)
+	}
+}
+
+// ── Refresh mit abgelaufenem Cookie (GAP4) ───────────────────────────────────
+// Ein in der DB vorhandenes, aber abgelaufenes refresh_token → 401.
+func TestRefresh_ExpiredCookie(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	plain, hash, err := auth.GenerateOpaqueToken()
+	if err != nil {
+		t.Fatalf("GenerateOpaqueToken: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?,?,?)`,
+		userID, hash, time.Now().Add(-time.Hour)); err != nil {
+		t.Fatalf("insert refresh_token: %v", err)
+	}
+	srv := newAuthServer(t, db)
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: plain})
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expired refresh cookie: expected 401, got %d", res.StatusCode)
 	}
 }

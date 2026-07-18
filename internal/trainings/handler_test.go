@@ -31,6 +31,7 @@ func testServer(t *testing.T, h *trainings.Handler) *httptest.Server {
 			r.Post("/api/training-sessions/{id}/attendances", h.SaveAttendances)
 			r.Post("/api/training-sessions", h.CreateSession)
 			r.Put("/api/training-sessions/{id}", h.UpdateSession)
+			r.Delete("/api/training-sessions/{id}", h.DeleteSession)
 		})
 
 		r.Group(func(r chi.Router) {
@@ -1306,7 +1307,11 @@ func TestRespond_Cutoff_AdminAfter_OK(t *testing.T) {
 }
 
 // Kassierer ohne weitere Funktion nach Cutoff → 422.
-func TestRespond_Cutoff_KassiererAfter_422(t *testing.T) {
+// Kassierer ist weder Staff (kein Cutoff-Override) noch Elternteil/Owner des Zielmitglieds →
+// Antwort für ein fremdes Mitglied ist 403 (Ownership-Gate, VOR dem Cutoff). Früher erwartete
+// dieser Test 422 — das kodierte das inzwischen behobene Broken-Access-Control-Loch (jeder
+// durfte für jedes Mitglied antworten, nur der Cutoff bremste).
+func TestRespond_Cutoff_KassiererForeignMember_403(t *testing.T) {
 	db, sessionID, _, _ := setupCutoffSession(t)
 	kUserID := testutil.CreateUser(t, db, "standard")
 	testutil.CreateMember(t, db, kUserID)
@@ -1320,8 +1325,8 @@ func TestRespond_Cutoff_KassiererAfter_422(t *testing.T) {
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
 		map[string]any{"status": "declined", "member_id": targetMember})
 	res.Body.Close()
-	if res.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 (kein Ownership), got %d", res.StatusCode)
 	}
 }
 
@@ -1499,5 +1504,296 @@ func TestSaveAttendances_OwnTeamTrainerOK(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusNoContent {
 		t.Errorf("expected 204 for own-team trainer, got %d", res.StatusCode)
+	}
+}
+
+// ── DeleteSession — hasTeamAccess (Handler-intern, nicht Tier) ─────────────────
+
+// A1: Trainer des eigenen Teams löscht eine Session → 204; Session verschwindet und
+// die pending_event_notes_push-Zeile wird mit aufgeräumt (handler.go DeleteSession).
+func TestDeleteSession_OwnTeamTrainer_DeletesAndCleansPending(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	sid := testutil.CreateTrainingSession(t, db, teamA, seasonID, "2025-01-10")
+
+	// Begleitzeilen, die beim Löschen mit weggeräumt werden sollen.
+	if _, err := db.Exec(
+		`INSERT INTO training_responses (training_id, member_id, responded_by, status, responded_at)
+		 VALUES (?, ?, ?, 'confirmed', CURRENT_TIMESTAMP)`, sid, trainerMemberID, trainerUserID); err != nil {
+		t.Fatalf("seed training_responses: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO pending_event_notes_push (ref_type, ref_id, note_text, notify_after, updated_by)
+		 VALUES ('training', ?, 'x', datetime('now','+5 minutes'), ?)`, sid, trainerUserID); err != nil {
+		t.Fatalf("seed pending: %v", err)
+	}
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+
+	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/training-sessions/%d", sid), token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var sessionCount, pendingCount int
+	db.QueryRow(`SELECT COUNT(*) FROM training_sessions WHERE id=?`, sid).Scan(&sessionCount)
+	db.QueryRow(`SELECT COUNT(*) FROM pending_event_notes_push WHERE ref_type='training' AND ref_id=?`, sid).Scan(&pendingCount)
+	if sessionCount != 0 {
+		t.Errorf("session should be deleted, got %d rows", sessionCount)
+	}
+	if pendingCount != 0 {
+		t.Errorf("pending_event_notes_push should be cleaned, got %d rows", pendingCount)
+	}
+}
+
+// A2: Trainer nur von Team A darf keine Session von Team B löschen → 403; Session bleibt.
+func TestDeleteSession_ForeignTeamTrainer_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID) // trainer of Team A only
+
+	sidB := testutil.CreateTrainingSession(t, db, teamB, seasonID, "2025-01-10")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+
+	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/training-sessions/%d", sidB), token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+
+	var count int
+	db.QueryRow(`SELECT COUNT(*) FROM training_sessions WHERE id=?`, sidB).Scan(&count)
+	if count != 1 {
+		t.Errorf("foreign session must remain, got %d rows", count)
+	}
+}
+
+// A3: DeleteSession auf unbekannte ID → 404 (admin umgeht den Tier-Gate).
+func TestDeleteSession_NotFound(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminUserID := testutil.CreateUser(t, db, "admin")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/training-sessions/999999", token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.StatusCode)
+	}
+}
+
+// ── Respond — Member-Auflösung / parentHasChild (Handler-intern) ──────────────
+
+// B1: Elternteil versucht, für ein fremdes (nicht verknüpftes) Mitglied zu
+// antworten → 403 (parentHasChild=false, handler.go im case "elternteil").
+// Hinweis: der reale Eltern-Persona ist role="standard"+IsParent (personas_test.go),
+// der über den default-Zweig läuft; hier wird role="elternteil" gesetzt, um genau
+// den parentHasChild-Zweig zu treffen (siehe Bericht/Auffälligkeit).
+func TestRespond_ParentForNonChild_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sid := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-06-01")
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	ownChild := testutil.CreateMember(t, db, 0)
+	if _, err := db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, ownChild); err != nil {
+		t.Fatalf("family_links: %v", err)
+	}
+	strangerMember := testutil.CreateMember(t, db, 0) // NO link to parent
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
+	srv := testServer(t, h)
+
+	// Reale Eltern-Persona: role="standard" + IsParent=true (die synthetische Rolle
+	// "elternteil" wird nie ausgestellt). Fremdes Mitglied ohne family_link → 403.
+	token := testutil.TokenWithIsParent(t, parentUserID, "standard", nil, true)
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sid), token,
+		map[string]any{"status": "confirmed", "member_id": strangerMember})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM training_responses WHERE training_id=? AND member_id=?`, sid, strangerMember).Scan(&n)
+	if n != 0 {
+		t.Errorf("no response row must be written for stranger, got %d", n)
+	}
+}
+
+// Isolations-Pin: ein ganz gewöhnlicher standard-Nutzer (keine Funktion, kein Elternteil)
+// darf die RSVP eines fremden Mitglieds nicht setzen (403). Entkoppelt vom Cutoff-Timing
+// (vor Cutoff) und vom Kassierer-Spezialfall — nagelt das Ownership-Gate direkt fest.
+func TestRespond_StandardForeignMember_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sid := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-06-01")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, userID) // hat eigenes Mitglied, antwortet aber für ein fremdes
+	foreign := testutil.CreateMember(t, db, 0)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sid), token,
+		map[string]any{"status": "confirmed", "member_id": foreign})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+// B4: Account ohne verknüpften Mitglieds-Datensatz, ohne member_id → 422
+// (Respond: own-member-Pfad, memberIDForUser == 0).
+func TestRespond_SpielerUnlinkedAccount_422(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sid := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-06-01")
+
+	userID := testutil.CreateUser(t, db, "standard") // KEIN CreateMember → unverknüpft
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00")))
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sid), token,
+		map[string]any{"status": "confirmed"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", res.StatusCode)
+	}
+}
+
+// ── GetAttendances / GetSession — Zugriff & NotFound ──────────────────────────
+
+// C2: Ein Nutzer, der weder Trainer-artig ist noch in user_accessible_teams von
+// Team A steht, bekommt bei GET /attendances → 403 (handler.go GetAttendances).
+func TestGetAttendances_TrueStranger_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	sid := testutil.CreateTrainingSession(t, db, teamA, seasonID, "2026-06-01")
+
+	strangerUserID := testutil.CreateUser(t, db, "standard") // keine Funktion, kein Kader, kein Member
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, strangerUserID, "standard", nil)
+
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sid), token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+// C1: GET auf unbekannte Session → 404 (handler.go GetSession).
+func TestGetSession_NotFound(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminUserID := testutil.CreateUser(t, db, "admin")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, "/api/training-sessions/999999", token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", res.StatusCode)
+	}
+}
+
+// ── CreateSession / UpdateSession — fremdes Team (Handler-intern hasTeamAccess) ─
+
+// D1: Trainer von Team A legt Session für Team B an → 403 (CreateSession).
+func TestCreateSession_ForeignTeam_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+
+	body := map[string]any{
+		"team_id":    teamB, // fremdes Team
+		"season_id":  seasonID,
+		"title":      "Zusatztraining",
+		"date":       "2026-08-05",
+		"start_time": "18:00",
+		"end_time":   "20:00",
+	}
+	res := testutil.Post(t, srv, "/api/training-sessions", token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+// D4: Trainer von Team A bearbeitet eine Session von Team B → 403 (UpdateSession).
+func TestUpdateSession_ForeignTeam_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	sidB := testutil.CreateTrainingSession(t, db, teamB, seasonID, "2026-08-05")
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+
+	body := map[string]any{
+		"team_id":    teamB,
+		"season_id":  seasonID,
+		"title":      "Geändert",
+		"date":       "2026-08-05",
+		"start_time": "19:00",
+		"end_time":   "21:00",
+	}
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/training-sessions/%d", sidB), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
 	}
 }
