@@ -8,6 +8,7 @@ import ProfileMemberTab from '../components/profile/ProfileMemberTab'
 import ProfileBankTab from '../components/profile/ProfileBankTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
 import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
+import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 import { Member, Parent, Phone } from './ProfilePage'
 
 export interface UserContact {
@@ -27,12 +28,13 @@ export interface UserContact {
   }
 }
 
-type TabName = 'profile' | 'member' | 'banking' | 'datenschutz' | 'misc'
+type TabName = 'profile' | 'member' | 'banking' | 'anwesenheit' | 'datenschutz' | 'misc'
 
 const labels: Record<TabName, string> = {
   profile: 'Kontakt',
   member: 'Mitgliedsdaten',
   banking: 'Bankdaten',
+  anwesenheit: 'Anwesenheit',
   datenschutz: 'Datenschutz',
   misc: 'Sonstiges',
 }
@@ -85,12 +87,23 @@ export default function ChildProfilePage() {
 
   if (!member) return null
 
+  // Anwesenheit-Tab nur für Spieler-Kinder (Vereinsfunktion `spieler`).
+  const isPlayer = !!member.club_functions?.includes('spieler')
+  const tabs: TabName[] = [
+    'profile',
+    'member',
+    'banking',
+    ...(isPlayer ? (['anwesenheit'] as TabName[]) : []),
+    'datenschutz',
+    'misc',
+  ]
+
   return (
     <div className="max-w-4xl">
       <h1 className="text-2xl font-bold mb-6">{member.first_name}</h1>
 
       <div className="flex gap-1 mb-6 border-b border-brand-border-subtle flex-wrap">
-        {(['profile', 'member', 'banking', 'datenschutz', 'misc'] as TabName[]).map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -160,6 +173,9 @@ export default function ChildProfilePage() {
       )}
       {activeTab === 'banking' && (
         <ProfileBankTab ownMember={member} />
+      )}
+      {isPlayer && activeTab === 'anwesenheit' && (
+        <ProfilAnwesenheitContent forcedMemberId={member.id} />
       )}
       {activeTab === 'datenschutz' && (
         <ProfileDatenschutzTab ownMember={member} onUpdated={load} />
