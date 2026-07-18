@@ -33,9 +33,11 @@ type TrainerEntry struct {
 }
 
 type PlayerEntry struct {
-	UserID       int    `json:"userId"`
-	Name         string `json:"name"`
-	JerseyNumber *int   `json:"jerseyNumber"`
+	UserID           int      `json:"userId"`
+	MemberID         int      `json:"memberId"`
+	Name             string   `json:"name"`
+	JerseyNumber     *int     `json:"jerseyNumber"`
+	Responsibilities []string `json:"responsibilities"`
 }
 
 type ParentEntry struct {
@@ -51,6 +53,7 @@ type RosterResponse struct {
 	Parents         []ParentEntry  `json:"parents"`
 	ExtendedPlayers []PlayerEntry  `json:"extended_players"`
 	ExtendedParents []ParentEntry  `json:"extended_parents"`
+	CanManage       bool           `json:"canManage"`
 }
 
 // GET /api/teams/:id/roster
@@ -99,6 +102,11 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 		ExtendedParents: []ParentEntry{},
 	}
 
+	// canManage: der anfragende Nutzer ist Trainer/Admin dieses Teams (aktive Saison).
+	if canManage, mErr := h.isTrainerOfTeam(ctx, claims, teamID); mErr == nil {
+		resp.CanManage = canManage
+	}
+
 	// Active season ID
 	var seasonID int
 	h.db.QueryRowContext(ctx, `SELECT id FROM seasons WHERE is_active = 1 LIMIT 1`).Scan(&seasonID)
@@ -123,7 +131,7 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 
 	// Players: kader_members → members → users
 	playerRows, err := h.db.QueryContext(ctx, `
-		SELECT DISTINCT COALESCE(u.id, 0), m.first_name || ' ' || m.last_name,
+		SELECT DISTINCT m.id, COALESCE(u.id, 0), m.first_name || ' ' || m.last_name,
 		       m.jersey_number
 		FROM kader_members km
 		JOIN kader k ON k.id = km.kader_id
@@ -136,18 +144,19 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 		for playerRows.Next() {
 			var p PlayerEntry
 			var jerseyNum sql.NullInt64
-			playerRows.Scan(&p.UserID, &p.Name, &jerseyNum)
+			playerRows.Scan(&p.MemberID, &p.UserID, &p.Name, &jerseyNum)
 			if jerseyNum.Valid {
 				n := int(jerseyNum.Int64)
 				p.JerseyNumber = &n
 			}
+			p.Responsibilities = h.responsibilitiesFor(ctx, teamID, seasonID, p.MemberID)
 			resp.Players = append(resp.Players, p)
 		}
 	}
 
 	// Extended players: kader_extended_members → members → users
 	extRows, err := h.db.QueryContext(ctx, `
-		SELECT DISTINCT COALESCE(u.id, 0), m.first_name || ' ' || m.last_name,
+		SELECT DISTINCT m.id, COALESCE(u.id, 0), m.first_name || ' ' || m.last_name,
 		       m.jersey_number
 		FROM kader_extended_members kem
 		JOIN kader k ON k.id = kem.kader_id
@@ -160,11 +169,12 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 		for extRows.Next() {
 			var p PlayerEntry
 			var jerseyNum sql.NullInt64
-			extRows.Scan(&p.UserID, &p.Name, &jerseyNum)
+			extRows.Scan(&p.MemberID, &p.UserID, &p.Name, &jerseyNum)
 			if jerseyNum.Valid {
 				n := int(jerseyNum.Int64)
 				p.JerseyNumber = &n
 			}
+			p.Responsibilities = h.responsibilitiesFor(ctx, teamID, seasonID, p.MemberID)
 			resp.ExtendedPlayers = append(resp.ExtendedPlayers, p)
 		}
 	}
