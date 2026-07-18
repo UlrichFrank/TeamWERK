@@ -30,15 +30,19 @@
 - [x] 3.5 `TestClaim_NonMatchReportSlot_Unaffected` — Slot anderen Typs → Guard greift nicht, regulärer Claim
 - [x] 3.6 Commit: `test(duties): Spielbericht-Slot-Guard inkl. Proxy-Rollenverschiebung`
 
-## 4. attendance-Recording (`internal/training/` + `internal/games/`)
+## 4. attendance-Recording (`internal/trainings/` + `internal/games/`)
 
-- [ ] 4.1 `internal/training`: Testserver für `POST /api/training-sessions/{id}/attendances` (Package hat bisher **keine** Testdatei — neu anlegen)
-- [ ] 4.2 `TestSaveAttendances_ForeignTeamTrainerForbidden` (training) — Trainer eines fremden Teams → 403
-- [ ] 4.3 `TestSaveAttendances_OwnTeamTrainerOK` (training) — zuständiger Trainer → 2xx, Recording persistiert
-- [ ] 4.4 `TestSaveAttendances_NonStaffForbidden` (training) — Nicht-Staff → 403
-- [ ] 4.5 `TestGameSaveAttendances_ForeignTeamForbidden` (games) — analog für `POST /api/games/{id}/attendances`
-- [ ] 4.6 `TestGameSaveAttendances_OwnTeamOK` (games) — zuständiger Trainer → 2xx
-- [ ] 4.7 Commit: `test(training,games): Recording-Authz für Anwesenheiten`
+**Scope beim Umsetzen weiter geschärft (Roadmap 9.2):** Package heißt `trainings` (mit „s") und
+**hat** bereits Tests; games-Recording ist **vollständig** abgedeckt. Nur der Fremd-Team-Fall bei
+`trainings.SaveAttendances` war ein echter Gap.
+
+- [x] 4.1 ~~neue Testdatei~~ — Annahme korrigiert: `internal/trainings/handler_test.go` existiert bereits (Testserver mit `SaveAttendances` verdrahtet)
+- [x] 4.2 `TestSaveAttendances_ForeignTeamTrainerForbidden` (trainings) — Trainer eines fremden Teams → 403 **(neu, der eigentliche Gap)**
+- [x] 4.3 `TestSaveAttendances_OwnTeamTrainerOK` (trainings) — echter Team-Trainer (nicht admin) → 204 **(neu, ergänzt den admin-basierten Happy-Path)**
+- [x] 4.4 Nicht-Staff → 403: **bereits vorhanden** (`TestSaveAttendances_PlayerForbidden`) — nicht dupliziert
+- [x] 4.5 games Fremd-Team → 403: **bereits vorhanden** (`TestSaveGameAttendances_TrainerOfOtherTeam_403`) — nicht dupliziert
+- [x] 4.6 games zuständiger Trainer → 2xx: **bereits vorhanden** (`TestSaveGameAttendances_HappyPath`, `_SportlicheLeitung_Any_OK`, plus `_Unauthenticated_401`/`_NotFound_404`) — nicht dupliziert
+- [x] 4.7 Commit: `test(trainings): Recording-Authz fremdes Team + echter Team-Trainer`
 
 ## 5. absences — Sichtbarkeit & Mutation (`internal/absences/handler_test.go`)
 
