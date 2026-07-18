@@ -1766,6 +1766,43 @@ func parseImportCSV(raw []byte) (*parsedCSV, error) {
 	return &parsedCSV{header: header, colIdx: colIdx, rows: rows}, nil
 }
 
+// csvDupes captures the within-CSV duplicate relations keyed by 1-based line
+// number (header = line 1, first data row = line 2).
+type csvDupes struct {
+	dupOf           map[int]int  // later line → first line
+	firstDupPartner map[int]int  // first line → first later duplicate
+	isDupLine       map[int]bool // line participates in a duplicate group
+}
+
+// detectCSVDuplicates finds rows that repeat the same {lower(Vorname),
+// lower(Nachname), normalizeDate(Geburtsdatum)} key. lineNum = i+2.
+func detectCSVDuplicates(rows [][]string, col func([]string, string) string) csvDupes {
+	type dupKey struct{ first, last, dob string }
+	seenAt := make(map[dupKey]int) // key → first line number
+	dupOf := make(map[int]int)
+	firstDupPartner := make(map[int]int)
+	isDupLine := make(map[int]bool)
+	for i, row := range rows {
+		lineNum := i + 2
+		k := dupKey{
+			first: strings.ToLower(col(row, "Vorname")),
+			last:  strings.ToLower(col(row, "Nachname")),
+			dob:   normalizeDate(col(row, "Geburtsdatum")),
+		}
+		if prev, exists := seenAt[k]; exists {
+			dupOf[lineNum] = prev
+			isDupLine[lineNum] = true
+			isDupLine[prev] = true
+			if _, alreadyHasPartner := firstDupPartner[prev]; !alreadyHasPartner {
+				firstDupPartner[prev] = lineNum
+			}
+		} else {
+			seenAt[k] = lineNum
+		}
+	}
+	return csvDupes{dupOf: dupOf, firstDupPartner: firstDupPartner, isDupLine: isDupLine}
+}
+
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
@@ -1853,29 +1890,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	allRows := pc.rows
 
 	// Duplicate detection within CSV
-	type dupKey struct{ first, last, dob string }
-	seenAt := make(map[dupKey]int)       // key → first line number
-	dupOf := make(map[int]int)           // later line → first line
-	firstDupPartner := make(map[int]int) // first line → first later duplicate
-	isDupLine := make(map[int]bool)
-	for i, row := range allRows {
-		lineNum := i + 2
-		k := dupKey{
-			first: strings.ToLower(col(row, "Vorname")),
-			last:  strings.ToLower(col(row, "Nachname")),
-			dob:   normalizeDate(col(row, "Geburtsdatum")),
-		}
-		if prev, exists := seenAt[k]; exists {
-			dupOf[lineNum] = prev
-			isDupLine[lineNum] = true
-			isDupLine[prev] = true
-			if _, alreadyHasPartner := firstDupPartner[prev]; !alreadyHasPartner {
-				firstDupPartner[prev] = lineNum
-			}
-		} else {
-			seenAt[k] = lineNum
-		}
-	}
+	dupes := detectCSVDuplicates(allRows, col)
 
 	report := ImportReport{Rows: make([]ImportRow, 0, len(allRows))}
 
@@ -1895,12 +1910,12 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if isDupLine[lineNum] {
+		if dupes.isDupLine[lineNum] {
 			var msg string
-			if first, isLater := dupOf[lineNum]; isLater {
+			if first, isLater := dupes.dupOf[lineNum]; isLater {
 				msg = fmt.Sprintf("Mehrfach in CSV (zuerst Zeile %d)", first)
 			} else {
-				msg = fmt.Sprintf("Mehrfach in CSV (auch Zeile %d)", firstDupPartner[lineNum])
+				msg = fmt.Sprintf("Mehrfach in CSV (auch Zeile %d)", dupes.firstDupPartner[lineNum])
 			}
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "error", Name: displayName, Message: msg,
