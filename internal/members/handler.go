@@ -1826,6 +1826,133 @@ type ImportReport struct {
 	Rows      []ImportRow `json:"rows"`
 }
 
+// dbMember holds the columns scanned for an existing member during import
+// lookup, in exact scan order.
+type dbMember struct {
+	id                int
+	memberNum         sql.NullString
+	dob               string
+	passNum           sql.NullString
+	jerseyNum         sql.NullInt64
+	position          sql.NullString
+	status            string
+	gender            string
+	userID            sql.NullInt64
+	homeClub          sql.NullString
+	street            string
+	zip               string
+	city              string
+	joinDate          string
+	sepaMandat        int
+	beitragsfrei      int
+	beitragsfreiGrund string
+}
+
+type lookupOutcome int
+
+const (
+	lookupNotFound lookupOutcome = iota
+	lookupFound
+	lookupAmbiguous
+	lookupDBError
+)
+
+// lookupResult is the outcome of lookupExistingMember. It carries no report
+// state; the caller translates the outcome into report rows.
+type lookupResult struct {
+	outcome lookupOutcome
+	member  dbMember
+	message string
+	dbErr   error
+}
+
+// lookupExistingMember resolves a CSV row to an existing member by name (+ dob
+// as tiebreaker when present). It reports ambiguity (enrich without dob, or ≥2
+// same-name members without dob) via lookupAmbiguous with the verbatim German
+// message; a scan error via lookupDBError; no match via lookupNotFound; a hit
+// via lookupFound + member.
+func (h *Handler) lookupExistingMember(ctx context.Context, firstName, lastName, dob, mode string) lookupResult {
+	// Enrich mode without DOB: check for ambiguous name matches before proceeding.
+	if mode == "enrich" && dob == "" {
+		var cnt int
+		h.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`,
+			firstName, lastName).Scan(&cnt)
+		if cnt >= 2 {
+			return lookupResult{
+				outcome: lookupAmbiguous,
+				message: fmt.Sprintf("Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt", cnt),
+			}
+		}
+	}
+
+	// DB lookup by name (+ dob as tiebreaker when present)
+	query := `SELECT id, member_number, COALESCE(date_of_birth,''),
+	                 pass_number, jersey_number, position, status, gender, user_id, home_club,
+	                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
+	                 COALESCE(join_date,''),
+	                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0), COALESCE(beitragsfrei_grund,'')
+	          FROM members
+	          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
+	args := []interface{}{firstName, lastName}
+	if dob != "" {
+		// Standard: exakter Vergleich nur auf den Datumsanteil — date_of_birth
+		// kann reines ISO-Datum ("2007-10-14") ODER ISO-Timestamp
+		// ("2007-10-14T00:00:00Z") sein (SQLite-DATE-Gotcha).
+		dobClause := ` AND substr(COALESCE(date_of_birth,''),1,10)=?`
+		useDobArg := true
+
+		// Fall B: Findet der exakte Abgleich nichts und ist beim Bestands-
+		// mitglied gar kein Geburtsdatum gepflegt, matchen wir in Füll-Modi
+		// ersatzweise über den Namen allein (Geburtsdatum wird per enrich
+		// ergänzt) — aber NUR wenn genau ein gleichnamiges Mitglied ohne
+		// Geburtsdatum existiert (Eindeutigkeits-Schutz), damit keine andere
+		// gleichnamige Person befüllt wird.
+		if mode == "enrich" || mode == "update" {
+			var exactCnt int
+			h.db.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND substr(COALESCE(date_of_birth,''),1,10)=?`,
+				firstName, lastName, dob).Scan(&exactCnt)
+			if exactCnt == 0 {
+				var emptyCnt int
+				h.db.QueryRowContext(ctx,
+					`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND COALESCE(date_of_birth,'')=''`,
+					firstName, lastName).Scan(&emptyCnt)
+				switch {
+				case emptyCnt == 1:
+					dobClause = ` AND COALESCE(date_of_birth,'')=''`
+					useDobArg = false
+				case emptyCnt >= 2:
+					return lookupResult{
+						outcome: lookupAmbiguous,
+						message: fmt.Sprintf("Mehrdeutig (%d gleichnamige ohne Geburtsdatum) – bitte manuell zuordnen", emptyCnt),
+					}
+				}
+			}
+		}
+
+		query += dobClause
+		if useDobArg {
+			args = append(args, dob)
+		}
+	}
+	query += ` LIMIT 1`
+
+	var m dbMember
+	scanErr := h.db.QueryRowContext(ctx, query, args...).
+		Scan(&m.id, &m.memberNum, &m.dob, &m.passNum, &m.jerseyNum, &m.position,
+			&m.status, &m.gender, &m.userID, &m.homeClub,
+			&m.street, &m.zip, &m.city,
+			&m.joinDate, &m.sepaMandat, &m.beitragsfrei, &m.beitragsfreiGrund)
+	if scanErr == sql.ErrNoRows {
+		return lookupResult{outcome: lookupNotFound}
+	}
+	if scanErr != nil {
+		return lookupResult{outcome: lookupDBError, dbErr: scanErr}
+	}
+	return lookupResult{outcome: lookupFound, member: m}
+}
+
 // POST /api/members/import
 func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -1924,100 +2051,15 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Enrich mode without DOB: check for ambiguous name matches before proceeding.
-		if mode == "enrich" && dob == "" {
-			var cnt int
-			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`,
-				firstName, lastName).Scan(&cnt)
-			if cnt >= 2 {
-				report.Rows = append(report.Rows, ImportRow{
-					Line:    lineNum,
-					Status:  "error",
-					Name:    displayName,
-					Message: fmt.Sprintf("Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt", cnt),
-				})
-				report.Errors++
-				continue
-			}
+		lr := h.lookupExistingMember(r.Context(), firstName, lastName, dob, mode)
+		if lr.outcome == lookupAmbiguous {
+			report.Rows = append(report.Rows, ImportRow{
+				Line: lineNum, Status: "error", Name: displayName, Message: lr.message,
+			})
+			report.Errors++
+			continue
 		}
-
-		// DB lookup by name (+ dob as tiebreaker when present)
-		query := `SELECT id, member_number, COALESCE(date_of_birth,''),
-		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
-		                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
-		                 COALESCE(join_date,''),
-		                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0), COALESCE(beitragsfrei_grund,'')
-		          FROM members
-		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
-		args := []interface{}{firstName, lastName}
-		if dob != "" {
-			// Standard: exakter Vergleich nur auf den Datumsanteil — date_of_birth
-			// kann reines ISO-Datum ("2007-10-14") ODER ISO-Timestamp
-			// ("2007-10-14T00:00:00Z") sein (SQLite-DATE-Gotcha).
-			dobClause := ` AND substr(COALESCE(date_of_birth,''),1,10)=?`
-			useDobArg := true
-
-			// Fall B: Findet der exakte Abgleich nichts und ist beim Bestands-
-			// mitglied gar kein Geburtsdatum gepflegt, matchen wir in Füll-Modi
-			// ersatzweise über den Namen allein (Geburtsdatum wird per enrich
-			// ergänzt) — aber NUR wenn genau ein gleichnamiges Mitglied ohne
-			// Geburtsdatum existiert (Eindeutigkeits-Schutz), damit keine andere
-			// gleichnamige Person befüllt wird.
-			if mode == "enrich" || mode == "update" {
-				var exactCnt int
-				h.db.QueryRowContext(r.Context(),
-					`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND substr(COALESCE(date_of_birth,''),1,10)=?`,
-					firstName, lastName, dob).Scan(&exactCnt)
-				if exactCnt == 0 {
-					var emptyCnt int
-					h.db.QueryRowContext(r.Context(),
-						`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND COALESCE(date_of_birth,'')=''`,
-						firstName, lastName).Scan(&emptyCnt)
-					switch {
-					case emptyCnt == 1:
-						dobClause = ` AND COALESCE(date_of_birth,'')=''`
-						useDobArg = false
-					case emptyCnt >= 2:
-						report.Rows = append(report.Rows, ImportRow{
-							Line:    lineNum,
-							Status:  "error",
-							Name:    displayName,
-							Message: fmt.Sprintf("Mehrdeutig (%d gleichnamige ohne Geburtsdatum) – bitte manuell zuordnen", emptyCnt),
-						})
-						report.Errors++
-						continue
-					}
-				}
-			}
-
-			query += dobClause
-			if useDobArg {
-				args = append(args, dob)
-			}
-		}
-		query += ` LIMIT 1`
-
-		var (
-			existingID                         int
-			dbMemberNum, dbPassNum, dbPosition sql.NullString
-			dbDOB, dbGender, dbStatus          string
-			dbJerseyNum                        sql.NullInt64
-			dbUserID                           sql.NullInt64
-			dbHomeClub                         sql.NullString
-			dbStreet, dbZip, dbCity            string
-			dbJoinDate                         string
-			dbSepaMandat                       int
-			dbBeitragsfrei                     int
-			dbBeitragsfreiGrund                string
-		)
-		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
-			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
-				&dbStatus, &dbGender, &dbUserID, &dbHomeClub,
-				&dbStreet, &dbZip, &dbCity,
-				&dbJoinDate, &dbSepaMandat, &dbBeitragsfrei, &dbBeitragsfreiGrund)
-
-		if scanErr == sql.ErrNoRows {
+		if lr.outcome == lookupNotFound {
 			if mode == "enrich" {
 				report.Rows = append(report.Rows, ImportRow{
 					Line:   lineNum,
@@ -2082,16 +2124,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			report.Created++
 			continue
 		}
-		if scanErr != nil {
+		if lr.outcome == lookupDBError {
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "error", Name: displayName,
-				Message: "DB-Fehler: " + scanErr.Error(),
+				Message: "DB-Fehler: " + lr.dbErr.Error(),
 			})
 			report.Errors++
 			continue
 		}
 
-		// Existing member
+		// lr.outcome == lookupFound — existing member
 		if mode == "append" {
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "unchanged", Name: displayName,
@@ -2099,6 +2141,23 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			report.Unchanged++
 			continue
 		}
+
+		existingID := lr.member.id
+		dbMemberNum := lr.member.memberNum
+		dbDOB := lr.member.dob
+		dbPassNum := lr.member.passNum
+		dbJerseyNum := lr.member.jerseyNum
+		dbPosition := lr.member.position
+		dbStatus := lr.member.status
+		dbGender := lr.member.gender
+		dbHomeClub := lr.member.homeClub
+		dbStreet := lr.member.street
+		dbZip := lr.member.zip
+		dbCity := lr.member.city
+		dbJoinDate := lr.member.joinDate
+		dbSepaMandat := lr.member.sepaMandat
+		dbBeitragsfrei := lr.member.beitragsfrei
+		dbBeitragsfreiGrund := lr.member.beitragsfreiGrund
 
 		// mode == "update", "enrich", or legacy preview: apply non-empty changed fields
 		enrichOnly := mode == "enrich"
