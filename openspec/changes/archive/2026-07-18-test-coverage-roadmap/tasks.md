@@ -42,15 +42,15 @@
 
 ## 7. Parallel — Frontend
 
-> **Status (2026-07-18):** Fundament aufgesetzt & real verifiziert (echtes Chromium gegen
-> Prod-Binary + Seed-DB, `2 passed`). Single-Origin-Setup (kein Vite-Proxy): `webServer` baut die
-> Test-Binary, seedet via Go-Subcommand `e2e-seed`, serviert die eingebettete SPA + API auf :18080.
-> `make test-e2e` verdrahtet. Restliche Killer-Cases bauen trivial auf dem laufenden Fundament auf.
+> **Status (2026-07-18):** **Vollständig & real verifiziert** (echtes Chromium gegen Prod-Binary +
+> Seed-DB, `7 passed`). Single-Origin-Setup (kein Vite-Proxy): `webServer` baut die Test-Binary,
+> seedet via Go-Subcommand `e2e-seed`, serviert die eingebettete SPA + API auf :18080.
+> `make test-e2e` verdrahtet, CI-`e2e`-Job parallel zum Gate (PR #161 Fundament, #162 Golden-Paths).
 
 - [x] 7.1 `frontend-e2e-tests` Playwright-Setup: Playwright + Chromium installiert, `web/e2e/` (config/fixtures/tsconfig), `e2e-seed`-Subcommand, `make test-e2e` + `test:e2e`-Script, `.gitignore`, Doku. **Real grün.**
-- [ ] 7.2 Golden-Path-E2E: **Login-Pfad steht** (`auth-login.spec.ts`, Login + Fehlerpfad). Offen: Dashboard → Dienstbörse → Slot claimen → Logout (braucht Duty-Slot-Seed).
-- [ ] 7.3 Golden-Path-E2E: Mitglied bearbeiten (Vorstand), Bank-Daten-Envelope schreiben (kein Klartext) — Zero-Knowledge-Pfad. Offen.
-- [ ] 7.4 Zusätzlich offen (auf dem Fundament): chat-scroll-Killer-Cases (Bild-Decode-Scroll — der ursprüngliche Bug-Vector; braucht Bild-Seed 2.4–2.6), CI-`e2e`-Job. Entscheidung eigener Frontend-Roadmap-Change bleibt offen (Open Question in design.md).
+- [x] 7.2 Golden-Path-E2E: Login (`auth-login.spec.ts`, Login + Fehlerpfad) **+ Dienstbörse** (`duty-golden-path.spec.ts`: Login → Dienste → Slot eintragen/`Austragen` → Abmelden; Duty-Slot-Seed steht). **Real grün.**
+- [x] 7.3 Golden-Path-E2E: Zero-Knowledge-Pfad als **Tresor-Setup-Smoke** (`vault-setup.spec.ts`: RSA-OAEP + PBKDF2 + AES-GCM im echten Browser-WebCrypto). Bewusster Scope: der Bank-Envelope-Schreibpfad ist bereits durch Go- + Vitest-Tests abgedeckt; E2E ergänzt die im Node-WebCrypto **nicht** testbare ausgelieferte Browser-Krypto. **Real grün.**
+- [x] 7.4 chat-scroll-Killer-Cases (`chat-scroll.spec.ts`: Bild-Decode-Scroll — der ursprüngliche Bug-Vector, Unread-Divider, Deep-Link `?openUser`; Bild-Seed steht) + CI-`e2e`-Job. **Real grün.** (Entscheidung „eigener Frontend-Roadmap-Change" bleibt als Open Question in design.md — nicht nötig für diese Wellen.)
 
 ## 8. Nachgelagert (bewusst nach den Wellen)
 
@@ -62,4 +62,4 @@
 
 - [x] 9.1 Rückblick nach jeder Welle erfolgt — Scope wurde mehrfach am realen Code geschärft (W1: attendance-Stats schon abgedeckt; W2: games-Recording schon durch; Nachgelagert: venues-Authz via matrix_test). Adversariale Reviews fingen pro Welle echte Mängel (False-Green W1, geldnahe Gaps W2, Charakterisierungs-Lücken W3, **zwei Broken-Access-Control-Bugs** im Nachgelagert-Teil).
 - [x] 9.2 Roadmap wurde durchgehend explizit fortgeschrieben statt sklavisch abgearbeitet — u.a. Duplikate weggelassen, `regenSingleDay`-Refactor bewusst als eigener Folge-Change (nicht in 8.3 gequetscht), Frontend-E2E bewusst als eigene Session abgegrenzt.
-- [ ] 9.3 Roadmap archivieren — **noch offen**: einziger Rest ist Abschnitt 7 (Frontend-E2E). Archivierung erst, wenn Welle 7 abgeschlossen ODER bewusst verworfen ist.
+- [x] 9.3 Roadmap archiviert — alle Wellen (0–3, Nachgelagert, 7) abgeschlossen und gemergt; Welle 7 real grün (`7 passed`, PR #161/#162). Delta-Spec `test-strategy` in die Haupt-Spec appliziert.

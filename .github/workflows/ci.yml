@@ -70,3 +70,56 @@ jobs:
           TEAMWERK_REQUIRE_XSD: '1'
 
       - run: pnpm -C web lint
+
+  # Läuft PARALLEL zu gate (kein needs). Playwright-Golden-Paths gegen die eingebettete
+  # Prod-SPA + Seed-DB. Der webServer (web/e2e/playwright.config.ts) baut die Test-Binary
+  # via go, seedet e2e.db und serviert auf :18080; alle Env-Vars sind dort inline gesetzt.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm -C web install --frozen-lockfile
+
+      # Chromium-Binary aus dem Cache (Key an das Lockfile / die @playwright/test-Version
+      # gebunden, damit ein Upgrade den Cache invalidiert). Spart ~200 MB ab dem 2. Lauf.
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm -C web exec playwright install-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm -C web exec playwright install --with-deps chromium
+
+      # make test-e2e: pnpm build (vite → cmd/teamwerk/web/dist) → playwright test.
+      - run: make test-e2e
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            web/e2e/playwright-report/
+            web/e2e/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
