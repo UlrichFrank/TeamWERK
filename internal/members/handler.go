@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1648,6 +1649,160 @@ func normalizeDateAt(s string, currentYear int) string {
 	return year + "-" + month + "-" + day
 }
 
+func normalizeGender(s string) string {
+	switch s {
+	case "m":
+		return "m"
+	case "w", "f":
+		return "f"
+	default:
+		return "u"
+	}
+}
+
+// normalizeStatus mappt den Wert der CSV-Spalte "Status TeamWERK" auf einen
+// CHECK-konformen members.status-Wert. Leerer Input ODER unbekannter Wert
+// ergibt "" — der Aufrufer entscheidet (Insert: Default 'aktiv'; Update:
+// addChange überspringt leere CSV-Werte, Status bleibt unverändert).
+func normalizeStatus(s string) string {
+	switch strings.TrimSpace(s) {
+	case "":
+		return ""
+	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter":
+		return s
+	case "gekündigt", "Vereinswechsel":
+		return "ausgetreten"
+	default:
+		return ""
+	}
+}
+
+func normalizeBeitragsfrei(s string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "":
+		return 0, false
+	case "ja":
+		return 1, true
+	default:
+		return 0, true
+	}
+}
+
+func normalizeSepa(s string) int {
+	if strings.TrimSpace(s) == "vorliegend" {
+		return 1
+	}
+	return 0
+}
+
+// parsedCSV is the header/index/rows result of parseImportCSV.
+type parsedCSV struct {
+	header []string
+	colIdx map[string]int
+	rows   [][]string
+}
+
+// col returns the trimmed value of the named column for a row, or "" if the
+// column is absent or the row is too short.
+func (pc *parsedCSV) col(row []string, name string) string {
+	idx, ok := pc.colIdx[name]
+	if !ok || idx >= len(row) {
+		return ""
+	}
+	return strings.TrimSpace(row[idx])
+}
+
+// parseImportCSV strips a UTF-8 BOM, auto-detects the delimiter from the first
+// line, reads the header (building a column index incl. external-tool aliases),
+// enforces the required Vorname/Nachname columns, and reads all rows. The three
+// failure cases return errors with the verbatim 400-Text the handler surfaces.
+func parseImportCSV(raw []byte) (*parsedCSV, error) {
+	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")) // strip UTF-8 BOM
+
+	// Auto-detect delimiter from first line
+	firstNewline := bytes.IndexByte(raw, '\n')
+	firstLineBytes := raw
+	if firstNewline > 0 {
+		firstLineBytes = raw[:firstNewline]
+	}
+	delim := rune(',')
+	if bytes.ContainsRune(firstLineBytes, ';') {
+		delim = ';'
+	}
+
+	cr := csv.NewReader(bytes.NewReader(raw))
+	cr.Comma = delim
+	cr.TrimLeadingSpace = true
+
+	header, err := cr.Read()
+	if err != nil {
+		return nil, errors.New("cannot read CSV header")
+	}
+	// Canonical names for columns that external tools export differently.
+	columnAliases := map[string]string{
+		"Name":          "Nachname",
+		"geboren am":    "Geburtsdatum",
+		"Mitglied seit": "join_date",
+	}
+	colIdx := make(map[string]int, len(header))
+	for i, name := range header {
+		trimmed := strings.TrimSpace(name)
+		colIdx[trimmed] = i
+		if canonical, ok := columnAliases[trimmed]; ok {
+			colIdx[canonical] = i
+		}
+	}
+	if _, ok := colIdx["Vorname"]; !ok {
+		return nil, errors.New("missing required column: Vorname")
+	}
+	if _, ok := colIdx["Nachname"]; !ok {
+		return nil, errors.New("missing required column: Nachname")
+	}
+
+	rows, err := cr.ReadAll()
+	if err != nil {
+		return nil, errors.New("cannot parse CSV")
+	}
+	return &parsedCSV{header: header, colIdx: colIdx, rows: rows}, nil
+}
+
+// csvDupes captures the within-CSV duplicate relations keyed by 1-based line
+// number (header = line 1, first data row = line 2).
+type csvDupes struct {
+	dupOf           map[int]int  // later line → first line
+	firstDupPartner map[int]int  // first line → first later duplicate
+	isDupLine       map[int]bool // line participates in a duplicate group
+}
+
+// detectCSVDuplicates finds rows that repeat the same {lower(Vorname),
+// lower(Nachname), normalizeDate(Geburtsdatum)} key. lineNum = i+2.
+func detectCSVDuplicates(rows [][]string, col func([]string, string) string) csvDupes {
+	type dupKey struct{ first, last, dob string }
+	seenAt := make(map[dupKey]int) // key → first line number
+	dupOf := make(map[int]int)
+	firstDupPartner := make(map[int]int)
+	isDupLine := make(map[int]bool)
+	for i, row := range rows {
+		lineNum := i + 2
+		k := dupKey{
+			first: strings.ToLower(col(row, "Vorname")),
+			last:  strings.ToLower(col(row, "Nachname")),
+			dob:   normalizeDate(col(row, "Geburtsdatum")),
+		}
+		if prev, exists := seenAt[k]; exists {
+			dupOf[lineNum] = prev
+			isDupLine[lineNum] = true
+			isDupLine[prev] = true
+			if _, alreadyHasPartner := firstDupPartner[prev]; !alreadyHasPartner {
+				firstDupPartner[prev] = lineNum
+			}
+		} else {
+			seenAt[k] = lineNum
+		}
+	}
+	return csvDupes{dupOf: dupOf, firstDupPartner: firstDupPartner, isDupLine: isDupLine}
+}
+
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
@@ -1669,6 +1824,299 @@ type ImportReport struct {
 	Errors    int         `json:"errors"`
 	NotFound  int         `json:"not_found"`
 	Rows      []ImportRow `json:"rows"`
+}
+
+// dbMember holds the columns scanned for an existing member during import
+// lookup, in exact scan order.
+type dbMember struct {
+	id                int
+	memberNum         sql.NullString
+	dob               string
+	passNum           sql.NullString
+	jerseyNum         sql.NullInt64
+	position          sql.NullString
+	status            string
+	gender            string
+	userID            sql.NullInt64
+	homeClub          sql.NullString
+	street            string
+	zip               string
+	city              string
+	joinDate          string
+	sepaMandat        int
+	beitragsfrei      int
+	beitragsfreiGrund string
+}
+
+type lookupOutcome int
+
+const (
+	lookupNotFound lookupOutcome = iota
+	lookupFound
+	lookupAmbiguous
+	lookupDBError
+)
+
+// lookupResult is the outcome of lookupExistingMember. It carries no report
+// state; the caller translates the outcome into report rows.
+type lookupResult struct {
+	outcome lookupOutcome
+	member  dbMember
+	message string
+	dbErr   error
+}
+
+// lookupExistingMember resolves a CSV row to an existing member by name (+ dob
+// as tiebreaker when present). It reports ambiguity (enrich without dob, or ≥2
+// same-name members without dob) via lookupAmbiguous with the verbatim German
+// message; a scan error via lookupDBError; no match via lookupNotFound; a hit
+// via lookupFound + member.
+func (h *Handler) lookupExistingMember(ctx context.Context, firstName, lastName, dob, mode string) lookupResult {
+	// Enrich mode without DOB: check for ambiguous name matches before proceeding.
+	if mode == "enrich" && dob == "" {
+		var cnt int
+		h.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`,
+			firstName, lastName).Scan(&cnt)
+		if cnt >= 2 {
+			return lookupResult{
+				outcome: lookupAmbiguous,
+				message: fmt.Sprintf("Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt", cnt),
+			}
+		}
+	}
+
+	// DB lookup by name (+ dob as tiebreaker when present)
+	query := `SELECT id, member_number, COALESCE(date_of_birth,''),
+	                 pass_number, jersey_number, position, status, gender, user_id, home_club,
+	                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
+	                 COALESCE(join_date,''),
+	                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0), COALESCE(beitragsfrei_grund,'')
+	          FROM members
+	          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
+	args := []interface{}{firstName, lastName}
+	if dob != "" {
+		// Standard: exakter Vergleich nur auf den Datumsanteil — date_of_birth
+		// kann reines ISO-Datum ("2007-10-14") ODER ISO-Timestamp
+		// ("2007-10-14T00:00:00Z") sein (SQLite-DATE-Gotcha).
+		dobClause := ` AND substr(COALESCE(date_of_birth,''),1,10)=?`
+		useDobArg := true
+
+		// Fall B: Findet der exakte Abgleich nichts und ist beim Bestands-
+		// mitglied gar kein Geburtsdatum gepflegt, matchen wir in Füll-Modi
+		// ersatzweise über den Namen allein (Geburtsdatum wird per enrich
+		// ergänzt) — aber NUR wenn genau ein gleichnamiges Mitglied ohne
+		// Geburtsdatum existiert (Eindeutigkeits-Schutz), damit keine andere
+		// gleichnamige Person befüllt wird.
+		if mode == "enrich" || mode == "update" {
+			var exactCnt int
+			h.db.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND substr(COALESCE(date_of_birth,''),1,10)=?`,
+				firstName, lastName, dob).Scan(&exactCnt)
+			if exactCnt == 0 {
+				var emptyCnt int
+				h.db.QueryRowContext(ctx,
+					`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND COALESCE(date_of_birth,'')=''`,
+					firstName, lastName).Scan(&emptyCnt)
+				switch {
+				case emptyCnt == 1:
+					dobClause = ` AND COALESCE(date_of_birth,'')=''`
+					useDobArg = false
+				case emptyCnt >= 2:
+					return lookupResult{
+						outcome: lookupAmbiguous,
+						message: fmt.Sprintf("Mehrdeutig (%d gleichnamige ohne Geburtsdatum) – bitte manuell zuordnen", emptyCnt),
+					}
+				}
+			}
+		}
+
+		query += dobClause
+		if useDobArg {
+			args = append(args, dob)
+		}
+	}
+	query += ` LIMIT 1`
+
+	var m dbMember
+	scanErr := h.db.QueryRowContext(ctx, query, args...).
+		Scan(&m.id, &m.memberNum, &m.dob, &m.passNum, &m.jerseyNum, &m.position,
+			&m.status, &m.gender, &m.userID, &m.homeClub,
+			&m.street, &m.zip, &m.city,
+			&m.joinDate, &m.sepaMandat, &m.beitragsfrei, &m.beitragsfreiGrund)
+	if scanErr == sql.ErrNoRows {
+		return lookupResult{outcome: lookupNotFound}
+	}
+	if scanErr != nil {
+		return lookupResult{outcome: lookupDBError, dbErr: scanErr}
+	}
+	return lookupResult{outcome: lookupFound, member: m}
+}
+
+// insertNewMember inserts a member from a CSV row. Status falls back to 'aktiv'
+// only here when the CSV status is empty/unknown. Bank data is never imported
+// via CSV (Zero-Knowledge, Model B) — a present IBAN/Kontoinhaber column only
+// yields the returned ibanWarn hint. On dryRun nothing is written. err is the
+// raw INSERT error (the caller prefixes "Fehler beim Anlegen: ").
+func (h *Handler) insertNewMember(ctx context.Context, pc *parsedCSV, row []string, firstName, lastName, dob string, dryRun bool) (ibanWarn string, err error) {
+	col := pc.col
+	// Status kommt ausschließlich aus "Status TeamWERK"; die alte Spalte
+	// "Status" (Freitext-Begründungen) wird ignoriert.
+	gender := normalizeGender(col(row, "Geschlecht"))
+	status := normalizeStatus(col(row, "Status TeamWERK"))
+	if status == "" {
+		status = "aktiv"
+	}
+	beitragsfreiVal, _ := normalizeBeitragsfrei(col(row, "beitragsfrei"))
+	grundRaw := col(row, "Grund für Beitragsfreiheit")
+	var grundArg any
+	if beitragsfreiVal == 1 && grundRaw != "" {
+		grundArg = grundRaw
+	}
+	jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
+	joinDate := normalizeDate(col(row, "join_date"))
+
+	// Zero-Knowledge (Modell B): Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT
+	// importiert — der Server kann sie nicht verschlüsseln. Sie werden pro Mitglied
+	// im Tresor erfasst. Vorhandene CSV-Bankspalten lösen nur einen Hinweis aus.
+	if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+		ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
+	}
+
+	if !dryRun {
+		_, insErr := h.db.ExecContext(ctx,
+			`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
+			                      pass_number, jersey_number, position, status, gender, home_club,
+			                      street, zip, city, join_date, sepa_mandat,
+			                      beitragsfrei, beitragsfrei_grund)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
+			nullableString(dob), nullableString(col(row, "Passnummer")),
+			jerseyArg, nullableString(col(row, "Position")), status, gender,
+			nullableString(col(row, "Stammverein")),
+			nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
+			nullableString(joinDate),
+			normalizeSepa(col(row, "SEPA Mandat")),
+			beitragsfreiVal, grundArg)
+		if insErr != nil {
+			return ibanWarn, insErr
+		}
+	}
+	return ibanWarn, nil
+}
+
+// memberUpdate is the computed diff for an existing member: the SQL SET clauses
+// + args, the human-readable change list, and an optional bank-data hint. The
+// caller runs the UPDATE and builds the report row.
+type memberUpdate struct {
+	setClauses []string
+	setArgs    []any
+	changes    []string
+	ibanWarn   string
+}
+
+// buildMemberUpdate computes the field-level diff between a CSV row and an
+// existing member (db). enrichOnly never overwrites a populated value. Bank
+// data (IBAN/Kontoinhaber) is never written via CSV — a present column only
+// sets ibanWarn.
+func buildMemberUpdate(pc *parsedCSV, row []string, dob string, enrichOnly bool, fieldAllowed func(string) bool, db dbMember) memberUpdate {
+	col := pc.col
+	var mu memberUpdate
+
+	addChange := func(csvVal, dbVal, label, column string) {
+		if !fieldAllowed(column) {
+			return // Feld nicht in der Auswahl
+		}
+		if csvVal == "" || csvVal == dbVal {
+			return
+		}
+		if enrichOnly && dbVal != "" {
+			return // enrich: never overwrite existing values
+		}
+		mu.setClauses = append(mu.setClauses, column+"=?")
+		mu.setArgs = append(mu.setArgs, csvVal)
+		mu.changes = append(mu.changes, fmt.Sprintf("%s: %q → %q", label, dbVal, csvVal))
+	}
+	addNullableChange := func(csvVal string, dbVal sql.NullString, label, column string) {
+		if !fieldAllowed(column) {
+			return // Feld nicht in der Auswahl
+		}
+		if csvVal == "" || csvVal == dbVal.String {
+			return
+		}
+		if enrichOnly && dbVal.Valid && dbVal.String != "" {
+			return // enrich: never overwrite existing values
+		}
+		mu.setClauses = append(mu.setClauses, column+"=?")
+		mu.setArgs = append(mu.setArgs, csvVal)
+		mu.changes = append(mu.changes, fmt.Sprintf("%s: %q → %q", label, dbVal.String, csvVal))
+	}
+
+	addNullableChange(col(row, "Mitgliedsnummer"), db.memberNum, "Mitgliedsnummer", "member_number")
+	addChange(dob, db.dob, "Geburtsdatum", "date_of_birth")
+	addChange(normalizeGender(col(row, "Geschlecht")), db.gender, "Geschlecht", "gender")
+	addNullableChange(col(row, "Passnummer"), db.passNum, "Passnummer", "pass_number")
+	addNullableChange(col(row, "Position"), db.position, "Position", "position")
+	addChange(normalizeStatus(col(row, "Status TeamWERK")), db.status, "Status", "status")
+	addNullableChange(col(row, "Stammverein"), db.homeClub, "Stammverein", "home_club")
+
+	if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" && fieldAllowed("jersey_number") {
+		dbJerseyStr := ""
+		if db.jerseyNum.Valid {
+			dbJerseyStr = fmt.Sprintf("%d", db.jerseyNum.Int64)
+		}
+		if jerseyRaw != dbJerseyStr && (!enrichOnly || !db.jerseyNum.Valid) {
+			n, _ := parseOptionalInt(jerseyRaw)
+			mu.setClauses = append(mu.setClauses, "jersey_number=?")
+			mu.setArgs = append(mu.setArgs, n)
+			mu.changes = append(mu.changes, fmt.Sprintf("Trikotnummer: %q → %q", dbJerseyStr, jerseyRaw))
+		}
+	}
+
+	// New fields: address, join_date, sepa_mandat. Bankdaten (IBAN/Kontoinhaber)
+	// werden per CSV NICHT importiert (Zero-Knowledge, Modell B — separat im Tresor).
+	joinDate := normalizeDate(col(row, "join_date"))
+	addChange(col(row, "Adresse"), db.street, "Adresse", "street")
+	addChange(col(row, "PLZ"), db.zip, "PLZ", "zip")
+	addChange(col(row, "Ort"), db.city, "Ort", "city")
+	addChange(joinDate, db.joinDate, "Mitglied seit", "join_date")
+
+	if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly && fieldAllowed("sepa_mandat") {
+		sepaVal := normalizeSepa(sepaRaw)
+		if sepaVal != db.sepaMandat {
+			mu.setClauses = append(mu.setClauses, "sepa_mandat=?")
+			mu.setArgs = append(mu.setArgs, sepaVal)
+			mu.changes = append(mu.changes, fmt.Sprintf("SEPA Mandat: %d → %d", db.sepaMandat, sepaVal))
+		}
+	}
+
+	// beitragsfrei kommt ausschließlich aus der gleichnamigen CSV-Spalte.
+	// Enrich-Modus: nur 0 → 1 erlauben, niemals ein bestehendes 1 zurücksetzen
+	// (siehe design.md D6).
+	if bfVal, bfPresent := normalizeBeitragsfrei(col(row, "beitragsfrei")); bfPresent && fieldAllowed("beitragsfrei") {
+		if bfVal != db.beitragsfrei && (!enrichOnly || (db.beitragsfrei == 0 && bfVal == 1)) {
+			mu.setClauses = append(mu.setClauses, "beitragsfrei=?")
+			mu.setArgs = append(mu.setArgs, bfVal)
+			mu.changes = append(mu.changes, fmt.Sprintf("Beitragsfrei: %v → %v", db.beitragsfrei == 1, bfVal == 1))
+		}
+	}
+
+	// Grund für Beitragsfreiheit: Enrich überschreibt belegten Grund nicht.
+	if grundRaw := col(row, "Grund für Beitragsfreiheit"); grundRaw != "" && fieldAllowed("beitragsfrei_grund") {
+		if grundRaw != db.beitragsfreiGrund && (!enrichOnly || db.beitragsfreiGrund == "") {
+			mu.setClauses = append(mu.setClauses, "beitragsfrei_grund=?")
+			mu.setArgs = append(mu.setArgs, grundRaw)
+			mu.changes = append(mu.changes, fmt.Sprintf("Grund für Beitragsfreiheit: %q → %q", db.beitragsfreiGrund, grundRaw))
+		}
+	}
+
+	// Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT aktualisiert; vorhandene
+	// CSV-Bankspalten lösen nur einen Hinweis aus (separat im Tresor erfassen).
+	if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+		mu.ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
+	}
+
+	return mu
 }
 
 // POST /api/members/import
@@ -1725,130 +2173,17 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cannot read file", http.StatusBadRequest)
 		return
 	}
-	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")) // strip UTF-8 BOM
 
-	// Auto-detect delimiter from first line
-	firstNewline := bytes.IndexByte(raw, '\n')
-	firstLineBytes := raw
-	if firstNewline > 0 {
-		firstLineBytes = raw[:firstNewline]
-	}
-	delim := rune(',')
-	if bytes.ContainsRune(firstLineBytes, ';') {
-		delim = ';'
-	}
-
-	cr := csv.NewReader(bytes.NewReader(raw))
-	cr.Comma = delim
-	cr.TrimLeadingSpace = true
-
-	header, err := cr.Read()
+	pc, err := parseImportCSV(raw)
 	if err != nil {
-		http.Error(w, "cannot read CSV header", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Canonical names for columns that external tools export differently.
-	columnAliases := map[string]string{
-		"Name":          "Nachname",
-		"geboren am":    "Geburtsdatum",
-		"Mitglied seit": "join_date",
-	}
-	colIdx := make(map[string]int, len(header))
-	for i, name := range header {
-		trimmed := strings.TrimSpace(name)
-		colIdx[trimmed] = i
-		if canonical, ok := columnAliases[trimmed]; ok {
-			colIdx[canonical] = i
-		}
-	}
-	col := func(row []string, name string) string {
-		idx, ok := colIdx[name]
-		if !ok || idx >= len(row) {
-			return ""
-		}
-		return strings.TrimSpace(row[idx])
-	}
-	normalizeGender := func(s string) string {
-		switch s {
-		case "m":
-			return "m"
-		case "w", "f":
-			return "f"
-		default:
-			return "u"
-		}
-	}
-	// normalizeStatus mappt den Wert der CSV-Spalte "Status TeamWERK" auf einen
-	// CHECK-konformen members.status-Wert. Leerer Input ODER unbekannter Wert
-	// ergibt "" — der Aufrufer entscheidet (Insert: Default 'aktiv'; Update:
-	// addChange überspringt leere CSV-Werte, Status bleibt unverändert).
-	normalizeStatus := func(s string) string {
-		switch strings.TrimSpace(s) {
-		case "":
-			return ""
-		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter":
-			return s
-		case "gekündigt", "Vereinswechsel":
-			return "ausgetreten"
-		default:
-			return ""
-		}
-	}
-	normalizeBeitragsfrei := func(s string) (int, bool) {
-		switch strings.ToLower(strings.TrimSpace(s)) {
-		case "":
-			return 0, false
-		case "ja":
-			return 1, true
-		default:
-			return 0, true
-		}
-	}
-	normalizeSepa := func(s string) int {
-		if strings.TrimSpace(s) == "vorliegend" {
-			return 1
-		}
-		return 0
-	}
-	if _, ok := colIdx["Vorname"]; !ok {
-		http.Error(w, "missing required column: Vorname", http.StatusBadRequest)
-		return
-	}
-	if _, ok := colIdx["Nachname"]; !ok {
-		http.Error(w, "missing required column: Nachname", http.StatusBadRequest)
-		return
-	}
-
-	allRows, err := cr.ReadAll()
-	if err != nil {
-		http.Error(w, "cannot parse CSV", http.StatusBadRequest)
-		return
-	}
+	col := pc.col
+	allRows := pc.rows
 
 	// Duplicate detection within CSV
-	type dupKey struct{ first, last, dob string }
-	seenAt := make(map[dupKey]int)       // key → first line number
-	dupOf := make(map[int]int)           // later line → first line
-	firstDupPartner := make(map[int]int) // first line → first later duplicate
-	isDupLine := make(map[int]bool)
-	for i, row := range allRows {
-		lineNum := i + 2
-		k := dupKey{
-			first: strings.ToLower(col(row, "Vorname")),
-			last:  strings.ToLower(col(row, "Nachname")),
-			dob:   normalizeDate(col(row, "Geburtsdatum")),
-		}
-		if prev, exists := seenAt[k]; exists {
-			dupOf[lineNum] = prev
-			isDupLine[lineNum] = true
-			isDupLine[prev] = true
-			if _, alreadyHasPartner := firstDupPartner[prev]; !alreadyHasPartner {
-				firstDupPartner[prev] = lineNum
-			}
-		} else {
-			seenAt[k] = lineNum
-		}
-	}
+	dupes := detectCSVDuplicates(allRows, col)
 
 	report := ImportReport{Rows: make([]ImportRow, 0, len(allRows))}
 
@@ -1868,12 +2203,12 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if isDupLine[lineNum] {
+		if dupes.isDupLine[lineNum] {
 			var msg string
-			if first, isLater := dupOf[lineNum]; isLater {
+			if first, isLater := dupes.dupOf[lineNum]; isLater {
 				msg = fmt.Sprintf("Mehrfach in CSV (zuerst Zeile %d)", first)
 			} else {
-				msg = fmt.Sprintf("Mehrfach in CSV (auch Zeile %d)", firstDupPartner[lineNum])
+				msg = fmt.Sprintf("Mehrfach in CSV (auch Zeile %d)", dupes.firstDupPartner[lineNum])
 			}
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "error", Name: displayName, Message: msg,
@@ -1882,100 +2217,15 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Enrich mode without DOB: check for ambiguous name matches before proceeding.
-		if mode == "enrich" && dob == "" {
-			var cnt int
-			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`,
-				firstName, lastName).Scan(&cnt)
-			if cnt >= 2 {
-				report.Rows = append(report.Rows, ImportRow{
-					Line:    lineNum,
-					Status:  "error",
-					Name:    displayName,
-					Message: fmt.Sprintf("Mehrdeutig (%d Treffer) – Geburtsdatum in CSV fehlt", cnt),
-				})
-				report.Errors++
-				continue
-			}
+		lr := h.lookupExistingMember(r.Context(), firstName, lastName, dob, mode)
+		if lr.outcome == lookupAmbiguous {
+			report.Rows = append(report.Rows, ImportRow{
+				Line: lineNum, Status: "error", Name: displayName, Message: lr.message,
+			})
+			report.Errors++
+			continue
 		}
-
-		// DB lookup by name (+ dob as tiebreaker when present)
-		query := `SELECT id, member_number, COALESCE(date_of_birth,''),
-		                 pass_number, jersey_number, position, status, gender, user_id, home_club,
-		                 COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''),
-		                 COALESCE(join_date,''),
-		                 COALESCE(sepa_mandat,0), COALESCE(beitragsfrei,0), COALESCE(beitragsfrei_grund,'')
-		          FROM members
-		          WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?)`
-		args := []interface{}{firstName, lastName}
-		if dob != "" {
-			// Standard: exakter Vergleich nur auf den Datumsanteil — date_of_birth
-			// kann reines ISO-Datum ("2007-10-14") ODER ISO-Timestamp
-			// ("2007-10-14T00:00:00Z") sein (SQLite-DATE-Gotcha).
-			dobClause := ` AND substr(COALESCE(date_of_birth,''),1,10)=?`
-			useDobArg := true
-
-			// Fall B: Findet der exakte Abgleich nichts und ist beim Bestands-
-			// mitglied gar kein Geburtsdatum gepflegt, matchen wir in Füll-Modi
-			// ersatzweise über den Namen allein (Geburtsdatum wird per enrich
-			// ergänzt) — aber NUR wenn genau ein gleichnamiges Mitglied ohne
-			// Geburtsdatum existiert (Eindeutigkeits-Schutz), damit keine andere
-			// gleichnamige Person befüllt wird.
-			if mode == "enrich" || mode == "update" {
-				var exactCnt int
-				h.db.QueryRowContext(r.Context(),
-					`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND substr(COALESCE(date_of_birth,''),1,10)=?`,
-					firstName, lastName, dob).Scan(&exactCnt)
-				if exactCnt == 0 {
-					var emptyCnt int
-					h.db.QueryRowContext(r.Context(),
-						`SELECT COUNT(*) FROM members WHERE lower(first_name)=lower(?) AND lower(last_name)=lower(?) AND COALESCE(date_of_birth,'')=''`,
-						firstName, lastName).Scan(&emptyCnt)
-					switch {
-					case emptyCnt == 1:
-						dobClause = ` AND COALESCE(date_of_birth,'')=''`
-						useDobArg = false
-					case emptyCnt >= 2:
-						report.Rows = append(report.Rows, ImportRow{
-							Line:    lineNum,
-							Status:  "error",
-							Name:    displayName,
-							Message: fmt.Sprintf("Mehrdeutig (%d gleichnamige ohne Geburtsdatum) – bitte manuell zuordnen", emptyCnt),
-						})
-						report.Errors++
-						continue
-					}
-				}
-			}
-
-			query += dobClause
-			if useDobArg {
-				args = append(args, dob)
-			}
-		}
-		query += ` LIMIT 1`
-
-		var (
-			existingID                         int
-			dbMemberNum, dbPassNum, dbPosition sql.NullString
-			dbDOB, dbGender, dbStatus          string
-			dbJerseyNum                        sql.NullInt64
-			dbUserID                           sql.NullInt64
-			dbHomeClub                         sql.NullString
-			dbStreet, dbZip, dbCity            string
-			dbJoinDate                         string
-			dbSepaMandat                       int
-			dbBeitragsfrei                     int
-			dbBeitragsfreiGrund                string
-		)
-		scanErr := h.db.QueryRowContext(r.Context(), query, args...).
-			Scan(&existingID, &dbMemberNum, &dbDOB, &dbPassNum, &dbJerseyNum, &dbPosition,
-				&dbStatus, &dbGender, &dbUserID, &dbHomeClub,
-				&dbStreet, &dbZip, &dbCity,
-				&dbJoinDate, &dbSepaMandat, &dbBeitragsfrei, &dbBeitragsfreiGrund)
-
-		if scanErr == sql.ErrNoRows {
+		if lr.outcome == lookupNotFound {
 			if mode == "enrich" {
 				report.Rows = append(report.Rows, ImportRow{
 					Line:   lineNum,
@@ -1986,53 +2236,15 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				report.NotFound++
 				continue
 			}
-			// New member — insert. Status kommt ausschließlich aus "Status TeamWERK";
-			// die alte Spalte "Status" (Freitext-Begründungen) wird ignoriert.
-			gender := normalizeGender(col(row, "Geschlecht"))
-			status := normalizeStatus(col(row, "Status TeamWERK"))
-			if status == "" {
-				status = "aktiv"
-			}
-			beitragsfreiVal, _ := normalizeBeitragsfrei(col(row, "beitragsfrei"))
-			grundRaw := col(row, "Grund für Beitragsfreiheit")
-			var grundArg any
-			if beitragsfreiVal == 1 && grundRaw != "" {
-				grundArg = grundRaw
-			}
-			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
-			joinDate := normalizeDate(col(row, "join_date"))
-
-			// Zero-Knowledge (Modell B): Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT
-			// importiert — der Server kann sie nicht verschlüsseln. Sie werden pro Mitglied
-			// im Tresor erfasst. Vorhandene CSV-Bankspalten lösen nur einen Hinweis aus.
-			var ibanWarn string
-			if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
-				ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
-			}
-
-			if !dryRun {
-				_, insErr := h.db.ExecContext(r.Context(),
-					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
-					                      pass_number, jersey_number, position, status, gender, home_club,
-					                      street, zip, city, join_date, sepa_mandat,
-					                      beitragsfrei, beitragsfrei_grund)
-					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-					nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
-					nullableString(dob), nullableString(col(row, "Passnummer")),
-					jerseyArg, nullableString(col(row, "Position")), status, gender,
-					nullableString(col(row, "Stammverein")),
-					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
-					nullableString(joinDate),
-					normalizeSepa(col(row, "SEPA Mandat")),
-					beitragsfreiVal, grundArg)
-				if insErr != nil {
-					report.Rows = append(report.Rows, ImportRow{
-						Line: lineNum, Status: "error", Name: displayName,
-						Message: "Fehler beim Anlegen: " + insErr.Error(),
-					})
-					report.Errors++
-					continue
-				}
+			// New member — insert.
+			ibanWarn, insErr := h.insertNewMember(r.Context(), pc, row, firstName, lastName, dob, dryRun)
+			if insErr != nil {
+				report.Rows = append(report.Rows, ImportRow{
+					Line: lineNum, Status: "error", Name: displayName,
+					Message: "Fehler beim Anlegen: " + insErr.Error(),
+				})
+				report.Errors++
+				continue
 			}
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "created", Name: displayName, DOB: dob, IBANWarning: ibanWarn,
@@ -2040,16 +2252,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			report.Created++
 			continue
 		}
-		if scanErr != nil {
+		if lr.outcome == lookupDBError {
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "error", Name: displayName,
-				Message: "DB-Fehler: " + scanErr.Error(),
+				Message: "DB-Fehler: " + lr.dbErr.Error(),
 			})
 			report.Errors++
 			continue
 		}
 
-		// Existing member
+		// lr.outcome == lookupFound — existing member
 		if mode == "append" {
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "unchanged", Name: displayName,
@@ -2058,114 +2270,20 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		existingID := lr.member.id
+
 		// mode == "update", "enrich", or legacy preview: apply non-empty changed fields
 		enrichOnly := mode == "enrich"
-		var setClauses []string
-		var setArgs []interface{}
-		var changes []string
-
-		addChange := func(csvVal, dbVal, label, column string) {
-			if !fieldAllowed(column) {
-				return // Feld nicht in der Auswahl
-			}
-			if csvVal == "" || csvVal == dbVal {
-				return
-			}
-			if enrichOnly && dbVal != "" {
-				return // enrich: never overwrite existing values
-			}
-			setClauses = append(setClauses, column+"=?")
-			setArgs = append(setArgs, csvVal)
-			changes = append(changes, fmt.Sprintf("%s: %q → %q", label, dbVal, csvVal))
-		}
-		addNullableChange := func(csvVal string, dbVal sql.NullString, label, column string) {
-			if !fieldAllowed(column) {
-				return // Feld nicht in der Auswahl
-			}
-			if csvVal == "" || csvVal == dbVal.String {
-				return
-			}
-			if enrichOnly && dbVal.Valid && dbVal.String != "" {
-				return // enrich: never overwrite existing values
-			}
-			setClauses = append(setClauses, column+"=?")
-			setArgs = append(setArgs, csvVal)
-			changes = append(changes, fmt.Sprintf("%s: %q → %q", label, dbVal.String, csvVal))
-		}
-
-		addNullableChange(col(row, "Mitgliedsnummer"), dbMemberNum, "Mitgliedsnummer", "member_number")
-		addChange(dob, dbDOB, "Geburtsdatum", "date_of_birth")
-		addChange(normalizeGender(col(row, "Geschlecht")), dbGender, "Geschlecht", "gender")
-		addNullableChange(col(row, "Passnummer"), dbPassNum, "Passnummer", "pass_number")
-		addNullableChange(col(row, "Position"), dbPosition, "Position", "position")
-		addChange(normalizeStatus(col(row, "Status TeamWERK")), dbStatus, "Status", "status")
-		addNullableChange(col(row, "Stammverein"), dbHomeClub, "Stammverein", "home_club")
-
-		if jerseyRaw := col(row, "Trikotnummer"); jerseyRaw != "" && fieldAllowed("jersey_number") {
-			dbJerseyStr := ""
-			if dbJerseyNum.Valid {
-				dbJerseyStr = fmt.Sprintf("%d", dbJerseyNum.Int64)
-			}
-			if jerseyRaw != dbJerseyStr && (!enrichOnly || !dbJerseyNum.Valid) {
-				n, _ := parseOptionalInt(jerseyRaw)
-				setClauses = append(setClauses, "jersey_number=?")
-				setArgs = append(setArgs, n)
-				changes = append(changes, fmt.Sprintf("Trikotnummer: %q → %q", dbJerseyStr, jerseyRaw))
-			}
-		}
-
-		// New fields: address, join_date, sepa_mandat. Bankdaten (IBAN/Kontoinhaber)
-		// werden per CSV NICHT importiert (Zero-Knowledge, Modell B — separat im Tresor).
-		joinDate := normalizeDate(col(row, "join_date"))
-		addChange(col(row, "Adresse"), dbStreet, "Adresse", "street")
-		addChange(col(row, "PLZ"), dbZip, "PLZ", "zip")
-		addChange(col(row, "Ort"), dbCity, "Ort", "city")
-		addChange(joinDate, dbJoinDate, "Mitglied seit", "join_date")
-
-		if sepaRaw := col(row, "SEPA Mandat"); sepaRaw != "" && !enrichOnly && fieldAllowed("sepa_mandat") {
-			sepaVal := normalizeSepa(sepaRaw)
-			if sepaVal != dbSepaMandat {
-				setClauses = append(setClauses, "sepa_mandat=?")
-				setArgs = append(setArgs, sepaVal)
-				changes = append(changes, fmt.Sprintf("SEPA Mandat: %d → %d", dbSepaMandat, sepaVal))
-			}
-		}
-
-		// beitragsfrei kommt ausschließlich aus der gleichnamigen CSV-Spalte.
-		// Enrich-Modus: nur 0 → 1 erlauben, niemals ein bestehendes 1 zurücksetzen
-		// (siehe design.md D6).
-		if bfVal, bfPresent := normalizeBeitragsfrei(col(row, "beitragsfrei")); bfPresent && fieldAllowed("beitragsfrei") {
-			if bfVal != dbBeitragsfrei && (!enrichOnly || (dbBeitragsfrei == 0 && bfVal == 1)) {
-				setClauses = append(setClauses, "beitragsfrei=?")
-				setArgs = append(setArgs, bfVal)
-				changes = append(changes, fmt.Sprintf("Beitragsfrei: %v → %v", dbBeitragsfrei == 1, bfVal == 1))
-			}
-		}
-
-		// Grund für Beitragsfreiheit: Enrich überschreibt belegten Grund nicht.
-		if grundRaw := col(row, "Grund für Beitragsfreiheit"); grundRaw != "" && fieldAllowed("beitragsfrei_grund") {
-			if grundRaw != dbBeitragsfreiGrund && (!enrichOnly || dbBeitragsfreiGrund == "") {
-				setClauses = append(setClauses, "beitragsfrei_grund=?")
-				setArgs = append(setArgs, grundRaw)
-				changes = append(changes, fmt.Sprintf("Grund für Beitragsfreiheit: %q → %q", dbBeitragsfreiGrund, grundRaw))
-			}
-		}
-
-		// Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT aktualisiert; vorhandene
-		// CSV-Bankspalten lösen nur einen Hinweis aus (separat im Tresor erfassen).
-		var ibanWarn string
-		if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
-			ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
-		}
+		mu := buildMemberUpdate(pc, row, dob, enrichOnly, fieldAllowed, lr.member)
 
 		// Mitglieder-Auswahl: außerhalb des Dry-Runs nur ausgewählte Zeilen anwenden.
 		selected := applyLines == nil || applyLines[lineNum]
 
-		if len(setClauses) > 0 && !dryRun && selected {
-			setArgs = append(setArgs, existingID)
+		if len(mu.setClauses) > 0 && !dryRun && selected {
+			mu.setArgs = append(mu.setArgs, existingID)
 			_, updErr := h.db.ExecContext(r.Context(),
-				"UPDATE members SET "+strings.Join(setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
-				setArgs...)
+				"UPDATE members SET "+strings.Join(mu.setClauses, ", ")+", updated_at=CURRENT_TIMESTAMP WHERE id=?",
+				mu.setArgs...)
 			if updErr != nil {
 				report.Rows = append(report.Rows, ImportRow{
 					Line: lineNum, Status: "error", Name: displayName,
@@ -2176,16 +2294,16 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		hasChanges := len(changes) > 0 || ibanWarn != ""
+		hasChanges := len(mu.changes) > 0 || mu.ibanWarn != ""
 		switch {
 		case hasChanges && (dryRun || selected):
 			report.Rows = append(report.Rows, ImportRow{
-				Line: lineNum, Status: "updated", Name: displayName, Changes: changes, IBANWarning: ibanWarn,
+				Line: lineNum, Status: "updated", Name: displayName, Changes: mu.changes, IBANWarning: mu.ibanWarn,
 			})
 			report.Updated++
 		case hasChanges: // !dryRun && !selected: bewusst abgewählt
 			report.Rows = append(report.Rows, ImportRow{
-				Line: lineNum, Status: "skipped", Name: displayName, Changes: changes, IBANWarning: ibanWarn,
+				Line: lineNum, Status: "skipped", Name: displayName, Changes: mu.changes, IBANWarning: mu.ibanWarn,
 			})
 			report.Skipped++
 		default:
