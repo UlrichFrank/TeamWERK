@@ -471,10 +471,16 @@ func TestConfirm_ProtokollOhneIBAN(t *testing.T) {
 		t.Fatalf("confirm status %d, want 200", res.StatusCode)
 	}
 	content := readProtokoll(t, dir)
+	// Struktur-Tripwire (kein echter Security-Test): die eigentliche Garantie ist
+	// Modell B (Server hält keinen Entschlüsselungsschlüssel) + `ProtokollResult` ohne
+	// IBAN-Feld (protokoll.go). Dieser Runtime-Check kann unter erreichbarem Handler-
+	// Verhalten nicht rot werden — er dokumentiert die Absicht und fängt nur eine grobe
+	// künftige Regression (jemand hängt Bankdaten an das Protokoll).
 	if strings.Contains(content, validIBAN) || strings.Contains(content, "DE89") {
 		t.Errorf("Protokoll enthält IBAN (darf nie passieren):\n%s", content)
 	}
-	// Positive Format-Prüfung: die erlaubten Felder stehen drin.
+	// Die eigentlichen Zähne dieses Tests: das Protokoll-Format enthält genau die
+	// erlaubten Felder (Mitgliedsnummer + Betrag).
 	if !strings.Contains(content, "Mitgl.-Nr 1042") || !strings.Contains(content, "96,00") {
 		t.Errorf("Protokoll fehlen erwartete Felder:\n%s", content)
 	}
@@ -505,6 +511,10 @@ func TestConfirm_MixedSuccessFailure(t *testing.T) {
 	if cr.Erfolgreich != 1 || cr.NichtErfolgreich != 1 {
 		t.Errorf("confirm-JSON: %+v, want erfolgreich=1 nicht_erfolgreich=1", cr)
 	}
+	// Money-kritisch: der fehlgeschlagene Einzug darf NICHT in die bestätigte Summe fließen.
+	if cr.SummeErfolgreichCent != 9600 {
+		t.Errorf("summe_erfolgreich_cent=%d, want 9600 (Fehlschlag darf nicht mitzählen)", cr.SummeErfolgreichCent)
+	}
 	content := readProtokoll(t, dir)
 	if !strings.Contains(content, "Erfolgreich (1)") || !strings.Contains(content, "Nicht erfolgreich (1)") {
 		t.Errorf("Protokoll fehlen Erfolgs-/Fehlblock:\n%s", content)
@@ -534,7 +544,7 @@ func TestConfirm_AppendOnly_ZweiLaeufe(t *testing.T) {
 }
 
 func TestConfirm_UnbekannteSaison404(t *testing.T) {
-	srv, db, _ := setupSrv(t)
+	srv, db, dir := setupSrv(t)
 	id := insertMember(t, db, "Max", defaultMember())
 	res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
 		"saison_id": 99999,
@@ -543,6 +553,10 @@ func TestConfirm_UnbekannteSaison404(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusNotFound {
 		t.Errorf("status %d, want 404", res.StatusCode)
+	}
+	// Invariante (spec): bei unbekannter Saison darf KEIN Protokoll entstehen.
+	if files, _ := filepath.Glob(filepath.Join(dir, "beitragslauf_*.txt")); len(files) != 0 {
+		t.Errorf("kein Protokoll darf bei unbekannter Saison entstehen, got %v", files)
 	}
 }
 
