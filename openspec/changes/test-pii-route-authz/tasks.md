@@ -46,12 +46,12 @@
 
 ## 5. absences — Sichtbarkeit & Mutation (`internal/absences/handler_test.go`)
 
-- [ ] 5.1 `TestCalendar_ShowTeam_MemberSeesNoTeamAbsences` — einfaches Mitglied mit `?show_team=true` → keine fremden Team-Abwesenheiten
-- [ ] 5.2 `TestCalendar_ShowTeam_VorstandSeesTeam` — vorstand/trainer-like → Team-Abwesenheiten sichtbar
-- [ ] 5.3 `TestUpdate_ForeignForbidden` — `PUT /api/absences/{id}` durch Fremden → 403
-- [ ] 5.4 `TestDelete_ForeignForbidden` — `DELETE /api/absences/{id}` durch Fremden → 403; Eintrag bleibt
-- [ ] 5.5 `TestList_NoForeignAbsences` — `GET /api/absences` gibt keine fremden Abwesenheiten zurück
-- [ ] 5.6 Commit: `test(absences): Calendar-show_team-Scoping + Update/Delete/List-Authz`
+- [x] 5.1 `TestCalendar_ShowTeam_MemberSeesNoTeamAbsences` — einfaches Mitglied mit `?show_team=true` → keine fremden Team-Abwesenheiten
+- [x] 5.2 `TestCalendar_ShowTeam_VorstandSeesTeam` — vorstand/trainer-like → Team-Abwesenheiten sichtbar
+- [x] 5.3 `TestUpdate_ForeignForbidden` — `PUT /api/absences/{id}` durch Fremden → 403
+- [x] 5.4 `TestDelete_ForeignForbidden` — `DELETE /api/absences/{id}` durch Fremden → 403; Eintrag bleibt
+- [x] 5.5 `TestList_NoForeignAbsences` — `GET /api/absences` gibt keine fremden Abwesenheiten zurück
+- [x] 5.6 Commit: `test(absences): Calendar-show_team-Scoping + Update/Delete/List-Authz`
 
 ## 6. Abschluss
 

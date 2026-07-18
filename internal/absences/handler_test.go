@@ -310,3 +310,156 @@ func TestPreview_Empty(t *testing.T) {
 		t.Errorf("expected 0 events for empty range, got %d", len(events))
 	}
 }
+
+// ── Sichtbarkeit & Mutation: Owner/Staff-Scoping ─────────────────────────────
+
+func absenceRWServer(t *testing.T, db *sql.DB) *httptest.Server {
+	t.Helper()
+	h := absences.NewHandler(db, hub.NewHub())
+	return testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/absences", h.List)
+		r.Get("/api/absences/calendar", h.Calendar)
+		r.Put("/api/absences/{id}", h.Update)
+		r.Delete("/api/absences/{id}", h.Delete)
+	})
+}
+
+func decodeAbsenceMemberIDs(t *testing.T, res *http.Response) []int {
+	t.Helper()
+	var items []map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&items); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	res.Body.Close()
+	ids := make([]int, 0, len(items))
+	for _, it := range items {
+		if v, ok := it["member_id"].(float64); ok {
+			ids = append(ids, int(v))
+		}
+	}
+	return ids
+}
+
+// TestCalendar_ShowTeam_MemberSeesNoTeamAbsences nagelt die Leak-Prävention fest: ein
+// einfaches Mitglied (weder vorstand/trainer noch admin) sieht mit ?show_team=true KEINE
+// fremden Team-Abwesenheiten — der Team-Block wird durch das canSeeTeam-Gate übersprungen.
+func TestCalendar_ShowTeam_MemberSeesNoTeamAbsences(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	requesterUserID := testutil.CreateUser(t, db, "standard")
+
+	foreignMemberID := testutil.CreateMember(t, db, 0)
+	testutil.AddKaderMember(t, db, kaderID, foreignMemberID)
+	db.Exec(`UPDATE members SET absences_public=1 WHERE id=?`, foreignMemberID)
+	testutil.CreateAbsence(t, db, foreignMemberID, "vacation", "2026-03-01", "2026-03-05", testutil.CreateUser(t, db, "standard"))
+
+	srv := absenceRWServer(t, db)
+	tok := testutil.Token(t, requesterUserID, "standard", nil)
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/absences/calendar?from=2026-03-01&to=2026-03-31&show_team=true&team_id=%d", teamID), tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	ids := decodeAbsenceMemberIDs(t, res)
+	for _, id := range ids {
+		if id == foreignMemberID {
+			t.Fatalf("plain member must not see foreign team absence (member %d leaked)", foreignMemberID)
+		}
+	}
+}
+
+// TestCalendar_ShowTeam_VorstandSeesTeam ist der Gegenpol: ein vorstand mit Kader-Zugang
+// (user_accessible_teams) sieht die öffentliche Team-Abwesenheit.
+func TestCalendar_ShowTeam_VorstandSeesTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	// vorstand user must be in user_accessible_teams for this team → via kader_trainers
+	vorstandUserID := testutil.CreateUser(t, db, "standard")
+	vorstandMemberID := testutil.CreateMember(t, db, vorstandUserID)
+	testutil.AddKaderTrainer(t, db, kaderID, vorstandMemberID)
+
+	foreignMemberID := testutil.CreateMember(t, db, 0)
+	testutil.AddKaderMember(t, db, kaderID, foreignMemberID)
+	db.Exec(`UPDATE members SET absences_public=1 WHERE id=?`, foreignMemberID)
+	testutil.CreateAbsence(t, db, foreignMemberID, "vacation", "2026-03-01", "2026-03-05", testutil.CreateUser(t, db, "standard"))
+
+	srv := absenceRWServer(t, db)
+	tok := testutil.Token(t, vorstandUserID, "standard", []string{"vorstand"})
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/absences/calendar?from=2026-03-01&to=2026-03-31&show_team=true&team_id=%d", teamID), tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	ids := decodeAbsenceMemberIDs(t, res)
+	found := false
+	for _, id := range ids {
+		if id == foreignMemberID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("vorstand with kader access must see public team absence of member %d", foreignMemberID)
+	}
+}
+
+func TestUpdate_ForeignForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	ownerUserID := testutil.CreateUser(t, db, "standard")
+	ownerMemberID := testutil.CreateMember(t, db, ownerUserID)
+	absID := testutil.CreateAbsence(t, db, ownerMemberID, "vacation", "2026-03-01", "2026-03-05", ownerUserID)
+
+	strangerUserID := testutil.CreateUser(t, db, "standard")
+
+	srv := absenceRWServer(t, db)
+	tok := testutil.Token(t, strangerUserID, "standard", nil)
+	res := testutil.Put(t, srv, fmt.Sprintf("/api/absences/%d", absID), tok,
+		map[string]any{"type": "vacation", "start_date": "2026-03-02", "end_date": "2026-03-06"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 updating foreign absence, got %d", res.StatusCode)
+	}
+}
+
+func TestDelete_ForeignForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	ownerUserID := testutil.CreateUser(t, db, "standard")
+	ownerMemberID := testutil.CreateMember(t, db, ownerUserID)
+	absID := testutil.CreateAbsence(t, db, ownerMemberID, "vacation", "2026-03-01", "2026-03-05", ownerUserID)
+
+	strangerUserID := testutil.CreateUser(t, db, "standard")
+
+	srv := absenceRWServer(t, db)
+	tok := testutil.Token(t, strangerUserID, "standard", nil)
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/absences/%d", absID), tok)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 deleting foreign absence, got %d", res.StatusCode)
+	}
+	if got := countAbsences(t, db, ownerMemberID); got != 1 {
+		t.Errorf("foreign absence must remain, count=%d", got)
+	}
+}
+
+func TestList_NoForeignAbsences(t *testing.T) {
+	db := testutil.NewDB(t)
+	ownerUserID := testutil.CreateUser(t, db, "standard")
+	ownerMemberID := testutil.CreateMember(t, db, ownerUserID)
+	testutil.CreateAbsence(t, db, ownerMemberID, "vacation", "2026-03-01", "2026-03-05", ownerUserID)
+
+	strangerUserID := testutil.CreateUser(t, db, "standard")
+
+	srv := absenceRWServer(t, db)
+	tok := testutil.Token(t, strangerUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/absences", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	ids := decodeAbsenceMemberIDs(t, res)
+	if len(ids) != 0 {
+		t.Errorf("stranger must not see any foreign absences, got member_ids %v", ids)
+	}
+}
