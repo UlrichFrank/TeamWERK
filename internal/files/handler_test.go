@@ -453,6 +453,11 @@ func TestDeletePermission_NoWriteForbidden(t *testing.T) {
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("expected 403 deleting permission without can_write, got %d", res.StatusCode)
 	}
+	var pc int
+	db.QueryRow(`SELECT COUNT(*) FROM folder_permissions WHERE id=?`, permID).Scan(&pc)
+	if pc != 1 {
+		t.Error("permission row must survive a forbidden delete")
+	}
 }
 
 func TestDownloadToken_NoReadForbidden(t *testing.T) {

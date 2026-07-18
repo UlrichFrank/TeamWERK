@@ -350,6 +350,12 @@ func TestCalendar_ShowTeam_MemberSeesNoTeamAbsences(t *testing.T) {
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 
 	requesterUserID := testutil.CreateUser(t, db, "standard")
+	// Requester IS a kader player of teamID → user_accessible_teams grants the team, so the
+	// team query's inner filter passes. Only the canSeeTeam role gate must hide the foreign
+	// absence. Without this, an empty result would be over-determined (requester lacks team
+	// access anyway) and the test would pass even with the gate removed.
+	requesterMemberID := testutil.CreateMember(t, db, requesterUserID)
+	testutil.AddKaderMember(t, db, kaderID, requesterMemberID)
 
 	foreignMemberID := testutil.CreateMember(t, db, 0)
 	testutil.AddKaderMember(t, db, kaderID, foreignMemberID)
@@ -422,6 +428,12 @@ func TestUpdate_ForeignForbidden(t *testing.T) {
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("expected 403 updating foreign absence, got %d", res.StatusCode)
 	}
+	// Side-effect guard: the row must be untouched (403 in response ≠ mutated in DB).
+	var start string
+	db.QueryRow(`SELECT start_date FROM member_absences WHERE id=?`, absID).Scan(&start)
+	if start[:10] != "2026-03-01" {
+		t.Errorf("foreign PUT must not mutate the row; start_date=%s", start)
+	}
 }
 
 func TestDelete_ForeignForbidden(t *testing.T) {
@@ -450,7 +462,11 @@ func TestList_NoForeignAbsences(t *testing.T) {
 	ownerMemberID := testutil.CreateMember(t, db, ownerUserID)
 	testutil.CreateAbsence(t, db, ownerMemberID, "vacation", "2026-03-01", "2026-03-05", ownerUserID)
 
+	// Stranger has their OWN member + absence, so an empty result would not prove scoping —
+	// we assert the stranger sees only their own and NOT the owner's absence.
 	strangerUserID := testutil.CreateUser(t, db, "standard")
+	strangerMemberID := testutil.CreateMember(t, db, strangerUserID)
+	testutil.CreateAbsence(t, db, strangerMemberID, "vacation", "2026-04-01", "2026-04-03", strangerUserID)
 
 	srv := absenceRWServer(t, db)
 	tok := testutil.Token(t, strangerUserID, "standard", nil)
@@ -459,7 +475,12 @@ func TestList_NoForeignAbsences(t *testing.T) {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
 	ids := decodeAbsenceMemberIDs(t, res)
-	if len(ids) != 0 {
-		t.Errorf("stranger must not see any foreign absences, got member_ids %v", ids)
+	for _, id := range ids {
+		if id == ownerMemberID {
+			t.Errorf("stranger must not see owner's absence (member %d leaked)", ownerMemberID)
+		}
+	}
+	if len(ids) != 1 || ids[0] != strangerMemberID {
+		t.Errorf("stranger should see only their own absence, got member_ids %v", ids)
 	}
 }

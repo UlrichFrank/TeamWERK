@@ -2022,6 +2022,36 @@ func TestClaim_MatchReportSlot_ProxyParentForbidden(t *testing.T) {
 	}
 }
 
+// TestClaim_MatchReportSlot_ProxyPressParentOK ist die Positiv-Kontrolle zu
+// _ProxyParentForbidden: bei gültigem Family-Link claimt ein presseteam-Elternteil den
+// Spielbericht-Slot fürs Kind erfolgreich (204). Beweist, dass der 403 im Forbidden-Fall vom
+// Rollen-Guard kommt und nicht vom Family-Check davor.
+func TestClaim_MatchReportSlot_ProxyPressParentOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, slotID := matchReportSlot(t, db)
+
+	parentUserID := testutil.CreateUser(t, db, "presseteam")
+	childUserID := testutil.CreateUser(t, db, "standard")
+	db.Exec(`UPDATE users SET can_login=0 WHERE id=?`, childUserID)
+	childMemberID := testutil.CreateMember(t, db, childUserID)
+	if _, err := db.Exec(
+		`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`,
+		parentUserID, childMemberID); err != nil {
+		t.Fatalf("insert family_links: %v", err)
+	}
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, parentUserID, "presseteam", nil)
+	res := testutil.Post(t, srv, "/api/duty-board/"+itoa(slotID)+"/claim", token,
+		map[string]any{"user_id": childUserID})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 (press parent, valid family link), got %d", res.StatusCode)
+	}
+}
+
 func TestClaim_NonMatchReportSlot_Unaffected(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
