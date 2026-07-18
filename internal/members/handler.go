@@ -1953,6 +1953,58 @@ func (h *Handler) lookupExistingMember(ctx context.Context, firstName, lastName,
 	return lookupResult{outcome: lookupFound, member: m}
 }
 
+// insertNewMember inserts a member from a CSV row. Status falls back to 'aktiv'
+// only here when the CSV status is empty/unknown. Bank data is never imported
+// via CSV (Zero-Knowledge, Model B) — a present IBAN/Kontoinhaber column only
+// yields the returned ibanWarn hint. On dryRun nothing is written. err is the
+// raw INSERT error (the caller prefixes "Fehler beim Anlegen: ").
+func (h *Handler) insertNewMember(ctx context.Context, pc *parsedCSV, row []string, firstName, lastName, dob string, dryRun bool) (ibanWarn string, err error) {
+	col := pc.col
+	// Status kommt ausschließlich aus "Status TeamWERK"; die alte Spalte
+	// "Status" (Freitext-Begründungen) wird ignoriert.
+	gender := normalizeGender(col(row, "Geschlecht"))
+	status := normalizeStatus(col(row, "Status TeamWERK"))
+	if status == "" {
+		status = "aktiv"
+	}
+	beitragsfreiVal, _ := normalizeBeitragsfrei(col(row, "beitragsfrei"))
+	grundRaw := col(row, "Grund für Beitragsfreiheit")
+	var grundArg any
+	if beitragsfreiVal == 1 && grundRaw != "" {
+		grundArg = grundRaw
+	}
+	jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
+	joinDate := normalizeDate(col(row, "join_date"))
+
+	// Zero-Knowledge (Modell B): Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT
+	// importiert — der Server kann sie nicht verschlüsseln. Sie werden pro Mitglied
+	// im Tresor erfasst. Vorhandene CSV-Bankspalten lösen nur einen Hinweis aus.
+	if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
+		ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
+	}
+
+	if !dryRun {
+		_, insErr := h.db.ExecContext(ctx,
+			`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
+			                      pass_number, jersey_number, position, status, gender, home_club,
+			                      street, zip, city, join_date, sepa_mandat,
+			                      beitragsfrei, beitragsfrei_grund)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
+			nullableString(dob), nullableString(col(row, "Passnummer")),
+			jerseyArg, nullableString(col(row, "Position")), status, gender,
+			nullableString(col(row, "Stammverein")),
+			nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
+			nullableString(joinDate),
+			normalizeSepa(col(row, "SEPA Mandat")),
+			beitragsfreiVal, grundArg)
+		if insErr != nil {
+			return ibanWarn, insErr
+		}
+	}
+	return ibanWarn, nil
+}
+
 // POST /api/members/import
 func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -2070,53 +2122,15 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				report.NotFound++
 				continue
 			}
-			// New member — insert. Status kommt ausschließlich aus "Status TeamWERK";
-			// die alte Spalte "Status" (Freitext-Begründungen) wird ignoriert.
-			gender := normalizeGender(col(row, "Geschlecht"))
-			status := normalizeStatus(col(row, "Status TeamWERK"))
-			if status == "" {
-				status = "aktiv"
-			}
-			beitragsfreiVal, _ := normalizeBeitragsfrei(col(row, "beitragsfrei"))
-			grundRaw := col(row, "Grund für Beitragsfreiheit")
-			var grundArg any
-			if beitragsfreiVal == 1 && grundRaw != "" {
-				grundArg = grundRaw
-			}
-			jerseyArg, _ := parseOptionalInt(col(row, "Trikotnummer"))
-			joinDate := normalizeDate(col(row, "join_date"))
-
-			// Zero-Knowledge (Modell B): Bankdaten (IBAN/Kontoinhaber) werden per CSV NICHT
-			// importiert — der Server kann sie nicht verschlüsseln. Sie werden pro Mitglied
-			// im Tresor erfasst. Vorhandene CSV-Bankspalten lösen nur einen Hinweis aus.
-			var ibanWarn string
-			if col(row, "IBAN") != "" || col(row, "Kontoinhaber") != "" {
-				ibanWarn = "Bankdaten werden per CSV nicht importiert — separat im Bankdaten-Tab erfassen"
-			}
-
-			if !dryRun {
-				_, insErr := h.db.ExecContext(r.Context(),
-					`INSERT INTO members (member_number, first_name, last_name, date_of_birth,
-					                      pass_number, jersey_number, position, status, gender, home_club,
-					                      street, zip, city, join_date, sepa_mandat,
-					                      beitragsfrei, beitragsfrei_grund)
-					 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-					nullableString(col(row, "Mitgliedsnummer")), firstName, lastName,
-					nullableString(dob), nullableString(col(row, "Passnummer")),
-					jerseyArg, nullableString(col(row, "Position")), status, gender,
-					nullableString(col(row, "Stammverein")),
-					nullableString(col(row, "Adresse")), nullableString(col(row, "PLZ")), nullableString(col(row, "Ort")),
-					nullableString(joinDate),
-					normalizeSepa(col(row, "SEPA Mandat")),
-					beitragsfreiVal, grundArg)
-				if insErr != nil {
-					report.Rows = append(report.Rows, ImportRow{
-						Line: lineNum, Status: "error", Name: displayName,
-						Message: "Fehler beim Anlegen: " + insErr.Error(),
-					})
-					report.Errors++
-					continue
-				}
+			// New member — insert.
+			ibanWarn, insErr := h.insertNewMember(r.Context(), pc, row, firstName, lastName, dob, dryRun)
+			if insErr != nil {
+				report.Rows = append(report.Rows, ImportRow{
+					Line: lineNum, Status: "error", Name: displayName,
+					Message: "Fehler beim Anlegen: " + insErr.Error(),
+				})
+				report.Errors++
+				continue
 			}
 			report.Rows = append(report.Rows, ImportRow{
 				Line: lineNum, Status: "created", Name: displayName, DOB: dob, IBANWarning: ibanWarn,
