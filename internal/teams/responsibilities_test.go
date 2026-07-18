@@ -39,27 +39,38 @@ func respRoutes(h *teams.Handler) func(chi.Router) {
 // des Spielers mit der gegebenen memberId (aus players + extended_players).
 func rosterPlayerLabels(t *testing.T, body []byte, memberID int) []string {
 	t.Helper()
+	type respEntry struct {
+		ID    int    `json:"id"`
+		Label string `json:"label"`
+	}
 	var resp struct {
 		Players []struct {
-			MemberID         int      `json:"memberId"`
-			Responsibilities []string `json:"responsibilities"`
+			MemberID         int         `json:"memberId"`
+			Responsibilities []respEntry `json:"responsibilities"`
 		} `json:"players"`
 		ExtendedPlayers []struct {
-			MemberID         int      `json:"memberId"`
-			Responsibilities []string `json:"responsibilities"`
+			MemberID         int         `json:"memberId"`
+			Responsibilities []respEntry `json:"responsibilities"`
 		} `json:"extended_players"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatalf("decode roster: %v", err)
 	}
+	collect := func(items []respEntry) []string {
+		labels := []string{}
+		for _, it := range items {
+			labels = append(labels, it.Label)
+		}
+		return labels
+	}
 	for _, p := range resp.Players {
 		if p.MemberID == memberID {
-			return p.Responsibilities
+			return collect(p.Responsibilities)
 		}
 	}
 	for _, p := range resp.ExtendedPlayers {
 		if p.MemberID == memberID {
-			return p.Responsibilities
+			return collect(p.Responsibilities)
 		}
 	}
 	return nil

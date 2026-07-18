@@ -33,11 +33,11 @@ type TrainerEntry struct {
 }
 
 type PlayerEntry struct {
-	UserID           int      `json:"userId"`
-	MemberID         int      `json:"memberId"`
-	Name             string   `json:"name"`
-	JerseyNumber     *int     `json:"jerseyNumber"`
-	Responsibilities []string `json:"responsibilities"`
+	UserID           int                        `json:"userId"`
+	MemberID         int                        `json:"memberId"`
+	Name             string                     `json:"name"`
+	JerseyNumber     *int                       `json:"jerseyNumber"`
+	Responsibilities []ResponsibilityAssignment `json:"responsibilities"`
 }
 
 type ParentEntry struct {

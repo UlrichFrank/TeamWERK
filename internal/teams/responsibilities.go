@@ -25,29 +25,38 @@ type ResponsibilityType struct {
 	Label string `json:"label"`
 }
 
-// responsibilitiesFor liefert die Aufgaben-Labels eines Members, gescoped auf die
-// Kader dieses Teams in der angegebenen (aktiven) Saison, alphabetisch sortiert.
+// ResponsibilityAssignment ist eine einem Member zugewiesene Aufgabe. Die id wird
+// mitgeliefert, damit der Trainer eine Zuweisung direkt vom Roster-Chip entfernen
+// kann (DELETE /responsibilities/{respId}) — auch für Bestandszuweisungen nach
+// Reload. Die id ist opak/unkritisch und darf auch in der Eltern-Sicht erscheinen.
+type ResponsibilityAssignment struct {
+	ID    int    `json:"id"`
+	Label string `json:"label"`
+}
+
+// responsibilitiesFor liefert die Aufgaben eines Members, gescoped auf die Kader
+// dieses Teams in der angegebenen (aktiven) Saison, alphabetisch nach Label.
 // Liefert nie nil — für die Roster-JSON-Invariante (responsibilities != null).
-func (h *Handler) responsibilitiesFor(ctx context.Context, teamID, seasonID, memberID int) []string {
-	labels := []string{}
+func (h *Handler) responsibilitiesFor(ctx context.Context, teamID, seasonID, memberID int) []ResponsibilityAssignment {
+	items := []ResponsibilityAssignment{}
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT mr.label
+		SELECT mr.id, mr.label
 		FROM member_responsibilities mr
 		JOIN kader k ON k.id = mr.kader_id
 		WHERE mr.member_id = ? AND k.team_id = ? AND k.season_id = ?
 		ORDER BY mr.label`, memberID, teamID, seasonID)
 	if err != nil {
-		return labels
+		return items
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var l string
-		if err := rows.Scan(&l); err != nil {
+		var it ResponsibilityAssignment
+		if err := rows.Scan(&it.ID, &it.Label); err != nil {
 			continue
 		}
-		labels = append(labels, l)
+		items = append(items, it)
 	}
-	return labels
+	return items
 }
 
 // ListResponsibilityTypes — GET /api/teams/{id}/responsibility-types.
