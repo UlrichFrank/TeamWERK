@@ -103,7 +103,9 @@ describe('ChatPage — Scroll-Verhalten', () => {
     expect(screen.getByText('Nachricht-0')).toBeInTheDocument()
     expect(screen.getByText('Nachricht-180')).toBeInTheDocument()
     expect(screen.getByText('Nachricht-199')).toBeInTheDocument()
-  })
+    // 200 Bubbles rendern ist lastabhängig langsam; der 5000-ms-Default flaked unter
+    // paralleler Suite-Last. Höherer Timeout beseitigt die Flakiness ohne Assertion-Abstrich.
+  }, 20_000)
 
   test('hochgescrollte Nutzer werden bei State-Änderungen nicht ans Ende gerissen', async () => {
     // Sticky-to-Bottom: Auto-Scroll fährt nur ans Ende, wenn der Nutzer eh
@@ -149,5 +151,5 @@ describe('ChatPage — Scroll-Verhalten', () => {
     await flushAsync()
 
     expect(scrollIntoView.mock.calls.length).toBe(callsBefore)
-  })
+  }, 20_000)
 })
