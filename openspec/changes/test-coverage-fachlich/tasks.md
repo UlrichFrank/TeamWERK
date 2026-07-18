@@ -28,26 +28,26 @@
 
 ## 3. duties-Tests (internal/duties/handler_test.go)
 
-- [ ] 3.1 Testserver-Setup: `newDutiesServer(t, db)` mit Claim/Unclaim/Board/Slot-Routen
-- [ ] 3.2 TC-D01: `TestClaim_FreeSlot` — slots_filled++, duty_accounts-Eintrag angelegt
-- [ ] 3.3 TC-D02: `TestClaim_FullSlot` — HTTP 409
-- [ ] 3.4 TC-D03: `TestClaim_Duplicate` — HTTP 409 (UNIQUE-Verletzung)
-- [ ] 3.5 TC-D04: `TestUnclaim_Pending` — Assignment gelöscht, slots_filled--
-- [ ] 3.6 TC-D05: `TestUnclaim_Fulfilled` — HTTP 409
-- [ ] 3.7 TC-D06: `TestUnclaim_NotFound` — HTTP 404
-- [ ] 3.8 TC-D07: `TestClaim_ForProxyChild` — Elternteil claimt für Kind mit can_login=0
-- [ ] 3.9 TC-D08: `TestClaim_ForeignUserForbidden` — HTTP 403
-- [ ] 3.10 TC-D09: `TestBoard_AdminSeesAll` — alle Slots in aktiver Saison
-- [ ] 3.11 TC-D10: `TestBoard_UserSeesOwnTeam` — nur eigene Team-Slots
-- [ ] 3.12 TC-D11: `TestBoard_AudienceElternVisible` — eltern-Slot für Elternteil sichtbar
-- [ ] 3.13 TC-D12: `TestBoard_AudienceElternHidden` — eltern-Slot für User ohne Kinder unsichtbar
-- [ ] 3.14 TC-D13: `TestBoard_TrainerBypassesAudience` — Trainer sieht eltern-Slot
-- [ ] 3.15 TC-D14: `TestBoard_ViewMine` — nur eigene geclaimten Slots
-- [ ] 3.16 TC-D15: `TestAccounts_AdminSeesAll` und `TestAccounts_UserSeesOwn` — Sichtbarkeit + Balance
-- [ ] 3.17 TC-D16: `TestCreateSlot_IsCustom` — is_custom=1
-- [ ] 3.18 TC-D17: `TestUpdateSlot_IsCustom` — is_custom=1 nach Update
-- [ ] 3.19 TC-D18: `TestDeleteSlot_WithAssignments` — Slot gelöscht
-- [ ] 3.20 Commit: `test(duties): Claim/Unclaim, Board-Audience, Dienstkonten`
+- [x] 3.1 Testserver-Setup: `testServer(t, h)` mit Claim/Unclaim/Board/Slot-Routen (umgesetzt als `testServer`, nicht `newDutiesServer`)
+- [x] 3.2 TC-D01: `TestClaim_FreeSlot` — slots_filled++, duty_accounts-Eintrag angelegt
+- [x] 3.3 TC-D02: `TestClaim_FullSlot` — HTTP 409
+- [x] 3.4 TC-D03: `TestClaim_Duplicate` — HTTP 409 (UNIQUE-Verletzung)
+- [x] 3.5 TC-D04: `TestUnclaim_Pending` — Assignment gelöscht, slots_filled--
+- [x] 3.6 TC-D05: `TestUnclaim_Fulfilled` — HTTP 409
+- [x] 3.7 TC-D06: `TestUnclaim_NotFound` — HTTP 404
+- [x] 3.8 TC-D07: `TestClaim_ForProxyChild` — Elternteil claimt für Kind mit can_login=0
+- [x] 3.9 TC-D08: `TestClaim_ForeignUserForbidden` — HTTP 403
+- [x] 3.10 TC-D09: `TestBoard_AdminSeesAll` — alle Slots in aktiver Saison
+- [x] 3.11 TC-D10: `TestBoard_UserSeesOwnTeam` — nur eigene Team-Slots
+- [x] 3.12 TC-D11: `TestBoard_AudienceElternVisible` — eltern-Slot für Elternteil sichtbar
+- [x] 3.13 TC-D12: `TestBoard_AudienceElternHidden` — eltern-Slot für User ohne Kinder unsichtbar
+- [x] 3.14 TC-D13: Trainer-Audience-Verhalten — bei Umsetzung präzisiert: Trainer umgeht Audience *nicht* per se, sondern via `?audience=all`/Team-Quelle (`TestDutyBoard_TrainerAudienceFilterDefault`, `TestBoard_AudienceElternTeamScoped`) statt eines `TestBoard_TrainerBypassesAudience`
+- [x] 3.15 TC-D14: `TestBoard_ViewMine` — nur eigene geclaimten Slots
+- [x] 3.16 TC-D15: `TestAccounts_AdminSeesAll` und `TestAccounts_UserSeesOwn` — Sichtbarkeit + Balance
+- [x] 3.17 TC-D16: `TestCreateSlot_IsCustom` — is_custom=1
+- [x] 3.18 TC-D17: `TestUpdateSlot_IsCustom` — is_custom=1 nach Update
+- [x] 3.19 TC-D18: `TestDeleteSlot_WithAssignments` — Slot gelöscht
+- [x] 3.20 Commit: `test(duties): Claim/Unclaim, Board-Audience, Dienstkonten`
 
 ## 4. members-Tests (internal/members/handler_test.go)
 

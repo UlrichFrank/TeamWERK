@@ -1,5 +1,7 @@
 # Test-Standard
 
+**Wo investieren?** Die Priorisierung (Risiko × Churn vor Coverage-Prozent, Arch-Test vor Copy-Paste, Bug-Fix vor Charakterisierung, E2E vor Vitest-Coverage) ist als Capability `test-strategy` festgehalten: `openspec/specs/test-strategy/spec.md`.
+
 Jede neue HTTP-Route **muss** mindestens **Happy-Path** (Erfolg) und **Fehlerfall** (401/403/400/404/409) abdecken. Tests prüfen fachliche Invarianten — keine Dummy-Assertions zur Coverage-Erhöhung.
 
 Jeder OpenSpec-Proposal mit neuen Routen / geänderter Geschäftslogik braucht einen Abschnitt `## Test-Anforderungen` (Route → Testname + erwarteter Status, plus die garantierte Invariante).

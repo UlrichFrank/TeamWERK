@@ -1,22 +1,22 @@
 ## 1. Roadmap-Artefakte
 
-- [ ] 1.1 Proposal, Design und `test-strategy`-Spec eingecheckt und `openspec validate test-coverage-roadmap` grün
-- [ ] 1.2 Kurzverweis in `docs/agent/07-testing.md` auf die `test-strategy`-Capability ergänzen (ein Satz plus Link)
-- [ ] 1.3 Commit: `docs(openspec): Roadmap test-coverage-roadmap (Risiko×Churn, Wellen, Bug-vor-Test)`
+- [x] 1.1 Proposal, Design und `test-strategy`-Spec eingecheckt und `openspec validate test-coverage-roadmap` grün
+- [x] 1.2 Kurzverweis in `docs/agent/07-testing.md` auf die `test-strategy`-Capability ergänzen (ein Satz plus Link)
+- [x] 1.3 Commit: `docs(openspec): Roadmap test-coverage-roadmap (Risiko×Churn, Wellen, Bug-vor-Test)`
 
 ## 2. Vorab — WIP-Hygiene & verifizierte Code-Bugs
 
-- [ ] 2.1 Tote In-Flight-Changes sichten und archivieren/abbrechen (`rename-mitfahrten`, `golangci-lint-v2-cleanup`, `harden-field-encryption-key`, …) — vor dem Auffahren neuer Wellen
-- [ ] 2.2 `test-coverage-fachlich` Section 3 (duties): Checkboxen an den real umgesetzten Stand angleichen (Spec/Code-Drift), Change ggf. archivieren
-- [ ] 2.3 Code-Fix `members.UpdateStatus`: RowsAffected → 404 bei unbekannter ID + `Exec`-Fehler prüfen (nicht verschlucken); Test `TestUpdateStatus_NotFound404` absichert (eigener kleiner `fix(members)`-Commit)
-- [ ] 2.4 Entscheidung `files.checkAntiEscalation`: `newRead` gegen eigenen `can_read` prüfen ODER Verhalten bewusst dokumentieren (Kommentar) — Ergebnis in test-strategy-konformem Test festnageln
+- [x] 2.1 Tote In-Flight-Changes sichten und archivieren/abbrechen (`rename-mitfahrten`, `golangci-lint-v2-cleanup`, `harden-field-encryption-key`, …) — vor dem Auffahren neuer Wellen
+- [x] 2.2 `test-coverage-fachlich` Section 3 (duties): Checkboxen an den real umgesetzten Stand angleichen (Spec/Code-Drift) — Section 3 komplett umgesetzt (20/20, Namens-Drift bei 3.1/3.14 dokumentiert); Change bleibt offen wegen Section 4 (members)
+- [x] 2.3 Code-Fix `members.UpdateStatus`: RowsAffected → 404 bei unbekannter ID + `Exec`-Fehler prüfen (nicht verschlucken); Test `TestMemberStatus_NotFound404` absichert (eigener kleiner `fix(members)`-Commit)
+- [x] 2.4 Entscheidung `files.checkAntiEscalation`: `newRead` gegen eigenen `can_read` durchgesetzt (Read-Escalation für write-ohne-read geschlossen) + Kommentar korrigiert; Invariante in `TestCheckAntiEscalation_*` (4 Fälle) festgenagelt
 
 ## 3. Welle 0 — `test-harness-preconditions` (Enabler)
 
-- [ ] 3.1 Change proposen (siehe eigener Ordner `test-harness-preconditions`) und `openspec validate` grün
-- [ ] 3.2 `internal/testutil/prodserver/prodserver.go`: `MatchReports`/`Settings`(+Store)/`Stammvereine` verdrahten wie in `cmd/teamwerk/main.go`; Nil-Guard für `/api/stammvereine`
-- [ ] 3.3 Zentrale Fixtures nach `internal/testutil`: `CreateFolder`, `SetFolderPermission`, `CreateFile`, `PostMultipart` (Server-Helper), `CreateAbsence`, `RecordTrainingAttendance`/`RecordGameAttendance`, `SetMemberBankEnvelope`, `SetClubSepaEnvelope`, `CreateMemberWithFields` (Options-Struct, ersetzt `CreateMember` NICHT)
-- [ ] 3.4 Authz-Drift-Detektor in `internal/arch` (analog `broadcast_test.go`): Erwartungs-Maps aus `permissions/matrix_test.go` ↔ `router.go` synchron; verwaiste Einträge failen
+- [x] 3.1 Change proposen (siehe eigener Ordner `test-harness-preconditions`) und `openspec validate` grün
+- [x] 3.2 `internal/testutil/prodserver/prodserver.go`: `MatchReports`/`Settings`(+Store)/`Stammvereine` verdrahten wie in `cmd/teamwerk/main.go`; Nil-Guard für `/api/stammvereine`
+- [x] 3.3 Zentrale Fixtures nach `internal/testutil`: `CreateFolder`, `SetFolderPermission`, `CreateFile`, `PostMultipart` (Server-Helper), `CreateAbsence`, `RecordTrainingAttendance`/`RecordGameAttendance`, `SetMemberBankEnvelope`, `SetClubSepaEnvelope`, `CreateMemberWithFields` (Options-Struct, ersetzt `CreateMember` NICHT)
+- [x] 3.4 Authz-Drift-Detektor in `internal/arch` (analog `broadcast_test.go`): Erwartungs-Maps aus `permissions/matrix_test.go` ↔ `router.go` synchron; verwaiste Einträge failen
 - [ ] 3.5 Umsetzen, testen, archivieren — erwartetes Nebenresultat: Matrix-Test deckt jetzt matchreports/settings/stammvereine ab
 
 ## 4. Welle 1 — `test-pii-route-authz` (PII-Cluster, Route-Ebene)
