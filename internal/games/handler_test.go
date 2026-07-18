@@ -2237,3 +2237,396 @@ func TestGames_SetNote_EmptyDeletesPending(t *testing.T) {
 		t.Errorf("expected pending row deleted, got %d", n)
 	}
 }
+
+// ── regen_summary content assertions (regen.go) ──────────────────────────────
+//
+// The existing regen tests assert slot-row side-effects and that a regen_summary
+// object *exists*. The tests below nail down the *content* of that summary — the
+// skipped/created/reduced/conflicts/notified_users entries the frontend renders
+// as "N Dienste übersprungen / angelegt / …". A silent rename of a JSON field or
+// a drop of an entry would slip past every prior test.
+
+type regenSummaryDTO struct {
+	Created []struct {
+		Date     string `json:"date"`
+		DutyType string `json:"duty_type"`
+		Count    int    `json:"count"`
+	} `json:"created"`
+	Reduced []struct {
+		Date  string `json:"date"`
+		From  string `json:"from"`
+		To    string `json:"to"`
+		Count int    `json:"count"`
+	} `json:"reduced"`
+	Skipped []struct {
+		Date     string `json:"date"`
+		DutyType string `json:"duty_type"`
+	} `json:"skipped"`
+	NotifiedUsers []int `json:"notified_users"`
+	Conflicts     []struct {
+		Date       string `json:"date"`
+		DutyTypeID int    `json:"duty_type_id"`
+		EventTime  string `json:"event_time"`
+		GameIDs    []int  `json:"game_ids"`
+	} `json:"conflicts"`
+}
+
+// readRegenSummary decodes the {"regen_summary": {...}} envelope returned by
+// Create/Update/DeleteGame.
+func readRegenSummary(t *testing.T, res *http.Response) regenSummaryDTO {
+	t.Helper()
+	var body struct {
+		RegenSummary regenSummaryDTO `json:"regen_summary"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode regen_summary: %v", err)
+	}
+	return body.RegenSummary
+}
+
+// seedAgeClassRule gives the team an age class the rules table knows, so
+// effectiveEventDuration can position heim/auswärts slots.
+func seedAgeClassRule(t *testing.T, db *sql.DB, teamID int) {
+	t.Helper()
+	if _, err := db.Exec(`UPDATE teams SET age_class=? WHERE id=?`, "A-Jugend", teamID); err != nil {
+		t.Fatalf("set age_class: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO age_class_game_rules (age_class, half_duration_minutes, break_minutes) VALUES (?, ?, ?)`,
+		"A-Jugend", 30, 15); err != nil {
+		t.Fatalf("seed age_class_game_rules: %v", err)
+	}
+}
+
+// insertHeimTemplate creates a heim template with a single item (anchor=start,
+// given offset, 1 slot) for the given duty type and returns the template id.
+func insertHeimTemplate(t *testing.T, db *sql.DB, dutyTypeID, offsetMin int) int {
+	t.Helper()
+	tr, err := db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?, ?, ?)`,
+		"Heim", "heim", 75)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := tr.LastInsertId()
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, 'start', ?, 1, 0)`, templateID, dutyTypeID, offsetMin); err != nil {
+		t.Fatalf("seed template item: %v", err)
+	}
+	return int(templateID)
+}
+
+// TestRegenSummary_SkippedContent (#1): with adjacent_day_behavior=skip and two
+// heim games on consecutive days, creating the second game must record the
+// suppressed slot as a Skipped entry {date, duty_type} — not merely omit the row.
+func TestRegenSummary_SkippedContent(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	seedAgeClassRule(t, db, teamID)
+
+	dr, err := db.Exec(
+		`INSERT INTO duty_types (name, hours_value, adjacent_day_behavior) VALUES (?, ?, ?)`,
+		"Aufbau", 2.0, "skip")
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := dr.LastInsertId()
+	templateID := insertHeimTemplate(t, db, int(dutyTypeID), -60)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	body := func(date string) map[string]any {
+		return map[string]any{
+			"date": date, "time": "14:00", "opponent": "FC Test",
+			"team_ids": []int{teamID}, "event_type": "heim",
+			"season_id": seasonID, "template_id": templateID,
+		}
+	}
+
+	// Game A on 06-13 (no neighbors → slot created).
+	resA := testutil.Post(t, srv, "/api/games", token, body("2026-06-13"))
+	resA.Body.Close()
+	if resA.StatusCode != http.StatusCreated {
+		t.Fatalf("create game A: expected 201, got %d", resA.StatusCode)
+	}
+
+	// Game B on 06-14 → regen skips its slot (adjacent home game on 06-13).
+	resB := testutil.Post(t, srv, "/api/games", token, body("2026-06-14"))
+	if resB.StatusCode != http.StatusCreated {
+		t.Fatalf("create game B: expected 201, got %d", resB.StatusCode)
+	}
+	summary := readRegenSummary(t, resB)
+	resB.Body.Close()
+
+	found := false
+	for _, s := range summary.Skipped {
+		if s.Date == "2026-06-14" && s.DutyType == "Aufbau" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected Skipped entry {date:2026-06-14, duty_type:Aufbau}, got %+v", summary.Skipped)
+	}
+}
+
+// TestRegen_TemplateIDNull_DeletesAutoKeepsCustom (#2): switching a game to "no
+// template" (template_id=NULL) deletes its auto (is_custom=0) slots without
+// re-inserting anything, leaves is_custom=1 slots intact, and reports an empty
+// Created list.
+func TestRegen_TemplateIDNull_DeletesAutoKeepsCustom(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	seedAgeClassRule(t, db, teamID)
+
+	dutyTypeID := insertDutyType(t, db, "Aufbau", 2.0)
+	templateID := insertHeimTemplate(t, db, dutyTypeID, -60)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	// Create heim game with template → 1 auto (is_custom=0) slot at 13:00.
+	createRes := testutil.Post(t, srv, "/api/games", token, map[string]any{
+		"date": "2026-06-13", "time": "14:00", "opponent": "FC Test",
+		"team_ids": []int{teamID}, "event_type": "heim",
+		"season_id": seasonID, "template_id": templateID,
+	})
+	var created struct {
+		ID int `json:"id"`
+	}
+	json.NewDecoder(createRes.Body).Decode(&created)
+	createRes.Body.Close()
+	gameID := created.ID
+	if got := countRows(t, db, "duty_slots", "game_id=? AND is_custom=0", gameID); got != 1 {
+		t.Fatalf("after create: expected 1 auto-slot, got %d", got)
+	}
+
+	// One manual slot the regen must never touch.
+	if _, err := db.Exec(`
+		INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id,
+		  slots_total, team_id, season_id, game_id, is_custom)
+		VALUES (?, ?, ?, ?, 1, ?, ?, ?, 1)`,
+		"Manuell", "2026-06-13", "12:00", dutyTypeID, teamID, seasonID, gameID); err != nil {
+		t.Fatalf("seed custom slot: %v", err)
+	}
+
+	// Drop the template link, then PUT (same date, no template_id → stays NULL).
+	if _, err := db.Exec(`UPDATE games SET template_id=NULL WHERE id=?`, gameID); err != nil {
+		t.Fatalf("null template_id: %v", err)
+	}
+	putRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, map[string]any{
+		"date": "2026-06-13", "time": "14:00", "opponent": "FC Test",
+		"team_ids": []int{teamID}, "event_type": "heim", "season_id": seasonID,
+	})
+	if putRes.StatusCode != http.StatusOK {
+		t.Fatalf("update game: expected 200, got %d", putRes.StatusCode)
+	}
+	summary := readRegenSummary(t, putRes)
+	putRes.Body.Close()
+
+	if got := countRows(t, db, "duty_slots", "game_id=? AND is_custom=0", gameID); got != 0 {
+		t.Errorf("expected 0 auto-slots after template=NULL, got %d", got)
+	}
+	if got := countRows(t, db, "duty_slots", "game_id=? AND is_custom=1", gameID); got != 1 {
+		t.Errorf("expected is_custom=1 slot to survive, got %d", got)
+	}
+	if len(summary.Created) != 0 {
+		t.Errorf("expected empty Created (nothing re-inserted), got %+v", summary.Created)
+	}
+}
+
+// TestRegen_ConflictWithCustomSlot (#4): if a manual (is_custom=1) slot already
+// occupies the exact (duty_type, time, team) a template item would produce, the
+// regen must NOT insert a duplicate auto slot and must record a Conflicts entry.
+func TestRegen_ConflictWithCustomSlot(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	seedAgeClassRule(t, db, teamID)
+
+	dutyTypeID := insertDutyType(t, db, "Aufbau", 2.0)
+	templateID := insertHeimTemplate(t, db, dutyTypeID, -60) // slot at 13:00 for a 14:00 game
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	createRes := testutil.Post(t, srv, "/api/games", token, map[string]any{
+		"date": "2026-06-13", "time": "14:00", "opponent": "FC Test",
+		"team_ids": []int{teamID}, "event_type": "heim",
+		"season_id": seasonID, "template_id": templateID,
+	})
+	var created struct {
+		ID int `json:"id"`
+	}
+	json.NewDecoder(createRes.Body).Decode(&created)
+	createRes.Body.Close()
+	gameID := created.ID
+
+	// Manual slot colliding exactly with the template item (duty_type, 13:00, team).
+	if _, err := db.Exec(`
+		INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id,
+		  slots_total, team_id, season_id, game_id, is_custom)
+		VALUES (?, ?, ?, ?, 1, ?, ?, ?, 1)`,
+		"Manuell", "2026-06-13", "13:00", dutyTypeID, teamID, seasonID, gameID); err != nil {
+		t.Fatalf("seed custom slot: %v", err)
+	}
+
+	// PUT (same everything) → regen deletes the auto slot, tries to re-insert at
+	// 13:00, hits the custom-slot conflict.
+	putRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, map[string]any{
+		"date": "2026-06-13", "time": "14:00", "opponent": "FC Test",
+		"team_ids": []int{teamID}, "event_type": "heim",
+		"season_id": seasonID, "template_id": templateID,
+	})
+	if putRes.StatusCode != http.StatusOK {
+		t.Fatalf("update game: expected 200, got %d", putRes.StatusCode)
+	}
+	summary := readRegenSummary(t, putRes)
+	putRes.Body.Close()
+
+	if got := countRows(t, db, "duty_slots",
+		"game_id=? AND is_custom=0 AND event_time=?", gameID, "13:00"); got != 0 {
+		t.Errorf("expected no auto-slot at 13:00 (conflict), got %d", got)
+	}
+	found := false
+	for _, c := range summary.Conflicts {
+		if c.Date == "2026-06-13" && c.DutyTypeID == dutyTypeID && c.EventTime == "13:00" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected Conflicts entry {date:2026-06-13, duty_type_id:%d, event_time:13:00}, got %+v",
+			dutyTypeID, summary.Conflicts)
+	}
+}
+
+// TestRegen_NotifiesRemovedAssignee (#5): when regen deletes an auto slot that a
+// user was assigned to (and it does not come back), that user id lands in
+// NotifiedUsers and a "duties" notification is dispatched.
+func TestRegen_NotifiesRemovedAssignee(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	seedAgeClassRule(t, db, teamID)
+
+	dutyTypeID := insertDutyType(t, db, "Aufbau", 2.0)
+	templateID := insertHeimTemplate(t, db, dutyTypeID, -60)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	assigneeID := testutil.CreateUser(t, db, "standard")
+
+	cat := captureNotifyCategory(t)
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	createRes := testutil.Post(t, srv, "/api/games", token, map[string]any{
+		"date": "2026-06-13", "time": "14:00", "opponent": "FC Test",
+		"team_ids": []int{teamID}, "event_type": "heim",
+		"season_id": seasonID, "template_id": templateID,
+	})
+	var created struct {
+		ID int `json:"id"`
+	}
+	json.NewDecoder(createRes.Body).Decode(&created)
+	createRes.Body.Close()
+	gameID := created.ID
+
+	// Assign the user to the auto slot.
+	var slotID int
+	if err := db.QueryRow(
+		`SELECT id FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID).Scan(&slotID); err != nil {
+		t.Fatalf("read auto slot: %v", err)
+	}
+	insertDutyAssignment(t, db, slotID, assigneeID, "assigned")
+
+	// Drop the template so the slot is deleted and not recreated.
+	if _, err := db.Exec(`UPDATE games SET template_id=NULL WHERE id=?`, gameID); err != nil {
+		t.Fatalf("null template_id: %v", err)
+	}
+	putRes := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d", gameID), token, map[string]any{
+		"date": "2026-06-13", "time": "14:00", "opponent": "FC Test",
+		"team_ids": []int{teamID}, "event_type": "heim", "season_id": seasonID,
+	})
+	if putRes.StatusCode != http.StatusOK {
+		t.Fatalf("update game: expected 200, got %d", putRes.StatusCode)
+	}
+	summary := readRegenSummary(t, putRes)
+	putRes.Body.Close()
+
+	found := false
+	for _, uid := range summary.NotifiedUsers {
+		if uid == assigneeID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected NotifiedUsers to contain assignee %d, got %v", assigneeID, summary.NotifiedUsers)
+	}
+	// dispatchRegenNotifications fans out a "duties" notification for the removal.
+	waitForCategory(t, cat, "duties")
+}
+
+// TestRegen_SameDayBehaviorReduced (#3): a slot that falls between two games on
+// the same day and whose duty type has same_day_behavior=reduced must be created
+// as the variant type, and reported as a Reduced entry {from, to}.
+func TestRegen_SameDayBehaviorReduced(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	seedAgeClassRule(t, db, teamID)
+
+	// Variant B (normal) + base A that reduces to B between same-day games.
+	variantID := insertDutyType(t, db, "Aufbau-Licht", 1.0)
+	dr, err := db.Exec(
+		`INSERT INTO duty_types (name, hours_value, same_day_behavior, same_day_variant_id) VALUES (?, ?, ?, ?)`,
+		"Aufbau", 2.0, "reduced", variantID)
+	if err != nil {
+		t.Fatalf("seed duty_type A: %v", err)
+	}
+	baseID, _ := dr.LastInsertId()
+	templateID := insertHeimTemplate(t, db, int(baseID), -60) // 16:00 game → slot at 15:00
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	// Game 1 at 12:00 (no template) establishes the same-day context.
+	res1 := testutil.Post(t, srv, "/api/games", token, map[string]any{
+		"date": "2026-06-13", "time": "12:00", "opponent": "Früh",
+		"team_ids": []int{teamID}, "event_type": "heim", "season_id": seasonID,
+	})
+	res1.Body.Close()
+
+	// Game 2 at 16:00 with template → slot at 15:00 falls between the two games.
+	res2 := testutil.Post(t, srv, "/api/games", token, map[string]any{
+		"date": "2026-06-13", "time": "16:00", "opponent": "Spät",
+		"team_ids": []int{teamID}, "event_type": "heim",
+		"season_id": seasonID, "template_id": templateID,
+	})
+	if res2.StatusCode != http.StatusCreated {
+		t.Fatalf("create game 2: expected 201, got %d", res2.StatusCode)
+	}
+	summary := readRegenSummary(t, res2)
+	res2.Body.Close()
+
+	// The created slot carries the variant duty type, not the base.
+	if got := countRows(t, db, "duty_slots",
+		"event_date=? AND is_custom=0 AND duty_type_id=?", "2026-06-13", variantID); got != 1 {
+		t.Errorf("expected 1 auto-slot with variant duty_type %d, got %d", variantID, got)
+	}
+	found := false
+	for _, r := range summary.Reduced {
+		if r.Date == "2026-06-13" && r.From == "Aufbau" && r.To == "Aufbau-Licht" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected Reduced entry {from:Aufbau, to:Aufbau-Licht}, got %+v", summary.Reduced)
+	}
+}
