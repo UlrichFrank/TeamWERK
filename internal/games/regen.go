@@ -165,37 +165,10 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		}
 
 		// Step 2: load is_custom=1 slots so we can detect conflicts before inserting.
-		customRows, err := tx.QueryContext(ctx, `
-			SELECT duty_type_id, event_time, team_id
-			FROM duty_slots WHERE game_id=? AND is_custom=1`, g.ID)
+		customSlots, err := h.snapshotCustomSlots(ctx, tx, g.ID)
 		if err != nil {
-			return RegenSummary{}, fmt.Errorf("snapshot custom: %w", err)
+			return RegenSummary{}, err
 		}
-		type customKey struct {
-			DutyTypeID int
-			EventTime  string
-			TeamID     int64
-			HasTeam    bool
-		}
-		customSlots := map[customKey]bool{}
-		for customRows.Next() {
-			var k customKey
-			var et sql.NullString
-			var tid sql.NullInt64
-			if err := customRows.Scan(&k.DutyTypeID, &et, &tid); err != nil {
-				customRows.Close()
-				return RegenSummary{}, err
-			}
-			if et.Valid {
-				k.EventTime = et.String
-			}
-			if tid.Valid {
-				k.TeamID = tid.Int64
-				k.HasTeam = true
-			}
-			customSlots[k] = true
-		}
-		customRows.Close()
 
 		// Step 3: delete is_custom=0 slots (assignments cascade).
 		if _, err := tx.ExecContext(ctx,
@@ -343,6 +316,46 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 	}
 
 	return summary, nil
+}
+
+// customKey identifies an is_custom=1 slot for conflict detection. TeamID/HasTeam
+// distinguish team-scoped slots from team-agnostic ones.
+type customKey struct {
+	DutyTypeID int
+	EventTime  string
+	TeamID     int64
+	HasTeam    bool
+}
+
+// snapshotCustomSlots reads the is_custom=1 slots of a game into a set keyed by customKey,
+// so the regen can skip inserting a template slot that would collide with a manual one.
+func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[customKey]bool, error) {
+	customRows, err := tx.QueryContext(ctx, `
+		SELECT duty_type_id, event_time, team_id
+		FROM duty_slots WHERE game_id=? AND is_custom=1`, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot custom: %w", err)
+	}
+	customSlots := map[customKey]bool{}
+	for customRows.Next() {
+		var k customKey
+		var et sql.NullString
+		var tid sql.NullInt64
+		if err := customRows.Scan(&k.DutyTypeID, &et, &tid); err != nil {
+			customRows.Close()
+			return nil, err
+		}
+		if et.Valid {
+			k.EventTime = et.String
+		}
+		if tid.Valid {
+			k.TeamID = tid.Int64
+			k.HasTeam = true
+		}
+		customSlots[k] = true
+	}
+	customRows.Close()
+	return customSlots, nil
 }
 
 // deletedSlot captures an is_custom=0 slot (and its assigned users) before deletion,
