@@ -38,7 +38,7 @@
 - [x] 6.1 Proposal: 14 Charakterisierungstests ZUERST (Delimiter/BOM, Dedup, Enrich-Ambiguität, Fehlerpfade 400, Authz `kassierer/standard → 403`), dann 6-Stufen-Extract (normalize* top-level → parseImportCSV → detectCSVDuplicates → lookupExistingMember → buildMemberUpdate)
 - [x] 6.2 `## Test-Anforderungen`: die HTTP-Charakterisierungstests SIND die dauerhafte Abnahme-Instanz für jeden Refactor-Schritt (Suite nach jedem Schritt grün)
 - [x] 6.3 `openspec validate` grün
-- [ ] 6.4 Umsetzen (Charakterisierung → Refactor Schritt für Schritt), testen, archivieren
+- [x] 6.4 Umgesetzt, getestet, archiviert — zweiphasig: 19 Charakterisierungstests (PR #153), dann 6-Stufen-Extract (PR #155). `Import` gocognit 182→60, byte-genaue Verhaltenserhaltung (adversarial verifiziert, String-Contracts intakt). metrics-gate bewusst re-baselined (35→38/12→14, dokumentiert). Agenten: 2× Detail-Specs, 3× Review (fanden Charakterisierungs-Lücken + verschärften Pins), 1× Refactor, 1× Verhaltens-Verifikation.
 
 ## 7. Parallel — Frontend
 
