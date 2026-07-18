@@ -42,12 +42,16 @@ Package-Grenzen in `test-pii-files` / `test-pii-absences-attendance` / `test-pii
 gesplittet — die `## Test-Anforderungen` sind bereits so gegliedert, dass ein Split
 verlustfrei möglich ist.
 
-**D2 — attendance-Recording lebt in `training`/`games`, nicht in `attendance`.**
-`POST /api/training-sessions/{id}/attendances` → `Training.SaveAttendances`,
-`POST /api/games/{id}/attendances` → `Games.SaveAttendances`. `internal/training` hat aktuell
-**keine** Testdatei. Die Recording-Authz-Tests entstehen daher in `internal/training` bzw.
-`internal/games`, nicht in `internal/attendance`. Ehrlich benannt, damit der Scope nicht
-implizit ins falsche Package driftet.
+**D2 — attendance-Recording lebt in `trainings`/`games`, nicht in `attendance`.**
+`POST /api/training-sessions/{id}/attendances` → `Trainings.SaveAttendances`,
+`POST /api/games/{id}/attendances` → `Games.SaveAttendances`. Beim Umsetzen zeigte sich (Roadmap
+9.2): das Package heißt `internal/trainings` (mit „s") und **hat** bereits Tests
+(`PlayerForbidden`, `TrainerOK`); `internal/games` deckt das Recording **vollständig** ab
+(inkl. `TrainerOfOtherTeam_403`, `Unauthenticated_401`, `NotFound_404`). Einziger echter Gap:
+der Fremd-Team-Trainer bei `trainings.SaveAttendances` (nur `CreateSeries` hatte das Muster).
+Welle 1 ergänzt daher gezielt zwei `trainings`-Tests und dupliziert games **nicht**. Beide
+Recording-Routen sind per Router mit `RequireClubFunction("trainer","sportliche_leitung")`
+gated — der Team-Match ist Handler-Logik (`hasTeamAccess`/`canRecordGameAttendance`).
 
 **D3 — Bug-Verdacht vor Charakterisierung.** Wenn ein Test einen echten Fail-Open aufdeckt
 (z.B. `download-token` gibt Token ohne can_read aus, oder `ServeImage` verpasst einen

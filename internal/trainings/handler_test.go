@@ -1447,3 +1447,57 @@ func TestGetSession_RsvpLocksAt(t *testing.T) {
 		t.Errorf("expected rsvp_locks_at=2026-06-15T14:00:00Z, got %q", got)
 	}
 }
+
+// TestSaveAttendances_ForeignTeamTrainerForbidden nagelt die team-scoped Recording-Authz fest
+// (Welle 1): ein Trainer von Team A darf keine Anwesenheiten für eine Session von Team B
+// speichern — der Router-Gate (RequireClubFunction) lässt jeden Trainer durch, erst
+// hasTeamAccess im Handler blockt das fremde Team.
+func TestSaveAttendances_ForeignTeamTrainerForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	sessionB := testutil.CreateTrainingSession(t, db, teamB, seasonID, "2025-01-10") // past, Team B
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID) // trainer of Team A only
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionB), token,
+		[]map[string]any{})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 for trainer of foreign team, got %d", res.StatusCode)
+	}
+}
+
+// TestSaveAttendances_OwnTeamTrainerOK ergänzt den admin-basierten Happy-Path: ein echter,
+// dem Team zugeordneter Trainer (nicht admin) darf speichern — beweist, dass hasTeamAccess
+// über kader_trainers greift.
+func TestSaveAttendances_OwnTeamTrainerOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	sessionA := testutil.CreateTrainingSession(t, db, teamA, seasonID, "2025-01-10") // past
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionA), token,
+		[]map[string]any{})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Errorf("expected 204 for own-team trainer, got %d", res.StatusCode)
+	}
+}

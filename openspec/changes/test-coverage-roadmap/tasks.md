@@ -24,7 +24,7 @@
 - [x] 4.1 Proposal skizziert: files (Route-Tests CreateFolder/DeleteFolder/UploadFile/AddPermission/DeletePermission/Download-Token), absences (`Calendar?show_team`, Update/Delete-Authz, List-Fremdzugriff), matchreports (`images.go` ServeImage-Authz + Router-Tier), duties (`match_report_guard` inkl. Proxy-Kind-Rollenverschiebung). **Scope geschärft:** attendance-**Stats** bereits abgedeckt → nur **Recording** (`Training`/`Games.SaveAttendances`, Package `training`/`games`)
 - [x] 4.2 `## Test-Anforderungen`-Abschnitt vorhanden: Route → Testname + erwarteter Status + garantierte Invariante (pro Bereich)
 - [x] 4.3 `openspec validate test-pii-route-authz --strict` grün
-- [ ] 4.4 Umsetzen (nutzt Welle-0-Fixtures), testen, archivieren
+- [x] 4.4 Umgesetzt (nutzt Welle-0-Fixtures), getestet, archiviert — 12 neue Tests über files/matchreports/duties/trainings/absences; games-Recording + attendance-Stats waren bereits abgedeckt (nicht dupliziert). Adversariales Review fand 1 False-Green (absences Calendar-Leak, per Mutations-Test verifiziert gefixt) + 4 schwache Assertions, alle gehärtet.
 
 ## 5. Welle 2 — `test-finance-audit` (+ optional auth-Fehlerpfade)
 
