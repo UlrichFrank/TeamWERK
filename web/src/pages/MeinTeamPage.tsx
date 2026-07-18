@@ -374,16 +374,19 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, reloadRoster,
                   <option key={p.memberId} value={p.memberId}>{p.name}</option>
                 ))}
               </select>
-              <input
+              <select
                 value={assignLabel}
                 onChange={e => setAssignLabel(e.target.value)}
-                list={`resp-catalog-${teamId}`}
-                placeholder="Aufgabe (Katalog oder frei)…"
                 className={INPUT}
-              />
-              <datalist id={`resp-catalog-${teamId}`}>
-                {(respTypes ?? []).map(rt => <option key={rt.id} value={rt.label} />)}
-              </datalist>
+                disabled={!respTypes || respTypes.length === 0}
+              >
+                <option value="">
+                  {respTypes && respTypes.length === 0 ? 'Katalog leer — zuerst Aufgabe anlegen' : 'Aufgabe wählen…'}
+                </option>
+                {(respTypes ?? []).map(rt => (
+                  <option key={rt.id} value={rt.label}>{rt.label}</option>
+                ))}
+              </select>
               <button onClick={assignResp} disabled={!assignMember || !assignLabel.trim()} className={BTN_SMALL} aria-label="Aufgabe zuweisen">
                 <Plus className="w-4 h-4" />
               </button>
