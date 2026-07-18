@@ -169,3 +169,78 @@ func TestExportData_FaelligkeitVergangenheit400(t *testing.T) {
 		t.Errorf("Vergangenheit: status %d, want 400", res.StatusCode)
 	}
 }
+
+// Mitglied mit IBAN aber ohne SEPA-Mandat ist ausgeschlossen → 400.
+func TestExportData_MitgliedOhneMandat400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	m := defaultMember()
+	m.sepaMandat = 0 // IBAN bleibt, aber kein Mandat → ausgeschlossen
+	id := insertMember(t, db, "Ohne", m)
+
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{id}})
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("status %d, want 400", res.StatusCode)
+	}
+	if !strings.Contains(string(body), "ausgeschlossen oder unbekannt") {
+		t.Errorf("Body enthält nicht 'ausgeschlossen oder unbekannt': %s", body)
+	}
+}
+
+// Mitglied ohne Bankdaten (kein member_sensitive-Envelope) ist ausgeschlossen → 400.
+func TestExportData_MitgliedOhneBankdaten400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	m := defaultMember()
+	m.iban = "" // kein Envelope → HasBank=false → iban_fehlt → ausgeschlossen
+	id := insertMember(t, db, "NoBank", m)
+
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{id}})
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("status %d, want 400", res.StatusCode)
+	}
+	if !strings.Contains(string(body), "ausgeschlossen oder unbekannt") {
+		t.Errorf("Body enthält nicht 'ausgeschlossen oder unbekannt': %s", body)
+	}
+}
+
+// Unbekannte member_id → 400 mit der ID im Fehlertext.
+func TestExportData_UnbekannteMemberID400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	insertMember(t, db, "Max", defaultMember()) // gültiges Mitglied existiert
+
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": s, "member_ids": []int{999999}})
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("status %d, want 400", res.StatusCode)
+	}
+	if !strings.Contains(string(body), "Mitglied 999999") {
+		t.Errorf("Body enthält nicht 'Mitglied 999999': %s", body)
+	}
+}
+
+// Typ-fehlpassendes saison_id-Feld → Decode-Fehler → 400 'ungültiger Body'.
+func TestExportData_UngueltigerBody400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	insertSeason2027(t, db)
+
+	res := testutil.Post(t, srv, "/api/fee-run/export-data", tok(t),
+		map[string]any{"saison_id": "keine-zahl", "member_ids": []int{1}})
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("status %d, want 400", res.StatusCode)
+	}
+	if !strings.Contains(string(body), "ungültiger Body") {
+		t.Errorf("Body enthält nicht 'ungültiger Body': %s", body)
+	}
+}

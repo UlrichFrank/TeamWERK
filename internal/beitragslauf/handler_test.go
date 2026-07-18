@@ -3,8 +3,12 @@ package beitragslauf_test
 import (
 	"database/sql"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -117,8 +121,18 @@ type previewItem struct {
 	Exclusions []string `json:"exclusions"`
 }
 
+type previewSummary struct {
+	IncludedCount   int `json:"included_count"`
+	ExcludedCount   int `json:"excluded_count"`
+	WarnedCount     int `json:"warned_count"`
+	TotalCent       int `json:"total_cent"`
+	ExcludedCent    int `json:"excluded_cent"`
+	GesamtsummeCent int `json:"gesamtsumme_cent"`
+}
+
 type previewResp struct {
-	Items []previewItem `json:"items"`
+	Items   []previewItem  `json:"items"`
+	Summary previewSummary `json:"summary"`
 }
 
 func getPreview(t *testing.T, srv *httptest.Server, saisonID int) previewResp {
@@ -396,4 +410,268 @@ func contains(s []string, v string) bool {
 		}
 	}
 	return false
+}
+
+type confirmResp struct {
+	SaisonLabel          string `json:"saison_label"`
+	Erfolgreich          int    `json:"erfolgreich"`
+	NichtErfolgreich     int    `json:"nicht_erfolgreich"`
+	SummeErfolgreichCent int    `json:"summe_erfolgreich_cent"`
+}
+
+func readProtokoll(t *testing.T, dir string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "beitragslauf_2027-28.txt"))
+	if err != nil {
+		t.Fatalf("Protokolldatei lesen: %v", err)
+	}
+	return string(data)
+}
+
+// Confirm schreibt Protokoll und liefert die Aggregat-Zahlen 1:1 aus dem Body.
+func TestConfirm_HappyPath_SchreibtProtokoll(t *testing.T) {
+	srv, db, dir := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+
+	res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
+		"saison_id": s,
+		"results":   []map[string]any{{"member_id": id, "betrag_cent": 9600, "success": true}},
+	})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("confirm status %d, want 200", res.StatusCode)
+	}
+	var cr confirmResp
+	json.NewDecoder(res.Body).Decode(&cr)
+	res.Body.Close()
+	if cr.SaisonLabel != "2027/28" || cr.Erfolgreich != 1 || cr.NichtErfolgreich != 0 || cr.SummeErfolgreichCent != 9600 {
+		t.Errorf("confirm-JSON unerwartet: %+v", cr)
+	}
+
+	content := readProtokoll(t, dir)
+	for _, want := range []string{"=== Lauf bestätigt", "durch test@test.local (User #1)", "Erfolgreich (1)", "Mitgl.-Nr 1042", "96,00"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("Protokoll enthält %q nicht:\n%s", want, content)
+		}
+	}
+}
+
+// Das Protokoll darf keine IBAN führen (ProtokollResult hat kein IBAN-Feld).
+func TestConfirm_ProtokollOhneIBAN(t *testing.T) {
+	srv, db, dir := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+
+	res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
+		"saison_id": s,
+		"results":   []map[string]any{{"member_id": id, "betrag_cent": 9600, "success": true}},
+	})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("confirm status %d, want 200", res.StatusCode)
+	}
+	content := readProtokoll(t, dir)
+	// Struktur-Tripwire (kein echter Security-Test): die eigentliche Garantie ist
+	// Modell B (Server hält keinen Entschlüsselungsschlüssel) + `ProtokollResult` ohne
+	// IBAN-Feld (protokoll.go). Dieser Runtime-Check kann unter erreichbarem Handler-
+	// Verhalten nicht rot werden — er dokumentiert die Absicht und fängt nur eine grobe
+	// künftige Regression (jemand hängt Bankdaten an das Protokoll).
+	if strings.Contains(content, validIBAN) || strings.Contains(content, "DE89") {
+		t.Errorf("Protokoll enthält IBAN (darf nie passieren):\n%s", content)
+	}
+	// Die eigentlichen Zähne dieses Tests: das Protokoll-Format enthält genau die
+	// erlaubten Felder (Mitgliedsnummer + Betrag).
+	if !strings.Contains(content, "Mitgl.-Nr 1042") || !strings.Contains(content, "96,00") {
+		t.Errorf("Protokoll fehlen erwartete Felder:\n%s", content)
+	}
+}
+
+// Erfolgs- und Fehlblock werden getrennt gezählt und gerendert.
+func TestConfirm_MixedSuccessFailure(t *testing.T) {
+	srv, db, dir := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id1 := insertMember(t, db, "Max", defaultMember())
+	m2 := defaultMember()
+	m2.memberNumber = "1043"
+	id2 := insertMember(t, db, "Moritz", m2)
+
+	res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
+		"saison_id": s,
+		"results": []map[string]any{
+			{"member_id": id1, "betrag_cent": 9600, "success": true},
+			{"member_id": id2, "betrag_cent": 9600, "success": false},
+		},
+	})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("confirm status %d, want 200", res.StatusCode)
+	}
+	var cr confirmResp
+	json.NewDecoder(res.Body).Decode(&cr)
+	res.Body.Close()
+	if cr.Erfolgreich != 1 || cr.NichtErfolgreich != 1 {
+		t.Errorf("confirm-JSON: %+v, want erfolgreich=1 nicht_erfolgreich=1", cr)
+	}
+	// Money-kritisch: der fehlgeschlagene Einzug darf NICHT in die bestätigte Summe fließen.
+	if cr.SummeErfolgreichCent != 9600 {
+		t.Errorf("summe_erfolgreich_cent=%d, want 9600 (Fehlschlag darf nicht mitzählen)", cr.SummeErfolgreichCent)
+	}
+	content := readProtokoll(t, dir)
+	if !strings.Contains(content, "Erfolgreich (1)") || !strings.Contains(content, "Nicht erfolgreich (1)") {
+		t.Errorf("Protokoll fehlen Erfolgs-/Fehlblock:\n%s", content)
+	}
+}
+
+// Zwei Läufe hängen zwei Header-Blöcke an dieselbe Datei (append-only).
+func TestConfirm_AppendOnly_ZweiLaeufe(t *testing.T) {
+	srv, db, dir := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+
+	for _, success := range []bool{true, false} {
+		res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
+			"saison_id": s,
+			"results":   []map[string]any{{"member_id": id, "betrag_cent": 9600, "success": success}},
+		})
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("confirm status %d, want 200", res.StatusCode)
+		}
+	}
+	content := readProtokoll(t, dir)
+	if n := strings.Count(content, "=== Lauf bestätigt"); n != 2 {
+		t.Errorf("erwarte 2 Lauf-Blöcke, got %d:\n%s", n, content)
+	}
+}
+
+func TestConfirm_UnbekannteSaison404(t *testing.T) {
+	srv, db, dir := setupSrv(t)
+	id := insertMember(t, db, "Max", defaultMember())
+	res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
+		"saison_id": 99999,
+		"results":   []map[string]any{{"member_id": id, "betrag_cent": 9600, "success": true}},
+	})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("status %d, want 404", res.StatusCode)
+	}
+	// Invariante (spec): bei unbekannter Saison darf KEIN Protokoll entstehen.
+	if files, _ := filepath.Glob(filepath.Join(dir, "beitragslauf_*.txt")); len(files) != 0 {
+		t.Errorf("kein Protokoll darf bei unbekannter Saison entstehen, got %v", files)
+	}
+}
+
+func TestConfirm_UngueltigerBody400(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	insertSeason2027(t, db)
+	// saison_id als String → Decode-Fehler im int-Feld.
+	res := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
+		"saison_id": "keine-zahl",
+		"results":   []map[string]any{},
+	})
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("status %d, want 400", res.StatusCode)
+	}
+	if !strings.Contains(string(body), "ungültiger Body") {
+		t.Errorf("Body enthält nicht 'ungültiger Body': %s", body)
+	}
+}
+
+// Nach Confirm liefert Protocol den Klartext-Report zurück (ohne IBAN).
+func TestProtocol_RueckleseNachConfirm(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	id := insertMember(t, db, "Max", defaultMember())
+	cRes := testutil.Post(t, srv, "/api/fee-run/confirm", tok(t), map[string]any{
+		"saison_id": s,
+		"results":   []map[string]any{{"member_id": id, "betrag_cent": 9600, "success": true}},
+	})
+	cRes.Body.Close()
+	if cRes.StatusCode != http.StatusOK {
+		t.Fatalf("confirm status %d", cRes.StatusCode)
+	}
+
+	res := testutil.Get(t, srv, "/api/fee-run/protocol?saison_id="+itoa(s), tok(t))
+	body, _ := io.ReadAll(res.Body)
+	ct := res.Header.Get("Content-Type")
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("protocol status %d, want 200", res.StatusCode)
+	}
+	if !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("Content-Type %q, want text/plain*", ct)
+	}
+	if !strings.Contains(string(body), "Mitgl.-Nr 1042") {
+		t.Errorf("Protocol-Body fehlt Mitgl.-Nr:\n%s", body)
+	}
+	if strings.Contains(string(body), validIBAN) {
+		t.Errorf("Protocol-Body enthält IBAN:\n%s", body)
+	}
+}
+
+func TestProtocol_UnbekannteSaison404(t *testing.T) {
+	srv, _, _ := setupSrv(t)
+	res := testutil.Get(t, srv, "/api/fee-run/protocol?saison_id=99999", tok(t))
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("status %d, want 404", res.StatusCode)
+	}
+}
+
+// Saison ohne bislang bestätigten Lauf → 200 mit leerem Body.
+func TestProtocol_OhneDateiLeer200(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	res := testutil.Get(t, srv, "/api/fee-run/protocol?saison_id="+itoa(s), tok(t))
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", res.StatusCode)
+	}
+	if len(body) != 0 {
+		t.Errorf("erwarte leeren Body, got %d Bytes: %q", len(body), body)
+	}
+}
+
+// Unterjähriger Austritt mit Stammverein → aktiv_mit, halbiert (austritt), 4800.
+func TestPreview_UnterjaehrigerAustrittMitStammvereinAktivMit(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	m := defaultMember()
+	m.status = "ausgetreten"
+	tv := 8 // TV Cannstatt 1846
+	m.homeClubID = &tv
+	id := insertMember(t, db, "Geht", m)
+	db.Exec(`UPDATE members SET join_date='2020-01-01', exit_date='2027-11-01' WHERE id=?`, id)
+	it, ok := itemFor(getPreview(t, srv, s), id)
+	if !ok || !it.Included || it.Kategorie != "aktiv_mit" || !it.Half || it.HalfReason != "austritt" || it.BetragCent != 4800 {
+		t.Errorf("got %+v (ok=%v), want included aktiv_mit half austritt 4800", it, ok)
+	}
+}
+
+// Summary aggregiert einbezogene (total_cent) und ausgeschlossene (excluded_cent) Beträge.
+func TestPreview_SummaryTotals(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	insertMember(t, db, "Aktiv", defaultMember()) // aktiv_ohne, included, 22600
+
+	ausgeschlossen := defaultMember()
+	ausgeschlossen.sepaMandat = 0 // ausgeschlossen (kein_sepa_mandat), Betrag 22600 sichtbar
+	ausgeschlossen.memberNumber = "1043"
+	insertMember(t, db, "Ohne", ausgeschlossen)
+
+	pr := getPreview(t, srv, s)
+	if pr.Summary.IncludedCount != 1 {
+		t.Errorf("included_count=%d, want 1", pr.Summary.IncludedCount)
+	}
+	if pr.Summary.TotalCent != 22600 {
+		t.Errorf("total_cent=%d, want 22600", pr.Summary.TotalCent)
+	}
+	if pr.Summary.ExcludedCount != 1 || pr.Summary.ExcludedCent != 22600 {
+		t.Errorf("excluded_count=%d excluded_cent=%d, want 1/22600", pr.Summary.ExcludedCount, pr.Summary.ExcludedCent)
+	}
+	if pr.Summary.GesamtsummeCent != 45200 {
+		t.Errorf("gesamtsumme_cent=%d, want 45200", pr.Summary.GesamtsummeCent)
+	}
 }
