@@ -177,105 +177,16 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		}
 
 		// Step 4: per template item, compute behavior and insert.
-		type itemOutcome struct {
-			kind    string // "created" | "reduced" | "skipped"
-			newType string // duty_type name after reduction (for "reduced")
+		gameSummary, outcomeByOriginalType, err := h.regenGameItems(
+			ctx, tx, g, items, durationMins, allGameTimes,
+			hasPrevDay, hasNextDay, teamIDs, customSlots, eventName, date, seasonID)
+		if err != nil {
+			return RegenSummary{}, err
 		}
-		outcomeByOriginalType := map[int]itemOutcome{}
-
-		for _, it := range items {
-			var eventTime string
-			if it.Anchor == "end" && g.EndTime.Valid {
-				eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
-			} else {
-				offset := it.OffsetMinutes
-				if it.Anchor == "end" {
-					offset += durationMins
-				}
-				eventTime = addMinutes(g.Time, offset)
-			}
-
-			isBefore, isAfter, isBetween := classifySlotPosition(eventTime, g.Time, allGameTimes)
-			resultDutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes,
-				hasPrevDay, hasNextDay, isBefore, isAfter, isBetween)
-
-			if resultDutyTypeID == -1 {
-				outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "skipped"}
-				summary.Skipped = append(summary.Skipped, SkippedEntry{
-					Date: date, DutyType: it.DutyTypeName,
-				})
-				continue
-			}
-
-			resultTypeName := it.DutyTypeName
-			isReduce := resultDutyTypeID != it.DutyTypeID
-			if isReduce {
-				name, lerr := h.lookupDutyTypeNameTx(ctx, tx, resultDutyTypeID)
-				if lerr == nil {
-					resultTypeName = name
-				}
-			}
-
-			n := it.SlotsCount
-			if n <= 0 {
-				n = 1
-			}
-			slotAudiences := audiencesToDB(audiencesFromDB(it.Audiences))
-
-			insertOne := func(teamID sql.NullInt64) error {
-				k := customKey{DutyTypeID: resultDutyTypeID, EventTime: eventTime}
-				if teamID.Valid {
-					k.TeamID = teamID.Int64
-					k.HasTeam = true
-				}
-				if customSlots[k] {
-					summary.Conflicts = append(summary.Conflicts, ConflictEntry{
-						Date: date, DutyTypeID: resultDutyTypeID,
-						EventTime: eventTime, GameIDs: []int{g.ID},
-					})
-					return nil
-				}
-				var teamVal any
-				if teamID.Valid {
-					teamVal = teamID.Int64
-				}
-				_, err := tx.ExecContext(ctx, `
-					INSERT INTO duty_slots
-					  (event_name, event_date, event_time, duty_type_id, role_desc,
-					   slots_total, team_id, season_id, game_id, audiences, is_custom)
-					VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
-					eventName, date, eventTime, resultDutyTypeID, "",
-					n, teamVal, seasonID, g.ID, slotAudiences)
-				return err
-			}
-
-			if g.EventType == "generisch" {
-				// generisch never reaches here (skipped above), but kept defensive.
-				if err := insertOne(sql.NullInt64{}); err != nil {
-					return RegenSummary{}, err
-				}
-			} else {
-				for _, tid := range teamIDs {
-					if err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}); err != nil {
-						return RegenSummary{}, err
-					}
-				}
-			}
-
-			if isReduce {
-				outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "reduced", newType: resultTypeName}
-				summary.Reduced = append(summary.Reduced, ReducedEntry{
-					Date: date, From: it.DutyTypeName, To: resultTypeName,
-					Count: max(1, len(teamIDs)) * n,
-				})
-			} else {
-				outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "created"}
-				summary.Created = append(summary.Created, CreatedEntry{
-					Date: date, DutyType: it.DutyTypeName,
-					Count: max(1, len(teamIDs)) * n,
-				})
-			}
-		}
+		summary.Created = append(summary.Created, gameSummary.Created...)
+		summary.Reduced = append(summary.Reduced, gameSummary.Reduced...)
+		summary.Skipped = append(summary.Skipped, gameSummary.Skipped...)
+		summary.Conflicts = append(summary.Conflicts, gameSummary.Conflicts...)
 
 		// Step 5: turn deleted-slot user assignments into notification intents.
 		notifiedSeen := map[int]bool{}
@@ -437,6 +348,122 @@ func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, sea
 	}
 	rows.Close()
 	return dayGames, nil
+}
+
+// itemOutcome records what happened to one template item's duty type, keyed by the
+// item's original DutyTypeID, so notification intents can distinguish removed vs. variant-changed.
+type itemOutcome struct {
+	kind    string // "created" | "reduced" | "skipped"
+	newType string // duty_type name after reduction (for "reduced")
+}
+
+// regenGameItems runs the per-template-item insertion loop for a single game (after its
+// is_custom=0 slots were deleted). It returns a gameSummary carrying only the
+// Created/Reduced/Skipped/Conflicts deltas for this game plus the per-original-type outcomes
+// used downstream to build notification intents. It performs all duty_slots INSERTs on tx.
+func (h *Handler) regenGameItems(
+	ctx context.Context, tx *sql.Tx, g dayGame, items []templateItemRow, durationMins int,
+	allGameTimes []string, hasPrevDay, hasNextDay bool, teamIDs []int,
+	customSlots map[customKey]bool, eventName, date string, seasonID int,
+) (RegenSummary, map[int]itemOutcome, error) {
+	var summary RegenSummary
+	outcomeByOriginalType := map[int]itemOutcome{}
+
+	for _, it := range items {
+		var eventTime string
+		if it.Anchor == "end" && g.EndTime.Valid {
+			eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
+		} else {
+			offset := it.OffsetMinutes
+			if it.Anchor == "end" {
+				offset += durationMins
+			}
+			eventTime = addMinutes(g.Time, offset)
+		}
+
+		isBefore, isAfter, isBetween := classifySlotPosition(eventTime, g.Time, allGameTimes)
+		resultDutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes,
+			hasPrevDay, hasNextDay, isBefore, isAfter, isBetween)
+
+		if resultDutyTypeID == -1 {
+			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "skipped"}
+			summary.Skipped = append(summary.Skipped, SkippedEntry{
+				Date: date, DutyType: it.DutyTypeName,
+			})
+			continue
+		}
+
+		resultTypeName := it.DutyTypeName
+		isReduce := resultDutyTypeID != it.DutyTypeID
+		if isReduce {
+			name, lerr := h.lookupDutyTypeNameTx(ctx, tx, resultDutyTypeID)
+			if lerr == nil {
+				resultTypeName = name
+			}
+		}
+
+		n := it.SlotsCount
+		if n <= 0 {
+			n = 1
+		}
+		slotAudiences := audiencesToDB(audiencesFromDB(it.Audiences))
+
+		insertOne := func(teamID sql.NullInt64) error {
+			k := customKey{DutyTypeID: resultDutyTypeID, EventTime: eventTime}
+			if teamID.Valid {
+				k.TeamID = teamID.Int64
+				k.HasTeam = true
+			}
+			if customSlots[k] {
+				summary.Conflicts = append(summary.Conflicts, ConflictEntry{
+					Date: date, DutyTypeID: resultDutyTypeID,
+					EventTime: eventTime, GameIDs: []int{g.ID},
+				})
+				return nil
+			}
+			var teamVal any
+			if teamID.Valid {
+				teamVal = teamID.Int64
+			}
+			_, err := tx.ExecContext(ctx, `
+				INSERT INTO duty_slots
+				  (event_name, event_date, event_time, duty_type_id, role_desc,
+				   slots_total, team_id, season_id, game_id, audiences, is_custom)
+				VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
+				eventName, date, eventTime, resultDutyTypeID, "",
+				n, teamVal, seasonID, g.ID, slotAudiences)
+			return err
+		}
+
+		if g.EventType == "generisch" {
+			// generisch never reaches here (skipped above), but kept defensive.
+			if err := insertOne(sql.NullInt64{}); err != nil {
+				return RegenSummary{}, nil, err
+			}
+		} else {
+			for _, tid := range teamIDs {
+				if err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}); err != nil {
+					return RegenSummary{}, nil, err
+				}
+			}
+		}
+
+		if isReduce {
+			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "reduced", newType: resultTypeName}
+			summary.Reduced = append(summary.Reduced, ReducedEntry{
+				Date: date, From: it.DutyTypeName, To: resultTypeName,
+				Count: max(1, len(teamIDs)) * n,
+			})
+		} else {
+			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "created"}
+			summary.Created = append(summary.Created, CreatedEntry{
+				Date: date, DutyType: it.DutyTypeName,
+				Count: max(1, len(teamIDs)) * n,
+			})
+		}
+	}
+
+	return summary, outcomeByOriginalType, nil
 }
 
 func composeEventName(eventType string, isHome bool, opponent string) string {
