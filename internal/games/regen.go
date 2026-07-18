@@ -159,43 +159,10 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		eventName := composeEventName(g.EventType, g.IsHome, g.Opponent)
 
 		// Step 1: snapshot to-be-deleted slots with their assignments.
-		type deletedSlot struct {
-			DutyTypeID int
-			EventTime  string
-			TeamID     sql.NullInt64
-			UserIDs    []int
-		}
-		snapRows, err := tx.QueryContext(ctx, `
-			SELECT ds.id, ds.duty_type_id, ds.event_time, ds.team_id, da.user_id
-			FROM duty_slots ds
-			LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id
-			WHERE ds.game_id=? AND ds.is_custom=0`, g.ID)
+		slotsByID, err := h.snapshotDeletedSlots(ctx, tx, g.ID)
 		if err != nil {
-			return RegenSummary{}, fmt.Errorf("snapshot deleted: %w", err)
+			return RegenSummary{}, err
 		}
-		slotsByID := map[int]*deletedSlot{}
-		for snapRows.Next() {
-			var slotID int
-			var s deletedSlot
-			var et sql.NullString
-			var uid sql.NullInt64
-			if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.TeamID, &uid); err != nil {
-				snapRows.Close()
-				return RegenSummary{}, err
-			}
-			if et.Valid {
-				s.EventTime = et.String
-			}
-			existing, ok := slotsByID[slotID]
-			if !ok {
-				existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, TeamID: s.TeamID}
-				slotsByID[slotID] = existing
-			}
-			if uid.Valid {
-				existing.UserIDs = append(existing.UserIDs, int(uid.Int64))
-			}
-		}
-		snapRows.Close()
 
 		// Step 2: load is_custom=1 slots so we can detect conflicts before inserting.
 		customRows, err := tx.QueryContext(ctx, `
@@ -376,6 +343,52 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 	}
 
 	return summary, nil
+}
+
+// deletedSlot captures an is_custom=0 slot (and its assigned users) before deletion,
+// so removed assignments can be turned into notification intents.
+type deletedSlot struct {
+	DutyTypeID int
+	EventTime  string
+	TeamID     sql.NullInt64
+	UserIDs    []int
+}
+
+// snapshotDeletedSlots reads the is_custom=0 slots of a game together with their
+// assignments, keyed by slot id. Multiple assignment rows per slot accumulate into UserIDs.
+func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[int]*deletedSlot, error) {
+	snapRows, err := tx.QueryContext(ctx, `
+		SELECT ds.id, ds.duty_type_id, ds.event_time, ds.team_id, da.user_id
+		FROM duty_slots ds
+		LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id
+		WHERE ds.game_id=? AND ds.is_custom=0`, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot deleted: %w", err)
+	}
+	slotsByID := map[int]*deletedSlot{}
+	for snapRows.Next() {
+		var slotID int
+		var s deletedSlot
+		var et sql.NullString
+		var uid sql.NullInt64
+		if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.TeamID, &uid); err != nil {
+			snapRows.Close()
+			return nil, err
+		}
+		if et.Valid {
+			s.EventTime = et.String
+		}
+		existing, ok := slotsByID[slotID]
+		if !ok {
+			existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, TeamID: s.TeamID}
+			slotsByID[slotID] = existing
+		}
+		if uid.Valid {
+			existing.UserIDs = append(existing.UserIDs, int(uid.Int64))
+		}
+	}
+	snapRows.Close()
+	return slotsByID, nil
 }
 
 // dayGame is one row of games for the regen target date+season.
