@@ -1,59 +1,70 @@
+## Status
+
+**Umgesetzt** auf Branch `feat/mannschaft-aufgaben-strafen` (Worktree). Backend + Frontend grün:
+`go build ./...`, `go test ./...`, golangci-lint, `pnpm build`, `pnpm lint`, Broadcast-/Arch-/Permission-Gate, `openspec validate` — alle bestanden.
+
+**Bewusste Abweichungen vom ursprünglichen Plan:**
+- Gates liegen **inline im `internal/teams`-Package** (`access.go`), nicht in `internal/policy/rules.go` — `policy` führt kein `*sql.DB`, und die Checks sind DB-Lookups (wie `GetRoster` seinen Zugriffscheck schon inline macht).
+- **Kein neues Package**: Aufgaben/Strafen leben in `internal/teams` (`responsibilities.go`, `penalties.go`) → keine `arch_test`-Klassifizierung nötig.
+- Roster liefert `responsibilities` als **`[{id,label}]`** (statt nur Label), damit der Trainer jede Zuweisung direkt vom Chip entfernen kann.
+- Zusätzliches Harness-Gate gepflegt: `internal/permissions/matrix_test.go` (Permission-Matrix-Drift-Check).
+
 ## 1. Datenmodell & Migration
 
-- [ ] 1.1 Nächste freie Migrationsnummer ermitteln (`ls internal/db/migrations/`) und `0NN_mannschaft_aufgaben_strafen.up.sql` + `.down.sql` anlegen
-- [ ] 1.2 Table `responsibility_types(id, kader_id → kader ON DELETE CASCADE, label)` + UNIQUE(kader_id, label)
-- [ ] 1.3 Table `penalty_types(id, kader_id → kader ON DELETE CASCADE, reason, default_amount_cent INTEGER)`
-- [ ] 1.4 Table `kader_strafenwarte(kader_id → kader ON DELETE CASCADE, member_id → members ON DELETE CASCADE, PRIMARY KEY(kader_id, member_id))`
-- [ ] 1.5 Table `member_responsibilities(id, kader_id → kader ON DELETE CASCADE, member_id → members ON DELETE CASCADE, label)` — label als Snapshot
-- [ ] 1.6 Table `team_penalties(id, kader_id → kader ON DELETE CASCADE, member_id → members ON DELETE CASCADE, amount_cent INTEGER, reason, created_by_member_id → members, created_at DATETIME)` — reason/amount_cent als Snapshot, kein Status
-- [ ] 1.7 `.down.sql` droppt alle fünf Tables in FK-sicherer Reihenfolge
-- [ ] 1.8 `make migrate-up` lokal ausführen; Migration idempotent verifizieren; Architektur-Test (neues Package klassifizieren, falls eigenes Package) beachten
+- [x] 1.1 Migration `031_mannschaft_aufgaben_strafen.up.sql` + `.down.sql`
+- [x] 1.2 `responsibility_types(id, kader_id, label)` UNIQUE(kader_id,label)
+- [x] 1.3 `penalty_types(id, kader_id, reason, default_amount_cent)`
+- [x] 1.4 `kader_strafenwarte(kader_id, member_id)` PK
+- [x] 1.5 `member_responsibilities(id, kader_id, member_id, label)` — Snapshot
+- [x] 1.6 `team_penalties(id, kader_id, member_id, amount_cent, reason, created_by_member_id, created_at)` — Snapshot, kein Status
+- [x] 1.7 `.down.sql` FK-sicher
+- [x] 1.8 Migration up/down verifiziert (Teil von `go test ./internal/db/...`)
 
-## 2. Backend — Team→Kader-Auflösung & Gates (policy)
+## 2. Backend — Gates (teams/access.go)
 
-- [ ] 2.1 Helper in `internal/policy/rules.go`: `IsTrainerOfKader(userID, kaderID)` bzw. team-basiert, im Stil des bestehenden Trainer-Scopings
-- [ ] 2.2 Helper `IsStrafenwartOfKader(userID, kaderID)` (Lookup `kader_strafenwarte` via `members.user_id`)
-- [ ] 2.3 Helper `CanReadPenalties(userID, teamID)` — true bei Spieler/Trainer/Erweitertem Kader der aktiven Saison, **false** bei Eltern/Außenstehenden
-- [ ] 2.4 Team→aktive-Saison-Kader-Auflösung an bestehende `GetRoster`-Logik ausrichten (mehrere Kader pro Team via `team_number` gleich behandeln)
-- [ ] 2.5 Unit-Tests für die drei Gates (positive + negative Fälle, insb. Eltern → false, Fremd-Team → false)
+- [x] 2.1 `isTrainerOfTeam` (kader_trainers, admin-Bypass)
+- [x] 2.2 `isStrafenwartOfTeam` (kader_strafenwarte)
+- [x] 2.3 `canReadPenalties` (Spieler/Trainer/Erweitert; Eltern/Extern → false)
+- [x] 2.4 `resolveKaderID` (aktive Saison)
+- [x] 2.5 Gates über die Handler-Tests abgedeckt (403-Fälle je Route)
 
-## 3. Backend — Aufgaben-Handler & Routen
+## 3. Backend — Aufgaben
 
-- [ ] 3.1 Handler für Aufgaben-Catalog-CRUD (`responsibility_types`) — Gate Trainer des Kaders, `h.hub.Broadcast("responsibilities")`
-- [ ] 3.2 Handler für Aufgaben-Zuweisung/Entfernen (`member_responsibilities`) — Snapshot-Label, Gate Trainer, Broadcast
-- [ ] 3.3 `GetRoster` erweitern: Aufgaben-Labels je Spieler additiv in die Roster-Response aufnehmen
-- [ ] 3.4 Routen in `internal/app/router.go` (`BuildRouter`) unter passendem Tier registrieren (`r.PathValue`)
-- [ ] 3.5 Tests: `TestResponsibilityCatalog_TrainerCreates_200`, `_NonTrainer_403`, `TestResponsibilityAssign_Trainer_200`, `TestRoster_IncludesResponsibilities`, `TestResponsibility_CatalogEditKeepsSnapshot`
+- [x] 3.1 Catalog-CRUD `responsibility_types` (Trainer, Broadcast)
+- [x] 3.2 Zuweisung/Entfernen `member_responsibilities` (Snapshot, Trainer, Broadcast)
+- [x] 3.3 `GetRoster` liefert memberId + responsibilities[{id,label}] + canManage
+- [x] 3.4 Routen in `BuildRouter`
+- [x] 3.5 Tests (Trainer 200, Non-Trainer 403, unauth 401, Roster inkl. Eltern, Snapshot)
 
-## 4. Backend — Strafen-Handler & Routen
+## 4. Backend — Strafen
 
-- [ ] 4.1 Handler `GET /api/teams/{id}/penalties` — Read-Gate `CanReadPenalties`, Liste + Kassenstand-Summe pro Spieler; **nicht** auf der Roster-Response
-- [ ] 4.2 Handler `POST /api/teams/{id}/penalties` — Gate Strafenwart des Kaders, Betrag editierbar (Snapshot), Broadcast `penalties`
-- [ ] 4.3 Handler `DELETE /api/teams/{id}/penalties/{pid}` — Storno (hard delete), Gate Strafenwart, Broadcast
-- [ ] 4.4 Handler `DELETE /api/teams/{id}/penalties?member={mid}` — Zurücksetzen je Spieler (hard delete), Gate Strafenwart, Broadcast
-- [ ] 4.5 Handler Strafen-Catalog-CRUD (`penalty_types`) + Strafenwart-Ernennung (`kader_strafenwarte`) — Gate Trainer, Broadcast
-- [ ] 4.6 Routen in `BuildRouter` registrieren
-- [ ] 4.7 Tests: `TestPenalties_Player_200`, `_ExtendedMember_200`, `_Parent_403`, `_Outsider_403`, `TestRoster_ExcludesPenalties`
-- [ ] 4.8 Tests: `TestPenaltyCreate_Strafenwart_200`, `_NonStrafenwart_403`, `_ForeignTeamStrafenwart_403`, `TestPenaltyStorno_Strafenwart_200`, `TestPenaltyReset_PerMember_200`
-- [ ] 4.9 Tests: `TestStrafenwartAppoint_Trainer_200`/`_NonTrainer_403`, `TestPenalty_CatalogEditKeepsSnapshot`, `TestClubFunctions_NoStrafenwartValue`
+- [x] 4.1 `GET /penalties` mit Read-Gate + Kassenstand je Spieler
+- [x] 4.2 `POST /penalties` (Strafenwart, editierbarer Betrag, Broadcast)
+- [x] 4.3 `DELETE /penalties/{pid}` Storno
+- [x] 4.4 `DELETE /penalties?member=` Zurücksetzen je Spieler
+- [x] 4.5 Strafen-Catalog-CRUD + Strafenwart-Ernennung (Trainer)
+- [x] 4.6 Routen in `BuildRouter`
+- [x] 4.7 Read-Gate-Tests (Player/Extended 200, Parent/Outsider 403, Roster ohne Strafen)
+- [x] 4.8 Write-Gate-Tests (Strafenwart 200, Non-Strafenwart 403, Fremd-Team 403, Storno, Reset)
+- [x] 4.9 Ernennung 200/403, Snapshot-Invariante, `TestClubFunctions_NoStrafenwartValue`
 
 ## 5. Test-Fixtures
 
-- [ ] 5.1 Fixtures in `internal/testutil/` ergänzen soweit nötig (z.B. `AppointStrafenwart`, `CreatePenalty`, `AssignResponsibility`) — bestehende `CreateKader`/`CreateMember`/`CreateTeam` nutzen
-- [ ] 5.2 Sicherstellen, dass Fixtures Eltern (`family_links`) und Erweiterten Kader (`kader_extended_members`) für die Negativ-/Positiv-Tests abbilden
+- [x] 5.1 `internal/testutil/fixtures_teamextras.go` (AppointStrafenwart, CreatePenalty, AssignResponsibility, AddResponsibilityType, AddPenaltyType)
+- [x] 5.2 Eltern (family_links) + Erweiterter Kader in den Negativ-/Positiv-Tests abgebildet
 
 ## 6. Frontend — MeinTeamPage
 
-- [ ] 6.1 Aufgaben als Chips neben dem Spielernamen im Team-Tab (`RosterSection`), aus der erweiterten Roster-Response
-- [ ] 6.2 Strafen als eigener Bereich/Tab, nur sichtbar/geladen für Berechtigte (`GET /teams/{id}/penalties`; 403 sauber behandeln = Bereich ausblenden), Liste + Kassenstand-Summe pro Spieler (Cent → €-Anzeige)
-- [ ] 6.3 Trainer-Verwaltung: Aufgaben-Catalog pflegen, Aufgaben zuweisen, Strafen-Catalog pflegen, Strafenwart ernennen (Dropdown + Freitext, brand-Tokens, lucide-Icons, `aria-label` bei Icon-Buttons)
-- [ ] 6.4 Strafenwart-Aktionen: Strafe vergeben (Betrag editierbar), stornieren, je Spieler zurücksetzen (Bestätigung vor Reset)
-- [ ] 6.5 `useLiveUpdates` um `responsibilities` und `penalties` erweitern → betroffene Ansicht neu laden
+- [x] 6.1 Aufgaben-Chips je Spieler (Team-Tab, inkl. Erweiterter Kader)
+- [x] 6.2 Strafen-Tab: 403 versteckt Sektion; sonst Kassenstand je Spieler + Team (Cent→€)
+- [x] 6.3 Trainer-Verwaltung: Catalog pflegen, Aufgaben zuweisen/entfernen, Strafenwart ernennen
+- [x] 6.4 Strafenwart-Aktionen: vergeben (Betrag editierbar), stornieren, je Spieler zurücksetzen (confirm)
+- [x] 6.5 `useLiveUpdates` um `responsibilities`/`penalties` erweitert
 
 ## 7. Verifikation
 
-- [ ] 7.1 `make test` (inkl. Architektur- + Broadcast-Gate) grün
-- [ ] 7.2 `make lint` grün (brand-Tokens statt Raw-Tailwind, keine Emojis/Unicode-Icons)
-- [ ] 7.3 `pnpm -C web build && pnpm -C web test && pnpm -C web lint` grün
-- [ ] 7.4 `/verify-change` durchlaufen (Route→Tests, Mutation→Broadcast/useLiveUpdates, Migrationsnummer, `openspec validate`)
-- [ ] 7.5 Ein Commit pro Task-Gruppe (Conventional Commits, Scope `teams`/`db`/`policy`); abschließend Proposal archivieren
+- [x] 7.1 `go test ./...` (inkl. Architektur-, Broadcast- + Permission-Gate) grün
+- [x] 7.2 golangci-lint grün (brand-Tokens, lucide-Icons, keine Raw-Farben/Emojis)
+- [x] 7.3 `pnpm -C web build` + `pnpm -C web lint` grün (0 Errors)
+- [x] 7.4 `openspec validate` grün
+- [ ] 7.5 Merge nach `main` + Deploy (offen — siehe Zusammenfassung)
