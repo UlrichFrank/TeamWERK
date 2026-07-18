@@ -264,6 +264,68 @@ func TestListMyTeams_IsNotExtended(t *testing.T) {
 	}
 }
 
+// TestGetRoster_IsStrafenwart verifies that ernannte Strafenwarte auf dem Team-Tab
+// per Flag am Spieler-Entry sichtbar sind — Stammkader wie erweiterter Kader.
+func TestGetRoster_IsStrafenwart(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	// Regulärer Spieler → wird Strafenwart
+	swUserID := testutil.CreateUser(t, db, "standard")
+	swMemberID := testutil.CreateMember(t, db, swUserID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, swMemberID)
+	testutil.AppointStrafenwart(t, db, kaderID, swMemberID)
+
+	// Regulärer Spieler ohne Rolle
+	plainUserID := testutil.CreateUser(t, db, "standard")
+	plainMemberID := testutil.CreateMember(t, db, plainUserID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, plainMemberID)
+
+	// Erweiterter Spieler → wird ebenfalls Strafenwart (Gate-Test für extended)
+	extUserID := testutil.CreateUser(t, db, "standard")
+	extMemberID := testutil.CreateMember(t, db, extUserID)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, extMemberID)
+	testutil.AppointStrafenwart(t, db, kaderID, extMemberID)
+
+	h := teams.NewHandler(db, hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, plainUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/teams/"+strconv.Itoa(teamID)+"/roster", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var roster map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&roster)
+	res.Body.Close()
+
+	var players, extended []map[string]any
+	json.Unmarshal(roster["players"], &players)
+	json.Unmarshal(roster["extended_players"], &extended)
+
+	got := map[int]bool{}
+	for _, p := range players {
+		got[int(p["memberId"].(float64))] = p["isStrafenwart"].(bool)
+	}
+	for _, p := range extended {
+		got[int(p["memberId"].(float64))] = p["isStrafenwart"].(bool)
+	}
+
+	if !got[swMemberID] {
+		t.Errorf("expected regular Strafenwart member %d to have isStrafenwart=true, got %v", swMemberID, got)
+	}
+	if got[plainMemberID] {
+		t.Errorf("expected plain member %d to have isStrafenwart=false, got true", plainMemberID)
+	}
+	if !got[extMemberID] {
+		t.Errorf("expected extended Strafenwart member %d to have isStrafenwart=true, got %v", extMemberID, got)
+	}
+}
+
 // TestGetRoster_NoExtendedPlayers verifies that extended_players is an empty array when none exist.
 func TestGetRoster_NoExtendedPlayers(t *testing.T) {
 	db := testutil.NewDB(t)

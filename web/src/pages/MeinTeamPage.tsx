@@ -13,6 +13,7 @@ interface PlayerEntry {
   jerseyNumber: number | null
   memberId: number
   responsibilities?: Responsibility[]
+  isStrafenwart?: boolean
 }
 interface ParentEntry { userId: number; name: string; children: string[] }
 
@@ -228,6 +229,11 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, reloadRoster,
                       <td className="py-2">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <PersonChip userId={p.userId || undefined} name={p.name} />
+                          {p.isStrafenwart && (
+                            <span className="inline-flex items-center rounded-full border border-brand-yellow px-2 py-0.5 text-xs text-brand-text-muted">
+                              Strafenwart
+                            </span>
+                          )}
                           {(p.responsibilities ?? []).map(r => (
                             <span key={r.id} className="inline-flex items-center rounded-full border border-brand-yellow px-2 py-0.5 text-xs text-brand-text-muted">
                               {r.label}
@@ -257,6 +263,11 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, reloadRoster,
                         <td className="py-2">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <PersonChip userId={p.userId || undefined} name={p.name} />
+                            {p.isStrafenwart && (
+                              <span className="inline-flex items-center rounded-full border border-brand-yellow px-2 py-0.5 text-xs text-brand-text-muted">
+                                Strafenwart
+                              </span>
+                            )}
                             {(p.responsibilities ?? []).map(r => (
                               <span key={r.id} className="inline-flex items-center rounded-full border border-brand-yellow px-2 py-0.5 text-xs text-brand-text-muted">
                                 {r.label}
@@ -641,6 +652,9 @@ export default function MeinTeamPage() {
     }
     if (event === 'penalties') {
       for (const idStr of Object.keys(penalties)) loadPenalties(Number(idStr))
+      // Strafenwart-Ernennung broadcastet ebenfalls 'penalties' → Team-Tab-Chip
+      // hängt am roster.players[].isStrafenwart, also auch die Rosters neu ziehen.
+      for (const idStr of Object.keys(rosters)) loadRoster(Number(idStr))
       setLiveBump(b => b + 1)
     }
   })

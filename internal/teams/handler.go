@@ -38,6 +38,7 @@ type PlayerEntry struct {
 	Name             string                     `json:"name"`
 	JerseyNumber     *int                       `json:"jerseyNumber"`
 	Responsibilities []ResponsibilityAssignment `json:"responsibilities"`
+	IsStrafenwart    bool                       `json:"isStrafenwart"`
 }
 
 type ParentEntry struct {
@@ -111,6 +112,24 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 	var seasonID int
 	h.db.QueryRowContext(ctx, `SELECT id FROM seasons WHERE is_active = 1 LIMIT 1`).Scan(&seasonID)
 
+	// Strafenwart-Member-IDs für dieses Team+Saison einmal einsammeln, damit die
+	// Spieler-Rows unten in O(1) markiert werden können. Die Info ist auf dem
+	// Team-Tab (funktionale Rolle, kein PII) für alle Team-Mitglieder sichtbar.
+	strafenwarte := map[int]bool{}
+	if swRows, err := h.db.QueryContext(ctx, `
+		SELECT ks.member_id
+		FROM kader_strafenwarte ks
+		JOIN kader k ON k.id = ks.kader_id
+		WHERE k.team_id = ? AND k.season_id = ?`, teamID, seasonID); err == nil {
+		defer swRows.Close()
+		for swRows.Next() {
+			var mid int
+			if err := swRows.Scan(&mid); err == nil {
+				strafenwarte[mid] = true
+			}
+		}
+	}
+
 	// Trainers: kader_trainers → members → users
 	trainerRows, err := h.db.QueryContext(ctx, `
 		SELECT DISTINCT COALESCE(u.id, 0), m.first_name || ' ' || m.last_name
@@ -150,6 +169,7 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 				p.JerseyNumber = &n
 			}
 			p.Responsibilities = h.responsibilitiesFor(ctx, teamID, seasonID, p.MemberID)
+			p.IsStrafenwart = strafenwarte[p.MemberID]
 			resp.Players = append(resp.Players, p)
 		}
 	}
@@ -175,6 +195,7 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 				p.JerseyNumber = &n
 			}
 			p.Responsibilities = h.responsibilitiesFor(ctx, teamID, seasonID, p.MemberID)
+			p.IsStrafenwart = strafenwarte[p.MemberID]
 			resp.ExtendedPlayers = append(resp.ExtendedPlayers, p)
 		}
 	}
