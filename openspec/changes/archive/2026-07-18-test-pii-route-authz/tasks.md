@@ -55,10 +55,10 @@
 
 ## 6. Abschluss
 
-- [ ] 6.1 `go test ./...` grün; `/verify-change` (Build/Test/Lint + Invarianten) grün
-- [ ] 6.2 `openspec validate test-pii-route-authz --strict` grün
-- [ ] 6.3 Rückblick (Roadmap 9.1): Risiko-/Churn-Bild nach Welle 1 neu bewerten; Roadmap-Section 4 abhaken
-- [ ] 6.4 Change archivieren (`openspec archive`) — appliziert Capability `pii-route-authz`
+- [x] 6.1 `go test ./...` grün; `/verify-change` (Build/Test/Lint + Invarianten) grün
+- [x] 6.2 `openspec validate test-pii-route-authz --strict` grün
+- [x] 6.3 Rückblick (Roadmap 9.1): Risiko-/Churn-Bild nach Welle 1 neu bewerten; Roadmap-Section 4 abhaken
+- [x] 6.4 Change archivieren (`openspec archive`) — appliziert Capability `pii-route-authz`
 
 ## Test-Anforderungen
 
@@ -81,9 +81,9 @@ Route → Testname → erwarteter Status → garantierte Invariante.
 - `POST /api/duty-board/{slotId}/claim` (Spielbericht) → `TestClaim_MatchReportSlot_NonPressForbidden` → 403 → nur presseteam/admin
 - `POST …/claim` (Spielbericht, Proxy) → `TestClaim_MatchReportSlot_ProxyParentForbidden` → 403 → Rolle des handelnden Users zählt
 
-**training/games** (`internal/training`, `internal/games`)
-- `POST /api/training-sessions/{id}/attendances` → `TestSaveAttendances_ForeignTeamTrainerForbidden` → 403 → nur Staff des zuständigen Teams
-- `POST /api/games/{id}/attendances` → `TestGameSaveAttendances_ForeignTeamForbidden` → 403 → nur Staff des zuständigen Teams
+**trainings/games** (`internal/trainings`, `internal/games`)
+- `POST /api/training-sessions/{id}/attendances` → `TestSaveAttendances_ForeignTeamTrainerForbidden` (neu) → 403 → nur Staff des zuständigen Teams
+- `POST /api/games/{id}/attendances` → `TestSaveGameAttendances_TrainerOfOtherTeam_403` (bereits vorhanden, nicht dupliziert) → 403 → nur Staff des zuständigen Teams
 
 **absences** (`internal/absences`)
 - `GET /api/absences/calendar?show_team=true` → `TestCalendar_ShowTeam_MemberSeesNoTeamAbsences` → 200 (leer) → kein Team-Leak an Nicht-Berechtigte
