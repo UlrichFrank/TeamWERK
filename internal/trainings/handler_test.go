@@ -1644,6 +1644,32 @@ func TestRespond_ParentForNonChild_Forbidden(t *testing.T) {
 	}
 }
 
+// Isolations-Pin: ein ganz gewöhnlicher standard-Nutzer (keine Funktion, kein Elternteil)
+// darf die RSVP eines fremden Mitglieds nicht setzen (403). Entkoppelt vom Cutoff-Timing
+// (vor Cutoff) und vom Kassierer-Spezialfall — nagelt das Ownership-Gate direkt fest.
+func TestRespond_StandardForeignMember_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sid := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-06-01")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	testutil.CreateMember(t, db, userID) // hat eigenes Mitglied, antwortet aber für ein fremdes
+	foreign := testutil.CreateMember(t, db, 0)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sid), token,
+		map[string]any{"status": "confirmed", "member_id": foreign})
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+}
+
 // B4: Account ohne verknüpften Mitglieds-Datensatz, ohne member_id → 422
 // (Respond: own-member-Pfad, memberIDForUser == 0).
 func TestRespond_SpielerUnlinkedAccount_422(t *testing.T) {
