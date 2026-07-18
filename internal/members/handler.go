@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1694,6 +1695,77 @@ func normalizeSepa(s string) int {
 	return 0
 }
 
+// parsedCSV is the header/index/rows result of parseImportCSV.
+type parsedCSV struct {
+	header []string
+	colIdx map[string]int
+	rows   [][]string
+}
+
+// col returns the trimmed value of the named column for a row, or "" if the
+// column is absent or the row is too short.
+func (pc *parsedCSV) col(row []string, name string) string {
+	idx, ok := pc.colIdx[name]
+	if !ok || idx >= len(row) {
+		return ""
+	}
+	return strings.TrimSpace(row[idx])
+}
+
+// parseImportCSV strips a UTF-8 BOM, auto-detects the delimiter from the first
+// line, reads the header (building a column index incl. external-tool aliases),
+// enforces the required Vorname/Nachname columns, and reads all rows. The three
+// failure cases return errors with the verbatim 400-Text the handler surfaces.
+func parseImportCSV(raw []byte) (*parsedCSV, error) {
+	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")) // strip UTF-8 BOM
+
+	// Auto-detect delimiter from first line
+	firstNewline := bytes.IndexByte(raw, '\n')
+	firstLineBytes := raw
+	if firstNewline > 0 {
+		firstLineBytes = raw[:firstNewline]
+	}
+	delim := rune(',')
+	if bytes.ContainsRune(firstLineBytes, ';') {
+		delim = ';'
+	}
+
+	cr := csv.NewReader(bytes.NewReader(raw))
+	cr.Comma = delim
+	cr.TrimLeadingSpace = true
+
+	header, err := cr.Read()
+	if err != nil {
+		return nil, errors.New("cannot read CSV header")
+	}
+	// Canonical names for columns that external tools export differently.
+	columnAliases := map[string]string{
+		"Name":          "Nachname",
+		"geboren am":    "Geburtsdatum",
+		"Mitglied seit": "join_date",
+	}
+	colIdx := make(map[string]int, len(header))
+	for i, name := range header {
+		trimmed := strings.TrimSpace(name)
+		colIdx[trimmed] = i
+		if canonical, ok := columnAliases[trimmed]; ok {
+			colIdx[canonical] = i
+		}
+	}
+	if _, ok := colIdx["Vorname"]; !ok {
+		return nil, errors.New("missing required column: Vorname")
+	}
+	if _, ok := colIdx["Nachname"]; !ok {
+		return nil, errors.New("missing required column: Nachname")
+	}
+
+	rows, err := cr.ReadAll()
+	if err != nil {
+		return nil, errors.New("cannot parse CSV")
+	}
+	return &parsedCSV{header: header, colIdx: colIdx, rows: rows}, nil
+}
+
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
@@ -1771,63 +1843,14 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cannot read file", http.StatusBadRequest)
 		return
 	}
-	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf")) // strip UTF-8 BOM
 
-	// Auto-detect delimiter from first line
-	firstNewline := bytes.IndexByte(raw, '\n')
-	firstLineBytes := raw
-	if firstNewline > 0 {
-		firstLineBytes = raw[:firstNewline]
-	}
-	delim := rune(',')
-	if bytes.ContainsRune(firstLineBytes, ';') {
-		delim = ';'
-	}
-
-	cr := csv.NewReader(bytes.NewReader(raw))
-	cr.Comma = delim
-	cr.TrimLeadingSpace = true
-
-	header, err := cr.Read()
+	pc, err := parseImportCSV(raw)
 	if err != nil {
-		http.Error(w, "cannot read CSV header", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Canonical names for columns that external tools export differently.
-	columnAliases := map[string]string{
-		"Name":          "Nachname",
-		"geboren am":    "Geburtsdatum",
-		"Mitglied seit": "join_date",
-	}
-	colIdx := make(map[string]int, len(header))
-	for i, name := range header {
-		trimmed := strings.TrimSpace(name)
-		colIdx[trimmed] = i
-		if canonical, ok := columnAliases[trimmed]; ok {
-			colIdx[canonical] = i
-		}
-	}
-	col := func(row []string, name string) string {
-		idx, ok := colIdx[name]
-		if !ok || idx >= len(row) {
-			return ""
-		}
-		return strings.TrimSpace(row[idx])
-	}
-	if _, ok := colIdx["Vorname"]; !ok {
-		http.Error(w, "missing required column: Vorname", http.StatusBadRequest)
-		return
-	}
-	if _, ok := colIdx["Nachname"]; !ok {
-		http.Error(w, "missing required column: Nachname", http.StatusBadRequest)
-		return
-	}
-
-	allRows, err := cr.ReadAll()
-	if err != nil {
-		http.Error(w, "cannot parse CSV", http.StatusBadRequest)
-		return
-	}
+	col := pc.col
+	allRows := pc.rows
 
 	// Duplicate detection within CSV
 	type dupKey struct{ first, last, dob string }
