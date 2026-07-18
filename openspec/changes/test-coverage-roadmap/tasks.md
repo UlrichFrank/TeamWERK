@@ -42,6 +42,13 @@
 
 ## 7. Parallel — Frontend
 
+> **Status (2026-07-18):** einziger noch offener Roadmap-Teil. Bewusst NICHT im Backend-Durchlauf
+> mitgemacht — Greenfield-Infra: Playwright ist nicht installiert (keine Config/Specs), braucht
+> Browser-Binaries + Orchestrierung von Go-Backend + Vite + Test-DB und einen echten (headed/
+> headless) Lauf zur Verifikation. Nicht sinnvoll agenten-getrieben „blind" grün zu bekommen →
+> eigene, interaktive Session mit real gestarteter App. Der Change `frontend-e2e-tests` (Proposal/
+> Design/Tasks) liegt vor; 7.1 beginnt mit `pnpm -C web add -D @playwright/test` + `playwright.config`.
+
 - [ ] 7.1 `frontend-e2e-tests` Playwright-Setup abschließen (existierender Change)
 - [ ] 7.2 Golden-Path-E2E: Login → Dashboard → Dienstbörse → Slot claimen → Logout
 - [ ] 7.3 Golden-Path-E2E: Mitglied bearbeiten (Vorstand), Bank-Daten-Envelope schreiben (kein Klartext) — Zero-Knowledge-Pfad
@@ -55,6 +62,6 @@
 
 ## 9. Roadmap-Kontrolle
 
-- [ ] 9.1 Nach jeder abgeschlossenen Welle: Rückblick — hat sich das Risiko-/Churn-Bild verschoben? Nächste Welle noch die richtige?
-- [ ] 9.2 Wenn nach einer Welle die Welt anders aussieht, Roadmap explizit updaten oder archivieren — nicht sklavisch abarbeiten
-- [ ] 9.3 Roadmap archivieren, wenn alle Wellen entweder abgeschlossen oder als „nicht mehr relevant" markiert sind
+- [x] 9.1 Rückblick nach jeder Welle erfolgt — Scope wurde mehrfach am realen Code geschärft (W1: attendance-Stats schon abgedeckt; W2: games-Recording schon durch; Nachgelagert: venues-Authz via matrix_test). Adversariale Reviews fingen pro Welle echte Mängel (False-Green W1, geldnahe Gaps W2, Charakterisierungs-Lücken W3, **zwei Broken-Access-Control-Bugs** im Nachgelagert-Teil).
+- [x] 9.2 Roadmap wurde durchgehend explizit fortgeschrieben statt sklavisch abgearbeitet — u.a. Duplikate weggelassen, `regenSingleDay`-Refactor bewusst als eigener Folge-Change (nicht in 8.3 gequetscht), Frontend-E2E bewusst als eigene Session abgegrenzt.
+- [ ] 9.3 Roadmap archivieren — **noch offen**: einziger Rest ist Abschnitt 7 (Frontend-E2E). Archivierung erst, wenn Welle 7 abgeschlossen ODER bewusst verworfen ist.
