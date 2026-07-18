@@ -29,7 +29,7 @@
 ## 5. Welle 2 — `test-finance-audit` (+ optional auth-Fehlerpfade)
 
 - [x] 5.1 Proposal: `fee-run/confirm` (Happy/404/400 + Protokoll-Schreiben, keine Bankdaten), `fee-run/protocol` (Rücklesen/404), `export-data`-400 (Mitglied ohne Mandat, unbekannte ID) + Halbierungsmatrix-Restfälle (unterjähriger Austritt + home_club)
-- [ ] 5.2 Optional als eigener kleiner Change / in `test-coverage-fachlich`: `auth`-Fehlerpfade (Session-Invalidierung nach E-Mail-Änderung, Passwort-Reauth, abgelaufener/manipulierter Token)
+- [x] 5.2 `auth`-Fehlerpfade: 6 Tests — E-Mail-Change-Session-Invalidierung (ConfirmEmailChange löscht refresh_tokens) + Passwort-Reauth (RequestEmailChange 403/204) + abgelaufener/manipulierter Access-Token (401) + abgelaufener Refresh-Token (401). Passwort-Reauth beim Passwort-Ändern war bereits abgedeckt (nicht dupliziert).
 - [x] 5.3 `openspec validate` grün
 - [x] 5.4 Umgesetzt, getestet, archiviert — 15 neue Tests in `internal/beitragslauf` (confirm/protocol + export-data-400 + Preview-Halbierung/Summen); keine neuen Fixtures. Zwei parallele Review-Agenten: keine False-Greens, drei geldnahe Härtungen eingearbeitet (summe_erfolgreich_cent, Confirm-404-keine-Datei, IBAN-Tripwire ehrlich kommentiert).
 
@@ -49,9 +49,9 @@
 
 ## 8. Nachgelagert (bewusst nach den Wellen)
 
-- [ ] 8.1 `venues`: 403-Authz + destruktive Routen (`Delete`/`DeleteAll`) + Import-Fehlerpfade — billige Versicherung, niedrigster Churn
-- [ ] 8.2 `trainings` DeleteSession + Cross-Family-Authz
-- [ ] 8.3 `games`-Regen: erst Refactor-Vorbehalt für `regenSingleDay` klären (cog prüfen), dann Tests
+- [x] 8.1 `venues`: 8 Tests — destruktive Routen (Delete 204/404/400, DeleteAll schont Home-Venue) + Import-Fehlerpfade + Upsert-Happy. 403-Authz war bereits via `permissions/matrix_test.go` abgedeckt (nicht dupliziert).
+- [x] 8.2 `trainings`: DeleteSession-Authz (own/foreign/404) + Cross-Family + GetAttendances/GetSession/Create/UpdateSession-Fehlerpfade. **Dabei echten Broken-Access-Control-Bug in `Respond` gefunden & gefixt** (Rollen-Switch auf tote „spieler/elternteil" → jeder konnte fremde RSVP setzen); jetzt Ownership-Gate (own/parent/staff → sonst 403).
+- [x] 8.3 `games`-Regen: **Komplexitäts-Vorbehalt geklärt** — `regenSingleDay` ist gocognit **124** (>> members.Import 60), Refactor gerechtfertigt, ABER voll black-box-testbar → **Tests zuerst** (5 Regen-Invarianten festgenagelt: template_id=NULL, Konflikt, removed-Notification, skipped-Inhalt, same_day reduced). **`regenSingleDay`-Refactor als eigener Folgeschritt vertagt** (analog Welle 3, jetzt durch die Tests abgesichert).
 
 ## 9. Roadmap-Kontrolle
 
