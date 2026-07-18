@@ -23,12 +23,12 @@
 
 ## 3. duties — Spielbericht-Slot-Guard (`internal/duties/`)
 
-- [ ] 3.1 `TestClaim_MatchReportSlot_NonPressForbidden` — Nicht-Presseteam claimt Spielbericht-Slot → 403 (`role_required`)
-- [ ] 3.2 `TestClaim_MatchReportSlot_PressTeamOK` — `presseteam` claimt → 204
-- [ ] 3.3 `TestClaim_MatchReportSlot_AdminOK` — `admin` claimt → 204
-- [ ] 3.4 `TestClaim_MatchReportSlot_ProxyParentForbidden` — Elternteil ohne `presseteam` claimt für Kind → 403 (Rolle des handelnden Users wird gewertet)
-- [ ] 3.5 `TestClaim_NonMatchReportSlot_Unaffected` — Slot anderen Typs → Guard greift nicht, regulärer Claim
-- [ ] 3.6 Commit: `test(duties): Spielbericht-Slot-Guard inkl. Proxy-Rollenverschiebung`
+- [x] 3.1 `TestClaim_MatchReportSlot_NonPressForbidden` — Nicht-Presseteam claimt Spielbericht-Slot → 403 (`role_required`)
+- [x] 3.2 `TestClaim_MatchReportSlot_PressTeamOK` — `presseteam` claimt → 204
+- [x] 3.3 `TestClaim_MatchReportSlot_AdminOK` — `admin` claimt → 204
+- [x] 3.4 `TestClaim_MatchReportSlot_ProxyParentForbidden` — Elternteil ohne `presseteam` claimt für Kind → 403 (Rolle des handelnden Users wird gewertet)
+- [x] 3.5 `TestClaim_NonMatchReportSlot_Unaffected` — Slot anderen Typs → Guard greift nicht, regulärer Claim
+- [x] 3.6 Commit: `test(duties): Spielbericht-Slot-Guard inkl. Proxy-Rollenverschiebung`
 
 ## 4. attendance-Recording (`internal/training/` + `internal/games/`)
 

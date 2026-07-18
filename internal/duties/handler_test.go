@@ -1926,3 +1926,117 @@ func TestBoard_ExposesHasInstruction(t *testing.T) {
 		t.Errorf("expected duty_type_id=%d, got %v", dtWithout, id)
 	}
 }
+
+// ── Spielbericht-Slot-Guard (assertSlotTakePermitted) ────────────────────────
+
+// matchReportSlot legt einen Spielbericht-Duty-Type + Slot an (Guard matcht per Name).
+func matchReportSlot(t *testing.T, db *sql.DB) (seasonID, slotID int) {
+	t.Helper()
+	seasonID = testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Spielbericht", 0.5)
+	slotID = createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	return
+}
+
+func TestClaim_MatchReportSlot_NonPressForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, slotID := matchReportSlot(t, db)
+	userID := testutil.CreateUser(t, db, "standard")
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, "/api/duty-board/"+itoa(slotID)+"/claim", token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-press user, got %d", res.StatusCode)
+	}
+	if got := slotsFilled(t, db, slotID); got != 0 {
+		t.Errorf("slot must not be claimed, slots_filled=%d", got)
+	}
+}
+
+func TestClaim_MatchReportSlot_PressTeamOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, slotID := matchReportSlot(t, db)
+	userID := testutil.CreateUser(t, db, "presseteam")
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "presseteam", nil)
+	res := testutil.Post(t, srv, "/api/duty-board/"+itoa(slotID)+"/claim", token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 for presseteam, got %d", res.StatusCode)
+	}
+}
+
+func TestClaim_MatchReportSlot_AdminOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, slotID := matchReportSlot(t, db)
+	userID := testutil.CreateUser(t, db, "admin")
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "admin", nil)
+	res := testutil.Post(t, srv, "/api/duty-board/"+itoa(slotID)+"/claim", token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 for admin, got %d", res.StatusCode)
+	}
+}
+
+// TestClaim_MatchReportSlot_ProxyParentForbidden nagelt die Rollenverschiebung fest:
+// der Guard wertet die Rolle des HANDELNDEN Elternteils, nicht des Kind-Zielkontos.
+// Ein Elternteil ohne presseteam darf einen Spielbericht-Slot auch für ein Kind nicht ziehen.
+func TestClaim_MatchReportSlot_ProxyParentForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, slotID := matchReportSlot(t, db)
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	childUserID := testutil.CreateUser(t, db, "standard")
+	db.Exec(`UPDATE users SET can_login=0 WHERE id=?`, childUserID)
+	childMemberID := testutil.CreateMember(t, db, childUserID)
+	if _, err := db.Exec(
+		`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`,
+		parentUserID, childMemberID); err != nil {
+		t.Fatalf("insert family_links: %v", err)
+	}
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, parentUserID, "standard", nil)
+	body := map[string]any{"user_id": childUserID}
+	res := testutil.Post(t, srv, "/api/duty-board/"+itoa(slotID)+"/claim", token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 (parent role counts), got %d", res.StatusCode)
+	}
+	if got := slotsFilled(t, db, slotID); got != 0 {
+		t.Errorf("slot must not be claimed, slots_filled=%d", got)
+	}
+}
+
+func TestClaim_NonMatchReportSlot_Unaffected(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+	slotID := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	userID := testutil.CreateUser(t, db, "standard")
+
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Post(t, srv, "/api/duty-board/"+itoa(slotID)+"/claim", token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("guard must not touch non-Spielbericht slot, got %d", res.StatusCode)
+	}
+}
