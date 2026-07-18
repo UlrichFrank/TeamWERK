@@ -28,9 +28,9 @@
 
 ## 5. Welle 2 — `test-finance-audit` (+ optional auth-Fehlerpfade)
 
-- [ ] 5.1 Proposal: `fee-run/confirm` (Happy/404/400 + Protokoll-Schreiben, keine Bankdaten), `fee-run/protocol` (Rücklesen/404), `export-data`-400 (Mitglied ohne Mandat, unbekannte ID) + Halbierungsmatrix-Restfälle (unterjähriger Austritt + home_club)
+- [x] 5.1 Proposal: `fee-run/confirm` (Happy/404/400 + Protokoll-Schreiben, keine Bankdaten), `fee-run/protocol` (Rücklesen/404), `export-data`-400 (Mitglied ohne Mandat, unbekannte ID) + Halbierungsmatrix-Restfälle (unterjähriger Austritt + home_club)
 - [ ] 5.2 Optional als eigener kleiner Change / in `test-coverage-fachlich`: `auth`-Fehlerpfade (Session-Invalidierung nach E-Mail-Änderung, Passwort-Reauth, abgelaufener/manipulierter Token)
-- [ ] 5.3 `openspec validate` grün
+- [x] 5.3 `openspec validate` grün
 - [ ] 5.4 Umsetzen, testen, archivieren
 
 ## 6. Welle 3 — `refactor-members-import` (Funktionserhalt-kritisch)
