@@ -1648,6 +1648,52 @@ func normalizeDateAt(s string, currentYear int) string {
 	return year + "-" + month + "-" + day
 }
 
+func normalizeGender(s string) string {
+	switch s {
+	case "m":
+		return "m"
+	case "w", "f":
+		return "f"
+	default:
+		return "u"
+	}
+}
+
+// normalizeStatus mappt den Wert der CSV-Spalte "Status TeamWERK" auf einen
+// CHECK-konformen members.status-Wert. Leerer Input ODER unbekannter Wert
+// ergibt "" — der Aufrufer entscheidet (Insert: Default 'aktiv'; Update:
+// addChange überspringt leere CSV-Werte, Status bleibt unverändert).
+func normalizeStatus(s string) string {
+	switch strings.TrimSpace(s) {
+	case "":
+		return ""
+	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter":
+		return s
+	case "gekündigt", "Vereinswechsel":
+		return "ausgetreten"
+	default:
+		return ""
+	}
+}
+
+func normalizeBeitragsfrei(s string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "":
+		return 0, false
+	case "ja":
+		return 1, true
+	default:
+		return 0, true
+	}
+}
+
+func normalizeSepa(s string) int {
+	if strings.TrimSpace(s) == "vorliegend" {
+		return 1
+	}
+	return 0
+}
+
 // ImportRow holds the result for a single CSV row.
 type ImportRow struct {
 	Line        int      `json:"line"`
@@ -1767,48 +1813,6 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			return ""
 		}
 		return strings.TrimSpace(row[idx])
-	}
-	normalizeGender := func(s string) string {
-		switch s {
-		case "m":
-			return "m"
-		case "w", "f":
-			return "f"
-		default:
-			return "u"
-		}
-	}
-	// normalizeStatus mappt den Wert der CSV-Spalte "Status TeamWERK" auf einen
-	// CHECK-konformen members.status-Wert. Leerer Input ODER unbekannter Wert
-	// ergibt "" — der Aufrufer entscheidet (Insert: Default 'aktiv'; Update:
-	// addChange überspringt leere CSV-Werte, Status bleibt unverändert).
-	normalizeStatus := func(s string) string {
-		switch strings.TrimSpace(s) {
-		case "":
-			return ""
-		case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter":
-			return s
-		case "gekündigt", "Vereinswechsel":
-			return "ausgetreten"
-		default:
-			return ""
-		}
-	}
-	normalizeBeitragsfrei := func(s string) (int, bool) {
-		switch strings.ToLower(strings.TrimSpace(s)) {
-		case "":
-			return 0, false
-		case "ja":
-			return 1, true
-		default:
-			return 0, true
-		}
-	}
-	normalizeSepa := func(s string) int {
-		if strings.TrimSpace(s) == "vorliegend" {
-			return 1
-		}
-		return 0
 	}
 	if _, ok := colIdx["Vorname"]; !ok {
 		http.Error(w, "missing required column: Vorname", http.StatusBadRequest)
