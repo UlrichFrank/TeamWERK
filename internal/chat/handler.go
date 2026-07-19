@@ -506,7 +506,12 @@ const messageSelect = `
 	       m.is_system,
 	       m.media_id,
 	       med.width,
-	       med.height
+	       med.height,
+	       (SELECT COUNT(*) FROM message_reads mr
+	          WHERE mr.message_id = m.id AND mr.user_id != m.sender_id) AS read_count,
+	       (SELECT COUNT(*) FROM conversation_members cm
+	          WHERE cm.conversation_id = m.conversation_id
+	            AND cm.left_at IS NULL AND cm.user_id != m.sender_id) AS read_total
 	FROM messages m
 	JOIN users u ON u.id = m.sender_id
 	LEFT JOIN messages rm ON rm.id = m.reply_to_id
@@ -573,6 +578,12 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		MediaWidth        *int              `json:"mediaWidth,omitempty"`
 		MediaHeight       *int              `json:"mediaHeight,omitempty"`
 		Reactions         []messageReaction `json:"reactions"`
+		// Read-Receipts (Absender-Sicht): readCount = Leser außer Sender,
+		// readTotal = aktive Mitglieder außer Sender, read = readCount>0
+		// (Direct kollabiert damit auf gesendet/gelesen).
+		ReadCount int  `json:"readCount"`
+		ReadTotal int  `json:"readTotal"`
+		Read      bool `json:"read"`
 	}
 
 	var rows *sql.Rows
@@ -618,7 +629,9 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		var replyToID, mediaID, mediaWidth, mediaHeight sql.NullInt64
 		var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
 		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &body, &msg.SentAt,
-			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem, &mediaID, &mediaWidth, &mediaHeight)
+			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem, &mediaID, &mediaWidth, &mediaHeight,
+			&msg.ReadCount, &msg.ReadTotal)
+		msg.Read = msg.ReadCount > 0
 		if mediaID.Valid {
 			id := int(mediaID.Int64)
 			msg.MediaID = &id
@@ -951,6 +964,11 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Vor dem INSERT die pro Absender höchste JETZT neu-zu-markierende message_id
+	// erfassen — nach dem INSERT OR IGNORE ist ein neuer Read nicht mehr von einem
+	// Bestands-Read unterscheidbar.
+	upToBySender := h.newlyReadPerSender(r.Context(), convID, claims.UserID)
+
 	h.db.ExecContext(r.Context(), `
 		INSERT OR IGNORE INTO message_reads (message_id, user_id)
 		SELECT m.id, ? FROM messages m
@@ -958,6 +976,12 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		claims.UserID, convID, claims.UserID)
 
 	h.hub.BroadcastToUser(claims.UserID, "chat:conversation-read")
+	// Read-Receipt-Fanout: genau ein coalesced Event pro Absender (upToMessageId =
+	// höchste neu gelesene Nachricht dieses Absenders), damit ein Bulk-Read mit N
+	// Nachrichten nicht N Events auslöst.
+	for senderID, upTo := range upToBySender {
+		h.hub.BroadcastToUser(senderID, fmt.Sprintf("chat:read-receipt:%d:%d:%d", convID, claims.UserID, upTo))
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

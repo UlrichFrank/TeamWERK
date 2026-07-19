@@ -22,6 +22,8 @@ import {
   SmilePlus,
   Copy,
   Paperclip,
+  Check,
+  CheckCheck,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
@@ -38,6 +40,7 @@ import WindowedRows from "../components/WindowedRows";
 import { useAuth } from "../contexts/AuthContext";
 import { useChatEvents } from "../hooks/useChatEvents";
 import ConversationParticipantsModal from "../components/ConversationParticipantsModal";
+import MessageReadsModal from "../components/MessageReadsModal";
 import CreatorExitChoiceModal from "../components/CreatorExitChoiceModal";
 
 interface ConvMember {
@@ -87,6 +90,12 @@ interface Message {
   mediaWidth?: number;
   mediaHeight?: number;
   reactions: Reaction[];
+  // Read-Receipts (nur für eigene Nachrichten relevant): read = mind. ein
+  // Empfänger hat gelesen; readCount/readTotal = Leser bzw. aktive Mitglieder
+  // (je ohne Absender) für die Gruppen-Aggregatanzeige „N/M gelesen".
+  readCount?: number;
+  readTotal?: number;
+  read?: boolean;
 }
 
 const REACTION_EMOJIS = ["👍", "👎", "❤️", "😂", "😮", "😢", "🙌", "🔥"];
@@ -233,6 +242,7 @@ export default function ChatPage() {
   } | null>(null);
   // Bild im Vollbild-Overlay (Lightbox), url ohne /api-Prefix.
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [readsModalMsgId, setReadsModalMsgId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [mobileOverlay, setMobileOverlay] = useState<{
@@ -512,6 +522,21 @@ export default function ChatPage() {
         appendNewMessages(convId);
       } else {
         loadConversations();
+      }
+    }
+    if (event.startsWith("chat:read-receipt")) {
+      // chat:read-receipt:<convId>:<readerUserId>:<upToMessageId>
+      const parts = event.split(":");
+      const convId = parseInt(parts[2]);
+      const upTo = parseInt(parts[4]);
+      if (activeConv?.id === convId && !Number.isNaN(upTo)) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.senderId === user?.id && m.id <= upTo
+              ? { ...m, read: true, readCount: (m.readCount ?? 0) + 1 }
+              : m,
+          ),
+        );
       }
     }
     if (event.startsWith("chat:member-left")) {
@@ -1276,6 +1301,7 @@ export default function ChatPage() {
                           }}
                           onClosePicker={() => setEmojiPickerMsgId(null)}
                           onToggleReaction={toggleReaction}
+                          onOpenReads={(m) => setReadsModalMsgId(m.id)}
                           onImageClick={() => {
                             if (msg.mediaUrl) setLightboxUrl(msg.mediaUrl);
                           }}
@@ -1624,6 +1650,13 @@ export default function ChatPage() {
         />
       )}
 
+      {readsModalMsgId !== null && (
+        <MessageReadsModal
+          messageId={readsModalMsgId}
+          onClose={() => setReadsModalMsgId(null)}
+        />
+      )}
+
       {showCreatorExit && activeConv && activeConv.type === "group" && (
         <CreatorExitChoiceModal
           convId={activeConv.id}
@@ -1703,6 +1736,7 @@ function MessageBubble({
   onClosePicker,
   onToggleReaction,
   onImageClick,
+  onOpenReads,
 }: {
   msg: Message;
   body: string;
@@ -1717,6 +1751,7 @@ function MessageBubble({
   onClosePicker: () => void;
   onToggleReaction: (msgId: number, emoji: string) => void;
   onImageClick: () => void;
+  onOpenReads?: (msg: Message) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
@@ -1927,6 +1962,27 @@ function MessageBubble({
           </span>
           {msg.editedAt && (
             <span className="text-xs text-brand-text-subtle">(bearbeitet)</span>
+          )}
+          {isOwn && !msg.isSystem && (
+            <button
+              type="button"
+              onClick={() => onOpenReads?.(msg)}
+              aria-label={msg.read ? "gelesen — Details anzeigen" : "gesendet"}
+              className="flex items-center gap-0.5 text-xs text-brand-text-subtle cursor-pointer min-h-[24px]"
+            >
+              {msg.read ? (
+                <CheckCheck className="w-3.5 h-3.5 text-brand-blue" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+              {msg.readTotal !== undefined &&
+                msg.readTotal > 1 &&
+                msg.readCount !== undefined && (
+                  <span>
+                    {msg.readCount}/{msg.readTotal}
+                  </span>
+                )}
+            </button>
           )}
         </div>
       </div>
