@@ -103,6 +103,72 @@ Wenn du TeamWERK auf deinem Smartphone zum Homescreen hinzufügst (als PWA insta
 
 ---
 
+## FAQ: Benachrichtigungen kommen nicht oder verspätet an
+
+Wenn ungelesene Nachrichten (Badges) oder Push-Benachrichtigungen bei dir nicht oder erst mit Stunden Verzögerung ankommen, hilft in fast allen Fällen einer der folgenden Wege.
+
+### iPhone (iOS) — TeamWERK neu einrichten
+
+1. TeamWERK vollständig beenden.
+2. Safari vollständig beenden.
+3. Das TeamWERK-Symbol vom Home-Bildschirm löschen (nur das Symbol, nicht die Daten).
+4. Öffne **Einstellungen → Apps → Safari → Erweitert → Website-Daten**.
+5. Lösche den Eintrag **team-stuttgart.org**.
+6. Öffne Safari und rufe folgende Adresse auf: **https://teamwerk.team-stuttgart.org**
+7. Tippe auf **Teilen** und anschließend auf **Zum Home-Bildschirm**.
+8. Schließe Safari.
+9. Starte die neu angelegte TeamWERK-App und melde dich an.
+10. Das iPhone sollte nun nach der Berechtigung für Push-Benachrichtigungen fragen. Erlaube diese.
+11. Unter **Einstellungen → Apps** sollte jetzt auch TeamWERK als eigene App erscheinen.
+
+### Android — TeamWERK neu einrichten
+
+1. TeamWERK vollständig beenden.
+2. Den verwendeten Browser (z. B. Chrome) vollständig schließen.
+3. Das TeamWERK-Symbol vom Startbildschirm entfernen.
+4. Öffne den Browser und rufe folgende Adresse auf: **https://teamwerk.team-stuttgart.org**
+5. Wähle im Browser-Menü **Zum Startbildschirm hinzufügen** bzw. **App installieren** (je nach Browser).
+6. Schließe den Browser.
+7. Starte die neu installierte TeamWERK-App und melde dich an.
+8. Wenn Android nach der Berechtigung für Benachrichtigungen fragt, erteile diese.
+9. Prüfe anschließend unter **Einstellungen → Apps → TeamWERK → Benachrichtigungen**, dass Benachrichtigungen aktiviert sind.
+
+### Android — Benachrichtigungen kommen mit Stunden Verspätung
+
+Manche Handys (besonders **Samsung, Xiaomi, Huawei, OnePlus**) halten Benachrichtigungen zurück, um Akku zu sparen. So schaltest du das für TeamWERK aus:
+
+**Schritt 1 — Akku-Optimierung ausschalten**
+
+1. Öffne die **Einstellungen** deines Handys.
+2. Tippe auf **Apps** (oder „Anwendungen").
+3. Suche **TeamWERK** in der Liste und tippe drauf.
+4. Tippe auf **Akku** (manchmal auch „Batterie" oder „Energie").
+5. Wähle **„Nicht optimieren"** oder **„Uneingeschränkt"**
+   (bei Samsung heißt es oft „Nicht eingeschränkt", bei Xiaomi „Keine Einschränkungen").
+
+**Schritt 2 — Benachrichtigungen erlauben**
+
+1. Immer noch bei TeamWERK in den App-Einstellungen.
+2. Tippe auf **Benachrichtigungen**.
+3. Alle Schalter auf **an** (grün).
+
+**Schritt 3 (nur Samsung) — „Apps in den Ruhezustand" prüfen**
+
+1. **Einstellungen → Gerätewartung** (oder „Akku und Gerätewartung").
+2. **Akku → Nutzungslimits für Hintergrund**.
+3. Prüfe alle drei Listen (**Ruhende Apps**, **Tief ruhende Apps**, **Nie ruhende Apps**):
+   - TeamWERK darf **nicht** in den ersten beiden Listen stehen.
+   - Am besten TeamWERK zu **„Nie ruhende Apps"** hinzufügen.
+
+**Schritt 4 (nur Xiaomi/Redmi) — Autostart**
+
+1. **Einstellungen → Apps → Berechtigungen → Autostart**.
+2. TeamWERK aktivieren.
+
+**Kurztest:** Bitte jemanden, dir eine Test-Nachricht im TeamWERK-Chat zu schicken, während dein Handy 5 Minuten im Standby liegt (Bildschirm aus, in der Tasche). Die Benachrichtigung sollte innerhalb weniger Sekunden ankommen.
+
+---
+
 ## Offline-Nutzung
 
 TeamWERK funktioniert auch ohne Internetverbindung eingeschränkt. Die zuletzt geladenen Seiten bleiben abrufbar. Änderungen können erst nach Wiederherstellung der Verbindung gespeichert werden.
