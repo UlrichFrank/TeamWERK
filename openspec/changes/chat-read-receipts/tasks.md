@@ -48,38 +48,38 @@
 
 ## 4. Frontend
 
-- [ ] 4.1 Message-Type in `web/src/pages/ChatPage.tsx` (bzw. Message-Interface)
+- [x] 4.1 Message-Type in `web/src/pages/ChatPage.tsx` (bzw. Message-Interface)
   um `readCount`, `readTotal`, `read` erweitern.
-- [ ] 4.2 Rendering in der eigenen Nachrichten-Bubble:
+- [x] 4.2 Rendering in der eigenen Nachrichten-Bubble:
   - Direct: `<Check>` (gesendet) → `<CheckCheck className="text-brand-info">`
     (gelesen).
   - Group/Team-Group: `<CheckCheck>` + Text `N/M gelesen` (oder nur
     `<Check>` wenn N=0).
-- [ ] 4.3 Neuer Info-Modal-Komponent `MessageReadsModal` (in
+- [x] 4.3 Neuer Info-Modal-Komponent `MessageReadsModal` (in
   `web/src/components/`), lädt on-demand per `api.get(/chat/messages/{id}/reads)`,
   rendert Reader-Liste mit `readAt` (Format `HH:MM`).
-- [ ] 4.4 Tap/Klick auf die eigene Bubble öffnet das Modal (mobile: Tap
+- [x] 4.4 Tap/Klick auf die eigene Bubble öffnet das Modal (mobile: Tap
   auf die Bubble; Desktop: Click auf die Bubble mit Cursor-Pointer).
-- [ ] 4.5 `useLiveUpdates`-Handler für `chat:read-receipt`: Payload parsen,
+- [x] 4.5 `useLiveUpdates`-Handler für `chat:read-receipt`: Payload parsen,
   betroffenen State `readReceipts` mergen, betroffene Bubbles re-rendern.
-- [ ] 4.6 Kein Rendering für fremde Nachrichten (nur eigene bekommen Ticks).
+- [x] 4.6 Kein Rendering für fremde Nachrichten (nur eigene bekommen Ticks).
 
 ## 5. Tests (Frontend)
 
-- [ ] 5.1 Component-Test `MessageBubble` mit `read: true` → `CheckCheck`
+- [x] 5.1 Component-Test `MessageBubble` mit `read: true` → `CheckCheck`
   gerendert.
-- [ ] 5.2 Component-Test `MessageBubble` mit `readCount=3, readTotal=8`
+- [x] 5.2 Component-Test `MessageBubble` mit `readCount=3, readTotal=8`
   → Text `3/8 gelesen`.
-- [ ] 5.3 `MessageReadsModal`-Test: Fetch mockt, Reader-Liste sortiert nach
+- [x] 5.3 `MessageReadsModal`-Test: Fetch mockt, Reader-Liste sortiert nach
   `readAt` gerendert.
-- [ ] 5.4 `ChatPage`-Integration: SSE-Event `chat:read-receipt` mit
+- [x] 5.4 `ChatPage`-Integration: SSE-Event `chat:read-receipt` mit
   `upToMessageId=5` markiert Nachrichten 1..5 als gelesen, spätere unverändert.
 
 ## 6. Dokumentation
 
-- [ ] 6.1 `docs/agent/06-gotchas.md`: neuer Absatz „Chat-Read-Receipts" —
+- [x] 6.1 `docs/agent/06-gotchas.md`: neuer Absatz „Chat-Read-Receipts" —
   Kurzform des Live-Loop-Designs (Coalescing, Sender-only für Detail-Route).
-- [ ] 6.2 `docs/agent/04-api-db.md`: neue Route `GET /chat/messages/{id}/reads`
+- [x] 6.2 `docs/agent/04-api-db.md`: neue Route `GET /chat/messages/{id}/reads`
   in Auth-Tier-Tabelle ergänzen.
 
 ## 7. Verifikation
