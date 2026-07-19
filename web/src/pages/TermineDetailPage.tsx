@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { AlertTriangle, Ban, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, RotateCcw, UserMinus, X } from 'lucide-react'
+import { AlertTriangle, Ban, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
+import ActionMenu from '../components/ActionMenu'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
@@ -564,22 +565,18 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
           {a.isTrainer && a.seriesId != null && !row.is_trainer && (
             row.unavailable
               ? a.onClearUnavailable && (
-                <button
-                  onClick={() => a.onClearUnavailable!(row.unavailable!.id)}
-                  className="ml-2 inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 py-2 sm:py-0.5 px-2 rounded-md text-xs font-medium text-brand-text-muted hover:text-brand-text hover:bg-brand-table-select transition-colors align-middle"
-                  aria-label={`${row.member_name} wieder anmelden`}
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> wieder anmelden
-                </button>
+                <span className="ml-2 inline-flex align-middle">
+                  <ActionMenu actions={[
+                    { label: 'Wieder anmelden', onClick: () => a.onClearUnavailable!(row.unavailable!.id) },
+                  ]} />
+                </span>
               )
               : a.onSetUnavailable && (
-                <button
-                  onClick={() => a.onSetUnavailable!(row.member_id)}
-                  className="ml-2 inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 py-2 sm:py-0.5 px-2 rounded-md text-xs font-medium text-brand-text-muted hover:text-brand-danger hover:bg-brand-table-select transition-colors align-middle"
-                  aria-label={`${row.member_name} dauerhaft abmelden`}
-                >
-                  <UserMinus className="w-3.5 h-3.5" /> abmelden
-                </button>
+                <span className="ml-2 inline-flex align-middle">
+                  <ActionMenu actions={[
+                    { label: 'Dauerhaft abmelden', onClick: () => a.onSetUnavailable!(row.member_id), variant: 'danger' },
+                  ]} />
+                </span>
               )
           )}
         </td>
