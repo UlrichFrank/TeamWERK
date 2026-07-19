@@ -16,7 +16,6 @@ import SpieltagDetailModal from '../components/SpieltagDetailModal'
 import VenuePicker, { Venue as VenueType } from '../components/VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
-import EventNoteIndicator from '../components/EventNoteIndicator'
 
 interface VenueRef {
   id: number
@@ -925,14 +924,22 @@ export default function KalenderPage() {
                   >
                     <div className="flex items-center gap-1 mb-0.5">
                       <Dumbbell className={`w-3 h-3 shrink-0 ${getEventColors('training').pillIcon}`} />
-                      <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text">
+                      <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text flex-1">
                         {shortNames.get(t.team_id) ?? (t.title || 'Training')}
                       </span>
+                      {(t.note ?? '').trim() !== '' && (
+                        <span
+                          className="ml-auto inline-flex items-center shrink-0"
+                          aria-label={`Hinweis: ${t.note}`}
+                          title={`Hinweis: ${t.note}`}
+                        >
+                          <AlertTriangle className="w-3 h-3 text-brand-danger" />
+                        </span>
+                      )}
                     </div>
                     <div className="hidden @tile-md:block leading-tight">&nbsp;</div>
                     <div className="flex items-center gap-1.5 text-brand-text-subtle leading-tight">
                       <span>{t.start_time}</span>
-                      <EventNoteIndicator variant="icon" note={t.note ?? ''} className="order-last ml-auto" />
                       {t.my_rsvp_locked ? (
                         <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger" title="Durch Abwesenheit gesetzt">
                           <X className="w-2.5 h-2.5" />
