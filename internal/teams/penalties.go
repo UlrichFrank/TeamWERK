@@ -209,6 +209,15 @@ func (h *Handler) CreatePenalty(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "amountCent must be > 0", http.StatusBadRequest)
 		return
 	}
+	// Bei Einheit 'striche' sind nur ganze Striche zulässig (amount_cent muss durch
+	// 100 teilbar sein, weil ein Strich als 100 Cent gespeichert wird).
+	if unit, uErr := h.currentPenaltyUnit(ctx, teamID); uErr != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	} else if unit == "striche" && body.AmountCent%100 != 0 {
+		http.Error(w, "amount must be whole striche", http.StatusBadRequest)
+		return
+	}
 
 	kaderID, err := h.resolveKaderID(ctx, teamID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -420,6 +429,14 @@ func (h *Handler) CreatePenaltyType(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "defaultAmountCent must be >= 0", http.StatusBadRequest)
 		return
 	}
+	// Bei Einheit 'striche' nur ganze Striche im Katalog (durch 100 teilbar).
+	if unit, uErr := h.currentPenaltyUnit(ctx, teamID); uErr != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	} else if unit == "striche" && body.DefaultAmountCent%100 != 0 {
+		http.Error(w, "amount must be whole striche", http.StatusBadRequest)
+		return
+	}
 
 	kaderID, err := h.resolveKaderID(ctx, teamID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -486,7 +503,7 @@ func (h *Handler) DeletePenaltyType(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ListStrafenwarte — GET /api/teams/{id}/strafenwarte.
+// ListStrafenwarte — GET /api/teams/{id}/penalty-wardens.
 // Gate: canReadPenalties. Liefert die ernannten Strafenwarte des Kaders der aktiven
 // Saison als JSON-Array (nie null).
 func (h *Handler) ListStrafenwarte(w http.ResponseWriter, r *http.Request) {
@@ -527,7 +544,7 @@ func (h *Handler) ListStrafenwarte(w http.ResponseWriter, r *http.Request) {
 	writeRespJSON(w, http.StatusOK, warte)
 }
 
-// AppointStrafenwart — POST /api/teams/{id}/strafenwarte. Body {"memberId":M}.
+// AppointStrafenwart — POST /api/teams/{id}/penalty-wardens. Body {"memberId":M}.
 // Gate: isTrainerOfTeam. 404 ohne aktiven Kader, 400 wenn der Member nicht im
 // (regulären/erweiterten/Trainer-)Kader des Teams ist. INSERT OR IGNORE (idempotent).
 // Broadcast + 201 {"memberId":M}.
@@ -587,7 +604,7 @@ func (h *Handler) AppointStrafenwart(w http.ResponseWriter, r *http.Request) {
 	writeRespJSON(w, http.StatusCreated, map[string]int{"memberId": body.MemberID})
 }
 
-// RemoveStrafenwart — DELETE /api/teams/{id}/strafenwarte/{memberId}.
+// RemoveStrafenwart — DELETE /api/teams/{id}/penalty-wardens/{memberId}.
 // Gate: isTrainerOfTeam. Löscht das Appointment (auf die aktive Saison des Teams
 // gescoped). Broadcast + 204.
 func (h *Handler) RemoveStrafenwart(w http.ResponseWriter, r *http.Request) {

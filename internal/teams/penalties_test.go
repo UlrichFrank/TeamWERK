@@ -22,9 +22,9 @@ func penaltyRoutes(h *teams.Handler) func(chi.Router) {
 		r.Get("/api/teams/{id}/penalty-types", h.ListPenaltyTypes)
 		r.Post("/api/teams/{id}/penalty-types", h.CreatePenaltyType)
 		r.Delete("/api/teams/{id}/penalty-types/{typeId}", h.DeletePenaltyType)
-		r.Get("/api/teams/{id}/strafenwarte", h.ListStrafenwarte)
-		r.Post("/api/teams/{id}/strafenwarte", h.AppointStrafenwart)
-		r.Delete("/api/teams/{id}/strafenwarte/{memberId}", h.RemoveStrafenwart)
+		r.Get("/api/teams/{id}/penalty-wardens", h.ListStrafenwarte)
+		r.Post("/api/teams/{id}/penalty-wardens", h.AppointStrafenwart)
+		r.Delete("/api/teams/{id}/penalty-wardens/{memberId}", h.RemoveStrafenwart)
 	}
 }
 
@@ -391,7 +391,7 @@ func TestStrafenwartAppoint_Trainer_200(t *testing.T) {
 	plM := testutil.CreateMember(t, db, plUID)
 	testutil.AddKaderMember(t, db, kaderID, plM)
 
-	res := testutil.Post(t, srv, "/api/teams/"+itoa(teamID)+"/strafenwarte", trTok,
+	res := testutil.Post(t, srv, "/api/teams/"+itoa(teamID)+"/penalty-wardens", trTok,
 		map[string]any{"memberId": plM})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
@@ -399,7 +399,7 @@ func TestStrafenwartAppoint_Trainer_200(t *testing.T) {
 	}
 
 	// In der Liste sichtbar.
-	lres := testutil.Get(t, srv, "/api/teams/"+itoa(teamID)+"/strafenwarte", trTok)
+	lres := testutil.Get(t, srv, "/api/teams/"+itoa(teamID)+"/penalty-wardens", trTok)
 	defer lres.Body.Close()
 	var warte []struct {
 		MemberID int `json:"memberId"`
@@ -430,7 +430,7 @@ func TestStrafenwartAppoint_NonTrainer_403(t *testing.T) {
 	testutil.AddKaderMember(t, db, kaderID, plM)
 	plTok := testutil.Token(t, plUID, "standard", []string{"spieler"})
 
-	res := testutil.Post(t, srv, "/api/teams/"+itoa(teamID)+"/strafenwarte", plTok,
+	res := testutil.Post(t, srv, "/api/teams/"+itoa(teamID)+"/penalty-wardens", plTok,
 		map[string]any{"memberId": plM})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {

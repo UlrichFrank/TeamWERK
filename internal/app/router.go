@@ -353,9 +353,25 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/teams/{id}/penalty-types", h.Teams.ListPenaltyTypes)
 		r.Post("/api/teams/{id}/penalty-types", h.Teams.CreatePenaltyType)
 		r.Delete("/api/teams/{id}/penalty-types/{typeId}", h.Teams.DeletePenaltyType)
-		r.Get("/api/teams/{id}/strafenwarte", h.Teams.ListStrafenwarte)
-		r.Post("/api/teams/{id}/strafenwarte", h.Teams.AppointStrafenwart)
-		r.Delete("/api/teams/{id}/strafenwarte/{memberId}", h.Teams.RemoveStrafenwart)
+		r.Get("/api/teams/{id}/penalty-wardens", h.Teams.ListStrafenwarte)
+		r.Post("/api/teams/{id}/penalty-wardens", h.Teams.AppointStrafenwart)
+		r.Delete("/api/teams/{id}/penalty-wardens/{memberId}", h.Teams.RemoveStrafenwart)
+
+		// Strafen-Einheit (Euro | Striche) pro Kader. Read team-intern; Preview
+		// und Wechsel (Massen-Umrechnung in einer TX) nur für Trainer des Kaders.
+		r.Get("/api/teams/{id}/penalty-settings", h.Teams.GetPenaltySettings)
+		r.Get("/api/teams/{id}/penalty-settings/preview", h.Teams.PreviewPenaltySettings)
+		r.Put("/api/teams/{id}/penalty-settings", h.Teams.SetPenaltySettings)
+
+		// Mannschaftskasse (Cashbook). Read-Gate wie Strafen (Spieler+Trainer+
+		// Erweitert, KEINE Eltern); Buchen für Trainer ODER Kassenwart des Kaders,
+		// Kassenwart-Ernennung nur für Trainer.
+		r.Get("/api/teams/{id}/cashbook", h.Teams.ListCashbook)
+		r.Post("/api/teams/{id}/cashbook", h.Teams.CreateCashbookEntry)
+		r.Delete("/api/teams/{id}/cashbook/{entryId}", h.Teams.DeleteCashbookEntry)
+		r.Get("/api/teams/{id}/treasurers", h.Teams.ListKassenwarte)
+		r.Post("/api/teams/{id}/treasurers", h.Teams.AppointKassenwart)
+		r.Delete("/api/teams/{id}/treasurers/{memberId}", h.Teams.RemoveKassenwart)
 
 		// Stammvereine (Liste für Mitglied-Dropdown; alle Eingeloggten)
 		if h.Stammvereine != nil {

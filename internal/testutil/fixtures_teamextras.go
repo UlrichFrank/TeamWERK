@@ -20,6 +20,46 @@ func AppointStrafenwart(t *testing.T, database *sql.DB, kaderID, memberID int) {
 	}
 }
 
+// AppointKassenwart trägt einen Member als Kassenwart eines Kaders ein (kader_kassenwarte).
+func AppointKassenwart(t *testing.T, database *sql.DB, kaderID, memberID int) {
+	t.Helper()
+	_, err := database.Exec(
+		`INSERT OR IGNORE INTO kader_kassenwarte (kader_id, member_id) VALUES (?, ?)`,
+		kaderID, memberID)
+	if err != nil {
+		t.Fatalf("AppointKassenwart: %v", err)
+	}
+}
+
+// CreateCashbookEntry legt eine Kassenbuchung an (amountCent signed) und gibt die ID zurück.
+// enteredByMemberID=0 → NULL (entered_by_member_id).
+func CreateCashbookEntry(t *testing.T, database *sql.DB, kaderID, memberID, amountCent int, note string) int {
+	t.Helper()
+	var byArg any
+	if memberID > 0 {
+		byArg = memberID
+	}
+	res, err := database.Exec(
+		`INSERT INTO team_cashbook_entries (kader_id, amount_cent, note, entered_by_member_id) VALUES (?, ?, ?, ?)`,
+		kaderID, amountCent, note, byArg)
+	if err != nil {
+		t.Fatalf("CreateCashbookEntry: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// SetPenaltyUnit setzt die Strafen-Einheit eines Kaders (penalty_settings, Upsert).
+func SetPenaltyUnit(t *testing.T, database *sql.DB, kaderID int, unit string) {
+	t.Helper()
+	_, err := database.Exec(`
+		INSERT INTO penalty_settings (kader_id, unit) VALUES (?, ?)
+		ON CONFLICT(kader_id) DO UPDATE SET unit = excluded.unit`, kaderID, unit)
+	if err != nil {
+		t.Fatalf("SetPenaltyUnit: %v", err)
+	}
+}
+
 // AddResponsibilityType legt einen Aufgaben-Catalog-Eintrag für einen Kader an und gibt die ID zurück.
 func AddResponsibilityType(t *testing.T, database *sql.DB, kaderID int, label string) int {
 	t.Helper()

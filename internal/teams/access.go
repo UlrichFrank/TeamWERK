@@ -48,6 +48,45 @@ func (h *Handler) isStrafenwartOfTeam(ctx context.Context, claims *auth.Claims, 
 	return n > 0, err
 }
 
+// isKassenwartOfTeam meldet, ob der Nutzer als Kassenwart eines Kaders dieses
+// Teams in der aktiven Saison eingetragen ist. Sibling von isStrafenwartOfTeam.
+// Teil des Write-Gates fürs Kassenbuch (Trainer ODER Kassenwart). Kein
+// Appointment-Row → false, was Fremd-Team-Buchungen strukturell ausschließt.
+func (h *Handler) isKassenwartOfTeam(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
+	if claims.Role == "admin" {
+		return true, nil
+	}
+	var n int
+	err := h.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM kader_kassenwarte kk
+		JOIN kader k   ON k.id = kk.kader_id
+		JOIN members m ON m.id = kk.member_id
+		JOIN seasons s ON s.id = k.season_id
+		WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id = ?`,
+		teamID, claims.UserID).Scan(&n)
+	return n > 0, err
+}
+
+// canManageCashbook meldet, ob der Nutzer Kassenbuchungen anlegen/löschen darf:
+// Trainer ODER Kassenwart dieses Kaders (admin passt in beiden Sub-Checks). Der
+// Trainer soll die Kasse auch ohne ernannten Kassenwart pflegen können.
+func (h *Handler) canManageCashbook(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
+	if ok, err := h.isTrainerOfTeam(ctx, claims, teamID); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	return h.isKassenwartOfTeam(ctx, claims, teamID)
+}
+
+// canReadCashbook meldet, ob der Nutzer das Kassenbuch lesen darf. Bewusst
+// identisch zum Read-Gate für Strafen (Spieler ∨ Trainer ∨ Erw. Kader; keine
+// Eltern, keine Außenstehenden) — benannter Alias, damit die Sichtbarkeit von
+// Kasse und Strafen nie auseinanderläuft.
+func (h *Handler) canReadCashbook(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
+	return h.canReadPenalties(ctx, claims, teamID)
+}
+
 // canReadPenalties meldet, ob der Nutzer die Strafenliste des Teams lesen darf:
 // Spieler (kader_members), Trainer (kader_trainers) ODER Erweiterter Kader
 // (kader_extended_members) des Kaders der aktiven Saison. Eltern (family_links)

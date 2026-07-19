@@ -431,9 +431,20 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/teams/{id}/penalty-types", expected: exTeamInternalGate},
 	{method: "POST", path: "/api/teams/{id}/penalty-types", expected: exTeamInternalGate},
 	{method: "DELETE", path: "/api/teams/{id}/penalty-types/{typeId}", expected: exTeamInternalGate},
-	{method: "GET", path: "/api/teams/{id}/strafenwarte", expected: exTeamInternalGate},
-	{method: "POST", path: "/api/teams/{id}/strafenwarte", expected: exTeamInternalGate},
-	{method: "DELETE", path: "/api/teams/{id}/strafenwarte/{memberId}", expected: exTeamInternalGate},
+	{method: "GET", path: "/api/teams/{id}/penalty-wardens", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/penalty-wardens", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/penalty-wardens/{memberId}", expected: exTeamInternalGate},
+	// Strafen-Einheit (Read team-intern, Preview/Wechsel Trainer; ohne Fixture nur admin).
+	{method: "GET", path: "/api/teams/{id}/penalty-settings", expected: exTeamInternalGate},
+	{method: "GET", path: "/api/teams/{id}/penalty-settings/preview", expected: exTeamInternalGate},
+	{method: "PUT", path: "/api/teams/{id}/penalty-settings", expected: exTeamInternalGate},
+	// Mannschaftskasse (Read-Gate wie Strafen, Buchen Trainer/Kassenwart; ohne Fixture nur admin).
+	{method: "GET", path: "/api/teams/{id}/cashbook", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/cashbook", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/cashbook/{entryId}", expected: exTeamInternalGate},
+	{method: "GET", path: "/api/teams/{id}/treasurers", expected: exTeamInternalGate},
+	{method: "POST", path: "/api/teams/{id}/treasurers", expected: exTeamInternalGate},
+	{method: "DELETE", path: "/api/teams/{id}/treasurers/{memberId}", expected: exTeamInternalGate},
 	{method: "GET", path: "/api/stammvereine", expected: exAuth},
 
 	// Videos (Spielvideo-Ablage) — Lese-/CRUD-Routen im Authenticated-Tier;
