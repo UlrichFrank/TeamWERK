@@ -17,6 +17,14 @@
 > vom Nachfolger-Change [[sepa-xml-xsd-gate]] adressiert: offizielles
 > DK-TVS-XSD eingecheckt, mechanische Validierung im CI-Gate. Dieser Change
 > hier kann nach dem `CreDtTm`-Z-Fix archiviert werden.
+>
+> **Archiviert 2026-07-19:** Kern (2.1 `CreDtTm`-Z) ist im Code (`sepaXml.ts`,
+> `creDtTm()`) und auf Prod deployt; 2.2/2.3 wie oben bewusst verworfen. Die
+> Delta-Spec (`sepa-beitragslauf`, eine MODIFIED-Requirement) wurde **nicht**
+> synchronisiert — die Haupt-Spec trägt bereits die neuere, ablösende Fassung
+> aus [[sepa-xml-xsd-gate]]; ein Sync würde sie zurückdrehen. Die verbleibenden
+> offenen Tasks sind manuelle Bank-Validierung (deckungsgleich mit dem bereits
+> abgehakten Deploy des Nachfolgers).
 
 
 ## 1. Bank-Test der manuell gefixten Datei (Voraussetzung)
