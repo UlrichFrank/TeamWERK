@@ -198,6 +198,17 @@ ssh vServer "chown www-data:www-data /var/lib/teamwerk/teamwerk.db && \
 Beitragslauf-Protokolle: `/var/lib/teamwerk/beitragslauf-protokolle/` mit dem
 Backup nachziehen (Append-only-Textdateien — siehe `CLAUDE.md`).
 
+Storage-Dirs, die `setup-vps.sh` anlegt und in `/etc/teamwerk/env` setzt (falls
+händisch nachgezogen: alle müssen absolute Pfade sein, sonst werden sie relativ
+zum systemd-`WorkingDirectory=/usr/local/bin` aufgelöst und schlagen beim
+Schreiben mit HTTP 500 fehl):
+
+- `UPLOAD_DIR=/var/lib/teamwerk/uploads`
+- `FILES_DIR=/var/lib/teamwerk/files`
+- `MEDIA_DIR=/var/lib/teamwerk/media`
+- `MATCH_REPORT_IMAGE_DIR=/var/lib/teamwerk/match-report-images`
+- `BEITRAGSLAUF_DIR=/var/lib/teamwerk/beitragslauf-protokolle`
+
 ---
 
 ## 7. Vector starten (Log- + Metrics-Stream)

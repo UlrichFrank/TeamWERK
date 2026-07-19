@@ -18,7 +18,7 @@ apt-get install -y nginx openssl curl ca-certificates gnupg logrotate ffmpeg cro
 # ---------------------------------------------------------------------------
 # 2. Verzeichnisse
 # ---------------------------------------------------------------------------
-mkdir -p /var/lib/teamwerk/{uploads,files,media}
+mkdir -p /var/lib/teamwerk/{uploads,files,media,match-report-images,beitragslauf-protokolle}
 chown -R www-data:www-data /var/lib/teamwerk
 
 # Spielvideo-Ablage (separater Storage, vor produktiver Nutzung manuell
@@ -42,6 +42,8 @@ DB_PATH=/var/lib/teamwerk/teamwerk.db
 UPLOAD_DIR=/var/lib/teamwerk/uploads
 FILES_DIR=/var/lib/teamwerk/files
 MEDIA_DIR=/var/lib/teamwerk/media
+MATCH_REPORT_IMAGE_DIR=/var/lib/teamwerk/match-report-images
+BEITRAGSLAUF_DIR=/var/lib/teamwerk/beitragslauf-protokolle
 JWT_SECRET=$JWT_SECRET
 SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587
