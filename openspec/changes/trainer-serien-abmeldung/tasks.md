@@ -55,7 +55,7 @@
 
 ## 11. Abschluss
 
-- [ ] 11.1 `/verify-change` (Build/Test/Lint + Invarianten: Route→Tests, Mutation→Broadcast+useLiveUpdates, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`)
+- [x] 11.1 `/verify-change` grün: `make test` (Go+arch+broadcast-gate+vitest 605), `make lint` (0 issues), `make build`, `openspec validate --strict`; Invarianten (Route→Tests, Mutation→Broadcast+useLiveUpdates, brand-Tokens, lucide-Icons, Migration 033, Rollen) geprüft
 - [x] 11.2 Benutzerhandbuch ergänzt: `anleitung-trainer.md` (eigener Abschnitt + Tabellenzeile), `anleitung-spieler.md` + `anleitung-elternteil.md` (Kurzhinweis „dauerhaft abgemeldet")
 
 ## Test-Anforderungen
