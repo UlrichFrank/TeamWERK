@@ -51,7 +51,7 @@
 
 ## 4. members-Tests (internal/members/handler_test.go)
 
-- [ ] 4.1 Testserver-Setup: `newMembersServer(t, db)` mit List/FamilyLink/ProxyAccount-Routen
+- [x] 4.1 Testserver-Setup: `newMembersServer(t, db)` mit List/FamilyLink/ProxyAccount-Routen
 - [x] 4.2 TC-M01: `TestList_Pagination` — limit/offset + total
 - [x] 4.3 TC-M02: `TestList_SearchByName` — serverseitige Namenssuche
 - [x] 4.4 TC-M03: `TestList_AusgetretenHidden` — ausgetretene nicht in Liste
