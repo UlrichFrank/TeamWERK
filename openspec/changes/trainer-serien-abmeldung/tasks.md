@@ -7,7 +7,7 @@
 ## 2. Backend — Domain-Logik & Ableitung
 
 - [x] 2.1 In `internal/trainings` einen Helper `seriesUnavailabilityApplies(memberID, seriesID, date)` bzw. eine Batch-Variante (`unavailableMemberIDsForSession(sessionID)`) implementieren, der die Ableitung aus `serien-abmeldung`-Spec (member+series+Datumsfenster, NULL offen) als reinen Lookup umsetzt
-- [ ] 2.2 Unit-Test der Ableitung: innerhalb/außerhalb Fenster, NULL-Grenzen (permanent/ab-Beginn), Einzeltermin `series_id IS NULL` nie betroffen, überlappende Einträge harmlos
+- [x] 2.2 Unit-Test der Ableitung: innerhalb/außerhalb Fenster, NULL-Grenzen (permanent/ab-Beginn), Einzeltermin `series_id IS NULL` nie betroffen, überlappende Einträge harmlos (`unavailabilities_internal_test.go`)
 
 ## 3. Backend — CRUD-Routen (Trainer-Tier)
 
@@ -37,9 +37,9 @@
 
 ## 8. Backend — Tests
 
-- [ ] 8.1 Route-Tests für CRUD (siehe `## Test-Anforderungen`): Happy-Path + Fehlerfälle (403 fremdes Team, 403 Spieler, 404 falsche uid)
-- [ ] 8.2 RSVP-403-Test (Spieler + Eltern), Attendance-Skip-Test, Statistik-Ausschluss-Test (inkl. Dominanz über excused), Session-Listing-`unavailable`-Feld-Test
-- [ ] 8.3 Broadcast-Gate: sicherstellen, dass die neuen Mutations-Routen `training-unavailability-changed` broadcasten (sonst schlägt `internal/arch/broadcast_test.go` fehl)
+- [x] 8.1 Route-Tests für CRUD (siehe `## Test-Anforderungen`): Happy-Path + Fehlerfälle (403 fremdes Team, 403 Spieler, 404 falsche uid) (`unavailabilities_test.go`)
+- [x] 8.2 RSVP-403-Test (Spieler + Eltern), Attendance-Skip-Test, Statistik-Ausschluss-Test (inkl. Dominanz über excused, `attendance/unavailability_test.go`), Session-Roster-`unavailable`-Feld-Test
+- [x] 8.3 Broadcast-Gate grün (Create/Delete broadcasten `training-unavailability-changed` via `broadcastTeam`); Routen zusätzlich in Permission-Matrix (`permissions/matrix_test.go`) klassifiziert
 
 ## 9. Frontend — API & Serien-Bearbeitung
 

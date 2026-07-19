@@ -168,6 +168,45 @@ func CreateTrainingSession(t *testing.T, database *sql.DB, teamID, seasonID int,
 	return int(id)
 }
 
+// CreateTrainingSessionForSeries inserts a training session linked to a series
+// (series_id set) and returns its ID. Needed to exercise series-unavailability
+// derivation (which never applies to sessions with series_id NULL).
+// date must be in "2006-01-02" format.
+func CreateTrainingSessionForSeries(t *testing.T, database *sql.DB, teamID, seasonID, seriesID int, date string) int {
+	t.Helper()
+	res, err := database.Exec(
+		`INSERT INTO training_sessions (team_id, season_id, series_id, date, start_time, end_time, title)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		teamID, seasonID, seriesID, date, "18:00", "20:00", "Test Session")
+	if err != nil {
+		t.Fatalf("CreateTrainingSessionForSeries: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// CreateSeriesUnavailability inserts a member_series_unavailabilities row and
+// returns its ID. Empty start/end strings are stored as NULL (open window).
+func CreateSeriesUnavailability(t *testing.T, database *sql.DB, memberID, seriesID int, start, end, reason string, createdByUserID int) int {
+	t.Helper()
+	var startArg, endArg any
+	if start != "" {
+		startArg = start
+	}
+	if end != "" {
+		endArg = end
+	}
+	res, err := database.Exec(
+		`INSERT INTO member_series_unavailabilities (member_id, training_series_id, start_date, end_date, reason, created_by)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		memberID, seriesID, startArg, endArg, reason, createdByUserID)
+	if err != nil {
+		t.Fatalf("CreateSeriesUnavailability: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
 // CreateGame inserts a game and its team link, returns the game ID.
 func CreateGame(t *testing.T, database *sql.DB, seasonID, teamID int, date string) int {
 	t.Helper()

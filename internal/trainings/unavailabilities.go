@@ -15,7 +15,10 @@ import (
 
 // unavailInfo ist der pro Mitglied ausgewiesene Serien-Abmelde-Status.
 // permanent = true, wenn kein end_date gesetzt ist (Abmeldung bis Serien-Ende).
+// ID ist die msu-Zeilen-ID (für die Trainer-Aktion „wieder anmelden" aus dem
+// Termin-Detail heraus; bei Überlappung die permanent-bevorzugte Zeile).
 type unavailInfo struct {
+	ID        int    `json:"id"`
 	Reason    string `json:"reason"`
 	Permanent bool   `json:"permanent"`
 }
@@ -61,7 +64,7 @@ func sessionUnavailabilityForMember(ctx context.Context, q rowQuerier, sessionID
 // (series_id IS NULL) ergeben eine leere Map.
 func unavailableMembersForSession(ctx context.Context, q rowQuerier, sessionID int) (map[int]unavailInfo, error) {
 	rows, err := q.QueryContext(ctx, `
-		SELECT msu.member_id, COALESCE(msu.reason, ''), CASE WHEN msu.end_date IS NULL THEN 1 ELSE 0 END
+		SELECT msu.member_id, msu.id, COALESCE(msu.reason, ''), CASE WHEN msu.end_date IS NULL THEN 1 ELSE 0 END
 		FROM training_sessions ts
 		JOIN member_series_unavailabilities msu
 		  ON msu.training_series_id = ts.series_id
@@ -75,15 +78,15 @@ func unavailableMembersForSession(ctx context.Context, q rowQuerier, sessionID i
 	defer rows.Close()
 	out := map[int]unavailInfo{}
 	for rows.Next() {
-		var mid, permanent int
+		var mid, id, permanent int
 		var reason string
-		if err := rows.Scan(&mid, &reason, &permanent); err != nil {
+		if err := rows.Scan(&mid, &id, &reason, &permanent); err != nil {
 			return nil, err
 		}
 		if _, ok := out[mid]; ok {
 			continue // erste Zeile pro Mitglied gewinnt (permanent bevorzugt via ORDER BY)
 		}
-		out[mid] = unavailInfo{Reason: reason, Permanent: permanent == 1}
+		out[mid] = unavailInfo{ID: id, Reason: reason, Permanent: permanent == 1}
 	}
 	return out, rows.Err()
 }
