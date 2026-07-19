@@ -12,6 +12,8 @@ Guidance for Claude Code working in this repository.
 - **Jede neue Route bekommt Tests** (Happy-Path + Fehlerfall).
 - **Kein ORM** — direktes `database/sql`.
 
+**Empfehlung (keine Pflicht):** Für Live-Analyse von Browser-Verhalten (Scroll/Layout/Decode/Focus) ist **Chrome DevTools MCP** der schnellste Weg — jsdom/Vitest sehen diese Klasse strukturell nicht (Beispiel: der `chat-open-at-unread`-Scroll-Bug war JS-korrekt + alle Vitest grün, aber live in Chrome sichtbar). Für Regressionsschutz solcher Fälle → Playwright-E2E (`make test-e2e`, siehe `docs/agent/07-testing.md`).
+
 ---
 
 ## Kapitel

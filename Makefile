@@ -56,6 +56,8 @@ env: ## .env aus .env.example erstellen
 init: hooks ## Abhängigkeiten installieren (go mod tidy, pnpm install) + Git-Hooks aktivieren
 	$(GO) mod tidy
 	cd web && pnpm install
+	# Playwright-Chromium für E2E (make test-e2e). Idempotent: skippt still, wenn schon da.
+	cd web && pnpm exec playwright install chromium
 
 hooks: ## Git-Hooks aktivieren (core.hooksPath → .githooks: pre-commit gofmt, pre-push Gate)
 	git config core.hooksPath .githooks

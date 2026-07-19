@@ -19,6 +19,12 @@ export default defineConfig({
   outputDir: path.join(__dirname, 'test-results'),
   reporter: [['list'], ['html', { open: 'never', outputFolder: path.join(__dirname, 'playwright-report') }]],
   retries: process.env.CI ? 2 : 0,
+  // Ein Worker: alle Tests teilen sich EINE Seed-SQLite-Datei (Design: keine
+  // Per-Test-Isolation). Parallele Worker schreiben sonst gleichzeitig beim Login
+  // (refresh_tokens-INSERT) → SQLITE_BUSY → sporadisch fehlschlagender Login. Bei
+  // 7 Tests (~25 s) ist die serielle Ausführung vernachlässigbar teurer als der
+  // Determinismus-Gewinn.
+  workers: 1,
   timeout: 30_000,
   expect: { timeout: 10_000 },
   use: {

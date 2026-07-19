@@ -45,6 +45,26 @@ func runE2ESeed() {
 	}
 	defer database.Close()
 
+	r := seedE2E(database)
+
+	fmt.Printf("e2e-seed: DB %s angelegt (admin=%d, users=%v)\n", *dbPath, r.adminID, r.userIDs)
+	fmt.Printf("e2e-seed: duty_slot=%d, member=%d, media_dir=%s\n", r.dutySlotID, r.memberID, r.mediaDir)
+}
+
+// e2eSeedResult bündelt die IDs/Pfade, die runE2ESeed für die Zusammenfassung
+// ausgibt und Tests zum Assertieren nutzen.
+type e2eSeedResult struct {
+	adminID    int
+	userIDs    []int
+	dutySlotID int
+	memberID   int
+	mediaDir   string
+}
+
+// seedE2E migriert die (bereits geöffnete) DB und trägt den deterministischen
+// E2E-Datensatz ein. Bewusst von der CLI-Hülle (runE2ESeed) getrennt, damit die
+// Seed-Logik in Go-Tests (Idempotenz, Login) direkt ausführbar ist.
+func seedE2E(database *sql.DB) e2eSeedResult {
 	if err := db.Migrate(database, db.MigrationsFS); err != nil {
 		fatal("e2e-seed: migrate failed", "error", err)
 	}
@@ -71,8 +91,7 @@ func runE2ESeed() {
 	memberID := seedClubAndMember(database)
 	mediaDir := seedChatMedia(database, adminID, userIDs)
 
-	fmt.Printf("e2e-seed: DB %s angelegt (admin=%d, users=%v)\n", *dbPath, adminID, userIDs)
-	fmt.Printf("e2e-seed: duty_slot=%d, member=%d, media_dir=%s\n", dutySlotID, memberID, mediaDir)
+	return e2eSeedResult{adminID: adminID, userIDs: userIDs, dutySlotID: dutySlotID, memberID: memberID, mediaDir: mediaDir}
 }
 
 func mustInsertUser(database *sql.DB, email, hash, role, first, last string) int {
