@@ -47,7 +47,7 @@
 - [x] 5.1 In `.github/workflows/ci.yml` vor `- run: pnpm -C web test` einen
   Schritt `- run: sudo apt-get update && sudo apt-get install -y libxml2-utils`
   einfügen.
-- [ ] 5.2 CI-Lauf auf dem PR verifizieren: `xmllint --version` geloggt,
+- [x] 5.2 CI-Lauf auf dem PR verifizieren: `xmllint --version` geloggt,
   `sepaXml.xsd.test.ts` nicht skipped (4/4 Tests laufen, nicht 0).
 - [x] 5.3 `.githooks/pre-push` prüft nur lokal `xmllint`-Verfügbarkeit (falls
   fehlt: Warnung, kein Hard-Fail — Entwickler ohne libxml2 sollen weiter
@@ -77,8 +77,8 @@
 
 ## 8. Merge & Post-Deploy
 
-- [ ] 8.1 PR öffnen, CI grün, Review.
-- [ ] 8.2 Merge nach `main`. `make deploy`.
+- [x] 8.1 PR öffnen, CI grün, Review.
+- [x] 8.2 Merge nach `main`. `make deploy`. (Prod-Deploy vollzogen 2026-07-19.)
 - [ ] 8.3 Kassierer erzeugt echten Beitragslauf-Export, lädt bei BW-Bank hoch,
   bestätigt Akzeptanz.
-- [ ] 8.4 `openspec archive sepa-xml-xsd-gate`.
+- [x] 8.4 `openspec archive sepa-xml-xsd-gate`.
