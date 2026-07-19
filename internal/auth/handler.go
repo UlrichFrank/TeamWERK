@@ -1860,6 +1860,13 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFromClaims(claims)
+	// Für die Nav-Berechnung: hat dieser User einen eigenen Mitglieds-Datensatz?
+	// Steuert „Mein Profil" — Admins ohne Mitglied/Kind (Setup-Admin) sollen den
+	// Eintrag nicht sehen, Admins die gleichzeitig Mitglied/Elternteil sind schon.
+	var hasMember bool
+	_ = h.db.QueryRowContext(r.Context(),
+		`SELECT EXISTS(SELECT 1 FROM members WHERE user_id = ?)`, claims.UserID).Scan(&hasMember)
+	p.HasMember = hasMember
 
 	resp := struct {
 		User struct {

@@ -120,23 +120,31 @@ func TestScopeMembersQuery(t *testing.T) {
 }
 
 func TestNavFor_ProfileVisibility(t *testing.T) {
-	// Admin should NOT see Mein Profil
-	adminNav := policy.NavFor(adminP())
-	for _, item := range adminNav {
-		if item.Route == "/profil" {
-			t.Error("admin should not see /profil in nav")
+	hasProfil := func(nav []policy.NavItem) bool {
+		for _, item := range nav {
+			if item.Route == "/profil" {
+				return true
+			}
 		}
+		return false
 	}
-	// Trainer SHOULD see Mein Profil
-	trainerNav := policy.NavFor(trainerP())
-	found := false
-	for _, item := range trainerNav {
-		if item.Route == "/profil" {
-			found = true
-		}
+	// Reiner Admin (kein Mitglied, kein Elternteil) → kein /profil
+	if hasProfil(policy.NavFor(adminP())) {
+		t.Error("pure admin should not see /profil in nav")
 	}
-	if !found {
+	// Trainer → /profil
+	if !hasProfil(policy.NavFor(trainerP())) {
 		t.Error("trainer should see /profil in nav")
+	}
+	// Admin + eigenes Mitglied → /profil sichtbar (Regressions-Guard)
+	adminMember := &policy.Principal{UserID: 10, Role: "admin", HasMember: true}
+	if !hasProfil(policy.NavFor(adminMember)) {
+		t.Error("admin who is also a member should see /profil in nav")
+	}
+	// Admin + Elternteil → /profil sichtbar
+	adminParent := &policy.Principal{UserID: 11, Role: "admin", IsParent: true}
+	if !hasProfil(policy.NavFor(adminParent)) {
+		t.Error("admin who is also a parent should see /profil in nav")
 	}
 }
 

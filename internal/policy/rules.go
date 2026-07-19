@@ -9,6 +9,7 @@ type Principal struct {
 	Role          string
 	ClubFunctions []string
 	IsParent      bool
+	HasMember     bool
 }
 
 // NavItem represents a navigation entry returned by /api/me.
@@ -232,7 +233,10 @@ func NavFor(p *Principal) []NavItem {
 
 	// Nutzer
 	nav = append(nav, NavItem{"Dashboard", "/"})
-	if p.Role != "admin" {
+	// „Mein Profil" für alle mit eigenem Mitglieds-Datensatz oder Elternteilen.
+	// Reine Admin-Accounts ohne Mitglied/Kind (Beispiel: initialer Setup-Admin)
+	// sehen den Eintrag nicht — für sie ist /profil leer.
+	if p.Role != "admin" || p.HasMember || p.IsParent {
 		nav = append(nav, NavItem{"Mein Profil", "/profil"})
 	}
 
