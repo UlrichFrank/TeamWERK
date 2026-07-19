@@ -67,4 +67,4 @@
 - [x] 7.2 golangci-lint grün (brand-Tokens, lucide-Icons, keine Raw-Farben/Emojis)
 - [x] 7.3 `pnpm -C web build` + `pnpm -C web lint` grün (0 Errors)
 - [x] 7.4 `openspec validate` grün
-- [ ] 7.5 Merge nach `main` + Deploy (offen — siehe Zusammenfassung)
+- [x] 7.5 Merge nach `main` + Deploy (PR #157, Commit `98934f6`)
