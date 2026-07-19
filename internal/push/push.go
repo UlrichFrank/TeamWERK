@@ -88,6 +88,7 @@ var SendToUsers = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, title, 
 			VAPIDPrivateKey: cfg.VAPIDPrivateKey,
 			Subscriber:      cfg.VAPIDEmail,
 			TTL:             3600,
+			Urgency:         webpush.UrgencyHigh,
 		})
 		if err != nil {
 			slog.Error("push send failed", "subscription", s.id, "error", err)
@@ -154,6 +155,7 @@ func SendToUserWithBadge(db *sql.DB, cfg *appconfig.Config, userID int, title, b
 			VAPIDPrivateKey: cfg.VAPIDPrivateKey,
 			Subscriber:      cfg.VAPIDEmail,
 			TTL:             3600,
+			Urgency:         webpush.UrgencyHigh,
 		})
 		if err != nil {
 			slog.Error("push send failed", "subscription", s.id, "error", err)
