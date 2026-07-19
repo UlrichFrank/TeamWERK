@@ -38,15 +38,22 @@ func suggestMembers(ctx context.Context, db *sql.DB, kaderID int, ageClass, gend
 		args = append(args, "%"+search+"%")
 	}
 
+	// filterByBracket without a concrete year only narrows for game age-classes
+	// (A–D-Jugend) that own a bracket. Training-group kader (Förderkader/
+	// Perspektivkader) have no bracket and are scoped per kader via
+	// dedicated_birth_year — without one we must NOT emit `BETWEEN 0 AND 0`
+	// (which matched nobody and forced users to disable the filter); we simply
+	// skip the year filter so all candidates show.
+	yearFiltered := false
 	if filterByBracket {
 		if dedicatedBirthYear != nil {
 			query += ` AND CAST(strftime('%Y', m.date_of_birth) AS INTEGER) = ?`
 			args = append(args, *dedicatedBirthYear)
-		} else {
-			brackets := ComputeAgeBrackets(seasonStartYear)
-			bracket := brackets[ageClass]
+			yearFiltered = true
+		} else if bracket, ok := ComputeAgeBrackets(seasonStartYear)[ageClass]; ok {
 			query += ` AND CAST(strftime('%Y', m.date_of_birth) AS INTEGER) BETWEEN ? AND ?`
 			args = append(args, bracket[0], bracket[1])
+			yearFiltered = true
 		}
 	}
 
@@ -64,7 +71,7 @@ func suggestMembers(ctx context.Context, db *sql.DB, kaderID int, ageClass, gend
 		var inKader int
 		rows.Scan(&s.ID, &s.Name, &s.BirthYear, &s.Gender, &inKader)
 		s.AlreadyInKader = inKader == 1
-		if filterByBracket {
+		if yearFiltered {
 			s.Reason = "Passender Jahrgang " + ageClass
 		}
 		result = append(result, s)

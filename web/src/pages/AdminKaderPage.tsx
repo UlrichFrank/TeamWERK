@@ -328,14 +328,17 @@ export default function AdminKaderPage() {
   const ageClassTabs = [...new Set(kaderList.map(k => k.age_class))].sort((a, b) => compareAgeClass(a, b, trainingCategories))
 
   // Jahrgangswahl in der Anlage-Maske: Trainingsgruppen haben keinen Spiel-Bracket,
-  // daher freie Jahresliste (Saison-Startjahr −4 … −14); Spiel-Altersklassen behalten
-  // die Bracket-Jahre (unverändertes Verhalten).
+  // ihre wählbaren Jahrgänge werden relativ zur D-Jugend berechnet (D+1 =
+  // Perspektivkader, D+2/D+3 = Förderkader 1/2) und verschieben sich mit der Saison.
+  // Spiegelt internal/kader.TrainingGroupCandidateYears (D-Jugend = [y−12, y−11]).
+  // Spiel-Altersklassen behalten ihre Bracket-Jahre (unverändertes Verhalten).
   const seasonStartYear = selectedSeason?.start_date
     ? parseInt(selectedSeason.start_date.slice(0, 4))
     : new Date().getFullYear()
-  const freeBirthYears = Array.from({ length: 11 }, (_, i) => seasonStartYear - 4 - i)
+  const dJugendYoungest = seasonStartYear - 11
+  const trainingGroupYears = Array.from({ length: 6 }, (_, i) => dJugendYoungest + 1 + i)
   const createIsTrainingGroup = !!createModal && trainingCategories.some(c => c.name === createModal.ageClass)
-  const createYearOptions = createIsTrainingGroup ? freeBirthYears : (createModal?.bracketYears ?? [])
+  const createYearOptions = createIsTrainingGroup ? trainingGroupYears : (createModal?.bracketYears ?? [])
 
   const groupOrder = activeAgeClass
     ? allGroupOrder.filter(key => key.startsWith(`${activeAgeClass}|`))

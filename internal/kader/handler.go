@@ -163,19 +163,49 @@ type kaderDetail struct {
 	Can             policy.CanFlags `json:"can"`
 }
 
-func computeBirthYears(k kaderRow, seasonStartYear int) (birthYears []int, bracketYears []int) {
-	brackets := ComputeAgeBrackets(seasonStartYear)
-	r, ok := brackets[k.AgeClass]
+// computeBirthYears derives the birth-year display data for a kader.
+//   - bracketYears = the selectable years shown in the "Jahrgang wählen" dropdown.
+//     A–D-Jugend expose their fixed 2-year bracket; training-group kader
+//     (Förderkader/Perspektivkader) expose the years computed relative to
+//     D-Jugend (D+1, D+2, …), since they carry no game bracket.
+//   - birthYears = the concrete roster years (the yellow "Jg." badge / filter).
+//     Dedicated year → just that year. Otherwise the full A–D bracket; a
+//     training group without a dedicated year has no implied range → empty.
+func computeBirthYears(k kaderRow, seasonStartYear int, isTrainingGroup bool) (birthYears []int, bracketYears []int) {
 	bracketYears = []int{}
-	if ok {
+	if isTrainingGroup {
+		bracketYears = TrainingGroupCandidateYears(seasonStartYear)
+	} else if r, ok := ComputeAgeBrackets(seasonStartYear)[k.AgeClass]; ok {
 		bracketYears = []int{r[0], r[1]}
 	}
 	if k.DedicatedBirthYear != nil {
 		birthYears = []int{*k.DedicatedBirthYear}
-	} else {
+	} else if !isTrainingGroup {
 		birthYears = bracketYears
+	} else {
+		birthYears = []int{}
 	}
 	return
+}
+
+// trainingGroupCategorySet returns the set of age_class values that are
+// training-group categories (Förderkader/Perspektivkader, …) rather than
+// game age-classes, in a single query for bulk callers.
+func trainingGroupCategorySet(ctx context.Context, db *sql.DB) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM training_group_categories`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	set := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		set[name] = true
+	}
+	return set, rows.Err()
 }
 
 func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
@@ -244,6 +274,12 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	trainingGroups, err := trainingGroupCategorySet(r.Context(), h.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	result := []kaderDetail{}
 	for rows.Next() {
 		k, seasonStartYear, err := scanKaderRow(rows)
@@ -254,7 +290,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 		members, _ := h.loadMembers(r.Context(), k.ID)
 		trainers, _ := h.loadTrainers(r.Context(), k.ID)
 		extended, _ := h.loadExtendedMembers(r.Context(), k.ID)
-		bys, bkys := computeBirthYears(k, seasonStartYear)
+		bys, bkys := computeBirthYears(k, seasonStartYear, trainingGroups[k.AgeClass])
 		result = append(result, kaderDetail{
 			kaderRow:        k,
 			BirthYears:      bys,
@@ -290,7 +326,12 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 	members, _ := h.loadMembers(r.Context(), k.ID)
 	trainers, _ := h.loadTrainers(r.Context(), k.ID)
 	extended, _ := h.loadExtendedMembers(r.Context(), k.ID)
-	bys, bkys := computeBirthYears(k, seasonStartYear)
+	isTrainingGroup, err := isTrainingGroupCategory(r.Context(), h.db, k.AgeClass)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	bys, bkys := computeBirthYears(k, seasonStartYear, isTrainingGroup)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(kaderDetail{
 		kaderRow:        k,
@@ -668,7 +709,12 @@ func (h *Handler) writeCreatedKader(w http.ResponseWriter, r *http.Request, newI
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	bys, bkys := computeBirthYears(k, seasonStartYear)
+	isTrainingGroup, err := isTrainingGroupCategory(r.Context(), h.db, k.AgeClass)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	bys, bkys := computeBirthYears(k, seasonStartYear, isTrainingGroup)
 	h.broadcastKaderTeams(r.Context(), []int{int(k.TeamID)})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

@@ -356,6 +356,199 @@ func TestMemberSuggestions_BracketDisabled(t *testing.T) {
 	}
 }
 
+// ── Trainingsgruppen (Förderkader/Perspektivkader) ───────────────────────────
+
+// TestMemberSuggestions_TrainingGroupNoDedicatedYear ist der Regressionstest für
+// den ursprünglichen Bug: eine Trainingsgruppe (Förderkader/Perspektivkader) hat
+// keinen Spiel-Bracket. Ohne dedicated_birth_year lieferte der Default-Filter
+// (filter_age_bracket=true) früher `BETWEEN 0 AND 0` → NULL Treffer, sodass man
+// den Filter manuell abschalten musste. Jetzt wird der Jahresfilter mangels
+// Bracket übersprungen → Kandidaten erscheinen.
+func TestMemberSuggestions_TrainingGroupNoDedicatedYear(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := kader.NewHandler(db, hub.NewHub())
+
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Förderkader no-year")
+
+	// Förderkader kader, NO dedicated_birth_year (the reported situation).
+	res, err := db.Exec(
+		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, "Förderkader", "mixed", teamID, 1)
+	if err != nil {
+		t.Fatalf("insert kader: %v", err)
+	}
+	kaderIDRaw, _ := res.LastInsertId()
+	kaderID := int(kaderIDRaw)
+
+	// A D+2 Förderkind (born 2016) and an unrelated older member (born 2005).
+	youngRes, _ := db.Exec(
+		`INSERT INTO members (first_name, last_name, status, date_of_birth, gender) VALUES (?, ?, ?, ?, ?)`,
+		"Fritz", "Förderkind", "foerderkind", "2016-04-04", "m")
+	youngID, _ := youngRes.LastInsertId()
+	oldRes, _ := db.Exec(
+		`INSERT INTO members (first_name, last_name, status, date_of_birth, gender) VALUES (?, ?, ?, ?, ?)`,
+		"Otto", "Alt", "aktiv", "2005-02-20", "m")
+	oldID, _ := oldRes.LastInsertId()
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	token := testutil.Token(t, adminID, "admin", nil)
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/kader/{id}/member-suggestions", h.MemberSuggestions)
+	})
+
+	// Default request (filter_age_bracket defaults to true).
+	resp := testutil.Get(t, srv, fmt.Sprintf("/api/kader/%d/member-suggestions", kaderID), token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	var payload struct {
+		Suggestions []struct {
+			ID int `json:"id"`
+		} `json:"suggestions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Suggestions) == 0 {
+		t.Fatal("training-group suggestions without dedicated year must not be empty (regression: BETWEEN 0 AND 0)")
+	}
+	youngFound, oldFound := false, false
+	for _, s := range payload.Suggestions {
+		if int64(s.ID) == youngID {
+			youngFound = true
+		}
+		if int64(s.ID) == oldID {
+			oldFound = true
+		}
+	}
+	if !youngFound {
+		t.Errorf("expected Förderkind (born 2016, id=%d) in suggestions", youngID)
+	}
+	// No bracket → no year filter applied; all active members are candidates.
+	if !oldFound {
+		t.Errorf("expected unfiltered member (id=%d) in suggestions when no bracket applies", oldID)
+	}
+}
+
+// TestMemberSuggestions_TrainingGroupDedicatedYear verifies that once a training
+// group carries a dedicated_birth_year, the default filter narrows to exactly
+// that Jahrgang.
+func TestMemberSuggestions_TrainingGroupDedicatedYear(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := kader.NewHandler(db, hub.NewHub())
+
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Perspektivkader dedicated")
+
+	// Perspektivkader = D+1 = 2015.
+	res, err := db.Exec(
+		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number, dedicated_birth_year) VALUES (?, ?, ?, ?, ?, ?)`,
+		seasonID, "Perspektivkader", "mixed", teamID, 1, 2015)
+	if err != nil {
+		t.Fatalf("insert kader: %v", err)
+	}
+	kaderIDRaw, _ := res.LastInsertId()
+	kaderID := int(kaderIDRaw)
+
+	inRes, _ := db.Exec(
+		`INSERT INTO members (first_name, last_name, status, date_of_birth, gender) VALUES (?, ?, ?, ?, ?)`,
+		"Paul", "Passt", "foerderkind", "2015-06-06", "m")
+	inID, _ := inRes.LastInsertId()
+	outRes, _ := db.Exec(
+		`INSERT INTO members (first_name, last_name, status, date_of_birth, gender) VALUES (?, ?, ?, ?, ?)`,
+		"Nina", "Nachbarjahr", "foerderkind", "2016-06-06", "f")
+	outID, _ := outRes.LastInsertId()
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	token := testutil.Token(t, adminID, "admin", nil)
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/kader/{id}/member-suggestions", h.MemberSuggestions)
+	})
+
+	resp := testutil.Get(t, srv, fmt.Sprintf("/api/kader/%d/member-suggestions", kaderID), token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	var payload struct {
+		Suggestions []struct {
+			ID int `json:"id"`
+		} `json:"suggestions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	inFound, outFound := false, false
+	for _, s := range payload.Suggestions {
+		if int64(s.ID) == inID {
+			inFound = true
+		}
+		if int64(s.ID) == outID {
+			outFound = true
+		}
+	}
+	if !inFound {
+		t.Errorf("expected 2015 member (id=%d) in dedicated-year suggestions", inID)
+	}
+	if outFound {
+		t.Errorf("expected 2016 member (id=%d) NOT in 2015-dedicated suggestions", outID)
+	}
+}
+
+// TestGetKader_TrainingGroupBracketYears verifies that a training-group kader
+// exposes selectable bracket_years (computed relative to D-Jugend) so the
+// "Jahrgang wählen" dropdown is populated — previously it was empty.
+func TestGetKader_TrainingGroupBracketYears(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := kader.NewHandler(db, hub.NewHub())
+
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Förderkader brackets")
+	res, err := db.Exec(
+		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, "Förderkader", "mixed", teamID, 1)
+	if err != nil {
+		t.Fatalf("insert kader: %v", err)
+	}
+	kaderIDRaw, _ := res.LastInsertId()
+	kaderID := int(kaderIDRaw)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	token := testutil.Token(t, adminID, "admin", nil)
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/kader/{id}", h.GetKader)
+	})
+
+	resp := testutil.Get(t, srv, fmt.Sprintf("/api/kader/%d", kaderID), token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	var payload struct {
+		BracketYears []int `json:"bracket_years"`
+		BirthYears   []int `json:"birth_years"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	// 2025/26: D+1..D+6 = 2015..2020.
+	if len(payload.BracketYears) == 0 {
+		t.Fatal("training-group bracket_years must be populated (dropdown source)")
+	}
+	if payload.BracketYears[0] != 2015 {
+		t.Errorf("first bracket year: got %d, want 2015 (D+1)", payload.BracketYears[0])
+	}
+	// Without a dedicated year a training group has no implied roster range.
+	if len(payload.BirthYears) != 0 {
+		t.Errorf("training-group birth_years without dedicated year: got %v, want []", payload.BirthYears)
+	}
+}
+
 // ── TC-K06/K07: CopyFromSeason ────────────────────────────────────────────────
 
 // TC-K06: CopyFromSeason mit member_source=same-age-previous übernimmt Mitglieder.

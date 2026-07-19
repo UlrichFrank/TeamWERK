@@ -58,6 +58,44 @@ func TestBirthYearInBracket(t *testing.T) {
 	}
 }
 
+func TestTrainingGroupCandidateYears(t *testing.T) {
+	// 2025/26: D-Jugend youngest = 2014 → D+1..D+6 = 2015..2020.
+	got := TrainingGroupCandidateYears(2025)
+	want := []int{2015, 2016, 2017, 2018, 2019, 2020}
+	if len(got) != len(want) {
+		t.Fatalf("2025: got %d years %v, want %d %v", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("2025: got[%d]=%d, want %d (full: %v)", i, got[i], want[i], got)
+		}
+	}
+
+	// The three named groups map to D+1/D+2/D+3 (first three offered years).
+	if got[0] != 2015 { // Perspektivkader = D+1
+		t.Errorf("Perspektivkader (D+1): got %d, want 2015", got[0])
+	}
+	if got[1] != 2016 { // Förderkader 1 = D+2
+		t.Errorf("Förderkader 1 (D+2): got %d, want 2016", got[1])
+	}
+	if got[2] != 2017 { // Förderkader 2 = D+3
+		t.Errorf("Förderkader 2 (D+3): got %d, want 2017", got[2])
+	}
+
+	// Shifts with the season by +1, staying below D-Jugend.
+	if got26 := TrainingGroupCandidateYears(2026); got26[0] != 2016 {
+		t.Errorf("2026/27: Perspektivkader (D+1) got %d, want 2016", got26[0])
+	}
+
+	// Candidate years must not overlap the D-Jugend bracket (they are younger).
+	dMax := ComputeAgeBrackets(2025)["D-Jugend"][1]
+	for _, y := range got {
+		if y <= dMax {
+			t.Errorf("candidate year %d is not younger than D-Jugend (max %d)", y, dMax)
+		}
+	}
+}
+
 func TestNoBracketOverlap(t *testing.T) {
 	for _, year := range []int{2024, 2025, 2026} {
 		brackets := ComputeAgeBrackets(year)

@@ -35,3 +35,23 @@ func BirthYearInBracket(birthYear int, ageClass string, seasonStartYear int) boo
 	}
 	return birthYear >= r[0] && birthYear <= r[1]
 }
+
+// trainingGroupYearCount is how many birth years are offered for training-group
+// kader (Förderkader/Perspektivkader), starting one year below D-Jugend
+// (D+1 = Perspektivkader, D+2/D+3 = Förderkader 1/2). Extra buffer years cover
+// even younger groups; the concrete Jahrgang is still chosen per kader via
+// dedicated_birth_year.
+const trainingGroupYearCount = 6
+
+// TrainingGroupCandidateYears returns the selectable birth years for
+// training-group kader, computed relative to the D-Jugend bracket so they shift
+// with the season like A–D. For 2025/26 (D-Jugend = 2013/2014) this yields
+// 2015, 2016, 2017, … (D+1, D+2, D+3, …).
+func TrainingGroupCandidateYears(seasonStartYear int) []int {
+	dYoungest := ComputeAgeBrackets(seasonStartYear)["D-Jugend"][1] // e.g. 2014 for 2025/26
+	years := make([]int, trainingGroupYearCount)
+	for i := range years {
+		years[i] = dYoungest + 1 + i
+	}
+	return years
+}
