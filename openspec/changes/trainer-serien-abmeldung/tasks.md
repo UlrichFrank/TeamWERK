@@ -1,39 +1,39 @@
 ## 1. Datenbank
 
-- [ ] 1.1 Migration `internal/db/migrations/0NN_member_series_unavailabilities.up.sql` mit nächster freier Nummer anlegen: Tabelle `member_series_unavailabilities` (Schema aus design.md) + Indizes `idx_msu_series`, `idx_msu_member`
-- [ ] 1.2 Passende `.down.sql` (DROP INDEX + DROP TABLE)
-- [ ] 1.3 `make migrate-up` lokal, danach `make migrate-down`/`up` gegentesten (Reversibilität)
+- [x] 1.1 Migration `internal/db/migrations/0NN_member_series_unavailabilities.up.sql` mit nächster freier Nummer anlegen: Tabelle `member_series_unavailabilities` (Schema aus design.md) + Indizes `idx_msu_series`, `idx_msu_member`
+- [x] 1.2 Passende `.down.sql` (DROP INDEX + DROP TABLE)
+- [x] 1.3 `make migrate-up` lokal, danach `make migrate-down`/`up` gegentesten (Reversibilität)
 
 ## 2. Backend — Domain-Logik & Ableitung
 
-- [ ] 2.1 In `internal/trainings` einen Helper `seriesUnavailabilityApplies(memberID, seriesID, date)` bzw. eine Batch-Variante (`unavailableMemberIDsForSession(sessionID)`) implementieren, der die Ableitung aus `serien-abmeldung`-Spec (member+series+Datumsfenster, NULL offen) als reinen Lookup umsetzt
+- [x] 2.1 In `internal/trainings` einen Helper `seriesUnavailabilityApplies(memberID, seriesID, date)` bzw. eine Batch-Variante (`unavailableMemberIDsForSession(sessionID)`) implementieren, der die Ableitung aus `serien-abmeldung`-Spec (member+series+Datumsfenster, NULL offen) als reinen Lookup umsetzt
 - [ ] 2.2 Unit-Test der Ableitung: innerhalb/außerhalb Fenster, NULL-Grenzen (permanent/ab-Beginn), Einzeltermin `series_id IS NULL` nie betroffen, überlappende Einträge harmlos
 
 ## 3. Backend — CRUD-Routen (Trainer-Tier)
 
-- [ ] 3.1 Handler `ListSeriesUnavailabilities` (`GET /api/training-series/{id}/unavailabilities`): `hasTeamAccess(series.team_id)`; liefert member_id, member_name, start_date, end_date, reason, created_at
-- [ ] 3.2 Handler `CreateSeriesUnavailability` (`POST .../unavailabilities`): Body `{member_id, start_date?, end_date?, reason?}`; `hasTeamAccess`; Insert via `LastInsertId()` (kein RETURNING); HTTP 201; `h.hub.Broadcast("training-unavailability-changed")`
-- [ ] 3.3 Handler `DeleteSeriesUnavailability` (`DELETE .../unavailabilities/{uid}`): `hasTeamAccess`; 404 wenn `{uid}` nicht zur Serie gehört; Broadcast
-- [ ] 3.4 Routen in `internal/app/router.go` im bestehenden `RequireClubFunction("trainer","sportliche_leitung")`-Sub-Router registrieren
-- [ ] 3.5 Falls nötig `hub *hub.EventHub` sicherstellen (Trainings-Handler hat es bereits)
+- [x] 3.1 Handler `ListSeriesUnavailabilities` (`GET /api/training-series/{id}/unavailabilities`): `hasTeamAccess(series.team_id)`; liefert member_id, member_name, start_date, end_date, reason, created_at
+- [x] 3.2 Handler `CreateSeriesUnavailability` (`POST .../unavailabilities`): Body `{member_id, start_date?, end_date?, reason?}`; `hasTeamAccess`; Insert via `LastInsertId()` (kein RETURNING); HTTP 201; Broadcast `training-unavailability-changed` (via `broadcastTeam`, erfüllt Broadcast-Gate)
+- [x] 3.3 Handler `DeleteSeriesUnavailability` (`DELETE .../unavailabilities/{uid}`): `hasTeamAccess`; 404 wenn `{uid}` nicht zur Serie gehört; Broadcast
+- [x] 3.4 Routen in `internal/app/router.go` im bestehenden `RequireClubFunction("trainer","sportliche_leitung")`-Sub-Router registrieren
+- [x] 3.5 Falls nötig `hub *hub.EventHub` sicherstellen (Trainings-Handler hat es bereits)
 
 ## 4. Backend — RSVP-Sperre
 
-- [ ] 4.1 In `Respond` (`internal/trainings/handler.go:1359`) nach dem Absence-Lock die Serien-Abmelde-Ableitung prüfen und bei Treffer HTTP 403 zurückgeben (kein Insert/Upsert in `training_responses`)
+- [x] 4.1 In `Respond` (`internal/trainings/handler.go:1359`) nach dem Absence-Lock die Serien-Abmelde-Ableitung prüfen und bei Treffer HTTP 403 zurückgeben (kein Insert/Upsert in `training_responses`)
 
 ## 5. Backend — Attendance-Ausschluss
 
-- [ ] 5.1 In `SaveAttendances` (`internal/trainings/handler.go:1665`) abgemeldete Mitglieder aus dem Persist überspringen (analog trainer-only-Skip); restliche Erfassung unbeeinflusst
+- [x] 5.1 In `SaveAttendances` (`internal/trainings/handler.go:1665`) abgemeldete Mitglieder aus dem Persist überspringen (analog trainer-only-Skip); restliche Erfassung unbeeinflusst
 
 ## 6. Backend — Statistik
 
-- [ ] 6.1 In `loadCounts` (`internal/attendance/handler.go:117`) LEFT JOIN auf `member_series_unavailabilities` über `(member_id, ts.series_id)` + Datumsfenster; die drei Trainings-Buckets um `AND msu.id IS NULL` erweitern (Ausschluss dominiert excused)
-- [ ] 6.2 In `GetMemberStats` (`handler.go:380`) betroffene Trainings-Sessions in der `events`-Liste mit `category: "unavailable"` + `reason` ausweisen (kein Zähler-Beitrag)
-- [ ] 6.3 Team-Aggregat: sicherstellen, dass die Team-Quote als Ø der Pro-Spieler-Quoten berechnet wird (unterschiedliche Nenner je Spieler)
+- [x] 6.1 In `loadCounts` (`internal/attendance/handler.go:117`) LEFT JOIN auf `member_series_unavailabilities` über `(member_id, ts.series_id)` + Datumsfenster; die drei Trainings-Buckets um `AND msu.id IS NULL` erweitern (Ausschluss dominiert excused)
+- [x] 6.2 In `GetMemberStats` (`handler.go:380`) betroffene Trainings-Sessions in der `events`-Liste mit `category: "unavailable"` + `reason` ausweisen (kein Zähler-Beitrag) — via `loadMemberEvents`; `unavailable` dominiert cancelled-nachrangig, present/excused-vorrangig
+- [x] 6.3 Team-Aggregat: Ø der Pro-Spieler-Quoten ergibt sich by-construction — `computeAverages` mittelt Pro-Member-Counts, die dank `loadCounts`-Ausschluss die abgemeldeten Sessions je Spieler bereits ausklammern (kein gemeinsamer Nenner)
 
 ## 7. Backend — Session-Listing
 
-- [ ] 7.1 In `ListSessions`/`GetSession` pro Mitglied `unavailable: {reason, permanent} | null` mitliefern (`permanent = end_date IS NULL`); Mitglied bleibt in der Liste sichtbar
+- [x] 7.1 Pro Mitglied `unavailable: {reason, permanent} | null` in der Roster-Antwort `GET /api/training-sessions/{id}/attendances` (`attendanceItem`) mitliefern (`permanent = end_date IS NULL`); Mitglied bleibt sichtbar. Hinweis: Der `/termine`-Detail rendert den Kader aus `/attendances` (nicht aus `GetSession.responses`, das nur Antwortende listet) — daher liegt das Feld dort statt in `GetSession`.
 
 ## 8. Backend — Tests
 

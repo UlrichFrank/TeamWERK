@@ -134,18 +134,24 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 	// Trainings-Zähler
 	trainingSQL := `
 		SELECT m.id, m.first_name || ' ' || m.last_name,
-		       COALESCE(SUM(CASE WHEN ta.present = 1 THEN 1 ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN ta.present = 0 THEN 1 ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN ta.present = 1 AND msu.id IS NULL THEN 1 ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN ta.present = 0 AND msu.id IS NULL THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ta.present IS NULL
 		                          AND tr.status = 'declined'
-		                          AND tr.absence_id IS NOT NULL THEN 1 ELSE 0 END), 0)
+		                          AND tr.absence_id IS NOT NULL
+		                          AND msu.id IS NULL THEN 1 ELSE 0 END), 0)
 		FROM members m` + memberJoin + `
 		LEFT JOIN training_sessions ts ON ts.team_id = k.team_id
 		                              AND ts.season_id = k.season_id
 		                              AND ts.status != 'cancelled'
 		                              AND date(ts.date) BETWEEN date(?) AND date(?)
 		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = m.id
-		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id` +
+		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id
+		LEFT JOIN member_series_unavailabilities msu
+		       ON msu.member_id = m.id
+		      AND msu.training_series_id = ts.series_id
+		      AND (msu.start_date IS NULL OR msu.start_date <= date(ts.date))
+		      AND (msu.end_date   IS NULL OR msu.end_date   >= date(ts.date))` +
 		memberWhere + `
 		GROUP BY m.id, m.first_name, m.last_name
 		ORDER BY m.first_name, m.last_name`
@@ -447,10 +453,16 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 	// Kader das Mitglied in dieser Saison steht.
 	trainingRows, err := h.db.QueryContext(ctx, `
 		SELECT ts.id, ts.date, ts.title, ts.status,
-		       ta.present, tr.status, tr.absence_id IS NOT NULL, tr.reason
+		       ta.present, tr.status, tr.absence_id IS NOT NULL, tr.reason,
+		       msu.id IS NOT NULL, msu.reason
 		FROM training_sessions ts
 		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = ?
 		LEFT JOIN training_responses  tr ON tr.training_id = ts.id AND tr.member_id = ?
+		LEFT JOIN member_series_unavailabilities msu
+		       ON msu.member_id = ?
+		      AND msu.training_series_id = ts.series_id
+		      AND (msu.start_date IS NULL OR msu.start_date <= date(ts.date))
+		      AND (msu.end_date   IS NULL OR msu.end_date   >= date(ts.date))
 		WHERE ts.season_id = ?
 		  AND date(ts.date) BETWEEN date(?) AND date(?)
 		  AND ts.team_id IN (
@@ -461,7 +473,7 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		    )
 		  )
 		ORDER BY ts.date, ts.id`,
-		memberID, memberID, seasonID, startDate, endDate, seasonID, memberID, memberID)
+		memberID, memberID, memberID, seasonID, startDate, endDate, seasonID, memberID, memberID)
 	if err != nil {
 		return nil, counts, fmt.Errorf("training events: %w", err)
 	}
@@ -469,10 +481,10 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		var ev eventDetail
 		var status string
 		var present sql.NullInt64
-		var respStatus, reason sql.NullString
-		var hasAbsence bool
+		var respStatus, reason, unavailReason sql.NullString
+		var hasAbsence, unavailable bool
 		if err := trainingRows.Scan(&ev.EventID, &ev.Date, &ev.Title, &status,
-			&present, &respStatus, &hasAbsence, &reason); err != nil {
+			&present, &respStatus, &hasAbsence, &reason, &unavailable, &unavailReason); err != nil {
 			trainingRows.Close()
 			return nil, counts, err
 		}
@@ -480,13 +492,22 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		if ev.Title == "" {
 			ev.Title = "Training"
 		}
-		if status == "cancelled" {
+		switch {
+		case status == "cancelled":
 			ev.Category = CategoryCanceled
-		} else {
+		case unavailable:
+			// Serien-Abmeldung dominiert (auch eine bereits erfasste Anwesenheit
+			// oder entschuldigte Absage): zählt in keiner Säule.
+			ev.Category = CategoryUnavailable
+			if unavailReason.Valid && unavailReason.String != "" {
+				s := unavailReason.String
+				ev.Reason = &s
+			}
+		default:
 			ev.Category = classifyRow(present, respStatus, hasAbsence)
 			tallyCount(&counts, ev.EventType, ev.Category)
 		}
-		if reason.Valid && reason.String != "" {
+		if ev.Reason == nil && reason.Valid && reason.String != "" {
 			s := reason.String
 			ev.Reason = &s
 		}

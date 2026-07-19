@@ -13,6 +13,10 @@ const (
 	CategoryExcused  Category = "excused"
 	CategoryUnknown  Category = "unknown"
 	CategoryCanceled Category = "cancelled"
+	// CategoryUnavailable markiert eine Session, für die das Mitglied per
+	// Serien-Abmeldung dauerhaft abgemeldet ist. Sie zählt in keiner Säule und
+	// dominiert eine etwaige parallele entschuldigte Absage (Nenner-Ausschluss).
+	CategoryUnavailable Category = "unavailable"
 )
 
 // Classify ordnet einem Termin-/Mitgliedspaar genau eine Säule zu.

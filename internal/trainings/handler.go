@@ -1429,6 +1429,16 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Serien-Abmeldung: Ist das Mitglied für die Serie dieser Session abgemeldet,
+	// wird keine RSVP zugelassen (kein Insert/Upsert), analog zum Absence-Lock.
+	if unavailable, _, uerr := sessionUnavailabilityForMember(r.Context(), h.db, sessionID, memberID); uerr != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	} else if unavailable {
+		http.Error(w, "für diese Terminserie abgemeldet", http.StatusForbidden)
+		return
+	}
+
 	if !claims.CanOverrideRSVPCutoff() {
 		var sessDate, sessStart string
 		if err := h.db.QueryRowContext(r.Context(),
@@ -1485,6 +1495,10 @@ type attendanceItem struct {
 	RSVPIsDefault bool    `json:"rsvp_is_default,omitempty"`
 	Reason        *string `json:"reason"`
 	Present       *bool   `json:"present"`
+	// Unavailable ist gesetzt, wenn das Mitglied für die Serie dieser Session
+	// dauerhaft abgemeldet ist (serien-abmeldung); dann bleibt es in der Liste
+	// sichtbar, wird aber aus der Anwesenheitserfassung/Statistik ausgenommen.
+	Unavailable *unavailInfo `json:"unavailable"`
 }
 
 // GET /api/training-sessions/{id}/attendances
@@ -1615,6 +1629,14 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	// Serien-Abmeldungen einmalig für diese Session laden (member_id -> Status).
+	unavail, err := unavailableMembersForSession(r.Context(), h.db, sessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "GetAttendances unavailability: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	result := []attendanceItem{}
 	for rows.Next() {
 		var item attendanceItem
@@ -1654,6 +1676,10 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		if present.Valid && !item.IsTrainer {
 			b := present.Int64 == 1
 			item.Present = &b
+		}
+		if u, ok := unavail[item.MemberID]; ok {
+			info := u
+			item.Unavailable = &info
 		}
 		result = append(result, item)
 	}
@@ -1709,7 +1735,20 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	// Serien-abgemeldete Mitglieder werden — wie trainer-only-Mitglieder — aus dem
+	// Persist übersprungen (keine training_attendances-Zeile), ohne den Bulk-Save zu
+	// scheitern. Effekt: kein Attendance-Record → nicht im Statistik-Nenner.
+	unavailable, err := unavailableMembersForSession(r.Context(), tx, sessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "SaveAttendances unavailability: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	for _, e := range entries {
+		if _, skip := unavailable[e.MemberID]; skip {
+			continue
+		}
 		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die zum Kader-Trainerstab
 		// gehören und nicht als Spieler im Kader stehen, werden still übersprungen. Die
 		// Roster-Antwort enthält Trainer-Zeilen (eigene Sektion), die der Bulk-Save des
