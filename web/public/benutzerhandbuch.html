@@ -48,6 +48,27 @@
     text-rendering:optimizeLegibility;
   }
 
+  /* ---------- Sticky Zurück-Leiste ---------- */
+  /* Beim Aufruf aus der installierten PWA (Android besonders) fehlt der Browser-Zurück-Button.
+     Diese Leiste garantiert einen sichtbaren Weg zurück in die App. */
+  .backbar{
+    position:sticky;
+    top:0;
+    z-index:50;
+    display:flex;
+    align-items:center;
+    gap:.4rem;
+    padding:.7rem 1.25rem;
+    background:var(--white);
+    border-bottom:1px solid var(--border-subtle);
+    color:var(--text-muted);
+    text-decoration:none;
+    font-size:.9rem;
+    font-weight:500;
+  }
+  .backbar:hover{color:var(--text);}
+  .backbar svg{width:1.1rem;height:1.1rem;flex-shrink:0;}
+
   /* ---------- Kopfleiste ---------- */
   header.masthead{
     background:var(--black);
@@ -343,6 +364,13 @@
 </style>
 </head>
 <body>
+
+<a class="backbar" href="/" aria-label="Zurück zu TeamWERK">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="15 18 9 12 15 6"></polyline>
+  </svg>
+  <span>Zurück zu TeamWERK</span>
+</a>
 
 <header class="masthead">
   <div class="masthead-inner">
