@@ -2,48 +2,48 @@
 
 ## 1. Datenmodell
 
-- [ ] 1.1 Migration `internal/db/migrations/031_message_reads_read_at.up.sql`:
+- [x] 1.1 Migration `internal/db/migrations/031_message_reads_read_at.up.sql`:
   `ALTER TABLE message_reads ADD COLUMN read_at TIMESTAMP;` + Backfill mit
   `CURRENT_TIMESTAMP` + Index `idx_message_reads_message_id`.
-- [ ] 1.2 Migration `.down.sql`: Table-Rebuild (SQLite-Idiom), Index droppen.
-- [ ] 1.3 `make migrate-up` lokal ausführen, `PRAGMA table_info(message_reads)`
+- [x] 1.2 Migration `.down.sql`: Table-Rebuild (SQLite-Idiom), Index droppen.
+- [x] 1.3 `make migrate-up` lokal ausführen, `PRAGMA table_info(message_reads)`
   prüft die neue Spalte.
 
 ## 2. Backend
 
-- [ ] 2.1 `MarkRead`-Handler in `internal/chat/handler.go` erweitern:
+- [x] 2.1 `MarkRead`-Handler in `internal/chat/handler.go` erweitern:
   vor dem `INSERT OR IGNORE` per SELECT die Menge der neu-zu-markierenden
   `(message_id, sender_id)`-Paare ermitteln (nur wo noch kein Read existiert).
   `read_at` explizit auf `CURRENT_TIMESTAMP` setzen.
-- [ ] 2.2 Nach dem INSERT: pro `(sender_id)` mit `MAX(message_id)` als
+- [x] 2.2 Nach dem INSERT: pro `(sender_id)` mit `MAX(message_id)` als
   `upToMessageId` ein SSE-Event `chat:read-receipt` mit Payload
   `{convId, readerUserId, upToMessageId, readAt}` per
   `h.hub.BroadcastToUser(sender_id, event)` senden.
-- [ ] 2.3 Neue Route `GET /api/chat/messages/{id}/reads` (Handler
+- [x] 2.3 Neue Route `GET /api/chat/messages/{id}/reads` (Handler
   `GetMessageReads`). Authorization: nur wenn `m.sender_id = claims.UserID`,
   sonst 403. Response: `[{userId, name, readAt}]` sortiert nach `readAt` ASC.
-- [ ] 2.4 In `ListMessages` / `Messages` pro Nachricht `readCount` (Anzahl
+- [x] 2.4 In `ListMessages` / `Messages` pro Nachricht `readCount` (Anzahl
   Reader != Sender) und `readTotal` (aktive Konversations-Mitglieder != Sender)
   in die Response aufnehmen. Für Direct-Konversationen kollabiert das auf
   `read: bool` (readCount >= 1).
-- [ ] 2.5 Router-Eintrag `r.Get("/chat/messages/{id}/reads", chatH.GetMessageReads)`
+- [x] 2.5 Router-Eintrag `r.Get("/chat/messages/{id}/reads", chatH.GetMessageReads)`
   im auth-tier `Authenticated` (jeder eingeloggte Nutzer, Handler-interne
   Sender-Prüfung).
 
 ## 3. Tests (Backend)
 
-- [ ] 3.1 `TestGetMessageReads_Sender_OK`: Absender ruft
+- [x] 3.1 `TestGetMessageReads_Sender_OK`: Absender ruft
   `/messages/{id}/reads` ab, Response enthält Liste mit `readAt`.
-- [ ] 3.2 `TestGetMessageReads_ForeignUser_403`: anderer Konversations-User
+- [x] 3.2 `TestGetMessageReads_ForeignUser_403`: anderer Konversations-User
   bekommt 403.
-- [ ] 3.3 `TestGetMessageReads_MessageMissing_404`: gelöschte oder unbekannte
+- [x] 3.3 `TestGetMessageReads_MessageMissing_404`: gelöschte oder unbekannte
   Message-ID.
-- [ ] 3.4 `TestMarkRead_BroadcastsReadReceiptToSenders`: MarkRead in Gruppen-
+- [x] 3.4 `TestMarkRead_BroadcastsReadReceiptToSenders`: MarkRead in Gruppen-
   Konversation mit 2 Sendern → SSE-Fanout an beide Sender, jeweils genau ein
   Event mit korrektem `upToMessageId`.
-- [ ] 3.5 `TestListMessages_IncludesReadCounters`: Response enthält
+- [x] 3.5 `TestListMessages_IncludesReadCounters`: Response enthält
   `readCount`, `readTotal` pro Nachricht.
-- [ ] 3.6 Broadcast-Gate `internal/arch/broadcast_test.go` läuft weiter grün
+- [x] 3.6 Broadcast-Gate `internal/arch/broadcast_test.go` läuft weiter grün
   (der neue Fanout ergänzt den bestehenden, keine Allowlist-Änderung).
 
 ## 4. Frontend
