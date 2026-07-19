@@ -73,12 +73,12 @@ Das System SHALL das Kassenbuch nur an Spieler (`kader_members`), Trainer (`kade
 - **THEN** enthält die Response keinerlei Kassenbuch-Einträge, Saldo oder Kassenwart-Details
 
 ### Requirement: Live-Update bei Kassen-Änderung
-Das System SHALL bei jeder mutierenden Kassen- oder Kassenwart-Aktion einen SSE-Event broadcasten (`cashbook` für Ledger-Mutationen, `kassenwarte` für Ernennung/Abberufung), damit Team-interne Clients ihre Sicht ohne Reload aktualisieren.
+Das System SHALL bei jeder mutierenden Kassen- oder Kassenwart-Aktion einen SSE-Event broadcasten (`cashbook` für Ledger-Mutationen, `treasurers` für Ernennung/Abberufung), damit Team-interne Clients ihre Sicht ohne Reload aktualisieren.
 
 #### Scenario: Buchung triggert cashbook-Event
 - **WHEN** eine Kassenbuchung angelegt oder gelöscht wird
 - **THEN** wird ein SSE-Event `cashbook` an alle verbundenen Clients gesendet
 
-#### Scenario: Ernennung triggert kassenwarte-Event
+#### Scenario: Ernennung triggert treasurers-Event
 - **WHEN** ein Kassenwart ernannt oder abberufen wird
-- **THEN** wird ein SSE-Event `kassenwarte` gesendet
+- **THEN** wird ein SSE-Event `treasurers` gesendet

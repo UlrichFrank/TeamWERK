@@ -17,7 +17,7 @@ Zusätzlich eine kleine UX-Verbesserung: In den Listen (Strafen, Kasse, Rosters)
 - **Strafen-Tab bereinigt**: die irreführende „Mannschaftskasse"-Kopfzeile (Zeilen 484–487 in `MeinTeamPage.tsx`) wird entfernt. Der Strafen-Tab zeigt fortan nur noch offene Strafen pro Spieler.
 - **Verwalten-Tab bekommt Kassenwart-Sektion** direkt unter der Strafenwart-Sektion (gleicher UI-Baustein).
 - **Eigene Zeile fett**: In den Roster-Tabs (Team/Trainer/Eltern), der Strafen-Übersicht und im Kassenbuch wird die Zeile des eingeloggten Nutzers `font-semibold`. Kriterium: `roster.mymember.id === row.memberId` (oder analog).
-- **SSE**: neue Broadcast-Events `cashbook`, `kassenwarte`, `penalty-settings`; jede Mutations-Route ruft `h.hub.Broadcast(...)`, Frontend abonniert via `useLiveUpdates`.
+- **SSE**: neue Broadcast-Events `cashbook`, `treasurers`, `penalty-settings`; jede Mutations-Route ruft `h.hub.Broadcast(...)`, Frontend abonniert via `useLiveUpdates`.
 
 ## Capabilities
 
@@ -31,7 +31,7 @@ Zusätzlich eine kleine UX-Verbesserung: In den Listen (Strafen, Kasse, Rosters)
 
 - **Neue Migration** (`internal/db/migrations/`, nächste freie Nummer, `.up.sql` + `.down.sql`): drei Tables — `penalty_settings(kader_id PK, unit CHECK IN ('euro','striche'))`, `team_cashbook_entries(id, kader_id, amount_cent [signed], note, entered_by_member_id, entered_at)`, `kader_kassenwarte(kader_id, member_id) PK`. Alle FK auf `kader(id) ON DELETE CASCADE`.
 - **Backend:** `internal/teams/access.go` — neuer Helper `isKassenwartOfTeam`, ergänzt bestehendes `canReadPenalties` als `canReadCashbook` (identisches Prädikat, benannt für Klarheit). Neue Handler-Dateien `cashbook.go`, `penalty_settings.go` in `internal/teams`. Router `internal/app/router.go` — neue Routen unter Authenticated- (Read) und Trainer-Tier (Write). Strafen-Handler (`penalties.go`) erhält Umrechnungs-Transaktion und Preview-Route.
-- **SSE (Hard Rule):** jede Mutations-Route ruft `h.hub.Broadcast(...)` (Events `cashbook`, `kassenwarte`, `penalty-settings`, plus `penalties` beim Einheiten-Wechsel wegen Massen-Update); vom `internal/arch/broadcast_test.go` automatisch erfasst.
+- **SSE (Hard Rule):** jede Mutations-Route ruft `h.hub.Broadcast(...)` (Events `cashbook`, `treasurers`, `penalty-settings`, plus `penalties` beim Einheiten-Wechsel wegen Massen-Update); vom `internal/arch/broadcast_test.go` automatisch erfasst.
 - **Frontend:** `web/src/pages/MeinTeamPage.tsx` — neuer Tab „Kasse", Strafen-Tab-Header raus, Einheiten-Umschaltung (Trainer-Verwaltung mit Preview-Modal), Verwalten-Tab-Sektion für Kassenwart, `useLiveUpdates` erweitert um neue Events. Bold-Me-Logik als kleiner Utility-Vergleich in den relevanten Listen. `brand-*`-Tokens, `lucide-react`.
 - **Tests (Hard Rule):** Happy-Path + Fehlerfall je neuer Route; Fixtures in `internal/testutil/` um `AppointKassenwart`, `CreateCashbookEntry`, `SetPenaltyUnit` erweitert.
 - **Abhängigkeit:** setzt voraus, dass `mannschaft-aufgaben-strafen` in `openspec/specs/mannschaftsstrafen/` archiviert ist (die MODIFIED-Requirements referenzieren den dortigen Baseline-Text). Reihenfolge: Basis-Change mergen + archivieren → dieser Change.
@@ -59,10 +59,10 @@ Jede neue Route bekommt Happy-Path + Fehlerfall. Route → Testname → erwartet
 - `POST /api/teams/{id}/cashbook` → `TestCashbookCreate_Spieler_403` → 403 → normaler Spieler ohne Rolle darf nicht buchen.
 - `POST /api/teams/{id}/cashbook` → `TestCashbookCreate_ForeignTeamKassenwart_403` → 403 → **Kassenwart Team A kann Team B nicht bebuchen** (keine Row angelegt).
 - `DELETE /api/teams/{id}/cashbook/{eid}` → `TestCashbookDelete_Kassenwart_200` → 200 → einzelne Buchung hart gelöscht.
-- `POST /api/teams/{id}/kassenwarte` → `TestKassenwartAppoint_Trainer_200` / `_NonTrainer_403` → 200/403 → nur Trainer ernennt.
+- `POST /api/teams/{id}/treasurers` → `TestKassenwartAppoint_Trainer_200` / `_NonTrainer_403` → 200/403 → nur Trainer ernennt.
 - Invariante `TestCashbook_ExcludedFromRoster` → 200 → Roster-Response enthält keinerlei Kassendaten (analog zur Strafen-Ausschluss-Invariante).
 - Invariante `TestClubFunctions_NoKassenwartValue` → CHECK-Constraint von `member_club_functions` enthält keinen `kassenwart`-Wert.
-- Broadcast-Gate (`internal/arch/broadcast_test.go`) erfasst alle Mutations-Routen automatisch (`cashbook`/`kassenwarte`/`penalty-settings`).
+- Broadcast-Gate (`internal/arch/broadcast_test.go`) erfasst alle Mutations-Routen automatisch (`cashbook`/`treasurers`/`penalty-settings`).
 
 ## Non-Goals
 

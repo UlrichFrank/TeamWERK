@@ -61,7 +61,7 @@ Eine Buchung modifiziert **nichts** an `team_penalties`. Wenn ein Spieler seine 
 **Warum:** Konsistenz mit dem im Basis-Change bewusst gewählten Modell. Kein neuer globaler `member_club_functions`-Wert (keine CHECK-Migration, kein neuer JWT-Claim), kein „Kassenwart überall/immer". Fremd-Team-Buchung strukturell ausgeschlossen (D5 baut darauf auf).
 
 ### D5 — Write-Gate „Trainer ODER Kassenwart"
-Buchen (`POST`/`DELETE` auf `/cashbook`) ist erlaubt, wenn der Caller-Member Trainer **oder** Kassenwart **dieses** Kaders ist. Ernennung (`POST/DELETE /kassenwarte`) nur Trainer. Beide Gates sind DB-Lookups im Handler (`isTrainerOfTeam`, `isKassenwartOfTeam`), analog zu `isStrafenwartOfTeam` aus dem Basis-Change.
+Buchen (`POST`/`DELETE` auf `/cashbook`) ist erlaubt, wenn der Caller-Member Trainer **oder** Kassenwart **dieses** Kaders ist. Ernennung (`POST/DELETE /treasurers`) nur Trainer. Beide Gates sind DB-Lookups im Handler (`isTrainerOfTeam`, `isKassenwartOfTeam`), analog zu `isStrafenwartOfTeam` aus dem Basis-Change.
 
 **Warum:** Trainer soll die Kasse auch pflegen können (typischer Fall: Trainer hält die Kasse selbst, kein separater Kassenwart im Team). Reine „Kassenwart-only"-Gates würden den Trainer aussperren und Ernennung erzwingen.
 
@@ -81,7 +81,7 @@ Vergleich `roster.mymember.id === row.memberId` (bzw. `user.id === row.userId` j
 **Warum:** Rein visuell, keine Sicherheits- oder Datenimplikation. Wird in `MeinTeamPage.tsx` in drei Listen angewendet (Roster-Tabs, Strafen-Übersicht, Kassenbuch); als kleiner Utility-Vergleich, keine neue Abstraktion.
 
 ### D9 — SSE-Events getrennt pro Aggregat
-Broadcasts: `cashbook` (Ledger-Mutation), `kassenwarte` (Ernennung), `penalty-settings` (Einheiten-Wechsel), und beim Einheiten-Wechsel zusätzlich `penalties` (weil Beträge in Rows mutieren). Frontend abonniert via `useLiveUpdates` und reloadet entsprechend.
+Broadcasts: `cashbook` (Ledger-Mutation), `treasurers` (Ernennung), `penalty-settings` (Einheiten-Wechsel), und beim Einheiten-Wechsel zusätzlich `penalties` (weil Beträge in Rows mutieren). Frontend abonniert via `useLiveUpdates` und reloadet entsprechend.
 
 **Warum:** Getrennte Events, damit `MeinTeamPage` nur die relevante Sektion nachlädt (Kasse-Buchung soll keinen Roster-Reload triggern). Erfüllt die Broadcast-Hard-Rule und wird vom `broadcast_test.go`-Gate erfasst.
 
