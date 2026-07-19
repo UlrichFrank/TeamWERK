@@ -258,6 +258,42 @@ func TestGetTeamStats_Unauthenticated(t *testing.T) {
 	}
 }
 
+func TestGetTeamStats_GenericEventsExcluded(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	_, kaderID := makeTrainer(t, db, teamID, seasonID)
+	player := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderID, player)
+
+	heim := testutil.CreateGame(t, db, seasonID, teamID, pastDate1)
+	recordGameAttendance(t, db, heim, player, 1)
+
+	res, err := db.Exec(
+		`INSERT INTO games (season_id, opponent, date, time, event_type, is_home) VALUES (?, ?, ?, ?, 'generisch', 0)`,
+		seasonID, "Sommerfest", pastDate2, "18:00")
+	if err != nil {
+		t.Fatalf("insert generisch: %v", err)
+	}
+	genericID, _ := res.LastInsertId()
+	if _, err := db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, genericID, teamID); err != nil {
+		t.Fatalf("game_teams: %v", err)
+	}
+	recordGameAttendance(t, db, int(genericID), player, 1)
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	response := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/attendance-stats", teamID), token)
+	defer response.Body.Close()
+	var body map[string]any
+	json.NewDecoder(response.Body).Decode(&body)
+	m := body["regular_members"].([]any)[0].(map[string]any)
+	if int(m["game_present"].(float64)) != 1 {
+		t.Errorf("game_present=1 erwartet (nur Heim-Spiel), got %v", m["game_present"])
+	}
+}
+
 // ---------- MemberStats ----------
 
 func TestGetMemberStats_OwnSelf_OK(t *testing.T) {
@@ -376,6 +412,53 @@ func TestGetMemberStats_CancelledEventCategorized(t *testing.T) {
 		int(counts["training_missed"].(float64)) != 0 ||
 		int(counts["training_excused"].(float64)) != 0 {
 		t.Errorf("cancelled must not increase any counter, got %v", counts)
+	}
+}
+
+func TestGetMemberStats_GenericEventsExcluded(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	user := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, user)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	addKaderMember(t, db, kaderID, memberID)
+
+	heim := testutil.CreateGame(t, db, seasonID, teamID, pastDate1)
+	recordGameAttendance(t, db, heim, memberID, 1)
+
+	res, err := db.Exec(
+		`INSERT INTO games (season_id, opponent, date, time, event_type, is_home) VALUES (?, ?, ?, ?, 'generisch', 0)`,
+		seasonID, "Sommerfest", pastDate2, "18:00")
+	if err != nil {
+		t.Fatalf("insert generisch: %v", err)
+	}
+	genericID, _ := res.LastInsertId()
+	if _, err := db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, genericID, teamID); err != nil {
+		t.Fatalf("game_teams: %v", err)
+	}
+	recordGameAttendance(t, db, int(genericID), memberID, 1)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, user, "standard", []string{"spieler"})
+	response := testutil.Get(t, srv, fmt.Sprintf("/api/members/%d/attendance-stats", memberID), token)
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(response.Body).Decode(&body)
+
+	events := body["events"].([]any)
+	for _, e := range events {
+		ev := e.(map[string]any)
+		if ev["event_type"].(string) == "game" && ev["title"].(string) == "Sommerfest" {
+			t.Errorf("generisches Event darf nicht als Spiel gelistet werden: %v", ev)
+		}
+	}
+	counts := body["counts"].(map[string]any)
+	if int(counts["game_present"].(float64)) != 1 {
+		t.Errorf("game_present=1 erwartet (nur Heim-Spiel), got %v", counts["game_present"])
 	}
 }
 

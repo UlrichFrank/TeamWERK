@@ -188,6 +188,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		LEFT JOIN game_teams gt ON gt.team_id = k.team_id
 		LEFT JOIN games g ON g.id = gt.game_id
 		                  AND g.season_id = k.season_id
+		                  AND g.event_type IN ('heim','auswärts')
 		                  AND date(g.date) BETWEEN date(?) AND date(?)
 		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = m.id
 		LEFT JOIN game_responses gr ON gr.game_id = g.id AND gr.member_id = m.id` +
@@ -493,8 +494,8 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 	}
 	trainingRows.Close()
 
-	// Spiele: alle Spiele, deren team_ids im selben Sinn das Mitglied
-	// enthalten.
+	// Spiele: nur Heim-/Auswärtsspiele (keine generischen Termine wie
+	// Sommerfest), deren team_ids im selben Sinn das Mitglied enthalten.
 	gameRows, err := h.db.QueryContext(ctx, `
 		SELECT g.id, g.date,
 		       COALESCE(NULLIF(g.opponent, ''), 'Spiel'),
@@ -503,6 +504,7 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = ?
 		LEFT JOIN game_responses   gr ON gr.game_id = g.id AND gr.member_id = ?
 		WHERE g.season_id = ?
+		  AND g.event_type IN ('heim','auswärts')
 		  AND date(g.date) BETWEEN date(?) AND date(?)
 		  AND EXISTS (
 		    SELECT 1 FROM game_teams gt
