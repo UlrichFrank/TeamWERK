@@ -5,8 +5,10 @@ bekommt Happy-Path- + Fehlerfall-Test (Fixtures in `internal/testutil`).
 
 ## 1. Datenbank-Migration (033)
 
-- [ ] 1.1 Migration `033_foerderkader_trainingsgruppen.up.sql` + `.down.sql`
-  anlegen (nächste freie Nummer per `ls internal/db/migrations/` verifizieren).
+- [x] 1.1 Migration `034_foerderkader_trainingsgruppen.up.sql` + `.down.sql`
+  anlegen (034, da 033 bereits `member_series_unavailabilities` belegt).
+  `PRAGMA legacy_alter_table=ON` nötig: vier Views (team_/player_/trainer_memberships,
+  user_accessible_teams) referenzieren `members`, sonst scheitert DROP/RENAME.
   - `members`-Rebuild: `members_new` mit CHECK
     `status IN ('aktiv','verletzt','pausiert','ausgetreten','passiv','honorar','anwaerter','foerderkind')`,
     vollständige Spaltenliste per `INSERT … SELECT`, `DROP`/`RENAME`, alle Indizes
@@ -16,7 +18,9 @@ bekommt Happy-Path- + Fehlerfall-Test (Fixtures in `internal/testutil`).
   - `.down.sql` spiegelbildlich (CHECK ohne `foerderkind`; Tabelle droppen). Hinweis:
     down bei bereits vorhandenen `foerderkind`-Rows scheitert am CHECK — im
     down-Skript dokumentieren/abfangen.
-- [ ] 1.2 `make migrate-up` lokal grün; `make migrate-down`/`up` Round-Trip prüfen.
+- [x] 1.2 Up/Down-Round-Trip auf Temp-DB verifiziert: Up → v34, `foerderkind`
+  erlaubt, Kategorien in Ordnung (Perspektivkader=1, Förderkader=2), Views intakt,
+  Bestandsdaten erhalten; Down → CHECK zurückgesetzt, Kategorientabelle entfernt.
 
 ## 2. Backend — Trainingsgruppen-Kategorien (Config-Package)
 
