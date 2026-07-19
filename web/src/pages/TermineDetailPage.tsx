@@ -544,8 +544,14 @@ interface RowActions {
   onClearUnavailable?: (uid: number) => void
 }
 
+// Eigene rechte Spalte für das Aktionen-Menü (Serien-Ab-/Wieder-Anmelden),
+// sichtbar nur für Trainer auf Serien-Terminen.
+function hasActionsCol(a: RowActions) {
+  return a.isTrainer && a.seriesId != null
+}
+
 function colSpan(a: RowActions) {
-  return 2 + (a.lineupMap !== undefined ? 1 : 0) + (a.showAttendanceCol ? 1 : 0)
+  return 2 + (a.lineupMap !== undefined ? 1 : 0) + (a.showAttendanceCol ? 1 : 0) + (hasActionsCol(a) ? 1 : 0)
 }
 
 function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
@@ -561,23 +567,6 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
             >
               <Ban className="w-3 h-3" /> dauerhaft abgemeldet
             </span>
-          )}
-          {a.isTrainer && a.seriesId != null && !row.is_trainer && (
-            row.unavailable
-              ? a.onClearUnavailable && (
-                <span className="ml-2 inline-flex align-middle">
-                  <ActionMenu actions={[
-                    { label: 'Wieder anmelden', onClick: () => a.onClearUnavailable!(row.unavailable!.id) },
-                  ]} />
-                </span>
-              )
-              : a.onSetUnavailable && (
-                <span className="ml-2 inline-flex align-middle">
-                  <ActionMenu actions={[
-                    { label: 'Dauerhaft abmelden', onClick: () => a.onSetUnavailable!(row.member_id), variant: 'danger' },
-                  ]} />
-                </span>
-              )
           )}
         </td>
         <td className="px-4 py-3">
@@ -628,6 +617,27 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
                 readOnly={!a.isTrainer}
                 className={`w-4 h-4 rounded border-brand-border ${a.isTrainer ? '' : 'cursor-default opacity-60'}`}
               />
+            )}
+          </td>
+        )}
+        {hasActionsCol(a) && (
+          <td className="px-4 py-3 text-right align-middle">
+            {!row.is_trainer && (
+              row.unavailable
+                ? a.onClearUnavailable && (
+                  <div className="flex justify-end">
+                    <ActionMenu actions={[
+                      { label: 'Wieder anmelden', onClick: () => a.onClearUnavailable!(row.unavailable!.id) },
+                    ]} />
+                  </div>
+                )
+                : a.onSetUnavailable && (
+                  <div className="flex justify-end">
+                    <ActionMenu actions={[
+                      { label: 'Dauerhaft abmelden', onClick: () => a.onSetUnavailable!(row.member_id), variant: 'danger' },
+                    ]} />
+                  </div>
+                )
             )}
           </td>
         )}
@@ -694,6 +704,9 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
                 )}
                 {showAttendanceCol && (
                   <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-center">Anwesend</th>
+                )}
+                {hasActionsCol(a) && (
+                  <th className="px-4 py-3 w-px"><span className="sr-only">Aktionen</span></th>
                 )}
               </tr>
             </thead>
