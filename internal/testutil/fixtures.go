@@ -577,7 +577,7 @@ type MemberOpts struct {
 	UserID         int    // 0 → NULL (no user link)
 	FirstName      string // "" → "Test"
 	LastName       string // "" → generated "MemberN"
-	Status         string // "" → "aktiv"; CHECK: aktiv|verletzt|pausiert|ausgetreten|passiv|honorar|anwaerter
+	Status         string // "" → "aktiv"; CHECK: aktiv|verletzt|pausiert|ausgetreten|passiv|honorar|anwaerter|foerderkind
 	JoinDate       string // "" → NULL
 	ExitDate       string // "" → NULL (Pflicht bei Status ausgetreten, hier nicht erzwungen)
 	HomeClubID     int    // 0 → NULL (FK stammvereine)

@@ -59,7 +59,9 @@ const GENDER_OPTIONS = [
 ]
 
 
-const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'honorar', 'anwaerter', 'ausgetreten']
+const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'honorar', 'anwaerter', 'foerderkind', 'ausgetreten']
+// Nicht-beitragspflichtige Talent-Status ohne Eintrittsdatum-Zwang (kein Beitrag → kein Beitrags-relevantes join_date).
+const STATUS_WITHOUT_JOIN_DATE = ['anwaerter', 'foerderkind']
 const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']
 
 export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onFormChange, onDraftAccept, onDraftReject, onSave, saving, saved, error }: Props) {
@@ -108,6 +110,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const hasSpieler = clubFunctions.includes('spieler')
 
   const isHonorar = form.status === 'honorar'
+  const joinDateRequired = !STATUS_WITHOUT_JOIN_DATE.includes(form.status)
 
   const toggleClubFunction = (fn: string) => {
     if (isHonorar && fn !== 'trainer') return
@@ -394,11 +397,11 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Eintrittsdatum <span className="text-brand-danger">*</span>
+              Eintrittsdatum {joinDateRequired && <span className="text-brand-danger">*</span>}
             </label>
             <input
               type="date"
-              required
+              required={joinDateRequired}
               value={form.join_date ?? ''}
               onChange={e => onFormChange({ join_date: e.target.value })}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"

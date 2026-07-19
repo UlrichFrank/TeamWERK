@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
@@ -233,7 +234,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := kaderSelectSQL + where + ` ORDER BY k.age_class, k.gender, k.team_number LIMIT ? OFFSET ?`
+	query := kaderSelectSQL + where + ` ORDER BY ` + appdb.AgeClassSortKey("k.age_class") + `, k.gender, k.team_number LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
@@ -518,8 +519,38 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
+// isTrainingGroupCategory reports whether ageClass is a training-group category
+// (Förderkader/Perspektivkader, …) rather than a game age-class (A–D-Jugend).
+func isTrainingGroupCategory(ctx context.Context, q dbq, ageClass string) (bool, error) {
+	var exists int
+	err := q.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM training_group_categories WHERE name=?)`, ageClass).Scan(&exists)
+	return exists == 1, err
+}
+
 // createSingleKader inserts one kader entry and returns 201 with the new object, or 409 on conflict.
 func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seasonID int, ageClass, gender string, teamNumber int, dedicatedBirthYear *int) {
+	isTrainingGroup, err := isTrainingGroupCategory(r.Context(), h.db, ageClass)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Training-group kader get their team_number assigned deterministically by
+	// ascending dedicated_birth_year (older year → lower number) so the running
+	// number in the short name follows the year, not the creation order
+	// (design.md Entscheidung 6). Regular A–D kader keep the classic behaviour
+	// (explicit team_number, 409 on UNIQUE conflict).
+	if isTrainingGroup {
+		newID, err := h.createTrainingGroupKader(r.Context(), seasonID, ageClass, gender, dedicatedBirthYear)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		h.writeCreatedKader(w, r, newID)
+		return
+	}
+
 	teamID, err := ensureTeam(r.Context(), h.db, ageClass, gender, teamNumber)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -537,7 +568,100 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 		return
 	}
 	newID, _ := res.LastInsertId()
+	h.writeCreatedKader(w, r, newID)
+}
 
+// createTrainingGroupKader inserts a training-group kader and renumbers all
+// siblings of the same (season, age_class, gender) by ascending
+// dedicated_birth_year (NULL years sort last). Runs in one transaction and uses
+// a two-phase update (negative offset first) to sidestep the
+// UNIQUE(season_id, age_class, gender, team_number) index while shuffling.
+// Returns the id of the freshly inserted kader.
+func (h *Handler) createTrainingGroupKader(ctx context.Context, seasonID int, ageClass, gender string, dedicatedBirthYear *int) (int64, error) {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// Insert with a provisional, collision-free team_number (max+1); the
+	// renumber pass below assigns the final value.
+	var nextNumber int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(team_number),0)+1 FROM kader WHERE season_id=? AND age_class=? AND gender=?`,
+		seasonID, ageClass, gender).Scan(&nextNumber); err != nil {
+		return 0, err
+	}
+	provTeamID, err := ensureTeam(ctx, tx, ageClass, gender, nextNumber)
+	if err != nil {
+		return 0, err
+	}
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO kader (season_id, age_class, gender, team_number, dedicated_birth_year, team_id) VALUES (?,?,?,?,?,?)`,
+		seasonID, ageClass, gender, nextNumber, dedicatedBirthYear, provTeamID)
+	if err != nil {
+		return 0, err
+	}
+	newID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	// Gather all siblings ordered by dedicated_birth_year (NULLs last, then by id
+	// for stable ordering) and assign ranks 1..N.
+	rows, err := tx.QueryContext(ctx,
+		`SELECT id FROM kader
+		 WHERE season_id=? AND age_class=? AND gender=?
+		 ORDER BY dedicated_birth_year IS NULL, dedicated_birth_year, id`,
+		seasonID, ageClass, gender)
+	if err != nil {
+		return 0, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	// Phase 1: park every sibling on a unique negative number to free the target
+	// numbers from the UNIQUE index.
+	for i, id := range ids {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE kader SET team_number=? WHERE id=?`, -(i + 1), id); err != nil {
+			return 0, err
+		}
+	}
+	// Phase 2: assign final ranks + repoint team_id to the matching team.
+	for i, id := range ids {
+		rank := i + 1
+		teamID, err := ensureTeam(ctx, tx, ageClass, gender, rank)
+		if err != nil {
+			return 0, err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE kader SET team_number=?, team_id=?, updated_at=? WHERE id=?`,
+			rank, teamID, time.Now(), id); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return newID, nil
+}
+
+// writeCreatedKader loads the freshly created kader by id, broadcasts to its team
+// audience and writes the 201 response.
+func (h *Handler) writeCreatedKader(w http.ResponseWriter, r *http.Request, newID int64) {
 	k, seasonStartYear, err := scanKaderRow(h.db.QueryRowContext(r.Context(),
 		kaderSelectSQL+` WHERE k.id=?`, newID))
 	if err != nil {
@@ -545,7 +669,7 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 		return
 	}
 	bys, bkys := computeBirthYears(k, seasonStartYear)
-	h.broadcastKaderTeams(r.Context(), []int{int(teamID)})
+	h.broadcastKaderTeams(r.Context(), []int{int(k.TeamID)})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(kaderDetail{

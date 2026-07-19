@@ -10,10 +10,12 @@ import CopyKaderModal from '../components/CopyKaderModal'
 import AutoAssignModal from '../components/AutoAssignModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
+import { compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
 
 interface Season {
   id: number
   name: string
+  start_date: string
   is_active: boolean
 }
 
@@ -69,6 +71,7 @@ export default function AdminKaderPage() {
   const [toast, setToast] = useState<string | null>(null)
   const [activeAgeClass, setActiveAgeClass] = useState<string | null>(null)
   const [ageClassOptions, setAgeClassOptions] = useState<string[]>([])
+  const [trainingCategories, setTrainingCategories] = useState<TrainingGroupCategory[]>([])
 
   const [pendingDedicated, setPendingDedicated] = useState<Set<number>>(new Set())
   const [gpsValues, setGpsValues] = useState<Record<number, number>>({})
@@ -100,9 +103,10 @@ export default function AdminKaderPage() {
   // bei Reloads (Mutationen, Live-Updates). Season-Wechsel übergeben 0.
   const loadKader = async (seasonId: number, windowSize?: number) => {
     const limit = Math.max(KADER_PAGE_SIZE, windowSize ?? kaderList.length)
-    const [kaderRes, ageClassRes] = await Promise.all([
+    const [kaderRes, ageClassRes, catRes] = await Promise.all([
       api.get(`/kader?season_id=${seasonId}&limit=${limit}&offset=0`),
       api.get('/age-class-rules'),
+      api.get('/training-group-categories'),
     ])
     const list: Kader[] = kaderRes.data?.items ?? []
     setKaderList(list)
@@ -113,8 +117,10 @@ export default function AdminKaderPage() {
     setGpsValues(initialGps)
     const options: string[] = (ageClassRes.data ?? []).map((r: { age_class: string }) => r.age_class)
     setAgeClassOptions(options)
+    const cats: TrainingGroupCategory[] = catRes.data ?? []
+    setTrainingCategories(cats)
     setActiveAgeClass(prev => {
-      const classes = [...new Set(list.map(k => k.age_class))].sort()
+      const classes = [...new Set(list.map(k => k.age_class))].sort((a, b) => compareAgeClass(a, b, cats))
       if (prev && classes.includes(prev)) return prev
       return classes[0] ?? null
     })
@@ -152,7 +158,11 @@ export default function AdminKaderPage() {
     init().finally(() => setLoading(false))
   }, [])
 
-  useLiveUpdates(event => { if (event === 'kader' && selectedSeason) loadKader(selectedSeason.id) })
+  useLiveUpdates(event => {
+    if ((event === 'kader' || event === 'training-group-categories-changed') && selectedSeason) {
+      loadKader(selectedSeason.id)
+    }
+  })
 
   const handleRemoveMember = async (kaderId: number, memberId: number) => {
     const key = `${kaderId}-${memberId}`
@@ -315,7 +325,18 @@ export default function AdminKaderPage() {
     if (!allGroupOrder.includes(key)) allGroupOrder.push(key)
   }
 
-  const ageClassTabs = [...new Set(kaderList.map(k => k.age_class))].sort()
+  const ageClassTabs = [...new Set(kaderList.map(k => k.age_class))].sort((a, b) => compareAgeClass(a, b, trainingCategories))
+
+  // Jahrgangswahl in der Anlage-Maske: Trainingsgruppen haben keinen Spiel-Bracket,
+  // daher freie Jahresliste (Saison-Startjahr −4 … −14); Spiel-Altersklassen behalten
+  // die Bracket-Jahre (unverändertes Verhalten).
+  const seasonStartYear = selectedSeason?.start_date
+    ? parseInt(selectedSeason.start_date.slice(0, 4))
+    : new Date().getFullYear()
+  const freeBirthYears = Array.from({ length: 11 }, (_, i) => seasonStartYear - 4 - i)
+  const createIsTrainingGroup = !!createModal && trainingCategories.some(c => c.name === createModal.ageClass)
+  const createYearOptions = createIsTrainingGroup ? freeBirthYears : (createModal?.bracketYears ?? [])
+
   const groupOrder = activeAgeClass
     ? allGroupOrder.filter(key => key.startsWith(`${activeAgeClass}|`))
     : allGroupOrder
@@ -524,9 +545,18 @@ export default function AdminKaderPage() {
                           onChange={e => handleSetAgeClass(k, e.target.value)}
                           className="border border-brand-border-subtle rounded px-2 py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow w-28"
                         >
-                          {ageClassOptions.map(ac => (
-                            <option key={ac} value={ac}>{ac}</option>
-                          ))}
+                          <optgroup label="Wettkampf">
+                            {ageClassOptions.map(ac => (
+                              <option key={ac} value={ac}>{ac}</option>
+                            ))}
+                          </optgroup>
+                          {trainingCategories.length > 0 && (
+                            <optgroup label="Trainingsgruppen">
+                              {trainingCategories.map(c => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </optgroup>
+                          )}
                         </select>
                         <span className="text-xs text-brand-text-muted font-medium">Spiele:</span>
                         <input
@@ -671,13 +701,26 @@ export default function AdminKaderPage() {
                 <label className="text-xs font-medium text-brand-text-muted block mb-1">Altersklasse</label>
                 <select
                   value={createModal.ageClass}
-                  onChange={e => setCreateModal(prev => prev && ({ ...prev, ageClass: e.target.value }))}
+                  onChange={e => {
+                    const ageClass = e.target.value
+                    setCreateModal(prev => prev && ({ ...prev, ageClass }))
+                    setCreateDedicatedYear(null)
+                  }}
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 >
                   <option value="">Bitte wählen…</option>
-                  {ageClassOptions.map(ac => (
-                    <option key={ac} value={ac}>{ac}</option>
-                  ))}
+                  <optgroup label="Wettkampf">
+                    {ageClassOptions.map(ac => (
+                      <option key={ac} value={ac}>{ac}</option>
+                    ))}
+                  </optgroup>
+                  {trainingCategories.length > 0 && (
+                    <optgroup label="Trainingsgruppen">
+                      {trainingCategories.map(c => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
               <div>
@@ -704,7 +747,7 @@ export default function AdminKaderPage() {
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 >
                   <option value="">Gemischt (alle Jahrgänge)</option>
-                  {createModal.bracketYears.map(yr => (
+                  {createYearOptions.map(yr => (
                     <option key={yr} value={yr}>{yr}</option>
                   ))}
                 </select>

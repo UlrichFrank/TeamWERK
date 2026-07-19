@@ -227,8 +227,10 @@ export default function MemberDetailPage() {
   const handleSave = async () => {
     setSaving(true); setError('')
     try {
-      // Eintrittsdatum ist Pflicht; Austrittsdatum Pflicht bei Status 'ausgetreten'.
-      if (!form.join_date) {
+      // Eintrittsdatum ist Pflicht — außer für nicht-beitragspflichtige Talent-Status
+      // (anwaerter, foerderkind), die kein Beitrags-relevantes join_date brauchen.
+      // Austrittsdatum Pflicht bei Status 'ausgetreten'.
+      if (!['anwaerter', 'foerderkind'].includes(form.status) && !form.join_date) {
         setError('Eintrittsdatum ist erforderlich.')
         return
       }

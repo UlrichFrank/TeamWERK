@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/httpcache"
@@ -349,5 +350,86 @@ func (h *Handler) UpdateAgeClassRuleHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	h.hub.Broadcast("settings")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// TrainingGroupCategory ist eine nicht-spielgebundene Kader-Kategorie
+// (z. B. „Förderkader"), getrennt von age_class_game_rules — trägt keine
+// Spielregeln und keinen Fremdschlüssel; kader.age_class bleibt Freitext.
+type TrainingGroupCategory struct {
+	Name      string `json:"name"`
+	SortOrder int    `json:"sort_order"`
+}
+
+// GetTrainingGroupCategories liest die gepflegte Referenzliste in kanonischer
+// Reihenfolge (sort_order, dann Name).
+func GetTrainingGroupCategories(db *sql.DB) ([]TrainingGroupCategory, error) {
+	rows, err := db.Query(
+		`SELECT name, sort_order FROM training_group_categories ORDER BY sort_order, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []TrainingGroupCategory{}
+	for rows.Next() {
+		var c TrainingGroupCategory
+		if err := rows.Scan(&c.Name, &c.SortOrder); err != nil {
+			return nil, err
+		}
+		result = append(result, c)
+	}
+	return result, nil
+}
+
+// GET /api/training-group-categories — für jeden authentifizierten Nutzer
+// (Eingabe-Unterstützung der Kader-Anlage).
+func (h *Handler) GetTrainingGroupCategoriesHandler(w http.ResponseWriter, r *http.Request) {
+	cats, err := GetTrainingGroupCategories(h.db)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cats)
+}
+
+// POST /api/training-group-categories — Vorstand legt eine Kategorie an.
+func (h *Handler) CreateTrainingGroupCategory(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name      string `json:"name"`
+		SortOrder int    `json:"sort_order"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		http.Error(w, "name ist erforderlich", http.StatusBadRequest)
+		return
+	}
+	_, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO training_group_categories (name, sort_order) VALUES (?, ?)`,
+		name, req.SortOrder)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			http.Error(w, "Kategorie existiert bereits", http.StatusConflict)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("training-group-categories-changed")
+	w.WriteHeader(http.StatusCreated)
+}
+
+// DELETE /api/training-group-categories/{name} — Vorstand löscht eine Kategorie.
+// Bewusst ohne FK-/Nutzungs-Check: Kader mit diesem age_class-Freitext bleiben
+// unverändert erhalten, die Kategorie verschwindet nur aus dem Anlage-Dropdown.
+func (h *Handler) DeleteTrainingGroupCategory(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if _, err := h.db.ExecContext(r.Context(),
+		`DELETE FROM training_group_categories WHERE name=?`, name); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.hub.Broadcast("training-group-categories-changed")
 	w.WriteHeader(http.StatusNoContent)
 }

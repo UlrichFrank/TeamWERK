@@ -375,14 +375,14 @@ func TestPreview_ErstjahrAlleHalb(t *testing.T) {
 	}
 }
 
-// Mitglieder mit Status ausgetreten/honorar/anwaerter sind fachlich nie Teil
-// des Beitragslaufs und werden deshalb gar nicht erst geladen — weder in der
-// Preview-Tabelle noch in den Summen.
+// Mitglieder mit Status ausgetreten/honorar/anwaerter/foerderkind sind fachlich
+// nie Teil des Beitragslaufs und werden deshalb gar nicht erst geladen — weder in
+// der Preview-Tabelle noch in den Summen.
 func TestPreview_StatusOhneBeitragNichtImPreview(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	aktivID := insertMember(t, db, "Aktiv", defaultMember())
-	for i, status := range []string{"ausgetreten", "honorar", "anwaerter"} {
+	for i, status := range []string{"ausgetreten", "honorar", "anwaerter", "foerderkind"} {
 		m := defaultMember()
 		m.status = status
 		m.memberNumber = "200" + itoa(i)
@@ -391,6 +391,35 @@ func TestPreview_StatusOhneBeitragNichtImPreview(t *testing.T) {
 	pr := getPreview(t, srv, s)
 	if len(pr.Items) != 1 || pr.Items[0].MemberID != aktivID {
 		t.Fatalf("erwarte exakt 1 Item (aktiv), got %d: %+v", len(pr.Items), pr.Items)
+	}
+}
+
+// Ein Förderkind mit sonst vollständigen Beitragsdaten (SEPA-Mandat, Adresse,
+// Mitgliedsnummer) wird trotzdem vollständig aus Preview UND Summen ausgeschlossen —
+// Förderkinder sind keine beitragspflichtigen Mitglieder.
+func TestPreview_FoerderkindAusgeschlossen(t *testing.T) {
+	srv, db, _ := setupSrv(t)
+	s := insertSeason2027(t, db)
+	aktivID := insertMember(t, db, "Aktiv", defaultMember())
+
+	foerder := defaultMember()
+	foerder.status = "foerderkind"
+	foerder.memberNumber = "3001"
+	foerderID := insertMember(t, db, "Foerder", foerder)
+
+	pr := getPreview(t, srv, s)
+	if _, ok := itemFor(pr, foerderID); ok {
+		t.Fatalf("Förderkind darf nicht in der Preview erscheinen: %+v", pr.Items)
+	}
+	if len(pr.Items) != 1 || pr.Items[0].MemberID != aktivID {
+		t.Fatalf("erwarte exakt 1 Item (aktiv), got %d: %+v", len(pr.Items), pr.Items)
+	}
+	// Nur das aktive Mitglied fließt in die Summen ein.
+	if pr.Summary.IncludedCount != 1 {
+		t.Errorf("IncludedCount=%d, want 1", pr.Summary.IncludedCount)
+	}
+	if pr.Summary.ExcludedCount != 0 {
+		t.Errorf("ExcludedCount=%d, want 0 (Förderkind gar nicht geladen)", pr.Summary.ExcludedCount)
 	}
 }
 

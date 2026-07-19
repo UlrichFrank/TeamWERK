@@ -30,6 +30,38 @@ export function buildTeamShortNames<T extends TeamForName>(teams: T[]): Map<numb
   return result
 }
 
+export interface TrainingGroupCategory {
+  name: string
+  sort_order: number
+}
+
+/**
+ * Kanonischer Vergleich zweier `age_class`-Werte für die Kader-/Team-Sortierung.
+ *
+ * Nicht-Trainingsgruppen (`age_class` NICHT in `categories`) kommen zuerst,
+ * alphabetisch (→ A-,B-,C-,D-Jugend unverändert); danach die
+ * Trainingsgruppen-Kategorien nach ihrem `sort_order`. Single Source of Truth für
+ * „Perspektivkader vor Förderkader" ist `training_group_categories.sort_order`.
+ *
+ * Spiegelt die SQL-Logik von `internal/db.AgeClassSortKey` (binäre String-Ordnung):
+ *   Block '0' + age_class            (Nicht-Trainingsgruppen, alphabetisch)
+ *   Block '1' + padded(sort_order) + age_class (Trainingsgruppen nach sort_order)
+ */
+export function compareAgeClass(
+  a: string,
+  b: string,
+  categories: TrainingGroupCategory[],
+): number {
+  const key = (ac: string): string => {
+    const cat = categories.find(c => c.name === ac)
+    const prefix = cat ? '1' + String(cat.sort_order).padStart(4, '0') : '0'
+    return prefix + ac
+  }
+  const ka = key(a)
+  const kb = key(b)
+  return ka < kb ? -1 : ka > kb ? 1 : 0
+}
+
 export interface TeamDisplay {
   id: number
   display_short?: string

@@ -93,6 +93,7 @@ const statusBadgeStyles = (status: string) => {
   if (status === 'verletzt') return 'bg-brand-yellow text-brand-black'
   if (status === 'honorar') return 'bg-brand-blue/10 text-brand-blue'
   if (status === 'anwaerter') return 'bg-brand-green/10 text-brand-green'
+  if (status === 'foerderkind') return 'bg-brand-info/10 text-brand-info'
   return 'bg-brand-border-subtle text-brand-text-muted'
 }
 
@@ -103,6 +104,7 @@ const STATUS_LABEL: Record<string, string> = {
   passiv: 'Passiv',
   honorar: 'Honorar',
   anwaerter: 'Anwärter',
+  foerderkind: 'Förderkind',
   ausgetreten: 'Ausgetreten',
 }
 
@@ -150,15 +152,17 @@ export default function MembersPage() {
   const navigate = useNavigate()
   const { hasCapability } = useAuth()
   const [clubFunctionFilter, setClubFunctionFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [unlinkedUserFilter, setUnlinkedUserFilter] = useState(false)
   const [hasDraftFilter, setHasDraftFilter] = useState(false)
   const extraParams = useMemo<Record<string, string>>(() => {
     const p: Record<string, string> = {}
     if (clubFunctionFilter) p.club_function = clubFunctionFilter
+    if (statusFilter) p.status = statusFilter
     if (unlinkedUserFilter) p.unlinked_user = '1'
     if (hasDraftFilter) p.has_draft = '1'
     return p
-  }, [clubFunctionFilter, unlinkedUserFilter, hasDraftFilter])
+  }, [clubFunctionFilter, statusFilter, unlinkedUserFilter, hasDraftFilter])
   const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
   // Windowing der Mitgliedertabelle: nur sichtbare Zeilen im DOM. Scroll-Quelle ist
@@ -406,6 +410,16 @@ export default function MembersPage() {
             >
               <option value="">Alle Funktionen</option>
               {Object.entries(CLUB_FUNCTION_LABELS).map(([val, label]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+            >
+              <option value="">Alle Status</option>
+              {Object.entries(STATUS_LABEL).map(([val, label]) => (
                 <option key={val} value={val}>{label}</option>
               ))}
             </select>

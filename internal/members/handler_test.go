@@ -136,6 +136,38 @@ func TestList_SearchByName(t *testing.T) {
 	}
 }
 
+// Statusfilter: GET /api/members?status=foerderkind liefert ausschließlich
+// Mitglieder mit diesem Status (Spec foerderkind-member-status).
+func TestList_StatusFilter_Foerderkind(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandUserID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandUserID, "standard", []string{"vorstand"})
+
+	database.Exec(`INSERT INTO members (first_name, last_name, status) VALUES (?, ?, ?)`,
+		"Aktiv", "Spieler", "aktiv")
+	database.Exec(`INSERT INTO members (first_name, last_name, status) VALUES (?, ?, ?)`,
+		"Foerder", "Kind", "foerderkind")
+
+	srv := newMembersServer(t, database)
+	res := testutil.Get(t, srv, "/api/members?status=foerderkind", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	lr := decodeList(t, res)
+	if lr.Total != 1 || len(lr.Items) != 1 {
+		t.Fatalf("expected exactly 1 foerderkind, got total=%d items=%d", lr.Total, len(lr.Items))
+	}
+	var item struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(lr.Items[0], &item); err != nil {
+		t.Fatalf("unmarshal item: %v", err)
+	}
+	if item.Status != "foerderkind" {
+		t.Errorf("expected status=foerderkind, got %q", item.Status)
+	}
+}
+
 // ── TC-M03: ausgetreten members are hidden ────────────────────────────────────
 
 func TestList_AusgetretenHidden(t *testing.T) {
@@ -868,6 +900,97 @@ func TestMemberStatus_Anwaerter_Create(t *testing.T) {
 		map[string]string{"status": "anwaerter"})
 	if res2.StatusCode != http.StatusNoContent {
 		t.Fatalf("expected 204 on status update, got %d", res2.StatusCode)
+	}
+}
+
+// ── TC-F: Förderkind-Status ───────────────────────────────────────────────────
+
+// POST /api/members mit status=foerderkind OHNE join_date → 201 (analog anwaerter,
+// kein Eintrittsdatum-Zwang), join_date bleibt NULL.
+func TestCreateMember_FoerderkindOhneJoinDate(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Post(t, srv, "/api/members", tok,
+		map[string]any{"first_name": "Timo", "last_name": "Talent",
+			"date_of_birth": "2016-03-01", "status": "foerderkind"})
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 für Förderkind ohne join_date, got %d", res.StatusCode)
+	}
+	var body struct {
+		ID int `json:"id"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	var status string
+	var joinDate sql.NullString
+	if err := database.QueryRow(`SELECT status, join_date FROM members WHERE id=?`, body.ID).
+		Scan(&status, &joinDate); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if status != "foerderkind" {
+		t.Errorf("status=%q, want foerderkind", status)
+	}
+	if joinDate.Valid {
+		t.Errorf("join_date sollte NULL sein, got %q", joinDate.String)
+	}
+}
+
+// POST /api/members mit unbekanntem Status → 400 (Whitelist-Validierung).
+func TestCreateMember_UngueltigerStatus400(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Post(t, srv, "/api/members", tok,
+		map[string]any{"first_name": "Fal", "last_name": "Sch",
+			"status": "kein_gueltiger_status", "join_date": "2026-01-01"})
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 für ungültigen Status, got %d", res.StatusCode)
+	}
+}
+
+// Ein Förderkind lässt sich einem Kader UND einem erweiterten Kader zuordnen und
+// mehreren Kadern gleichzeitig — kein Sonderpfad, dieselben Zuordnungstabellen.
+func TestFoerderkind_KaderUndErweiterterKaderZuordnung(t *testing.T) {
+	database := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, database, "2025/26")
+	teamID := testutil.CreateTeam(t, database, "Förderteam")
+	kader1 := testutil.CreateKader(t, database, teamID, seasonID)
+	kader2 := testutil.CreateKader(t, database, teamID, seasonID)
+
+	memberID := testutil.CreateMemberWithFields(t, database, testutil.MemberOpts{
+		FirstName: "Timo", LastName: "Talent", Status: "foerderkind",
+	})
+
+	// primärer Kader + zweiter primärer Kader (Mehrfach) + erweiterter Kader
+	testutil.AddKaderMember(t, database, kader1, memberID)
+	testutil.AddKaderMember(t, database, kader2, memberID)
+	testutil.AddExtendedKaderMember(t, database, kader2, memberID)
+
+	// Roster-View player_memberships (über kader_members): Förderkind erscheint in
+	// beiden Kadern → 2 Zeilen (Mehrfach-Zuordnung möglich).
+	var rosterCount int
+	if err := database.QueryRow(
+		`SELECT COUNT(*) FROM player_memberships WHERE member_id=?`, memberID).Scan(&rosterCount); err != nil {
+		t.Fatalf("player_memberships: %v", err)
+	}
+	if rosterCount != 2 {
+		t.Errorf("player_memberships rows=%d, want 2 (zwei Kader)", rosterCount)
+	}
+
+	// erweiterte Kader-Zuordnung ist ebenfalls vorhanden.
+	var extCount int
+	if err := database.QueryRow(
+		`SELECT COUNT(*) FROM kader_extended_members WHERE member_id=?`, memberID).Scan(&extCount); err != nil {
+		t.Fatalf("kader_extended_members: %v", err)
+	}
+	if extCount != 1 {
+		t.Errorf("kader_extended_members rows=%d, want 1", extCount)
 	}
 }
 

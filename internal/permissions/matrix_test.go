@@ -500,6 +500,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/members/{id}/change-drafts/{draftId}/accept", expected: exVorstandTrainer},
 	{method: "DELETE", path: "/api/members/{id}/change-drafts/{draftId}", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/age-class-rules", expected: exVorstandTrainer},
+	{method: "GET", path: "/api/training-group-categories", expected: exVorstandTrainer},
 	// Read-only Vorstand+Trainer-Gruppe
 	{method: "GET", path: "/api/duty-types", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/duty-templates", expected: exVorstandTrainer},
@@ -607,6 +608,8 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/upload/member-photo/{id}", expected: exVorstand},
 	{method: "POST", path: "/api/upload/sepa-mandat/{id}", expected: exVorstandKassierer},
 	{method: "PUT", path: "/api/age-class-rules/{ageClass}", expected: exVorstand},
+	{method: "POST", path: "/api/training-group-categories", expected: exVorstand},
+	{method: "DELETE", path: "/api/training-group-categories/{name}", expected: exVorstand},
 	{method: "POST", path: "/api/stammvereine", expected: exVorstand},
 	{method: "PUT", path: "/api/stammvereine/{id}", expected: exVorstand},
 	{method: "DELETE", path: "/api/stammvereine/{id}", expected: exVorstand},

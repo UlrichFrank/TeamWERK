@@ -1422,7 +1422,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
-			 ORDER BY t.age_class, t.gender, k.team_number`)
+			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`)
 	} else if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
@@ -1431,7 +1431,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			 JOIN kader_trainers kt ON kt.kader_id = k.id
 			 JOIN members m ON m.id = kt.member_id
 			 WHERE k.season_id = `+activeSeasonSub+` AND m.user_id = ?
-			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
+			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`, claims.UserID)
 	} else if !claims.IsTrainerLike() {
 		// spieler / elternteil: only teams the user or their children belong to.
 		// user_accessible_teams covers regular AND extended squad (kader_extended_members)
@@ -1445,7 +1445,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			     SELECT team_id FROM user_accessible_teams
 			     WHERE user_id = ? AND season_id = `+activeSeasonSub+`
 			   )
-			 ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
+			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`, claims.UserID)
 	} else {
 		// sportliche_leitung: all teams
 		rows, err = h.db.QueryContext(r.Context(),
@@ -1453,7 +1453,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
-			 ORDER BY t.age_class, t.gender, k.team_number`)
+			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`)
 	}
 
 	result := []team{}
@@ -2784,7 +2784,7 @@ func (h *Handler) ListTeamNames(w http.ResponseWriter, r *http.Request) {
 		 FROM teams t
 		 JOIN kader k ON k.team_id = t.id
 		 WHERE k.season_id = `+activeSeasonSub+` AND t.is_active = 1
-		 ORDER BY t.age_class, t.gender, k.team_number`)
+		 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

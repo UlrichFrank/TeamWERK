@@ -254,6 +254,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	search := r.URL.Query().Get("search")
 	clubFuncFilter := r.URL.Query().Get("club_function")
+	statusFilter := r.URL.Query().Get("status")
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
 		fmt.Sscanf(l, "%d", &limit)
@@ -292,6 +293,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			EXISTS(SELECT 1 FROM users u WHERE u.id = m.user_id AND u.email LIKE ?)
 		)`
 	}
+	if statusFilter != "" {
+		whereExtra += ` AND m.status = ?`
+	}
 
 	var err error
 	var total int
@@ -316,7 +320,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	if wideSearch {
 		countQuery := `SELECT COUNT(*) FROM members m WHERE status != 'ausgetreten'` + whereExtra
-		args := buildListArgs(nil, clubFuncFilter, search, nil, nil)
+		args := buildListArgs(nil, clubFuncFilter, search, statusFilter, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	} else {
 		countQuery := `SELECT COUNT(*) FROM members m WHERE m.status != 'ausgetreten' AND ` + scopeWhere + whereExtra
@@ -324,7 +328,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		if scopeNeedsUserID {
 			prefix = []any{p.UserID}
 		}
-		args := buildListArgs(prefix, clubFuncFilter, search, nil, nil)
+		args := buildListArgs(prefix, clubFuncFilter, search, statusFilter, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	}
 	if err != nil {
@@ -337,7 +341,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		query := `SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
 		 FROM members m WHERE m.status != 'ausgetreten'` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
-		args := buildListArgs(nil, clubFuncFilter, search, &limit, &offset)
+		args := buildListArgs(nil, clubFuncFilter, search, statusFilter, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	} else {
 		query := `SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
@@ -347,7 +351,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		if scopeNeedsUserID {
 			prefix = []any{p.UserID}
 		}
-		args := buildListArgs(prefix, clubFuncFilter, search, &limit, &offset)
+		args := buildListArgs(prefix, clubFuncFilter, search, statusFilter, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	}
 	if err != nil {
@@ -452,7 +456,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 // buildListArgs constructs the args slice for list queries in order:
 // prefix args, club_function, search x12, limit, offset
-func buildListArgs(prefix []any, clubFunc, search string, limit, offset *int) []any {
+func buildListArgs(prefix []any, clubFunc, search, status string, limit, offset *int) []any {
 	args := append([]any{}, prefix...)
 	if clubFunc != "" {
 		args = append(args, clubFunc)
@@ -463,6 +467,9 @@ func buildListArgs(prefix []any, clubFunc, search string, limit, offset *int) []
 			args = append(args, s)
 		}
 	}
+	if status != "" {
+		args = append(args, status)
+	}
 	if limit != nil {
 		args = append(args, *limit)
 	}
@@ -470,6 +477,27 @@ func buildListArgs(prefix []any, clubFunc, search string, limit, offset *int) []
 		args = append(args, *offset)
 	}
 	return args
+}
+
+// isValidMemberStatus prüft, ob s ein CHECK-konformer members.status-Wert ist.
+// Muss mit dem CHECK-Constraint auf members.status (Migrationen) übereinstimmen.
+func isValidMemberStatus(s string) bool {
+	switch s {
+	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter", "foerderkind":
+		return true
+	}
+	return false
+}
+
+// statusRequiresJoinDate meldet, ob ein Status ein Eintrittsdatum (join_date) als
+// Pflichtfeld verlangt. Anwärter und Förderkinder sind keine vollwertigen,
+// beitragspflichtigen Mitglieder und werden ohne Eintrittsdatum angelegt/gepflegt.
+func statusRequiresJoinDate(s string) bool {
+	switch s {
+	case "anwaerter", "foerderkind":
+		return false
+	}
+	return true
 }
 
 // POST /api/members
@@ -482,6 +510,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		PassNumber    string   `json:"pass_number"`
 		Position      string   `json:"position"`
 		Gender        string   `json:"gender"`
+		Status        string   `json:"status"`
 		JoinDate      string   `json:"join_date"`
 		ClubFunctions []string `json:"club_functions"`
 	}
@@ -489,8 +518,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	// Eintrittsdatum ist Pflicht (für die Beitrags-Halbierung bei unterjährigem Eintritt).
-	if req.JoinDate == "" {
+	if req.Status == "" {
+		req.Status = "aktiv"
+	}
+	if !isValidMemberStatus(req.Status) {
+		http.Error(w, "ungültiger Status", http.StatusBadRequest)
+		return
+	}
+	// Eintrittsdatum ist Pflicht (für die Beitrags-Halbierung bei unterjährigem
+	// Eintritt) — außer für Status, die keine beitragspflichtige Vollmitgliedschaft
+	// sind (anwaerter, foerderkind).
+	if req.JoinDate == "" && statusRequiresJoinDate(req.Status) {
 		http.Error(w, "join_date ist erforderlich", http.StatusBadRequest)
 		return
 	}
@@ -509,9 +547,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		res, err := h.db.ExecContext(r.Context(),
-			`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender, join_date) VALUES (?,?,?,?,?,?,?,?)`,
+			`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender, status, join_date) VALUES (?,?,?,?,?,?,?,?,?)`,
 			req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(memberNumber),
-			nullableString(req.PassNumber), nullableString(req.Position), req.Gender, req.JoinDate)
+			nullableString(req.PassNumber), nullableString(req.Position), req.Gender, req.Status, nullableString(req.JoinDate))
 		if err != nil {
 			if attempt == 2 {
 				http.Error(w, "duplicate pass number or internal error", http.StatusConflict)
@@ -768,10 +806,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Status == "" {
 		req.Status = "aktiv"
 	}
+	if !isValidMemberStatus(req.Status) {
+		http.Error(w, "ungültiger Status", http.StatusBadRequest)
+		return
+	}
 	// Eintrittsdatum ist Pflicht; Austrittsdatum ist Pflicht, sobald der Status
 	// auf 'ausgetreten' gesetzt wird (für die Beitrags-Halbierung). Bei anderem
-	// Status wird ein evtl. vorhandenes Austrittsdatum geleert.
-	if req.JoinDate == "" {
+	// Status wird ein evtl. vorhandenes Austrittsdatum geleert. Anwärter und
+	// Förderkinder sind vom join_date-Zwang ausgenommen (keine beitragspflichtige
+	// Vollmitgliedschaft).
+	if req.JoinDate == "" && statusRequiresJoinDate(req.Status) {
 		http.Error(w, "join_date ist erforderlich", http.StatusBadRequest)
 		return
 	}
@@ -842,7 +886,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender,
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub), req.HomeClubID,
 		req.Status,
-		req.JoinDate, nullableString(req.ExitDate),
+		nullableString(req.JoinDate), nullableString(req.ExitDate),
 		boolToInt(req.CrossTeamVisible),
 		boolToInt(req.Zweitspielrecht),
 		time.Now(), id)
@@ -912,11 +956,7 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	valid := map[string]bool{
-		"aktiv": true, "verletzt": true, "pausiert": true,
-		"ausgetreten": true, "passiv": true, "honorar": true, "anwaerter": true,
-	}
-	if !valid[req.Status] {
+	if !isValidMemberStatus(req.Status) {
 		http.Error(w, "invalid status", http.StatusBadRequest)
 		return
 	}
@@ -1668,7 +1708,7 @@ func normalizeStatus(s string) string {
 	switch strings.TrimSpace(s) {
 	case "":
 		return ""
-	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter":
+	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter", "foerderkind":
 		return s
 	case "gekündigt", "Vereinswechsel":
 		return "ausgetreten"

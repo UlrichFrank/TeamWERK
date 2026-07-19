@@ -446,6 +446,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/members/{id}/change-drafts/{draftId}/accept", h.Members.AcceptChangeRequestHandler)
 			r.Delete("/api/members/{id}/change-drafts/{draftId}", h.Members.RejectChangeRequestHandler)
 			r.Get("/api/age-class-rules", h.Config.GetAgeClassRulesHandler)
+			r.Get("/api/training-group-categories", h.Config.GetTrainingGroupCategoriesHandler)
 		})
 
 		// Admin only
@@ -582,6 +583,8 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/upload/member-photo/{id}", h.Upload.UploadMemberPhoto)
 			r.Delete("/api/upload/member-photo/{id}", h.Upload.DeleteMemberPhoto)
 			r.Put("/api/age-class-rules/{ageClass}", h.Config.UpdateAgeClassRuleHandler)
+			r.Post("/api/training-group-categories", h.Config.CreateTrainingGroupCategory)
+			r.Delete("/api/training-group-categories/{name}", h.Config.DeleteTrainingGroupCategory)
 			if h.Stammvereine != nil {
 				r.Post("/api/stammvereine", h.Stammvereine.Create)
 				r.Put("/api/stammvereine/{id}", h.Stammvereine.Update)

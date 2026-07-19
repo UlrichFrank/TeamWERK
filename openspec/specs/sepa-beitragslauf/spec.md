@@ -16,7 +16,7 @@ Nutzer mit Vereinsfunktion `vorstand` oder `kassierer` (sowie System-Rolle `admi
 
 ### Requirement: Ein- und Ausschlussregeln
 
-Der Vorschau-Endpoint MUST Mitglieder mit `status IN ('honorar','anwaerter')`
+Der Vorschau-Endpoint MUST Mitglieder mit `status IN ('honorar','anwaerter','foerderkind')`
 oder `beitragsfrei = 1` ausschließen, ebenso Mitglieder ohne gültiges SEPA-Mandat
 (`sepa_mandat = 0`), ohne Mitgliedsnummer oder mit unvollständiger Adresse — diese
 Prüfungen erfolgen serverseitig anhand **nicht-verschlüsselter** Felder. Mitglieder mit
@@ -27,6 +27,11 @@ Die Ausschlüsse **IBAN fehlt** (`iban_fehlt`) und **IBAN ungültig** (`iban_ung
 **clientseitig** nach Entschlüsselung der IBAN ermittelt werden. Jeder Ausschluss MUST dem
 Nutzer mit Begründung angezeigt werden. Ein fehlender Stammverein (`home_club_id = NULL`)
 führt NICHT zum Ausschluss, sondern regulär zur Kategorie `aktiv_ohne`.
+
+#### Scenario: Förderkind wird ausgeschlossen
+- **WHEN** ein Mitglied mit `status = 'foerderkind'` im Beitragslauf verarbeitet wird
+- **THEN** wird es `included = false` mit `exclusions` enthält `status_inaktiv` (bzw. die
+  bestehende Status-Ausschluss-Begründung) und erscheint nicht in den Summen
 
 #### Scenario: Nicht-IBAN-Ausschluss kommt vom Server
 - **WHEN** ein Mitglied `sepa_mandat = 0` hat

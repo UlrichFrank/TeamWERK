@@ -103,7 +103,7 @@ Spiegelt exakt `anwaerter-member-status`:
   Doppel-Datensätze.
 
 SQLite kennt kein `ALTER TABLE … ADD CHECK`, daher **Tabellen-Rebuild** von
-`members` in Migration 033 (create `members_new` mit erweiterter CHECK → `INSERT
+`members` in Migration 034 (create `members_new` mit erweiterter CHECK → `INSERT
 … SELECT` → `DROP`/`RENAME`, Indizes neu). Vorbild: Rebuilds in Migration 018.
 
 CHECK neu:

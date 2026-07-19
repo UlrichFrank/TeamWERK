@@ -84,7 +84,7 @@ Zwei Dinge fehlen aber:
 
 ## Impact
 
-- **Backend:** neue Migration `internal/db/migrations/033_*` — (a) `members`-Rebuild
+- **Backend:** neue Migration `internal/db/migrations/034_*` — (a) `members`-Rebuild
   zur CHECK-Erweiterung um `foerderkind` (SQLite kennt kein ALTER … CHECK), (b)
   Tabelle `training_group_categories` + Seed („Förderkader", „Perspektivkader").
   Beitragslauf-Query (`internal/beitragslauf/query.go`) um `foerderkind` ergänzen.
