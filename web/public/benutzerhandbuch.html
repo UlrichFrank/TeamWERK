@@ -218,6 +218,12 @@
     color:var(--text);
   }
   h3:first-of-type{margin-top:.4rem;}
+  h4{
+    font-size:.98rem;
+    font-weight:600;
+    margin:1.1rem 0 .4rem;
+    color:var(--text);
+  }
   p{margin:.6rem 0;}
   .card > p:first-of-type{margin-top:0;}
   strong{font-weight:600;}
@@ -395,6 +401,7 @@
       <li><a href="#k4"><span class="num">04</span><span>Bankdaten-Tresor</span></a></li>
       <li><a href="#k5"><span class="num">05</span><span>Berechtigungen &amp; Pflichten</span></a></li>
       <li><a href="#k6"><span class="num">06</span><span>Risiken</span></a></li>
+      <li><a href="#k7"><span class="num">07</span><span>FAQ: Benachrichtigungen</span></a></li>
     </ol>
   </nav>
 
@@ -425,12 +432,13 @@
       <p>TeamWERK kennt <strong>zwei voneinander unabhängige Dimensionen</strong> von Berechtigungen. Wer diese versteht, versteht die ganze App.</p>
 
       <h3>System-Rolle (technische Ebene)</h3>
-      <p>Jedes Konto hat genau <strong>eine</strong> System-Rolle:</p>
+      <p>Jedes Konto hat genau <strong>eine</strong> System-Rolle. Hierarchisch: Admin &supe; Presseteam &supe; Standard.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Rolle</th><th>Bedeutung</th></tr></thead>
           <tbody>
             <tr><td><strong>Standard</strong></td><td>Normalfall. Zugriff ergibt sich aus den Vereinsfunktionen und aus dem, was einem selbst gehört (eigenes Profil, eigene Kinder).</td></tr>
+            <tr><td><strong>Presseteam</strong></td><td>Darf Spielberichte verfassen und zur Prüfung einreichen (Autoren-Workflow). Alles andere wie Standard.</td></tr>
             <tr><td><strong>Admin</strong></td><td>Technische Vollzugriffs-Rolle. Umgeht alle Funktions-Prüfungen. Nur für die technische Betreuung der Plattform gedacht.</td></tr>
           </tbody>
         </table>
@@ -443,11 +451,12 @@
           <thead><tr><th>Funktion</th><th>Worum es geht</th></tr></thead>
           <tbody>
             <tr><td><code>spieler</code></td><td>Aktive Spielerin / aktiver Spieler.</td></tr>
-            <tr><td><code>trainer</code></td><td>Leitet Trainings, plant Spiele, erfasst Anwesenheiten.</td></tr>
-            <tr><td><code>sportliche_leitung</code></td><td>Sportliche Gesamtverantwortung; technisch mit dem Trainer gleichgestellt.</td></tr>
-            <tr><td><code>vorstand</code></td><td>Vereinsverwaltung: Mitglieder, Teams, Nutzer, Einladungen, Stammdaten.</td></tr>
+            <tr><td><code>trainer</code></td><td>Leitet Trainings, plant Spiele, erfasst Anwesenheiten, verwaltet Kader und Videos der eigenen Mannschaft.</td></tr>
+            <tr><td><code>sportliche_leitung</code></td><td>Sportliche Gesamtverantwortung; technisch mit dem Trainer gleichgestellt, aber vereinsweit statt teamgebunden.</td></tr>
+            <tr><td><code>vorstand</code></td><td>Vereinsverwaltung: Mitglieder, Teams, Nutzer, Einladungen, Stammdaten, Saisons.</td></tr>
             <tr><td><code>vorstand_beisitzer</code></td><td>Vorstandsmitglied mit eingeschränkterem Aufgabenkreis.</td></tr>
             <tr><td><code>kassierer</code></td><td>Finanzen: Bankdaten, Beitragsmatrix, Beitragslauf (SEPA).</td></tr>
+            <tr><td><code>medien</code></td><td>Freigeber-Rolle für Spielberichte: prüft eingereichte Berichte und veröffentlicht sie.</td></tr>
           </tbody>
         </table>
       </div>
@@ -458,7 +467,8 @@
           <ul style="margin:.4rem 0 0;">
             <li><strong>Eltern</strong> sind <em>keine</em> Vereinsfunktion – wer mit einem Kind verknüpft ist, erhält automatisch die passenden Rechte.</li>
             <li>Den „Sportvorstand" gibt es nicht als eigene Funktion – das ist jemand mit <em>vorstand</em> <strong>und</strong> <em>sportliche_leitung</em>.</li>
-            <li>Funktionen lassen sich kombinieren: z.&nbsp;B. gleichzeitig <em>trainer</em> und <em>vorstand</em>.</li>
+            <li>Funktionen lassen sich kombinieren: z.&nbsp;B. gleichzeitig <em>trainer</em> und <em>vorstand</em>, oder <em>medien</em> zusätzlich zur System-Rolle <em>Presseteam</em> (Autor + Freigeber in einer Person).</li>
+            <li><strong>Strafenwart</strong> ist keine eigene Funktion, sondern eine <em>teaminterne Ernennung</em>: der Trainer bestimmt pro Mannschaft, wer Strafen buchen darf.</li>
           </ul>
         </div>
       </div>
@@ -471,47 +481,68 @@
       <h3>Für alle angemeldeten Nutzer</h3>
       <ul>
         <li><strong>Dashboard:</strong> Persönliche Übersicht – nächste Termine, offene Dienste, eigene Dienst-Bilanz (Soll/Ist), offene Mitfahrgelegenheiten, ungelesene Nachrichten.</li>
-        <li><strong>Mein Profil:</strong> Stammdaten, Kontakt, Telefonnummern, Foto, Sichtbarkeits- &amp; Benachrichtigungs-Einstellungen, eigene Anwesenheits-Historie.</li>
-        <li><strong>Kinderprofile (Eltern):</strong> Daten der eigenen Kinder verwalten – inkl. verschlüsselter Bankdaten.</li>
-        <li><strong>Kalender &amp; Termine:</strong> Trainings, Spiele, sonstige Termine ansehen, zu-/absagen (RSVP); persönlicher Kalender-Abo-Link (iCal).</li>
+        <li><strong>Mein Profil:</strong> Stammdaten, Kontakt, Telefonnummern, Foto, Sichtbarkeits-Einstellungen, Fahrzeugdaten für Mitfahrten sowie <strong>Benachrichtigungs-Präferenzen</strong> pro Kategorie (Spiele, Trainings, Dienste, Chat, …).</li>
+        <li><strong>Anwesenheits-Historie:</strong> Eigene Anwesenheiten (Spieler) bzw. die deiner Kinder (Eltern) einsehen.</li>
+        <li><strong>Kinderprofile (Eltern):</strong> Daten der eigenen Kinder verwalten – inkl. clientseitig verschlüsselter Bankdaten, Fotos, Kontakt und Anwesenheiten.</li>
+        <li><strong>Kalender &amp; Termine:</strong> Trainings, Spiele, sonstige Termine ansehen, zu-/absagen (RSVP); persönlicher iCal-Abo-Link zum Einbinden in fremde Kalender-Apps.</li>
         <li><strong>Abwesenheiten melden:</strong> Krankheit, Urlaub o.&nbsp;Ä. eintragen; betroffene Termine werden angezeigt.</li>
-        <li><strong>Mein Team:</strong> Mannschaftszugehörigkeit und Aufstellung.</li>
-        <li><strong>Dienstbörse:</strong> Offene Dienst-Slots ansehen und sich anmelden; eigenes Dienst-Konto einsehen.</li>
+        <li><strong>Mein Team:</strong> Mannschaftszugehörigkeit, Aufstellung, <strong>Aufgaben</strong> (z.&nbsp;B. Mannschaftskasse, Getränkewart) und <strong>Mannschafts-Strafen</strong> einsehen.</li>
+        <li><strong>Dienstbörse:</strong> Offene Dienst-Slots ansehen und sich anmelden; eigenes Dienst-Konto einsehen; Anleitungen zu Dienst-Typen aufrufen.</li>
         <li><strong>Mitfahrgelegenheiten:</strong> Fahrten zu Auswärtsspielen anbieten oder suchen; Paarungen bestätigen/ablehnen.</li>
-        <li><strong>Nachrichten / Chat:</strong> Einzel- und Gruppenchats, Reaktionen, Push.</li>
-        <li><strong>Dokumente &amp; Videos:</strong> Vereinsdokumente lesen/herunterladen, Spiel- &amp; Trainingsvideos streamen (je nach Berechtigung).</li>
+        <li><strong>Nachrichten / Chat:</strong> Einzel- und Gruppenchats mit Reaktionen und Push-Benachrichtigungen; zusätzlich <strong>Mitteilungen</strong> (Broadcasts vom Vorstand); Team-Gruppen als Direkt-Adressat.</li>
+        <li><strong>Dokumente:</strong> Ordnerbasiertes Dokumenten-Archiv mit Berechtigungen; PDF- und Bild-Ansicht direkt in der App.</li>
+        <li><strong>Videos:</strong> Spiel- und Trainingsvideos streamen (HLS), Weitergabe an TV per <strong>AirPlay</strong> (Apple) oder <strong>Chromecast</strong> (Android/Google) – je nach Berechtigung der Mannschaft.</li>
+        <li><strong>PWA / Push:</strong> Zur Startseite hinzufügen, Push-Berechtigung erlauben und den Badge (ungelesene Nachrichten) am App-Symbol nutzen – Details siehe <a class="inline" href="#k7">Kapitel 07</a>.</li>
       </ul>
 
       <h3>Trainer &amp; sportliche Leitung</h3>
       <ul>
-        <li><strong>Trainings planen:</strong> Einzeltrainings und Serien anlegen, ändern, absagen.</li>
-        <li><strong>Anwesenheiten erfassen</strong> bei Trainings und Spielen – auch rückwirkend.</li>
-        <li><strong>Spiele verwalten:</strong> Heim-/Auswärtsspiele, Spiel-Notizen, Spielorte.</li>
-        <li><strong>Kaderplanung:</strong> Saison-Kader zusammenstellen, Vorschläge &amp; Auto-Zuweisung, Kader aus Vorsaison kopieren.</li>
-        <li><strong>Dienste organisieren</strong> und Videos hochladen; <strong>Mitglieder suchen</strong> (eingeschränkter Umfang).</li>
+        <li><strong>Trainings planen:</strong> Einzeltrainings und ganze Serien anlegen, ändern, absagen; Trainings-Notizen pflegen.</li>
+        <li><strong>Anwesenheiten erfassen</strong> bei Trainings und Spielen – auch rückwirkend – sowie Team-Anwesenheits-Statistiken einsehen.</li>
+        <li><strong>Spiele verwalten:</strong> Heim-, Auswärts- und generische Events; Aufstellung/Kader-Nominierung, Spiel-Notizen, Spielorte.</li>
+        <li><strong>Kaderplanung:</strong> Saison-Kader zusammenstellen, Vorschläge &amp; Auto-Zuweisung, Kader aus Vorsaison kopieren, Spiele pro Saison patchen.</li>
+        <li><strong>Dienste organisieren:</strong> Dienst-Slots anlegen/anpassen, Erfüllung bestätigen, Bar-Ersatz buchen; automatische Neuerzeugung bei Spieländerungen.</li>
+        <li><strong>Videos hochladen</strong> (resumable Upload) und Video-Metadaten pflegen für die eigene Mannschaft.</li>
+        <li><strong>Mein Team – Verwaltung:</strong> Aufgaben-Katalog pflegen und Aufgaben zuweisen, Strafen-Katalog pflegen, <strong>Strafenwart</strong> ernennen.</li>
+        <li><strong>Mitglieder suchen</strong> (eingeschränkt auf die eigenen Kader bzw. vereinsweite Trainerliste).</li>
+      </ul>
+
+      <h3>Strafenwart (teaminterne Ernennung)</h3>
+      <ul>
+        <li>Vom Trainer der Mannschaft ernannt; <strong>bucht Strafen</strong> aus dem Team-Katalog auf einzelne Spieler, storniert Fehlbuchungen, setzt Konten zurück.</li>
+        <li>Sieht die Strafen des eigenen Teams; keine Rechte in anderen Mannschaften.</li>
+      </ul>
+
+      <h3>Presseteam &amp; Medien-Freigeber (Spielberichte)</h3>
+      <ul>
+        <li><strong>Presseteam</strong> (System-Rolle): Spielbericht als Entwurf anlegen, Bilder hochladen, bearbeiten und <em>zur Prüfung</em> einreichen.</li>
+        <li><strong>Medien</strong> (Vereinsfunktion) und <strong>Vorstand</strong>: eingereichte Berichte prüfen und <strong>veröffentlichen</strong>; der Autor bekommt fehlgeschlagene Publish-Läufe zurück.</li>
+        <li>Übersicht der eigenen Entwürfe unter <em>Spielberichte</em>, Freigabe-Warteschlange unter <em>Spielbericht prüfen</em>.</li>
       </ul>
 
       <h3>Vorstand</h3>
       <ul>
-        <li><strong>Mitgliederverwaltung:</strong> anlegen, bearbeiten, Status ändern (aktiv / verletzt / pausiert / ausgetreten), löschen, im-/exportieren.</li>
-        <li><strong>Änderungsanträge</strong> von Mitgliedern prüfen und annehmen/ablehnen.</li>
-        <li><strong>Nutzer &amp; Konten:</strong> Konten anlegen, Rollen vergeben, Einladungen (auch per CSV), Beitrittsanfragen, Familien-Verknüpfungen.</li>
-        <li><strong>Stammdaten:</strong> Teams, Saisons (inkl. aktiver Saison &amp; Dienst-Zielen), Stammvereine, Veranstaltungsorte, Dienst-Typen &amp; Dienstplan-Vorlagen.</li>
+        <li><strong>Mitgliederverwaltung:</strong> anlegen, bearbeiten, Status ändern (aktiv / verletzt / pausiert / ausgetreten), Familien-Verknüpfungen anlegen/lösen, Proxy-Konten für Kinder erzeugen, Willkommens-Mail auslösen, löschen, im-/exportieren.</li>
+        <li><strong>Änderungsanträge</strong> (auch verschlüsselte Bankdaten-Anträge) prüfen und annehmen/ablehnen.</li>
+        <li><strong>Nutzer &amp; Konten:</strong> Konten anlegen, System-Rolle vergeben, Einladungen einzeln oder per CSV-Import, Beitrittsanfragen genehmigen/ablehnen, Recovery-E-Mails setzen.</li>
+        <li><strong>Stammdaten:</strong> Teams, Saisons (inkl. aktiver Saison, Dienst-Zielen und Halbierungs-Kennung), Stammvereine, Veranstaltungsorte (auch Import), Dienst-Typen mit Markdown-Anleitungen, Dienstplan-Vorlagen.</li>
+        <li><strong>Vereinseinstellungen:</strong> Vereinsstammdaten, Alters­klassen-Regeln, Tresor-Passphrase-Rotation.</li>
       </ul>
 
       <h3>Vorstand &amp; Kassierer (Finanzen)</h3>
       <ul>
         <li><strong>Mitglieder-Stammdaten</strong> lesen und exportieren.</li>
-        <li><strong>Bankdaten:</strong> SEPA-Mandate hochladen, Bankdaten pflegen (clientseitig verschlüsselt – siehe <a class="inline" href="#k4">Kapitel 04</a>).</li>
-        <li><strong>Vereins-Stammdaten</strong> (SEPA-Gläubiger-ID, Konto) pflegen.</li>
+        <li><strong>Bankdaten:</strong> SEPA-Mandate hochladen (clientseitig verschlüsselt), Bankdaten pflegen und Kinder-Bankdaten korrigieren – siehe <a class="inline" href="#k4">Kapitel 04</a>.</li>
+        <li><strong>Vereins-Stammdaten</strong> (SEPA-Gläubiger-ID, Konto, Kontoinhaber) pflegen.</li>
         <li><strong>Beitragsmatrix</strong> je Kategorie und Stichtag verwalten (mit Historie).</li>
-        <li><strong>Beitragslauf:</strong> SEPA-Lastschriftlauf erstellen – Vorschau prüfen, SEPA-Datei erzeugen, Lauf bestätigen und protokollieren.</li>
-        <li><strong>Tresor</strong> entsperren (Voraussetzung für Bankdaten &amp; Beitragslauf).</li>
+        <li><strong>Beitragslauf:</strong> SEPA-Lastschriftlauf erstellen – Vorschau prüfen, SEPA-Datei im Browser erzeugen, Lauf bestätigen und in einem Saison-Protokoll dokumentieren.</li>
+        <li><strong>Tresor</strong> entsperren (Voraussetzung für Bankdaten &amp; Beitragslauf); Passphrase-Rotation.</li>
       </ul>
 
       <h3>Admin</h3>
       <ul>
         <li><strong>Impersonation</strong> (im Namen eines anderen Kontos handeln) – ausschließlich zur technischen Fehlersuche.</li>
+        <li><strong>Wartungsmodus</strong> ein-/ausschalten: sperrt Schreibzugriffe außerhalb der Anmeldung (z.&nbsp;B. für Migrations-Fenster).</li>
       </ul>
     </section>
 
@@ -559,9 +590,33 @@
       <div class="role">
         <h4>Trainer / sportliche Leitung</h4>
         <p class="rights-label">Darf</p>
-        <p>Trainings &amp; Spiele planen, Kader zusammenstellen, Anwesenheiten erfassen, Dienste organisieren, Videos hochladen.</p>
+        <p>Trainings &amp; Spiele planen, Kader zusammenstellen, Anwesenheiten erfassen, Dienste organisieren, Videos hochladen, Team-Aufgaben und Strafen-Katalog pflegen, Strafenwart ernennen.</p>
         <p class="duties-label">Pflichten</p>
         <ul><li>Termine <strong>frühzeitig und korrekt</strong> pflegen.</li><li>Anwesenheiten <strong>wahrheitsgemäß</strong> erfassen.</li><li>Bei jeder Spieländerung an die <strong>automatisch neu erzeugten Dienste</strong> denken.</li><li>Nur Daten der <strong>eigenen Mannschaft</strong> einsehen.</li></ul>
+      </div>
+
+      <div class="role">
+        <h4>Strafenwart (teaminterne Ernennung)</h4>
+        <p class="rights-label">Darf</p>
+        <p>Strafen im eigenen Team buchen, stornieren und Konten zurücksetzen.</p>
+        <p class="duties-label">Pflichten</p>
+        <ul><li>Nur <strong>tatsächlich verhängte</strong> Strafen buchen; Fehler zeitnah korrigieren.</li><li>Kein Zugriff auf andere Mannschaften missbrauchen.</li></ul>
+      </div>
+
+      <div class="role">
+        <h4>Presseteam (System-Rolle)</h4>
+        <p class="rights-label">Darf</p>
+        <p>Spielberichte als Entwurf verfassen, Bilder hochladen, bearbeiten und zur Prüfung einreichen.</p>
+        <p class="duties-label">Pflichten</p>
+        <ul><li>Nur eigene Wahrnehmung/Recherche wiedergeben, keine <strong>Persönlichkeitsrechte</strong> verletzen.</li><li>Berichte vor dem Einreichen auf <strong>Rechtschreibung und Fakten</strong> prüfen.</li><li>Bildrechte an hochgeladenen Fotos <strong>vor</strong> dem Upload klären.</li></ul>
+      </div>
+
+      <div class="role">
+        <h4>Medien-Freigeber (Vereinsfunktion <em>medien</em>)</h4>
+        <p class="rights-label">Darf</p>
+        <p>Eingereichte Spielberichte prüfen und veröffentlichen.</p>
+        <p class="duties-label">Pflichten</p>
+        <ul><li>Berichte <strong>vor der Veröffentlichung</strong> auf Verein-Ton, Recht und Vollständigkeit prüfen.</li><li>Fehlgeschlagene oder ungeeignete Berichte an den Autor <strong>mit Begründung</strong> zurückgeben.</li></ul>
       </div>
 
       <div class="role">
@@ -616,6 +671,82 @@
         <li><strong>Gesundheits- &amp; Abwesenheitsdaten</strong> sind vertraulich und nur für die Zuständigen bestimmt.</li>
         <li><strong>Modellgrenze – ehrlich:</strong> Die Verschlüsselung schützt gegen passives Auslesen (gestohlenes Backup, neugieriger Hoster), <strong>nicht</strong> gegen ein kompromittiertes oder offen gelassenes Endgerät. → Geräte sperren, sichere Passwörter, Vorsicht in öffentlichen Netzen.</li>
       </ul>
+    </section>
+
+    <!-- 07 -->
+    <section class="card" id="k7">
+      <div class="sec-head"><span class="sec-num">07</span><h2>FAQ: Benachrichtigungen kommen nicht oder verspätet an</h2></div>
+      <p>Wenn ungelesene Nachrichten (Badges) oder Push-Benachrichtigungen bei dir nicht oder erst mit Stunden Verzögerung ankommen, hilft in fast allen Fällen einer der folgenden Wege.</p>
+
+      <h3>iPhone (iOS) &ndash; TeamWERK neu einrichten</h3>
+      <ol>
+        <li>TeamWERK vollständig beenden.</li>
+        <li>Safari vollständig beenden.</li>
+        <li>Das TeamWERK-Symbol vom Home-Bildschirm löschen (nur das Symbol, nicht die Daten).</li>
+        <li>Öffne <strong>Einstellungen &rarr; Apps &rarr; Safari &rarr; Erweitert &rarr; Website-Daten</strong>.</li>
+        <li>Lösche den Eintrag <strong>team-stuttgart.org</strong>.</li>
+        <li>Öffne Safari und rufe folgende Adresse auf: <strong>https://teamwerk.team-stuttgart.org</strong></li>
+        <li>Tippe auf <strong>Teilen</strong> und anschließend auf <strong>Zum Home-Bildschirm</strong>.</li>
+        <li>Schließe Safari.</li>
+        <li>Starte die neu angelegte TeamWERK-App und melde dich an.</li>
+        <li>Das iPhone sollte nun nach der Berechtigung für Push-Benachrichtigungen fragen. Erlaube diese.</li>
+        <li>Unter <strong>Einstellungen &rarr; Apps</strong> sollte jetzt auch TeamWERK als eigene App erscheinen.</li>
+      </ol>
+
+      <h3>Android &ndash; TeamWERK neu einrichten</h3>
+      <ol>
+        <li>TeamWERK vollständig beenden.</li>
+        <li>Den verwendeten Browser (z.&nbsp;B. Chrome) vollständig schließen.</li>
+        <li>Das TeamWERK-Symbol vom Startbildschirm entfernen.</li>
+        <li>Öffne den Browser und rufe folgende Adresse auf: <strong>https://teamwerk.team-stuttgart.org</strong></li>
+        <li>Wähle im Browser-Menü <strong>Zum Startbildschirm hinzufügen</strong> bzw. <strong>App installieren</strong> (je nach Browser).</li>
+        <li>Schließe den Browser.</li>
+        <li>Starte die neu installierte TeamWERK-App und melde dich an.</li>
+        <li>Wenn Android nach der Berechtigung für Benachrichtigungen fragt, erteile diese.</li>
+        <li>Prüfe anschließend unter <strong>Einstellungen &rarr; Apps &rarr; TeamWERK &rarr; Benachrichtigungen</strong>, dass Benachrichtigungen aktiviert sind.</li>
+      </ol>
+
+      <h3>Android &ndash; Benachrichtigungen kommen mit Stunden Verspätung</h3>
+      <p>Manche Handys (besonders <strong>Samsung, Xiaomi, Huawei, OnePlus</strong>) halten Benachrichtigungen zurück, um Akku zu sparen. So schaltest du das für TeamWERK aus:</p>
+
+      <h4>Schritt 1 &ndash; Akku-Optimierung ausschalten</h4>
+      <ol>
+        <li>Öffne die <strong>Einstellungen</strong> deines Handys.</li>
+        <li>Tippe auf <strong>Apps</strong> (oder „Anwendungen").</li>
+        <li>Suche <strong>TeamWERK</strong> in der Liste und tippe drauf.</li>
+        <li>Tippe auf <strong>Akku</strong> (manchmal auch „Batterie" oder „Energie").</li>
+        <li>Wähle <strong>„Nicht optimieren"</strong> oder <strong>„Uneingeschränkt"</strong> (bei Samsung heißt es oft „Nicht eingeschränkt", bei Xiaomi „Keine Einschränkungen").</li>
+      </ol>
+
+      <h4>Schritt 2 &ndash; Benachrichtigungen erlauben</h4>
+      <ol>
+        <li>Immer noch bei TeamWERK in den App-Einstellungen.</li>
+        <li>Tippe auf <strong>Benachrichtigungen</strong>.</li>
+        <li>Alle Schalter auf <strong>an</strong> (grün).</li>
+      </ol>
+
+      <h4>Schritt 3 (nur Samsung) &ndash; „Apps in den Ruhezustand" prüfen</h4>
+      <ol>
+        <li><strong>Einstellungen &rarr; Gerätewartung</strong> (oder „Akku und Gerätewartung").</li>
+        <li><strong>Akku &rarr; Nutzungslimits für Hintergrund</strong>.</li>
+        <li>Prüfe alle drei Listen (<strong>Ruhende Apps</strong>, <strong>Tief ruhende Apps</strong>, <strong>Nie ruhende Apps</strong>):
+          <ul>
+            <li>TeamWERK darf <strong>nicht</strong> in den ersten beiden Listen stehen.</li>
+            <li>Am besten TeamWERK zu <strong>„Nie ruhende Apps"</strong> hinzufügen.</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h4>Schritt 4 (nur Xiaomi/Redmi) &ndash; Autostart</h4>
+      <ol>
+        <li><strong>Einstellungen &rarr; Apps &rarr; Berechtigungen &rarr; Autostart</strong>.</li>
+        <li>TeamWERK aktivieren.</li>
+      </ol>
+
+      <div class="note info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span><strong>Kurztest:</strong> Bitte jemanden, dir eine Test-Nachricht im TeamWERK-Chat zu schicken, während dein Handy 5 Minuten im Standby liegt (Bildschirm aus, in der Tasche). Die Benachrichtigung sollte innerhalb weniger Sekunden ankommen.</span>
+      </div>
     </section>
   </main>
 </div>
