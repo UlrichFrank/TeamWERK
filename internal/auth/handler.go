@@ -1177,9 +1177,22 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "only admins can assign admin role", http.StatusForbidden)
 		return
 	}
-	var exists bool
-	if err := h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) > 0 FROM users WHERE id = ?`, targetID).Scan(&exists); err != nil || !exists {
+	var targetRole string
+	err = h.db.QueryRowContext(r.Context(), `SELECT role FROM users WHERE id = ?`, targetID).Scan(&targetRole)
+	if err == sql.ErrNoRows {
 		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	// Separation of Duties: Nur ein Admin darf einen bestehenden Admin herabstufen
+	// oder die eigene Rolle ändern. Nicht-Admins behalten legitime Rollenpflege an
+	// Nicht-Admin-Accounts (Vorstand). Die Vergabe von 'admin' bleibt ohnehin
+	// admin-only (Prüfung oben).
+	if caller.Role != RoleAdmin && (targetRole == RoleAdmin || caller.UserID == targetID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	if _, err := h.db.ExecContext(r.Context(), `UPDATE users SET role = ? WHERE id = ?`, req.Role, targetID); err != nil {
