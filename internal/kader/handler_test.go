@@ -443,10 +443,10 @@ func TestMemberSuggestions_TrainingGroupDedicatedYear(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Perspektivkader dedicated")
 
-	// Perspektivkader = D+1 = 2015.
+	// Perspektivkader = younger D-Jugend year = 2014 (2025/26), overlaps D-Jugend.
 	res, err := db.Exec(
 		`INSERT INTO kader (season_id, age_class, gender, team_id, team_number, dedicated_birth_year) VALUES (?, ?, ?, ?, ?, ?)`,
-		seasonID, "Perspektivkader", "mixed", teamID, 1, 2015)
+		seasonID, "Perspektivkader", "mixed", teamID, 1, 2014)
 	if err != nil {
 		t.Fatalf("insert kader: %v", err)
 	}
@@ -455,11 +455,11 @@ func TestMemberSuggestions_TrainingGroupDedicatedYear(t *testing.T) {
 
 	inRes, _ := db.Exec(
 		`INSERT INTO members (first_name, last_name, status, date_of_birth, gender) VALUES (?, ?, ?, ?, ?)`,
-		"Paul", "Passt", "foerderkind", "2015-06-06", "m")
+		"Paul", "Passt", "foerderkind", "2014-06-06", "m")
 	inID, _ := inRes.LastInsertId()
 	outRes, _ := db.Exec(
 		`INSERT INTO members (first_name, last_name, status, date_of_birth, gender) VALUES (?, ?, ?, ?, ?)`,
-		"Nina", "Nachbarjahr", "foerderkind", "2016-06-06", "f")
+		"Nina", "Nachbarjahr", "foerderkind", "2015-06-06", "f")
 	outID, _ := outRes.LastInsertId()
 
 	adminID := testutil.CreateUser(t, db, "admin")
@@ -536,12 +536,12 @@ func TestGetKader_TrainingGroupBracketYears(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	// 2025/26: D+1..D+6 = 2015..2020.
+	// 2025/26: first candidate = younger D-Jugend year (Perspektivkader) = 2014.
 	if len(payload.BracketYears) == 0 {
 		t.Fatal("training-group bracket_years must be populated (dropdown source)")
 	}
-	if payload.BracketYears[0] != 2015 {
-		t.Errorf("first bracket year: got %d, want 2015 (D+1)", payload.BracketYears[0])
+	if payload.BracketYears[0] != 2014 {
+		t.Errorf("first bracket year: got %d, want 2014 (younger D-Jugend year)", payload.BracketYears[0])
 	}
 	// Without a dedicated year a training group has no implied roster range.
 	if len(payload.BirthYears) != 0 {
