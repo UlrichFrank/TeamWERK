@@ -84,7 +84,7 @@
 
 ## 7. Verifikation
 
-- [ ] 7.1 `/verify-change` — grüne Build/Test/Lint + Projekt-Invarianten.
+- [x] 7.1 `/verify-change` — grüne Build/Test/Lint + Projekt-Invarianten.
 - [ ] 7.2 Lokaler Manual-Test: Konversation zwischen zwei Test-Usern öffnen,
   Nachricht senden, in zweiter Session lesen, Live-Update im ersten Client
   beobachten.
