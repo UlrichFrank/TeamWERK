@@ -22,6 +22,8 @@ Dein Account ist über einen **Familien-Link** mit dem Mitgliedsprofil deines Ki
 
 Der Familien-Link wird vom Vorstand eingerichtet. Wenn die Verknüpfung fehlt oder falsch ist, wende dich an den Admin.
 
+Falls dein Kind an einer wiederkehrenden Trainingsserie dauerhaft nicht teilnehmen kann, kann der Trainer es für diese Serie **abmelden**. Die betroffenen Termine sind dann mit **„dauerhaft abgemeldet"** gekennzeichnet, du kannst dort keine Rückmeldung geben, und sie zählen nicht in die Anwesenheitsstatistik. Diese Abmeldung pflegt ausschließlich der Trainer.
+
 ---
 
 ## Dienste für das Kind

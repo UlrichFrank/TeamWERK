@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { AlertTriangle, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
+import { AlertTriangle, Ban, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, RotateCcw, UserMinus, X } from 'lucide-react'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
@@ -68,6 +68,7 @@ interface VenueRef {
 
 interface SessionDetail {
   id: number
+  series_id?: number | null
   date: string
   start_time: string
   end_time: string
@@ -131,6 +132,12 @@ function RsvpConfigBadges({ defaultPlayers, defaultExtended, requireReason }: { 
   )
 }
 
+interface UnavailableInfo {
+  id: number
+  reason: string
+  permanent: boolean
+}
+
 interface AttendanceItem {
   member_id: number
   member_name: string
@@ -140,6 +147,7 @@ interface AttendanceItem {
   rsvp_is_default?: boolean
   reason: string | null
   present: boolean | null
+  unavailable?: UnavailableInfo | null
 }
 
 interface TableRow {
@@ -153,6 +161,7 @@ interface TableRow {
   is_trainer?: boolean
   in_lineup?: boolean
   team_id?: number
+  unavailable?: UnavailableInfo | null
 }
 
 // Eine gruppierte Sektion der Teilnahme-Tabelle (Team- oder Kader-Überschrift + Zeilen).
@@ -246,6 +255,30 @@ export default function TermineDetailPage() {
       .catch(() => {})
   }
 
+  // Trainer-Aktion aus dem Termin-Detail heraus: einen Spieler für die Serie
+  // dieses Termins dauerhaft abmelden (Prefill start=heute) bzw. wieder anmelden.
+  const setUnavailable = async (memberId: number) => {
+    if (!session?.series_id) return
+    try {
+      await api.post(`/training-series/${session.series_id}/unavailabilities`, { member_id: memberId, start_date: today, reason: '' })
+      setAttendanceError(null)
+      loadAttendances()
+    } catch {
+      setAttendanceError('Fehler beim Abmelden. Bitte nochmal versuchen.')
+    }
+  }
+
+  const clearUnavailable = async (uid: number) => {
+    if (!session?.series_id) return
+    try {
+      await api.delete(`/training-series/${session.series_id}/unavailabilities/${uid}`)
+      setAttendanceError(null)
+      loadAttendances()
+    } catch {
+      setAttendanceError('Fehler beim Wieder-Anmelden. Bitte nochmal versuchen.')
+    }
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     load()
@@ -254,7 +287,7 @@ export default function TermineDetailPage() {
   }, [id, type])
 
   useLiveUpdates((event) => {
-    if (isTraining && (event === 'trainings' || event === 'event-note' || event === 'attendance-changed')) { load(true); loadAttendances() }
+    if (isTraining && (event === 'trainings' || event === 'event-note' || event === 'attendance-changed' || event === 'training-unavailability-changed')) { load(true); loadAttendances() }
     else if (!isTraining && (event === 'games' || event === 'event-note' || event === 'attendance-changed')) load(true)
   })
 
@@ -312,6 +345,7 @@ export default function TermineDetailPage() {
       rsvp_is_default: a.rsvp_is_default,
       reason: a.reason,
       present: a.present,
+      unavailable: a.unavailable,
     }))
 
     return (
@@ -375,6 +409,9 @@ export default function TermineDetailPage() {
           setShowReasonId={setShowReasonId}
           onToggleAttendance={toggleAttendance}
           onDismissError={() => setAttendanceError(null)}
+          seriesId={session.series_id}
+          onSetUnavailable={setUnavailable}
+          onClearUnavailable={clearUnavailable}
         />
       </div>
     )
@@ -500,6 +537,10 @@ interface RowActions {
   onToggleAttendance: (memberId: number, value: boolean) => Promise<void>
   lineupMap?: Record<number, boolean>
   onToggleLineup?: (memberId: number, value: boolean) => void
+  // Nur für Trainings mit Serie gesetzt: Trainer-Aktion Ab-/Wieder-Anmelden.
+  seriesId?: number | null
+  onSetUnavailable?: (memberId: number) => void
+  onClearUnavailable?: (uid: number) => void
 }
 
 function colSpan(a: RowActions) {
@@ -512,6 +553,35 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
       <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
         <td className="px-4 py-3 text-sm text-brand-text font-medium">
           <span>{row.member_name}</span>
+          {row.unavailable && (
+            <span
+              title={row.unavailable.reason || undefined}
+              className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-border-subtle text-brand-text-muted border border-brand-border align-middle"
+            >
+              <Ban className="w-3 h-3" /> dauerhaft abgemeldet
+            </span>
+          )}
+          {a.isTrainer && a.seriesId != null && !row.is_trainer && (
+            row.unavailable
+              ? a.onClearUnavailable && (
+                <button
+                  onClick={() => a.onClearUnavailable!(row.unavailable!.id)}
+                  className="ml-2 inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 py-2 sm:py-0.5 px-2 rounded-md text-xs font-medium text-brand-text-muted hover:text-brand-text hover:bg-brand-table-select transition-colors align-middle"
+                  aria-label={`${row.member_name} wieder anmelden`}
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> wieder anmelden
+                </button>
+              )
+              : a.onSetUnavailable && (
+                <button
+                  onClick={() => a.onSetUnavailable!(row.member_id)}
+                  className="ml-2 inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 py-2 sm:py-0.5 px-2 rounded-md text-xs font-medium text-brand-text-muted hover:text-brand-danger hover:bg-brand-table-select transition-colors align-middle"
+                  aria-label={`${row.member_name} dauerhaft abmelden`}
+                >
+                  <UserMinus className="w-3.5 h-3.5" /> abmelden
+                </button>
+              )
+          )}
         </td>
         <td className="px-4 py-3">
           <div className={`relative group flex items-center gap-1 ${row.rsvp_is_default ? 'text-brand-text-subtle italic' : 'text-brand-text'}`}>
@@ -549,7 +619,11 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
         )}
         {a.showAttendanceCol && (
           <td className="px-4 py-3 text-center">
-            {row.is_trainer ? null : (
+            {row.is_trainer ? null : row.unavailable ? (
+              // Dauerhaft abgemeldete Spieler: keine Anwesenheitserfassung (Server
+              // überspringt sie ebenfalls) — Toggle gesperrt.
+              <span className="text-brand-text-muted text-sm">–</span>
+            ) : (
               <input
                 type="checkbox"
                 checked={a.attendanceMap[row.member_id] ?? false}
@@ -572,7 +646,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
   )
 }
 
-function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup }: {
+function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable }: {
   rows: TableRow[]
   sections?: TableSection[]
   showAttendanceCol: boolean
@@ -585,8 +659,11 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
   onDismissError: () => void
   lineupMap?: Record<number, boolean>
   onToggleLineup?: (memberId: number, value: boolean) => void
+  seriesId?: number | null
+  onSetUnavailable?: (memberId: number) => void
+  onClearUnavailable?: (uid: number) => void
 }) {
-  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup }
+  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable }
 
   // Ohne explizite Sektionen: drei benannte Sektionen Trainer / Spieler / Erweiterter Kader
   // in dieser Reihenfolge; leere Sektionen werden weggelassen.

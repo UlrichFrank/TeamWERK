@@ -18,6 +18,7 @@ Alle Funktionen aus der **[Spieler-Anleitung](anleitung-spieler.md)** stehen dir
 | Einladungen versenden | — | ✓ |
 | Spielplan verwalten | — | ✓ |
 | Kader verwalten | — | ✓ |
+| Spieler dauerhaft von einer Trainingsserie abmelden | — | ✓ |
 | Änderungsanträge genehmigen | — | ✓ |
 
 ---
@@ -136,6 +137,32 @@ Am Saisonstart einmalig:
 - Mitglieder hinzufügen oder entfernen
 - **Spiele pro Saison** eintragen (für statistische Auswertungen)
 - Automatische Zuweisung nutzen: **„Auto-Assign"** schlägt Mitglieder basierend auf Altersklassenregeln vor
+
+---
+
+## Spieler dauerhaft von einer Trainingsserie abmelden
+
+Manche Spieler können an einer wiederkehrenden Trainingsserie **dauerhaft** oder für einen längeren Zeitraum nicht teilnehmen — z. B. weil sie fest in der A-Jugend mittrainieren, Berufsschule haben oder langfristig verletzt sind. Damit sie nicht als „keine Rückmeldung" erscheinen und die Anwesenheitsstatistik verzerren, kannst du sie **serien-gebunden abmelden**.
+
+Die Abmeldung gilt **nur für die betroffene Serie deines Teams** — nicht für andere Kader desselben Spielers. Nur Trainer des eigenen Teams (sowie sportliche Leitung / Admin) können sie pflegen; der Spieler selbst kann nichts ändern.
+
+### Über die Serien-Bearbeitung
+
+1. Unter **„Termine"** → Tab **„Serien"** die betroffene Serie aufklappen
+2. Im Abschnitt **„Dauerhaft abgemeldete Spieler"** auf **„Spieler abmelden"** klicken
+3. Spieler auswählen, optional **Von/Bis**-Zeitraum (leer = dauerhaft) und einen **Grund** (z. B. „spielt A-Jugend") eintragen
+4. Speichern — der Spieler ist ab sofort für die betroffenen Termine abgemeldet
+
+Zum Rückgängigmachen in derselben Liste **„wieder anmelden"** klicken.
+
+### Direkt aus dem Termin-Detail
+
+Im Detail eines Serien-Termins kannst du neben jedem Spieler direkt **„abmelden"** (ab heute) bzw. bei bereits abgemeldeten Spielern **„wieder anmelden"** wählen.
+
+### Auswirkungen
+
+- **Anwesenheitsstatistik:** Betroffene Termine zählen für den Spieler in **keiner** Spalte (weder anwesend, noch fehlend, noch entschuldigt) — sie fallen komplett aus seinem Nenner. In der Detailliste erscheinen sie als **„abgemeldet"**. (Das unterscheidet die Abmeldung von einer normalen Abwesenheit, die als *entschuldigt* zählt und im Nenner bleibt.)
+- **Rückmeldung/Anwesenheit:** Ein abgemeldeter Spieler kann für betroffene Termine **keine** Zu-/Absage geben, und seine Anwesenheit wird nicht erfasst. In den Terminlisten bleibt er sichtbar, mit dem Hinweis **„dauerhaft abgemeldet"**.
 
 ---
 

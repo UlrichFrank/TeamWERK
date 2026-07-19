@@ -14,7 +14,7 @@ interface Counts {
   game_excused: number
 }
 
-type Category = 'present' | 'missed' | 'excused' | 'unknown' | 'cancelled'
+type Category = 'present' | 'missed' | 'excused' | 'unknown' | 'cancelled' | 'unavailable'
 
 interface EventDetail {
   event_type: 'training' | 'game'
@@ -91,12 +91,14 @@ function CategoryBadge({ category }: { category: Category }) {
     missed: { label: 'fehlt', cls: 'bg-brand-danger text-white' },
     unknown: { label: '—', cls: 'bg-brand-border-subtle text-brand-text-muted' },
     cancelled: { label: 'abgesagt', cls: 'bg-brand-border-subtle text-brand-text-muted' },
+    unavailable: { label: 'abgemeldet', cls: 'bg-brand-border-subtle text-brand-text-muted' },
   }
   const { label, cls } = map[category]
   return <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${cls}`}>{label}</span>
 }
 
 function EventTable({ title, events }: { title: string; events: EventDetail[] }) {
+  const hasUnavailable = events.some(e => e.category === 'unavailable')
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
       <div className="px-6 py-4 border-b border-brand-border-subtle">
@@ -127,6 +129,11 @@ function EventTable({ title, events }: { title: string; events: EventDetail[] })
           </tbody>
         </table>
       )}
+      {hasUnavailable && (
+        <p className="px-6 py-3 text-xs text-brand-text-muted italic border-t border-brand-border-subtle">
+          * dauerhaft abgemeldete Spieler zählen für ihre Termine nicht mit
+        </p>
+      )}
     </div>
   )
 }
@@ -151,7 +158,7 @@ export default function AttendanceStatsView({ memberId }: { memberId: number }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId])
 
-  useLiveUpdates((event) => { if (event === 'attendance-changed') load(true) })
+  useLiveUpdates((event) => { if (event === 'attendance-changed' || event === 'training-unavailability-changed') load(true) })
 
   if (loading) return <p className="text-brand-text-muted text-sm p-4">Laden…</p>
   if (error) return <p className="text-brand-danger text-sm p-4">{error}</p>

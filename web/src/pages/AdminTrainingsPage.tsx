@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Dumbbell, AlertTriangle, X } from 'lucide-react'
+import { Plus, Trash2, Edit2, ChevronDown, ChevronRight, Dumbbell, AlertTriangle, X, Ban } from 'lucide-react'
 import { api } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 import VenuePicker from '../components/VenuePicker'
@@ -40,6 +40,16 @@ interface Series {
   rsvp_default_players: RsvpDefault
   rsvp_default_extended: RsvpDefault
   rsvp_require_reason: number
+}
+
+interface Unavailability {
+  id: number
+  member_id: number
+  member_name: string
+  start_date: string | null
+  end_date: string | null
+  reason: string
+  created_at: string
 }
 
 interface Team { id: number; name: string; age_class: string; gender: string; team_number: number; group_count: number }
@@ -106,6 +116,10 @@ export default function AdminTrainingsPage() {
   const [seasons, setSeasons] = useState<Season[]>([])
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
   const [expandedSeries, setExpandedSeries] = useState<Set<number>>(new Set())
+  const [unavailBySeries, setUnavailBySeries] = useState<Record<number, Unavailability[]>>({})
+  const [membersByTeam, setMembersByTeam] = useState<Record<number, { id: number; name: string }[]>>({})
+  const [abmeldModal, setAbmeldModal] = useState<{ seriesId: number; teamId: number } | null>(null)
+  const [abmeldForm, setAbmeldForm] = useState<{ member_id: number; start_date: string; end_date: string; reason: string }>({ member_id: 0, start_date: '', end_date: '', reason: '' })
 
   const [seriesModal, setSeriesModal] = useState<SeriesModal | null>(null)
   const [editScope, setEditScope] = useState<'all' | 'this_and_following'>('this_and_following')
@@ -144,7 +158,30 @@ export default function AdminTrainingsPage() {
     loadStandalone()
   }, [])
 
-  useLiveUpdates(event => { if (event === 'trainings') { loadSeries(); loadStandalone() } })
+  const loadUnavail = (seriesId: number) =>
+    api.get(`/training-series/${seriesId}/unavailabilities`).then(r =>
+      setUnavailBySeries(prev => ({ ...prev, [seriesId]: r.data?.items ?? [] })))
+
+  // Spielerliste des Teams für den Abmelde-Picker: Kader-Mitglieder (regulär +
+  // erweitert) der Saison der Serie. Wird pro Team einmal geladen und gecacht.
+  const loadTeamMembers = (teamId: number, seasonId: number) => {
+    if (membersByTeam[teamId]) return
+    api.get(`/kader?season_id=${seasonId}`).then(r => {
+      const kaders = Array.isArray(r.data) ? r.data : []
+      const k = kaders.find((x: { team_id: number }) => x.team_id === teamId)
+      const raw: { id: number; name: string }[] = k ? [...(k.members ?? []), ...(k.extended_members ?? [])] : []
+      const seen = new Set<number>()
+      const members = raw.filter(m => (seen.has(m.id) ? false : (seen.add(m.id), true))).map(m => ({ id: m.id, name: m.name }))
+      setMembersByTeam(prev => ({ ...prev, [teamId]: members }))
+    })
+  }
+
+  useLiveUpdates(event => {
+    if (event === 'trainings') { loadSeries(); loadStandalone() }
+    else if (event === 'training-unavailability-changed') {
+      setUnavailBySeries(prev => { Object.keys(prev).forEach(k => loadUnavail(Number(k))); return prev })
+    }
+  })
 
   const openNewSeries = () => {
     setError('')
@@ -254,13 +291,53 @@ export default function AdminTrainingsPage() {
     loadStandalone()
   }
 
-  const toggleExpand = (id: number) => {
+  const toggleExpand = (s: Series) => {
     setExpandedSeries(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      if (next.has(s.id)) next.delete(s.id)
+      else { next.add(s.id); loadUnavail(s.id) }
       return next
     })
   }
+
+  const openAbmeldModal = (s: Series) => {
+    setError('')
+    loadTeamMembers(s.team_id, s.season_id)
+    setAbmeldForm({ member_id: 0, start_date: '', end_date: '', reason: '' })
+    setAbmeldModal({ seriesId: s.id, teamId: s.team_id })
+  }
+
+  const submitAbmeldung = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!abmeldModal) return
+    if (!abmeldForm.member_id) { setError('Bitte Spieler wählen.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await api.post(`/training-series/${abmeldModal.seriesId}/unavailabilities`, {
+        member_id: abmeldForm.member_id,
+        start_date: abmeldForm.start_date || null,
+        end_date: abmeldForm.end_date || null,
+        reason: abmeldForm.reason,
+      })
+      await loadUnavail(abmeldModal.seriesId)
+      setAbmeldModal(null)
+    } catch (e) {
+      setError(errorMessage(e, 'Fehler beim Abmelden.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteUnavail = async (seriesId: number, uid: number) => {
+    await api.delete(`/training-series/${seriesId}/unavailabilities/${uid}`)
+    loadUnavail(seriesId)
+  }
+
+  const fmtUnavailPeriod = (u: Unavailability) =>
+    !u.start_date && !u.end_date
+      ? 'dauerhaft'
+      : `${u.start_date ?? '…'} – ${u.end_date ?? 'unbefristet'}`
 
   return (
     <div className="max-w-3xl">
@@ -281,7 +358,7 @@ export default function AdminTrainingsPage() {
         ))}
       </div>
 
-      {error && !seriesModal && !sessionModal && (
+      {error && !seriesModal && !sessionModal && !abmeldModal && (
         <div className="mb-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{error}</span>
@@ -357,7 +434,7 @@ export default function AdminTrainingsPage() {
             <div className="space-y-3">
               {series.map(s => (
                 <div key={s.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
-                  <div className="p-4 cursor-pointer hover:bg-white/40 transition-colors" onClick={() => toggleExpand(s.id)}>
+                  <div className="p-4 cursor-pointer hover:bg-white/40 transition-colors" onClick={() => toggleExpand(s)}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
                         {expandedSeries.has(s.id)
@@ -386,6 +463,45 @@ export default function AdminTrainingsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {expandedSeries.has(s.id) && (
+                    <div className="border-t border-brand-border-subtle px-4 py-3 bg-white/40">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <h3 className="text-sm font-semibold text-brand-text flex items-center gap-1.5">
+                          <Ban className="w-4 h-4 text-brand-text-muted" /> Dauerhaft abgemeldete Spieler
+                        </h3>
+                        <button
+                          onClick={() => openAbmeldModal(s)}
+                          className="bg-brand-yellow text-brand-black rounded-md px-3 py-2.5 sm:py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                        >
+                          Spieler abmelden
+                        </button>
+                      </div>
+                      {(unavailBySeries[s.id]?.length ?? 0) === 0 ? (
+                        <p className="text-xs text-brand-text-muted py-1">Kein Spieler dauerhaft abgemeldet.</p>
+                      ) : (
+                        <ul className="divide-y divide-brand-border-subtle">
+                          {unavailBySeries[s.id]!.map(u => (
+                            <li key={u.id} className="py-2 flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm text-brand-text">{u.member_name}</p>
+                                <p className="text-xs text-brand-text-muted">
+                                  {fmtUnavailPeriod(u)}{u.reason ? ` · ${u.reason}` : ''}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => deleteUnavail(s.id, u.id)}
+                                aria-label="Wieder anmelden"
+                                className="p-2 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger-light rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -567,6 +683,70 @@ export default function AdminTrainingsPage() {
                   {saving ? 'Speichern…' : isNewSeries ? 'Serie anlegen' : 'Speichern'}
                 </button>
                 <button type="button" onClick={() => setSeriesModal(null)}
+                  className="bg-white border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors">
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* === ABMELDE MODAL === */}
+      {abmeldModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setAbmeldModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-brand-text text-lg">Spieler abmelden</h2>
+              <button onClick={() => setAbmeldModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={submitAbmeldung} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-brand-text-muted mb-1">Spieler</label>
+                <select required value={abmeldForm.member_id}
+                  onChange={e => setAbmeldForm(f => ({ ...f, member_id: Number(e.target.value) }))}
+                  className={INPUT}>
+                  <option value={0}>– Spieler wählen –</option>
+                  {(membersByTeam[abmeldModal.teamId] ?? []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-muted mb-1">Von (optional)</label>
+                  <input type="date" value={abmeldForm.start_date}
+                    onChange={e => setAbmeldForm(f => ({ ...f, start_date: e.target.value }))}
+                    className={INPUT} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-muted mb-1">Bis (optional)</label>
+                  <input type="date" value={abmeldForm.end_date}
+                    onChange={e => setAbmeldForm(f => ({ ...f, end_date: e.target.value }))}
+                    className={INPUT} />
+                </div>
+              </div>
+              <p className="text-xs text-brand-text-muted -mt-2">Ohne Zeitraum gilt die Abmeldung dauerhaft.</p>
+              <div>
+                <label className="block text-xs font-medium text-brand-text-muted mb-1">Grund (optional)</label>
+                <input value={abmeldForm.reason}
+                  onChange={e => setAbmeldForm(f => ({ ...f, reason: e.target.value }))}
+                  className={INPUT} placeholder="z.B. spielt A-Jugend" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="submit" disabled={saving}
+                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                  {saving ? 'Speichern…' : 'Abmelden'}
+                </button>
+                <button type="button" onClick={() => setAbmeldModal(null)}
                   className="bg-white border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors">
                   Abbrechen
                 </button>

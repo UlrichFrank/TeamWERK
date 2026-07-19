@@ -58,6 +58,10 @@ Unter **„Kalender"** findest du alle Spiele und Termine. Du siehst:
 - Heim- oder Auswärtsspiel
 - Verknüpfte Dienst-Slots (falls vorhanden)
 
+### Dauerhaft abgemeldet
+
+Falls du an einer wiederkehrenden Trainingsserie dauerhaft nicht teilnehmen kannst (z. B. weil du fest in einem anderen Team mittrainierst), kann dein Trainer dich für diese Serie **abmelden**. Bei den betroffenen Terminen erscheinst du dann mit dem Hinweis **„dauerhaft abgemeldet"**; du kannst dort keine Rückmeldung geben, und diese Termine zählen **nicht** in deine Anwesenheitsstatistik. Die Abmeldung pflegt ausschließlich dein Trainer — sprich ihn an, wenn etwas nicht stimmt.
+
 ---
 
 ## Dienstbörse

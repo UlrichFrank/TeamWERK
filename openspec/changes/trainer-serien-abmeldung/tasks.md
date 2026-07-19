@@ -43,20 +43,20 @@
 
 ## 9. Frontend — API & Serien-Bearbeitung
 
-- [ ] 9.1 API-Calls in `web/src/lib/` bzw. der Trainings-Seite (`GET/POST/DELETE .../unavailabilities`)
-- [ ] 9.2 Serien-Bearbeitung: Abschnitt „Dauerhaft abgemeldete Spieler" (Liste + „Spieler abmelden"-Modal mit Spielerauswahl, optional Zeitraum + Grund; brand-Tokens, lucide-Icons, Touch-Targets ≥ 44px)
-- [ ] 9.3 `useLiveUpdates((e) => { if (e === 'training-unavailability-changed') reload() })`
+- [x] 9.1 API-Calls inline in der Trainings-Seite (`GET/POST/DELETE .../unavailabilities`)
+- [x] 9.2 Serien-Bearbeitung (`AdminTrainingsPage.tsx`): ausklappbarer Abschnitt „Dauerhaft abgemeldete Spieler" (Liste + „Spieler abmelden"-Modal, Spielerauswahl via `/kader`, optional Von/Bis + Grund)
+- [x] 9.3 `useLiveUpdates` reload auf `training-unavailability-changed`
 
 ## 10. Frontend — Termine & Anwesenheit
 
-- [ ] 10.1 In `/termine` (Session-Detail) je Spieler Badge „dauerhaft abgemeldet" + Grund rendern (`<CalendarX>`/`<Ban>`), An-/Abwesenheits-Toggle für abgemeldete Spieler sperren; Trainer bekommt Lösch-/Abmelden-Aktion (Prefill Serie=aktuell, start=heute)
-- [ ] 10.2 Anwesenheits-Sichten: Kategorie `unavailable` in Termin-Liste rendern; Fußnote „* dauerhaft abgemeldete Spieler zählen für ihre Termine nicht mit"
-- [ ] 10.3 Spieler sieht eigenen Status (read-only, keine Aktion)
+- [x] 10.1 In `/termine` (Session-Detail, `TermineDetailPage.tsx`) je Spieler Badge „dauerhaft abgemeldet" (`<Ban>`) + Grund, Anwesenheits-Toggle für abgemeldete Spieler gesperrt; Trainer bekommt Inline-Aktion „abmelden" (start=heute) / „wieder anmelden" (DELETE via `unavailable.id`), nur bei Serien-Terminen
+- [x] 10.2 Anwesenheits-Sichten (`AttendanceStatsView.tsx`): Kategorie `unavailable` ("abgemeldet") in Termin-Liste + Fußnote „* dauerhaft abgemeldete Spieler zählen für ihre Termine nicht mit"
+- [x] 10.3 Spieler sieht eigenen Status (read-only, keine Aktion) — Badge ohne Aktion für Nicht-Trainer
 
 ## 11. Abschluss
 
 - [ ] 11.1 `/verify-change` (Build/Test/Lint + Invarianten: Route→Tests, Mutation→Broadcast+useLiveUpdates, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`)
-- [ ] 11.2 Benutzerhandbuch (`docs/anleitung`) um die Serien-Abmeldung ergänzen, falls einschlägig
+- [x] 11.2 Benutzerhandbuch ergänzt: `anleitung-trainer.md` (eigener Abschnitt + Tabellenzeile), `anleitung-spieler.md` + `anleitung-elternteil.md` (Kurzhinweis „dauerhaft abgemeldet")
 
 ## Test-Anforderungen
 
