@@ -845,12 +845,12 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	pushRecipients := push.FilterByPushPref(h.db, h.activeMembers(r, convID, claims.UserID), "chat")
 	title := h.senderName(r, claims.UserID, claims.Email)
+	if convType == "group" && strings.TrimSpace(convName.String) != "" {
+		title = title + " (" + strings.TrimSpace(convName.String) + ")"
+	}
 	preview := truncate(body.Body, 80)
 	if preview == "" {
 		preview = "Bild"
-	}
-	if convType == "group" && strings.TrimSpace(convName.String) != "" {
-		preview = strings.TrimSpace(convName.String) + "\n" + preview
 	}
 	for _, uid := range pushRecipients {
 		badge, err := ComputeUnreadForUser(h.db, uid)

@@ -21,10 +21,10 @@ func setUserName(t *testing.T, db *sql.DB, uid int, first, last string) {
 	}
 }
 
-// TestSendMessage_GroupChatBodyContainsGroupName — In Gruppenchats bleibt der
-// Push-Titel der Autor; der Body zeigt den Gruppennamen als erste Zeile über
-// dem Nachrichtentext.
-func TestSendMessage_GroupChatBodyContainsGroupName(t *testing.T) {
+// TestSendMessage_GroupChatTitleContainsGroupName — In Gruppenchats hängt der
+// Push-Titel den Gruppennamen in Klammern an den Autor an; der Body bleibt
+// der reine Nachrichtentext.
+func TestSendMessage_GroupChatTitleContainsGroupName(t *testing.T) {
 	db := testutil.NewDB(t)
 	me := testutil.CreateUser(t, db, "standard")
 	you := testutil.CreateUser(t, db, "standard")
@@ -49,10 +49,10 @@ func TestSendMessage_GroupChatBodyContainsGroupName(t *testing.T) {
 
 	select {
 	case c := <-calls:
-		if want := "Ulrich Frank"; c.title != want {
+		if want := "Ulrich Frank (Vorstand)"; c.title != want {
 			t.Fatalf("title = %q, want %q", c.title, want)
 		}
-		if want := "Vorstand\nhallo"; c.body != want {
+		if want := "hallo"; c.body != want {
 			t.Fatalf("body = %q, want %q", c.body, want)
 		}
 	case <-time.After(2 * time.Second):
