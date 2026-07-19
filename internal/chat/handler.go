@@ -829,7 +829,8 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// For direct chats: restore any member who had left so they receive the SSE
 	var convType string
-	h.db.QueryRowContext(r.Context(), `SELECT type FROM conversations WHERE id = ?`, convID).Scan(&convType)
+	var convName sql.NullString
+	h.db.QueryRowContext(r.Context(), `SELECT type, name FROM conversations WHERE id = ?`, convID).Scan(&convType, &convName)
 	if convType == "direct" {
 		h.db.ExecContext(r.Context(),
 			`UPDATE conversation_members SET left_at = NULL WHERE conversation_id = ? AND left_at IS NOT NULL`,
@@ -844,6 +845,9 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	pushRecipients := push.FilterByPushPref(h.db, h.activeMembers(r, convID, claims.UserID), "chat")
 	title := h.senderName(r, claims.UserID, claims.Email)
+	if convType == "group" && strings.TrimSpace(convName.String) != "" {
+		title = title + " - " + strings.TrimSpace(convName.String)
+	}
 	preview := truncate(body.Body, 80)
 	if preview == "" {
 		preview = "Bild"
