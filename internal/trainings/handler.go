@@ -924,6 +924,7 @@ type sessionListItem struct {
 	MyRSVPIsDefault     bool             `json:"my_rsvp_is_default,omitempty"`
 	MyRSVPLocked        bool             `json:"my_rsvp_locked"`
 	MyReason            *string          `json:"my_reason,omitempty"`
+	AmIParticipant      bool             `json:"am_i_participant"`
 	ChildrenRSVP        []childRSVP      `json:"children_rsvp,omitempty"`
 	RsvpDefaultPlayers  string           `json:"rsvp_default_players"`
 	RsvpDefaultExtended string           `json:"rsvp_default_extended"`
@@ -1055,8 +1056,9 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// args für die Items-Query: 6 memberID-Spalten-Args (explicit_rsvp, default-player,
-	// default-extended, default-trainer, my_rsvp_locked, my_reason) + whereArgs + LIMIT/OFFSET.
-	args := append([]any{memberID, memberID, memberID, memberID, memberID, memberID}, whereArgs...)
+	// default-extended, default-trainer, my_rsvp_locked, my_reason) + 3 für am_i_participant
+	// + whereArgs + LIMIT/OFFSET.
+	args := append([]any{memberID, memberID, memberID, memberID, memberID, memberID, memberID, memberID, memberID}, whereArgs...)
 
 	query := fmt.Sprintf(`
 		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
@@ -1102,6 +1104,11 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		       END AS default_rsvp,
 		       (SELECT absence_id IS NOT NULL FROM training_responses WHERE training_id = ts.id AND member_id = ? LIMIT 1),
 		       (SELECT reason FROM training_responses WHERE training_id = ts.id AND member_id = ?) AS explicit_reason,
+		       CASE WHEN
+		           EXISTS (SELECT 1 FROM player_memberships pmP WHERE pmP.member_id=? AND pmP.team_id=ts.team_id AND pmP.season_id=ts.season_id)
+		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.team_id=ts.team_id AND kEP.season_id=ts.season_id)
+		        OR EXISTS (SELECT 1 FROM kader_trainers ktP JOIN kader kTP ON kTP.id=ktP.kader_id WHERE ktP.member_id=? AND kTP.team_id=ts.team_id AND kTP.season_id=ts.season_id)
+		       THEN 1 ELSE 0 END AS am_i_participant,
 		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
@@ -1133,12 +1140,14 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		var seriesID sql.NullInt64
 		var explicitRSVP, defaultRSVP, explicitReason sql.NullString
 		var myRSVPLocked sql.NullInt64
+		var amIParticipant int
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		err := rows.Scan(
 			&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 			&s.Note, &s.Status, &s.CancelReason,
 			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP, &myRSVPLocked, &explicitReason,
+			&amIParticipant,
 			&s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 		if err != nil {
@@ -1161,6 +1170,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			s.MyRSVPIsDefault = true
 		}
 		s.MyRSVPLocked = myRSVPLocked.Valid && myRSVPLocked.Int64 == 1
+		s.AmIParticipant = amIParticipant == 1
 		if vID.Valid {
 			s.Venue = &sessionVenueRef{
 				ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
@@ -1215,6 +1225,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	var s sessionListItem
 	var seriesID sql.NullInt64
 	var explicitRSVP, defaultRSVP sql.NullString
+	var amIParticipant int
 	var vID sql.NullInt64
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err = h.db.QueryRowContext(r.Context(), `
@@ -1260,15 +1271,21 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		           THEN NULLIF(ts.rsvp_default_extended, 'none')
 		         ELSE NULL
 		       END,
+		       CASE WHEN
+		           EXISTS (SELECT 1 FROM player_memberships pmP WHERE pmP.member_id=? AND pmP.team_id=ts.team_id AND pmP.season_id=ts.season_id)
+		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.team_id=ts.team_id AND kEP.season_id=ts.season_id)
+		        OR EXISTS (SELECT 1 FROM kader_trainers ktP JOIN kader kTP ON kTP.id=ktP.kader_id WHERE ktP.member_id=? AND kTP.team_id=ts.team_id AND kTP.season_id=ts.season_id)
+		       THEN 1 ELSE 0 END AS am_i_participant,
 		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
 		LEFT JOIN teams t ON t.id = ts.team_id
 		LEFT JOIN venues v ON v.id = ts.venue_id
-		WHERE ts.id = ?`, memberID, memberID, memberID, sessionID).Scan(
+		WHERE ts.id = ?`, memberID, memberID, memberID, memberID, memberID, memberID, sessionID).Scan(
 		&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 		&s.Note, &s.Status, &s.CancelReason,
 		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP,
+		&amIParticipant,
 		&s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 		&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if err == sql.ErrNoRows {
@@ -1291,6 +1308,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		s.MyRSVP = &v
 		s.MyRSVPIsDefault = true
 	}
+	s.AmIParticipant = amIParticipant == 1
 	if vID.Valid {
 		s.Venue = &sessionVenueRef{
 			ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
