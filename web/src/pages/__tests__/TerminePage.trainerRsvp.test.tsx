@@ -50,13 +50,13 @@ function renderTrainerElternteil(session: Record<string, unknown>) {
 }
 
 describe('TerminePage — Trainer-RSVP-Buttons', () => {
-  test('Trainer eines Team-Termins (my_rsvp=confirmed) sieht Buttons', async () => {
-    renderTrainer({ ...baseSession, my_rsvp: 'confirmed', my_rsvp_is_default: true })
+  test('Trainer eines Team-Termins (am_i_participant=true) sieht Buttons', async () => {
+    renderTrainer({ ...baseSession, my_rsvp: 'confirmed', my_rsvp_is_default: true, am_i_participant: true })
     expect(await screen.findByText('Zusagen')).not.toBeNull()
   })
 
-  test('Trainer ohne Teilnahme am Termin (my_rsvp=null) sieht keine Buttons', async () => {
-    renderTrainer({ ...baseSession, my_rsvp: null })
+  test('Trainer ohne Teilnahme am Termin (am_i_participant=false) sieht keine Buttons', async () => {
+    renderTrainer({ ...baseSession, my_rsvp: null, am_i_participant: false })
     await screen.findByText('18:00 – 19:30')
     expect(screen.queryByText('Zusagen')).toBeNull()
   })
@@ -66,6 +66,7 @@ describe('TerminePage — Trainer-RSVP-Buttons', () => {
       ...baseSession,
       my_rsvp: 'confirmed',
       my_rsvp_is_default: true,
+      am_i_participant: true,
       children_rsvp: [{ member_id: 99, name: 'Lias Muster', rsvp: null }],
     })
     // Eigene Zeile hat Label "Ich" und Buttons
@@ -80,6 +81,7 @@ describe('TerminePage — Trainer-RSVP-Buttons', () => {
       ...baseSession,
       my_rsvp: 'confirmed',
       my_rsvp_is_default: true,
+      am_i_participant: true,
       // kein children_rsvp → Kind nicht im Team
     })
     expect(await screen.findByText('Zusagen')).not.toBeNull()

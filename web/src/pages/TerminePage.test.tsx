@@ -22,6 +22,7 @@ function trainingSession(overrides: Record<string, unknown>) {
     declined_count: 1,
     maybe_count: 0,
     my_rsvp: 'declined',
+    am_i_participant: true,
     rsvp_default_players: 'none',
     rsvp_default_extended: 'none',
     rsvp_require_reason: 1,
@@ -83,6 +84,7 @@ describe('TerminePage — eigener Absagegrund', () => {
     seedRoutes([
       trainingSession({
         my_rsvp: null,
+        am_i_participant: false,
         children_rsvp: [
           { member_id: 42, name: 'Anna', rsvp: 'declined', reason: 'Krank' },
         ],
@@ -90,5 +92,31 @@ describe('TerminePage — eigener Absagegrund', () => {
     ])
     renderPage()
     await waitFor(() => expect(screen.getByText('Krank')).toBeTruthy())
+  })
+})
+
+// Regression: Spieler im Kader ohne Response bei Default=none sieht drei
+// (inaktive) RSVP-Buttons — nicht: gar keine Buttons. Deckt den bisherigen
+// Bug ab, dass showOwn an my_rsvp !== null gekoppelt war.
+describe('TerminePage — Buttons sichtbar bei am_i_participant=true (Default=none)', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+  })
+
+  test('Spieler im Kader ohne Response → drei Buttons sichtbar, keiner aktiv', async () => {
+    seedRoutes([trainingSession({ my_rsvp: null, am_i_participant: true })])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Zusagen')).toBeTruthy())
+    expect(screen.getByText('Vielleicht')).toBeTruthy()
+    expect(screen.getByText('Absagen')).toBeTruthy()
+  })
+
+  test('Fremder Nutzer (kein Kader, kein Elternteil) → keine Buttons', async () => {
+    seedRoutes([trainingSession({ my_rsvp: null, am_i_participant: false })])
+    renderPage()
+    // Karte muss trotzdem rendern
+    await waitFor(() => expect(screen.getByText('Training')).toBeTruthy())
+    expect(screen.queryByText('Zusagen')).toBeNull()
   })
 })

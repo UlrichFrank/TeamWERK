@@ -53,6 +53,7 @@ interface Session {
   my_rsvp: string | null
   my_rsvp_is_default?: boolean
   my_reason?: string
+  am_i_participant: boolean
   children_rsvp?: ChildRSVP[]
   rsvp_default_players: RsvpDefault
   rsvp_default_extended: RsvpDefault
@@ -78,6 +79,7 @@ interface Game {
   my_rsvp: string | null
   my_rsvp_is_default?: boolean
   my_reason?: string
+  am_i_participant: boolean
   children_rsvp?: ChildRSVP[]
   rsvp_default_players: RsvpDefault
   rsvp_default_extended: RsvpDefault
@@ -173,7 +175,6 @@ function RsvpButton({ label, icon, active, activeClass, disabled, onClick }: {
 export default function TerminePage() {
   const { user, hasCapability } = useAuth()
   const navigate = useNavigate()
-  const isTrainer = hasCapability('manage_trainings')
   const isParent = user?.isParent === true
   // Override für RSVP-Cutoff: admin/vorstand/trainer/sportliche_leitung dürfen
   // jederzeit pflegen. `manage_games` deckt genau diese vier ab.
@@ -517,9 +518,9 @@ export default function TerminePage() {
                     )}
                   </div>
 
-                  {s.status === 'active' && (!isTrainer || s.my_rsvp !== null || isParent) && (() => {
+                  {s.status === 'active' && (s.am_i_participant || isParent) && (() => {
                     const cutoffLocked = !canOverrideRsvpCutoff && !!s.rsvp_locks_at && Date.now() >= new Date(s.rsvp_locks_at).getTime()
-                    const showOwn = s.my_rsvp !== null
+                    const showOwn = s.am_i_participant
                     const childRows = isParent ? (s.children_rsvp ?? []) : []
                     return (
                       <div className="mt-3 space-y-2" onClick={e => e.stopPropagation()}>
@@ -623,9 +624,9 @@ export default function TerminePage() {
                   </div>
                 </div>
 
-                {(!isTrainer || g.my_rsvp !== null || isParent) && (() => {
+                {(g.am_i_participant || isParent) && (() => {
                   const cutoffLocked = !canOverrideRsvpCutoff && !!g.rsvp_locks_at && Date.now() >= new Date(g.rsvp_locks_at).getTime()
-                  const showOwn = g.my_rsvp !== null
+                  const showOwn = g.am_i_participant
                   const childRows = isParent ? (g.children_rsvp ?? []) : []
                   return (
                     <div className="mt-3 space-y-2" onClick={e => e.stopPropagation()}>
