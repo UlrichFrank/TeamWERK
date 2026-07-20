@@ -1935,6 +1935,7 @@ type childRSVP struct {
 	Name     string  `json:"name"`
 	RSVP     *string `json:"rsvp"`
 	Reason   *string `json:"reason,omitempty"`
+	Locked   bool    `json:"rsvp_locked"`
 }
 
 type gameVenueRef struct {
@@ -2726,7 +2727,7 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 	// applies (rsvp_default_players for regular, rsvp_default_extended for
 	// extended); 'none' leaves the RSVP empty.
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_players, gr.reason
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_players, gr.reason, gr.absence_id IS NOT NULL AS locked
 		FROM game_teams gt
 		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
@@ -2739,7 +2740,7 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 
 		UNION
 
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_extended, gr.reason
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_extended, gr.reason, gr.absence_id IS NOT NULL AS locked
 		FROM game_teams gt
 		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
@@ -2769,7 +2770,9 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 		var c childRSVP
 		var rsvp, reason sql.NullString
 		var roleDefault string
-		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason)
+		var locked sql.NullInt64
+		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason, &locked)
+		c.Locked = locked.Valid && locked.Int64 == 1
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s

@@ -28,12 +28,19 @@
 - [ ] 4.3 `web/src/pages/TermineDetailPage.tsx` analog prüfen und anpassen
 - [ ] 4.4 Vitest-Suite in `web/src/pages/TerminePage.test.tsx` (und ggf. Detail-Test) grün halten / erweitern um „Buttons sichtbar bei am_i_participant=true und my_rsvp=null"
 
-## 5. Frontend — Cutoff-Texte
+## 5. Frontend — Absence-Lock respektieren
+
+- [ ] 5.0 `web/src/pages/TerminePage.tsx`: `my_rsvp_locked?: boolean` in Typen `Session`/`Game`
+- [ ] 5.0.1 An beiden RSVP-Zweigen: `absenceLocked = s.my_rsvp_locked === true`; `disabled={cutoffLocked || absenceLocked || rsvpLoading===…}`
+- [ ] 5.0.2 Notice-Text „Durch Abwesenheit gesperrt — Urlaub bearbeiten" bei `absenceLocked=true` (Vorrang vor `cutoffLocked`)
+- [ ] 5.0.3 Vitest-Regression: Payload mit `my_rsvp_locked=true, my_rsvp='declined'` → drei Buttons visible aber disabled, Notice sichtbar
+
+## 6. Frontend — Cutoff-Texte
 
 - [ ] 5.1 `grep -rn "18 Stunden\|18h" web/src` — wenn Text vorkommt, für Games auf „2 Stunden" umstellen
 - [ ] 5.2 `RsvpLockNotice`-Text prüfen (nutzt evtl. dynamisch das API-`locks_at`, dann keine Textänderung nötig)
 
-## 6. Verifikation
+## 7. Verifikation
 
 - [ ] 6.1 `/verify-change` durchlaufen (go vet/test/lint, pnpm build/test/lint, openspec validate)
 - [ ] 6.2 `openspec validate rsvp-teilnehmer-sichtbarkeit --strict`

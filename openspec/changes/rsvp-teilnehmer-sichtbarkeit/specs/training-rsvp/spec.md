@@ -6,6 +6,8 @@ Endpoints `GET /api/training-sessions` und `GET /api/training-sessions/{id}` SHA
 
 Die Frontend-Anzeige der eigenen RSVP-Buttons auf `/termine` SHALL an `am_i_participant` gebunden sein — **nicht** an `my_rsvp !== null`. Bei erreichtem 2h-Cutoff bleiben die Buttons sichtbar und sind `disabled` mit erklärender Notice; Cutoff-Berechtigte (admin/vorstand/trainer/sportliche_leitung) sind davon ausgenommen.
 
+Ist die eigene Response durch eine Abwesenheit auto-declined (Backend-Flag `my_rsvp_locked=true` bzw. `training_responses.absence_id IS NOT NULL`), SHALL das Frontend die drei Buttons sichtbar, aber `disabled` rendern und den Hinweis „Durch Abwesenheit gesperrt — Urlaub bearbeiten" anzeigen. Der Backend-Handler lehnt Änderungen an einer absence-gelockten Response weiterhin mit HTTP 403 ab; der Nutzer muss stattdessen die Abwesenheit bearbeiten oder löschen.
+
 Für Eltern gilt: Die Kind-Zeilen (`children_rsvp`) sind bereits heute kader-basiert und bleiben unverändert. Ein Elternteil ohne eigene Kader-Zugehörigkeit sieht `am_i_participant=false` für sich selbst (keine Eigen-Buttons), aber weiterhin die Buttons pro Kind.
 
 #### Scenario: Spieler ohne Response sieht `am_i_participant=true`
@@ -33,3 +35,7 @@ Für Eltern gilt: Die Kind-Zeilen (`children_rsvp`) sind bereits heute kader-bas
 #### Scenario: Spieler-Buttons sichtbar aber gesperrt nach Cutoff
 - **WHEN** ein Spieler mit `am_i_participant=true` eine Session innerhalb der letzten 2 Stunden vor Beginn aufruft und den Cutoff nicht überschreiben darf
 - **THEN** rendert das Frontend die drei RSVP-Buttons sichtbar, aber `disabled`, mit erklärender Notice
+
+#### Scenario: Spieler-Buttons sichtbar aber gesperrt bei Abwesenheit
+- **WHEN** ein Spieler mit `am_i_participant=true` einen Urlaub eingetragen hat, der die Session überlappt (`my_rsvp_locked=true`, `my_rsvp='declined'`)
+- **THEN** rendert das Frontend die drei RSVP-Buttons sichtbar, aber `disabled`, mit dem Hinweis „Durch Abwesenheit gesperrt — Urlaub bearbeiten"

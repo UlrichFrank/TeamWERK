@@ -120,3 +120,51 @@ describe('TerminePage — Buttons sichtbar bei am_i_participant=true (Default=no
     expect(screen.queryByText('Zusagen')).toBeNull()
   })
 })
+
+// Regression: eingetragener Urlaub → auto-declined via absence_id, Backend liefert
+// my_rsvp='declined' + my_rsvp_locked=true. Frontend rendert alle drei Buttons
+// sichtbar aber disabled und zeigt den Hinweis „Durch Abwesenheit gesperrt".
+describe('TerminePage — Absence-Lock (my_rsvp_locked=true)', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+  })
+
+  test('Spieler mit Urlaub sieht drei disabled Buttons + Hinweis', async () => {
+    seedRoutes([
+      trainingSession({
+        my_rsvp: 'declined',
+        my_rsvp_locked: true,
+        am_i_participant: true,
+        my_reason: 'Urlaub',
+      }),
+    ])
+    renderPage()
+    const zusagen = await screen.findByRole('button', { name: /Zusagen/ })
+    expect(zusagen).toBeTruthy()
+    expect((zusagen as HTMLButtonElement).disabled).toBe(true)
+    const vielleicht = screen.getByRole('button', { name: /Vielleicht/ })
+    expect((vielleicht as HTMLButtonElement).disabled).toBe(true)
+    const absagen = screen.getByRole('button', { name: /Absagen/ })
+    expect((absagen as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(/Durch Abwesenheit gesperrt/)).toBeTruthy()
+  })
+
+  test('Kind mit Urlaub: Kind-Buttons sind disabled + Hinweis unter Kind', async () => {
+    authState.is_parent = true
+    seedRoutes([
+      trainingSession({
+        my_rsvp: null,
+        am_i_participant: false,
+        children_rsvp: [
+          { member_id: 42, name: 'Anna', rsvp: 'declined', reason: 'Krank', rsvp_locked: true },
+        ],
+      }),
+    ])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Anna')).toBeTruthy())
+    const zusagen = screen.getByRole('button', { name: /Zusagen/ })
+    expect((zusagen as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(/Durch Abwesenheit gesperrt/)).toBeTruthy()
+  })
+})

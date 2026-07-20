@@ -25,6 +25,7 @@ interface ChildRSVP {
   name: string
   rsvp: string | null
   reason?: string
+  rsvp_locked?: boolean
 }
 
 interface VenueRef {
@@ -52,6 +53,7 @@ interface Session {
   maybe_count: number
   my_rsvp: string | null
   my_rsvp_is_default?: boolean
+  my_rsvp_locked?: boolean
   my_reason?: string
   am_i_participant: boolean
   children_rsvp?: ChildRSVP[]
@@ -78,6 +80,7 @@ interface Game {
   maybe_count: number
   my_rsvp: string | null
   my_rsvp_is_default?: boolean
+  my_rsvp_locked?: boolean
   my_reason?: string
   am_i_participant: boolean
   children_rsvp?: ChildRSVP[]
@@ -520,6 +523,11 @@ export default function TerminePage() {
 
                   {s.status === 'active' && (s.am_i_participant || isParent) && (() => {
                     const cutoffLocked = !canOverrideRsvpCutoff && !!s.rsvp_locks_at && Date.now() >= new Date(s.rsvp_locks_at).getTime()
+                    // Absence-Lock (auto-decline durch Urlaub) sperrt sowohl die Änderung als
+                    // auch die Cutoff-Override-Rechte — Trainer/Vorstand können ebenfalls nicht
+                    // per Klick überschreiben, sondern müssen die Abwesenheit selbst bearbeiten.
+                    const absenceLocked = s.my_rsvp_locked === true
+                    const buttonsDisabled = cutoffLocked || absenceLocked
                     const showOwn = s.am_i_participant
                     const childRows = isParent ? (s.children_rsvp ?? []) : []
                     return (
@@ -530,10 +538,13 @@ export default function TerminePage() {
                               <span className="text-xs font-medium text-brand-text-muted">Ich</span>
                             )}
                             <div className="flex gap-2">
-                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === key} onClick={() => respondTraining(s.id, s.my_rsvp_is_default ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
-                              <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'maybe') : respondTraining(s.id, 'maybe')} />
-                              <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'declined') : respondTraining(s.id, 'declined')} />
+                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondTraining(s.id, s.my_rsvp_is_default ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                              <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'maybe') : respondTraining(s.id, 'maybe')} />
+                              <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'declined') : respondTraining(s.id, 'declined')} />
                             </div>
+                            {absenceLocked && (
+                              <p className="text-xs text-brand-text-muted">Durch Abwesenheit gesperrt — Urlaub bearbeiten</p>
+                            )}
                             {s.my_reason && (s.my_rsvp === 'declined' || s.my_rsvp === 'maybe') && (
                               <p className="text-xs text-brand-text-muted flex items-start gap-1">
                                 <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
@@ -544,6 +555,8 @@ export default function TerminePage() {
                         )}
                         {childRows.map(child => {
                           const childKey = `t-${s.id}-${child.member_id}`
+                          const childAbsenceLocked = child.rsvp_locked === true
+                          const childDisabled = cutoffLocked || childAbsenceLocked
                           const handleChildDecline = (status: 'declined' | 'maybe') =>
                             s.rsvp_require_reason
                               ? openReasonModal('training', s.id, status, child.member_id)
@@ -552,10 +565,13 @@ export default function TerminePage() {
                             <div key={child.member_id} className="space-y-1.5">
                               <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
                               <div className="flex gap-2">
-                                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => respondTraining(s.id, 'confirmed', '', child.member_id)} />
-                                <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
-                                <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
+                                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={childDisabled || rsvpLoading === childKey} onClick={() => respondTraining(s.id, 'confirmed', '', child.member_id)} />
+                                <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
+                                <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                               </div>
+                              {childAbsenceLocked && (
+                                <p className="text-xs text-brand-text-muted">Durch Abwesenheit gesperrt — Urlaub bearbeiten</p>
+                              )}
                               {child.reason && (child.rsvp === 'declined' || child.rsvp === 'maybe') && (
                                 <p className="text-xs text-brand-text-muted flex items-start gap-1">
                                   <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
@@ -626,6 +642,8 @@ export default function TerminePage() {
 
                 {(g.am_i_participant || isParent) && (() => {
                   const cutoffLocked = !canOverrideRsvpCutoff && !!g.rsvp_locks_at && Date.now() >= new Date(g.rsvp_locks_at).getTime()
+                  const absenceLocked = g.my_rsvp_locked === true
+                  const buttonsDisabled = cutoffLocked || absenceLocked
                   const showOwn = g.am_i_participant
                   const childRows = isParent ? (g.children_rsvp ?? []) : []
                   return (
@@ -636,10 +654,13 @@ export default function TerminePage() {
                             <span className="text-xs font-medium text-brand-text-muted">Ich</span>
                           )}
                           <div className="flex gap-2">
-                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp_is_default ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
-                            <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
-                            <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
+                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp_is_default ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                            <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
+                            <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
                           </div>
+                          {absenceLocked && (
+                            <p className="text-xs text-brand-text-muted">Durch Abwesenheit gesperrt — Urlaub bearbeiten</p>
+                          )}
                           {g.my_reason && (g.my_rsvp === 'declined' || g.my_rsvp === 'maybe') && (
                             <p className="text-xs text-brand-text-muted flex items-start gap-1">
                               <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
@@ -650,6 +671,8 @@ export default function TerminePage() {
                       )}
                       {childRows.map(child => {
                         const childKey = `g-${g.id}-${child.member_id}`
+                        const childAbsenceLocked = child.rsvp_locked === true
+                        const childDisabled = cutoffLocked || childAbsenceLocked
                         const handleChildDecline = (status: 'declined' | 'maybe') =>
                           g.rsvp_require_reason
                             ? openReasonModal('game', g.id, status, child.member_id)
@@ -658,10 +681,13 @@ export default function TerminePage() {
                           <div key={child.member_id} className="space-y-1.5">
                             <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
                             <div className="flex gap-2">
-                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => respondGame(g.id, 'confirmed', '', child.member_id)} />
-                              <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
-                              <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={cutoffLocked || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
+                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={childDisabled || rsvpLoading === childKey} onClick={() => respondGame(g.id, 'confirmed', '', child.member_id)} />
+                              <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
+                              <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                             </div>
+                            {childAbsenceLocked && (
+                              <p className="text-xs text-brand-text-muted">Durch Abwesenheit gesperrt — Urlaub bearbeiten</p>
+                            )}
                             {child.reason && (child.rsvp === 'declined' || child.rsvp === 'maybe') && (
                               <p className="text-xs text-brand-text-muted flex items-start gap-1">
                                 <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />

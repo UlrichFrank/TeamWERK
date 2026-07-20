@@ -83,6 +83,8 @@ Endpoints `GET /api/games/my` und `GET /api/games/{id}` SHALL pro Spiel-Objekt e
 
 Die Frontend-Anzeige der eigenen RSVP-Buttons (Zusagen/Vielleicht/Absagen) SHALL an `am_i_participant` gebunden sein — **nicht** an `my_rsvp !== null`. Ist der Cutoff (`rsvp_locks_at`) erreicht und der User nicht Cutoff-berechtigt, bleiben die Buttons sichtbar und sind `disabled` mit einer erklärenden Notice.
 
+Ist die eigene Response durch eine Abwesenheit auto-declined (Backend-Flag `my_rsvp_locked=true` bzw. `game_responses.absence_id IS NOT NULL`), SHALL das Frontend die drei Buttons ebenfalls sichtbar, aber `disabled` rendern und einen Hinweis „Durch Abwesenheit gesperrt — Urlaub bearbeiten" anzeigen. Der Backend-Handler `POST /api/games/{id}/respond` lehnt Änderungen an einer absence-gelockten Response weiterhin mit HTTP 403 ab; der Nutzer muss stattdessen die Abwesenheit bearbeiten oder löschen (Vorrang vor Cutoff, siehe „Absence-Lock hat Vorrang vor Cutoff").
+
 Für Eltern gilt: Die Kind-Zeilen (`children_rsvp`) sind bereits heute kader-basiert und ändern sich nicht. Ein Elternteil ohne eigene Kader-Zugehörigkeit sieht `am_i_participant=false` für sich selbst (keine Eigen-Buttons), aber weiterhin die Buttons pro Kind.
 
 #### Scenario: Spieler ohne Response sieht `am_i_participant=true`
@@ -110,3 +112,8 @@ Für Eltern gilt: Die Kind-Zeilen (`children_rsvp`) sind bereits heute kader-bas
 #### Scenario: Spieler-Buttons sichtbar aber gesperrt nach Cutoff
 - **WHEN** ein Spieler mit `am_i_participant=true` das Spiel innerhalb der letzten 2 Stunden vor Anpfiff aufruft und den Cutoff nicht überschreiben darf
 - **THEN** rendert das Frontend die drei RSVP-Buttons sichtbar, aber `disabled`, mit erklärender Notice
+
+#### Scenario: Spieler-Buttons sichtbar aber gesperrt bei Abwesenheit
+- **WHEN** ein Spieler mit `am_i_participant=true` einen Urlaub eingetragen hat, der das Spiel überlappt, und die Response daher auto-declined mit `absence_id` ist (`my_rsvp_locked=true`)
+- **THEN** rendert das Frontend die drei RSVP-Buttons sichtbar, aber `disabled`, mit dem Hinweis „Durch Abwesenheit gesperrt — Urlaub bearbeiten"
+- **AND** der Absagen-Button ist visuell aktiv (`my_rsvp='declined'`), aber nicht klickbar

@@ -892,6 +892,7 @@ type childRSVP struct {
 	Name     string  `json:"name"`
 	RSVP     *string `json:"rsvp"`
 	Reason   *string `json:"reason,omitempty"`
+	Locked   bool    `json:"rsvp_locked"`
 }
 
 type sessionVenueRef struct {
@@ -1828,7 +1829,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 	// The extended branch excludes members already counted as regular for the same
 	// team/season so a child in both squads appears exactly once (regular wins).
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_players, tr.reason
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_players, tr.reason, tr.absence_id IS NOT NULL AS locked
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_members km ON km.kader_id = k.id
@@ -1839,7 +1840,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 
 		UNION
 
-		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_extended, tr.reason
+		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_extended, tr.reason, tr.absence_id IS NOT NULL AS locked
 		FROM training_sessions ts
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
 		JOIN kader_extended_members kem ON kem.kader_id = k.id
@@ -1866,7 +1867,8 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 		var c childRSVP
 		var rsvp, reason sql.NullString
 		var roleDefault string
-		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason)
+		var locked sql.NullInt64
+		rows.Scan(&sid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason, &locked)
 		if rsvp.Valid {
 			s := rsvp.String
 			c.RSVP = &s
@@ -1878,6 +1880,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 			d := roleDefault
 			c.RSVP = &d
 		}
+		c.Locked = locked.Valid && locked.Int64 == 1
 		bySession[sid] = append(bySession[sid], c)
 	}
 
