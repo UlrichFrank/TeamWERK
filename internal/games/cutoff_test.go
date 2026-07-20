@@ -77,7 +77,7 @@ func TestRespondToGame_Cutoff_PlayerBefore_OK(t *testing.T) {
 	mID := testutil.CreateMember(t, db, uID)
 	addKaderMember(t, db, kaderID, mID)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-14 18:00")) // T-24h
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 15:00")) // T-3h (vor 2h-Cutoff)
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"spieler"})
@@ -89,14 +89,14 @@ func TestRespondToGame_Cutoff_PlayerBefore_OK(t *testing.T) {
 	}
 }
 
-// Spieler 12 h vor Spielbeginn → 422 rsvp_locked.
+// Spieler 30 Minuten vor Spielbeginn → 422 rsvp_locked.
 func TestRespondToGame_Cutoff_PlayerAfter_422(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "standard")
 	mID := testutil.CreateMember(t, db, uID)
 	addKaderMember(t, db, kaderID, mID)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 06:00")) // T-12h
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 17:30")) // T-12h
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"spieler"})
@@ -123,7 +123,7 @@ func TestRespondToGame_Cutoff_PlayerAfter_422(t *testing.T) {
 	}
 }
 
-// Spieler ändert confirmed → declined 12 h vor Spiel → 422, alter Status bleibt.
+// Spieler ändert confirmed → declined 30 min vor Spiel → 422, alter Status bleibt.
 func TestRespondToGame_Cutoff_StatusChange_422(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "standard")
@@ -132,7 +132,7 @@ func TestRespondToGame_Cutoff_StatusChange_422(t *testing.T) {
 	db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, responded_at)
 	         VALUES (?, ?, ?, 'confirmed', datetime('now'))`, gameID, mID, uID)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 06:00"))
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 17:30"))
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"spieler"})
@@ -150,7 +150,7 @@ func TestRespondToGame_Cutoff_StatusChange_422(t *testing.T) {
 	}
 }
 
-// Eltern für Kind 12 h vor Spiel → 422.
+// Eltern für Kind 30 min vor Spiel → 422.
 func TestRespondToGame_Cutoff_ParentAfter_422(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	parentUserID := testutil.CreateUser(t, db, "standard")
@@ -159,7 +159,7 @@ func TestRespondToGame_Cutoff_ParentAfter_422(t *testing.T) {
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`,
 		parentUserID, childMemberID)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 06:00"))
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 17:30"))
 	srv := cutoffServer(t, h)
 
 	token := testutil.TokenWithIsParent(t, parentUserID, "standard", nil, true)
@@ -171,7 +171,7 @@ func TestRespondToGame_Cutoff_ParentAfter_422(t *testing.T) {
 	}
 }
 
-// Trainer 12 h vor Spiel → 204 (Override).
+// Trainer 30 min vor Spiel → 204 (Override).
 func TestRespondToGame_Cutoff_TrainerAfter_OK(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	trainerUserID := testutil.CreateUser(t, db, "standard")
@@ -180,7 +180,7 @@ func TestRespondToGame_Cutoff_TrainerAfter_OK(t *testing.T) {
 	targetMember := testutil.CreateMember(t, db, 0)
 	addKaderMember(t, db, kaderID, targetMember)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 06:00"))
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 17:30"))
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
@@ -192,7 +192,7 @@ func TestRespondToGame_Cutoff_TrainerAfter_OK(t *testing.T) {
 	}
 }
 
-// sportliche_leitung 12 h vor Spiel → 204.
+// sportliche_leitung 30 min vor Spiel → 204.
 func TestRespondToGame_Cutoff_SportlicheLeitung_OK(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "standard")
@@ -201,7 +201,7 @@ func TestRespondToGame_Cutoff_SportlicheLeitung_OK(t *testing.T) {
 	targetMember := testutil.CreateMember(t, db, 0)
 	addKaderMember(t, db, kaderID, targetMember)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 06:00"))
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 17:30"))
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"sportliche_leitung"})
@@ -234,7 +234,7 @@ func TestRespondToGame_Cutoff_VorstandAfterStart_OK(t *testing.T) {
 	}
 }
 
-// Admin (Rolle) ohne Funktion 12 h vor Spiel → 204.
+// Admin (Rolle) ohne Funktion 30 min vor Spiel → 204.
 func TestRespondToGame_Cutoff_AdminAfter_OK(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "admin")
@@ -242,7 +242,7 @@ func TestRespondToGame_Cutoff_AdminAfter_OK(t *testing.T) {
 	targetMember := testutil.CreateMember(t, db, 0)
 	addKaderMember(t, db, kaderID, targetMember)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 06:00"))
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 17:30"))
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "admin", nil)
@@ -254,7 +254,7 @@ func TestRespondToGame_Cutoff_AdminAfter_OK(t *testing.T) {
 	}
 }
 
-// Kassierer ohne weitere Funktion 12 h vor Spiel → 422.
+// Kassierer ohne weitere Funktion 30 min vor Spiel → 422.
 func TestRespondToGame_Cutoff_KassiererAfter_422(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "standard")
@@ -262,7 +262,7 @@ func TestRespondToGame_Cutoff_KassiererAfter_422(t *testing.T) {
 	addClubFunction(t, db, mID, "kassierer")
 	addKaderMember(t, db, kaderID, mID) // damit UserCanSeeGame durchgeht
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 06:00"))
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 17:30"))
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"kassierer"})
@@ -284,7 +284,7 @@ func TestRespondToGame_ForeignMember_Forbidden(t *testing.T) {
 	addKaderMember(t, db, kaderID, mID) // UserCanSeeGame passiert
 	foreign := testutil.CreateMember(t, db, 0)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-14 18:00")) // vor Cutoff
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 15:00")) // vor Cutoff
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"spieler"})
@@ -330,7 +330,7 @@ func TestRespondToGame_Cutoff_AbsenceLockTakesPrecedence_403(t *testing.T) {
 	}
 }
 
-// ListMyGames enthält rsvp_locks_at (Sommerzeit: 18:00 Berlin = 16:00Z, -18h = 22:00Z am Vortag).
+// ListMyGames enthält rsvp_locks_at (Sommerzeit: 18:00 Berlin = 16:00Z, -2h = 14:00Z).
 func TestListMyGames_RsvpLocksAt_Summer(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "standard")
@@ -355,7 +355,7 @@ func TestListMyGames_RsvpLocksAt_Summer(t *testing.T) {
 			break
 		}
 	}
-	if got != "2026-06-14T22:00:00Z" {
+	if got != "2026-06-15T14:00:00Z" {
 		t.Errorf("expected rsvp_locks_at=2026-06-14T22:00:00Z, got %q", got)
 	}
 }
@@ -384,7 +384,7 @@ func TestListGames_RsvpLocksAt(t *testing.T) {
 			break
 		}
 	}
-	if got != "2026-06-14T22:00:00Z" {
+	if got != "2026-06-15T14:00:00Z" {
 		t.Errorf("expected rsvp_locks_at=2026-06-14T22:00:00Z, got %q", got)
 	}
 }
@@ -404,7 +404,7 @@ func TestGetGame_RsvpLocksAt(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&body)
 	g, _ := body["game"].(map[string]any)
 	got, _ := g["rsvp_locks_at"].(string)
-	if got != "2026-06-14T22:00:00Z" {
+	if got != "2026-06-15T14:00:00Z" {
 		t.Errorf("expected rsvp_locks_at=2026-06-14T22:00:00Z, got %q", got)
 	}
 }

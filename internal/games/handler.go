@@ -61,7 +61,7 @@ func (h *Handler) SetNow(now func() time.Time) { h.now = now }
 
 // GameRSVPCutoff: bis dahin (vor Spielbeginn) sind RSVP-Änderungen
 // für Spieler/Eltern erlaubt. Trainer/Vorstand/Admin können auch danach pflegen.
-const GameRSVPCutoff = 18 * time.Hour
+const GameRSVPCutoff = 2 * time.Hour
 
 var berlinTZ = mustLoadBerlin()
 
@@ -737,6 +737,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		} `json:"teams"`
 		TeamDisplayShortCSV string              `json:"team_display_short_csv"`
 		TeamDisplayLongCSV  string              `json:"team_display_long_csv"`
+		AmIParticipant      bool                `json:"am_i_participant"`
 		Can                 policy.GameCanFlags `json:"can"`
 	}
 	var templateIDNull sql.NullInt64
@@ -827,6 +828,23 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		canEdit = trains > 0
 	}
 	g.Can = policy.GameCanFlags{Edit: canEdit, Delete: canEdit, ManageLineup: canEdit}
+
+	// am_i_participant: aufrufender User selbst in Stamm-, Erweitert- oder Trainer-Kader
+	// eines beteiligten Teams für die Spielsaison.
+	var participant int
+	h.db.QueryRowContext(r.Context(), `
+		SELECT CASE WHEN EXISTS (
+		  SELECT 1 FROM game_teams gt
+		  JOIN kader k ON k.team_id = gt.team_id AND k.season_id = ?
+		  JOIN members m ON m.user_id = ?
+		  WHERE gt.game_id = ?
+		    AND (
+		      EXISTS (SELECT 1 FROM kader_members       km  WHERE km.kader_id  = k.id AND km.member_id  = m.id)
+		      OR EXISTS (SELECT 1 FROM kader_extended_members kem WHERE kem.kader_id = k.id AND kem.member_id = m.id)
+		      OR EXISTS (SELECT 1 FROM kader_trainers  kt  WHERE kt.kader_id  = k.id AND kt.member_id  = m.id)
+		    )
+		) THEN 1 ELSE 0 END`, g.SeasonID, claims.UserID, id).Scan(&participant)
+	g.AmIParticipant = participant == 1
 
 	rows, _ := h.db.QueryContext(r.Context(),
 		`SELECT ds.id, dt.name, COALESCE(ds.event_time,''), COALESCE(ds.role_desc,''),
@@ -1947,6 +1965,7 @@ type gameListItem struct {
 	MyRSVPIsDefault     bool          `json:"my_rsvp_is_default,omitempty"`
 	MyRSVPLocked        bool          `json:"my_rsvp_locked"`
 	MyReason            *string       `json:"my_reason,omitempty"`
+	AmIParticipant      bool          `json:"am_i_participant"`
 	ChildrenRSVP        []childRSVP   `json:"children_rsvp,omitempty"`
 	RsvpDefaultPlayers  string        `json:"rsvp_default_players"`
 	RsvpDefaultExtended string        `json:"rsvp_default_extended"`
@@ -2119,6 +2138,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g.IsHome = isHome == 1
+		g.AmIParticipant = inRegularKader == 1 || inExtendedKader == 1 || inTrainerKader == 1
 		g.TeamNames = teamNames.String
 		g.TeamDisplayShortCSV = teamShortCSV.String
 		g.TeamDisplayLongCSV = teamLongCSV.String
@@ -2262,7 +2282,7 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if h.now().After(locksAt) {
-			writeRSVPLocked(w, "Spiel kann nur bis 18 Stunden vor Beginn umgesagt werden.", locksAt)
+			writeRSVPLocked(w, "Spiel kann nur bis 2 Stunden vor Beginn umgesagt werden.", locksAt)
 			return
 		}
 	}

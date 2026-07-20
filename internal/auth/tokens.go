@@ -42,7 +42,7 @@ func (c *Claims) IsTrainerLike() bool {
 }
 
 // CanOverrideRSVPCutoff returns true for users who may submit or change RSVP
-// responses after the cutoff (Training: T-2h, Game: T-18h). These users plan
+// responses after the cutoff (T-2h für Trainings und Spiele). These users plan
 // the squad and need to keep the attendance list realistic.
 func (c *Claims) CanOverrideRSVPCutoff() bool {
 	return c.Role == "admin" || c.HasFunction("vorstand") || c.IsTrainerLike()
