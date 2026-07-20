@@ -105,6 +105,9 @@ func TestAttendanceReminders_StopOnceAttendanceRecorded(t *testing.T) {
 		tsID, playerMemberID); err != nil {
 		t.Fatalf("seed attendance: %v", err)
 	}
+	if _, err := db.Exec(`UPDATE training_sessions SET attendance_tracked=1 WHERE id=?`, tsID); err != nil {
+		t.Fatalf("seed attendance_tracked: %v", err)
+	}
 
 	s := New(db, testutil.TestConfig(), nil)
 	now := at19()

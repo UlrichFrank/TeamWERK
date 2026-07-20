@@ -509,7 +509,9 @@ func CreateAbsence(t *testing.T, database *sql.DB, memberID int, absenceType, st
 
 // RecordTrainingAttendance inserts (or replaces) a training_attendances row for
 // the given session/member. present is mapped to 0/1. The (training_id,
-// member_id) UNIQUE constraint is honoured via upsert.
+// member_id) UNIQUE constraint is honoured via upsert. Es setzt zusätzlich
+// training_sessions.attendance_tracked=1, damit die Statistik die Row auch
+// tatsächlich berücksichtigt (analog zum Produktivpfad SaveAttendances).
 func RecordTrainingAttendance(t *testing.T, database *sql.DB, sessionID, memberID int, present bool) {
 	t.Helper()
 	if _, err := database.Exec(
@@ -519,11 +521,17 @@ func RecordTrainingAttendance(t *testing.T, database *sql.DB, sessionID, memberI
 		sessionID, memberID, boolToInt(present)); err != nil {
 		t.Fatalf("RecordTrainingAttendance: %v", err)
 	}
+	if _, err := database.Exec(
+		`UPDATE training_sessions SET attendance_tracked=1 WHERE id=?`, sessionID); err != nil {
+		t.Fatalf("RecordTrainingAttendance set tracked: %v", err)
+	}
 }
 
 // RecordGameAttendance inserts (or replaces) a game_attendances row for the
 // given game/member. present is mapped to 0/1. The (game_id, member_id) UNIQUE
-// constraint is honoured via upsert.
+// constraint is honoured via upsert. Es setzt zusätzlich
+// games.attendance_tracked=1, damit die Statistik die Row auch tatsächlich
+// berücksichtigt (analog zum Produktivpfad SaveAttendances).
 func RecordGameAttendance(t *testing.T, database *sql.DB, gameID, memberID int, present bool) {
 	t.Helper()
 	if _, err := database.Exec(
@@ -532,6 +540,10 @@ func RecordGameAttendance(t *testing.T, database *sql.DB, gameID, memberID int, 
 		 ON CONFLICT(game_id, member_id) DO UPDATE SET present = excluded.present`,
 		gameID, memberID, boolToInt(present)); err != nil {
 		t.Fatalf("RecordGameAttendance: %v", err)
+	}
+	if _, err := database.Exec(
+		`UPDATE games SET attendance_tracked=1 WHERE id=?`, gameID); err != nil {
+		t.Fatalf("RecordGameAttendance set tracked: %v", err)
 	}
 }
 

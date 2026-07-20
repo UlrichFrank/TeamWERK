@@ -145,7 +145,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		                              AND ts.season_id = k.season_id
 		                              AND ts.status != 'cancelled'
 		                              AND date(ts.date) BETWEEN date(?) AND date(?)
-		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = m.id
+		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = m.id AND ts.attendance_tracked = 1
 		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id
 		LEFT JOIN member_series_unavailabilities msu
 		       ON msu.member_id = m.id
@@ -196,7 +196,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		                  AND g.season_id = k.season_id
 		                  AND g.event_type IN ('heim','auswärts')
 		                  AND date(g.date) BETWEEN date(?) AND date(?)
-		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = m.id
+		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = m.id AND g.attendance_tracked = 1
 		LEFT JOIN game_responses gr ON gr.game_id = g.id AND gr.member_id = m.id` +
 		memberWhere + `
 		GROUP BY m.id`
@@ -456,7 +456,7 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		       ta.present, tr.status, tr.absence_id IS NOT NULL, tr.reason,
 		       msu.id IS NOT NULL, msu.reason
 		FROM training_sessions ts
-		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = ?
+		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = ? AND ts.attendance_tracked = 1
 		LEFT JOIN training_responses  tr ON tr.training_id = ts.id AND tr.member_id = ?
 		LEFT JOIN member_series_unavailabilities msu
 		       ON msu.member_id = ?
@@ -522,7 +522,7 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		       COALESCE(NULLIF(g.opponent, ''), 'Spiel'),
 		       ga.present, gr.status, gr.absence_id IS NOT NULL, gr.reason
 		FROM games g
-		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = ?
+		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = ? AND g.attendance_tracked = 1
 		LEFT JOIN game_responses   gr ON gr.game_id = g.id AND gr.member_id = ?
 		WHERE g.season_id = ?
 		  AND g.event_type IN ('heim','auswärts')
@@ -658,9 +658,7 @@ func (h *Handler) GetTeamOpen(w http.ResponseWriter, r *http.Request) {
 		  AND ts.status != 'cancelled'
 		  AND date(ts.date) >= date(?)
 		  AND date(ts.date) < date('now')
-		  AND NOT EXISTS (
-		    SELECT 1 FROM training_attendances ta WHERE ta.training_id = ts.id
-		  )
+		  AND ts.attendance_tracked = 0
 		ORDER BY ts.date, ts.id`,
 		teamID, seasonID, startDate)
 	if err != nil {
@@ -688,9 +686,7 @@ func (h *Handler) GetTeamOpen(w http.ResponseWriter, r *http.Request) {
 		WHERE g.season_id = ?
 		  AND date(g.date) >= date(?)
 		  AND date(g.date) < date('now')
-		  AND NOT EXISTS (
-		    SELECT 1 FROM game_attendances ga WHERE ga.game_id = g.id
-		  )
+		  AND g.attendance_tracked = 0
 		ORDER BY g.date, g.id`,
 		teamID, seasonID, startDate)
 	if err != nil {

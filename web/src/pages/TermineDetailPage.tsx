@@ -87,6 +87,7 @@ interface SessionDetail {
   rsvp_default_players?: RsvpDefault
   rsvp_default_extended?: RsvpDefault
   rsvp_require_reason?: number
+  attendance_tracked?: boolean
 }
 
 interface TeamRef {
@@ -111,6 +112,7 @@ interface GameDetail {
   teams?: TeamRef[]
   note?: string
   can?: { edit: boolean; delete: boolean; manage_lineup: boolean }
+  attendance_tracked?: boolean
 }
 
 function RsvpConfigBadges({ defaultPlayers, defaultExtended, requireReason }: { defaultPlayers?: RsvpDefault; defaultExtended?: RsvpDefault; requireReason?: number }) {
@@ -315,6 +317,23 @@ export default function TermineDetailPage() {
     }
   }
 
+  const resetAttendanceTracking = async () => {
+    if (!window.confirm('Anwesenheits-Erfassung dieses Termins zurücksetzen? Die Statistik zeigt bis zur nächsten Erfassung wieder „—" für alle Mitglieder. Vorhandene Häkchen bleiben gespeichert und werden beim nächsten Klick wieder wirksam.')) {
+      return
+    }
+    const url = isTraining
+      ? `/training-sessions/${id}/attendance-tracking`
+      : `/games/${id}/attendance-tracking`
+    try {
+      await api.delete(url)
+      setAttendanceError(null)
+      load(true)
+      loadAttendances()
+    } catch {
+      setAttendanceError('Fehler beim Zurücksetzen. Bitte nochmal versuchen.')
+    }
+  }
+
   const saveLineup = async (memberId: number, newValue: boolean) => {
     const updatedMap = { ...lineupMap, [memberId]: newValue }
     setLineupMap(updatedMap)
@@ -399,6 +418,18 @@ export default function TermineDetailPage() {
         </div>
 
         <EventNoteSection note={session.note} />
+
+        {isTrainer && isPast && session.attendance_tracked && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={resetAttendanceTracking}
+              className="text-xs text-brand-text-muted hover:text-brand-danger underline"
+            >
+              Anwesenheits-Erfassung zurücksetzen
+            </button>
+          </div>
+        )}
 
         <ResponseTable
           rows={tableRows}
@@ -508,6 +539,18 @@ export default function TermineDetailPage() {
       {isTrainer && !isPast && (
         <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
           Anwesenheit kann erst nach dem Spiel erfasst werden.
+        </div>
+      )}
+
+      {isTrainer && isPast && g.attendance_tracked && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={resetAttendanceTracking}
+            className="text-xs text-brand-text-muted hover:text-brand-danger underline"
+          >
+            Anwesenheits-Erfassung zurücksetzen
+          </button>
         </div>
       )}
 

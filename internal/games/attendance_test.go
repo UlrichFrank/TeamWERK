@@ -368,3 +368,122 @@ func TestSaveGameAttendances_TrainerInBatch_Skipped(t *testing.T) {
 		t.Errorf("expected no attendance row for trainer, got %d", n)
 	}
 }
+
+// TestSaveGameAttendances_SetsAttendanceTrackedFlag verifies that a successful
+// player upsert flips games.attendance_tracked from 0 → 1.
+func TestSaveGameAttendances_SetsAttendanceTrackedFlag(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	trainerUserID := makeTrainer(t, db, teamID, seasonID)
+	playerMemberID := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderOf(t, db, teamID, seasonID), playerMemberID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	var tracked int
+	db.QueryRow(`SELECT attendance_tracked FROM games WHERE id=?`, gameID).Scan(&tracked)
+	if tracked != 0 {
+		t.Fatalf("pre-save attendance_tracked expected 0, got %d", tracked)
+	}
+	body := []map[string]any{{"member_id": playerMemberID, "present": true}}
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", gameID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	db.QueryRow(`SELECT attendance_tracked FROM games WHERE id=?`, gameID).Scan(&tracked)
+	if tracked != 1 {
+		t.Errorf("post-save attendance_tracked expected 1, got %d", tracked)
+	}
+}
+
+// TestResetGameAttendanceTracking_ClearsFlagButKeepsRows verifies that DELETE
+// /api/games/{id}/attendance-tracking sets the flag to 0 while leaving
+// game_attendances rows intact, and that the operation is idempotent.
+func TestResetGameAttendanceTracking_ClearsFlagButKeepsRows(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	trainerUserID := makeTrainer(t, db, teamID, seasonID)
+	playerMemberID := testutil.CreateMember(t, db, 0)
+	testutil.RecordGameAttendance(t, db, gameID, playerMemberID, true)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/games/%d/attendance-tracking", gameID), token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var tracked int
+	db.QueryRow(`SELECT attendance_tracked FROM games WHERE id=?`, gameID).Scan(&tracked)
+	if tracked != 0 {
+		t.Errorf("attendance_tracked expected 0 after reset, got %d", tracked)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM game_attendances WHERE game_id=? AND member_id=?`, gameID, playerMemberID).Scan(&n)
+	if n != 1 {
+		t.Errorf("row must remain after reset (Undo), got %d", n)
+	}
+	// Idempotent
+	res2 := testutil.Delete(t, srv, fmt.Sprintf("/api/games/%d/attendance-tracking", gameID), token)
+	res2.Body.Close()
+	if res2.StatusCode != http.StatusNoContent {
+		t.Errorf("second reset expected 204, got %d", res2.StatusCode)
+	}
+}
+
+// TestResetGameAttendanceTracking_ForeignTeam_Forbidden verifies that a
+// trainer without access to any team of the game gets 403.
+func TestResetGameAttendanceTracking_ForeignTeam_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	gameTeamID := testutil.CreateTeam(t, db, "Game Team")
+	otherTeamID := testutil.CreateTeam(t, db, "Other Team")
+	gameID := testutil.CreateGame(t, db, seasonID, gameTeamID, "2026-06-14")
+	otherTrainerUserID := makeTrainer(t, db, otherTeamID, seasonID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, otherTrainerUserID, "standard", []string{"trainer"})
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/games/%d/attendance-tracking", gameID), token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", res.StatusCode)
+	}
+}
+
+// TestResetGameAttendanceTracking_UnknownGame_404 verifies 404 for a
+// non-existing game id.
+func TestResetGameAttendanceTracking_UnknownGame_404(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	trainerUserID := makeTrainer(t, db, teamID, seasonID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Delete(t, srv, "/api/games/99999/attendance-tracking", token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", res.StatusCode)
+	}
+}
+
+// TestResetGameAttendanceTracking_Unauthenticated_401 verifies that no token
+// yields 401.
+func TestResetGameAttendanceTracking_Unauthenticated_401(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+
+	srv := testServer(t, db)
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/games/%d/attendance-tracking", gameID), "")
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", res.StatusCode)
+	}
+}

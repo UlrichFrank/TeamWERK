@@ -32,6 +32,7 @@ func testServer(t *testing.T, h *trainings.Handler) *httptest.Server {
 			r.Post("/api/training-series/{id}/unavailabilities", h.CreateSeriesUnavailability)
 			r.Delete("/api/training-series/{id}/unavailabilities/{uid}", h.DeleteSeriesUnavailability)
 			r.Post("/api/training-sessions/{id}/attendances", h.SaveAttendances)
+			r.Delete("/api/training-sessions/{id}/attendance-tracking", h.ResetAttendanceTracking)
 			r.Post("/api/training-sessions", h.CreateSession)
 			r.Put("/api/training-sessions/{id}", h.UpdateSession)
 			r.Delete("/api/training-sessions/{id}", h.DeleteSession)
@@ -405,6 +406,149 @@ func TestSaveAttendances_TrainerInBatch_Skipped(t *testing.T) {
 	}
 	if n != 0 {
 		t.Errorf("expected no attendance row for trainer, got %d", n)
+	}
+}
+
+// TestSaveAttendances_SetsAttendanceTrackedFlag verifies that a successful
+// player-upsert flips training_sessions.attendance_tracked from 0 → 1.
+func TestSaveAttendances_SetsAttendanceTrackedFlag(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2025-01-10")
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	memberID := testutil.CreateMember(t, db, adminUserID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	// Vor Save: 0
+	var tracked int
+	db.QueryRow(`SELECT attendance_tracked FROM training_sessions WHERE id=?`, sessionID).Scan(&tracked)
+	if tracked != 0 {
+		t.Fatalf("pre-save attendance_tracked expected 0, got %d", tracked)
+	}
+	body := []map[string]any{{"member_id": memberID, "present": true}}
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	db.QueryRow(`SELECT attendance_tracked FROM training_sessions WHERE id=?`, sessionID).Scan(&tracked)
+	if tracked != 1 {
+		t.Errorf("post-save attendance_tracked expected 1, got %d", tracked)
+	}
+}
+
+// TestSaveAttendances_TrainerOnlyBatch_DoesNotSetFlag verifies that a batch
+// containing only trainer-only entries (all skipped) does NOT flip the flag.
+func TestSaveAttendances_TrainerOnlyBatch_DoesNotSetFlag(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2025-01-10")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	if _, err := db.Exec(
+		`INSERT INTO member_club_functions (member_id, function) VALUES (?, ?)`,
+		trainerMemberID, "trainer"); err != nil {
+		t.Fatalf("club function: %v", err)
+	}
+	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	body := []map[string]any{{"member_id": trainerMemberID, "present": false}}
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendances", sessionID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var tracked int
+	db.QueryRow(`SELECT attendance_tracked FROM training_sessions WHERE id=?`, sessionID).Scan(&tracked)
+	if tracked != 0 {
+		t.Errorf("trainer-only batch must not set attendance_tracked; got %d", tracked)
+	}
+}
+
+// TestResetAttendanceTracking_ClearsFlagButKeepsRows verifies that the DELETE
+// route sets attendance_tracked=0 while leaving training_attendances rows
+// untouched (Undo-Semantik: erneuter Save reaktiviert die Rows).
+func TestResetAttendanceTracking_ClearsFlagButKeepsRows(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	sessionID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2025-01-10")
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	memberID := testutil.CreateMember(t, db, adminUserID)
+	testutil.RecordTrainingAttendance(t, db, sessionID, memberID, true)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendance-tracking", sessionID), token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	var tracked int
+	db.QueryRow(`SELECT attendance_tracked FROM training_sessions WHERE id=?`, sessionID).Scan(&tracked)
+	if tracked != 0 {
+		t.Errorf("attendance_tracked expected 0 after reset, got %d", tracked)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM training_attendances WHERE training_id=? AND member_id=?`, sessionID, memberID).Scan(&n)
+	if n != 1 {
+		t.Errorf("row must remain after reset (Undo), got %d", n)
+	}
+	// Idempotent: nochmal Reset → weiter 204, weiter 0.
+	res2 := testutil.Delete(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendance-tracking", sessionID), token)
+	res2.Body.Close()
+	if res2.StatusCode != http.StatusNoContent {
+		t.Errorf("second reset expected 204, got %d", res2.StatusCode)
+	}
+}
+
+// TestResetAttendanceTracking_UnknownSession_404 verifies 404 for a
+// non-existing session ID.
+func TestResetAttendanceTracking_UnknownSession_404(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+	res := testutil.Delete(t, srv, "/api/training-sessions/99999/attendance-tracking", token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", res.StatusCode)
+	}
+}
+
+// TestResetAttendanceTracking_ForeignTeam_Forbidden verifies that a trainer
+// without access to the session's team gets 403.
+func TestResetAttendanceTracking_ForeignTeam_Forbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	sessionID := testutil.CreateTrainingSession(t, db, teamA, seasonID, "2025-01-10")
+	// Trainer nur für Team B.
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderB := testutil.CreateKader(t, db, teamB, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderB, trainerMemberID)
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/training-sessions/%d/attendance-tracking", sessionID), token)
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", res.StatusCode)
 	}
 }
 

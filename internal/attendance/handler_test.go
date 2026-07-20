@@ -68,6 +68,10 @@ func recordTrainingAttendance(t *testing.T, db *sql.DB, sessionID, memberID, pre
 		sessionID, memberID, present); err != nil {
 		t.Fatalf("training_attendances: %v", err)
 	}
+	if _, err := db.Exec(
+		`UPDATE training_sessions SET attendance_tracked=1 WHERE id=?`, sessionID); err != nil {
+		t.Fatalf("attendance_tracked set: %v", err)
+	}
 }
 
 func recordGameAttendance(t *testing.T, db *sql.DB, gameID, memberID, present int) {
@@ -76,6 +80,10 @@ func recordGameAttendance(t *testing.T, db *sql.DB, gameID, memberID, present in
 		`INSERT INTO game_attendances (game_id, member_id, present) VALUES (?, ?, ?)`,
 		gameID, memberID, present); err != nil {
 		t.Fatalf("game_attendances: %v", err)
+	}
+	if _, err := db.Exec(
+		`UPDATE games SET attendance_tracked=1 WHERE id=?`, gameID); err != nil {
+		t.Fatalf("attendance_tracked set: %v", err)
 	}
 }
 
@@ -570,5 +578,85 @@ func TestGetTeamStats_SportlicheLeitung_OK(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+}
+
+// TestAttendanceTrackedFalse_IgnoresPresentRows verifies that a session with
+// attendance_tracked=0 does not contribute any present/missed count to the
+// aggregation, even if training_attendances rows exist.
+func TestAttendanceTrackedFalse_IgnoresPresentRows(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	trainerUserID, kaderID := makeTrainer(t, db, teamID, seasonID)
+	player := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderID, player)
+
+	// Row exists (present=0 = would classify as "missed") — aber tracked=0
+	// blendet sie aus → member erscheint mit training_missed=0.
+	ts := testutil.CreateTrainingSession(t, db, teamID, seasonID, pastDate1)
+	recordTrainingAttendance(t, db, ts, player, 0)
+	if _, err := db.Exec(`UPDATE training_sessions SET attendance_tracked=0 WHERE id=?`, ts); err != nil {
+		t.Fatalf("clear tracked: %v", err)
+	}
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/attendance-stats", teamID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	regular := body["regular_members"].([]any)
+	if len(regular) != 1 {
+		t.Fatalf("expected 1 regular member, got %d", len(regular))
+	}
+	m := regular[0].(map[string]any)
+	if int(m["training_missed"].(float64)) != 0 {
+		t.Errorf("training_missed expected 0 (row hidden by tracked=0), got %v", m["training_missed"])
+	}
+	if int(m["training_present"].(float64)) != 0 {
+		t.Errorf("training_present expected 0, got %v", m["training_present"])
+	}
+}
+
+// TestGetTeamOpen_ShowsSessionWithTrackedFalse verifies that a reset session
+// reappears in the "offen zu erfassen"-Liste even though attendance rows still
+// exist for it.
+func TestGetTeamOpen_ShowsSessionWithTrackedFalse(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	trainerUserID, kaderID := makeTrainer(t, db, teamID, seasonID)
+	player := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderID, player)
+
+	ts := testutil.CreateTrainingSession(t, db, teamID, seasonID, pastDate1)
+	recordTrainingAttendance(t, db, ts, player, 1) // → tracked=1
+	// Reset simulieren
+	if _, err := db.Exec(`UPDATE training_sessions SET attendance_tracked=0 WHERE id=?`, ts); err != nil {
+		t.Fatalf("clear tracked: %v", err)
+	}
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/attendance-open", teamID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var items []map[string]any
+	json.NewDecoder(res.Body).Decode(&items)
+	found := false
+	for _, it := range items {
+		if int(it["event_id"].(float64)) == ts {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected reset session to appear in attendance-open list, got %v", items)
 	}
 }

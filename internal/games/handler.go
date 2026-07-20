@@ -738,22 +738,27 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		TeamDisplayShortCSV string              `json:"team_display_short_csv"`
 		TeamDisplayLongCSV  string              `json:"team_display_long_csv"`
 		AmIParticipant      bool                `json:"am_i_participant"`
+		AttendanceTracked   bool                `json:"attendance_tracked"`
 		Can                 policy.GameCanFlags `json:"can"`
 	}
 	var templateIDNull sql.NullInt64
 	var endTimeNull, endDateNull sql.NullString
 	var vID sql.NullInt64
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
+	var attendanceTracked int
 	err := h.db.QueryRowContext(r.Context(),
 		`SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id,
 		        g.rsvp_default_players, g.rsvp_default_extended, g.rsvp_require_reason, g.note,
 		        `+gameRsvpCountCols+`,
+		        g.attendance_tracked,
 		        v.id, v.name, v.street, v.city, v.postal_code, v.note
 		 FROM games g LEFT JOIN venues v ON v.id = g.venue_id WHERE g.id=?`, id).
 		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull,
 			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note,
 			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
+			&attendanceTracked,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
+	g.AttendanceTracked = attendanceTracked == 1
 	if templateIDNull.Valid {
 		v := int(templateIDNull.Int64)
 		g.TemplateID = &v
@@ -2924,6 +2929,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	wroteAny := false
 	for _, e := range entries {
 		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die als Trainer eines
 		// beteiligten Teams eingetragen sind und nicht auch als Spieler geführt werden,
@@ -2964,8 +2970,60 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		wroteAny = true
+	}
+	// Nur wenn tatsächlich ein Spieler-Eintrag persistiert wurde, kippt das
+	// Spiel auf "bewertet". Ein rein-Trainer-Paket ist ein No-op und lässt
+	// das Flag ruhen.
+	if wroteAny {
+		if _, err := tx.ExecContext(r.Context(),
+			`UPDATE games SET attendance_tracked=1 WHERE id=?`, gameID); err != nil {
+			fmt.Fprintf(os.Stderr, "SaveGameAttendances set tracked: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.broadcastGame(r.Context(), gameID, "attendance-changed")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ResetAttendanceTracking — DELETE /api/games/{id}/attendance-tracking
+// Setzt games.attendance_tracked=0. Vorhandene game_attendances-Rows bleiben
+// unverändert; die Statistik ignoriert sie, solange das Flag 0 ist.
+func (h *Handler) ResetAttendanceTracking(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	gameID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var exists int
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT 1 FROM games WHERE id = ?`, gameID).Scan(&exists)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE games SET attendance_tracked=0 WHERE id=?`, gameID); err != nil {
+		fmt.Fprintf(os.Stderr, "ResetGameAttendanceTracking: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

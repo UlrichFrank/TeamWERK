@@ -931,6 +931,7 @@ type sessionListItem struct {
 	RsvpDefaultExtended string           `json:"rsvp_default_extended"`
 	RsvpRequireReason   int              `json:"rsvp_require_reason"`
 	RsvpLocksAt         string           `json:"rsvp_locks_at,omitempty"`
+	AttendanceTracked   bool             `json:"attendance_tracked"`
 }
 
 // GET /api/training-sessions
@@ -1227,6 +1228,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	var seriesID sql.NullInt64
 	var explicitRSVP, defaultRSVP sql.NullString
 	var amIParticipant int
+	var attendanceTracked int
 	var vID sql.NullInt64
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err = h.db.QueryRowContext(r.Context(), `
@@ -1278,6 +1280,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		        OR EXISTS (SELECT 1 FROM kader_trainers ktP JOIN kader kTP ON kTP.id=ktP.kader_id WHERE ktP.member_id=? AND kTP.team_id=ts.team_id AND kTP.season_id=ts.season_id)
 		       THEN 1 ELSE 0 END AS am_i_participant,
 		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
+		       ts.attendance_tracked,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_sessions ts
 		LEFT JOIN teams t ON t.id = ts.team_id
@@ -1288,6 +1291,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP,
 		&amIParticipant,
 		&s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
+		&attendanceTracked,
 		&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -1310,6 +1314,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		s.MyRSVPIsDefault = true
 	}
 	s.AmIParticipant = amIParticipant == 1
+	s.AttendanceTracked = attendanceTracked == 1
 	if vID.Valid {
 		s.Venue = &sessionVenueRef{
 			ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
@@ -1764,6 +1769,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	wroteAny := false
 	for _, e := range entries {
 		if _, skip := unavailable[e.MemberID]; skip {
 			continue
@@ -1802,8 +1808,57 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		wroteAny = true
+	}
+	// Erst wenn tatsächlich ein Spieler-Eintrag persistiert wurde, kippt die
+	// Session auf "bewertet". Ein rein-Trainer-Paket oder ein Paket, in dem
+	// alle Einträge übersprungen wurden, ist ein No-op und lässt das Flag ruhen.
+	if wroteAny {
+		if _, err := tx.ExecContext(r.Context(),
+			`UPDATE training_sessions SET attendance_tracked=1 WHERE id=?`, sessionID); err != nil {
+			fmt.Fprintf(os.Stderr, "SaveAttendances set tracked: %v\n", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.broadcastSession(r.Context(), sessionID, "trainings")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ResetAttendanceTracking — DELETE /api/training-sessions/{id}/attendance-tracking
+// Setzt attendance_tracked=0. Vorhandene training_attendances-Rows bleiben
+// unverändert; die Statistik ignoriert sie, solange das Flag 0 ist. Ein
+// späterer Bulk-Save re-aktiviert das Flag und die Rows werden wieder wirksam.
+func (h *Handler) ResetAttendanceTracking(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	sessionID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var teamID int
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	if err != nil || !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE training_sessions SET attendance_tracked=0 WHERE id=?`, sessionID); err != nil {
+		fmt.Fprintf(os.Stderr, "ResetAttendanceTracking: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

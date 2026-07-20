@@ -114,9 +114,7 @@ func (s *Scheduler) loadOpenAttendanceEvents(seasonID int, startDate string) ([]
 		                          AND ts.status != 'cancelled'
 		                          AND date(ts.date) >= date(?)
 		                          AND date(ts.date) < date('now')
-		                          AND NOT EXISTS (
-		                            SELECT 1 FROM training_attendances ta WHERE ta.training_id = ts.id
-		                          )
+		                          AND ts.attendance_tracked = 0
 		UNION ALL
 		SELECT tr.user_id, tr.team_id, tr.team_name, 'game', g.id, g.date
 		FROM trainers tr
@@ -125,9 +123,7 @@ func (s *Scheduler) loadOpenAttendanceEvents(seasonID int, startDate string) ([]
 		             AND g.season_id = ?
 		             AND date(g.date) >= date(?)
 		             AND date(g.date) < date('now')
-		             AND NOT EXISTS (
-		               SELECT 1 FROM game_attendances ga WHERE ga.game_id = g.id
-		             )
+		             AND g.attendance_tracked = 0
 		ORDER BY user_id, 6, 5`, // user_id, date, event_id
 		seasonID, seasonID, startDate, seasonID, startDate)
 	if err != nil {
