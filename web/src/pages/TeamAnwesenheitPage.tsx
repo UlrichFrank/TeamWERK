@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Check, MinusCircle, X, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Check, MinusCircle, X, ChevronRight, EyeOff, Eye } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { buildTeamShortNames } from '../lib/teamName'
@@ -42,6 +42,11 @@ interface OpenItem {
   event_id: number
   date: string
   title: string
+}
+
+interface OpenResponse {
+  open: OpenItem[]
+  excluded: OpenItem[]
 }
 
 interface TeamRef {
@@ -156,7 +161,9 @@ export default function TeamAnwesenheitPage() {
   const [teams, setTeams] = useState<TeamRef[]>([])
   const [stats, setStats] = useState<TeamStats | null>(null)
   const [open, setOpen] = useState<OpenItem[]>([])
+  const [excluded, setExcluded] = useState<OpenItem[]>([])
   const [showOpen, setShowOpen] = useState(false)
+  const [showExcluded, setShowExcluded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -180,7 +187,9 @@ export default function TeamAnwesenheitPage() {
     ])
       .then(([statsRes, openRes]) => {
         setStats(statsRes.data)
-        setOpen(openRes.data ?? [])
+        const openData: OpenResponse = openRes.data ?? { open: [], excluded: [] }
+        setOpen(openData.open ?? [])
+        setExcluded(openData.excluded ?? [])
         setError(null)
       })
       .catch(() => setError('Statistik konnte nicht geladen werden.'))
@@ -248,16 +257,69 @@ export default function TeamAnwesenheitPage() {
               {showOpen && (
                 <ul className="border-t border-brand-border-subtle divide-y divide-brand-border-subtle">
                   {open.map(it => (
-                    <li key={`${it.event_type}-${it.event_id}`}>
+                    <li key={`${it.event_type}-${it.event_id}`} className="flex items-center gap-2 px-4 py-2.5 hover:bg-brand-table-select transition-colors">
                       <button
                         onClick={() => navigate(`/termine/${it.event_type === 'training' ? 'training' : 'spiel'}/${it.event_id}`)}
-                        className="w-full text-left px-6 py-3 flex items-center justify-between gap-2 hover:bg-brand-table-select transition-colors"
+                        className="flex-1 text-left flex items-center justify-between gap-2"
                       >
                         <span className="text-sm text-brand-text">
                           {fmtDate(it.date)} · {it.title}
                           <span className="text-brand-text-muted"> ({it.event_type === 'training' ? 'Training' : 'Spiel'})</span>
                         </span>
                         <ChevronRight className="w-4 h-4 text-brand-text-subtle shrink-0" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const url = it.event_type === 'training'
+                            ? `/training-sessions/${it.event_id}/attendance-excluded`
+                            : `/games/${it.event_id}/attendance-excluded`
+                          api.post(url).catch(() => {})
+                        }}
+                        title="Aus Statistik ausschließen"
+                        className="text-brand-text-muted hover:text-brand-danger transition-colors shrink-0"
+                        aria-label="Aus Statistik ausschließen"
+                      >
+                        <EyeOff className="w-4 h-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {excluded.length > 0 && (
+            <div className="bg-brand-surface-card rounded-xl shadow overflow-hidden border border-brand-border-subtle">
+              <button
+                onClick={() => setShowExcluded(s => !s)}
+                className="w-full flex items-center gap-2 px-6 py-4 text-left hover:bg-brand-table-select transition-colors"
+              >
+                <EyeOff className="w-5 h-5 text-brand-text-muted shrink-0" />
+                <span className="flex-1 text-sm text-brand-text-muted">
+                  {excluded.length} ausgeschlossene {excluded.length === 1 ? 'Erfassung' : 'Erfassungen'}
+                </span>
+                <ChevronRight className={`w-5 h-5 text-brand-text-subtle transition-transform ${showExcluded ? 'rotate-90' : ''}`} />
+              </button>
+              {showExcluded && (
+                <ul className="border-t border-brand-border-subtle divide-y divide-brand-border-subtle">
+                  {excluded.map(it => (
+                    <li key={`${it.event_type}-${it.event_id}`} className="flex items-center gap-2 px-4 py-2.5 hover:bg-brand-table-select transition-colors">
+                      <span className="flex-1 text-sm text-brand-text-muted">
+                        {fmtDate(it.date)} · {it.title}
+                        <span className="text-brand-text-subtle"> ({it.event_type === 'training' ? 'Training' : 'Spiel'})</span>
+                      </span>
+                      <button
+                        onClick={() => {
+                          const url = it.event_type === 'training'
+                            ? `/training-sessions/${it.event_id}/attendance-excluded`
+                            : `/games/${it.event_id}/attendance-excluded`
+                          api.delete(url).catch(() => {})
+                        }}
+                        title="Wieder einschließen"
+                        className="text-brand-text-muted hover:text-brand-text transition-colors shrink-0"
+                        aria-label="Wieder einschließen"
+                      >
+                        <Eye className="w-4 h-4" />
                       </button>
                     </li>
                   ))}

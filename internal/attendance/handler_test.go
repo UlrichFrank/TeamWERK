@@ -499,10 +499,13 @@ func TestGetTeamOpen_ShowsPastUnrecorded(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var items []map[string]any
-	json.NewDecoder(res.Body).Decode(&items)
-	if len(items) != 1 {
-		t.Fatalf("expected 1 open item, got %d", len(items))
+	var resp struct {
+		Open     []map[string]any `json:"open"`
+		Excluded []map[string]any `json:"excluded"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	if len(resp.Open) != 1 {
+		t.Fatalf("expected 1 open item, got %d", len(resp.Open))
 	}
 }
 
@@ -526,10 +529,13 @@ func TestGetTeamOpen_HidesFutureAndRecorded(t *testing.T) {
 	token := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
 	res := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/attendance-open", teamID), token)
 	defer res.Body.Close()
-	var items []map[string]any
-	json.NewDecoder(res.Body).Decode(&items)
-	if len(items) != 0 {
-		t.Errorf("expected 0 open items, got %d: %v", len(items), items)
+	var resp struct {
+		Open     []map[string]any `json:"open"`
+		Excluded []map[string]any `json:"excluded"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	if len(resp.Open) != 0 || len(resp.Excluded) != 0 {
+		t.Errorf("expected 0 items, got open=%d excluded=%d", len(resp.Open), len(resp.Excluded))
 	}
 }
 
@@ -545,10 +551,13 @@ func TestGetTeamOpen_CancelledNotShown(t *testing.T) {
 	token := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
 	res := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/attendance-open", teamID), token)
 	defer res.Body.Close()
-	var items []map[string]any
-	json.NewDecoder(res.Body).Decode(&items)
-	if len(items) != 0 {
-		t.Errorf("cancelled session must not appear, got %d items", len(items))
+	var resp struct {
+		Open     []map[string]any `json:"open"`
+		Excluded []map[string]any `json:"excluded"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	if len(resp.Open) != 0 || len(resp.Excluded) != 0 {
+		t.Errorf("cancelled session must not appear, got open=%d excluded=%d", len(resp.Open), len(resp.Excluded))
 	}
 }
 
@@ -647,16 +656,18 @@ func TestGetTeamOpen_ShowsSessionWithTrackedFalse(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var items []map[string]any
-	json.NewDecoder(res.Body).Decode(&items)
+	var resp struct {
+		Open []map[string]any `json:"open"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
 	found := false
-	for _, it := range items {
+	for _, it := range resp.Open {
 		if int(it["event_id"].(float64)) == ts {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected reset session to appear in attendance-open list, got %v", items)
+		t.Errorf("expected reset session to appear in attendance-open list, got %v", resp.Open)
 	}
 }

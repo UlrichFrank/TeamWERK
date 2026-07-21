@@ -144,6 +144,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		LEFT JOIN training_sessions ts ON ts.team_id = k.team_id
 		                              AND ts.season_id = k.season_id
 		                              AND ts.status != 'cancelled'
+		                              AND ts.attendance_excluded = 0
 		                              AND date(ts.date) BETWEEN date(?) AND date(?)
 		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = m.id AND ts.attendance_tracked = 1
 		LEFT JOIN training_responses tr ON tr.training_id = ts.id AND tr.member_id = m.id
@@ -195,6 +196,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		LEFT JOIN games g ON g.id = gt.game_id
 		                  AND g.season_id = k.season_id
 		                  AND g.event_type IN ('heim','auswärts')
+		                  AND g.attendance_excluded = 0
 		                  AND date(g.date) BETWEEN date(?) AND date(?)
 		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = m.id AND g.attendance_tracked = 1
 		LEFT JOIN game_responses gr ON gr.game_id = g.id AND gr.member_id = m.id` +
@@ -605,6 +607,12 @@ type openItem struct {
 	Title     string `json:"title"`
 }
 
+// openResponse fasst offene und ausgeschlossene Termine zusammen.
+type openResponse struct {
+	Open     []openItem `json:"open"`
+	Excluded []openItem `json:"excluded"`
+}
+
 // GetTeamOpen — GET /api/teams/{id}/attendance-open
 // Liefert vergangene, nicht cancelled Termine des Teams in der aktiven
 // Saison, für die noch keine attendance-Zeile existiert.
@@ -648,10 +656,13 @@ func (h *Handler) GetTeamOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := []openItem{}
+	resp := openResponse{Open: []openItem{}, Excluded: []openItem{}}
+
+	// Trainings: offen (tracked=0, excluded=0) und ausgeschlossen (excluded=1)
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT ts.id, ts.date,
-		       COALESCE(NULLIF(ts.title, ''), 'Training')
+		       COALESCE(NULLIF(ts.title, ''), 'Training'),
+		       ts.attendance_excluded
 		FROM training_sessions ts
 		WHERE ts.team_id = ?
 		  AND ts.season_id = ?
@@ -668,19 +679,26 @@ func (h *Handler) GetTeamOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	for rows.Next() {
 		var it openItem
+		var excluded int
 		it.EventType = "training"
-		if err := rows.Scan(&it.EventID, &it.Date, &it.Title); err != nil {
+		if err := rows.Scan(&it.EventID, &it.Date, &it.Title, &excluded); err != nil {
 			rows.Close()
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		items = append(items, it)
+		if excluded == 1 {
+			resp.Excluded = append(resp.Excluded, it)
+		} else {
+			resp.Open = append(resp.Open, it)
+		}
 	}
 	rows.Close()
 
+	// Spiele: offen und ausgeschlossen
 	rows, err = h.db.QueryContext(r.Context(), `
 		SELECT g.id, g.date,
-		       COALESCE(NULLIF(g.opponent, ''), 'Spiel')
+		       COALESCE(NULLIF(g.opponent, ''), 'Spiel'),
+		       g.attendance_excluded
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id AND gt.team_id = ?
 		WHERE g.season_id = ?
@@ -697,14 +715,71 @@ func (h *Handler) GetTeamOpen(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	for rows.Next() {
 		var it openItem
+		var excluded int
 		it.EventType = "game"
-		if err := rows.Scan(&it.EventID, &it.Date, &it.Title); err != nil {
+		if err := rows.Scan(&it.EventID, &it.Date, &it.Title, &excluded); err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		items = append(items, it)
+		if excluded == 1 {
+			resp.Excluded = append(resp.Excluded, it)
+		} else {
+			resp.Open = append(resp.Open, it)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// SetAttendanceExcluded — POST/DELETE /api/training-sessions/{id}/attendance-excluded
+// und POST/DELETE /api/games/{id}/attendance-excluded.
+// Setzt attendance_excluded=1 (POST) bzw. =0 (DELETE).
+// Gate: trainer oder sportliche_leitung (via RequireClubFunction im Router).
+func (h *Handler) SetTrainingExcluded(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	val := 1
+	if r.Method == http.MethodDelete {
+		val = 0
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE training_sessions SET attendance_excluded=? WHERE id=? AND attendance_tracked=0`, val, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "not found or already tracked", http.StatusNotFound)
+		return
+	}
+	h.hub.Broadcast("attendance-changed")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) SetGameExcluded(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	val := 1
+	if r.Method == http.MethodDelete {
+		val = 0
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE games SET attendance_excluded=? WHERE id=? AND attendance_tracked=0`, val, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "not found or already tracked", http.StatusNotFound)
+		return
+	}
+	h.hub.Broadcast("attendance-changed")
+	w.WriteHeader(http.StatusNoContent)
 }
