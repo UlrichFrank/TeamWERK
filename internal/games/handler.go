@@ -2397,6 +2397,7 @@ type participantItem struct {
 	IsTrainer        bool    `json:"is_trainer"`
 	RsvpStatus       *string `json:"rsvp_status"`
 	RsvpIsDefault    bool    `json:"rsvp_is_default,omitempty"`
+	Reason           *string `json:"reason,omitempty"`
 	InLineup         bool    `json:"in_lineup"`
 	TeamID           int     `json:"team_id"`
 	crossTeamVisible bool    `json:"-"`
@@ -2455,6 +2456,30 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		claims.HasFunction("sportliche_leitung") ||
 		claims.HasFunction("vorstand"))
 
+	// Reason-Sichtbarkeit: Trainer/Admin/Vorstand/sL sehen alle, Mitglied nur eigene,
+	// Elternteil zusätzlich Zeilen ihrer Kinder.
+	var callerMemberID int
+	childMemberIDs := map[int]bool{}
+	if claims != nil {
+		callerMemberID, err = h.memberIDForUser(r.Context(), claims.UserID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if claims.IsParent {
+			childRows, err := h.db.QueryContext(r.Context(),
+				`SELECT member_id FROM family_links WHERE parent_user_id = ?`, claims.UserID)
+			if err == nil {
+				defer childRows.Close()
+				for childRows.Next() {
+					var cid int
+					childRows.Scan(&cid)
+					childMemberIDs[cid] = true
+				}
+			}
+		}
+	}
+
 	// Filter greift nur bei Multi-Team-Events und für Nicht-Funktionsträger.
 	var teamCount int
 	h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM game_teams WHERE game_id=?`, gameID).Scan(&teamCount)
@@ -2479,13 +2504,14 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		Scan(&defPlayers, &defExtended)
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, in_lineup, team_id, cross_team_visible
+		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, reason, in_lineup, team_id, cross_team_visible
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
 			       0 AS is_extended,
 			       1 AS is_trainer,
 			       gr.status AS rsvp_status,
+			       gr.reason AS reason,
 			       0 AS in_lineup,
 			       k.team_id AS team_id,
 			       m.cross_team_visible AS cross_team_visible
@@ -2503,6 +2529,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			       0 AS is_extended,
 			       0 AS is_trainer,
 			       gr.status AS rsvp_status,
+			       gr.reason AS reason,
 			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup,
 			       k.team_id AS team_id,
 			       m.cross_team_visible AS cross_team_visible
@@ -2520,6 +2547,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 			       1 AS is_extended,
 			       0 AS is_trainer,
 			       gr.status AS rsvp_status,
+			       gr.reason AS reason,
 			       EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id=? AND gl.member_id=m.id) AS in_lineup,
 			       k.team_id AS team_id,
 			       m.cross_team_visible AS cross_team_visible
@@ -2546,13 +2574,19 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	teamsHidden := map[int]bool{}
 	for rows.Next() {
 		var p participantItem
-		var status sql.NullString
+		var status, reason sql.NullString
 		var isExtended, isTrainer, inLineup, ctv int
-		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &isTrainer, &status, &inLineup, &p.TeamID, &ctv)
+		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &isTrainer, &status, &reason, &inLineup, &p.TeamID, &ctv)
 		p.IsExtended = isExtended == 1
 		p.IsTrainer = isTrainer == 1
 		p.InLineup = inLineup == 1
 		p.crossTeamVisible = ctv == 1
+		canSeeReason := bypass ||
+			(callerMemberID > 0 && p.MemberID == callerMemberID) ||
+			childMemberIDs[p.MemberID]
+		if canSeeReason && reason.Valid && reason.String != "" {
+			p.Reason = &reason.String
+		}
 		if status.Valid {
 			p.RsvpStatus = &status.String
 		} else if p.IsTrainer {

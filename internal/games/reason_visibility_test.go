@@ -264,3 +264,157 @@ func TestGetGameAttendances_Reason_SportlicheLeitung_HidesForeignReason(t *testi
 func itoa(n int) string {
 	return fmt.Sprintf("%d", n)
 }
+
+// --- GetParticipants reason-Sichtbarkeit ---
+//
+// Diese Tests decken die 2026-07 behobene Regression ab: GetParticipants lieferte
+// reason=null für alle Teilnehmer, weil gr.reason im SQL fehlte.
+
+// TestGetParticipants_Reason_Trainer_SeesAll: Trainer sieht die Absagegründe
+// aller Kader-Mitglieder im participants-Endpoint.
+func TestGetParticipants_Reason_Trainer_SeesAll(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-05-01")
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	testutil.AddClubFunction(t, db, trainerMemberID, "trainer")
+
+	other1 := testutil.CreateMember(t, db, 0)
+	other2 := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, other1)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, other2)
+	db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at)
+		VALUES (?, ?, 1, 'declined', 'Urlaub', CURRENT_TIMESTAMP)`, gameID, other1)
+	db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at)
+		VALUES (?, ?, 1, 'declined', 'Krank', CURRENT_TIMESTAMP)`, gameID, other2)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	res := testutil.Get(t, srv, "/api/games/"+itoa(gameID)+"/participants", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var resp struct {
+		Items []map[string]any `json:"items"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+
+	reasonsSeen := map[string]bool{}
+	for _, p := range resp.Items {
+		if p["reason"] != nil {
+			reasonsSeen[p["reason"].(string)] = true
+		}
+	}
+	if !reasonsSeen["Urlaub"] || !reasonsSeen["Krank"] {
+		t.Errorf("trainer should see all reasons, got %v", reasonsSeen)
+	}
+}
+
+// TestGetParticipants_Reason_Member_SeesOwnOnly: Regulärer Spieler sieht nur
+// seinen eigenen Absagegrund, fremde Reasons bleiben null.
+func TestGetParticipants_Reason_Member_SeesOwnOnly(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-05-01")
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+	db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at)
+		VALUES (?, ?, ?, 'declined', 'MeineReason', CURRENT_TIMESTAMP)`, gameID, memberID, userID)
+
+	other := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, other)
+	db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at)
+		VALUES (?, ?, 1, 'declined', 'FremdReason', CURRENT_TIMESTAMP)`, gameID, other)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/games/"+itoa(gameID)+"/participants", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var resp struct {
+		Items []map[string]any `json:"items"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+
+	var ownReason, foreignReason any
+	for _, p := range resp.Items {
+		mid := int(p["member_id"].(float64))
+		switch mid {
+		case memberID:
+			ownReason = p["reason"]
+		case other:
+			foreignReason = p["reason"]
+		}
+	}
+	if ownReason != "MeineReason" {
+		t.Errorf("member should see own reason, got %v", ownReason)
+	}
+	if foreignReason != nil {
+		t.Errorf("member should NOT see foreign reason, got %v", foreignReason)
+	}
+}
+
+// TestGetParticipants_Reason_Parent_SeesChild: Elternteil sieht den Absagegrund
+// des verlinkten Kindes, aber keine fremden Reasons.
+func TestGetParticipants_Reason_Parent_SeesChild(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-05-01")
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, childMemberID)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+	db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at)
+		VALUES (?, ?, ?, 'declined', 'KindReason', CURRENT_TIMESTAMP)`, gameID, childMemberID, parentUserID)
+
+	other := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, other)
+	db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, reason, responded_at)
+		VALUES (?, ?, 1, 'declined', 'FremdReason', CURRENT_TIMESTAMP)`, gameID, other)
+
+	srv := testServer(t, db)
+	token := testutil.TokenWithIsParent(t, parentUserID, "standard", nil, true)
+	res := testutil.Get(t, srv, "/api/games/"+itoa(gameID)+"/participants", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var resp struct {
+		Items []map[string]any `json:"items"`
+	}
+	json.NewDecoder(res.Body).Decode(&resp)
+	res.Body.Close()
+
+	var childReason, foreignReason any
+	for _, p := range resp.Items {
+		mid := int(p["member_id"].(float64))
+		switch mid {
+		case childMemberID:
+			childReason = p["reason"]
+		case other:
+			foreignReason = p["reason"]
+		}
+	}
+	if childReason != "KindReason" {
+		t.Errorf("parent should see child reason, got %v", childReason)
+	}
+	if foreignReason != nil {
+		t.Errorf("parent should NOT see foreign reason, got %v", foreignReason)
+	}
+}

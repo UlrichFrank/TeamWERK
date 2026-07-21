@@ -49,6 +49,7 @@ interface ParticipantItem {
   is_trainer?: boolean
   rsvp_status: string | null
   rsvp_is_default?: boolean
+  reason?: string | null
   in_lineup: boolean
   team_id: number
 }
@@ -461,7 +462,7 @@ export default function TermineDetailPage() {
     member_name: p.member_name,
     rsvp_status: p.rsvp_status,
     rsvp_is_default: p.rsvp_is_default,
-    reason: null,
+    reason: p.reason ?? null,
     present: null,
     is_extended: p.is_extended,
     is_trainer: p.is_trainer,
