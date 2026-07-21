@@ -601,7 +601,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
   return (
     <Fragment>
       <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
-        <td className="px-4 py-3 text-sm text-brand-text font-medium">
+        <td className="px-2 sm:px-4 py-3 text-sm text-brand-text font-medium">
           <span>{row.member_name}</span>
           {row.unavailable && (
             <span
@@ -612,7 +612,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
             </span>
           )}
         </td>
-        <td className="px-4 py-3">
+        <td className="px-2 sm:px-4 py-3">
           <div className={`relative group flex items-center gap-1 ${row.rsvp_is_default ? 'text-brand-text-subtle italic' : 'text-brand-text'}`}>
             <RsvpIcon status={row.rsvp_status} />
             {row.reason && (
@@ -631,7 +631,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
           </div>
         </td>
         {a.lineupMap !== undefined && (
-          <td className="px-4 py-3 text-center">
+          <td className="px-2 sm:px-4 py-3 text-center">
             {row.is_trainer ? null : a.onToggleLineup ? (
               <input
                 type="checkbox"
@@ -647,7 +647,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
           </td>
         )}
         {a.showAttendanceCol && (
-          <td className="px-4 py-3 text-center">
+          <td className="px-2 sm:px-4 py-3 text-center">
             {row.is_trainer ? null : row.unavailable ? (
               // Dauerhaft abgemeldete Spieler: keine Anwesenheitserfassung (Server
               // überspringt sie ebenfalls) — Toggle gesperrt.
@@ -664,7 +664,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
           </td>
         )}
         {hasActionsCol(a) && (
-          <td className="px-4 py-3 text-right align-middle">
+          <td className="px-2 sm:px-4 py-3 text-right align-middle">
             {!row.is_trainer && (
               row.unavailable
                 ? a.onClearUnavailable && (
@@ -740,16 +740,25 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
           <table className="w-full">
             <thead>
               <tr className="border-b border-brand-border-subtle">
-                <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Mitglied</th>
-                <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Rückmeldung</th>
+                <th className="text-brand-text-muted text-xs uppercase px-2 sm:px-4 py-3 text-left">Mitglied</th>
+                <th className="text-brand-text-muted text-xs uppercase px-2 sm:px-4 py-3 text-left">
+                  <span className="sm:hidden">RSVP</span>
+                  <span className="hidden sm:inline">Rückmeldung</span>
+                </th>
                 {lineupMap !== undefined && (
-                  <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-center">Aufstellung</th>
+                  <th className="text-brand-text-muted text-xs uppercase px-2 sm:px-4 py-3 text-center">
+                    <span className="sm:hidden">Aufst.</span>
+                    <span className="hidden sm:inline">Aufstellung</span>
+                  </th>
                 )}
                 {showAttendanceCol && (
-                  <th className="text-brand-text-muted text-xs uppercase px-4 py-3 text-center">Anwesend</th>
+                  <th className="text-brand-text-muted text-xs uppercase px-2 sm:px-4 py-3 text-center">
+                    <span className="sm:hidden">Anw.</span>
+                    <span className="hidden sm:inline">Anwesend</span>
+                  </th>
                 )}
                 {hasActionsCol(a) && (
-                  <th className="px-4 py-3 w-px"><span className="sr-only">Aktionen</span></th>
+                  <th className="px-2 sm:px-4 py-3 w-px"><span className="sr-only">Aktionen</span></th>
                 )}
               </tr>
             </thead>
@@ -759,7 +768,7 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
                   {section.title && (
                     <tr className="border-t-2 border-brand-border bg-brand-surface-card">
                       <td colSpan={colSpan(a)}
-                          className="px-4 py-2 text-xs font-semibold text-brand-text-muted uppercase tracking-wide">
+                          className="px-2 sm:px-4 py-2 text-xs font-semibold text-brand-text-muted uppercase tracking-wide">
                         {section.title}
                       </td>
                     </tr>
@@ -769,7 +778,7 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
                   ))}
                   {section.hasHidden && (
                     <tr>
-                      <td colSpan={colSpan(a)} className="px-4 py-2 text-xs italic text-brand-text-muted">
+                      <td colSpan={colSpan(a)} className="px-2 sm:px-4 py-2 text-xs italic text-brand-text-muted">
                         Weitere Mitglieder nicht sichtbar
                       </td>
                     </tr>
