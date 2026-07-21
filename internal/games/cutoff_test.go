@@ -70,14 +70,14 @@ func newGamesHandler(t *testing.T, db *sql.DB, nowAt time.Time) *games.Handler {
 	return h
 }
 
-// Spieler 24 h vor Spielbeginn → 204.
+// Spieler mehr als 18 h vor Spielbeginn → 204.
 func TestRespondToGame_Cutoff_PlayerBefore_OK(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "standard")
 	mID := testutil.CreateMember(t, db, uID)
 	addKaderMember(t, db, kaderID, mID)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 15:00")) // T-3h (vor 2h-Cutoff)
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-14 20:00")) // T-22h (vor 18h-Cutoff)
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"spieler"})
@@ -284,7 +284,7 @@ func TestRespondToGame_ForeignMember_Forbidden(t *testing.T) {
 	addKaderMember(t, db, kaderID, mID) // UserCanSeeGame passiert
 	foreign := testutil.CreateMember(t, db, 0)
 
-	h := newGamesHandler(t, db, berlinTime(t, "2026-06-15 15:00")) // vor Cutoff
+	h := newGamesHandler(t, db, berlinTime(t, "2026-06-14 20:00")) // vor 18h-Cutoff
 	srv := cutoffServer(t, h)
 
 	token := testutil.Token(t, uID, "standard", []string{"spieler"})
@@ -330,7 +330,7 @@ func TestRespondToGame_Cutoff_AbsenceLockTakesPrecedence_403(t *testing.T) {
 	}
 }
 
-// ListMyGames enthält rsvp_locks_at (Sommerzeit: 18:00 Berlin = 16:00Z, -2h = 14:00Z).
+// ListMyGames enthält rsvp_locks_at (Sommerzeit: 18:00 Berlin = 16:00Z, -18h = 2026-06-14T22:00Z).
 func TestListMyGames_RsvpLocksAt_Summer(t *testing.T) {
 	db, gameID, _, _, kaderID := setupCutoffGame(t)
 	uID := testutil.CreateUser(t, db, "standard")
@@ -355,7 +355,7 @@ func TestListMyGames_RsvpLocksAt_Summer(t *testing.T) {
 			break
 		}
 	}
-	if got != "2026-06-15T14:00:00Z" {
+	if got != "2026-06-14T22:00:00Z" {
 		t.Errorf("expected rsvp_locks_at=2026-06-14T22:00:00Z, got %q", got)
 	}
 }
@@ -384,7 +384,7 @@ func TestListGames_RsvpLocksAt(t *testing.T) {
 			break
 		}
 	}
-	if got != "2026-06-15T14:00:00Z" {
+	if got != "2026-06-14T22:00:00Z" {
 		t.Errorf("expected rsvp_locks_at=2026-06-14T22:00:00Z, got %q", got)
 	}
 }
@@ -404,7 +404,7 @@ func TestGetGame_RsvpLocksAt(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&body)
 	g, _ := body["game"].(map[string]any)
 	got, _ := g["rsvp_locks_at"].(string)
-	if got != "2026-06-15T14:00:00Z" {
+	if got != "2026-06-14T22:00:00Z" {
 		t.Errorf("expected rsvp_locks_at=2026-06-14T22:00:00Z, got %q", got)
 	}
 }

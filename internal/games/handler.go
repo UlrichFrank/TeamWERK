@@ -61,7 +61,7 @@ func (h *Handler) SetNow(now func() time.Time) { h.now = now }
 
 // GameRSVPCutoff: bis dahin (vor Spielbeginn) sind RSVP-Änderungen
 // für Spieler/Eltern erlaubt. Trainer/Vorstand/Admin können auch danach pflegen.
-const GameRSVPCutoff = 2 * time.Hour
+const GameRSVPCutoff = 18 * time.Hour
 
 var berlinTZ = mustLoadBerlin()
 
@@ -2288,7 +2288,7 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if h.now().After(locksAt) {
-			writeRSVPLocked(w, "Spiel kann nur bis 2 Stunden vor Beginn umgesagt werden.", locksAt)
+			writeRSVPLocked(w, "Spiel kann nur bis 18 Stunden vor Beginn umgesagt werden.", locksAt)
 			return
 		}
 	}
