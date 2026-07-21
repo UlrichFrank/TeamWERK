@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AlertTriangle, Ban, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
@@ -191,6 +191,9 @@ export default function TermineDetailPage() {
   const [attendanceError, setAttendanceError] = useState<string | null>(null)
   const [lineupMap, setLineupMap] = useState<Record<number, boolean>>({})
   const [showReasonId, setShowReasonId] = useState<number | null>(null)
+  const [declineTarget, setDeclineTarget] = useState<{ memberId: number; name: string } | null>(null)
+  const [declineReason, setDeclineReason] = useState('')
+  const declineInputRef = useRef<HTMLInputElement>(null)
 
   const isTraining = type === 'training'
   // Games carry an authoritative per-item can.manage_lineup; trainings have no per-item
@@ -199,6 +202,23 @@ export default function TermineDetailPage() {
   const date = isTraining ? session?.date : game?.date
   const today = new Date().toISOString().slice(0, 10)
   const isPast = date ? date.slice(0, 10) <= today : false
+
+  const setRsvpForMember = async (memberId: number, status: 'confirmed' | 'declined' | 'maybe', reason = '') => {
+    const url = isTraining ? `/training-sessions/${id}/respond` : `/games/${id}/respond`
+    try { await api.post(url, { member_id: memberId, status, reason }); load(true) } catch { /* still */ }
+  }
+
+  const openDecline = (memberId: number, name: string) => {
+    setDeclineTarget({ memberId, name })
+    setDeclineReason('')
+    setTimeout(() => declineInputRef.current?.focus(), 50)
+  }
+
+  const confirmDecline = async () => {
+    if (!declineTarget) return
+    await setRsvpForMember(declineTarget.memberId, 'declined', declineReason)
+    setDeclineTarget(null)
+  }
 
   const applyAttendances = (data: AttendanceItem[]) => {
     setAttendances(data)
@@ -352,6 +372,27 @@ export default function TermineDetailPage() {
   if (isTraining && !session) return <p className="text-brand-danger text-sm p-4">Termin nicht gefunden.</p>
   if (!isTraining && !game) return <p className="text-brand-danger text-sm p-4">Spiel nicht gefunden.</p>
 
+  const declineModal = declineTarget ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDeclineTarget(null)}>
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+        <h2 className="font-semibold text-brand-text mb-1">Absagen für {declineTarget.name}</h2>
+        <p className="text-sm text-brand-text-muted mb-4">Grund angeben (optional)</p>
+        <input
+          ref={declineInputRef}
+          value={declineReason}
+          onChange={e => setDeclineReason(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') confirmDecline(); if (e.key === 'Escape') setDeclineTarget(null) }}
+          placeholder="z.B. Krank, Urlaub…"
+          className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-4"
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setDeclineTarget(null)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors">Abbrechen</button>
+          <button onClick={confirmDecline} className="bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors">Absagen</button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   // --- Training detail ---
   if (isTraining && session) {
     const noRsvpCount = attendances.length - session.confirmed_count - session.declined_count - session.maybe_count
@@ -370,6 +411,8 @@ export default function TermineDetailPage() {
     }))
 
     return (
+      <>
+        {declineModal}
       <div className="max-w-2xl space-y-4">
         <div className={`bg-brand-surface-card rounded-xl shadow border-t-4 p-6 ${session.status === 'cancelled' ? 'border-brand-border' : 'border-brand-yellow'}`}>
           <div className="flex items-start gap-3">
@@ -445,8 +488,11 @@ export default function TermineDetailPage() {
           seriesId={session.series_id}
           onSetUnavailable={setUnavailable}
           onClearUnavailable={clearUnavailable}
+          onSetRsvp={isTrainer ? setRsvpForMember : undefined}
+          onDeclineRsvp={isTrainer ? openDecline : undefined}
         />
       </div>
+      </>
     )
   }
 
@@ -507,6 +553,8 @@ export default function TermineDetailPage() {
   const maybeCount = participants.filter(p => !p.is_trainer && p.rsvp_status === 'maybe').length
 
   return (
+    <>
+      {declineModal}
     <div className="max-w-2xl space-y-4">
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
         <div className="flex items-start gap-3">
@@ -568,8 +616,11 @@ export default function TermineDetailPage() {
         onDismissError={() => setAttendanceError(null)}
         lineupMap={lineupMap}
         onToggleLineup={isTrainer ? saveLineup : undefined}
+        onSetRsvp={isTrainer ? setRsvpForMember : undefined}
+        onDeclineRsvp={isTrainer ? openDecline : undefined}
       />
     </div>
+    </>
   )
 }
 
@@ -586,12 +637,15 @@ interface RowActions {
   seriesId?: number | null
   onSetUnavailable?: (memberId: number) => void
   onClearUnavailable?: (uid: number) => void
+  // Trainer setzt RSVP eines Spielers (Nachholung bei verspäteter Meldung).
+  onSetRsvp?: (memberId: number, status: 'confirmed' | 'declined' | 'maybe') => void
+  // Absagen durch Trainer: öffnet Grund-Modal statt direktem API-Call.
+  onDeclineRsvp?: (memberId: number, memberName: string) => void
 }
 
-// Eigene rechte Spalte für das Aktionen-Menü (Serien-Ab-/Wieder-Anmelden),
-// sichtbar nur für Trainer auf Serien-Terminen.
+// Rechte Aktionsspalte: Serien-Ab-/Wieder-Anmelden oder Trainer-RSVP-Override.
 function hasActionsCol(a: RowActions) {
-  return a.isTrainer && a.seriesId != null
+  return (a.isTrainer && a.seriesId != null) || a.onSetRsvp != null
 }
 
 function colSpan(a: RowActions) {
@@ -666,23 +720,26 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
         )}
         {hasActionsCol(a) && (
           <td className="px-2 sm:px-4 py-3 text-right align-middle">
-            {!row.is_trainer && (
-              row.unavailable
-                ? a.onClearUnavailable && (
-                  <div className="flex justify-end">
-                    <ActionMenu actions={[
-                      { label: 'Wieder anmelden', onClick: () => a.onClearUnavailable!(row.unavailable!.id) },
-                    ]} />
-                  </div>
+            {!row.is_trainer && (() => {
+              const actions: { label: string; onClick: () => void; variant?: 'default' | 'danger' }[] = []
+              if (a.onSetRsvp) {
+                actions.push(
+                  { label: 'Zusagen', onClick: () => a.onSetRsvp!(row.member_id, 'confirmed') },
+                  { label: 'Absagen', onClick: () => a.onDeclineRsvp ? a.onDeclineRsvp(row.member_id, row.member_name) : a.onSetRsvp!(row.member_id, 'declined') },
+                  { label: 'Vielleicht', onClick: () => a.onSetRsvp!(row.member_id, 'maybe') },
                 )
-                : a.onSetUnavailable && (
-                  <div className="flex justify-end">
-                    <ActionMenu actions={[
-                      { label: 'Dauerhaft abmelden', onClick: () => a.onSetUnavailable!(row.member_id), variant: 'danger' },
-                    ]} />
-                  </div>
-                )
-            )}
+              }
+              if (row.unavailable && a.onClearUnavailable) {
+                actions.push({ label: 'Wieder anmelden', onClick: () => a.onClearUnavailable!(row.unavailable!.id) })
+              } else if (!row.unavailable && a.onSetUnavailable) {
+                actions.push({ label: 'Dauerhaft abmelden', onClick: () => a.onSetUnavailable!(row.member_id), variant: 'danger' })
+              }
+              return actions.length > 0 ? (
+                <div className="flex justify-end">
+                  <ActionMenu actions={actions} />
+                </div>
+              ) : null
+            })()}
           </td>
         )}
       </tr>
@@ -697,7 +754,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
   )
 }
 
-function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable }: {
+function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }: {
   rows: TableRow[]
   sections?: TableSection[]
   showAttendanceCol: boolean
@@ -713,8 +770,10 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
   seriesId?: number | null
   onSetUnavailable?: (memberId: number) => void
   onClearUnavailable?: (uid: number) => void
+  onSetRsvp?: (memberId: number, status: 'confirmed' | 'declined' | 'maybe') => void
+  onDeclineRsvp?: (memberId: number, memberName: string) => void
 }) {
-  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable }
+  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }
 
   // Ohne explizite Sektionen: drei benannte Sektionen Trainer / Spieler / Erweiterter Kader
   // in dieser Reihenfolge; leere Sektionen werden weggelassen.

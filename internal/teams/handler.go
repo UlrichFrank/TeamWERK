@@ -28,8 +28,9 @@ type Team struct {
 }
 
 type TrainerEntry struct {
-	UserID int    `json:"userId"`
-	Name   string `json:"name"`
+	UserID   int    `json:"userId"`
+	MemberID int    `json:"memberId"`
+	Name     string `json:"name"`
 }
 
 type PlayerEntry struct {
@@ -132,7 +133,7 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 
 	// Trainers: kader_trainers → members → users
 	trainerRows, err := h.db.QueryContext(ctx, `
-		SELECT DISTINCT COALESCE(u.id, 0), m.first_name || ' ' || m.last_name
+		SELECT DISTINCT m.id, COALESCE(u.id, 0), m.first_name || ' ' || m.last_name
 		FROM kader_trainers kt
 		JOIN kader k ON k.id = kt.kader_id
 		JOIN members m ON m.id = kt.member_id
@@ -143,7 +144,7 @@ func (h *Handler) GetRoster(w http.ResponseWriter, r *http.Request) {
 		defer trainerRows.Close()
 		for trainerRows.Next() {
 			var t TrainerEntry
-			trainerRows.Scan(&t.UserID, &t.Name)
+			trainerRows.Scan(&t.MemberID, &t.UserID, &t.Name)
 			resp.Trainers = append(resp.Trainers, t)
 		}
 	}

@@ -45,10 +45,13 @@ type PenaltyTotal struct {
 
 // PenaltyListResponse ist die Antwort von ListPenalties. Alle Arrays nie null.
 // canLevy = der anfragende Nutzer ist Strafenwart dieses Teams.
+// myMemberIds = member_ids des anfragenden Nutzers (eigene + Kinder via family_links),
+// damit das Frontend eigene Einträge oben sortieren kann.
 type PenaltyListResponse struct {
-	Penalties []Penalty      `json:"penalties"`
-	Totals    []PenaltyTotal `json:"totals"`
-	CanLevy   bool           `json:"canLevy"`
+	Penalties   []Penalty      `json:"penalties"`
+	Totals      []PenaltyTotal `json:"totals"`
+	CanLevy     bool           `json:"canLevy"`
+	MyMemberIDs []int          `json:"myMemberIds"`
 }
 
 // PenaltyType ist ein Catalog-Eintrag (Strafen-Vokabular + Default-Betrag).
@@ -128,11 +131,30 @@ func (h *Handler) ListPenalties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := PenaltyListResponse{
-		Penalties: []Penalty{},
-		Totals:    []PenaltyTotal{},
+		Penalties:   []Penalty{},
+		Totals:      []PenaltyTotal{},
+		MyMemberIDs: []int{},
 	}
 	if canLevy, lErr := h.isStrafenwartOfTeam(ctx, claims, teamID); lErr == nil {
 		resp.CanLevy = canLevy
+	}
+
+	// Eigene member_id + Kinder (family_links) für Frontend-Sortierung.
+	if claims != nil {
+		var ownMemberID int
+		h.db.QueryRowContext(ctx, `SELECT id FROM members WHERE user_id = ?`, claims.UserID).Scan(&ownMemberID)
+		if ownMemberID > 0 {
+			resp.MyMemberIDs = append(resp.MyMemberIDs, ownMemberID)
+		}
+		childRows, err := h.db.QueryContext(ctx, `SELECT member_id FROM family_links WHERE parent_user_id = ?`, claims.UserID)
+		if err == nil {
+			defer childRows.Close()
+			for childRows.Next() {
+				var cid int
+				childRows.Scan(&cid)
+				resp.MyMemberIDs = append(resp.MyMemberIDs, cid)
+			}
+		}
 	}
 
 	rows, err := h.db.QueryContext(ctx, `

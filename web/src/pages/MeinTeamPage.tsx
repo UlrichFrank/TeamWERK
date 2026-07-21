@@ -6,7 +6,7 @@ import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 
-interface TrainerEntry { userId: number; name: string }
+interface TrainerEntry { userId: number; memberId: number; name: string }
 interface Responsibility { id: number; label: string }
 interface PlayerEntry {
   userId: number
@@ -33,7 +33,7 @@ interface MyTeam { id: number; name: string }
 // Strafen-Datenmodell (Beträge in Cent)
 interface Penalty { id: number; memberId: number; memberName: string; amountCent: number; reason: string; createdAt: string }
 interface PenaltyTotal { memberId: number; memberName: string; totalCent: number }
-interface PenaltiesData { penalties: Penalty[]; totals: PenaltyTotal[]; canLevy: boolean }
+interface PenaltiesData { penalties: Penalty[]; totals: PenaltyTotal[]; canLevy: boolean; myMemberIds: number[] }
 
 // Verwaltungs-Kataloge
 interface RespType { id: number; label: string }
@@ -107,11 +107,7 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
 
   const allPlayers = [...roster.players, ...roster.extended_players]
 
-  // Bold-Me: eigene Zeilen fett. isMeUser vergleicht die userId (Roster/Kasse),
-  // myMemberId löst die eigene member_id aus dem Roster auf (Strafen-Übersicht).
   const isMeUser = (userId: number) => user != null && userId === user.id
-  const myMemberId = allPlayers.find(p => p.userId === user?.id)?.memberId ?? -1
-  const isMeMember = (memberId: number) => memberId === myMemberId
 
   // --- Verwaltungs-Kataloge (lazy) ---
   const [respTypes, setRespTypes] = useState<RespType[] | null>(null)
@@ -136,10 +132,10 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
   useEffect(() => {
     if (activeTab === 'verwalten' && roster.canManage) {
       loadRespTypes(); loadPenaltyTypes(); loadStrafenwarte(); loadKassenwarte()
-    } else if (activeTab === 'strafen' && penalties?.canLevy) {
+    } else if (activeTab === 'strafen') {
       loadPenaltyTypes()
     }
-  }, [activeTab, bump, roster.canManage, penalties?.canLevy, loadRespTypes, loadPenaltyTypes, loadStrafenwarte, loadKassenwarte])
+  }, [activeTab, bump, roster.canManage, loadRespTypes, loadPenaltyTypes, loadStrafenwarte, loadKassenwarte])
 
   // --- Formularzustand ---
   const [newRespLabel, setNewRespLabel] = useState('')
@@ -151,7 +147,7 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
   const [newKassenwart, setNewKassenwart] = useState('')
   const [levyMember, setLevyMember] = useState('')
   const [levyTypeId, setLevyTypeId] = useState('')
-  const [levyEur, setLevyEur] = useState('')
+  const [katalogOpen, setKatalogOpen] = useState(false)
   // Einheiten-Wechsel: Vorschau-Modal
   const [unitPreview, setUnitPreview] = useState<PenaltyPreview | null>(null)
   // Kassenbuchung
@@ -261,18 +257,12 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
   }
 
   // --- Strafe verhängen / stornieren / zurücksetzen ---
-  function onLevyTypeChange(v: string) {
-    setLevyTypeId(v)
-    const t = (penaltyTypes ?? []).find(pt => String(pt.id) === v)
-    if (t) setLevyEur(penaltyUnit === 'striche' ? String(Math.round(t.defaultAmountCent / 100)) : (t.defaultAmountCent / 100).toFixed(2))
-  }
   async function levy() {
     const t = (penaltyTypes ?? []).find(pt => String(pt.id) === levyTypeId)
-    const cent = inputToCent(levyEur)
-    if (!levyMember || !t || !Number.isFinite(cent) || cent <= 0) return
+    if (!levyMember || !t) return
     try {
-      await api.post(`/teams/${teamId}/penalties`, { memberId: Number(levyMember), amountCent: cent, reason: t.reason })
-      setLevyMember(''); setLevyTypeId(''); setLevyEur('')
+      await api.post(`/teams/${teamId}/penalties`, { memberId: Number(levyMember), amountCent: t.defaultAmountCent, reason: t.reason })
+      setLevyMember(''); setLevyTypeId('')
       reloadPenalties()
     } catch { /* still */ }
   }
@@ -613,10 +603,21 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
             </div>
             <div className="flex gap-2">
               <select value={newKassenwart} onChange={e => setNewKassenwart(e.target.value)} className={INPUT}>
-                <option value="">Spieler wählen…</option>
-                {allPlayers.map(p => (
-                  <option key={p.memberId} value={p.memberId}>{p.name}</option>
-                ))}
+                <option value="">Person wählen…</option>
+                {roster.trainers.length > 0 && (
+                  <optgroup label="Trainer">
+                    {roster.trainers.map(t => (
+                      <option key={t.memberId} value={t.memberId}>{t.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {allPlayers.length > 0 && (
+                  <optgroup label="Spieler">
+                    {allPlayers.map(p => (
+                      <option key={p.memberId} value={p.memberId}>{p.name}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <button onClick={addKassenwart} disabled={!newKassenwart} className={BTN_SMALL} aria-label="Kassenwart ernennen">
                 <Plus className="w-4 h-4" />
@@ -633,13 +634,18 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
           <div className="space-y-4">
             {penalties.totals.length === 0 ? (
               <p className="text-sm text-brand-text-muted">— keine Strafen —</p>
-            ) : (
-              penalties.totals.map(t => (
-                <div key={t.memberId} className="border-t border-brand-border-subtle pt-3 first:border-0 first:pt-0">
+            ) : (() => {
+              const mySet = new Set(penalties.myMemberIds)
+              const mine = penalties.totals.filter(t => mySet.has(t.memberId))
+              const others = penalties.totals
+                .filter(t => !mySet.has(t.memberId))
+                .sort((a, b) => a.memberName.localeCompare(b.memberName, 'de'))
+              const renderEntry = (t: PenaltyTotal, first = false) => (
+                <div key={t.memberId} className={first ? '' : 'border-t border-brand-border-subtle pt-3'}>
                   <div className="flex items-center justify-between">
-                    <span className={`text-sm text-brand-text ${isMeMember(t.memberId) ? 'font-semibold' : 'font-medium'}`}>{t.memberName}</span>
+                    <span className={`text-sm text-brand-text ${mySet.has(t.memberId) ? 'font-semibold' : 'font-medium'}`}>{t.memberName}</span>
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm text-brand-text-muted ${isMeMember(t.memberId) ? 'font-semibold' : ''}`}>{fmtPenaltyAmount(t.totalCent, penaltyUnit)}</span>
+                      <span className={`text-sm text-brand-text-muted ${mySet.has(t.memberId) ? 'font-semibold' : ''}`}>{fmtPenaltyAmount(t.totalCent, penaltyUnit)}</span>
                       {penalties.canLevy && (
                         <button onClick={() => resetMember(t.memberId, t.memberName)} className="text-xs text-brand-text-muted hover:text-brand-danger transition-colors">
                           Zurücksetzen
@@ -663,7 +669,38 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
                     ))}
                   </ul>
                 </div>
-              ))
+              )
+              return (
+                <>
+                  {mine.map((t, i) => renderEntry(t, i === 0))}
+                  {mine.length > 0 && others.length > 0 && (
+                    <div className="border-t border-brand-border my-1" />
+                  )}
+                  {others.map((t, i) => renderEntry(t, i === 0))}
+                </>
+              )
+            })()}
+
+            {penaltyTypes && penaltyTypes.length > 0 && (
+              <div className="border-t border-brand-border-subtle pt-4">
+                <button
+                  onClick={() => setKatalogOpen(o => !o)}
+                  className="flex items-center gap-1 text-xs font-semibold text-brand-text-muted uppercase tracking-wide mb-2 hover:text-brand-text transition-colors"
+                >
+                  {katalogOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Strafenkatalog
+                </button>
+                {katalogOpen && (
+                  <div className="space-y-1 mb-2">
+                    {penaltyTypes.map(pt => (
+                      <div key={pt.id} className="flex items-center justify-between text-sm">
+                        <span className="text-brand-text">{pt.reason}</span>
+                        <span className="text-brand-text-muted">{fmtPenaltyAmount(pt.defaultAmountCent, penaltyUnit)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {penalties.canLevy && (
@@ -679,18 +716,13 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
                         <option key={p.memberId} value={p.memberId}>{p.name}</option>
                       ))}
                     </select>
-                    <select value={levyTypeId} onChange={e => onLevyTypeChange(e.target.value)} className={INPUT}>
+                    <select value={levyTypeId} onChange={e => setLevyTypeId(e.target.value)} className={INPUT}>
                       <option value="">Grund wählen…</option>
                       {(penaltyTypes ?? []).map(pt => (
-                        <option key={pt.id} value={pt.id}>{pt.reason}</option>
+                        <option key={pt.id} value={pt.id}>{pt.reason} · {fmtPenaltyAmount(pt.defaultAmountCent, penaltyUnit)}</option>
                       ))}
                     </select>
-                    {penaltyUnit === 'striche' ? (
-                      <input value={levyEur} onChange={e => setLevyEur(e.target.value)} type="number" step="1" min="1" placeholder="Anzahl Striche" className={INPUT} />
-                    ) : (
-                      <input value={levyEur} onChange={e => setLevyEur(e.target.value)} inputMode="decimal" placeholder="Betrag €" className={INPUT} />
-                    )}
-                    <button onClick={levy} disabled={!levyMember || !levyTypeId || !(inputToCent(levyEur) > 0)} className={BTN_SMALL} aria-label="Strafe verhängen">
+                    <button onClick={levy} disabled={!levyMember || !levyTypeId} className={BTN_SMALL} aria-label="Strafe verhängen">
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
