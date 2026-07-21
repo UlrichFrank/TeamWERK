@@ -103,7 +103,11 @@ export default function AppShell() {
   const [swUpdateAvailable, setSwUpdateAvailable] = useState(false)
   useRegisterSW({ onNeedRefresh() { setSwUpdateAvailable(true) } })
   const showUpdateBanner = sseUpdateAvailable || swUpdateAvailable
-  const [canGoBack, setCanGoBack] = useState(() => (window.history.state?.idx ?? 0) > 0)
+  // Baseline: History-Index beim AppShell-Mount. „Zurück" darf nur weiter
+  // zurück gehen, als wir bei Session-Start standen — sonst landet der erste
+  // Klick nach Login auf /login (führt zum Ausloggen).
+  const [initialHistoryIdx] = useState<number>(() => (window.history.state?.idx ?? 0))
+  const [canGoBack, setCanGoBack] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
   const [openModule, setOpenModule] = useState<string>(initOpenModule)
@@ -197,8 +201,8 @@ export default function AppShell() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
-    setCanGoBack((window.history.state?.idx ?? 0) > 0)
-  }, [location])
+    setCanGoBack((window.history.state?.idx ?? 0) > initialHistoryIdx)
+  }, [location, initialHistoryIdx])
 
   useEffect(() => {
     const nav = navigator as Navigator & {
