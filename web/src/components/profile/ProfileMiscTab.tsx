@@ -35,13 +35,7 @@ const categoryLabels: Record<Category, string> = {
 // Kurzbeschreibung unter dem Label (nur wo hilfreich).
 const categoryDescriptions: Partial<Record<Category, string>> = {
   operativ: 'Erinnerungen an deine Vereinsaufgaben, z. B. Anwesenheiten nachtragen oder Spielberichte freigeben.',
-  sonstiges: 'Sonstige Ereignisse, z. B. wenn ein hochgeladenes Video fertig verarbeitet ist.',
-}
-
-// Kategorien ohne E-Mail-Pfad (reine Push-Benachrichtigung) — kein E-Mail-Toggle.
-const pushOnly: Partial<Record<Category, boolean>> = {
-  operativ: true,
-  sonstiges: true,
+  sonstiges: 'Technische Ereignisse rund um Vereinsinhalte, z. B. wenn ein hochgeladenes Video fertig verarbeitet ist oder ein Video bald gelöscht wird.',
 }
 
 export default function ProfileMiscTab() {
@@ -158,15 +152,11 @@ export default function ProfileMiscTab() {
                 onToggle={() => togglePush(cat)}
                 label={`Push ${categoryLabels[cat]}`}
               />
-              {pushOnly[cat] ? (
-                <span className="w-11" aria-hidden="true" />
-              ) : (
-                <Toggle
-                  enabled={prefs[cat].email}
-                  onToggle={() => toggleEmail(cat)}
-                  label={`E-Mail ${categoryLabels[cat]}`}
-                />
-              )}
+              <Toggle
+                enabled={prefs[cat].email}
+                onToggle={() => toggleEmail(cat)}
+                label={`E-Mail ${categoryLabels[cat]}`}
+              />
             </div>
           ))}
         </div>

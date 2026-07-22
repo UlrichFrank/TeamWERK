@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
 
@@ -54,13 +54,7 @@ func (s *Scheduler) sendAttendanceRemindersAt(now time.Time) {
 	sent := 0
 	for _, perTrainer := range groupByTrainer(openEvents) {
 		userID := perTrainer.userID
-		// Präferenz respektieren: Trainer mit deaktiviertem 'operativ' vorab
-		// aussortieren (vor notification_log), damit ein späteres Wieder-
-		// Aktivieren künftige Läufe wieder erfasst.
-		if len(push.FilterByPushPref(s.db, []int{userID}, "operativ")) == 0 {
-			continue
-		}
-		// Idempotenz: pro User+heute genau eine Push, INSERT OR IGNORE.
+		// Idempotenz: pro User+heute genau eine Benachrichtigung, INSERT OR IGNORE.
 		res, err := s.db.Exec(
 			`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 			userID, "attendance-reminder", refID)
@@ -75,7 +69,7 @@ func (s *Scheduler) sendAttendanceRemindersAt(now time.Time) {
 		title := "Anwesenheiten fehlen"
 		body := buildAttendanceReminderBody(perTrainer.events)
 		url := fmt.Sprintf("/team/%d/anwesenheit", perTrainer.events[0].teamID)
-		go push.SendToUsers(s.db, s.cfg, []int{userID}, title, body, url)
+		notify.Send(s.db, s.cfg, []int{userID}, "operativ", title, body, url)
 		sent++
 	}
 

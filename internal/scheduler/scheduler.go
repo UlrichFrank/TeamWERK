@@ -108,7 +108,6 @@ func (s *Scheduler) sendMatchReportReviewReminders() {
 	// Präferenz respektieren: Freigeber mit deaktiviertem 'operativ' vorab
 	// aussortieren (vor notification_log), damit ein späteres Wieder-Aktivieren
 	// künftige Läufe wieder erfasst.
-	reviewers = push.FilterByPushPref(s.db, reviewers, "operativ")
 	if len(reviewers) == 0 {
 		return
 	}
@@ -127,7 +126,7 @@ func (s *Scheduler) sendMatchReportReviewReminders() {
 				continue
 			}
 			if n, _ := res.RowsAffected(); n == 1 {
-				go push.SendToUsers(s.db, s.cfg, []int{uid}, title, body, url)
+				notify.Send(s.db, s.cfg, []int{uid}, "operativ", title, body, url)
 				sent++
 			}
 		}
@@ -338,7 +337,12 @@ func (s *Scheduler) sendVideoRetentionWarnings() {
 				continue
 			}
 			if n, _ := res.RowsAffected(); n == 1 {
+				// Push: Datenverlust-Warnung → Präferenz bewusst umgangen.
 				go push.SendToUsers(s.db, s.cfg, []int{uid}, title, body, fmt.Sprintf("/videos/%d", w.id))
+				// Email: nur wenn explizit gewünscht.
+				if emailUIDs := notify.FilterByEmailPref(s.db, []int{uid}, "sonstiges"); len(emailUIDs) > 0 {
+					go notify.SendEmail(s.db, s.cfg, uid, title, body, fmt.Sprintf("/videos/%d", w.id))
+				}
 				sent++
 			}
 		}

@@ -42,6 +42,12 @@ var Send = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, titl
 	}
 }
 
+// FilterByEmailPref returns the subset of userIDs that have email_enabled=1
+// for the given category. Users without a row default to false.
+func FilterByEmailPref(db *sql.DB, userIDs []int, category string) []int {
+	return filterByEmailPref(db, userIDs, category)
+}
+
 // filterByEmailPref returns the subset of userIDs that have email_enabled=1
 // for the given category. Users without a row default to false.
 func filterByEmailPref(db *sql.DB, userIDs []int, category string) []int {
@@ -73,6 +79,13 @@ func filterByEmailPref(db *sql.DB, userIDs []int, category string) []int {
 		result = append(result, id)
 	}
 	return result
+}
+
+// SendEmail loads the user's email and sends a plain-text notification mail.
+// The body gets a direct-link line appended pointing into the app.
+// Exported so callers outside the package can reuse the email dispatch path.
+func SendEmail(db *sql.DB, cfg *appconfig.Config, userID int, title, body, url string) {
+	sendCategoryEmail(db, cfg, userID, title, body, url)
 }
 
 // sendCategoryEmail loads the user's email and sends a plain-text notification mail.

@@ -53,6 +53,7 @@ func (c *fakeConfig) pushSend(userIDs []int, _, body, _ string) {
 	c.pushUIDs = append(c.pushUIDs, userIDs)
 	c.pushBody = append(c.pushBody, body)
 }
+func (c *fakeConfig) emailSend(_ []int, _, _, _ string) {}
 
 func (c *fakeConfig) lastPush() ([]int, string, bool) {
 	c.mu.Lock()

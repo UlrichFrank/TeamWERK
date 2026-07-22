@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
@@ -85,7 +86,10 @@ type broadcaster interface {
 type workerConfig interface {
 	storageDir() string
 	reservedBytes() uint64
+	// pushSend erhält die bereits push-gefilterten UserIDs und versendet Push.
 	pushSend(userIDs []int, title, body, url string)
+	// emailSend erhält die bereits email-gefilterten UserIDs und versendet E-Mails.
+	emailSend(userIDs []int, title, body, url string)
 }
 
 // NewWorker baut einen Produktions-Worker mit echtem ffmpeg und den Defaults für
@@ -110,6 +114,11 @@ func (c handlerWorkerConfig) storageDir() string    { return c.h.cfg.VideoStorag
 func (c handlerWorkerConfig) reservedBytes() uint64 { return c.h.cfg.VideoReservedBytes }
 func (c handlerWorkerConfig) pushSend(userIDs []int, title, body, url string) {
 	push.SendToUsers(c.h.db, c.h.cfg, userIDs, title, body, url)
+}
+func (c handlerWorkerConfig) emailSend(userIDs []int, title, body, url string) {
+	for _, uid := range userIDs {
+		go notify.SendEmail(c.h.db, c.h.cfg, uid, title, body, url)
+	}
 }
 
 // ctxSleep schläft d lang oder kehrt früher zurück, wenn ctx endet.
@@ -280,18 +289,24 @@ func (wk *Worker) notifyReady(id int) {
 		slog.Error("video worker: load push meta failed", "video_id", id, "error", err)
 		return
 	}
-	uids, err := wk.pushRecipients(id)
+	allUids, err := wk.pushRecipients(id)
 	if err != nil {
 		slog.Error("video worker: collect push recipients failed", "video_id", id, "error", err)
 		return
 	}
-	uids = push.FilterByPushPref(wk.db, uids, "sonstiges")
-	if len(uids) == 0 {
+	if len(allUids) == 0 {
 		return
 	}
 	body := fmt.Sprintf("Neues Video: %s — %s", teamName, title)
 	url := "/videos/" + strconv.Itoa(id)
-	go wk.cfg.pushSend(uids, "Neues Video", body, url)
+	pushUids := push.FilterByPushPref(wk.db, allUids, "sonstiges")
+	if len(pushUids) > 0 {
+		go wk.cfg.pushSend(pushUids, "Neues Video", body, url)
+	}
+	emailUids := notify.FilterByEmailPref(wk.db, allUids, "sonstiges")
+	if len(emailUids) > 0 {
+		go wk.cfg.emailSend(emailUids, "Neues Video", body, url)
+	}
 }
 
 // pushRecipients liefert die distinkten User-IDs für die Ready-Push (4.8):
