@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -118,6 +119,127 @@ func (h *Handler) UpsertToken(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	h.db.ExecContext(r.Context(), `DELETE FROM calendar_tokens WHERE user_id = ?`, claims.UserID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// childUserID liefert die user_id des Kindes, wenn der anfragende Nutzer
+// Elternteil dieses Mitglieds ist (via family_links). 0 = kein Zugriff.
+func (h *Handler) childUserID(r *http.Request, claims *auth.Claims) (int, bool) {
+	memberID, err := strconv.Atoi(r.PathValue("memberId"))
+	if err != nil {
+		return 0, false
+	}
+	var count int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM family_links WHERE parent_user_id = ? AND member_id = ?`,
+		claims.UserID, memberID).Scan(&count)
+	if count == 0 {
+		return 0, false
+	}
+	var userID int
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT user_id FROM members WHERE id = ? AND user_id IS NOT NULL`, memberID).Scan(&userID)
+	if err != nil {
+		return 0, false
+	}
+	return userID, true
+}
+
+// GET /api/profile/kind/{memberId}/calendar-token
+func (h *Handler) GetChildToken(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	childUID, ok := h.childUserID(r, claims)
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var s tokenSettings
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT token, include_heim, include_auswaerts, include_training, include_generisch, include_duty
+		 FROM calendar_tokens WHERE user_id = ?`, childUID).
+		Scan(&s.Token, &s.IncludeHeim, &s.IncludeAuswaerts, &s.IncludeTraining, &s.IncludeGenerisch, &s.IncludeDuty)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s)
+}
+
+// POST /api/profile/kind/{memberId}/calendar-token
+func (h *Handler) UpsertChildToken(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	childUID, ok := h.childUserID(r, claims)
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var req tokenSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var existing string
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT token FROM calendar_tokens WHERE user_id = ?`, childUID).Scan(&existing)
+	if err == sql.ErrNoRows {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		b[6] = (b[6] & 0x0f) | 0x40
+		b[8] = (b[8] & 0x3f) | 0x80
+		token := hex.EncodeToString(b[:4]) + "-" +
+			hex.EncodeToString(b[4:6]) + "-" +
+			hex.EncodeToString(b[6:8]) + "-" +
+			hex.EncodeToString(b[8:10]) + "-" +
+			hex.EncodeToString(b[10:])
+		_, err = h.db.ExecContext(r.Context(),
+			`INSERT INTO calendar_tokens (user_id, token, include_heim, include_auswaerts, include_training, include_generisch, include_duty)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			childUID, token,
+			boolToInt(req.IncludeHeim), boolToInt(req.IncludeAuswaerts),
+			boolToInt(req.IncludeTraining), boolToInt(req.IncludeGenerisch),
+			boolToInt(req.IncludeDuty))
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		req.Token = token
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	} else {
+		_, err = h.db.ExecContext(r.Context(),
+			`UPDATE calendar_tokens SET include_heim=?, include_auswaerts=?, include_training=?, include_generisch=?, include_duty=?
+			 WHERE user_id=?`,
+			boolToInt(req.IncludeHeim), boolToInt(req.IncludeAuswaerts),
+			boolToInt(req.IncludeTraining), boolToInt(req.IncludeGenerisch),
+			boolToInt(req.IncludeDuty), childUID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		req.Token = existing
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(req)
+}
+
+// DELETE /api/profile/kind/{memberId}/calendar-token
+func (h *Handler) DeleteChildToken(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	childUID, ok := h.childUserID(r, claims)
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	h.db.ExecContext(r.Context(), `DELETE FROM calendar_tokens WHERE user_id = ?`, childUID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

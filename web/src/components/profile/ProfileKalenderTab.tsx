@@ -32,7 +32,7 @@ const labels: Record<keyof Toggles, string> = {
 const BTN_PRIMARY = 'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 const BTN_DANGER = 'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
-export default function ProfileKalenderTab() {
+export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { apiPath?: string }) {
   const [token, setToken] = useState<string | null>(null)
   const [toggles, setToggles] = useState<Toggles>(ALL_ON)
   const [loading, setLoading] = useState(true)
@@ -43,7 +43,7 @@ export default function ProfileKalenderTab() {
   const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
-    api.get<TokenResponse>('/calendar/token')
+    api.get<TokenResponse>(apiPath)
       .then(r => {
         setToken(r.data.token)
         setToggles({
@@ -58,7 +58,7 @@ export default function ProfileKalenderTab() {
         setToken(null)
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [apiPath])
 
   const flip = (key: keyof Toggles) => {
     setToggles(t => ({ ...t, [key]: !t[key] }))
@@ -69,7 +69,7 @@ export default function ProfileKalenderTab() {
     setSaving(true)
     setError('')
     try {
-      const r = await api.post<TokenResponse>('/calendar/token', toggles)
+      const r = await api.post<TokenResponse>(apiPath, toggles)
       setToken(r.data.token)
       setDirty(false)
     } catch {
@@ -84,7 +84,7 @@ export default function ProfileKalenderTab() {
     setDeleting(true)
     setError('')
     try {
-      await api.delete('/calendar/token')
+      await api.delete(apiPath)
       setToken(null)
       setToggles(ALL_ON)
       setDirty(false)

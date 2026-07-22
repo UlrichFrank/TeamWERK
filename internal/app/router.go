@@ -257,6 +257,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Delete("/api/profile/kind/{memberId}/phones/{phoneId}", h.Members.DeleteChildPhone)
 		r.Put("/api/profile/kind/{memberId}/visibility", h.Members.UpdateChildVisibility)
 		r.Post("/api/profile/kind/{memberId}/recovery-email", h.Auth.RequestRecoveryEmailChange)
+		r.Get("/api/profile/kind/{memberId}/calendar-token", h.Calendar.GetChildToken)
+		r.Post("/api/profile/kind/{memberId}/calendar-token", h.Calendar.UpsertChildToken)
+		r.Delete("/api/profile/kind/{memberId}/calendar-token", h.Calendar.DeleteChildToken)
 		r.Post("/api/upload/user-photo", h.Upload.UploadUserPhoto)
 		r.Delete("/api/upload/user-photo", h.Upload.DeleteUserPhoto)
 
