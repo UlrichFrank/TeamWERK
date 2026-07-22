@@ -266,7 +266,7 @@ func TestCreateUpload_BadRequest(t *testing.T) {
 		{"invalid team_id zero", map[string]any{"title": "x", "team_id": 0, "season_id": season, "size_bytes": 1024}},
 		{"missing season_id", map[string]any{"title": "x", "team_id": team, "size_bytes": 1024}},
 		{"missing size_bytes", map[string]any{"title": "x", "team_id": team, "season_id": season}},
-		{"over 2GB", map[string]any{"title": "x", "team_id": team, "season_id": season, "size_bytes": int64(3) << 30}},
+		{"over 15GB", map[string]any{"title": "x", "team_id": team, "season_id": season, "size_bytes": int64(16) << 30}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

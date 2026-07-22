@@ -21,9 +21,8 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 )
 
-// maxUploadSize ist das 2,5-GB-Hard-Limit pro Datei (tusd Config.MaxSize).
-// 5 << 29 == 2.5 GiB == 2_684_354_560 Bytes.
-const maxUploadSize int64 = 5 << 29 // 2.5 GiB
+// maxUploadSize ist das 15-GB-Hard-Limit pro Datei (tusd Config.MaxSize).
+const maxUploadSize int64 = 15 * 1024 * 1024 * 1024 // 15 GiB
 
 // uploadsDir liefert das tus-Session-Verzeichnis ({root}/uploads).
 func uploadsDir(root string) string {
@@ -95,7 +94,7 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.SizeBytes > maxUploadSize {
-		http.Error(w, "file too large (max 2.5 GB)", http.StatusBadRequest)
+		http.Error(w, "file too large (max 15 GB)", http.StatusBadRequest)
 		return
 	}
 

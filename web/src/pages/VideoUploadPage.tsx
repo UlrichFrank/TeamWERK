@@ -6,7 +6,7 @@ import { Upload, X, AlertTriangle, Info } from 'lucide-react'
 import { api, getAccessToken, getPendingRefresh, refreshAccessToken, setAccessToken } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
 
-const MAX_SIZE = 2.5 * 1024 * 1024 * 1024 // 2.5 GiB
+const MAX_SIZE = 15 * 1024 * 1024 * 1024 // 15 GiB
 
 // tus-js-client exportiert die PreviousUpload-Form nicht als Typ → über den
 // Rückgabewert von findPreviousUploads() ableiten.
@@ -216,7 +216,7 @@ export default function VideoUploadPage() {
     const f = e.target.files?.[0] ?? null
     if (f && f.size > MAX_SIZE) {
       setFile(null)
-      setError('Datei zu groß: maximal 2,5 GB erlaubt.')
+      setError('Datei zu groß: maximal 15 GB erlaubt.')
       return
     }
     setFile(f)
@@ -291,7 +291,7 @@ export default function VideoUploadPage() {
       return
     }
     if (file.size > MAX_SIZE) {
-      setError('Datei zu groß: maximal 2,5 GB erlaubt.')
+      setError('Datei zu groß: maximal 15 GB erlaubt.')
       return
     }
     if (!activeSeasonId) {
@@ -410,7 +410,7 @@ export default function VideoUploadPage() {
            <div className="space-y-1">
              <p className="font-medium">So läuft die Bereitstellung</p>
              <ol className="list-decimal list-inside text-brand-text-muted space-y-0.5">
-               <li>Upload (max. 2,5 GB, pausierbar/wiederaufnehmbar).</li>
+               <li>Upload (max. 15 GB, pausierbar/wiederaufnehmbar).</li>
               <li>Konvertierung im Hintergrund nach HLS 720p + 360p — dauert grob so lange wie das Video selbst.</li>
               <li>Sobald fertig: Push-Benachrichtigung an Uploader, Spieler, Eltern und Trainer; Video erscheint in der Liste.</li>
             </ol>
