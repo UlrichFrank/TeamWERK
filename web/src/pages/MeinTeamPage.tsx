@@ -1022,7 +1022,7 @@ export default function MeinTeamPage() {
                   aria-expanded={isOpen}
                   className="w-full flex items-center justify-between px-5 py-4 hover:bg-brand-border-subtle transition-colors min-h-[44px]"
                 >
-                  <h2 className="font-semibold text-sm text-brand-text text-left">{roster?.team.display_long || team.name}</h2>
+                  <h2 className="font-semibold text-brand-text text-left">{roster?.team.display_long || team.name}</h2>
                   {isOpen
                     ? <ChevronDown className="w-5 h-5 text-brand-text-muted shrink-0" />
                     : <ChevronRight className="w-5 h-5 text-brand-text-muted shrink-0" />
