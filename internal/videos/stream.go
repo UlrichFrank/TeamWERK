@@ -30,7 +30,8 @@ type streamUIDKey struct{}
 
 // loadVideoForView lädt die für die Berechtigungsprüfung nötige Teilmenge eines
 // Videos plus `duration_sec` für die dauerabhängige Stream-Token-TTL. Liefert
-// (nil, nil) wenn das Video nicht existiert.
+// (nil, nil) wenn das Video nicht existiert. TeamIDs wird aus video_teams
+// befüllt, sodass CanViewVideo alle zugeordneten Teams prüfen kann.
 func (h *Handler) loadVideoForView(id int) (*Video, error) {
 	v := &Video{ID: id}
 	var duration sql.NullInt64
@@ -46,7 +47,19 @@ func (h *Handler) loadVideoForView(id int) (*Video, error) {
 	if duration.Valid {
 		v.DurationSec = duration.Int64
 	}
-	return v, nil
+	rows, err := h.db.Query(`SELECT team_id FROM video_teams WHERE video_id = ?`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tid int
+		if err := rows.Scan(&tid); err != nil {
+			return nil, err
+		}
+		v.TeamIDs = append(v.TeamIDs, tid)
+	}
+	return v, rows.Err()
 }
 
 // Play liefert einen kurzlebigen Stream-Token + die Master-Playlist-URL aus.

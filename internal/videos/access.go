@@ -6,9 +6,11 @@ import (
 
 // Video ist die für Berechtigungsprüfungen relevante Teilmenge einer videos-Zeile.
 // `DurationSec` (0 wenn NULL) fließt in die Stream-Token-TTL ein (video-tv-streaming).
+// `TeamIDs` enthält alle video_teams-Einträge für die Sichtbarkeitsprüfung.
 type Video struct {
 	ID          int
 	TeamID      int
+	TeamIDs     []int
 	DurationSec int64
 }
 
@@ -50,11 +52,8 @@ func (h *Handler) CanManageTeamVideos(claims *auth.Claims, teamID int) (bool, er
 }
 
 // CanViewVideo meldet, ob der Aufrufer ein Video ansehen darf. Sichtbar sind
-// Videos eines Teams nur für (siehe design.md "Strenge Berechtigung"):
-//   - Vorstand und Admin (immer)
-//   - aktive Spieler des Teams
-//   - Trainer des Teams
-//   - Eltern aktiver Spieler des Teams
+// Videos für Nutzer, die mindestens einem der zugeordneten Teams angehören
+// (video_teams). Vorstand und Admin sehen immer alles.
 func (h *Handler) CanViewVideo(claims *auth.Claims, video *Video) (bool, error) {
 	if claims == nil || video == nil {
 		return false, nil
@@ -62,7 +61,20 @@ func (h *Handler) CanViewVideo(claims *auth.Claims, video *Video) (bool, error) 
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		return true, nil
 	}
-	return h.userBelongsToTeam(claims, video.TeamID)
+	for _, tid := range video.TeamIDs {
+		ok, err := h.userBelongsToTeam(claims, tid)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	// Fallback auf das primäre Team, falls video_teams noch nicht befüllt ist.
+	if len(video.TeamIDs) == 0 {
+		return h.userBelongsToTeam(claims, video.TeamID)
+	}
+	return false, nil
 }
 
 // isTrainerOfTeam meldet, ob der Nutzer in einem Kader des Teams (in einer

@@ -8,12 +8,18 @@ import VideoStatusPill from '../components/VideoStatusPill'
 import CastButton from '../components/CastButton'
 import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 
+interface TeamRef {
+  id: number
+  name: string
+}
+
 interface VideoDetail {
   id: number
   title: string
   description?: string | null
   team_id: number
   team_name: string
+  teams: TeamRef[]
   season_id: number
   game_id?: number | null
   status: string
@@ -22,6 +28,12 @@ interface VideoDetail {
   created_at: string
   ready_at?: string | null
   failure_reason?: string | null
+}
+
+interface Team {
+  id: number
+  name: string
+  is_active: boolean
 }
 
 interface PlayResponse {
@@ -198,7 +210,9 @@ export default function VideoDetailPage() {
   const [showDelete, setShowDelete] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editTeamIds, setEditTeamIds] = useState<number[]>([])
   const [editGameId, setEditGameId] = useState('')
+  const [teams, setTeams] = useState<Team[] | null>(null)
   const [games, setGames] = useState<Game[]>([])
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -243,28 +257,44 @@ export default function VideoDetailPage() {
     if (!video) return
     setEditTitle(video.title)
     setEditDescription(video.description ?? '')
+    setEditTeamIds((video.teams ?? []).map(t => t.id))
     setEditGameId(video.game_id != null ? String(video.game_id) : '')
     setActionError('')
+    setTeams(null)
     setShowEdit(true)
-    // Spiele des Video-Teams für den Zuordnungs-Selector laden (clientseitig filtern,
-    // wie im Upload-Formular). Fehler still schlucken — der Selector bleibt dann leer.
-    api.get<{ items: Game[]; total: number }>('/games?limit=500')
+    api.get<Team[]>('/teams')
       .then(r => {
-        const all = Array.isArray(r.data?.items) ? r.data.items : []
-        setGames(all.filter(g => (g.teams ?? []).some(t => t.id === video.team_id)))
+        const list = Array.isArray(r.data) ? r.data : []
+        setTeams(list.filter(t => t.is_active))
       })
+      .catch(() => setTeams([]))
+    // Alle Spiele laden; Filterung nach ausgewählten Teams live im Render.
+    api.get<{ items: Game[]; total: number }>('/games?limit=500')
+      .then(r => setGames(Array.isArray(r.data?.items) ? r.data.items : []))
       .catch(() => setGames([]))
   }
 
+  const toggleTeam = (tid: number) => {
+    setEditTeamIds(prev =>
+      prev.includes(tid) ? prev.filter(id => id !== tid) : [...prev, tid]
+    )
+    setEditGameId('')
+  }
+
+  const filteredGames = games.filter(g =>
+    (g.teams ?? []).some(t => editTeamIds.includes(t.id))
+  )
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editTitle.trim()) return
+    if (!editTitle.trim() || editTeamIds.length === 0) return
     setSaving(true)
     setActionError('')
     try {
       await api.patch(`/videos/${videoId}`, {
         title: editTitle.trim(),
         description: editDescription.trim(),
+        team_ids: editTeamIds,
         // Tri-State: gewählte Spiel-ID → Zahl, "Kein Spiel zuordnen" → null (löscht die Zuordnung).
         game_id: editGameId ? Number(editGameId) : null,
       })
@@ -308,7 +338,7 @@ export default function VideoDetailPage() {
           <h1 className="text-2xl font-bold break-words">{video.title}</h1>
           <div className="mt-1 flex items-center gap-2 flex-wrap text-sm text-brand-text-muted">
             <VideoStatusPill status={video.status} />
-            <span>{video.team_name}</span>
+            <span>{(video.teams ?? []).length > 0 ? video.teams.map(t => t.name).join(', ') : video.team_name}</span>
             <span>·</span>
             <span>{fmtVideoDate(video.created_at)}</span>
             <span>·</span>
@@ -365,8 +395,10 @@ export default function VideoDetailPage() {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="text-xs uppercase text-brand-text-muted mb-1">Team</div>
-            <div className="text-sm text-brand-text">{video.team_name}</div>
+            <div className="text-xs uppercase text-brand-text-muted mb-1">Team{(video.teams ?? []).length > 1 ? 's' : ''}</div>
+            <div className="text-sm text-brand-text">
+              {(video.teams ?? []).length > 0 ? video.teams.map(t => t.name).join(', ') : video.team_name}
+            </div>
           </div>
           <div>
             <div className="text-xs uppercase text-brand-text-muted mb-1">Datum</div>
@@ -422,6 +454,31 @@ export default function VideoDetailPage() {
                 />
               </div>
               <div>
+                <div className="block text-sm font-medium text-brand-text-muted mb-2">Teams (Sichtbarkeit)</div>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {teams === null ? (
+                    <p className="text-sm text-brand-text-muted">Laden…</p>
+                  ) : teams.length === 0 ? (
+                    <p className="text-sm text-brand-text-muted">Keine Teams verfügbar.</p>
+                  ) : (
+                    teams.map(t => (
+                      <label key={t.id} className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={editTeamIds.includes(t.id)}
+                          onChange={() => toggleTeam(t.id)}
+                          className="w-4 h-4 rounded accent-brand-yellow"
+                        />
+                        <span className="text-sm text-brand-text">{t.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {editTeamIds.length === 0 && (
+                  <p className="mt-1 text-xs text-brand-danger">Mindestens ein Team wählen.</p>
+                )}
+              </div>
+              <div>
                 <label htmlFor="edit-game" className="block text-sm font-medium text-brand-text-muted mb-1">Spiel</label>
                 <select
                   id="edit-game"
@@ -430,7 +487,7 @@ export default function VideoDetailPage() {
                   className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 >
                   <option value="">Kein Spiel zuordnen</option>
-                  {games.map(g => (
+                  {filteredGames.map(g => (
                     <option key={g.id} value={g.id}>{fmtGameOption(g)}</option>
                   ))}
                 </select>
@@ -444,7 +501,7 @@ export default function VideoDetailPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || editTeamIds.length === 0}
                   className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {saving ? 'Speichern…' : 'Speichern'}

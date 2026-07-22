@@ -336,6 +336,9 @@ func CreateVideo(t *testing.T, database *sql.DB, teamID, seasonID, createdByUser
 		t.Fatalf("CreateVideo: %v", err)
 	}
 	id, _ := res.LastInsertId()
+	if _, err := database.Exec(`INSERT OR IGNORE INTO video_teams (video_id, team_id) VALUES (?, ?)`, id, teamID); err != nil {
+		t.Fatalf("CreateVideo video_teams: %v", err)
+	}
 	return int(id)
 }
 

@@ -364,6 +364,81 @@ func TestUpdate_GameID(t *testing.T) {
 	}
 }
 
+// TestUpdate_TeamIDs prüft, dass team_ids per PATCH die video_teams-Zuordnung
+// ersetzt und dass leere Arrays sowie fehlende Einträge korrekt abgewiesen werden.
+func TestUpdate_TeamIDs(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := crudHandler(t, db)
+	srv := newCRUDServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	kaderA := testutil.CreateKader(t, db, teamA, season)
+	uploader := testutil.CreateUser(t, db, "standard")
+	vid := testutil.CreateVideo(t, db, teamA, season, uploader, "ready")
+
+	trainerUser := testutil.CreateUser(t, db, "standard")
+	trainerMem := testutil.CreateMember(t, db, trainerUser)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMem)
+	trainer := testutil.Token(t, trainerUser, "standard", []string{"trainer"})
+
+	readTeamIDs := func() []int {
+		t.Helper()
+		rows, err := db.Query(`SELECT team_id FROM video_teams WHERE video_id=? ORDER BY team_id`, vid)
+		if err != nil {
+			t.Fatalf("read video_teams: %v", err)
+		}
+		defer rows.Close()
+		var ids []int
+		for rows.Next() {
+			var tid int
+			if err := rows.Scan(&tid); err != nil {
+				t.Fatalf("scan video_teams: %v", err)
+			}
+			ids = append(ids, tid)
+		}
+		return ids
+	}
+
+	// Team B hinzufügen (beide Teams).
+	res := patch(t, srv, "/api/videos/"+itoa(vid), trainer, map[string]any{"team_ids": []int{teamA, teamB}})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("set two teams: status=%d, want 200", res.StatusCode)
+	}
+	res.Body.Close()
+	if ids := readTeamIDs(); len(ids) != 2 {
+		t.Errorf("after set two: video_teams=%v, want [%d %d]", ids, teamA, teamB)
+	}
+
+	// Nur Team A behalten.
+	res = patch(t, srv, "/api/videos/"+itoa(vid), trainer, map[string]any{"team_ids": []int{teamA}})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("reset to one team: status=%d, want 200", res.StatusCode)
+	}
+	res.Body.Close()
+	if ids := readTeamIDs(); len(ids) != 1 || ids[0] != teamA {
+		t.Errorf("after reset: video_teams=%v, want [%d]", ids, teamA)
+	}
+
+	// Leeres Array → 400.
+	res = patch(t, srv, "/api/videos/"+itoa(vid), trainer, map[string]any{"team_ids": []int{}})
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("empty team_ids: status=%d, want 400", res.StatusCode)
+	}
+	res.Body.Close()
+
+	// Spieler (kein Verwaltungsrecht) → 403.
+	playerUser := testutil.CreateUser(t, db, "standard")
+	pmem := testutil.CreateMember(t, db, playerUser)
+	addKaderMember(t, db, kaderA, pmem)
+	res = patch(t, srv, "/api/videos/"+itoa(vid), testutil.Token(t, playerUser, "standard", []string{"spieler"}), map[string]any{"team_ids": []int{teamB}})
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("player set team_ids: status=%d, want 403", res.StatusCode)
+	}
+	res.Body.Close()
+}
+
 // --- DELETE: removes row and files ------------------------------------------
 
 func TestDelete_RemovesRowAndFiles(t *testing.T) {

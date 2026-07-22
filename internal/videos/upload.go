@@ -185,6 +185,12 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := res.LastInsertId()
 
+	// Initiale Team-Zuordnung in video_teams anlegen.
+	if _, err := h.db.Exec(`INSERT OR IGNORE INTO video_teams (video_id, team_id) VALUES (?, ?)`, id, req.TeamID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	// Die Videos-Seite reagiert auf "video-queued" und lädt die Liste neu, sobald
 	// ein neuer Upload angelegt wurde (Platzhalterzeile status='uploading'). Stil
 	// wie die übrigen videos-Broadcasts im Package: ungeguarded.
