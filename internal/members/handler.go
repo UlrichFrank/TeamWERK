@@ -2705,8 +2705,18 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		userContact = &uc
 	}
 
+	// Kalender-Token des Kindes (nur wenn Kind Account hat) — read-only für Elternteil.
+	var calendarToken *string
+	if m.UserID != nil {
+		var tok string
+		if err := h.db.QueryRowContext(r.Context(),
+			`SELECT token FROM calendar_tokens WHERE user_id = ?`, *m.UserID).Scan(&tok); err == nil {
+			calendarToken = &tok
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"member": m, "parents": parents, "phones": nil, "user_contact": userContact})
+	json.NewEncoder(w).Encode(map[string]any{"member": m, "parents": parents, "phones": nil, "user_contact": userContact, "calendar_token": calendarToken})
 }
 
 // PUT /api/profile/kind/:memberId/account — aktualisiert users-Datensatz des Kindes (User-Strang)

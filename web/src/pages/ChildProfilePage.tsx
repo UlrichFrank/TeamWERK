@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Mail } from 'lucide-react'
+import { Mail, Copy, Check as CheckIcon } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ProfileProfilTab from '../components/profile/ProfileProfilTab'
@@ -28,13 +28,14 @@ export interface UserContact {
   }
 }
 
-type TabName = 'profile' | 'member' | 'banking' | 'anwesenheit' | 'datenschutz' | 'misc'
+type TabName = 'profile' | 'member' | 'banking' | 'anwesenheit' | 'kalender' | 'datenschutz' | 'misc'
 
 const labels: Record<TabName, string> = {
   profile: 'Kontakt',
   member: 'Mitgliedsdaten',
   banking: 'Bankdaten',
   anwesenheit: 'Anwesenheit',
+  kalender: 'Kalender',
   datenschutz: 'Datenschutz',
   misc: 'Sonstiges',
 }
@@ -45,6 +46,8 @@ export default function ChildProfilePage() {
   const [member, setMember] = useState<Member | null>(null)
   const [parents, setParents] = useState<Parent[]>([])
   const [userContact, setUserContact] = useState<UserContact | null>(null)
+  const [calendarToken, setCalendarToken] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<TabName>('profile')
   const [newRecoveryEmail, setNewRecoveryEmail] = useState('')
   const [recoverySaving, setRecoverySaving] = useState(false)
@@ -76,6 +79,7 @@ export default function ChildProfilePage() {
         setMember(r.data.member)
         setParents(r.data.parents ?? [])
         setUserContact(r.data.user_contact ?? null)
+        setCalendarToken(r.data.calendar_token ?? null)
       })
       .catch(err => { if (err.response?.status === 403) navigate('/') })
   }
@@ -94,9 +98,18 @@ export default function ChildProfilePage() {
     'member',
     'banking',
     ...(isPlayer ? (['anwesenheit'] as TabName[]) : []),
+    ...(calendarToken ? (['kalender'] as TabName[]) : []),
     'datenschutz',
     'misc',
   ]
+
+  const feedUrl = calendarToken ? `${window.location.origin}/api/calendar/feed/${calendarToken}` : ''
+  const copyFeedUrl = () => {
+    navigator.clipboard.writeText(feedUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   return (
     <div className="max-w-4xl">
@@ -176,6 +189,35 @@ export default function ChildProfilePage() {
       )}
       {isPlayer && activeTab === 'anwesenheit' && (
         <ProfilAnwesenheitContent forcedMemberId={member.id} />
+      )}
+      {activeTab === 'kalender' && calendarToken && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 space-y-4">
+          <div>
+            <h2 className="font-semibold text-brand-text-muted mb-1">Kalender-Abo</h2>
+            <p className="text-xs text-brand-text-subtle">
+              Abonniere diesen Link in Google Calendar, Apple Kalender oder Outlook, um die Termine von {member.first_name} in deinen Kalender zu importieren. Der Link ist privat — teile ihn nicht mit Dritten.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={feedUrl}
+              className="flex-1 border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow truncate"
+              onFocus={e => e.target.select()}
+            />
+            <button
+              onClick={copyFeedUrl}
+              className="flex items-center gap-1.5 bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors shrink-0"
+              aria-label="Kalender-Link kopieren"
+            >
+              {copied ? <CheckIcon className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'Kopiert' : 'Kopieren'}
+            </button>
+          </div>
+          <p className="text-xs text-brand-text-muted">
+            {member.first_name} kann die Termin-Auswahl und den Link unter Profil → Kalender verwalten.
+          </p>
+        </div>
       )}
       {activeTab === 'datenschutz' && (
         <ProfileDatenschutzTab ownMember={member} onUpdated={load} />
