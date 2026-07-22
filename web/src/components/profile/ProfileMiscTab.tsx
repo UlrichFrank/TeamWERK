@@ -33,7 +33,12 @@ const categoryLabels: Record<Category, string> = {
 }
 
 // Kurzbeschreibung unter dem Label (nur wo hilfreich).
-const categoryDescriptions: Partial<Record<Category, string>> = {
+const categoryDescriptions: Record<Category, string> = {
+  games: 'Erinnerungen 24 h und 3 h vor Spielen, Turnieren und sonstigen Terminen deines Teams.',
+  trainings: 'Erinnerungen 24 h und 3 h vor Trainingseinheiten deines Teams.',
+  duties: 'Neue offene Dienste in der Dienstbörse sowie Benachrichtigung bei einer direkten Dienstzuweisung.',
+  carpooling: 'Anfragen und Zusagen in Fahrgemeinschaften zu Spielen und Terminen.',
+  chat: 'Neue Nachrichten in Mannschafts- und Direktchats.',
   operativ: 'Erinnerungen an deine Vereinsaufgaben, z. B. Anwesenheiten nachtragen oder Spielberichte freigeben.',
   sonstiges: 'Technische Ereignisse rund um Vereinsinhalte, z. B. wenn ein hochgeladenes Video fertig verarbeitet ist oder ein Video bald gelöscht wird.',
 }
