@@ -53,8 +53,10 @@ var broadcastAllowlist = map[string]string{
 	"Notif.Unsubscribe":                   "Push-Subscription pro Gerät, kein geteilter State",
 	"Notif.UpdateNotificationPreferences": "eigene Benachrichtigungs-Präferenzen, kein geteilter State",
 	// Kalender-Feed-Token: pro Nutzer, kein beobachtbarer geteilter State.
-	"Calendar.UpsertToken": "per-Nutzer ICS-Feed-Token, kein geteilter State",
-	"Calendar.DeleteToken": "per-Nutzer ICS-Feed-Token, kein geteilter State",
+	"Calendar.UpsertToken":      "per-Nutzer ICS-Feed-Token, kein geteilter State",
+	"Calendar.DeleteToken":      "per-Nutzer ICS-Feed-Token, kein geteilter State",
+	"Calendar.UpsertChildToken": "per-Nutzer ICS-Feed-Token des Kindes, kein geteilter State",
+	"Calendar.DeleteChildToken": "per-Nutzer ICS-Feed-Token des Kindes, kein geteilter State",
 	// Dokumente: die Dokumente-Seite hat kein Hub-Live-Update (kein 'files'-Event).
 	"Files.CreateFolder":     "kein 'files'-Hub-Event; Dokumente-Seite lädt ohne Live-Update",
 	"Files.UploadFile":       "kein 'files'-Hub-Event; Dokumente-Seite lädt ohne Live-Update",

@@ -330,7 +330,9 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/profile/kind/{memberId}/phones/{phoneId}", expected: exPublic},
 	{method: "POST", path: "/api/profile/kind/{memberId}/recovery-email", expected: exPublic},
 	{method: "PUT", path: "/api/profile/kind/{memberId}/visibility", expected: exPublic},
-
+	{method: "GET", path: "/api/profile/kind/{memberId}/calendar-token", expected: exPublic},
+	{method: "POST", path: "/api/profile/kind/{memberId}/calendar-token", expected: exPublic},
+	{method: "DELETE", path: "/api/profile/kind/{memberId}/calendar-token", expected: exPublic},
 	// Upload (User-Photo)
 	{method: "POST", path: "/api/upload/user-photo", expected: exAuth},
 	{method: "DELETE", path: "/api/upload/user-photo", expected: exAuth},
@@ -478,11 +480,14 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/training-sessions/{id}", expected: exTrainer},
 	{method: "POST", path: "/api/training-sessions/{id}/attendances", expected: exTrainer},
 	{method: "DELETE", path: "/api/training-sessions/{id}/attendance-tracking", expected: exTrainer},
+	{method: "POST", path: "/api/training-sessions/{id}/attendance-excluded", expected: exTrainer},
+	{method: "DELETE", path: "/api/training-sessions/{id}/attendance-excluded", expected: exTrainer},
 	{method: "POST", path: "/api/games/{id}/attendances", expected: exTrainer},
 	{method: "DELETE", path: "/api/games/{id}/attendance-tracking", expected: exTrainer},
+	{method: "POST", path: "/api/games/{id}/attendance-excluded", expected: exTrainer},
+	{method: "DELETE", path: "/api/games/{id}/attendance-excluded", expected: exTrainer},
 	{method: "POST", path: "/api/duty-assignments/{id}/fulfill", expected: exTrainer},
 	{method: "POST", path: "/api/duty-assignments/{id}/cash-substitute", expected: exTrainer},
-
 	// ── Vorstand + Trainer + sportliche_leitung ──────────────────────────────────
 	{method: "GET", path: "/api/venues", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/venues", expected: exVorstandTrainer},

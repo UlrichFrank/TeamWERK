@@ -36,7 +36,7 @@ const labels: Record<TabName, string> = {
   member: 'Mitgliedsdaten',
   banking: 'Bankdaten',
   anwesenheit: 'Anwesenheit',
-  kalender: 'Kalender',
+  kalender: 'Kalender-Abo',
   datenschutz: 'Datenschutz',
   misc: 'Sonstiges',
 }
@@ -47,7 +47,7 @@ export default function ChildProfilePage() {
   const [member, setMember] = useState<Member | null>(null)
   const [parents, setParents] = useState<Parent[]>([])
   const [userContact, setUserContact] = useState<UserContact | null>(null)
-  const [hasCalendarToken, setHasCalendarToken] = useState(false)
+  const [, setHasCalendarToken] = useState(false)
   const [activeTab, setActiveTab] = useState<TabName>('profile')
   const [newRecoveryEmail, setNewRecoveryEmail] = useState('')
   const [recoverySaving, setRecoverySaving] = useState(false)
@@ -98,7 +98,7 @@ export default function ChildProfilePage() {
     'member',
     'banking',
     ...(isPlayer ? (['anwesenheit'] as TabName[]) : []),
-    ...(hasCalendarToken ? (['kalender'] as TabName[]) : []),
+    'kalender',
     'datenschutz',
     'misc',
   ]
@@ -182,7 +182,7 @@ export default function ChildProfilePage() {
       {isPlayer && activeTab === 'anwesenheit' && (
         <ProfilAnwesenheitContent forcedMemberId={member.id} />
       )}
-      {activeTab === 'kalender' && hasCalendarToken && (
+      {activeTab === 'kalender' && (
         <ProfileKalenderTab apiPath={`/profile/kind/${memberId}/calendar-token`} />
       )}
       {activeTab === 'datenschutz' && (
