@@ -55,13 +55,13 @@ describe('VideoUploadPage', () => {
     expect(await screen.findByRole('option', { name: 'mA' })).toBeInTheDocument()
   })
 
-  test('blockiert Dateien über 2,5 GB', async () => {
+  test('blockiert Dateien über 15 GB', async () => {
     renderAsPersona(<VideoUploadPage />, 'trainer', {
       mocks: [{ url: /\/teams/, data: TEAMS }],
     })
     await flushAsync()
 
-    const big = fakeFile('big.mp4', 3 * 1024 * 1024 * 1024)
+    const big = fakeFile('big.mp4', 16 * 1024 * 1024 * 1024)
     const input = screen.getByLabelText(/Videodatei/i) as HTMLInputElement
     fireEvent.change(input, { target: { files: [big] } })
 

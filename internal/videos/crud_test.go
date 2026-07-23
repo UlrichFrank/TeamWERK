@@ -3,6 +3,7 @@ package videos
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -454,6 +455,63 @@ func TestDelete_ForbiddenAndNotFound(t *testing.T) {
 		t.Fatalf("missing delete status = %d, want 404", res.StatusCode)
 	}
 	res.Body.Close()
+}
+
+func TestDelete_RemovesUploadSessions(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, root := crudHandler(t, db)
+	srv := newCRUDServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	kaderA := testutil.CreateKader(t, db, teamA, season)
+	uploader := testutil.CreateUser(t, db, "standard")
+	vid := testutil.CreateVideo(t, db, teamA, season, uploader, "uploading")
+
+	// Zwei verwaiste tus-Sessions für das Video anlegen.
+	uDir := filepath.Join(root, "uploads")
+	if err := os.MkdirAll(uDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sessions := []string{"aabbccddeeff00", "11223344556677"}
+	for _, sid := range sessions {
+		info := fmt.Sprintf(`{"ID":%q,"MetaData":{"video_id":%q}}`, sid, itoa(vid))
+		if err := os.WriteFile(filepath.Join(uDir, sid+".info"), []byte(info), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(uDir, sid), []byte("chunkdata"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Eine Session eines anderen Videos darf nicht gelöscht werden.
+	otherInfo := `{"ID":"ffffffffffffffff","MetaData":{"video_id":"9999"}}`
+	if err := os.WriteFile(filepath.Join(uDir, "ffffffffffffffff.info"), []byte(otherInfo), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	trainerUser := testutil.CreateUser(t, db, "standard")
+	tm := testutil.CreateMember(t, db, trainerUser)
+	testutil.AddKaderTrainer(t, db, kaderA, tm)
+	trainer := testutil.Token(t, trainerUser, "standard", []string{"trainer"})
+
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/videos/"+itoa(vid), trainer, nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200", res.StatusCode)
+	}
+	res.Body.Close()
+
+	for _, sid := range sessions {
+		if _, err := os.Stat(filepath.Join(uDir, sid+".info")); !os.IsNotExist(err) {
+			t.Errorf("tus .info für Session %s noch vorhanden", sid)
+		}
+		if _, err := os.Stat(filepath.Join(uDir, sid)); !os.IsNotExist(err) {
+			t.Errorf("tus Datendatei für Session %s noch vorhanden", sid)
+		}
+	}
+	// Fremde Session muss erhalten bleiben.
+	if _, err := os.Stat(filepath.Join(uDir, "ffffffffffffffff.info")); os.IsNotExist(err) {
+		t.Error("fremde tus .info fälschlicherweise gelöscht")
+	}
 }
 
 // --- helpers -----------------------------------------------------------------

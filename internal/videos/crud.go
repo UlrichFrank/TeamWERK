@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -353,7 +354,40 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Delete entfernt ein Video samt aller Dateien (raw + processed).
+// deleteUploadSessions entfernt alle tus-Sessiondateien (*.info + Datendatei) im
+// uploads/-Verzeichnis, deren MetaData.video_id mit videoID übereinstimmt.
+// Best-effort: einzelne Lesefehler werden ignoriert.
+func deleteUploadSessions(root string, videoID int) {
+	dir := uploadsDir(root)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	idStr := strconv.Itoa(videoID)
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".info") {
+			continue
+		}
+		infoPath := filepath.Join(dir, e.Name())
+		data, err := os.ReadFile(infoPath)
+		if err != nil {
+			continue
+		}
+		var info struct {
+			MetaData map[string]string `json:"MetaData"`
+		}
+		if err := json.Unmarshal(data, &info); err != nil {
+			continue
+		}
+		if info.MetaData["video_id"] != idStr {
+			continue
+		}
+		_ = os.Remove(strings.TrimSuffix(infoPath, ".info"))
+		_ = os.Remove(infoPath)
+	}
+}
+
+// Delete entfernt ein Video samt aller Dateien (raw + processed + tus-Sessions).
 // DELETE /api/videos/{id} (Authenticated-Tier; CanManageTeamVideos erzwungen).
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
@@ -395,6 +429,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	root := h.cfg.VideoStorageDir
 	_ = os.RemoveAll(RawPath(root, id))
 	_ = os.RemoveAll(ProcessedDir(root, id))
+	deleteUploadSessions(root, id)
 
 	h.hub.Broadcast("video-deleted")
 	w.WriteHeader(http.StatusOK)

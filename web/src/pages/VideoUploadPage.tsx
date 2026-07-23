@@ -55,6 +55,53 @@ function fmtRemaining(seconds: number): string {
   return `${m}m ${s.toString().padStart(2, '0')}s`
 }
 
+// createThrottledProgress fabriziert einen tus-onProgress-Callback, der
+// Fortschritt und Restzeit **maximal 1× pro Sekunde** an React weitergibt.
+// XHR.upload.progress feuert 30–100 Hz; ohne Throttle triggert jeder Event
+// zwei setState-Aufrufe, der Reconciler steilt sich den Main-Thread mit dem
+// XHR-Reader → 5–10× Throughput-Verlust bei großen Uploads. Zusätzlich:
+//   - Prozent-Guard: unveränderter gerundeter Wert löst kein setState aus.
+//   - Sliding-Window (letzte ~10 s) für die Restzeit-Schätzung — reagiert
+//     nach Bandbreiten-Aussetzern schneller als „seit Start"-Durchschnitt.
+// `now` ist injizierbar, damit Vitest ohne Fake-Timers determinstisch testen
+// kann. Pro Upload eine frische Factory-Instanz aufrufen (Closure-State ist
+// automatisch sauber — kein manuelles Reset nötig).
+export function createThrottledProgress(deps: {
+  setProgress: (n: number) => void
+  setRemaining: (s: string) => void
+}) {
+  // -Infinity, damit der erste Event immer publiziert wird — unabhängig davon,
+  // ob der Aufrufer bei now=0 (Test) oder bei Date.now() (Prod) startet.
+  let lastProgressAt = Number.NEGATIVE_INFINITY
+  let lastPct = -1
+  const samples: Array<{ t: number; bytes: number }> = []
+
+  return {
+    onProgress(bytesSent: number, bytesTotal: number, now: number = Date.now()) {
+      samples.push({ t: now, bytes: bytesSent })
+      while (samples.length > 1 && now - samples[0].t > 10_000) samples.shift()
+      if (now - lastProgressAt < 1000) return
+      lastProgressAt = now
+
+      const pct = bytesTotal > 0 ? Math.round((bytesSent / bytesTotal) * 100) : 0
+      if (pct !== lastPct) {
+        lastPct = pct
+        deps.setProgress(pct)
+      }
+
+      const first = samples[0]
+      const dt = (now - first.t) / 1000
+      const dbytes = bytesSent - first.bytes
+      if (dt > 0.5 && dbytes > 0) {
+        const rate = dbytes / dt
+        deps.setRemaining(fmtRemaining((bytesTotal - bytesSent) / rate))
+      }
+    },
+    // Für Tests: erlaubt Inspektion der Fenster-Größe.
+    _samplesLength: () => samples.length,
+  }
+}
+
 function fmtFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const kb = bytes / 1024
@@ -153,7 +200,9 @@ export default function VideoUploadPage() {
   const [resumable, setResumable] = useState<PreviousUpload | null>(null)
 
   const uploadRef = useRef<tus.Upload | null>(null)
-  const startTimeRef = useRef(0)
+  // Throttle-Instanz wird pro Upload frisch angelegt (Closure-State ist dann
+  // sauber, kein manuelles Reset nötig).
+  const throttlerRef = useRef<ReturnType<typeof createThrottledProgress> | null>(null)
 
   const activeTeams = useMemo(() => teams.filter(t => t.is_active), [teams])
   const shortNames = useMemo(() => buildTeamShortNames(activeTeams), [activeTeams])
@@ -231,7 +280,7 @@ export default function VideoUploadPage() {
     setUploading(true)
     setProgress(0)
     setRemaining('')
-    startTimeRef.current = Date.now()
+    throttlerRef.current = createThrottledProgress({ setProgress, setRemaining })
 
     const upload = new tus.Upload(f, {
       endpoint: '/api/videos/upload/',
@@ -255,16 +304,7 @@ export default function VideoUploadPage() {
         setUploading(false)
         setError(`Upload fehlgeschlagen: ${err.message}`)
       },
-      onProgress: (bytesSent, bytesTotal) => {
-        const pct = bytesTotal > 0 ? Math.round((bytesSent / bytesTotal) * 100) : 0
-        setProgress(pct)
-        const elapsed = (Date.now() - startTimeRef.current) / 1000
-        if (elapsed > 0 && bytesSent > 0) {
-          const rate = bytesSent / elapsed // bytes/s
-          const left = (bytesTotal - bytesSent) / rate
-          setRemaining(fmtRemaining(left))
-        }
-      },
+      onProgress: (b, t) => throttlerRef.current?.onProgress(b, t),
       onSuccess: () => {
         setUploading(false)
         setProgress(100)
@@ -342,15 +382,7 @@ export default function VideoUploadPage() {
         setUploading(false)
         setError(`Upload fehlgeschlagen: ${err.message}`)
       },
-      onProgress: (bytesSent, bytesTotal) => {
-        const pct = bytesTotal > 0 ? Math.round((bytesSent / bytesTotal) * 100) : 0
-        setProgress(pct)
-        const elapsed = (Date.now() - startTimeRef.current) / 1000
-        if (elapsed > 0 && bytesSent > 0) {
-          const rate = bytesSent / elapsed
-          setRemaining(fmtRemaining((bytesTotal - bytesSent) / rate))
-        }
-      },
+      onProgress: (b, t) => throttlerRef.current?.onProgress(b, t),
       onSuccess: () => {
         setUploading(false)
         setProgress(100)
@@ -359,9 +391,10 @@ export default function VideoUploadPage() {
       },
     })
     uploadRef.current = upload
-    startTimeRef.current = Date.now()
+    throttlerRef.current = createThrottledProgress({ setProgress, setRemaining })
     setUploading(true)
     setProgress(0)
+    setRemaining('')
     upload.resumeFromPreviousUpload(resumable)
     upload.start()
   }
