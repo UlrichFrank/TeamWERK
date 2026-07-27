@@ -11,6 +11,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -90,6 +91,9 @@ func seedE2E(database *sql.DB) e2eSeedResult {
 	dutySlotID := seedDienstboerse(database)
 	memberID := seedClubAndMember(database)
 	mediaDir := seedChatMedia(database, adminID, userIDs)
+
+	// Sehr lange, bildlastige Threads für die Scroll-/Divider-/Chip-Regressionstests.
+	seedChatLongThreads(database, mediaDir, adminID, userIDs)
 
 	return e2eSeedResult{adminID: adminID, userIDs: userIDs, dutySlotID: dutySlotID, memberID: memberID, mediaDir: mediaDir}
 }
@@ -206,7 +210,7 @@ func seedChatMedia(database *sql.DB, adminID int, userIDs []int) string {
 	imgConvID := seedTextConversation(database, "E2E Chat mit Bildern", []int{adminID, user1}, adminID, 4)
 	imgIndex := 1
 	for i := 0; i < 4; i++ {
-		mediaID := seedImage(database, mediaDir, adminID, imgIndex)
+		mediaID := seedImage(database, mediaDir, adminID, imgIndex, true)
 		imgIndex++
 		if _, err := database.Exec(
 			`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
@@ -287,7 +291,12 @@ func seedDirectConversation(database *sql.DB, memberIDs []int, createdBy int) in
 // seedImage erzeugt ein deterministisches 300x450-PNG (Hochformat, wie ein Foto),
 // schreibt es als e2e-img-<index>.png ins mediaDir und legt die zugehörige media-Zeile an.
 // Gibt die media-ID zurück.
-func seedImage(database *sql.DB, mediaDir string, uploadedBy, index int) int {
+//
+// withDims steuert, ob die media-Zeile width/height trägt: `true` = normaler Pfad
+// (Server kennt die Dimensionen, Frontend rendert ohne Layout-Shift). `false` legt eine
+// Zeile mit width=NULL/height=NULL an (wie ein Bestandsbild vor Migration 030) — das
+// exerziert den AuthImage-Fallback-Pfad im Frontend (Placeholder→Bild-Shift).
+func seedImage(database *sql.DB, mediaDir string, uploadedBy, index int, withDims bool) int {
 	const w, h = 300, 450
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	// Feste, pro Index leicht variierende Farbe (deterministisch, aber unterscheidbar).
@@ -304,12 +313,151 @@ func seedImage(database *sql.DB, mediaDir string, uploadedBy, index int) int {
 		fatal("e2e-seed: write png failed", "file", diskName, "error", err)
 	}
 
-	res, err := database.Exec(
-		`INSERT INTO media (disk_name, mime_type, size, uploaded_by, width, height) VALUES (?, ?, ?, ?, ?, ?)`,
-		diskName, "image/png", buf.Len(), uploadedBy, w, h)
+	var (
+		res sql.Result
+		err error
+	)
+	if withDims {
+		res, err = database.Exec(
+			`INSERT INTO media (disk_name, mime_type, size, uploaded_by, width, height) VALUES (?, ?, ?, ?, ?, ?)`,
+			diskName, "image/png", buf.Len(), uploadedBy, w, h)
+	} else {
+		// NULL-Dims: exerziert den AuthImage-Fallback (kein Server-Dim → Layout-Shift).
+		res, err = database.Exec(
+			`INSERT INTO media (disk_name, mime_type, size, uploaded_by) VALUES (?, ?, ?, ?)`,
+			diskName, "image/png", buf.Len(), uploadedBy)
+	}
 	if err != nil {
 		fatal("e2e-seed: insert media failed", "file", diskName, "error", err)
 	}
 	id, _ := res.LastInsertId()
 	return int(id)
+}
+
+// longThreadBaseTime ist die feste Basiszeit für gespreizte sent_at-Werte in
+// seedLongThread — deterministisch (KEIN time.Now()), damit die Seeds reproduzierbar
+// sind. Der Schritt (17 min) sorgt dafür, dass 150–250 Nachrichten mehrere Tage
+// überspannen und im Frontend DaySeparator-Trenner erscheinen.
+var longThreadBaseTime = time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
+
+const longThreadStep = 17 * time.Minute
+
+// seedLongThread legt eine Gruppen-Konversation mit n Nachrichten an und setzt sent_at
+// EXPLIZIT (deterministisch, aufsteigend gespreizt), damit Scroll-/Divider-/DaySeparator-
+// Verhalten im Frontend testbar ist.
+//
+//   - senderFor(i)  → Absender der i-ten Nachricht (0-basiert). Nachrichten von einem
+//     anderen Nutzer als dem Leser (Admin) zählen als unread.
+//   - imageAt(i)    → (isImage, withDims): true legt statt Text ein Bild an (media_id
+//     gesetzt, body=”), withDims steuert width/height der media-Zeile.
+//   - imgCounter    → wird pro Bild hochgezählt, garantiert eindeutige disk_names über
+//     alle Konversationen hinweg.
+//
+// Gibt convID + alle message-IDs (aufsteigend nach sent_at) zurück.
+func seedLongThread(
+	database *sql.DB, mediaDir, title string, memberIDs []int, createdBy, n int,
+	senderFor func(i int) int, imageAt func(i int) (bool, bool), imgCounter *int,
+) (int, []int) {
+	convID := seedGroupConversation(database, title, memberIDs, createdBy)
+
+	msgIDs := make([]int, 0, n)
+	for i := 0; i < n; i++ {
+		sentAt := longThreadBaseTime.Add(time.Duration(i) * longThreadStep).Format(time.RFC3339)
+		sender := senderFor(i)
+
+		isImage, withDims := imageAt(i)
+		var (
+			res sql.Result
+			err error
+		)
+		if isImage {
+			*imgCounter++
+			mediaID := seedImage(database, mediaDir, sender, *imgCounter, withDims)
+			res, err = database.Exec(
+				`INSERT INTO messages (conversation_id, sender_id, body, media_id, sent_at) VALUES (?, ?, '', ?, ?)`,
+				convID, sender, mediaID, sentAt)
+		} else {
+			// Body bewusst OHNE den Konversationstitel — sonst enthält die
+			// Last-Message-Vorschau in der Sidebar den Titel und getByText(name)
+			// im E2E-Test kollidiert (strict-mode: Name + Vorschau).
+			res, err = database.Exec(
+				`INSERT INTO messages (conversation_id, sender_id, body, sent_at) VALUES (?, ?, ?, ?)`,
+				convID, sender, fmt.Sprintf("Nachricht %d", i+1), sentAt)
+		}
+		if err != nil {
+			fatal("e2e-seed: insert long-thread message failed", "title", title, "error", err)
+		}
+		id, _ := res.LastInsertId()
+		msgIDs = append(msgIDs, int(id))
+	}
+	return convID, msgIDs
+}
+
+// markReadByAdmin markiert die übergebenen message-IDs als vom Admin gelesen
+// (INSERT INTO message_reads). Nachrichten, die der Admin selbst gesendet hat, sind
+// für die Unread-Berechnung ohnehin ausgenommen — doppeltes Markieren schadet nicht.
+func markReadByAdmin(database *sql.DB, adminID int, msgIDs []int) {
+	for _, mid := range msgIDs {
+		if _, err := database.Exec(
+			`INSERT INTO message_reads (message_id, user_id) VALUES (?, ?)`, mid, adminID); err != nil {
+			fatal("e2e-seed: insert long-thread message_read failed", "error", err)
+		}
+	}
+}
+
+// imageAtSet baut aus einer Map (message-Index → withDims) die imageAt-Funktion für
+// seedLongThread. Ist der Index in der Map, wird ein Bild gesetzt (mit dem hinterlegten
+// withDims-Flag); sonst Text.
+func imageAtSet(withDimsByIdx map[int]bool) func(i int) (bool, bool) {
+	return func(i int) (bool, bool) {
+		wd, ok := withDimsByIdx[i]
+		return ok, wd
+	}
+}
+
+// seedChatLongThreads legt die drei langen, bildlastigen Chat-Threads für die
+// Scroll-/Divider-/Chip-Regressionstests an. Leser/Login ist der Admin (e2e@test.local).
+//
+//	"E2E Chat lang gelesen"        150 Nachrichten, ~20 Bilder, komplett vom Admin
+//	                               → unreadCount(admin) = 0  (zuverlässiges „ans Ende").
+//	"E2E Chat lang unread"         150 Nachrichten von user1, Bilder über UND unter dem
+//	                               Divider; Admin liest alle außer den letzten 40
+//	                               → unreadCount(admin) = 40 (Divider auf 100er-Seite).
+//	"E2E Chat unread älter als Seite" 250 Nachrichten von user1, Admin liest alle außer
+//	                               den letzten 180 → unreadCount(admin) = 180 (>100,
+//	                               erste Ungelesene älter als die geladene Seite → Chip).
+func seedChatLongThreads(database *sql.DB, mediaDir string, adminID int, userIDs []int) {
+	user1 := userIDs[0]
+	// Eindeutige Bild-Indizes ab 1000, damit disk_names nicht mit seedChatMedia (1–4) kollidieren.
+	imgCounter := 1000
+
+	// 1) "E2E Chat lang gelesen": 150 Nachrichten, alle vom Admin → unread=0 (Sender==Leser).
+	//    ~20 Bilder über den ganzen Verlauf verteilt, dims abwechselnd mit/ohne.
+	langGelesenImgs := map[int]bool{}
+	for i := 5; i < 150; i += 7 { // 5,12,...,145 → 21 Bilder
+		langGelesenImgs[i] = (i/7)%2 == 0 // abwechselnd with/without dims
+	}
+	seedLongThread(database, mediaDir, "E2E Chat lang gelesen", []int{adminID, user1}, adminID, 150,
+		func(int) int { return adminID }, imageAtSet(langGelesenImgs), &imgCounter)
+
+	// 2) "E2E Chat lang unread": 150 Nachrichten von user1. Admin liest alle außer den
+	//    letzten 40 → unread=40 (Divider innerhalb der neuesten 100er-Seite).
+	//    Bilder über dem Divider (Indizes < 110, gelesen) und darunter (>= 110, ungelesen).
+	langUnreadImgs := map[int]bool{
+		9: true, 24: false, 44: true, 69: false, 94: true, // über dem Divider (gelesen)
+		118: false, 133: true, 147: false, // unter dem Divider (ungelesen)
+	}
+	_, unreadMsgIDs := seedLongThread(database, mediaDir, "E2E Chat lang unread", []int{adminID, user1}, adminID, 150,
+		func(int) int { return user1 }, imageAtSet(langUnreadImgs), &imgCounter)
+	markReadByAdmin(database, adminID, unreadMsgIDs[:len(unreadMsgIDs)-40]) // erste 110 gelesen
+
+	// 3) "E2E Chat unread älter als Seite": 250 Nachrichten von user1. Admin liest alle
+	//    außer den letzten 180 → unread=180 (>100 → erste Ungelesene älter als die
+	//    geladene 100er-Seite → Chip-Fall). Ein paar Bilder verteilt.
+	aelterImgs := map[int]bool{
+		15: true, 60: false, 120: true, 175: false, 230: true,
+	}
+	_, aelterMsgIDs := seedLongThread(database, mediaDir, "E2E Chat viele ungelesen", []int{adminID, user1}, adminID, 250,
+		func(int) int { return user1 }, imageAtSet(aelterImgs), &imgCounter)
+	markReadByAdmin(database, adminID, aelterMsgIDs[:len(aelterMsgIDs)-180]) // erste 70 gelesen
 }

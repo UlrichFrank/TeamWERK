@@ -113,6 +113,10 @@ func main() {
 		runE2ESeed()
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "dev-seed" {
+		runDevSeed()
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "gen-vapid" {
 		runGenVapid()
 		return
