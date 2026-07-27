@@ -255,10 +255,21 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesBoxRef = useRef<HTMLDivElement>(null);
   const suppressAutoScrollRef = useRef(false);
-  // Erzwingt einmalig einen Scroll ans Ende beim nächsten messages-Update
-  // (nach eigenem Senden / Öffnen einer Konversation), unabhängig davon, ob
-  // der Nutzer gerade hochgescrollt ist.
-  const forceScrollToEndRef = useRef(false);
+  // Scroll-Anker beim Öffnen/Senden: ein persistenter Intent, der asynchrones
+  // Bild-Decoding überlebt. 'bottom' = ans Ende, 'divider' = an die erste
+  // ungelesene Nachricht (UnreadDivider), 'divider-chip' = nach oben (erste
+  // Ungelesene liegt vor der geladenen Seite → Chip statt Divider), null = kein
+  // aktiver Anker (Normalfall: Sticky-to-Bottom via isAtBottomRef). Der Anker
+  // wird vom Watcher-Effekt bei JEDER Layout-Änderung erneut angewendet
+  // (applyAnchor, MutationObserver + Bild-`load`) und erst durch echte Nutzer-
+  // Eingabe (wheel/touch/keydown) oder das Settle-Timeout freigegeben. Das löst
+  // den Kern-Bug: Bilder decoden erst nach Sekunden und verschieben das Layout —
+  // ein einmaliger Scroll (früher forceScrollToEndRef/scrollToUnreadRef) landet
+  // dann daneben, der fortlaufende Anker nicht.
+  const anchorRef = useRef<"bottom" | "divider" | "divider-chip" | null>(null);
+  // Timer-Handle des Settle-Debounce; nach Ruhe (keine Layout-Änderung mehr)
+  // wird der Anker gelöst und isAtBottomRef final gesetzt.
+  const anchorSettleTimerRef = useRef<number | null>(null);
   // Sticky-to-Bottom-Zustand: true → jede spätere DOM-Änderung im Chat-
   // Container snappt ans neue Ende (fängt Bild-Load-Nachschub und
   // Reactions-Insert ab, die scrollHeight nach dem initial-Scroll noch
@@ -279,9 +290,97 @@ export default function ChatPage() {
   const unreadDividerIndexRef = useRef<number | null>(null);
   // Callback-Ref auf den DOM-Knoten des UnreadDividers für scrollIntoView.
   const unreadDividerElRef = useRef<HTMLDivElement | null>(null);
-  // Analog zu forceScrollToEndRef: signalisiert dem messages-Effekt, dass
-  // beim nächsten Update auf den UnreadDivider gescrollt werden soll.
-  const scrollToUnreadRef = useRef(false);
+
+  // Absolutes Zeitlimit für einen aktiven Anker (Backstop gegen ein hängendes
+  // Bild, das nie `load`/`error` feuert → sonst würde der Anker nie freigegeben).
+  const anchorDeadlineRef = useRef(0);
+
+  // Der eigentliche Scroll-Container ist der interne WindowedRows-Div
+  // (data-windowed-scroll), nicht messagesBoxRef selbst — hier zentral abfragen.
+  const scrollBox = useCallback(
+    () =>
+      messagesBoxRef.current?.querySelector<HTMLDivElement>(
+        "[data-windowed-scroll]",
+      ) ?? null,
+    [],
+  );
+
+  // releaseAnchor: Anker lösen und den Sticky-Zustand final festlegen. isAtBottom
+  // wird aus der TATSÄCHLICHEN Scroll-Position abgeleitet, nicht aus dem Anker-
+  // Modus — sonst würde ein Wheel-Escape während eines 'bottom'-Ankers (Nutzer
+  // scrollt hoch, während Bilder noch decoden) fälschlich isAtBottom=true lassen
+  // und der nächste Bild-`load` risse ihn wieder ans Ende.
+  const releaseAnchor = useCallback(() => {
+    if (anchorSettleTimerRef.current !== null) {
+      window.clearTimeout(anchorSettleTimerRef.current);
+      anchorSettleTimerRef.current = null;
+    }
+    const box = scrollBox();
+    isAtBottomRef.current = box
+      ? box.scrollHeight - box.scrollTop - box.clientHeight < 100
+      : anchorRef.current === "bottom";
+    anchorRef.current = null;
+  }, [scrollBox]);
+
+  // anchorMediaPending: true, solange im Container noch Bilder laden (AuthImage-
+  // Platzhalter mit aria-busy während des Blob-XHR) ODER dekodieren (`img` noch
+  // nicht `.complete`). Das entkoppelt die Anker-Freigabe von der Wall-Clock:
+  // ein langsames Bild ÜBER dem Divider darf den Anker NICHT vorzeitig verlieren
+  // (sonst driftet der Divider un-korrigiert weg — der Original-Bug).
+  const anchorMediaPending = useCallback(() => {
+    const box = scrollBox();
+    if (!box) return false;
+    if (box.querySelector('[aria-busy="true"]')) return true;
+    return Array.from(box.querySelectorAll("img")).some(
+      (i) => !(i as HTMLImageElement).complete,
+    );
+  }, [scrollBox]);
+
+  // scheduleAnchorSettle: Anker erst freigeben, wenn alle Bilder fertig sind
+  // (oder das absolute Zeitlimit erreicht ist). Solange noch Medien laden, erneut
+  // prüfen statt freizugeben. Jeder applyAnchor-Aufruf re-armiert den Timer.
+  const scheduleAnchorSettle = useCallback(() => {
+    if (anchorSettleTimerRef.current !== null) {
+      window.clearTimeout(anchorSettleTimerRef.current);
+    }
+    const check = () => {
+      anchorSettleTimerRef.current = null;
+      if (!anchorRef.current) return;
+      if (anchorMediaPending() && Date.now() < anchorDeadlineRef.current) {
+        anchorSettleTimerRef.current = window.setTimeout(check, 400);
+      } else {
+        releaseAnchor();
+      }
+    };
+    anchorSettleTimerRef.current = window.setTimeout(check, 600);
+  }, [anchorMediaPending, releaseAnchor]);
+
+  // applyAnchor wendet den aktiven Anker an und (re)armiert das Settle-Timeout.
+  // Wird sowohl beim Öffnen (messages-Effekt) als auch fortlaufend vom Watcher
+  // (MutationObserver + Bild-`load`) aufgerufen, solange ein Anker gesetzt ist.
+  // Jeder Aufruf schiebt programmaticScrollUntilRef vor, damit die von uns
+  // ausgelösten Scroll-Events nicht als Nutzer-Scroll fehlgedeutet werden.
+  const applyAnchor = useCallback(() => {
+    const mode = anchorRef.current;
+    if (!mode) return;
+    const box = scrollBox();
+    if (!box) return;
+    programmaticScrollUntilRef.current = Date.now() + 300;
+    if (mode === "bottom") {
+      box.scrollTop = box.scrollHeight;
+    } else if (mode === "divider-chip") {
+      box.scrollTop = 0;
+    } else if (mode === "divider") {
+      // Divider noch nicht gemountet → vorläufig nach oben; der nächste
+      // applyAnchor (Layout-Änderung) korrigiert, sobald der Knoten da ist.
+      if (unreadDividerElRef.current) {
+        unreadDividerElRef.current.scrollIntoView({ block: "start" });
+      } else {
+        box.scrollTop = 0;
+      }
+    }
+    scheduleAnchorSettle();
+  }, [scrollBox, scheduleAnchorSettle]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const draftsRef = useRef<Map<number, string>>(new Map());
@@ -354,6 +453,9 @@ export default function ChatPage() {
           unreadDividerIndexRef.current = null;
         } else if (unreadCount > msgs.length) {
           unreadDividerIndexRef.current = -1;
+          // Erste Ungelesene liegt vor der geladenen Seite → kein Divider,
+          // sondern Chip oben; Anker entsprechend auf 'divider-chip' umstellen.
+          if (anchorRef.current === "divider") anchorRef.current = "divider-chip";
         } else {
           unreadDividerIndexRef.current = msgs.length - unreadCount;
         }
@@ -400,6 +502,12 @@ export default function ChatPage() {
   // Seite und stellt sie voran; Scroll-Position bleibt stabil.
   const loadOlderMessages = async () => {
     if (!activeConv || loadingOlder || messages.length === 0) return;
+    // Expliziter History-Load = Nutzer-Intent. Der „Ältere laden"-Button sitzt
+    // außerhalb des Scroll-Containers, feuert also keine wheel/touch/keydown-
+    // Listener → ohne dieses Release bliebe ein aktiver (divider-chip-)Anker aktiv
+    // und würde per applyAnchor scrollTop=0 erzwingen, was die keepPosition-Logik
+    // unten bekämpft (Ansicht springt bei jedem Bild-Decode zurück nach oben).
+    if (anchorRef.current) releaseAnchor();
     setLoadingOlder(true);
     try {
       const r = await api.get(`/chat/conversations/${activeConv.id}/messages`, {
@@ -410,16 +518,28 @@ export default function ChatPage() {
       if (older.length > 0) {
         // Scroll-Container ist der interne WindowedRows-Div (Windowing, ⑤):
         // Position beim Voranstellen erhalten, damit die Ansicht nicht springt.
-        const box =
-          messagesBoxRef.current?.querySelector<HTMLDivElement>(
-            "[data-windowed-scroll]",
-          ) ?? null;
+        const box = scrollBox();
         const prevHeight = box?.scrollHeight ?? 0;
+        const prevTop = box?.scrollTop ?? 0;
         suppressAutoScrollRef.current = true;
         setMessages((prev) => [...older, ...prev]);
-        requestAnimationFrame(() => {
-          if (box) box.scrollTop += box.scrollHeight - prevHeight;
-        });
+        if (box) {
+          // Position der bisher sichtbaren Nachrichten stabil halten — auch wenn
+          // voran-gestellte Bilder erst NACH dem Prepend decoden und die Höhe
+          // über dem Viewport weiter wachsen lassen. Delta jeweils aus der
+          // AKTUELLEN scrollHeight (prevHeight/prevTop = unveränderter Alt-Stand).
+          const keepPosition = () => {
+            box.scrollTop = prevTop + (box.scrollHeight - prevHeight);
+          };
+          requestAnimationFrame(keepPosition);
+          const onOlderImg = (e: Event) => {
+            if ((e.target as HTMLElement)?.tagName === "IMG") keepPosition();
+          };
+          box.addEventListener("load", onOlderImg, true);
+          window.setTimeout(() => {
+            box.removeEventListener("load", onOlderImg, true);
+          }, 1500);
+        }
       }
     } catch {
     } finally {
@@ -445,13 +565,19 @@ export default function ChatPage() {
     // UnreadDivider landen, sonst am Ende. Beides überstimmt den
     // Sticky-Guard, damit der loadMessages-State-Update zur richtigen
     // Position scrollt.
+    // Etwaigen Anker der vorherigen Konversation abräumen.
+    if (anchorSettleTimerRef.current !== null) {
+      window.clearTimeout(anchorSettleTimerRef.current);
+      anchorSettleTimerRef.current = null;
+    }
+    anchorDeadlineRef.current = Date.now() + 15000;
     if (conv.unreadCount > 0) {
-      scrollToUnreadRef.current = true;
-      forceScrollToEndRef.current = false;
+      // 'divider' wird in loadMessages ggf. zu 'divider-chip' präzisiert, wenn
+      // die erste Ungelesene älter als die geladene Seite ist.
+      anchorRef.current = "divider";
       isAtBottomRef.current = false;
     } else {
-      forceScrollToEndRef.current = true;
-      scrollToUnreadRef.current = false;
+      anchorRef.current = "bottom";
       unreadDividerIndexRef.current = null;
       isAtBottomRef.current = true;
     }
@@ -476,10 +602,10 @@ export default function ChatPage() {
           prev.some((c) => c.id === conv.id) ? prev : [conv, ...prev],
         );
         setTab("chats");
-        // Über openConversation öffnen, damit forceScrollToEndRef gesetzt
-        // wird und der Deep-Link zuverlässig am Ende der Konversation landet
-        // (statt eigenem setActiveConv+loadMessages-Duplikat, das den
-        // Sticky-Guard umging und bei Verlauf ganz oben landete).
+        // Über openConversation öffnen, damit der Scroll-Anker gesetzt wird und
+        // der Deep-Link zuverlässig positioniert (statt eigenem setActiveConv+
+        // loadMessages-Duplikat, das den Sticky-Guard umging und bei Verlauf
+        // ganz oben landete).
         openConversation(conv);
       })
       .catch(() => {});
@@ -582,58 +708,30 @@ export default function ChatPage() {
       suppressAutoScrollRef.current = false;
       return;
     }
-    // Divider-Ziel (chat-open-at-unread): beim Öffnen einer Konversation
-    // mit unreadCount > 0 landen wir am UnreadDivider statt am Ende.
-    // Sonderfall unreadDividerIndexRef=-1 (alles ungelesen, erster
-    // ungelesener liegt vor der Seite): oben im Container landen, wo der
-    // „N weitere ungelesene älter"-Chip sitzt.
-    if (scrollToUnreadRef.current) {
-      scrollToUnreadRef.current = false;
-      // Divider-Scroll ist programmatisch; onScroll darf isAtBottomRef
-      // dadurch NICHT auf true setzen, sonst reißt der nächste Bild-Load-
-      // Snap uns weg vom Divider ans Ende (bei wenigen Ungelesenen wäre
-      // distance < 100 → falsche sticky-Erkennung).
-      programmaticScrollUntilRef.current = Date.now() + 1000;
-      if (unreadDividerIndexRef.current === -1) {
-        const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
-          "[data-windowed-scroll]",
-        );
-        if (box) box.scrollTop = 0;
-      } else if (unreadDividerElRef.current) {
-        unreadDividerElRef.current.scrollIntoView({ block: "start" });
-      }
+    // Aktiver Öffnungs-/Sende-Anker (bottom/divider/divider-chip): einmal
+    // anwenden; der Watcher-Effekt unten hält ihn danach über Bild-`load` und
+    // DOM-Mutationen bis zum Settle fortlaufend nach. Das ist der Kern des Fix:
+    // ein einmaliger Scroll landet daneben, sobald Bilder erst nach dem Scroll
+    // decoden und das Layout verschieben.
+    if (anchorRef.current) {
+      applyAnchor();
       return;
     }
-    // Sticky-to-Bottom: nur automatisch ans Ende scrollen, wenn der Nutzer
-    // eh in der Nähe des Endes steht (oder wir explizit forcieren, z. B. beim
-    // eigenen Senden / beim Öffnen einer Konversation). Ohne diesen Guard reißt
-    // jeder Reactions-Toggle / eingehende SSE-Message den hochgescrollten
-    // Nutzer zurück ans Ende (Symptom „Position springt ständig") — messages
-    // ändert sich häufig, auch ohne dass etwas Neues am Ende dazugekommen ist.
-    const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
-      "[data-windowed-scroll]",
-    );
-    if (!forceScrollToEndRef.current) {
-      if (box) {
-        const distanceFromBottom =
-          box.scrollHeight - box.scrollTop - box.clientHeight;
-        if (distanceFromBottom > 100) return;
-      }
-    }
-    forceScrollToEndRef.current = false;
-    // Direkter Container-Scroll (instant) statt scrollIntoView(smooth) auf
-    // dem messagesEndRef: die Smooth-Animation kann durch nachfolgende
-    // Renders (SSE, loadConversations-Response, verzögerte Bild-Loads)
-    // unterbrochen werden und uns dann mittendrin stehen lassen. Instant
-    // + direkter scrollTop = scrollHeight ist nicht abbrechbar und braucht
-    // keinen Ref-Roundtrip. Fallback auf scrollIntoView, wenn der Container
-    // (noch) nicht im DOM ist.
+    // Sticky-to-Bottom: nur automatisch ans Ende scrollen, wenn der Nutzer eh
+    // in der Nähe des Endes steht. Ohne diesen Guard reißt jeder Reactions-
+    // Toggle / eingehende SSE-Message den hochgescrollten Nutzer zurück ans
+    // Ende (Symptom „Position springt ständig") — messages ändert sich häufig,
+    // auch ohne dass etwas Neues am Ende dazugekommen ist.
+    const box = scrollBox();
     if (box) {
+      const distanceFromBottom =
+        box.scrollHeight - box.scrollTop - box.clientHeight;
+      if (distanceFromBottom > 100) return;
       smoothScrollToBottom(box, isAtBottomRef, programmaticScrollUntilRef);
     } else {
       messagesEndRef.current?.scrollIntoView();
     }
-  }, [messages]);
+  }, [messages, applyAnchor, scrollBox]);
 
   // Sticky-to-Bottom-Wächter für den aktiven Chat-Container. Bilder in
   // Chat-Nachrichten laden asynchron und expandieren erst NACH dem initialen
@@ -643,43 +741,57 @@ export default function ChatPage() {
   // sichtbar vor dem Ende stehen.
   //
   // Muster:
-  //   - Scroll-Listener aktualisiert isAtBottomRef bei jedem User-Scroll
-  //     (hoch → false, wieder ans Ende → true).
-  //   - MutationObserver auf childList/subtree/style beobachtet DOM-
-  //     Änderungen im Container. Wenn wir „sticky" sind, snap ans neue Ende.
-  //     Divider-Scroll (scrollToUnreadRef) wird respektiert — solange der
-  //     Ref true ist, unterbrechen wir den Divider-Scroll nicht.
+  //   - Scroll-Listener aktualisiert isAtBottomRef bei echtem User-Scroll
+  //     (nur wenn KEIN Anker aktiv ist; sonst stammen Scrolls von uns).
+  //   - wheel/touchstart/keydown geben einen aktiven Anker sofort frei —
+  //     der Nutzer darf jederzeit selbst wegscrollen.
+  //   - MutationObserver + Bild-`load` → reposition: bei aktivem Anker
+  //     re-verankern (applyAnchor hält Divider ODER Ende), sonst Sticky-to-
+  //     Bottom wie bisher.
   useEffect(() => {
     if (!activeConv) return;
-    const box = messagesBoxRef.current?.querySelector<HTMLDivElement>(
-      "[data-windowed-scroll]",
-    );
+    const box = scrollBox();
     if (!box) return;
 
     const onScroll = () => {
-      // Programmatic scrolls sollen isAtBottomRef nicht überschreiben —
-      // sonst würde ein Divider-Scroll bei wenigen Ungelesenen fälschlich
-      // sticky machen und der Nutzer würde durch Bild-Loads ans Ende
-      // geschleudert.
+      // Unsere eigenen (programmatischen) Scrolls ignorieren — applyAnchor schiebt
+      // das Fenster bei jeder Layout-Änderung um 300 ms vor.
       if (Date.now() < programmaticScrollUntilRef.current) return;
+      // Ein Scroll AUSSERHALB des Fensters ist echter Nutzer-Scroll — auch der
+      // Maus-Scrollbar-Drag, der KEIN wheel/touch/keydown feuert. Aktiven Anker
+      // freigeben (releaseAnchor setzt isAtBottom aus der echten Position).
+      if (anchorRef.current) {
+        releaseAnchor();
+        return;
+      }
       const dist = box.scrollHeight - box.scrollTop - box.clientHeight;
       isAtBottomRef.current = dist < 100;
     };
     box.addEventListener("scroll", onScroll, { passive: true });
 
-    const snap = () => {
-      if (scrollToUnreadRef.current) return;
-      if (isAtBottomRef.current) {
-        // Nach dem initial-Smooth ist der User schon (fast) am Ende — kleine
-        // Anpassungen durch Bild-Loads etc. instant snappen, damit sich der
-        // Chain aus Layout-Updates nicht zu einer wackligen Kette von
-        // Mini-Animationen aufaddiert.
+    // Echte Nutzer-Eingabe gibt den Anker sofort frei — der Nutzer soll während
+    // des Bild-Nachladens nicht gegen den Re-Pin ankämpfen müssen. Programma-
+    // tische scrollTop-Änderungen und Bild-Reflows lösen KEINE dieser Events aus.
+    const onUserIntent = () => {
+      if (anchorRef.current) releaseAnchor();
+    };
+    box.addEventListener("wheel", onUserIntent, { passive: true });
+    box.addEventListener("touchstart", onUserIntent, { passive: true });
+    box.addEventListener("keydown", onUserIntent);
+
+    const reposition = () => {
+      if (anchorRef.current) {
+        // Öffnungs-/Sende-Anker: Divider oder Ende halten, während Bilder
+        // decoden und das Layout wächst (Kern-Fix gegen „landet daneben").
+        applyAnchor();
+      } else if (isAtBottomRef.current) {
+        // Normale Sticky-to-Bottom-Nachführung (kleine Layout-Deltas instant).
         programmaticScrollUntilRef.current = Date.now() + 200;
         box.scrollTop = box.scrollHeight;
       }
     };
 
-    const mo = new MutationObserver(snap);
+    const mo = new MutationObserver(reposition);
     mo.observe(box, {
       childList: true,
       subtree: true,
@@ -687,23 +799,27 @@ export default function ChatPage() {
       attributeFilter: ["style"],
     });
 
-    // Bild-Decode-Kompensation: `<img>` wendet aspect-ratio zwar früh, aber
-    // die tatsächliche Layout-Höhe kann erst nach dem Image-Decode stabil
-    // sein (Chrome sub-pixel-Delta bis ~300 px am unteren Container-Rand).
-    // Das ist KEINE DOM-Mutation und wird vom MutationObserver nicht gefangen.
-    // Der `load`-Event feuert nach Decode → snap. `capture: true`, weil
-    // load-Events nicht bubbeln.
+    // Bild-Decode ist KEINE DOM-Mutation; `<img>` setzt aspect-ratio zwar früh,
+    // die tatsächliche Layout-Höhe steht aber erst nach Decode. Der `load`-Event
+    // (capture, weil load nicht bubbelt) feuert dann → reposition.
     const onImgLoad = (e: Event) => {
-      if ((e.target as HTMLElement)?.tagName === "IMG") snap();
+      if ((e.target as HTMLElement)?.tagName === "IMG") reposition();
     };
     box.addEventListener("load", onImgLoad, true);
 
     return () => {
       box.removeEventListener("scroll", onScroll);
+      box.removeEventListener("wheel", onUserIntent);
+      box.removeEventListener("touchstart", onUserIntent);
+      box.removeEventListener("keydown", onUserIntent);
       box.removeEventListener("load", onImgLoad, true);
       mo.disconnect();
+      if (anchorSettleTimerRef.current !== null) {
+        window.clearTimeout(anchorSettleTimerRef.current);
+        anchorSettleTimerRef.current = null;
+      }
     };
-  }, [activeConv?.id]);
+  }, [activeConv?.id, applyAnchor, releaseAnchor, scrollBox]);
 
   // Clamp context menu to viewport after render (runs before paint → no flicker)
   useLayoutEffect(() => {
@@ -825,11 +941,11 @@ export default function ChatPage() {
       clearPendingImage();
       draftsRef.current.delete(activeConv.id);
       // Nach dem eigenen Senden soll die eigene Nachricht in den Blick — auch
-      // wenn der Nutzer kurz vorher hochgescrollt hatte. Beide Refs: der
-      // force-Flag kickt den initialen End-Scroll im messages-Effekt, der
-      // sticky-Ref lässt den MutationObserver weiter am Ende halten während
-      // Bilder etc. async nachladen.
-      forceScrollToEndRef.current = true;
+      // wenn der Nutzer kurz vorher hochgescrollt hatte. Der 'bottom'-Anker
+      // hält den Container ans Ende, während Bilder/Reactions async nachladen
+      // (fortlaufende Re-Verankerung im Watcher).
+      anchorDeadlineRef.current = Date.now() + 15000;
+      anchorRef.current = "bottom";
       isAtBottomRef.current = true;
       await appendNewMessages(activeConv.id);
     } catch {
