@@ -21,6 +21,7 @@ const GAME = {
 beforeEach(() => {
   mock = new MockAdapter(api)
   mock.onGet('/teams').reply(200, [])
+  mock.onGet('/teams/names').reply(200, [])
   mock.onGet('/duty-templates').reply(200, [])
 })
 afterEach(() => {

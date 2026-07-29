@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
-import { buildTeamShortNames } from '../lib/teamName'
+import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { errorStatus } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import VenuePicker from './VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
@@ -69,9 +70,15 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [rsvpRequireReason, setRsvpRequireReason] = useState<boolean>(game.rsvp_require_reason === 1)
   const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>(game.teams?.map(t => t.id) ?? [])
   const [availableTeams, setAvailableTeams] = useState<AvailableTeam[]>([])
+  const [clubTeams, setClubTeams] = useState<TeamForName[]>([])
   const [templates, setTemplates] = useState<DutyTemplate[]>([])
   const [templateId, setTemplateId] = useState<number | null>(game.template_id ?? null)
-  const teamShortNames = useMemo(() => buildTeamShortNames(availableTeams), [availableTeams])
+  // Generische Events sind mannschaftsübergreifend: dort speist sich der Picker
+  // aus der vereinsweiten Liste (/teams/names), damit auch ein reiner Trainer
+  // fremde Mannschaften einladen kann. Heim-/Auswärtsspiele bleiben auf die
+  // nutzergefilterte Liste (/teams) beschränkt. Siehe game-edit-modal-Spec.
+  const pickerTeams: TeamForName[] = isGeneric ? clubTeams : availableTeams
+  const teamShortNames = useMemo(() => buildTeamShortNames(pickerTeams), [pickerTeams])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -82,6 +89,11 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   useEffect(() => {
     api.get<AvailableTeam[]>('/teams')
       .then(r => setAvailableTeams((r.data ?? []).filter(t => t.is_active)))
+      .catch(() => {})
+    // /teams/names liefert bereits nur aktive Teams der aktiven Saison,
+    // vorsortiert nach Altersklasse/Geschlecht/Team-Nummer.
+    api.get<TeamForName[]>('/teams/names')
+      .then(r => setClubTeams(r.data ?? []))
       .catch(() => {})
     api.get<DutyTemplate[]>('/duty-templates')
       .then(r => setTemplates(r.data ?? []))
@@ -127,8 +139,15 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         template_id: templateId,
       })
       onSaved(r.data?.regen_summary)
-    } catch {
-      setError('Speichern fehlgeschlagen.')
+    } catch (e) {
+      // 403 heißt hier immer Team-Scope: mindestens eine eigene Mannschaft muss
+      // am Event beteiligt bleiben (game-mutation-team-scope). Ohne eigene
+      // Meldung wäre für den Trainer nicht erkennbar, welche Auswahl das Problem ist.
+      setError(
+        errorStatus(e) === 403
+          ? 'Mindestens eine deiner Mannschaften muss am Event beteiligt bleiben.'
+          : 'Speichern fehlgeschlagen.'
+      )
     } finally {
       setSaving(false)
     }
@@ -195,11 +214,11 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
             <label className="block text-sm font-medium text-brand-text-muted mb-2">
               {isGeneric ? 'Mannschaften' : 'Mannschaft'}
             </label>
-            {availableTeams.length === 0 ? (
+            {pickerTeams.length === 0 ? (
               <p className="text-xs text-brand-text-subtle">Lädt…</p>
             ) : isGeneric ? (
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                {availableTeams.map(t => (
+                {pickerTeams.map(t => (
                   <label key={t.id} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -207,7 +226,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
                       onChange={() => toggleTeam(t.id)}
                       className="rounded accent-brand-yellow"
                     />
-                    <span className="text-sm text-brand-text">{teamShortNames.get(t.id) ?? t.name}</span>
+                    <span className="text-sm text-brand-text">{teamShortNames.get(t.id)}</span>
                   </label>
                 ))}
               </div>

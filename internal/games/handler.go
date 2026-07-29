@@ -176,6 +176,107 @@ func diffTeamIDs(a, b []int) []int {
 	return out
 }
 
+// isScopedTrainer reports whether the caller's event mutations are limited to
+// their own teams: club function `trainer` WITHOUT `sportliche_leitung` or
+// `vorstand`, and without the admin system role. Everyone else who reaches the
+// mutation routes (admin/vorstand/sportliche_leitung, per the router tier)
+// passes the team-scope checks unfiltered — consistent with CanViewAllGames.
+func isScopedTrainer(claims *auth.Claims) bool {
+	if claims == nil || claims.Role == "admin" {
+		return false
+	}
+	if !claims.HasFunction("trainer") {
+		return false
+	}
+	return !claims.HasFunction("sportliche_leitung") && !claims.HasFunction("vorstand")
+}
+
+// uniqueTeamIDs returns teamIDs without duplicates, preserving first-seen
+// order. checkTeamScope compares a DISTINCT COUNT against the list length, so a
+// request repeating the same team ("1,1,2") must not be able to pass the
+// all-own check for heim/auswärts with only one own team.
+func uniqueTeamIDs(teamIDs []int) []int {
+	seen := make(map[int]struct{}, len(teamIDs))
+	out := make([]int, 0, len(teamIDs))
+	for _, id := range teamIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+// trainerOwnTeamCount returns how many DISTINCT entries of teamIDs the user
+// trains in the active season.
+func (h *Handler) trainerOwnTeamCount(ctx context.Context, userID int, teamIDs []int) (int, error) {
+	if len(teamIDs) == 0 {
+		return 0, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(teamIDs)), ",")
+	args := append([]any{userID}, toAny(teamIDs)...)
+	var count int
+	err := h.db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT trm.team_id) FROM trainer_memberships trm
+		JOIN seasons s ON s.id = trm.season_id AND s.is_active = 1
+		JOIN members m ON m.id = trm.member_id AND m.user_id = ?
+		WHERE trm.team_id IN (`+placeholders+`)`, args...).Scan(&count)
+	return count, err
+}
+
+// checkTeamScope validates the team_ids a scoped trainer wants to attach to an
+// event of the given type:
+//
+//	heim/auswärts — every team must be one of their own (unchanged behaviour).
+//	generisch     — at least ONE own team must be included; the rest may be any
+//	                active team of the club. The "at least one" anchor keeps the
+//	                trainer from creating or re-assigning an event that
+//	                ScopeGamesQuery would then hide from them, leaving it
+//	                neither correctable nor deletable.
+func (h *Handler) checkTeamScope(ctx context.Context, claims *auth.Claims, eventType string, teamIDs []int) (bool, error) {
+	if claims == nil {
+		return false, nil
+	}
+	if !isScopedTrainer(claims) {
+		return true, nil
+	}
+	ids := uniqueTeamIDs(teamIDs)
+	own, err := h.trainerOwnTeamCount(ctx, claims.UserID, ids)
+	if err != nil {
+		return false, err
+	}
+	if eventType == "generisch" {
+		return own >= 1, nil
+	}
+	return own == len(ids), nil
+}
+
+// canMutateGame reports whether the caller may change or delete the given event
+// at all. A scoped trainer needs at least one of their own teams among the
+// event's CURRENT teams — the router tier alone (vorstand/trainer/sL) would
+// otherwise let any trainer edit or delete any club event via the API. The
+// team_ids of the RESULTING event are checked separately by checkTeamScope.
+func (h *Handler) canMutateGame(ctx context.Context, claims *auth.Claims, gameID int) (bool, error) {
+	if claims == nil {
+		return false, nil
+	}
+	if !isScopedTrainer(claims) {
+		return true, nil
+	}
+	var trains int
+	err := h.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM trainer_memberships trm
+		JOIN seasons s ON s.id = trm.season_id AND s.is_active = 1
+		JOIN members m ON m.id = trm.member_id AND m.user_id = ?
+		JOIN game_teams gt ON gt.team_id = trm.team_id AND gt.game_id = ?`,
+		claims.UserID, gameID).Scan(&trains)
+	if err != nil {
+		return false, err
+	}
+	return trains > 0, nil
+}
+
 // canEditGameNote reports whether the caller may set a game's note: admin,
 // vorstand, sportliche_leitung, or a trainer of a participating team. Mirrors
 // the canEdit logic of GetGame.
@@ -923,23 +1024,18 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 			`SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&req.SeasonID)
 	}
 
+	// Team-Scope für reine Trainer: bei heim/auswärts müssen alle Mannschaften
+	// eigene sein, bei generisch reicht eine eigene (mannschaftsübergreifende
+	// Events sind der Regelfall für diesen Typ). Siehe checkTeamScope.
 	claims := auth.ClaimsFromCtx(r.Context())
-	if claims != nil && claims.HasFunction("trainer") && !claims.HasFunction("sportliche_leitung") {
-		placeholders := strings.Repeat("?,", len(req.TeamIDs))
-		placeholders = placeholders[:len(placeholders)-1]
-		args := append([]any{claims.UserID}, toAny(req.TeamIDs)...)
-		var count int
-		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(DISTINCT k.team_id) FROM kader k
-			 JOIN kader_trainers kt ON kt.kader_id = k.id
-			 JOIN members m ON m.id = kt.member_id
-			 WHERE m.user_id = ? AND k.team_id IN (`+placeholders+`)
-			   AND k.season_id = (SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`,
-			args...).Scan(&count)
-		if err == nil && count != len(req.TeamIDs) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+	allowed, err := h.checkTeamScope(r.Context(), claims, req.EventType, req.TeamIDs)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 
 	isHome := req.EventType == "heim"
@@ -1114,6 +1210,52 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Autorisierung vor jedem Schreibzugriff. Die 404-Prüfung steht bewusst VOR
+	// der 403-Antwort, damit fremde Event-IDs nicht über den Statuscode
+	// unterscheidbar werden.
+	gameIDInt, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	claims := auth.ClaimsFromCtx(r.Context())
+	var storedEventType string
+	switch err := h.db.QueryRowContext(r.Context(),
+		`SELECT event_type FROM games WHERE id=?`, gameIDInt).Scan(&storedEventType); {
+	case err == sql.ErrNoRows:
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	case err != nil:
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	mayMutate, err := h.canMutateGame(r.Context(), claims, gameIDInt)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !mayMutate {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	// Hängt der Request die Mannschaften um, gilt die Typ-Regel für den ZIEL-Typ:
+	// req.EventType, falls gesetzt, sonst der gespeicherte Typ.
+	if len(req.TeamIDs) > 0 {
+		targetType := storedEventType
+		if req.EventType == "heim" || req.EventType == "auswärts" || req.EventType == "generisch" {
+			targetType = req.EventType
+		}
+		allowed, err := h.checkTeamScope(r.Context(), claims, targetType, req.TeamIDs)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if !allowed {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -1193,8 +1335,6 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	// Nur relevant, wenn TeamIDs im Request stehen (sonst bleibt game_teams unverändert).
 	var oldTeamIDs []int
 	if len(req.TeamIDs) > 0 {
-		gameIDInt := 0
-		fmt.Sscan(id, &gameIDInt)
 		oldTeamIDs = hub.NewAudience(h.db).TeamIDsForGame(r.Context(), gameIDInt)
 		tx.ExecContext(r.Context(), `DELETE FROM game_teams WHERE game_id=?`, id)
 		for _, teamID := range req.TeamIDs {
@@ -1238,8 +1378,6 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	gameIDInt := 0
-	fmt.Sscan(id, &gameIDInt)
 	// broadcastGame/gameTeamIDs adressieren die AKTUELLEN (neuen) game_teams. Bei einer
 	// Team-Umhängung müssen aber auch die ENTFERNTEN Teams erfahren, dass ihnen das Spiel
 	// nicht mehr gehört. Deshalb ein zusätzlicher, gezielter Broadcast/Push an die alten
@@ -1289,6 +1427,24 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Autorisierung nach der Existenzprüfung (404 vor 403) und vor dem Cascade:
+	// ein reiner Trainer löscht nur Events, an denen eine eigene Mannschaft
+	// beteiligt ist.
+	gameIDInt, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	mayMutate, err := h.canMutateGame(r.Context(), auth.ClaimsFromCtx(r.Context()), gameIDInt)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !mayMutate {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 

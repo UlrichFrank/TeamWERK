@@ -4,6 +4,7 @@ import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, 
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
+import { errorStatus } from '../lib/errors'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -480,8 +481,14 @@ export default function KalenderPage() {
       }
       await loadGames()
       closeDialog()
-    } catch {
-      setCreateError('Event konnte nicht angelegt werden. Ist eine aktive Saison vorhanden?')
+    } catch (e) {
+      // 403 = Team-Scope (game-mutation-team-scope): bei generischen Events muss
+      // eine eigene Mannschaft dabei sein, bei Spielen müssen alle eigene sein.
+      setCreateError(
+        errorStatus(e) === 403
+          ? 'Mindestens eine deiner eigenen Mannschaften muss am Event beteiligt sein.'
+          : 'Event konnte nicht angelegt werden. Ist eine aktive Saison vorhanden?'
+      )
     } finally {
       setCreating(false)
     }
@@ -1103,8 +1110,12 @@ export default function KalenderPage() {
                       {eventType === 'generisch' ? 'Mannschaften *' : 'Mannschaft *'}
                     </label>
                     {eventType === 'generisch' ? (
+                      // Generische Events sind mannschaftsübergreifend: alle aktiven
+                      // Mannschaften des Vereins (allTeamNames = /teams/names), nicht nur
+                      // die eigenen. Der Server verlangt weiterhin, dass mindestens eine
+                      // eigene Mannschaft dabei ist (game-mutation-team-scope).
                       <div className="space-y-2">
-                        {teams.filter(t => t.is_active).map(t => (
+                        {allTeamNames.map(t => (
                           <label key={t.id} className="flex items-center gap-2">
                             <input type="checkbox" checked={selectedTeamIds.includes(t.id)}
                               onChange={e => {
@@ -1114,7 +1125,7 @@ export default function KalenderPage() {
                                   setSelectedTeamIds(selectedTeamIds.filter(id => id !== t.id))
                                 }
                               }} className="rounded accent-brand-yellow" />
-                            <span className="text-sm text-brand-text">{shortNames.get(t.id) ?? t.name}</span>
+                            <span className="text-sm text-brand-text">{shortNames.get(t.id)}</span>
                           </label>
                         ))}
                       </div>
