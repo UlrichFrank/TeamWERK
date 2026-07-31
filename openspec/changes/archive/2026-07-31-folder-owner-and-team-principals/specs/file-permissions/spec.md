@@ -1,22 +1,4 @@
-# file-permissions Specification
-
-## Purpose
-TBD - created by archiving change dateiablage. Update Purpose after archive.
-## Requirements
-### Requirement: Dynamische Ordnerverwaltung
-Authentifizierte Nutzer mit `can_write` auf einen Ordner SHALL darin Unterordner via `POST /api/folders` anlegen können. Ein Ordner MUST einen `name` und eine `parent_id` (oder null für Wurzel) haben.
-
-#### Scenario: Unterordner anlegen
-- **WHEN** ein Nutzer mit `can_write` auf Ordner A `POST /api/folders` mit `parent_id = A` aufruft
-- **THEN** wird ein neuer Unterordner angelegt und `201 Created` zurückgegeben
-
-#### Scenario: Anlegen ohne Schreibrecht
-- **WHEN** ein Nutzer ohne `can_write` auf den Elternordner einen Unterordner anlegen will
-- **THEN** antwortet der Server mit HTTP 403
-
-#### Scenario: Wurzelordner anlegen
-- **WHEN** ein Admin `POST /api/folders` ohne `parent_id` aufruft
-- **THEN** wird ein neuer Wurzelordner angelegt
+## MODIFIED Requirements
 
 ### Requirement: ACL-Einträge verwalten
 Nutzer mit `can_write` auf einen Ordner SHALL Berechtigungseinträge via `POST /api/folders/:id/permissions` anlegen können. Bestehende Einträge SHALL via `DELETE /api/folders/:id/permissions/:permId` entfernt werden können.
@@ -40,21 +22,6 @@ Der Wert `owner` ist **kein** gültiger `principal_type`: Er erscheint ausschlie
 #### Scenario: Unbekannter Principal-Typ wird abgelehnt
 - **WHEN** ein Nutzer einen Eintrag mit `principal_type=owner` oder einem sonstigen unbekannten Wert anlegt
 - **THEN** antwortet der Server mit HTTP 400 und speichert nichts
-
-### Requirement: Anti-Eskalation
-Das System SHALL verhindern, dass ein Nutzer mehr Rechte vergibt als er selbst auf den Ordner hat. Admin (`role = 'admin'`) ist ausgenommen und darf immer alle Rechte vergeben.
-
-#### Scenario: Nur Leserecht — kann kein Schreibrecht vergeben
-- **WHEN** ein Nutzer nur `can_read` (nicht `can_write`) auf einen Ordner hat und versucht einem anderen Nutzer `can_write` zu geben
-- **THEN** antwortet der Server mit HTTP 403
-
-#### Scenario: Schreibrecht — kann Lese- und Schreibrecht vergeben
-- **WHEN** ein Nutzer `can_write` auf einen Ordner hat
-- **THEN** darf er sowohl `can_read` als auch `can_write` an andere vergeben
-
-#### Scenario: Admin darf alles vergeben
-- **WHEN** ein Nutzer mit `role = 'admin'` einen ACL-Eintrag anlegt
-- **THEN** wird der Eintrag ohne Eskalationsprüfung gespeichert
 
 ### Requirement: Principal-Typen
 Das System SHALL sechs Principal-Typen unterstützen: `user`, `team`, `team_parents`, `club_function`, `role` und `everyone`. Alle auf einem Ordner definierten Einträge werden ausgewertet; ein Treffer bei einem beliebigen Typ reicht für die Gewährung des jeweiligen Rechts (`can_read` und `can_write` werden getrennt vereinigt).
@@ -85,3 +52,10 @@ Das System SHALL sechs Principal-Typen unterstützen: `user`, `team`, `team_pare
 - **WHEN** ein Ordner einen Eintrag mit `principal_type = 'team_parents'` und `principal_ref = '7'` hat
 - **THEN** haben alle über `family_links` verknüpften Elternteile der Spieler und erweiterten Kadermitglieder dieser Mannschaft in der aktiven Saison die entsprechenden Rechte
 
+## REMOVED Requirements
+
+### Requirement: Additive Berechtigungsvererbung
+
+**Reason**: Fachlich abgelöst durch die Capability `folder-permission-resolution` (Nearest-Ancestor-Wins), eingeführt mit `archive/2026-06-13-folder-permissions-fix`. Die additive Auflösung war ein Sicherheitsloch — eine `everyone: read`-Freigabe in einem Vorfahren hebelte jede Einschränkung im Unterordner aus. Das Requirement wurde damals nur nicht gestrichen und widerspricht seither dem tatsächlichen Verhalten sowie der neueren Spec.
+
+**Migration**: Keine. Das beschriebene Verhalten existiert seit Juni 2026 nicht mehr im Code; maßgeblich ist `folder-permission-resolution`. Die einzige verbliebene Form eines nicht entziehbaren Rechts ist der Eigentümer-Vorrang, der dort eigenständig spezifiziert ist.
