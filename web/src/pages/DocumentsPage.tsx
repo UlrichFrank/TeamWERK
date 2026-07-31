@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -11,6 +11,7 @@ import { CLUB_FUNCTION_OPTIONS } from '../lib/constants'
 import { errorMessage, errorStatus } from '../lib/errors'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { openBlobNatively } from '../lib/openFileNatively'
+import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -218,9 +219,15 @@ const PRINCIPAL_TYPE_LABELS: Record<string, string> = {
   role: 'Rolle',
   club_function: 'Vereinsfunktion',
   user: 'Person',
+  team: 'Team',
+  team_parents: 'Eltern',
 }
 
-function PermissionsModal({ folderId, canWrite, onClose }: {
+/** Beide Typen tragen eine teams.id als principal_ref und teilen dasselbe Dropdown. */
+const TEAM_TYPES = ['team', 'team_parents']
+
+/** Bewusst exportiert: erlaubt Unit-Tests des Berechtigungsdialogs ohne Seiten-Render. */
+export function PermissionsModal({ folderId, canWrite, onClose }: {
   folderId: number
   canWrite: boolean
   onClose: () => void
@@ -235,15 +242,22 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
   const [saving, setSaving] = useState(false)
   const [pickerUsers, setPickerUsers] = useState<{ id: number; name: string }[]>([])
   const [pickerLoaded, setPickerLoaded] = useState(false)
+  const [teams, setTeams] = useState<TeamForName[]>([])
+  const [teamsLoaded, setTeamsLoaded] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const { data } = await api.get<Permission[]>(`/folders/${folderId}/permissions`)
       setPerms(data)
+      // Für die Kurznamen ("mA1") in der Liste — loadTeams ist idempotent.
+      if (data.some(p => TEAM_TYPES.includes(p.principal_type))) loadTeams()
     } finally {
       setLoading(false)
     }
+    // loadTeams ist über teamsLoaded selbst-guardend; als Dependency würde es die
+    // Liste bei jedem Laden neu identisieren und eine Endlosschleife erzeugen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
@@ -258,6 +272,18 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
       // ignore — picker stays empty
     } finally {
       setPickerLoaded(true)
+    }
+  }
+
+  async function loadTeams() {
+    if (teamsLoaded) return
+    try {
+      const { data } = await api.get<TeamForName[]>('/teams/names')
+      setTeams(data)
+    } catch {
+      // ignore — dropdown stays empty
+    } finally {
+      setTeamsLoaded(true)
     }
   }
 
@@ -290,10 +316,20 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
     load()
   }
 
+  const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
+
   function permLabel(p: Permission): string {
     if (p.principal_type === 'everyone') return 'Alle Nutzer'
+    if (p.principal_type === 'owner') return `Eigentümer: ${p.display_name ?? p.principal_ref}`
+    const label = PRINCIPAL_TYPE_LABELS[p.principal_type] ?? p.principal_type
+    if (TEAM_TYPES.includes(p.principal_type)) {
+      // Kurzname ("mA1") kommt aus der geladenen Teamliste; solange sie fehlt,
+      // greift der Langname aus teams.name vom Server.
+      const short = teamShortNames.get(Number(p.principal_ref))
+      return `${label}: ${short ?? p.display_name ?? p.principal_ref}`
+    }
     const ref = p.principal_type === 'user' ? (p.display_name ?? p.principal_ref) : p.principal_ref
-    return `${PRINCIPAL_TYPE_LABELS[p.principal_type] ?? p.principal_type}: ${ref}`
+    return `${label}: ${ref}`
   }
 
   return (
@@ -310,16 +346,19 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
           <p className="text-sm text-brand-text-muted">Laden…</p>
         ) : (
           <div className="space-y-2 mb-5">
-            {perms.length === 0 && <p className="text-sm text-brand-text-muted italic">Keine direkten Berechtigungen.</p>}
+            {!perms.some(p => p.principal_type !== 'owner') && (
+              <p className="text-sm text-brand-text-muted italic">Keine direkten Berechtigungen.</p>
+            )}
             {perms.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-brand-surface-card rounded-lg px-3 py-2 text-sm">
+              <div key={`${p.principal_type}-${p.id}`} className="flex items-center justify-between bg-brand-surface-card rounded-lg px-3 py-2 text-sm">
                 <div>
                   <span className="text-brand-text">{permLabel(p)}</span>
                   <span className="text-brand-text-muted ml-2">
                     {p.can_read && 'Lesen'}{p.can_read && p.can_write && ' + '}{p.can_write && 'Schreiben'}
                   </span>
                 </div>
-                {canWrite && (
+                {/* Der Eigentümer-Eintrag ist synthetisch (id 0) und nicht entziehbar. */}
+                {canWrite && p.principal_type !== 'owner' && (
                   <button onClick={() => removePerm(p.id)} aria-label="Entfernen" className="text-brand-danger hover:opacity-70 ml-2">
                     <X className="w-4 h-4" />
                   </button>
@@ -339,6 +378,7 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
                 setNewType(t)
                 setNewRef('')
                 if (t === 'user') loadPickerUsers()
+                if (TEAM_TYPES.includes(t)) loadTeams()
               }}
               className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
             >
@@ -376,6 +416,18 @@ function PermissionsModal({ folderId, canWrite, onClose }: {
                 <option value="">Person wählen…</option>
                 {pickerUsers.map(u => (
                   <option key={u.id} value={String(u.id)}>{u.name}</option>
+                ))}
+              </select>
+            )}
+            {TEAM_TYPES.includes(newType) && (
+              <select
+                value={newRef}
+                onChange={e => setNewRef(e.target.value)}
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              >
+                <option value="">Mannschaft wählen…</option>
+                {teams.map(t => (
+                  <option key={t.id} value={String(t.id)}>{teamShortNames.get(t.id) ?? t.id}</option>
                 ))}
               </select>
             )}
