@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,126 +32,26 @@ func NewHandler(db *sql.DB, filesDir, secret string) *Handler {
 	return &Handler{db: db, filesDir: filesDir, secret: secret}
 }
 
-// folderPath returns [folderID, parentID, grandparentID, ...] up to the root.
-func folderPath(db *sql.DB, folderID int) ([]int, error) {
-	path := []int{}
-	current := folderID
-	for {
-		path = append(path, current)
-		var parentID sql.NullInt64
-		err := db.QueryRow(`SELECT parent_id FROM file_folders WHERE id = ?`, current).Scan(&parentID)
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("folder %d not found", current)
-		}
-		if err != nil {
-			return nil, err
-		}
-		if !parentID.Valid {
-			break
-		}
-		current = int(parentID.Int64)
+// folderAccess returns the effective read/write access for the caller on folderID.
+//
+// Thin adapter over policy.FolderAccess — the single implementation of the folder
+// permission model (owner precedence, nearest-ancestor-wins, family and team
+// context). A second copy used to live here; keeping both in sync was a standing
+// hazard, because only FolderContents ever called the policy variant.
+//
+// A nil claims value means an unauthenticated caller on the public download route
+// and resolves to no access.
+func folderAccess(db *sql.DB, claims *auth.Claims, folderID int) (canRead, canWrite bool, err error) {
+	if claims == nil {
+		return false, false, nil
 	}
-	return path, nil
-}
-
-// fetchFamilyContext returns the user IDs and club functions of members linked to
-// userID via family_links. Used to grant Elternteil users their children's access.
-func fetchFamilyContext(db *sql.DB, userID int) (linkedUserIDs []int, linkedFunctions []string) {
-	rows, err := db.Query(`
-		SELECT COALESCE(m.user_id, 0), COALESCE(mcf.function, '')
-		  FROM family_links fl
-		  JOIN members m ON m.id = fl.member_id
-		  LEFT JOIN member_club_functions mcf ON mcf.member_id = m.id
-		 WHERE fl.parent_user_id = ?`, userID)
-	if err != nil {
-		return nil, nil
+	p := &policy.Principal{
+		UserID:        claims.UserID,
+		Role:          claims.Role,
+		ClubFunctions: claims.ClubFunctions,
+		IsParent:      claims.IsParent,
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var uid int
-		var fn string
-		if err := rows.Scan(&uid, &fn); err != nil {
-			continue
-		}
-		if uid != 0 && !slices.Contains(linkedUserIDs, uid) {
-			linkedUserIDs = append(linkedUserIDs, uid)
-		}
-		if fn != "" && !slices.Contains(linkedFunctions, fn) {
-			linkedFunctions = append(linkedFunctions, fn)
-		}
-	}
-	return linkedUserIDs, linkedFunctions
-}
-
-// resolveAccess returns the effective read/write access for the caller on folderID.
-// Nearest-ancestor-wins: the closest folder in the hierarchy with explicit permissions
-// is authoritative; ancestors beyond that point are ignored.
-// Elternteil users also inherit the club_function and user-ID rights of their children.
-func resolveAccess(db *sql.DB, claims *auth.Claims, folderID int) (canRead, canWrite bool, err error) {
-	if claims.Role == "admin" {
-		return true, true, nil
-	}
-
-	path, err := folderPath(db, folderID)
-	if err != nil {
-		return false, false, err
-	}
-
-	linkedUserIDs, linkedFunctions := fetchFamilyContext(db, claims.UserID)
-	userIDStr := strconv.Itoa(claims.UserID)
-
-	for _, id := range path {
-		rows, err := db.Query(
-			`SELECT principal_type, principal_ref, can_read, can_write
-			   FROM folder_permissions WHERE folder_id = ?`, id)
-		if err != nil {
-			return false, false, err
-		}
-
-		var hasAny bool
-		var cr, cw bool
-
-		for rows.Next() {
-			hasAny = true
-			var pt, pr sql.NullString
-			var r, w int
-			if scanErr := rows.Scan(&pt, &pr, &r, &w); scanErr != nil {
-				continue
-			}
-			matches := false
-			switch pt.String {
-			case "everyone":
-				matches = true
-			case "role":
-				matches = pr.Valid && pr.String == claims.Role
-			case "club_function":
-				matches = pr.Valid && (claims.HasFunction(pr.String) || slices.Contains(linkedFunctions, pr.String))
-			case "user":
-				if pr.Valid && pr.String == userIDStr {
-					matches = true
-				} else if pr.Valid {
-					if uid, parseErr := strconv.Atoi(pr.String); parseErr == nil {
-						matches = slices.Contains(linkedUserIDs, uid)
-					}
-				}
-			}
-			if matches {
-				if r == 1 {
-					cr = true
-				}
-				if w == 1 {
-					cw = true
-				}
-			}
-		}
-		rows.Close()
-
-		if hasAny {
-			return cr, cw, nil
-		}
-	}
-
-	return false, false, nil
+	return policy.FolderAccess(db, p, folderID)
 }
 
 // checkAntiEscalation returns true if the caller is allowed to grant the requested rights.
@@ -165,7 +64,7 @@ func checkAntiEscalation(db *sql.DB, claims *auth.Claims, folderID int, newRead,
 	if claims.Role == "admin" {
 		return true, nil
 	}
-	callerRead, callerWrite, err := resolveAccess(db, claims, folderID)
+	callerRead, callerWrite, err := folderAccess(db, claims, folderID)
 	if err != nil {
 		return false, err
 	}
@@ -215,7 +114,7 @@ func (h *Handler) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&f.ID, &f.Name, &f.CreatedAt, &f.CreatedByName); err != nil {
 			continue
 		}
-		cr, cw, _ := resolveAccess(h.db, claims, f.ID)
+		cr, cw, _ := folderAccess(h.db, claims, f.ID)
 		if !cr {
 			continue
 		}
@@ -243,7 +142,7 @@ func (h *Handler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.ParentID != nil {
-		_, cw, err := resolveAccess(h.db, claims, *req.ParentID)
+		_, cw, err := folderAccess(h.db, claims, *req.ParentID)
 		if err != nil {
 			http.Error(w, "db error", http.StatusInternalServerError)
 			return
@@ -284,14 +183,13 @@ type contentsResponse struct {
 // GET /api/folders/{id}/contents
 func (h *Handler) FolderContents(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
-	p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions, IsParent: claims.IsParent}
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	cr, cw, err := policy.FolderAccess(h.db, p, id)
+	cr, cw, err := folderAccess(h.db, claims, id)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -319,7 +217,7 @@ func (h *Handler) FolderContents(w http.ResponseWriter, r *http.Request) {
 		if err := frows.Scan(&f.ID, &f.Name, &f.CreatedAt, &f.CreatedByName); err != nil {
 			continue
 		}
-		fcr, fcw, _ := resolveAccess(h.db, claims, f.ID)
+		fcr, fcw, _ := folderAccess(h.db, claims, f.ID)
 		if !fcr {
 			continue
 		}
@@ -362,7 +260,7 @@ func (h *Handler) RenameFolder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
-	_, cw, err := resolveAccess(h.db, claims, id)
+	_, cw, err := folderAccess(h.db, claims, id)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -388,7 +286,7 @@ func (h *Handler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, cw, err := resolveAccess(h.db, claims, id)
+	_, cw, err := folderAccess(h.db, claims, id)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -432,7 +330,7 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	_, cw, err := resolveAccess(h.db, claims, folderID)
+	_, cw, err := folderAccess(h.db, claims, folderID)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -452,6 +350,9 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	result := []permResponse{}
+	if owner, ok := h.ownerEntry(r, folderID); ok {
+		result = append(result, owner)
+	}
 	for rows.Next() {
 		var p permResponse
 		var cr, cw int
@@ -460,20 +361,52 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 		}
 		p.CanRead = cr == 1
 		p.CanWrite = cw == 1
-		if p.PrincipalType == "user" && p.PrincipalRef != "" {
-			var name string
-			err := h.db.QueryRowContext(r.Context(),
-				`SELECT first_name || ' ' || last_name FROM users WHERE id = ?`, p.PrincipalRef).Scan(&name)
-			if err == nil {
-				p.DisplayName = name
-			} else {
-				p.DisplayName = p.PrincipalRef
-			}
+		switch p.PrincipalType {
+		case "user":
+			p.DisplayName = h.lookupName(r,
+				`SELECT first_name || ' ' || last_name FROM users WHERE id = ?`, p.PrincipalRef)
+		case "team", "team_parents":
+			p.DisplayName = h.lookupName(r, `SELECT name FROM teams WHERE id = ?`, p.PrincipalRef)
 		}
 		result = append(result, p)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// lookupName resolves a principal_ref to a display name, falling back to the raw
+// ref when the referenced row is gone. Returns "" for an empty ref.
+func (h *Handler) lookupName(r *http.Request, query, ref string) string {
+	if ref == "" {
+		return ""
+	}
+	var name string
+	if err := h.db.QueryRowContext(r.Context(), query, ref).Scan(&name); err != nil {
+		return ref
+	}
+	return name
+}
+
+// ownerEntry builds the synthetic `owner` row for the folder creator. It is not a
+// folder_permissions row (id 0, rejected by AddPermission) but the owner holds the
+// strongest right on the folder, and without this entry it would be the only right
+// invisible in the UI.
+func (h *Handler) ownerEntry(r *http.Request, folderID int) (permResponse, bool) {
+	var createdBy int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT created_by FROM file_folders WHERE id = ?`, folderID).Scan(&createdBy); err != nil {
+		return permResponse{}, false
+	}
+	ref := strconv.Itoa(createdBy)
+	return permResponse{
+		ID:            0,
+		PrincipalType: "owner",
+		PrincipalRef:  ref,
+		DisplayName: h.lookupName(r,
+			`SELECT first_name || ' ' || last_name FROM users WHERE id = ?`, ref),
+		CanRead:  true,
+		CanWrite: true,
+	}, true
 }
 
 // POST /api/folders/{id}/permissions
@@ -496,10 +429,24 @@ func (h *Handler) AddPermission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validTypes := map[string]bool{"everyone": true, "role": true, "club_function": true, "user": true}
+	// "owner" is deliberately absent: it is a read-only synthetic entry derived from
+	// file_folders.created_by, not a storable ACL row.
+	validTypes := map[string]bool{
+		"everyone": true, "role": true, "club_function": true,
+		"user": true, "team": true, "team_parents": true,
+	}
 	if !validTypes[req.PrincipalType] {
 		http.Error(w, "invalid principal_type", http.StatusBadRequest)
 		return
+	}
+
+	// team|team_parents carry a teams.id — an empty or non-numeric ref would store a
+	// row that can never match anyone.
+	if req.PrincipalType == "team" || req.PrincipalType == "team_parents" {
+		if _, err := strconv.Atoi(req.PrincipalRef); err != nil {
+			http.Error(w, "principal_ref must be a team id", http.StatusBadRequest)
+			return
+		}
 	}
 
 	ok, err := checkAntiEscalation(h.db, claims, folderID, req.CanRead, req.CanWrite)
@@ -552,7 +499,7 @@ func (h *Handler) DeletePermission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, cw, err := resolveAccess(h.db, claims, folderID)
+	_, cw, err := folderAccess(h.db, claims, folderID)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -611,7 +558,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, cw, err := resolveAccess(h.db, claims, folderID)
+	_, cw, err := folderAccess(h.db, claims, folderID)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -693,7 +640,7 @@ func (h *Handler) HandleDownloadToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cr, _, err := resolveAccess(h.db, claims, folderID)
+	cr, _, err := folderAccess(h.db, claims, folderID)
 	if err != nil || !cr {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -740,7 +687,7 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		cr, _, err := resolveAccess(h.db, claims, folderID)
+		cr, _, err := folderAccess(h.db, claims, folderID)
 		if err != nil || !cr {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -752,7 +699,7 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		cr, _, err := resolveAccess(h.db, claims, folderID)
+		cr, _, err := folderAccess(h.db, claims, folderID)
 		if err != nil || !cr {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -823,7 +770,7 @@ func (h *Handler) RenameFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	_, cw, err := resolveAccess(h.db, claims, folderID)
+	_, cw, err := folderAccess(h.db, claims, folderID)
 	if err != nil || !cw {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -859,7 +806,7 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, cw, err := resolveAccess(h.db, claims, folderID)
+	_, cw, err := folderAccess(h.db, claims, folderID)
 	if err != nil || !cw {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
