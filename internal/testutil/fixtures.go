@@ -463,8 +463,9 @@ func CreateFolder(t *testing.T, database *sql.DB, name string, parentID, created
 }
 
 // SetFolderPermission inserts a folder_permissions row. principalType is one of
-// everyone|role|club_function|user; pass principalRef="" (→ NULL) for the
-// 'everyone' principal. canRead/canWrite are mapped to 0/1.
+// everyone|role|club_function|user|team|team_parents; pass principalRef="" (→ NULL)
+// for the 'everyone' principal, a teams.id for team|team_parents. canRead/canWrite
+// are mapped to 0/1.
 func SetFolderPermission(t *testing.T, database *sql.DB, folderID int, principalType, principalRef string, canRead, canWrite bool) {
 	t.Helper()
 	if _, err := database.Exec(

@@ -48,7 +48,7 @@ func stdClaims(userID int) *auth.Claims {
 	return &auth.Claims{UserID: userID, Role: "standard", ClubFunctions: []string{}}
 }
 
-// ── resolveAccess: nearest-ancestor-wins ─────────────────────────────────────
+// ── folderAccess: nearest-ancestor-wins ─────────────────────────────────────
 
 func TestResolveAccess_NearestAncestorWins(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -61,9 +61,9 @@ func TestResolveAccess_NearestAncestorWins(t *testing.T) {
 	child := mkFolder(t, db, "Vorstand-Intern", &parent, adminID)
 	mkPerm(t, db, child, "club_function", "vorstand", 1, 0)
 
-	cr, cw, err := resolveAccess(db, stdClaims(userID), child)
+	cr, cw, err := folderAccess(db, stdClaims(userID), child)
 	if err != nil {
-		t.Fatalf("resolveAccess: %v", err)
+		t.Fatalf("folderAccess: %v", err)
 	}
 	if cr || cw {
 		t.Errorf("standard user must not access restricted subfolder: canRead=%v canWrite=%v", cr, cw)
@@ -81,9 +81,9 @@ func TestResolveAccess_InheritFromParent(t *testing.T) {
 	child := mkFolder(t, db, "Allgemein", &parent, adminID)
 	// no permissions on child — should inherit from parent
 
-	cr, _, err := resolveAccess(db, stdClaims(userID), child)
+	cr, _, err := folderAccess(db, stdClaims(userID), child)
 	if err != nil {
-		t.Fatalf("resolveAccess: %v", err)
+		t.Fatalf("folderAccess: %v", err)
 	}
 	if !cr {
 		t.Error("standard user should inherit read from parent folder")
@@ -97,16 +97,16 @@ func TestResolveAccess_NoRulesAnywhere(t *testing.T) {
 
 	folder := mkFolder(t, db, "Orphan", nil, adminID)
 
-	cr, cw, err := resolveAccess(db, stdClaims(userID), folder)
+	cr, cw, err := folderAccess(db, stdClaims(userID), folder)
 	if err != nil {
-		t.Fatalf("resolveAccess: %v", err)
+		t.Fatalf("folderAccess: %v", err)
 	}
 	if cr || cw {
 		t.Error("folder with no permissions should not be accessible")
 	}
 }
 
-// ── resolveAccess: family context ────────────────────────────────────────────
+// ── folderAccess: family context ────────────────────────────────────────────
 
 func TestResolveAccess_FamilyContext_ClubFunction(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -121,9 +121,9 @@ func TestResolveAccess_FamilyContext_ClubFunction(t *testing.T) {
 	folder := mkFolder(t, db, "Spieler-Bereich", nil, adminID)
 	mkPerm(t, db, folder, "club_function", "spieler", 1, 0)
 
-	cr, _, err := resolveAccess(db, stdClaims(parentUserID), folder)
+	cr, _, err := folderAccess(db, stdClaims(parentUserID), folder)
 	if err != nil {
-		t.Fatalf("resolveAccess: %v", err)
+		t.Fatalf("folderAccess: %v", err)
 	}
 	if !cr {
 		t.Error("Elternteil should inherit read via child's club_function=spieler")
@@ -142,9 +142,9 @@ func TestResolveAccess_FamilyContext_UserID(t *testing.T) {
 	folder := mkFolder(t, db, "Kind-Akte", nil, adminID)
 	mkPerm(t, db, folder, "user", itoa(childUserID), 1, 0)
 
-	cr, _, err := resolveAccess(db, stdClaims(parentUserID), folder)
+	cr, _, err := folderAccess(db, stdClaims(parentUserID), folder)
 	if err != nil {
-		t.Fatalf("resolveAccess: %v", err)
+		t.Fatalf("folderAccess: %v", err)
 	}
 	if !cr {
 		t.Error("Elternteil should inherit read via child's user_id in folder permission")
@@ -310,7 +310,9 @@ func filesRouteServer(t *testing.T, h *Handler) *httptest.Server {
 	return testutil.NewServer(t, func(r chi.Router) {
 		r.Post("/api/folders", h.CreateFolder)
 		r.Delete("/api/folders/{id}", h.DeleteFolder)
+		r.Get("/api/folders/{id}/contents", h.FolderContents)
 		r.Post("/api/folders/{folderId}/files", h.UploadFile)
+		r.Get("/api/folders/{id}/permissions", h.ListPermissions)
 		r.Post("/api/folders/{id}/permissions", h.AddPermission)
 		r.Delete("/api/folders/{id}/permissions/{permId}", h.DeletePermission)
 		r.Get("/api/files/{id}/download-token", h.HandleDownloadToken)
@@ -501,5 +503,204 @@ func TestDownloadToken_HappyPath(t *testing.T) {
 	res.Body.Close()
 	if body.Token == "" {
 		t.Error("expected a non-empty download token")
+	}
+}
+
+// ── Owner precedence + team principals at route level ────────────────────────
+
+// mkTeamKaderMember wires user → member → active-season kader of a fresh team and
+// returns the team ID.
+func mkTeamKaderMember(t *testing.T, db *sql.DB, userID int) int {
+	t.Helper()
+	memberID := testutil.CreateMember(t, db, userID)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "mA")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	testutil.AddKaderMember(t, db, kaderID, memberID)
+	return teamID
+}
+
+// TestListPermissions_OwnerNotLockedOut is the route-level regression test: after
+// granting rights to someone else, the creator must still be able to open the
+// permission dialog — which requires can_write.
+func TestListPermissions_OwnerNotLockedOut(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	ownerID := testutil.CreateUser(t, db, "standard")
+	otherID := testutil.CreateUser(t, db, "standard")
+
+	parent := testutil.CreateFolder(t, db, "Root", 0, adminID)
+	testutil.SetFolderPermission(t, db, parent, "everyone", "", true, true)
+	folder := testutil.CreateFolder(t, db, "Eigener", parent, ownerID)
+	testutil.SetFolderPermission(t, db, folder, "user", itoa(otherID), true, true)
+
+	tok := testutil.Token(t, ownerID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/folders/"+itoa(folder)+"/permissions", tok)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for the folder creator, got %d", res.StatusCode)
+	}
+}
+
+func TestListPermissions_OwnerEntryFirst(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+	teamID := testutil.CreateTeam(t, db, "mA-Jugend")
+	testutil.SetFolderPermission(t, db, folder, "team", itoa(teamID), true, false)
+
+	tok := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/folders/"+itoa(folder)+"/permissions", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var perms []permResponse
+	json.NewDecoder(res.Body).Decode(&perms)
+	res.Body.Close()
+
+	if len(perms) != 2 {
+		t.Fatalf("expected owner entry + team entry, got %d entries", len(perms))
+	}
+	owner := perms[0]
+	if owner.PrincipalType != "owner" || owner.ID != 0 {
+		t.Errorf("expected synthetic owner entry with id 0 first, got type=%q id=%d", owner.PrincipalType, owner.ID)
+	}
+	if !owner.CanRead || !owner.CanWrite {
+		t.Error("owner entry must carry read and write")
+	}
+	if owner.DisplayName == "" || owner.DisplayName == owner.PrincipalRef {
+		t.Errorf("expected a resolved owner name, got %q", owner.DisplayName)
+	}
+	if perms[1].DisplayName != "mA-Jugend" {
+		t.Errorf("expected team display_name from teams.name, got %q", perms[1].DisplayName)
+	}
+}
+
+// TestAddPermission_OwnerMayGrant: the creator passes anti-escalation even without
+// any ACL entry matching them, because it resolves through the same function.
+func TestAddPermission_OwnerMayGrant(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	ownerID := testutil.CreateUser(t, db, "standard")
+	otherID := testutil.CreateUser(t, db, "standard")
+
+	parent := testutil.CreateFolder(t, db, "Root", 0, adminID)
+	folder := testutil.CreateFolder(t, db, "Eigener", parent, ownerID)
+
+	tok := testutil.Token(t, ownerID, "standard", nil)
+	res := testutil.Post(t, srv, "/api/folders/"+itoa(folder)+"/permissions", tok, map[string]any{
+		"principal_type": "user", "principal_ref": itoa(otherID), "can_read": true, "can_write": true,
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("expected 201 for the folder creator, got %d", res.StatusCode)
+	}
+}
+
+func TestAddPermission_TeamType(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+	teamID := testutil.CreateTeam(t, db, "mA")
+
+	tok := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Post(t, srv, "/api/folders/"+itoa(folder)+"/permissions", tok, map[string]any{
+		"principal_type": "team_parents", "principal_ref": itoa(teamID), "can_read": true, "can_write": false,
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM folder_permissions WHERE folder_id = ? AND principal_type = 'team_parents' AND principal_ref = ?`,
+		folder, itoa(teamID)).Scan(&n)
+	if n != 1 {
+		t.Errorf("expected the team_parents row to be stored, found %d", n)
+	}
+}
+
+func TestAddPermission_OwnerPseudoTypeRejected(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+
+	tok := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Post(t, srv, "/api/folders/"+itoa(folder)+"/permissions", tok, map[string]any{
+		"principal_type": "owner", "principal_ref": itoa(adminID), "can_read": true, "can_write": true,
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for the synthetic owner type, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM folder_permissions WHERE folder_id = ?`, folder).Scan(&n)
+	if n != 0 {
+		t.Error("no row may be written for a rejected principal_type")
+	}
+}
+
+func TestAddPermission_TeamTypeMissingRef(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	folder := testutil.CreateFolder(t, db, "Docs", 0, adminID)
+
+	tok := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Post(t, srv, "/api/folders/"+itoa(folder)+"/permissions", tok, map[string]any{
+		"principal_type": "team", "principal_ref": "", "can_read": true, "can_write": false,
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for a team entry without principal_ref, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM folder_permissions WHERE folder_id = ?`, folder).Scan(&n)
+	if n != 0 {
+		t.Error("no row may be written for an invalid principal_ref")
+	}
+}
+
+func TestFolderContents_TeamPermission(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	memberUserID := testutil.CreateUser(t, db, "standard")
+	outsiderID := testutil.CreateUser(t, db, "standard")
+
+	teamID := mkTeamKaderMember(t, db, memberUserID)
+	folder := testutil.CreateFolder(t, db, "Team-Docs", 0, adminID)
+	testutil.SetFolderPermission(t, db, folder, "team", itoa(teamID), true, false)
+
+	tok := testutil.Token(t, memberUserID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/folders/"+itoa(folder)+"/contents", tok)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for a squad member of the granted team, got %d", res.StatusCode)
+	}
+
+	outTok := testutil.Token(t, outsiderID, "standard", nil)
+	outRes := testutil.Get(t, srv, "/api/folders/"+itoa(folder)+"/contents", outTok)
+	outRes.Body.Close()
+	if outRes.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 for a user outside the team, got %d", outRes.StatusCode)
 	}
 }
