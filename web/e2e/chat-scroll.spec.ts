@@ -240,3 +240,62 @@ test('viele-ungelesen-Konversation: Chip oben, „Ältere laden" erhält Positio
     )
     .toBeLessThanOrEqual(8)
 })
+
+// KERN-REGRESSION (chat-conversation-switch-flicker): openConversation setzte
+// activeConv synchron, ließ `messages` aber bis zum Auflösen des Fetches unangetastet —
+// im Verzögerungsfenster stand der neue Header über der Nachrichtenliste der VORHERIGEN
+// Konversation. Ein Rennen zwischen Netzwerk und Paint (in Chromium meist zu knapp, um es
+// zu treffen — siehe design.md „Ergebnis 1"). Künstliches Verzögern der Nachrichten-Antwort
+// macht das Rennen deterministisch (design.md, Entscheidung 4), ganz ohne WebKit/Video.
+test('Konversationswechsel zeigt keinen Fremdinhalt', async ({ page }) => {
+  await loginAsAdmin(page)
+  await openChat(page)
+
+  // Nur der GET auf die Nachrichten-Route wird verzögert, und erst ab dem ZWEITEN Aufruf
+  // (= Wechsel zu B) — das Öffnen von A bleibt ungebremst, damit das Verzögerungsfenster
+  // eindeutig dem Wechsel zuzuordnen ist. Das Glob endet ohne Wildcard auf „/messages" und
+  // trifft daher NICHT die `?before=`-Pagination von loadOlderMessages.
+  let messagesFetchCount = 0
+  await page.route('**/api/chat/conversations/*/messages', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    messagesFetchCount += 1
+    if (messagesFetchCount >= 2) {
+      await new Promise((resolve) => setTimeout(resolve, 800))
+    }
+    await route.continue()
+  })
+
+  const box = page.locator(BOX)
+
+  // A = "E2E Chat" (8 Textnachrichten, B = "E2E Chat lang gelesen" (150 Textnachrichten).
+  // Beide bewusst gewählt, weil ALLE ihre Nachrichten vom Admin selbst gesendet sind →
+  // unreadCount ist für beide immer 0, unabhängig davon, ob/wie oft dieser Test gegen die
+  // geteilte Seed-DB läuft. Anders als "E2E Chat unread"/"E2E Chat lang unread"/"E2E Chat
+  // viele ungelesen" (von den Bestandstests für Divider/Chip benötigt) verbraucht das
+  // Öffnen hier keinen Unread-Zustand, auf den andere Tests angewiesen sind.
+  await page.getByText('E2E Chat', { exact: true }).click()
+  await expect(box.getByText('E2E Nachricht 1', { exact: true })).toBeVisible()
+
+  await page.getByText('E2E Chat lang gelesen', { exact: true }).click()
+
+  // Innerhalb des 800ms-Verzögerungsfensters: Header zeigt bereits B — aber KEIN
+  // Nachrichtentext aus A darf im Nachrichten-Container stehen. Der kurze Timeout (deutlich
+  // unter 800 ms) ist hier Absicht: ohne Fix bleibt A's Text die vollen 800 ms sichtbar
+  // (die Liste wird nicht vor dem Fetch geleert) — ein langer/Default-Timeout würde erst
+  // NACH Auflösen des Fetches prüfen (dann sind ohnehin nur noch B's Nachrichten im DOM)
+  // und den Bug verdecken. `span.font-semibold.text-brand-text.truncate` ist die einzige
+  // Stelle, die `convName(activeConv)` im Header rendert (eindeutig, im Unterschied zu
+  // `getByText`, das auch den gleichnamigen Sidebar-Eintrag träfe).
+  await expect(
+    page.locator('span.font-semibold.text-brand-text.truncate'),
+  ).toHaveText('E2E Chat lang gelesen', { timeout: 300 })
+  await expect(
+    box.getByText('E2E Nachricht 1', { exact: true }),
+  ).not.toBeVisible({ timeout: 300 })
+
+  // Nach Auflösen der Verzögerung: B's echte Nachrichten stehen im DOM.
+  await expect(box.getByText('Nachricht 150', { exact: true })).toBeVisible()
+})

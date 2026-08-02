@@ -24,6 +24,7 @@ import {
   Paperclip,
   Check,
   CheckCheck,
+  Loader2,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
@@ -220,6 +221,15 @@ export default function ChatPage() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  // Ladezustand des Nachrichten-Abrufs beim KONVERSATIONSWECHSEL (nur dort;
+  // Aktualisierungen einer bereits offenen Konversation setzen ihn nicht).
+  // Hintergrund: openConversation setzt activeConv synchron, die Nachrichten
+  // kommen erst nach dem Netzwerk-Roundtrip (~120 ms lokal, produktiv mehr).
+  // In diesem Fenster malte der Browser den NEUEN Header über der Liste der
+  // VORHERIGEN Konversation (in WebKit 3 von 3 Aufnahmen reproduziert). Wir
+  // leeren die Liste deshalb vor dem Fetch — und brauchen dann diesen State,
+  // damit die leere Fläche nicht wie „Konversation ohne Nachrichten" aussieht.
+  const [loadingMessages, setLoadingMessages] = useState(false);
   // Cache für nachgeladene Volltexte gekürzter Nachrichten (id → body).
   const [fullBodies, setFullBodies] = useState<Record<number, string>>({});
   const [msgInput, setMsgInput] = useState("");
@@ -295,6 +305,28 @@ export default function ChatPage() {
   // Bild, das nie `load`/`error` feuert → sonst würde der Anker nie freigegeben).
   const anchorDeadlineRef = useRef(0);
 
+  // true zwischen dem absichtlichen Leeren der Liste (openConversation) und dem
+  // Commit der Nachrichten der Zielkonversation. In dieser Leerphase darf der
+  // Anker NICHT angewendet werden — nicht wegen des Scrollens (eine leere Box
+  // scrollt ohnehin nirgendwohin), sondern weil applyAnchor am Ende
+  // scheduleAnchorSettle() ruft und damit das 600-ms-Settle armiert. Auf der
+  // leeren Liste meldet anchorMediaPending() mangels Bildern sofort `false` →
+  // der Timer würde releaseAnchor() ausführen, BEVOR die Nachrichten überhaupt
+  // da sind. Der Divider-Anker wäre dann verloren und die Konversation öffnete
+  // an der falschen Stelle.
+  //
+  // Warum das nicht theoretisch ist: das Cleanup des Watcher-Effekts räumt
+  // anchorSettleTimerRef zwar ab, läuft aber nur, wenn sich `activeConv?.id`
+  // ändert. Genau in den beiden Fällen, in denen das nicht passiert, schlägt
+  // der Settle also zu — beim ERSTEN Öffnen (vorher war activeConv null, der
+  // Effekt stieg per `if (!activeConv) return` ohne Cleanup aus) und beim
+  // erneuten Öffnen der BEREITS aktiven Konversation. Betroffen ist jeder
+  // Abruf, der länger als 600 ms braucht (produktiv über Mobilfunk normal).
+  //
+  // Der Anker selbst (anchorRef) bleibt dabei bewusst gesetzt: er soll die
+  // Leerphase überleben und beim Eintreffen der Nachrichten normal wirken.
+  const awaitingMessagesRef = useRef(false);
+
   // Der eigentliche Scroll-Container ist der interne WindowedRows-Div
   // (data-windowed-scroll), nicht messagesBoxRef selbst — hier zentral abfragen.
   const scrollBox = useCallback(
@@ -361,6 +393,13 @@ export default function ChatPage() {
   // Jeder Aufruf schiebt programmaticScrollUntilRef vor, damit die von uns
   // ausgelösten Scroll-Events nicht als Nutzer-Scroll fehlgedeutet werden.
   const applyAnchor = useCallback(() => {
+    // Leerphase beim Konversationswechsel: nicht anwenden und vor allem kein
+    // Settle armieren (Begründung an awaitingMessagesRef). Der Guard sitzt
+    // bewusst HIER und nicht im aufrufenden Effekt, weil applyAnchor zwei
+    // Aufrufer hat: den [messages]-Layout-Effekt und reposition() im Watcher.
+    // Letzteres feuert per MutationObserver auf das Entfernen aller Zeilen —
+    // also genau auf das Leeren — und würde den Timer sonst trotzdem armieren.
+    if (awaitingMessagesRef.current) return;
     const mode = anchorRef.current;
     if (!mode) return;
     const box = scrollBox();
@@ -465,7 +504,27 @@ export default function ChatPage() {
       setEmojiPickerMsgId(null);
       await api.post(`/chat/conversations/${convId}/read`);
       loadConversations();
-    } catch {}
+    } catch {
+    } finally {
+      // Zwingend im finally, NICHT im Erfolgspfad: der catch oben verschluckt
+      // Fehler still (bewusst — ein fehlgeschlagener Abruf soll den Chat nicht
+      // abbrechen). Ohne finally bliebe nach einem Fehlschlag ein Dauer-
+      // Ladezustand stehen. Die übrigen Aufrufer (appendNewMessages-Fallback,
+      // chat:member-left, toggleReaction, Senden) setzen den State damit auf
+      // false, obwohl er dort schon false ist — React bricht bei gleichem Wert
+      // ab, also kein zusätzlicher Render.
+      setLoadingMessages(false);
+      // Zweiter (nachgelagerter) Reset des Leerphasen-Guards für die Fälle, die
+      // der [messages]-Layout-Effekt nicht sieht: fehlgeschlagener Abruf und
+      // Zielkonversation ohne Nachrichten — in beiden bleibt die Liste leer,
+      // `messages.length > 0` tritt also nie ein. Ohne diesen Reset bliebe der
+      // Anker dauerhaft blockiert (kein Nachführen bei späteren Bild-Loads).
+      // Der Erfolgsfall ist damit doppelt abgesichert; welcher der beiden
+      // Resets zuerst greift, hängt davon ab, ob React den setMessages-Commit
+      // vor oder nach dem `await api.post(.../read)` flusht — die Reihenfolge
+      // ist umgebungsabhängig, deshalb decken wir beide Richtungen ab.
+      awaitingMessagesRef.current = false;
+    }
   };
 
   // Inkrementelles Nachladen (incremental-sync, id-Cursor): holt per
@@ -581,6 +640,19 @@ export default function ChatPage() {
       unreadDividerIndexRef.current = null;
       isAtBottomRef.current = true;
     }
+    // Liste VOR dem Fetch leeren: activeConv ist oben bereits synchron gesetzt,
+    // die Nachrichten kommen erst nach dem Roundtrip. Ohne dieses Leeren gibt es
+    // ein Fenster von der Länge des Fetches, in dem der neue Header über den
+    // Nachrichten der vorherigen Konversation steht — jeder Paint darin zeigt
+    // einen Mischzustand aus zwei Konversationen. Das Leeren macht diesen
+    // Zustand strukturell unmöglich, unabhängig von Engine, Gerät und Laufzeit
+    // (statt sich darauf zu verlassen, dass der Fetch schneller ist als der
+    // nächste Frame). Bewusst NACH dem Sichern des Entwurfs und nach der
+    // Anker-Initialisierung, damit der Anker beim Commit der leeren Liste schon
+    // steht und die eintreffenden Nachrichten korrekt positioniert werden.
+    awaitingMessagesRef.current = true;
+    setMessages([]);
+    setLoadingMessages(true);
     await loadMessages(conv.id, conv.unreadCount);
   };
 
@@ -702,7 +774,26 @@ export default function ChatPage() {
     } catch {}
   };
 
-  useEffect(() => {
+  // Bewusst useLayoutEffect (nicht useEffect): der Effekt POSITIONIERT die
+  // gerade committete Liste. Als passiver Effekt liefe er nach dem Paint —
+  // dann gäbe es einen sichtbaren Zwischenframe, in dem der neue Inhalt schon
+  // steht, aber noch un-positioniert ist (beim Öffnen also der Anfang des
+  // Verlaufs statt Divider/Ende), gefolgt von einem Sprung. Als Layout-Effekt
+  // liegen Inhalt und Position im selben Frame. Der Rumpf liest/schreibt
+  // ausschließlich Scroll-Werte (O(1)-Arithmetik + ein scrollIntoView) und
+  // setzt keinen State — genau der Anwendungsfall für einen Layout-Effekt.
+  // Der Watcher-Effekt darunter MUSS dagegen ein useEffect bleiben: er hängt
+  // nur Listener/MutationObserver an, das Ergebnis ist für den aktuellen Paint
+  // irrelevant — als Layout-Effekt würde er den Paint ohne Gegenwert blockieren.
+  useLayoutEffect(() => {
+    // Ende der Leerphase: die Nachrichten der Zielkonversation sind committet
+    // (und ihre Knoten inkl. UnreadDivider-Ref stehen im DOM). Der Reset MUSS
+    // hier passieren und nicht nur im finally von loadMessages: dieser Effekt
+    // läuft im selben Commit, in dem setMessages(msgs) wirksam wird, das
+    // finally dagegen erst nach dem `await api.post(.../read)` — je nachdem,
+    // wann React den Commit flusht, käme es zu spät und der Anker würde beim
+    // einzigen Moment, in dem er wirken soll, ausgesperrt.
+    if (messages.length > 0) awaitingMessagesRef.current = false;
     // Beim Voranstellen älterer Nachrichten (?before=) nicht ans Ende springen
     if (suppressAutoScrollRef.current) {
       suppressAutoScrollRef.current = false;
@@ -1300,31 +1391,52 @@ export default function ChatPage() {
                 ref={messagesBoxRef}
                 className="flex-1 flex flex-col min-h-0"
               >
-                {/* „Ältere laden" (⑥, ?before=-Cursor) als gepinnter Kopf über der
-                    gefensterten Liste. */}
-                {hasOlder && (
-                  <div className="px-4 pt-2 flex justify-center shrink-0">
-                    <button
-                      onClick={loadOlderMessages}
-                      disabled={loadingOlder}
-                      className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {loadingOlder ? "Lade…" : "Ältere Nachrichten laden"}
-                    </button>
-                  </div>
-                )}
-                {/* chat-open-at-unread: wenn ALLE geladenen Nachrichten
-                    ungelesen sind und der erste ungelesene älter als die
-                    Seite liegt, informieren wir statt über einen Divider
-                    (der wäre am obersten Eintrag redundant zum Chip). */}
-                {activeConv.unreadCount > messages.length && (
+                {loadingMessages ? (
+                  /* Ladezustand während des Konversationswechsels. Die Liste ist
+                     hier bewusst leer (siehe openConversation) — ohne diesen
+                     Hinweis wäre die leere Fläche nicht von „Konversation ohne
+                     Nachrichten" zu unterscheiden. Kopf-Elemente („Ältere
+                     laden", Ungelesen-Chip) sind in diesem Zustand bewusst
+                     ausgeblendet: `hasOlder` stammt noch von der vorherigen
+                     Konversation, und der Chip verglich den unreadCount der
+                     neuen Konversation gegen eine leere Liste — beides wäre
+                     irreführend, solange nichts geladen ist. */
                   <div
                     role="status"
-                    className="mx-4 mt-2 p-2 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text text-center shrink-0"
+                    className="mx-4 mt-2 p-2 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text text-center shrink-0 flex items-center justify-center gap-2"
                   >
-                    {activeConv.unreadCount - messages.length} weitere
-                    ungelesene Nachrichten älter — „Ältere laden" klicken
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Nachrichten werden geladen…
                   </div>
+                ) : (
+                  <>
+                    {/* „Ältere laden" (⑥, ?before=-Cursor) als gepinnter Kopf über der
+                        gefensterten Liste. */}
+                    {hasOlder && (
+                      <div className="px-4 pt-2 flex justify-center shrink-0">
+                        <button
+                          onClick={loadOlderMessages}
+                          disabled={loadingOlder}
+                          className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {loadingOlder ? "Lade…" : "Ältere Nachrichten laden"}
+                        </button>
+                      </div>
+                    )}
+                    {/* chat-open-at-unread: wenn ALLE geladenen Nachrichten
+                        ungelesen sind und der erste ungelesene älter als die
+                        Seite liegt, informieren wir statt über einen Divider
+                        (der wäre am obersten Eintrag redundant zum Chip). */}
+                    {activeConv.unreadCount > messages.length && (
+                      <div
+                        role="status"
+                        className="mx-4 mt-2 p-2 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text text-center shrink-0"
+                      >
+                        {activeConv.unreadCount - messages.length} weitere
+                        ungelesene Nachrichten älter — „Ältere laden" klicken
+                      </div>
+                    )}
+                  </>
                 )}
                 {/* Chat-Bubbles haben extrem variable Höhen (~30 px kurzer Text
                     bis 300 px+ mit Bild/Reply/Reaktionen). Windowing mit fixer
