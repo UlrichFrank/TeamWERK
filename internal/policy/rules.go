@@ -173,24 +173,36 @@ func ScopeMembersQuery(p *Principal) (where string, needsUserIDArg bool) {
 	)`, true
 }
 
+// CanCreateRootFolder returns true if the caller may create a folder on the top level
+// of /dokumente. Top-level folders have no parent whose ACL could authorize the write,
+// so this is a standalone right: admin plus vorstand.
+//
+// Deliberately narrower than CapManageDocuments (blanket read+write on *every* folder,
+// admin only): vorstand creates top-level folders and holds them afterwards through the
+// created_by owner precedence in FolderAccess — not through a global override.
+func CanCreateRootFolder(p *Principal) bool {
+	return IsVorstandLike(p)
+}
+
 // Capability constants used in /api/me responses.
 const (
-	CapManageMembers   = "manage_members"
-	CapManageGames     = "manage_games"
-	CapManageDuties    = "manage_duties"
-	CapManageKader     = "manage_kader"
-	CapManageUsers     = "manage_users"
-	CapManageSeasons   = "manage_seasons"
-	CapManageClub      = "manage_club"
-	CapManageFees      = "manage_fees"
-	CapManageDutyTypes = "manage_duty_types"
-	CapImpersonate     = "impersonate"
-	CapManageTrainings = "manage_trainings"
-	CapFulfillDuties   = "fulfill_duties"
-	CapManageDocuments = "manage_documents"
-	CapBroadcast       = "broadcast_messages"
-	CapBroadcastAll    = "broadcast_all"
-	CapModerateChat    = "moderate_chat"
+	CapManageMembers    = "manage_members"
+	CapManageGames      = "manage_games"
+	CapManageDuties     = "manage_duties"
+	CapManageKader      = "manage_kader"
+	CapManageUsers      = "manage_users"
+	CapManageSeasons    = "manage_seasons"
+	CapManageClub       = "manage_club"
+	CapManageFees       = "manage_fees"
+	CapManageDutyTypes  = "manage_duty_types"
+	CapImpersonate      = "impersonate"
+	CapManageTrainings  = "manage_trainings"
+	CapFulfillDuties    = "fulfill_duties"
+	CapManageDocuments  = "manage_documents"
+	CapCreateRootFolder = "create_root_folder"
+	CapBroadcast        = "broadcast_messages"
+	CapBroadcastAll     = "broadcast_all"
+	CapModerateChat     = "moderate_chat"
 )
 
 // Capabilities returns the list of capability strings for a given principal.
@@ -219,6 +231,9 @@ func Capabilities(p *Principal) []string {
 	}
 	if CanBroadcastAll(p) {
 		caps = append(caps, CapBroadcastAll)
+	}
+	if CanCreateRootFolder(p) {
+		caps = append(caps, CapCreateRootFolder)
 	}
 	if p.Role == "admin" {
 		caps = append(caps, CapImpersonate, CapManageDocuments, CapModerateChat)
