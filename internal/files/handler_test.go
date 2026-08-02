@@ -353,6 +353,51 @@ func TestCreateFolder_HappyPath(t *testing.T) {
 	}
 }
 
+func TestCreateRootFolder_VorstandAllowed(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	tok := testutil.Token(t, userID, "standard", []string{"vorstand"})
+	res := testutil.Post(t, srv, "/api/folders", tok, map[string]any{"name": "Satzung"})
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 creating root folder as vorstand, got %d", res.StatusCode)
+	}
+
+	// Der Ersteller muss den Ordner anschließend über die Eigentümer-Vorrang-Regel
+	// lesen und beschreiben können — sonst wäre er aus dem eigenen Ordner ausgesperrt.
+	var id int
+	if err := db.QueryRow(`SELECT id FROM file_folders WHERE name = 'Satzung' AND parent_id IS NULL`).Scan(&id); err != nil {
+		t.Fatalf("root folder not persisted: %v", err)
+	}
+	cr, cw, err := folderAccess(db, &auth.Claims{UserID: userID, Role: "standard", ClubFunctions: []string{"vorstand"}}, id)
+	if err != nil {
+		t.Fatalf("folderAccess: %v", err)
+	}
+	if !cr || !cw {
+		t.Errorf("creator must own the new root folder, got read=%v write=%v", cr, cw)
+	}
+}
+
+func TestCreateRootFolder_StandardForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, t.TempDir(), "test-secret")
+	srv := filesRouteServer(t, h)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	tok := testutil.Token(t, userID, "standard", []string{"trainer"})
+	res := testutil.Post(t, srv, "/api/folders", tok, map[string]any{"name": "Heimlich"})
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 creating root folder without the right, got %d", res.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM file_folders WHERE parent_id IS NULL`).Scan(&n)
+	if n != 0 {
+		t.Error("no root folder may be created on a forbidden request")
+	}
+}
+
 func TestDeleteFolder_NoWriteForbidden(t *testing.T) {
 	db := testutil.NewDB(t)
 	h := NewHandler(db, t.TempDir(), "test-secret")

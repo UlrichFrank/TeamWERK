@@ -717,6 +717,9 @@ export default function DocumentsPage() {
 
   const isAdmin = hasCapability('manage_documents')
   const canWrite = isAdmin || (contents?.can_write ?? false)
+  // Auf oberster Ebene gibt es keinen Eltern-Ordner, dessen ACL schreiben erlauben könnte —
+  // dort entscheidet das eigenständige Recht (Admin + Vorstand).
+  const canCreateFolder = currentFolderId ? canWrite : hasCapability('create_root_folder')
   const displayFolders = currentFolderId ? (contents?.folders ?? []) : rootFolders
   const displayFiles = currentFolderId ? (contents?.files ?? []) : []
 
@@ -744,16 +747,18 @@ export default function DocumentsPage() {
               </nav>
             )}
           </div>
-          {canWrite && (
+          {(canCreateFolder || canWrite) && (
             <div className="flex gap-2">
-              <button
-                onClick={() => setShowNewFolder(true)}
-                className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
-              >
-                <FolderPlus className="w-4 h-4" />
-                <span className="hidden sm:inline">Neuer Ordner</span>
-              </button>
-              {currentFolderId && (
+              {canCreateFolder && (
+                <button
+                  onClick={() => setShowNewFolder(true)}
+                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Neuer Ordner</span>
+                </button>
+              )}
+              {currentFolderId && canWrite && (
                 <button
                   onClick={() => setShowUpload(true)}
                   className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"

@@ -45,13 +45,17 @@ func folderAccess(db *sql.DB, claims *auth.Claims, folderID int) (canRead, canWr
 	if claims == nil {
 		return false, false, nil
 	}
-	p := &policy.Principal{
+	return policy.FolderAccess(db, principalFromClaims(claims), folderID)
+}
+
+// principalFromClaims adapts JWT claims to the policy layer's Principal.
+func principalFromClaims(claims *auth.Claims) *policy.Principal {
+	return &policy.Principal{
 		UserID:        claims.UserID,
 		Role:          claims.Role,
 		ClubFunctions: claims.ClubFunctions,
 		IsParent:      claims.IsParent,
 	}
-	return policy.FolderAccess(db, p, folderID)
 }
 
 // checkAntiEscalation returns true if the caller is allowed to grant the requested rights.
@@ -151,7 +155,8 @@ func (h *Handler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-	} else if claims.Role != "admin" {
+	} else if !policy.CanCreateRootFolder(principalFromClaims(claims)) {
+		// Top level: no parent ACL to consult, so the standalone right decides.
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

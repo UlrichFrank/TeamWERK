@@ -264,6 +264,10 @@ func TestCapabilities_Vorstand(t *testing.T) {
 	if hasCap(caps, policy.CapManageDocuments) {
 		t.Error("pure vorstand should NOT have manage_documents (admin only)")
 	}
+	// Aber: Vorstand legt Ordner auf oberster Ebene an — engeres Recht als manage_documents.
+	if !hasCap(caps, policy.CapCreateRootFolder) {
+		t.Error("vorstand should have create_root_folder")
+	}
 }
 
 func TestCapabilities_Kassierer(t *testing.T) {
@@ -313,6 +317,7 @@ func TestCapabilities_Spieler(t *testing.T) {
 	for _, c := range []string{
 		policy.CapManageTrainings, policy.CapFulfillDuties, policy.CapBroadcast,
 		policy.CapBroadcastAll, policy.CapManageDocuments, policy.CapModerateChat,
+		policy.CapCreateRootFolder,
 	} {
 		if hasCap(caps, c) {
 			t.Errorf("spieler should NOT have %q", c)
