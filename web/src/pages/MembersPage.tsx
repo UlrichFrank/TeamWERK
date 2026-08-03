@@ -511,8 +511,8 @@ export default function MembersPage() {
               <th className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Status</th>
               <th className="hidden md:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Position</th>
               <th className="hidden lg:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Gesch.</th>
-              <th className="hidden xl:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Passnummer ({total})</th>
-              {isAdmin && <th className="bg-brand-surface-card px-4 py-3" />}
+              <th className="hidden xl:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Passnummer</th>
+              {isAdmin && <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-right">{total}</th>}
             </tr>
           </thead>
           <WindowedTableBody
