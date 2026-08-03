@@ -163,7 +163,7 @@ export default function MembersPage() {
     if (hasDraftFilter) p.has_draft = '1'
     return p
   }, [clubFunctionFilter, statusFilter, unlinkedUserFilter, hasDraftFilter])
-  const { items, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
+  const { items, total, setSearch, currentPage, totalPages, goToPage, refresh } = usePagination<Member>('/members', 20, extraParams)
   useLiveUpdates((event) => { if (event === 'members') refresh() })
   // Windowing der Mitgliedertabelle: nur sichtbare Zeilen im DOM. Scroll-Quelle ist
   // die Seite (window); der Wrapper misst seine Position relativ zum Viewport.
@@ -511,7 +511,7 @@ export default function MembersPage() {
               <th className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Status</th>
               <th className="hidden md:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Position</th>
               <th className="hidden lg:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Gesch.</th>
-              <th className="hidden xl:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Passnummer</th>
+              <th className="hidden xl:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Passnummer ({total})</th>
               {isAdmin && <th className="bg-brand-surface-card px-4 py-3" />}
             </tr>
           </thead>
