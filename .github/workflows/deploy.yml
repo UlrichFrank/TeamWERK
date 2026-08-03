@@ -18,6 +18,12 @@ on:
       tag:
         description: 'Tag, der deployt werden soll (z. B. v1.2.3)'
         required: true
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Tag, der deployt werden soll (z. B. v1.2.3)'
+        required: true
+        type: string
 
 concurrency:
   group: deploy-prod

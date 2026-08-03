@@ -1,6 +1,13 @@
 # Bei jedem Push auf main: nächste Semver-Version aus Conventional Commits
 # ableiten, Tag erstellen + pushen, GitHub-Release mit Changelog anlegen.
-# Das vX.Y.Z-Tag triggert anschließend den Deploy-Workflow (deploy.yml).
+#
+# Deploy ist bewusst NICHT automatisch: ein von github-actions[bot] gepushtes
+# Tag triggert deploy.yml's `push: tags:`-Trigger nicht (GitHub verhindert
+# rekursive Workflow-Ketten aus dem Standard-GITHUB_TOKEN heraus) — und ein
+# Prod-Deploy soll laut docs/agent/08-verification.md ohnehin ein bewusster,
+# bestätigter Schritt sein, kein Nebeneffekt jedes main-Pushs. Wer taggen UND
+# in einem Zug deployen will, löst das manuell per workflow_dispatch mit
+# `deploy: true` aus (ruft deploy.yml als reusable Workflow auf).
 name: release
 
 on:
@@ -12,6 +19,11 @@ on:
         description: 'Tag manuell setzen (z. B. v1.2.3). Leer = automatisch aus Commits.'
         required: false
         default: ''
+      deploy:
+        description: 'Nach dem Taggen sofort auf Prod deployen'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: release
@@ -23,6 +35,9 @@ permissions:
 jobs:
   tag:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      created: ${{ steps.next.outputs.created }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -96,3 +111,11 @@ jobs:
           VERSION: ${{ steps.next.outputs.version }}
           BODY: ${{ steps.changelog.outputs.body }}
         run: gh release create "$VERSION" --title "$VERSION" --notes "$BODY"
+
+  deploy:
+    needs: tag
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true && needs.tag.outputs.created == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      tag: ${{ needs.tag.outputs.version }}
+    secrets: inherit
