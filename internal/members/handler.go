@@ -296,6 +296,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if statusFilter != "" {
 		whereExtra += ` AND m.status = ?`
 	}
+	// Ausgetretene Mitglieder sind standardmäßig ausgeblendet, aber der explizite
+	// Status-Filter muss sie zeigen können (sonst liefert status='ausgetreten' 0 Treffer).
+	ausgetretenExclusion := ""
+	if statusFilter == "" {
+		ausgetretenExclusion = `m.status != 'ausgetreten' AND `
+	}
 
 	var err error
 	var total int
@@ -319,11 +325,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wideSearch {
-		countQuery := `SELECT COUNT(*) FROM members m WHERE status != 'ausgetreten'` + whereExtra
+		countQuery := `SELECT COUNT(*) FROM members m WHERE ` + ausgetretenExclusion + `1=1` + whereExtra
 		args := buildListArgs(nil, clubFuncFilter, search, statusFilter, nil, nil)
 		err = h.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total)
 	} else {
-		countQuery := `SELECT COUNT(*) FROM members m WHERE m.status != 'ausgetreten' AND ` + scopeWhere + whereExtra
+		countQuery := `SELECT COUNT(*) FROM members m WHERE ` + ausgetretenExclusion + scopeWhere + whereExtra
 		var prefix []any
 		if scopeNeedsUserID {
 			prefix = []any{p.UserID}
@@ -340,13 +346,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if wideSearch {
 		query := `SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
-		 FROM members m WHERE m.status != 'ausgetreten'` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
+		 FROM members m WHERE ` + ausgetretenExclusion + `1=1` + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
 		args := buildListArgs(nil, clubFuncFilter, search, statusFilter, &limit, &offset)
 		rows, err = h.db.QueryContext(r.Context(), query, args...)
 	} else {
 		query := `SELECT m.id, m.first_name, m.last_name, COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
 		        m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id, ` + clubFuncSubquery + `
-		 FROM members m WHERE m.status != 'ausgetreten' AND ` + scopeWhere + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
+		 FROM members m WHERE ` + ausgetretenExclusion + scopeWhere + whereExtra + ` ORDER BY m.last_name, m.first_name LIMIT ? OFFSET ?`
 		var prefix []any
 		if scopeNeedsUserID {
 			prefix = []any{p.UserID}

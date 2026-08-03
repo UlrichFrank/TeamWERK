@@ -198,6 +198,41 @@ func TestList_AusgetretenHidden(t *testing.T) {
 	}
 }
 
+// ── TC-M03b: explicit status=ausgetreten filter still shows them ─────────────
+
+func TestList_StatusFilterAusgetretenShown(t *testing.T) {
+	database := testutil.NewDB(t)
+	vorstandUserID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandUserID, "standard", []string{"vorstand"})
+
+	m1 := testutil.CreateMember(t, database, 0)
+	m2 := testutil.CreateMember(t, database, 0)
+	database.Exec(`UPDATE members SET status='ausgetreten' WHERE id=?`, m2)
+	_ = m1
+
+	srv := newMembersServer(t, database)
+	res := testutil.Get(t, srv, "/api/members?status=ausgetreten", tok)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	lr := decodeList(t, res)
+	if lr.Total != 1 {
+		t.Errorf("expected total=1 (ausgetreten member found via explicit filter), got %d", lr.Total)
+	}
+	if len(lr.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(lr.Items))
+	}
+	var item struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(lr.Items[0], &item); err != nil {
+		t.Fatalf("unmarshal item: %v", err)
+	}
+	if item.Status != "ausgetreten" {
+		t.Errorf("expected status=ausgetreten, got %q", item.Status)
+	}
+}
+
 // ── TC-M04: trainer sees only members of their team ───────────────────────────
 
 // GET /api/members ist für Trainer freigeschaltet (Kadersuche). Ohne
