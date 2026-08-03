@@ -845,8 +845,8 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if limit < 1 {
 		limit = 50
 	}
-	if limit > 200 {
-		limit = 200
+	if limit > 1000 {
+		limit = 1000
 	}
 	if offset < 0 {
 		offset = 0
