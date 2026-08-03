@@ -1274,6 +1274,7 @@ type ProfileResponse struct {
 	Street           string          `json:"street,omitempty"`
 	Zip              string          `json:"zip,omitempty"`
 	City             string          `json:"city,omitempty"`
+	DateOfBirth      string          `json:"date_of_birth,omitempty"`
 	PhotoURL         string          `json:"photo_url,omitempty"`
 	RecoveryEmail    string          `json:"recovery_email,omitempty"`
 	Phones           []UserPhone     `json:"phones"`
@@ -1336,16 +1337,17 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Contact data: address, photo_url, phones, visibility, reminder preference, maps provider
-	var street, zip, city, photoPath sql.NullString
+	var street, zip, city, dateOfBirth, photoPath sql.NullString
 	var reminderDays sql.NullInt64
 	var mapsProvider string
 	var recoveryEmail sql.NullString
 	h.db.QueryRowContext(r.Context(),
-		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(photo_path,''), duty_reminder_days, maps_provider, COALESCE(recovery_email,'') FROM users WHERE id=?`,
-		claims.UserID).Scan(&street, &zip, &city, &photoPath, &reminderDays, &mapsProvider, &recoveryEmail)
+		`SELECT COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(date_of_birth,''), COALESCE(photo_path,''), duty_reminder_days, maps_provider, COALESCE(recovery_email,'') FROM users WHERE id=?`,
+		claims.UserID).Scan(&street, &zip, &city, &dateOfBirth, &photoPath, &reminderDays, &mapsProvider, &recoveryEmail)
 	resp.Street = street.String
 	resp.Zip = zip.String
 	resp.City = city.String
+	resp.DateOfBirth = dateOfBirth.String
 	resp.RecoveryEmail = recoveryEmail.String
 	if photoPath.String != "" {
 		resp.PhotoURL = "/api/uploads/" + photoPath.String
@@ -1396,6 +1398,7 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Street       string `json:"street"`
 		Zip          string `json:"zip"`
 		City         string `json:"city"`
+		DateOfBirth  string `json:"date_of_birth"`
 		MapsProvider string `json:"maps_provider"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
@@ -1412,9 +1415,10 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		mapsProvider = "auto"
 	}
 	if _, err := h.db.ExecContext(r.Context(),
-		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, maps_provider=?, updated_at=? WHERE id=?`,
+		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, date_of_birth=?, maps_provider=?, updated_at=? WHERE id=?`,
 		req.FirstName, req.LastName,
-		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), mapsProvider, time.Now(), claims.UserID,
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.DateOfBirth),
+		mapsProvider, time.Now(), claims.UserID,
 	); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -2668,6 +2672,7 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 		Street        string          `json:"street"`
 		Zip           string          `json:"zip"`
 		City          string          `json:"city"`
+		DateOfBirth   string          `json:"date_of_birth"`
 		RecoveryEmail string          `json:"recovery_email"`
 		Phones        []phoneEntry    `json:"phones"`
 		Visibility    visibilityEntry `json:"visibility"`
@@ -2676,14 +2681,15 @@ func (h *Handler) GetChildProfile(w http.ResponseWriter, r *http.Request) {
 	var userContact *userContactEntry
 	if m.UserID != nil {
 		uc := userContactEntry{Phones: []phoneEntry{}}
-		var street, zip, city, recoveryEmail sql.NullString
+		var street, zip, city, dateOfBirth, recoveryEmail sql.NullString
 		h.db.QueryRowContext(r.Context(),
-			`SELECT first_name, last_name, COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(recovery_email,'') FROM users WHERE id=?`,
-			*m.UserID).Scan(&uc.FirstName, &uc.LastName, &street, &zip, &city, &recoveryEmail)
+			`SELECT first_name, last_name, COALESCE(street,''), COALESCE(zip,''), COALESCE(city,''), COALESCE(date_of_birth,''), COALESCE(recovery_email,'') FROM users WHERE id=?`,
+			*m.UserID).Scan(&uc.FirstName, &uc.LastName, &street, &zip, &city, &dateOfBirth, &recoveryEmail)
 		uc.RecoveryEmail = recoveryEmail.String
 		uc.Street = street.String
 		uc.Zip = zip.String
 		uc.City = city.String
+		uc.DateOfBirth = dateOfBirth.String
 
 		upRows, _ := h.db.QueryContext(r.Context(),
 			`SELECT id, label, number, sort_order FROM user_phones WHERE user_id=? ORDER BY sort_order, id`,
@@ -2743,20 +2749,21 @@ func (h *Handler) UpdateChildAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Street    string `json:"street"`
-		Zip       string `json:"zip"`
-		City      string `json:"city"`
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		Street      string `json:"street"`
+		Zip         string `json:"zip"`
+		City        string `json:"city"`
+		DateOfBirth string `json:"date_of_birth"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	if _, err := h.db.ExecContext(r.Context(),
-		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, updated_at=? WHERE id=?`,
+		`UPDATE users SET first_name=?, last_name=?, street=?, zip=?, city=?, date_of_birth=?, updated_at=? WHERE id=?`,
 		req.FirstName, req.LastName,
-		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City),
+		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.DateOfBirth),
 		time.Now(), childUserID.Int64,
 	); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)

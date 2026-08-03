@@ -299,8 +299,9 @@ func (h *Handler) extractFieldValue(m *Member, fieldName string) (json.RawMessag
 		return json.Marshal(m.SepaMandat)
 	case "profil":
 		p := map[string]interface{}{
-			"first_name": m.FirstName,
-			"last_name":  m.LastName,
+			"first_name":    m.FirstName,
+			"last_name":     m.LastName,
+			"date_of_birth": m.DateOfBirth,
 		}
 		if m.Street != nil {
 			p["street"] = *m.Street
@@ -386,18 +387,19 @@ func (h *Handler) applyDraftToMember(memberID int, fieldName string, newValue js
 
 	case "profil":
 		var data struct {
-			FirstName string `json:"first_name"`
-			LastName  string `json:"last_name"`
-			Street    string `json:"street"`
-			Zip       string `json:"zip"`
-			City      string `json:"city"`
+			FirstName   string `json:"first_name"`
+			LastName    string `json:"last_name"`
+			Street      string `json:"street"`
+			Zip         string `json:"zip"`
+			City        string `json:"city"`
+			DateOfBirth string `json:"date_of_birth"`
 		}
 		if err := json.Unmarshal(newValue, &data); err != nil {
 			return err
 		}
 		_, err := h.db.Exec(
-			`UPDATE members SET first_name=?, last_name=?, street=?, zip=?, city=? WHERE id=?`,
-			data.FirstName, data.LastName, data.Street, data.Zip, data.City, memberID)
+			`UPDATE members SET first_name=?, last_name=?, street=?, zip=?, city=?, date_of_birth=? WHERE id=?`,
+			data.FirstName, data.LastName, data.Street, data.Zip, data.City, nullableString(data.DateOfBirth), memberID)
 		return err
 
 	case "bankdaten":

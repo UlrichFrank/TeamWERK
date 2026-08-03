@@ -18,6 +18,7 @@ export interface UserContact {
   street: string
   zip: string
   city: string
+  date_of_birth: string
   recovery_email: string
   phones: Phone[]
   visibility: {

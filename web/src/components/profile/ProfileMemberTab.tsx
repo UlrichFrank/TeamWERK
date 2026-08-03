@@ -29,6 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
   street: 'Straße',
   zip: 'PLZ',
   city: 'Ort',
+  date_of_birth: 'Geburtsdatum',
   iban: 'IBAN',
 }
 

@@ -23,6 +23,7 @@ export default function ProfileProfilTab({
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [address, setAddress] = useState({ street: '', zip: '', city: '' })
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [phones, setPhones] = useState<Phone[]>([])
   const [visibility, setVisibility] = useState<Visibility>({ phones_visible: false, address_visible: false, photo_visible: false, email_visible: false, whatsapp_visible: false })
   const [photoURL, setPhotoURL] = useState('')
@@ -48,6 +49,7 @@ export default function ProfileProfilTab({
     if (mode === 'child') return
     api.get('/profile/me').then(r => {
       setAddress({ street: r.data?.street ?? '', zip: r.data?.zip ?? '', city: r.data?.city ?? '' })
+      setDateOfBirth((r.data?.date_of_birth || r.data?.own_member?.date_of_birth || '').slice(0, 10))
       setPhones(r.data?.phones ?? [])
       setVisibility(r.data?.visibility ?? { phones_visible: false, address_visible: false, photo_visible: false, email_visible: false, whatsapp_visible: false })
       if (r.data?.photo_url) setPhotoURL(r.data.photo_url)
@@ -92,6 +94,7 @@ export default function ProfileProfilTab({
       setFirstName(userContact.first_name)
       setLastName(userContact.last_name)
       setAddress({ street: userContact.street, zip: userContact.zip, city: userContact.city })
+      setDateOfBirth((userContact.date_of_birth || ownMember?.date_of_birth || '').slice(0, 10))
       setPhones(userContact.phones)
       setVisibility(userContact.visibility)
       setPhotoURL(ownMember?.photo_url ?? '')
@@ -99,6 +102,9 @@ export default function ProfileProfilTab({
       setFirstName(ownMember.first_name)
       setLastName(ownMember.last_name)
       setAddress({ street: ownMember.street ?? '', zip: ownMember.zip ?? '', city: ownMember.city ?? '' })
+      // Kein eigener User-Account → Feld wird nicht angezeigt, aber der Wert wird
+      // unverändert mitgeführt, damit ein Adress-only-Save date_of_birth nicht klobbert.
+      setDateOfBirth((ownMember.date_of_birth || '').slice(0, 10))
       setPhotoURL(ownMember.photo_url ?? '')
     }
     // Init aus userContact/ownMember nur bei Wechsel des Datensatzes (mode stabil)
@@ -122,6 +128,7 @@ export default function ProfileProfilTab({
       address.street !== userContact.street ||
       address.zip !== userContact.zip ||
       address.city !== userContact.city ||
+      dateOfBirth !== (userContact.date_of_birth || '').slice(0, 10) ||
       visibility.phones_visible !== userContact.visibility.phones_visible ||
       visibility.address_visible !== userContact.visibility.address_visible ||
       visibility.photo_visible !== userContact.visibility.photo_visible ||
@@ -137,6 +144,10 @@ export default function ProfileProfilTab({
   )
   const isChanged = mode === 'child' ? childChanged : changed
 
+  // Geburtsdatum nur für direkt verknüpfte Mitgliederaccounts: eigenes Profil
+  // (ownMember vorhanden) oder Kind mit eigenem User-Account (userContact vorhanden).
+  const showDateOfBirth = ownMember != null && (mode !== 'child' || !!userContact)
+
   const handleChange = () => setChanged(true)
 
   const handleSave = async (e: FormEvent) => {
@@ -148,22 +159,23 @@ export default function ProfileProfilTab({
         if (userContact) {
           await api.put(`/profile/kind/${childMemberId}/account`, {
             first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city,
+            date_of_birth: dateOfBirth,
           })
           await api.put(`/profile/kind/${childMemberId}/visibility`, visibility)
         }
         await api.post(`/members/${childMemberId}/change-request`, {
           field_name: 'profil',
-          new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city },
+          new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city, date_of_birth: dateOfBirth },
         })
         const r = await api.get(`/members/${childMemberId}/change-drafts`)
         const drafts: ChangeDraft[] = r.data?.drafts ?? []
         setProfilDraft(drafts.find(d => d.field_name === 'profil') ?? null)
       } else {
-        await api.put('/profile/me', { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city })
+        await api.put('/profile/me', { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city, date_of_birth: dateOfBirth })
         if (ownMember) {
           await api.post(`/members/${ownMember.id}/change-request`, {
             field_name: 'profil',
-            new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city },
+            new_value: { first_name: firstName, last_name: lastName, street: address.street, zip: address.zip, city: address.city, date_of_birth: dateOfBirth },
           })
           const r = await api.get(`/members/${ownMember.id}/change-drafts`)
           const drafts: ChangeDraft[] = r.data?.drafts ?? []
@@ -367,6 +379,17 @@ export default function ProfileProfilTab({
               />
             </div>
           </div>
+          {showDateOfBirth && (
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">Geburtsdatum</label>
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={e => { setDateOfBirth(e.target.value); handleChange() }}
+                className={inputCls}
+              />
+            </div>
+          )}
         </form>
       </div>
 
