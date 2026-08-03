@@ -441,6 +441,7 @@ export default function MemberDetailPage() {
           isNew={isNew}
           memberId={id && !isNew ? Number(id) : undefined}
           memberUserId={currentUserID}
+          memberName={{ first_name: form.first_name, last_name: form.last_name }}
           users={users}
           linkedParents={linkedParents}
           onAddParent={handleFamilyLink}
@@ -456,6 +457,7 @@ export default function MemberDetailPage() {
         <MemberAdminTab
           isNew={isNew}
           memberId={id && !isNew ? Number(id) : undefined}
+          memberName={{ first_name: form.first_name, last_name: form.last_name }}
           users={users}
           invitations={invitations}
           currentUserId={currentUserID}

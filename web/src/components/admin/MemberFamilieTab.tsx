@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { api } from '../../lib/api'
 import { errorStatus } from '../../lib/errors'
+import { isLikelyNameMatch } from '../../lib/nameMatch'
+import SearchableSelect from '../SearchableSelect'
 
 interface User {
   id: number
@@ -13,6 +15,7 @@ interface Props {
   isNew: boolean
   memberId?: number
   memberUserId?: number | null
+  memberName: { first_name: string; last_name: string }
   users: User[]
   linkedParents: User[]
   onAddParent: (userId: number) => Promise<void>
@@ -24,7 +27,7 @@ interface Props {
 }
 
 export default function MemberFamilieTab({
-  isNew, memberId, memberUserId, users, linkedParents,
+  isNew, memberId, memberUserId, memberName, users, linkedParents,
   onAddParent, onRemoveParent, onReload, saving, saved, error
 }: Props) {
   const [selectedParent, setSelectedParent] = useState('')
@@ -34,6 +37,16 @@ export default function MemberFamilieTab({
 
   const availableUsers = users.filter(u => !linkedParents.find(p => p.id === u.id))
   const canAddMore = linkedParents.length < 2
+
+  const userItems = availableUsers
+    .slice()
+    .sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name))
+    .map(u => ({
+      value: String(u.id),
+      label: `${u.first_name} ${u.last_name} (${u.email})`,
+      searchText: `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase(),
+      likely: isLikelyNameMatch(u, memberName),
+    }))
 
   const handleAdd = async () => {
     if (!selectedParent) return
@@ -101,16 +114,13 @@ export default function MemberFamilieTab({
           <div className="space-y-2">
             <label className="block text-sm font-medium text-brand-text">Hinzufügen (max. 2)</label>
             <div className="flex gap-2">
-              <select
+              <SearchableSelect
+                items={userItems}
                 value={selectedParent}
-                onChange={e => setSelectedParent(e.target.value)}
-                className="flex-1 border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text"
-              >
-                <option value="">– Nutzer wählen –</option>
-                {availableUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.email})</option>
-                ))}
-              </select>
+                onChange={setSelectedParent}
+                placeholder="– Nutzer wählen –"
+                className="flex-1"
+              />
               <button
                 onClick={handleAdd}
                 disabled={!selectedParent || saving}

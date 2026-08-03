@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CheckCircle, Mail } from 'lucide-react'
 import { api } from '../../lib/api'
+import { isLikelyNameMatch } from '../../lib/nameMatch'
+import SearchableSelect from '../SearchableSelect'
 
 interface User {
   id: number
@@ -18,6 +20,7 @@ interface PendingInvitation {
 interface Props {
   isNew: boolean
   memberId?: number
+  memberName: { first_name: string; last_name: string }
   users: User[]
   invitations: PendingInvitation[]
   currentUserId: number | null
@@ -36,7 +39,7 @@ function formatSentAt(iso: string) {
 }
 
 export default function MemberAdminTab({
-  isNew, memberId, users, invitations, currentUserId, welcomeEmailSentAt, onWelcomeEmailSent,
+  isNew, memberId, memberName, users, invitations, currentUserId, welcomeEmailSentAt, onWelcomeEmailSent,
   onLinkUser, onLinkInvitation, saving, saved, error,
 }: Props) {
   const linkedInvitation = memberId != null
@@ -54,6 +57,26 @@ export default function MemberAdminTab({
   const [sendError, setSendError] = useState('')
 
   const currentUser = currentUserId ? users.find(u => u.id === currentUserId) : null
+
+  const userItems = users
+    .slice()
+    .sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name))
+    .map(u => ({
+      value: `u:${u.id}`,
+      label: `${u.first_name} ${u.last_name} (${u.email})`,
+      searchText: `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase(),
+      likely: isLikelyNameMatch(u, memberName),
+    }))
+  const invitationItems = invitations
+    .slice()
+    .sort((a, b) => a.email.localeCompare(b.email))
+    .map(i => ({
+      value: `i:${i.id}`,
+      label: `${i.email} (Einladung ausstehend)`,
+      searchText: i.email.toLowerCase(),
+      likely: false,
+    }))
+  const linkItems = [...userItems, ...invitationItems]
 
   const handleSave = async () => {
     if (!selected) {
@@ -102,31 +125,14 @@ export default function MemberAdminTab({
 
         <div>
           <label className="block text-sm font-medium text-brand-text-muted mb-1">Nutzer ändern</label>
-          <select
+          <SearchableSelect
+            items={linkItems}
             value={selected}
-            onChange={e => setSelected(e.target.value)}
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
-          >
-            <option value="">– Keine Verknüpfung –</option>
-            {users.length > 0 && (
-              <optgroup label="Registrierte Nutzer">
-                {users.map(u => (
-                  <option key={`u:${u.id}`} value={`u:${u.id}`}>
-                    {u.first_name} {u.last_name} ({u.email})
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {invitations.length > 0 && (
-              <optgroup label="Ausstehende Einladungen">
-                {invitations.slice().sort((a, b) => a.email.localeCompare(b.email)).map(i => (
-                  <option key={`i:${i.id}`} value={`i:${i.id}`}>
-                    {i.email}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+            onChange={setSelected}
+            placeholder="– Keine Verknüpfung –"
+            clearLabel="– Keine Verknüpfung –"
+            className="mb-3"
+          />
 
           <button
             onClick={handleSave}
