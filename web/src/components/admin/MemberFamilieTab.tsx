@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../../lib/api'
 import { errorStatus } from '../../lib/errors'
-import { isLikelyNameMatch } from '../../lib/nameMatch'
+import { isFullNameMatch, isLastNameMatch } from '../../lib/nameMatch'
 import SearchableSelect from '../SearchableSelect'
 
 interface User {
@@ -39,13 +39,14 @@ export default function MemberFamilieTab({
   const canAddMore = linkedParents.length < 2
 
   const userItems = availableUsers
+    .filter(u => !isFullNameMatch(u, memberName))
     .slice()
     .sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name))
     .map(u => ({
       value: String(u.id),
       label: `${u.first_name} ${u.last_name} (${u.email})`,
       searchText: `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase(),
-      likely: isLikelyNameMatch(u, memberName),
+      likely: isLastNameMatch(u, memberName),
     }))
 
   const handleAdd = async () => {
@@ -110,21 +111,21 @@ export default function MemberFamilieTab({
           </div>
         )}
 
-        {canAddMore && availableUsers.length > 0 && (
+        {canAddMore && userItems.length > 0 && (
           <div className="space-y-2">
             <label className="block text-sm font-medium text-brand-text">Hinzufügen (max. 2)</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <SearchableSelect
                 items={userItems}
                 value={selectedParent}
                 onChange={setSelectedParent}
                 placeholder="– Nutzer wählen –"
-                className="flex-1"
+                className="w-full sm:flex-1"
               />
               <button
                 onClick={handleAdd}
                 disabled={!selectedParent || saving}
-                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow disabled:opacity-40"
+                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Hinzufügen
               </button>
