@@ -148,6 +148,46 @@ func TestNavFor_ProfileVisibility(t *testing.T) {
 	}
 }
 
+// Das eigene Trainingstagebuch hängt an der Vereinsfunktion `spieler`, nicht am
+// Mitglieds-Datensatz: Trainer, Vorstand und Eltern mit eigenem Mitglied führen
+// kein eigenes Tagebuch (Kinder-Tagebücher stehen im Kind-Profil-Tab).
+func TestNavFor_TrainingsdiaryVisibility(t *testing.T) {
+	const route = "/profil/trainingstagebuch"
+	has := func(p *policy.Principal) bool {
+		for _, item := range policy.NavFor(p) {
+			if item.Route == route {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !has(spielerP()) {
+		t.Error("spieler should see own training diary in nav")
+	}
+	// Mitglied ohne Spieler-Funktion → kein eigenes Tagebuch.
+	trainerMember := &policy.Principal{UserID: 20, Role: "standard", ClubFunctions: []string{"trainer"}, HasMember: true}
+	if has(trainerMember) {
+		t.Error("trainer with own member record should not see own training diary in nav")
+	}
+	// Elternteil mit eigenem Mitglied → kein eigenes Tagebuch.
+	parentMember := &policy.Principal{UserID: 21, Role: "standard", HasMember: true, IsParent: true}
+	if has(parentMember) {
+		t.Error("parent should not see own training diary in nav")
+	}
+	// Admin ohne Spieler-Funktion → kein eigenes Tagebuch (kein Rollen-Bypass,
+	// es geht um das persönliche Tagebuch, nicht um Verwaltungsrechte).
+	adminMember := &policy.Principal{UserID: 22, Role: "admin", HasMember: true}
+	if has(adminMember) {
+		t.Error("admin without spieler function should not see own training diary in nav")
+	}
+	// Spieler, der zugleich Trainer ist → sichtbar.
+	playerTrainer := &policy.Principal{UserID: 23, Role: "standard", ClubFunctions: []string{"trainer", "spieler"}, HasMember: true}
+	if !has(playerTrainer) {
+		t.Error("player who is also a trainer should see own training diary in nav")
+	}
+}
+
 func TestNavFor_MitgliederVisibility(t *testing.T) {
 	// Vorstand sees /mitglieder
 	vorstandNav := policy.NavFor(vorstandP())

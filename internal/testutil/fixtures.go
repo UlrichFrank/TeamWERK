@@ -339,6 +339,41 @@ func CreateVideo(t *testing.T, database *sql.DB, teamID, seasonID, createdByUser
 	return int(id)
 }
 
+// CreateTrainingDiaryEntry inserts a training diary entry for the given member.
+// seasonID <= 0 stores NULL — that is the "no active season" case, which the
+// retention job must never touch.
+func CreateTrainingDiaryEntry(t *testing.T, database *sql.DB, memberID, seasonID int, trainedOn string, durationMin, rpe int) int {
+	t.Helper()
+	var seasonArg any
+	if seasonID > 0 {
+		seasonArg = seasonID
+	}
+	res, err := database.Exec(
+		`INSERT INTO training_diary_entries (member_id, season_id, trained_on, kind, duration_min, rpe)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		memberID, seasonArg, trainedOn, "kraft", durationMin, rpe)
+	if err != nil {
+		t.Fatalf("CreateTrainingDiaryEntry: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// SetTrainingDiaryProof attaches a proof file record to a diary entry. The
+// caller is responsible for creating the file on disk when the test needs one.
+func SetTrainingDiaryProof(t *testing.T, database *sql.DB, entryID int, diskName, mime string) {
+	t.Helper()
+	_, err := database.Exec(
+		`UPDATE training_diary_entries
+		    SET proof_disk_name = ?, proof_mime = ?, proof_size = 1,
+		        proof_uploaded_at = CURRENT_TIMESTAMP, proof_purged_at = NULL
+		  WHERE id = ?`,
+		diskName, mime, entryID)
+	if err != nil {
+		t.Fatalf("SetTrainingDiaryProof: %v", err)
+	}
+}
+
 // AddExtendedKaderMember adds a member to the extended kader (kader_extended_members).
 func AddExtendedKaderMember(t *testing.T, database *sql.DB, kaderID, memberID int) {
 	t.Helper()

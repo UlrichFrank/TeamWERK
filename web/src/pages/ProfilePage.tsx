@@ -10,6 +10,7 @@ import ProfileMiscTab from '../components/profile/ProfileMiscTab'
 import ProfileKalenderTab from '../components/profile/ProfileKalenderTab'
 import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
+import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 
 export interface Member {
   id: number; first_name: string; last_name: string
@@ -56,7 +57,7 @@ export interface ChangeDraft {
   created_at: string
 }
 
-type TabName = 'account' | 'profile' | 'member' | 'banking' | 'anwesenheit' | 'kalender' | 'datenschutz' | 'misc'
+type TabName = 'account' | 'profile' | 'member' | 'banking' | 'anwesenheit' | 'tagebuch' | 'kalender' | 'datenschutz' | 'misc'
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
@@ -105,7 +106,7 @@ export default function ProfilePage() {
     'account',
     'profile',
     ...(showMemberTabs ? (['member', 'banking'] as TabName[]) : []),
-    ...(showAttendanceTab ? (['anwesenheit'] as TabName[]) : []),
+    ...(showAttendanceTab ? (['anwesenheit', 'tagebuch'] as TabName[]) : []),
     'kalender',
     ...(showMemberTabs ? (['datenschutz'] as TabName[]) : []),
     'misc',
@@ -117,6 +118,7 @@ export default function ProfilePage() {
     member: 'Mitgliedsdaten',
     banking: 'Bankdaten',
     anwesenheit: 'Anwesenheit',
+    tagebuch: 'Trainingstagebuch',
     kalender: 'Kalender-Abo',
     datenschutz: 'Datenschutz',
     misc: 'Sonstiges',
@@ -161,6 +163,9 @@ export default function ProfilePage() {
       )}
       {showAttendanceTab && activeTab === 'anwesenheit' && ownMember && (
         <ProfilAnwesenheitContent forcedMemberId={ownMember.id} />
+      )}
+      {showAttendanceTab && activeTab === 'tagebuch' && ownMember && (
+        <ProfilTrainingstagebuchContent />
       )}
       {activeTab === 'kalender' && <ProfileKalenderTab />}
       {showMemberTabs && activeTab === 'datenschutz' && ownMember && (

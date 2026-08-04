@@ -33,6 +33,7 @@ const navModules: NavModule[] = [
     items: [
       { to: '/', label: 'Dashboard', end: true },
       { to: '/profil', label: 'Mein Profil' },
+      { to: '/profil/trainingstagebuch', label: 'Mein Trainingstagebuch' },
     ],
   },
   {
@@ -42,6 +43,7 @@ const navModules: NavModule[] = [
       { to: '/termine', label: 'Termine' },
       { to: '/videos', label: 'Videos' },
       { to: '/anwesenheit', label: 'Anwesenheit' },
+      { to: '/trainingstagebuch', label: 'Trainingstagebuch' },
     ],
   },
   {

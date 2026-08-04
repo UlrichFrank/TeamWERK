@@ -15,11 +15,15 @@ type Config struct {
 	FilesDir        string
 	MediaDir        string
 	BeitragslaufDir string
-	SMTP            SMTPConfig
-	VAPIDPublicKey  string
-	VAPIDPrivateKey string
-	VAPIDEmail      string
-	MailerDisabled  bool
+	// TrainingDiaryDir hält die Nachweis-Dateien des Trainingstagebuchs.
+	// Bewusst getrennt von MediaDir: /api/media/{id} liefert an jeden
+	// Eingeloggten aus, Trainingsnachweise brauchen eine Prüfung pro Objekt.
+	TrainingDiaryDir string
+	SMTP             SMTPConfig
+	VAPIDPublicKey   string
+	VAPIDPrivateKey  string
+	VAPIDEmail       string
+	MailerDisabled   bool
 	// MetricsToken schützt GET /api/metrics. Leer ⇒ Endpoint deaktiviert (404).
 	MetricsToken string
 	// LogFormat steuert den slog-Handler: "json" (Default, Prod) oder "text" (lokal).
@@ -80,14 +84,15 @@ type SMTPConfig struct {
 func Load() (*Config, error) {
 	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
 	c := &Config{
-		Port:            getEnv("PORT", "8080"),
-		DBPath:          getEnv("DB_PATH", "./teamwerk.db"),
-		JWTSecret:       os.Getenv("JWT_SECRET"),
-		BaseURL:         getEnv("BASE_URL", "https://teamwerk.team-stuttgart.org"),
-		UploadDir:       getEnv("UPLOAD_DIR", "./storage/uploads"),
-		FilesDir:        getEnv("FILES_DIR", "./storage/files"),
-		MediaDir:        getEnv("MEDIA_DIR", "./storage/media"),
-		BeitragslaufDir: getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle"),
+		Port:             getEnv("PORT", "8080"),
+		DBPath:           getEnv("DB_PATH", "./teamwerk.db"),
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		BaseURL:          getEnv("BASE_URL", "https://teamwerk.team-stuttgart.org"),
+		UploadDir:        getEnv("UPLOAD_DIR", "./storage/uploads"),
+		FilesDir:         getEnv("FILES_DIR", "./storage/files"),
+		MediaDir:         getEnv("MEDIA_DIR", "./storage/media"),
+		BeitragslaufDir:  getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle"),
+		TrainingDiaryDir: getEnv("TRAINING_DIARY_DIR", "./storage/training-diary"),
 		SMTP: SMTPConfig{
 			Host:     getEnv("SMTP_HOST", "mail.agenturserver.de"),
 			Port:     smtpPort,

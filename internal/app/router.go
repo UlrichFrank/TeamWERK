@@ -37,6 +37,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/settings"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
+	"github.com/teamstuttgart/teamwerk/internal/trainingdiary"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 	"github.com/teamstuttgart/teamwerk/internal/venues"
@@ -62,6 +63,7 @@ type Handlers struct {
 	Training       *trainings.Handler
 	Absences       *absences.Handler
 	Attendance     *attendance.Handler
+	TrainingDiary  *trainingdiary.Handler
 	Teams          *teams.Handler
 	Venues         *venues.Handler
 	Beitragssaetze *beitragssaetze.Handler
@@ -326,6 +328,19 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/teams/{id}/attendance-stats", h.Attendance.GetTeamStats)
 		r.Get("/api/teams/{id}/attendance-open", h.Attendance.GetTeamOpen)
 		r.Get("/api/members/{id}/attendance-stats", h.Attendance.GetMemberStats)
+
+		// Trainingstagebuch (Eigentraining). Schreiben nur der Eigentümer,
+		// Lesen zusätzlich Eltern/Trainer/sL/admin — die Prüfung sitzt im
+		// Handler, wie bei den attendance-stats oben.
+		r.Get("/api/training-diary", h.TrainingDiary.ListOwn)
+		r.Post("/api/training-diary", h.TrainingDiary.CreateEntry)
+		r.Put("/api/training-diary/{id}", h.TrainingDiary.UpdateEntry)
+		r.Delete("/api/training-diary/{id}", h.TrainingDiary.DeleteEntry)
+		r.Post("/api/training-diary/{id}/proof", h.TrainingDiary.UploadProof)
+		r.Delete("/api/training-diary/{id}/proof", h.TrainingDiary.DeleteProof)
+		r.Get("/api/training-diary/{id}/proof", h.TrainingDiary.ServeProof)
+		r.Get("/api/members/{id}/training-diary", h.TrainingDiary.GetMemberDiary)
+		r.Get("/api/teams/{id}/training-diary-stats", h.TrainingDiary.GetTeamStats)
 
 		// Trainings (read + RSVP — all authenticated)
 		r.Get("/api/training-sessions", h.Training.ListSessions)

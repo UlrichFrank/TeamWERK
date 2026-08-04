@@ -1,6 +1,6 @@
 # Deployment & VPS
 
-IONOS VPS Linux XS · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN — **kein** `FIELD_ENCRYPTION_KEY` mehr, Zero-Knowledge). DB `/var/lib/teamwerk/teamwerk.db`. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
+IONOS VPS Linux XS · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN — **kein** `FIELD_ENCRYPTION_KEY` mehr, Zero-Knowledge). DB `/var/lib/teamwerk/teamwerk.db`. **Backup-relevante Storage-Pfade** neben der DB: `BEITRAGSLAUF_DIR` (append-only Saison-Protokolle) und `TRAINING_DIARY_DIR` (Trainingsnachweise, Default `./storage/training-diary`) — letzteres wird rollierend 90 Tage nach Saisonende automatisch bereinigt, ein älteres Backup holt gelöschte Nachweise also zurück. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
 
 SSH-Alias `vServer` (in `.env`), direkt `https://217.160.118.39`. Domain + Certbot-Zertifikat noch ausstehend.
 
