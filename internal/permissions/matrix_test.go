@@ -162,6 +162,32 @@ var exMemberDraftAccess = map[string]int{
 	"spieler": 403, "elternteil": 403,
 }
 
+// Handler-Level-Gate: trainingdiary.resolveOwnMember — der Endpoint hängt am
+// Mitglieds-Datensatz des Aufrufers, nicht an seiner Rolle. Keine der Personas
+// hat ein verknüpftes Mitglied, daher wird jede von ihnen geblockt — auch
+// admin. Das ist die Aussage: das Trainingstagebuch ist persönlich, keine
+// Vereinsfunktion verschafft Zugang zu einem fremden.
+var exDiaryOwnMember = map[string]int{
+	"admin": 403, "vorstand": 403, "vorstand_elternteil": 403,
+	"vorstand_beisitzer": 403, "kassierer": 403,
+	"trainer": 403, "trainer_elternteil": 403,
+	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
+	"spieler": 403, "elternteil": 403,
+}
+
+// Handler-Level-Gate: trainingdiary.canReadMemberDiary / canSeeTeamDiary —
+// admin || sportliche_leitung || isOwn || isParent || Trainer des Kaders.
+// Mit Member-/Team-ID 1 (keiner Persona zugeordnet) bleiben isOwn, isParent
+// und die Trainer-Bedingung falsch → nur admin und sportliche_leitung kommen
+// durch. `vorstand` und `kassierer` sind hier bewusst NICHT dabei.
+var exDiaryReadACL = map[string]int{
+	"admin":              httpAllowed,
+	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
+	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
+	"kassierer": 403, "trainer": 403, "trainer_elternteil": 403,
+	"spieler": 403, "elternteil": 403,
+}
+
 // RequireRole(auth.RolePressTeam, auth.RoleAdmin) — Match-Report-Autor-Tier.
 // In der aktuellen Persona-Menge gibt es KEINE press_team-Persona, daher kommt
 // effektiv nur admin durch. Sobald eine press_team-Persona ergänzt wird (siehe
@@ -407,6 +433,21 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/teams/{id}/attendance-stats", expected: exAuth},
 	{method: "GET", path: "/api/teams/{id}/attendance-open", expected: exAuth},
 	{method: "GET", path: "/api/members/{id}/attendance-stats", expected: exAuth},
+
+	// Trainingstagebuch (Authenticated; Handler-Authz).
+	// Eigene Liste/Anlegen hängen am Mitglieds-Datensatz, nicht an der Rolle.
+	{method: "GET", path: "/api/training-diary", expected: exDiaryOwnMember},
+	{method: "POST", path: "/api/training-diary", expected: exDiaryOwnMember},
+	// {id}=1 existiert nicht → 404 aus der Existenzprüfung, die bewusst VOR
+	// der Eigentümer-Prüfung läuft (keine Enumeration fremder IDs per 403).
+	{method: "PUT", path: "/api/training-diary/{id}", expected: exAuth},
+	{method: "DELETE", path: "/api/training-diary/{id}", expected: exAuth},
+	{method: "POST", path: "/api/training-diary/{id}/proof", expected: exAuth},
+	{method: "DELETE", path: "/api/training-diary/{id}/proof", expected: exAuth},
+	{method: "GET", path: "/api/training-diary/{id}/proof", expected: exAuth},
+	// Fremdlesen: nur admin/sportliche_leitung ohne Zusatzbedingung.
+	{method: "GET", path: "/api/members/{id}/training-diary", expected: exDiaryReadACL},
+	{method: "GET", path: "/api/teams/{id}/training-diary-stats", expected: exDiaryReadACL},
 
 	// Trainings (read + RSVP)
 	{method: "GET", path: "/api/training-sessions", expected: exAuth},
