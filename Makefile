@@ -26,12 +26,14 @@ FILES_DIR_REMOTE                  := /var/lib/teamwerk/files
 MEDIA_DIR_REMOTE                  := /var/lib/teamwerk/media
 BEITRAGSLAUF_DIR_REMOTE           := /var/lib/teamwerk/beitragslauf-protokolle
 MATCH_REPORT_IMAGE_DIR_REMOTE     := /var/lib/teamwerk/match-report-images
+TRAINING_DIARY_DIR_REMOTE         := /var/lib/teamwerk/training-diary
 VIDEO_STORAGE_DIR_REMOTE          := /storage/videos
 UPLOAD_DIR_LOCAL                  := $(REPO_ROOT)/storage/uploads
 FILES_DIR_LOCAL                   := $(REPO_ROOT)/storage/files
 MEDIA_DIR_LOCAL                   := $(REPO_ROOT)/storage/media
 BEITRAGSLAUF_DIR_LOCAL            := $(REPO_ROOT)/storage/beitragslauf-protokolle
 MATCH_REPORT_IMAGE_DIR_LOCAL      := $(REPO_ROOT)/storage/match-report-images
+TRAINING_DIARY_DIR_LOCAL          := $(REPO_ROOT)/storage/training-diary
 VIDEO_STORAGE_DIR_LOCAL           := $(REPO_ROOT)/storage/videos
 EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
@@ -99,6 +101,20 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
 		grep -E '^(PORT|DB_PATH|JWT_SECRET|BASE_URL|SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_PASS|SMTP_FROM)=' .env | \
 		sed 's|DB_PATH=.*|DB_PATH=/var/lib/teamwerk/teamwerk.db|; s|BASE_URL=.*|BASE_URL=https://teamwerk.team-stuttgart.org|' | \
 		ssh $(REMOTE) "sudo mkdir -p /etc/teamwerk && sudo tee /etc/teamwerk/env > /dev/null && sudo chmod 600 /etc/teamwerk/env"
+	@# Storage-Verzeichnisse + zugehörige Env-Schlüssel idempotent sicherstellen.
+	@# Nötig, weil der Block oben /etc/teamwerk/env nur beim ERSTEN Deploy
+	@# schreibt: ein neuer Storage-Pfad fehlt auf Bestandsservern sonst dauerhaft.
+	@# Ohne Env-Eintrag greift der relative Default (./storage/... relativ zu
+	@# WorkingDirectory=/usr/local/bin) — dort darf www-data nicht schreiben, der
+	@# Prozess kommt nicht hoch und Nginx antwortet mit 502.
+	@for kv in "TRAINING_DIARY_DIR=$(TRAINING_DIARY_DIR_REMOTE)" "BEITRAGSLAUF_DIR=$(BEITRAGSLAUF_DIR_REMOTE)"; do \
+		key=$${kv%%=*}; dir=$${kv#*=}; \
+		ssh $(REMOTE) "sudo mkdir -p $$dir && sudo chown www-data:www-data $$dir && \
+			if ! sudo grep -q '^$$key=' /etc/teamwerk/env; then \
+				echo '$$kv' | sudo tee -a /etc/teamwerk/env > /dev/null; \
+				echo '  $$key in /etc/teamwerk/env ergänzt'; \
+			fi" || exit 1; \
+	done
 	ssh $(REMOTE) "sudo mkdir -p $(dir $(DB_PATH)) && \
 		if ! [ -f /etc/systemd/system/teamwerk.service ]; then \
 			sudo mv /tmp/teamwerk.service /etc/systemd/system/teamwerk.service && \
@@ -141,9 +157,9 @@ backup: ## Prod-DB + Tresor-Blobs (uploads: Profilfotos + SEPA-Mandat-PDFs) auf 
 	rsync -az $(REMOTE):$(UPLOAD_DIR_REMOTE)/ $(BACKUP_DIR)/uploads/
 	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
-backup-files: ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragslauf, Chat-Media, Match-Report-Bilder) → ./backup/<timestamp>/
+backup-files: ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragslauf, Chat-Media, Match-Report-Bilder, Trainingsnachweise) → ./backup/<timestamp>/
 	@echo "Synchronisiere Datei-Blobs → $(BACKUP_DIR)/"
-	@mkdir -p $(BACKUP_DIR)/files $(BACKUP_DIR)/beitragslauf-protokolle $(BACKUP_DIR)/media $(BACKUP_DIR)/match-report-images
+	@mkdir -p $(BACKUP_DIR)/files $(BACKUP_DIR)/beitragslauf-protokolle $(BACKUP_DIR)/media $(BACKUP_DIR)/match-report-images $(BACKUP_DIR)/training-diary
 	@# files-Ordner (Dokumente-UI) — auf Prod immer vorhanden.
 	rsync -az $(REMOTE):$(FILES_DIR_REMOTE)/ $(BACKUP_DIR)/files/
 	@# Optionale Ordner mit test -d gaten, damit noch nicht angelegte
@@ -163,6 +179,13 @@ backup-files: ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragsla
 		rsync -az $(REMOTE):$(MATCH_REPORT_IMAGE_DIR_REMOTE)/ $(BACKUP_DIR)/match-report-images/; \
 	else \
 		echo "  ($(MATCH_REPORT_IMAGE_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
+	fi
+	@# Trainingsnachweise: die Retention löscht sie 90 Tage nach Saisonende
+	@# unwiderruflich vom Server — ein Backup ist der einzige Rückweg.
+	@if ssh $(REMOTE) "test -d $(TRAINING_DIARY_DIR_REMOTE)"; then \
+		rsync -az $(REMOTE):$(TRAINING_DIARY_DIR_REMOTE)/ $(BACKUP_DIR)/training-diary/; \
+	else \
+		echo "  ($(TRAINING_DIARY_DIR_REMOTE) existiert noch nicht — übersprungen.)"; \
 	fi
 	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
@@ -197,12 +220,12 @@ restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKU
 		exit 1; \
 	fi
 
-restore-local-files: ## Letztes Backup (Dokumente + Protokolle + Chat-Media + Match-Report-Bilder) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
+restore-local-files: ## Letztes Backup (Dokumente + Protokolle + Chat-Media + Match-Report-Bilder + Trainingsnachweise) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
 	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
-	if [ -z "$$RESTORE" ] || { [ ! -d "$$RESTORE/files" ] && [ ! -d "$$RESTORE/beitragslauf-protokolle" ] && [ ! -d "$$RESTORE/media" ] && [ ! -d "$$RESTORE/match-report-images" ]; }; then \
+	if [ -z "$$RESTORE" ] || { [ ! -d "$$RESTORE/files" ] && [ ! -d "$$RESTORE/beitragslauf-protokolle" ] && [ ! -d "$$RESTORE/media" ] && [ ! -d "$$RESTORE/match-report-images" ] && [ ! -d "$$RESTORE/training-diary" ]; }; then \
 		echo "Fehler: kein Backup gefunden. Zuerst 'make backup-files' ausführen."; exit 1; \
 	fi; \
-	echo "WARNUNG: $(FILES_DIR_LOCAL), $(BEITRAGSLAUF_DIR_LOCAL), $(MEDIA_DIR_LOCAL) und $(MATCH_REPORT_IMAGE_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
+	echo "WARNUNG: $(FILES_DIR_LOCAL), $(BEITRAGSLAUF_DIR_LOCAL), $(MEDIA_DIR_LOCAL), $(MATCH_REPORT_IMAGE_DIR_LOCAL) und $(TRAINING_DIARY_DIR_LOCAL) werden mit Backup aus $$RESTORE überschrieben."; \
 	printf "Fortfahren? [y/N] "; \
 	read ans; \
 	if [ "$$ans" = "y" ]; then \
@@ -217,6 +240,9 @@ restore-local-files: ## Letztes Backup (Dokumente + Protokolle + Chat-Media + Ma
 		fi; \
 		if [ -d "$$RESTORE/match-report-images" ]; then \
 			mkdir -p $(MATCH_REPORT_IMAGE_DIR_LOCAL) && rsync -a --delete "$$RESTORE/match-report-images/" $(MATCH_REPORT_IMAGE_DIR_LOCAL)/; \
+		fi; \
+		if [ -d "$$RESTORE/training-diary" ]; then \
+			mkdir -p $(TRAINING_DIARY_DIR_LOCAL) && rsync -a --delete "$$RESTORE/training-diary/" $(TRAINING_DIARY_DIR_LOCAL)/; \
 		fi; \
 		echo "Restore abgeschlossen aus $$RESTORE."; \
 	else \
@@ -339,7 +365,7 @@ server-bootstrap: _check-remote _check-new-remote _check-base-url-new build ## S
 		| ssh $(NEW_REMOTE_RESOLVED) "sudo mkdir -p $(dir $(DB_PATH)) && sudo tee $(DB_PATH) > /dev/null && sudo rm -f $(DB_PATH)-wal $(DB_PATH)-shm"
 	ssh $(REMOTE) "sudo rm -f /tmp/teamwerk-migration.db"
 	@echo ">>> F) Storage-Ordner synchronisieren (Direkt-Rsync zwischen Remotes)"
-	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(MEDIA_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) $(MATCH_REPORT_IMAGE_DIR_REMOTE) $(VIDEO_STORAGE_DIR_REMOTE); do \
+	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(MEDIA_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) $(MATCH_REPORT_IMAGE_DIR_REMOTE) $(TRAINING_DIARY_DIR_REMOTE) $(VIDEO_STORAGE_DIR_REMOTE); do \
 		if ssh $(REMOTE) "sudo test -d $$d"; then \
 			echo "    rsync $$d"; \
 			ssh $(REMOTE) "sudo rsync -az -e 'ssh -o StrictHostKeyChecking=accept-new' $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \
@@ -389,7 +415,7 @@ server-sync-data: _check-remote _check-new-remote _check-base-url-new build ## S
 		| ssh $(NEW_REMOTE_RESOLVED) "sudo tee $(DB_PATH) > /dev/null && sudo rm -f $(DB_PATH)-wal $(DB_PATH)-shm"
 	ssh $(REMOTE) "sudo rm -f /tmp/teamwerk-migration.db"
 	@echo ">>> C) Storage-Ordner synchronisieren"
-	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(MEDIA_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) $(MATCH_REPORT_IMAGE_DIR_REMOTE) $(VIDEO_STORAGE_DIR_REMOTE); do \
+	@for d in $(UPLOAD_DIR_REMOTE) $(FILES_DIR_REMOTE) $(MEDIA_DIR_REMOTE) $(BEITRAGSLAUF_DIR_REMOTE) $(MATCH_REPORT_IMAGE_DIR_REMOTE) $(TRAINING_DIARY_DIR_REMOTE) $(VIDEO_STORAGE_DIR_REMOTE); do \
 		if ssh $(REMOTE) "sudo test -d $$d"; then \
 			echo "    rsync $$d"; \
 			ssh $(REMOTE) "sudo rsync -az --delete -e 'ssh -o StrictHostKeyChecking=accept-new' $$d/ $(NEW_REMOTE_RESOLVED):$$d/" \

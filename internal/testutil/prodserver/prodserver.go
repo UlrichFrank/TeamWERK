@@ -48,6 +48,11 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 	m := mailer.New(appconfig.SMTPConfig{}, "http://localhost", true)
 	// SettingsStore ohne Poll-Loop (Tests stoßen den Poll bei Bedarf selbst an).
 	settingsStore := settings.NewStoreForTest(database, 0)
+	// t.TempDir() ist immer anlegbar — ein Fehler wäre ein kaputtes Test-Setup.
+	diaryHandler, err := trainingdiary.NewHandler(database, hubInstance, t.TempDir())
+	if err != nil {
+		t.Fatalf("trainingdiary.NewHandler: %v", err)
+	}
 	return &app.Handlers{
 		Auth:           auth.NewHandler(database, cfg, testutil.TestJWTSecret, m, "http://localhost", hubInstance),
 		Config:         appconfig.NewHandler(database, hubInstance),
@@ -65,7 +70,7 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Training:       trainings.NewHandler(database, cfg, hubInstance),
 		Absences:       absences.NewHandler(database, hubInstance),
 		Attendance:     attendance.NewHandler(database, hubInstance),
-		TrainingDiary:  trainingdiary.NewHandler(database, hubInstance, t.TempDir()),
+		TrainingDiary:  diaryHandler,
 		Teams:          teams.NewHandler(database, hubInstance),
 		Venues:         venues.NewHandler(database, hubInstance),
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),

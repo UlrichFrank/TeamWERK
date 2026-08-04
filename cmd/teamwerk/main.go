@@ -261,6 +261,16 @@ func serve() {
 		}
 	}()
 
+	// Nachweis-Verzeichnis des Trainingstagebuchs. Ein Fehler ist bewusst NICHT
+	// fatal: das Tagebuch ist ein Nebenfeature, und ein nicht anlegbares
+	// Verzeichnis (z.B. fehlendes TRAINING_DIARY_DIR → relativer Default unter
+	// WorkingDirectory=/usr/local/bin) darf nicht die ganze App am Start
+	// hindern. Die Routen bleiben gemountet; Uploads antworten dann mit 500.
+	diaryHandler, err := trainingdiary.NewHandler(database, hubInstance, cfg.TrainingDiaryDir)
+	if err != nil {
+		slog.Error("training diary storage unavailable — Uploads werden fehlschlagen", "error", err)
+	}
+
 	handlers := &app.Handlers{
 		Auth:                auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
 		Config:              appconfig.NewHandler(database, hubInstance),
@@ -279,7 +289,7 @@ func serve() {
 		Training:            trainings.NewHandler(database, cfg, hubInstance),
 		Absences:            absences.NewHandler(database, hubInstance),
 		Attendance:          attendance.NewHandler(database, hubInstance),
-		TrainingDiary:       trainingdiary.NewHandler(database, hubInstance, cfg.TrainingDiaryDir),
+		TrainingDiary:       diaryHandler,
 		Teams:               teams.NewHandler(database, hubInstance),
 		Venues:              venues.NewHandler(database, hubInstance),
 		Beitragssaetze:      beitragssaetze.NewHandler(database, hubInstance),

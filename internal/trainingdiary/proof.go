@@ -88,6 +88,15 @@ func (h *Handler) UploadProof(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verzeichnis vor jedem Schreiben sicherstellen: NewHandler toleriert einen
+	// Fehlschlag beim Start (siehe dort), damit ein falsch konfigurierter Pfad
+	// nicht die ganze App abschießt. Ein nachträglich korrigierter Pfad greift
+	// damit ohne Neustart — und ein von außen gelöschtes Verzeichnis heilt.
+	if err := os.MkdirAll(h.dir, 0755); err != nil {
+		http.Error(w, "storage error", http.StatusInternalServerError)
+		return
+	}
+
 	diskName := uuid.New().String() + ext
 	dst := filepath.Join(h.dir, diskName)
 	if err := os.WriteFile(dst, data, 0644); err != nil {

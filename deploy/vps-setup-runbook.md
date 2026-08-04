@@ -208,6 +208,12 @@ Schreiben mit HTTP 500 fehl):
 - `MEDIA_DIR=/var/lib/teamwerk/media`
 - `MATCH_REPORT_IMAGE_DIR=/var/lib/teamwerk/match-report-images`
 - `BEITRAGSLAUF_DIR=/var/lib/teamwerk/beitragslauf-protokolle`
+- `TRAINING_DIARY_DIR=/var/lib/teamwerk/training-diary`
+
+`make deploy` legt die letzten beiden Verzeichnisse zusätzlich bei jedem Lauf an
+und ergänzt einen fehlenden Env-Schlüssel — nötig, weil der Env-Block oben nur
+beim **ersten** Deploy geschrieben wird und ein neu hinzugekommener Storage-Pfad
+auf Bestandsservern sonst dauerhaft fehlt.
 
 ---
 

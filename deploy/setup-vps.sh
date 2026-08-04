@@ -18,7 +18,7 @@ apt-get install -y nginx openssl curl ca-certificates gnupg logrotate ffmpeg cro
 # ---------------------------------------------------------------------------
 # 2. Verzeichnisse
 # ---------------------------------------------------------------------------
-mkdir -p /var/lib/teamwerk/{uploads,files,media,match-report-images,beitragslauf-protokolle}
+mkdir -p /var/lib/teamwerk/{uploads,files,media,match-report-images,beitragslauf-protokolle,training-diary}
 chown -R www-data:www-data /var/lib/teamwerk
 
 # Spielvideo-Ablage (separater Storage, vor produktiver Nutzung manuell
@@ -44,6 +44,10 @@ FILES_DIR=/var/lib/teamwerk/files
 MEDIA_DIR=/var/lib/teamwerk/media
 MATCH_REPORT_IMAGE_DIR=/var/lib/teamwerk/match-report-images
 BEITRAGSLAUF_DIR=/var/lib/teamwerk/beitragslauf-protokolle
+# Trainingsnachweise. Muss absolut gesetzt sein: der relative Default
+# (./storage/training-diary) liegt unter WorkingDirectory=/usr/local/bin und ist
+# für www-data nicht anlegbar — der Prozess käme nicht hoch.
+TRAINING_DIARY_DIR=/var/lib/teamwerk/training-diary
 JWT_SECRET=$JWT_SECRET
 SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587

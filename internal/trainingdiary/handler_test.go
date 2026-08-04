@@ -27,7 +27,10 @@ import (
 func newDiaryServer(t *testing.T, db *sql.DB) (*httptest.Server, string) {
 	t.Helper()
 	dir := t.TempDir()
-	h := trainingdiary.NewHandler(db, hub.NewHub(), dir)
+	h, err := trainingdiary.NewHandler(db, hub.NewHub(), dir)
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
 	srv := testutil.NewServer(t, func(r chi.Router) {
 		r.Get("/api/training-diary", h.ListOwn)
 		r.Post("/api/training-diary", h.CreateEntry)
@@ -776,6 +779,51 @@ func TestUploadProof_Success(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, diskName)); err != nil {
 		t.Errorf("Datei fehlt auf der Platte: %v", err)
+	}
+}
+
+// Regression: ein nicht anlegbares Nachweis-Verzeichnis darf den Prozess NICHT
+// abschießen. Vorher panikte NewHandler, wodurch die komplette App nicht mehr
+// startete (Nginx: 502 auf jedem Request, auch /login).
+func TestNewHandler_UnusableDirIsNotFatal(t *testing.T) {
+	db := testutil.NewDB(t)
+	// Ein Datei-Pfad als "Verzeichnis" — MkdirAll scheitert reproduzierbar,
+	// ohne von Datei-Rechten oder dem Test-User abzuhängen.
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := trainingdiary.NewHandler(db, hub.NewHub(), filepath.Join(blocker, "proofs"))
+	if err == nil {
+		t.Fatal("NewHandler = nil error, want Fehler bei unbenutzbarem Verzeichnis")
+	}
+	if h == nil {
+		t.Fatal("NewHandler = nil handler; die Routen müssen montierbar bleiben")
+	}
+}
+
+// Ein zur Laufzeit verschwundenes (oder nachträglich korrigiertes) Verzeichnis
+// heilt beim nächsten Upload — kein Neustart nötig.
+func TestUploadProof_RecreatesMissingDir(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "25/26")
+	srv, dir := newDiaryServer(t, db)
+	_, memberID, token := player(t, db)
+	id := testutil.CreateTrainingDiaryEntry(t, db, memberID, seasonID, "2026-05-01", 30, 5)
+
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := uploadProof(t, srv, id, token, "a.jpg", jpegBytes(100))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("Verzeichnis nicht neu angelegt: err=%v entries=%v", err, entries)
 	}
 }
 

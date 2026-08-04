@@ -48,14 +48,23 @@ type Handler struct {
 	dir string
 }
 
-// NewHandler bindet DB, Event-Hub und das Verzeichnis der Nachweis-Dateien.
-// Das Verzeichnis wird wie bei media.NewHandler beim Start angelegt — schlägt
-// das fehl, ist die Installation kaputt und der Prozess soll nicht starten.
-func NewHandler(db *sql.DB, h *hub.EventHub, dir string) *Handler {
+// NewHandler bindet DB, Event-Hub und das Verzeichnis der Nachweis-Dateien und
+// legt das Verzeichnis an.
+//
+// Ein Fehler wird zurückgegeben, nicht fatal behandelt: das Trainingstagebuch
+// ist ein Nebenfeature und darf die gesamte Anwendung nicht am Start hindern
+// (ein nicht anlegbares Verzeichnis ließ früher den Prozess paniken → Nginx
+// antwortete auf JEDEN Request mit 502, inklusive Login). Der Handler ist auch
+// im Fehlerfall benutzbar: Lesen funktioniert, nur Uploads scheitern mit 500 —
+// und UploadProof versucht das Verzeichnis erneut anzulegen, sodass ein
+// nachträglich korrigierter Pfad ohne Neustart wieder funktioniert.
+// Bewusst anders als beim Video-Upload, der ohne Speicher hart abbricht.
+func NewHandler(db *sql.DB, h *hub.EventHub, dir string) (*Handler, error) {
+	handler := &Handler{db: db, hub: h, dir: dir}
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		panic(fmt.Sprintf("trainingdiary: cannot create storage dir %s: %v", dir, err))
+		return handler, fmt.Errorf("trainingdiary: cannot create storage dir %s: %w", dir, err)
 	}
-	return &Handler{db: db, hub: h, dir: dir}
+	return handler, nil
 }
 
 // entry ist die API-Repräsentation eines Tagebuch-Eintrags.
