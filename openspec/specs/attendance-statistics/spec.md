@@ -9,19 +9,24 @@ Die Statistik SHALL für jede Kombination aus Termin (Trainings-Session oder Spi
 
 - **ANWESEND** wenn `attendance.present = 1` UND die Session/das Spiel hat `attendance_tracked = 1`
 - **FEHLT** wenn `attendance.present = 0` UND die Session/das Spiel hat `attendance_tracked = 1`
-- **ENTSCHULDIGT** wenn keine wirksame `attendance`-Row existiert (entweder keine Row oder `attendance_tracked = 0`) UND `response.status = 'declined'` UND `response.absence_id IS NOT NULL`
+- **ENTSCHULDIGT** wenn keine wirksame `attendance`-Row existiert (entweder keine Row oder `attendance_tracked = 0`) UND `response.status = 'declined'` — **unabhängig davon, ob `response.absence_id` gesetzt ist**. Jede Absage (automatisch durch eine erfasste Abwesenheit oder manuell durch das Mitglied selbst) zählt gleichermaßen als entschuldigt.
 - **IGNORIERT** in allen anderen Fällen
 
 Für Sessions/Spiele mit `attendance_tracked = 0` SHALL das System vorhandene `attendance`-Rows behandeln, als existierten sie nicht. Cancelled Trainings (`training_sessions.status='cancelled'`) SHALL aus der Bezugsmenge entfernt werden. Spiele haben in TeamWERK keinen Cancellation-Status — abgesagte Spiele werden komplett gelöscht und tauchen folglich nicht mehr in der Bezugsmenge auf.
 
 #### Scenario: Anwesenheit dominiert auto-decline
 
-- **WHEN** ein Mitglied für eine Trainings-Session sowohl `attendance.present = 1` als auch eine `response`-Zeile mit `status='declined'` und gesetzter `absence_id` hat und die Session `attendance_tracked=1` hat
+- **WHEN** ein Mitglied für eine Trainings-Session sowohl `attendance.present = 1` als auch eine `response`-Zeile mit `status='declined'` (unabhängig davon, ob `absence_id` gesetzt ist) hat und die Session `attendance_tracked=1` hat
 - **THEN** wird das Mitglied als ANWESEND gezählt (nicht als ENTSCHULDIGT)
+
+#### Scenario: Manuelle Absage ohne hinterlegte Abwesenheit zählt als entschuldigt
+
+- **WHEN** ein Mitglied für einen vergangenen Termin `status='declined'` hat, ohne dass eine Abwesenheit hinterlegt ist (`response.absence_id IS NULL`), und keine wirksame `attendance`-Row existiert
+- **THEN** wird der Termin für dieses Mitglied als ENTSCHULDIGT gezählt
 
 #### Scenario: Datenloch wird ignoriert
 
-- **WHEN** ein vergangener Termin keine `attendance`-Row und keine `declined`-Response mit `absence_id` hat
+- **WHEN** ein vergangener Termin für ein Mitglied weder eine wirksame `attendance`-Row noch eine `declined`-Response hat (z.B. keine Rückmeldung oder `confirmed`/`maybe` ohne Erfassung)
 - **THEN** zählt der Termin für dieses Mitglied in keiner der drei Säulen
 
 #### Scenario: Cancelled Training nicht gezählt
@@ -36,7 +41,7 @@ Für Sessions/Spiele mit `attendance_tracked = 0` SHALL das System vorhandene `a
 
 #### Scenario: attendance_tracked=0 lässt entschuldigte Absage zählen
 
-- **WHEN** eine Trainings-Session `attendance_tracked=0` hat, gleichzeitig aber eine `declined`-Response mit gesetzter `absence_id` für Mitglied M existiert
+- **WHEN** eine Trainings-Session `attendance_tracked=0` hat, gleichzeitig aber eine `declined`-Response (mit oder ohne `absence_id`) für Mitglied M existiert
 - **THEN** wird der Termin für M als ENTSCHULDIGT gezählt (die Row wird durch den Filter unsichtbar, die Response bleibt maßgeblich)
 
 ### Requirement: Team-Aggregat-Statistik
@@ -204,7 +209,7 @@ Beide Sichten SHALL auf SSE-Event `attendance-changed` neu laden.
 
 ### Requirement: Serien-Abmeldung schließt Session×Mitglied aus der Bezugsmenge aus
 
-Zusätzlich zur Drei-Säulen-Klassifikation SHALL das System eine Trainings-Session für ein Mitglied vollständig aus present/missed/excused (und damit aus dem Nenner) ausschließen, wenn für dieses Mitglied und die Serie der Session eine greifende Serien-Abmeldung (`serien-abmeldung`-Ableitung) existiert. Der Ausschluss SHALL Vorrang vor der Kategorie ENTSCHULDIGT haben: liegt gleichzeitig eine `declined`-Response mit `absence_id` vor, dominiert der Ausschluss. In der Mitglieds-Detail-Termin-Liste (`GET /api/members/{id}/attendance-stats`) SHALL eine solche Session mit der Kategorie `unavailable` (nullable `reason`) erscheinen und in keiner Zähler-Spalte auftauchen.
+Zusätzlich zur Drei-Säulen-Klassifikation SHALL das System eine Trainings-Session für ein Mitglied vollständig aus present/missed/excused (und damit aus dem Nenner) ausschließen, wenn für dieses Mitglied und die Serie der Session eine greifende Serien-Abmeldung (`serien-abmeldung`-Ableitung) existiert. Der Ausschluss SHALL Vorrang vor der Kategorie ENTSCHULDIGT haben: liegt gleichzeitig eine `declined`-Response vor (unabhängig davon, ob `absence_id` gesetzt ist), dominiert der Ausschluss. In der Mitglieds-Detail-Termin-Liste (`GET /api/members/{id}/attendance-stats`) SHALL eine solche Session mit der Kategorie `unavailable` (nullable `reason`) erscheinen und in keiner Zähler-Spalte auftauchen. Die Kategorie `unavailable` bleibt eigenständig und wird nicht mit `excused`/ENTSCHULDIGT zusammengelegt — „dauerhaft abmelden" durch einen Trainer ist fachlich von einer individuellen Absage zu unterscheiden.
 
 #### Scenario: Abgemeldete Session zählt in keiner Säule
 
@@ -213,7 +218,7 @@ Zusätzlich zur Drei-Säulen-Klassifikation SHALL das System eine Trainings-Sess
 
 #### Scenario: Ausschluss dominiert eine parallele entschuldigte Absage
 
-- **WHEN** für dieselbe Session sowohl eine greifende Serien-Abmeldung als auch eine `declined`-Response mit gesetzter `absence_id` existiert
+- **WHEN** für dieselbe Session sowohl eine greifende Serien-Abmeldung als auch eine `declined`-Response (mit oder ohne `absence_id`) existiert
 - **THEN** wird die Session ausgeschlossen (nicht als `training_excused` gezählt)
 
 #### Scenario: Detail-Liste kennzeichnet die Session als unavailable
