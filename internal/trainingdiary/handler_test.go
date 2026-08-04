@@ -956,6 +956,32 @@ func TestServeProof_TrainerOfKader(t *testing.T) {
 	}
 }
 
+// Eltern sehen den Nachweis ihres Kindes — der Fall hinter der Kind-Profilseite
+// (/profil/kind/{id}, Tab „Trainingstagebuch"). Nicht nur die Metadaten aus
+// GetMemberDiary, sondern die Datei selbst.
+func TestServeProof_Parent(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "25/26")
+	srv, _ := newDiaryServer(t, db)
+	_, childMember, childToken := player(t, db)
+	id := testutil.CreateTrainingDiaryEntry(t, db, childMember, seasonID, "2026-05-01", 30, 5)
+	up := uploadProof(t, srv, id, childToken, "a.jpg", jpegBytes(100))
+	up.Body.Close()
+
+	parentUser := testutil.CreateUser(t, db, "standard")
+	testutil.AddFamilyLink(t, db, parentUser, childMember)
+	parentToken := testutil.TokenWithIsParent(t, parentUser, "standard", nil, true)
+
+	resp := testutil.Do(t, srv, http.MethodGet, fmt.Sprintf("/api/training-diary/%d/proof", id), parentToken, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/jpeg" {
+		t.Errorf("Content-Type = %q, want image/jpeg", ct)
+	}
+}
+
 // Kern-Invariante auf dem Datei-Pfad: Mannschaftskameraden sehen den Nachweis nicht.
 func TestServeProof_OtherPlayer(t *testing.T) {
 	db := testutil.NewDB(t)

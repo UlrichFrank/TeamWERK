@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight, FileText, ImageOff, Info } from 'lucide-react'
+import { ChevronDown, ChevronRight, ImageOff, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import AuthImage from '../components/AuthImage'
+import TrainingDiaryProofView from './TrainingDiaryProofView'
 import {
   fmtDate,
-  isImageMime,
   kindLabel,
   type DiaryEntry,
   type DiaryTeamStats,
@@ -33,19 +32,12 @@ function ProofCell({ entry }: { entry: DiaryEntry }) {
   if (entry.proof_status === 'none') {
     return <span className="text-xs text-brand-text-subtle">—</span>
   }
-  if (isImageMime(entry.proof_mime)) {
-    return (
-      <AuthImage
-        url={`/training-diary/${entry.id}/proof`}
-        alt="Trainingsnachweis"
-        className="max-h-24 rounded border border-brand-border-subtle"
-      />
-    )
-  }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-brand-text">
-      <FileText className="w-4 h-4" /> Datei
-    </span>
+    <TrainingDiaryProofView
+      entry={entry}
+      thumbClassName="max-h-24 rounded border border-brand-border-subtle"
+      fileLabel="Datei"
+    />
   )
 }
 

@@ -70,6 +70,20 @@ describe('ProfilTrainingstagebuchPage', () => {
     expect(authImageRendered).toHaveBeenCalledWith('/training-diary/1/proof')
   })
 
+  // Eltern-/Kind-Sicht auf /profil/kind/{id}: lesen und vergrößern ja, ändern nein.
+  test('Fremdsicht kann den Nachweis öffnen, aber nicht entfernen', async () => {
+    get.mockResolvedValue({
+      data: { items: [entry({ proof_status: 'present', proof_mime: 'image/webp' })] },
+    })
+
+    render(<ProfilTrainingstagebuchContent forcedMemberId={4} />)
+
+    expect(await screen.findByLabelText('Nachweis vergrößern')).toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('/members/4/training-diary')
+    expect(screen.queryByText('Nachweis entfernen')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Nachweis nachreichen')).not.toBeInTheDocument()
+  })
+
   test('bietet bei fehlendem Nachweis das Nachreichen an', async () => {
     get.mockResolvedValue({ data: { items: [entry({ proof_status: 'none' })] } })
 

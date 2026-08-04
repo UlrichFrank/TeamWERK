@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, FileText, ImageOff } from 'lucide-react'
+import { Plus, ImageOff } from 'lucide-react'
 import { api } from '../lib/api'
-import AuthImage from '../components/AuthImage'
 import ActionMenu from '../components/ActionMenu'
 import TrainingDiaryEntryForm, { type DiarySubmitPayload } from '../components/TrainingDiaryEntryForm'
+import TrainingDiaryProofView from '../components/TrainingDiaryProofView'
 import { deleteProof, uploadProof } from '../lib/trainingDiaryProof'
 import {
   RETENTION_HINT,
   fmtDate,
-  isImageMime,
   kindLabel,
   type DiaryEntry,
 } from '../lib/trainingDiary'
@@ -37,23 +36,15 @@ function ProofBlock({
 
   return (
     <div className="mt-2">
-      {isImageMime(entry.proof_mime) ? (
-        <AuthImage
-          url={`/training-diary/${entry.id}/proof`}
-          alt="Trainingsnachweis"
-          className="max-h-48 rounded-md border border-brand-border-subtle"
-        />
-      ) : (
-        <span className="inline-flex items-center gap-1 text-sm text-brand-text">
-          <FileText className="w-4 h-4" />
-          Nachweis hinterlegt
-        </span>
-      )}
+      <TrainingDiaryProofView
+        entry={entry}
+        thumbClassName="max-h-48 rounded-md border border-brand-border-subtle"
+      />
       {!readOnly && (
         <button
           type="button"
           onClick={onDelete}
-          className="ml-2 text-xs text-brand-danger hover:underline"
+          className="mt-1 block text-xs text-brand-danger hover:underline"
         >
           Nachweis entfernen
         </button>

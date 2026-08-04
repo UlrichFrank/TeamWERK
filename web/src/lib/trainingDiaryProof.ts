@@ -1,6 +1,7 @@
 import { api } from './api'
 import { compressImage } from './imageCompress'
-import { PROOF_MAX_EDGE, PROOF_TARGET_BYTES, type DiaryEntry } from './trainingDiary'
+import { openBlobNatively } from './openFileNatively'
+import { fmtDate, PROOF_MAX_EDGE, PROOF_TARGET_BYTES, type DiaryEntry } from './trainingDiary'
 
 // Bilder werden vor dem Upload clientseitig verkleinert — deutlich enger als
 // im Chat, weil ein Nachweis nur lesbar sein muss. Nicht-Bilder (PDF) gehen
@@ -30,4 +31,30 @@ export async function uploadProof(entryId: number, file: File): Promise<DiaryEnt
 
 export async function deleteProof(entryId: number): Promise<void> {
   await api.delete(`/training-diary/${entryId}/proof`)
+}
+
+// Endungen der Server-Whitelist (trainingdiary.extByMime). Ein unbekannter Typ
+// kann nur aus einer künftigen Whitelist-Erweiterung stammen — dann lieber ohne
+// Endung speichern als mit einer falschen.
+const PROOF_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+}
+
+// Lädt den Nachweis über axios (Bearer + Auto-Refresh) und übergibt ihn dem
+// nativen Viewer/Download des Geräts. Nötig für PDFs — die kann das Frontend
+// nicht inline zeigen — und als Zoom-Ausweg für Bilder auf Mobilgeräten.
+// Der Dateiname trägt das Trainingsdatum, damit mehrere Nachweise im
+// Download-Ordner unterscheidbar bleiben.
+export async function downloadProof(
+  entry: Pick<DiaryEntry, 'id' | 'trained_on' | 'proof_mime'>,
+): Promise<void> {
+  const res = await api.get<Blob>(`/training-diary/${entry.id}/proof`, {
+    responseType: 'blob',
+  })
+  const ext = PROOF_EXT[entry.proof_mime ?? '']
+  const stamp = fmtDate(entry.trained_on).replace(/\./g, '-')
+  openBlobNatively(res.data, `trainingsnachweis-${stamp}${ext ? `.${ext}` : ''}`)
 }
