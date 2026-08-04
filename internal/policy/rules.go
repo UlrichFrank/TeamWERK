@@ -262,6 +262,15 @@ func NavFor(p *Principal) []NavItem {
 	// Anwesenheits-Statistik nur für Trainer / sportliche Leitung / Admin.
 	if IsTrainerLike(p) {
 		nav = append(nav, NavItem{"Anwesenheit", "/anwesenheit"})
+		// Mannschaftsübersicht des Trainingstagebuchs — dieselbe Zielgruppe
+		// wie die Anwesenheitsstatistik.
+		nav = append(nav, NavItem{"Trainingstagebuch", "/trainingstagebuch"})
+	}
+	// Eigenes Trainingstagebuch: für jeden mit eigenem Mitglieds-Datensatz.
+	// Reine Eltern- oder Admin-Accounts ohne Mitglied können nichts erfassen
+	// (der Endpoint antwortet 403) — für sie bleibt der Eintrag verborgen.
+	if p.HasMember {
+		nav = append(nav, NavItem{"Mein Trainingstagebuch", "/profil/trainingstagebuch"})
 	}
 
 	// Verein — visible to all

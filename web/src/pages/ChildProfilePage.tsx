@@ -10,6 +10,7 @@ import ProfileKalenderTab from '../components/profile/ProfileKalenderTab'
 import ProfileMiscTab from '../components/profile/ProfileMiscTab'
 import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
+import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 import { Member, Parent, Phone } from './ProfilePage'
 
 export interface UserContact {
@@ -30,13 +31,14 @@ export interface UserContact {
   }
 }
 
-type TabName = 'profile' | 'member' | 'banking' | 'anwesenheit' | 'kalender' | 'datenschutz' | 'misc'
+type TabName = 'profile' | 'member' | 'banking' | 'anwesenheit' | 'tagebuch' | 'kalender' | 'datenschutz' | 'misc'
 
 const labels: Record<TabName, string> = {
   profile: 'Kontakt',
   member: 'Mitgliedsdaten',
   banking: 'Bankdaten',
   anwesenheit: 'Anwesenheit',
+  tagebuch: 'Trainingstagebuch',
   kalender: 'Kalender-Abo',
   datenschutz: 'Datenschutz',
   misc: 'Sonstiges',
@@ -98,7 +100,7 @@ export default function ChildProfilePage() {
     'profile',
     'member',
     'banking',
-    ...(isPlayer ? (['anwesenheit'] as TabName[]) : []),
+    ...(isPlayer ? (['anwesenheit', 'tagebuch'] as TabName[]) : []),
     'kalender',
     'datenschutz',
     'misc',
@@ -182,6 +184,11 @@ export default function ChildProfilePage() {
       )}
       {isPlayer && activeTab === 'anwesenheit' && (
         <ProfilAnwesenheitContent forcedMemberId={member.id} />
+      )}
+      {/* Eltern lesen das Tagebuch ihres Kindes, dürfen es aber nicht
+          befüllen — die Erfassung ist die Selbstauskunft des Spielers. */}
+      {isPlayer && activeTab === 'tagebuch' && (
+        <ProfilTrainingstagebuchContent forcedMemberId={member.id} />
       )}
       {activeTab === 'kalender' && (
         <ProfileKalenderTab apiPath={`/profile/kind/${memberId}/calendar-token`} />
