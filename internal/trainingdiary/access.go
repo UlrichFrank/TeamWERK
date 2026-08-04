@@ -16,6 +16,15 @@ import (
 // Bewusst NICHT enthalten: `vorstand` und `kassierer`. Das Tagebuch ist
 // persönlich; Vereinsverwaltung begründet keinen Lesezugriff.
 
+// isPlayer prüft die Vereinsfunktion `spieler`. Bewusst OHNE Admin-Bypass: es
+// geht um das persönliche Tagebuch des Aufrufers, nicht um ein Verwaltungsrecht
+// — ein Admin ohne Spieler-Funktion trainiert nicht und erfasst auch nichts.
+// Trainer, Vorstand, Kassierer und Elternteile mit eigenem Mitglieds-Datensatz
+// fallen damit ebenfalls heraus (Gegenstück zur Nav-Regel in policy.NavFor).
+func isPlayer(claims *auth.Claims) bool {
+	return claims != nil && claims.HasFunction("spieler")
+}
+
 // resolveOwnMember liefert die member_id des aufrufenden Nutzers. Nutzer ohne
 // Mitglieds-Datensatz (z. B. reine Elternkonten) können nichts erfassen.
 func (h *Handler) resolveOwnMember(ctx context.Context, claims *auth.Claims) (int, error) {

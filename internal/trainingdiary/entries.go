@@ -100,6 +100,14 @@ func (h *Handler) respondEntries(w http.ResponseWriter, r *http.Request, memberI
 // ignoriert (das Feld existiert im Request-Struct gar nicht erst).
 func (h *Handler) CreateEntry(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
+	// Neuanlage nur für Spieler. Bestandseinträge bleiben für den Eigentümer
+	// lesbar und pflegbar (ListOwn/PUT/DELETE) — wer die Spieler-Funktion
+	// verliert, soll seine Historie nicht verlieren, aber auch nichts Neues
+	// mehr erfassen.
+	if !isPlayer(claims) {
+		http.Error(w, "Trainingstagebuch nur für Spieler", http.StatusForbidden)
+		return
+	}
 	memberID, err := h.resolveOwnMember(r.Context(), claims)
 	if err == sql.ErrNoRows {
 		http.Error(w, "kein Mitglied für diesen Nutzer", http.StatusForbidden)

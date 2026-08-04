@@ -167,6 +167,10 @@ var exMemberDraftAccess = map[string]int{
 // hat ein verknüpftes Mitglied, daher wird jede von ihnen geblockt — auch
 // admin. Das ist die Aussage: das Trainingstagebuch ist persönlich, keine
 // Vereinsfunktion verschafft Zugang zu einem fremden.
+// Die Neuanlage (POST) verlangt zusätzlich die Vereinsfunktion `spieler`
+// (trainingdiary.isPlayer) — für alle Personas ohne Mitglied bleibt es 403,
+// der Fall „Mitglied ohne Spieler-Funktion" steckt in
+// trainingdiary.TestCreateEntry_NonPlayerForbidden.
 var exDiaryOwnMember = map[string]int{
 	"admin": 403, "vorstand": 403, "vorstand_elternteil": 403,
 	"vorstand_beisitzer": 403, "kassierer": 403,

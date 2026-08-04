@@ -105,7 +105,9 @@ export default function App() {
               <Route path="profil/kind/:memberId" element={<ChildProfilePage />} />
               <Route path="anwesenheit" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamAnwesenheitPage /></RoleRoute>} />
               <Route path="team/:id/anwesenheit" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamAnwesenheitPage /></RoleRoute>} />
-              <Route path="profil/trainingstagebuch" element={<ProfilTrainingstagebuchPage />} />
+              {/* Eigenes Tagebuch: nur Spieler. Eltern erreichen die Tagebücher
+                  ihrer Kinder über den Tab auf der Kind-Profilseite. */}
+              <Route path="profil/trainingstagebuch" element={<RoleRoute roles={['spieler']}><ProfilTrainingstagebuchPage /></RoleRoute>} />
               <Route path="trainingstagebuch" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamTrainingstagebuchPage /></RoleRoute>} />
               <Route path="team/:id/trainingstagebuch" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamTrainingstagebuchPage /></RoleRoute>} />
               <Route path="dokumente" element={<DocumentsPage />} />

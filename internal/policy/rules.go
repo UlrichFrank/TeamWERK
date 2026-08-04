@@ -266,10 +266,14 @@ func NavFor(p *Principal) []NavItem {
 		// wie die Anwesenheitsstatistik.
 		nav = append(nav, NavItem{"Trainingstagebuch", "/trainingstagebuch"})
 	}
-	// Eigenes Trainingstagebuch: für jeden mit eigenem Mitglieds-Datensatz.
-	// Reine Eltern- oder Admin-Accounts ohne Mitglied können nichts erfassen
-	// (der Endpoint antwortet 403) — für sie bleibt der Eintrag verborgen.
-	if p.HasMember {
+	// Eigenes Trainingstagebuch: ausschließlich für Spieler. Ein Mitglieds-
+	// Datensatz allein genügt nicht — Trainer, Vorstand, Kassierer und
+	// Elternteile mit eigenem Mitglied trainieren nicht als Spieler und führen
+	// deshalb kein eigenes Tagebuch. Das Tagebuch der Kinder erreichen Eltern
+	// über den Tab auf der Kind-Profilseite, nicht über diesen Eintrag.
+	// Spiegelt die Tab-Sichtbarkeit im Frontend (hasPlayerFunction) und das
+	// Schreibrecht in trainingdiary.CreateEntry.
+	if p.hasFunction("spieler") {
 		nav = append(nav, NavItem{"Mein Trainingstagebuch", "/profil/trainingstagebuch"})
 	}
 

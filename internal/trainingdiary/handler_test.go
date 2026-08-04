@@ -42,12 +42,15 @@ func newDiaryServer(t *testing.T, db *sql.DB) (*httptest.Server, string) {
 	return srv, dir
 }
 
-// player legt einen Standard-Nutzer mit Mitglied an und liefert beides plus Token.
+// player legt einen Standard-Nutzer mit Mitglied und Vereinsfunktion `spieler`
+// an und liefert beides plus Token. Die Funktion ist Voraussetzung für die
+// Neuanlage von Einträgen (siehe TestCreateEntry_NonPlayerForbidden).
 func player(t *testing.T, db *sql.DB) (userID, memberID int, token string) {
 	t.Helper()
 	userID = testutil.CreateUser(t, db, "standard")
 	memberID = testutil.CreateMember(t, db, userID)
-	return userID, memberID, testutil.Token(t, userID, "standard", nil)
+	testutil.AddClubFunction(t, db, memberID, "spieler")
+	return userID, memberID, testutil.Token(t, userID, "standard", []string{"spieler"})
 }
 
 // trainerOf macht einen neuen Nutzer zum Trainer des übergebenen Kaders.
@@ -259,7 +262,33 @@ func TestCreateEntry_NoMemberForUser(t *testing.T) {
 	testutil.CreateSeason(t, db, "25/26")
 	srv, _ := newDiaryServer(t, db)
 	userID := testutil.CreateUser(t, db, "standard") // bewusst ohne Mitglied
-	token := testutil.Token(t, userID, "standard", nil)
+	// Spieler-Funktion im Token, aber kein Mitglieds-Datensatz — prüft gezielt
+	// den resolveOwnMember-Pfad und nicht die vorgelagerte Spieler-Prüfung.
+	token := testutil.Token(t, userID, "standard", []string{"spieler"})
+
+	resp := testutil.Do(t, srv, http.MethodPost, "/api/training-diary", token, validBody())
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM training_diary_entries`).Scan(&n)
+	if n != 0 {
+		t.Errorf("Einträge = %d, want 0", n)
+	}
+}
+
+// Ein Mitglieds-Datensatz allein berechtigt nicht zur Erfassung: das Tagebuch
+// gehört Spielern. Trainer, Vorstand und Eltern mit eigenem Mitglied bekommen
+// 403 — sonst wäre die versteckte Nav-Zeile bloße Kosmetik.
+func TestCreateEntry_NonPlayerForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "25/26")
+	srv, _ := newDiaryServer(t, db)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	testutil.AddClubFunction(t, db, memberID, "trainer")
+	token := testutil.Token(t, userID, "standard", []string{"trainer"})
 
 	resp := testutil.Do(t, srv, http.MethodPost, "/api/training-diary", token, validBody())
 	defer resp.Body.Close()
