@@ -34,6 +34,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
+	"github.com/teamstuttgart/teamwerk/internal/trainingdiary"
 	"github.com/teamstuttgart/teamwerk/internal/trainings"
 	"github.com/teamstuttgart/teamwerk/internal/upload"
 	"github.com/teamstuttgart/teamwerk/internal/venues"
@@ -64,6 +65,7 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Training:       trainings.NewHandler(database, cfg, hubInstance),
 		Absences:       absences.NewHandler(database, hubInstance),
 		Attendance:     attendance.NewHandler(database, hubInstance),
+		TrainingDiary:  trainingdiary.NewHandler(database, hubInstance, t.TempDir()),
 		Teams:          teams.NewHandler(database, hubInstance),
 		Venues:         venues.NewHandler(database, hubInstance),
 		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
