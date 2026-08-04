@@ -22,21 +22,27 @@ const (
 // Classify ordnet einem Termin-/Mitgliedspaar genau eine Säule zu.
 //
 // Reihenfolge (siehe design.md D1):
-//  1. attendance.present = 1                            → present
-//  2. attendance.present = 0                            → missed
-//  3. response.status = 'declined' AND absence_id ≠ ∅   → excused
-//  4. sonst                                             → unknown (Datenloch)
+//  1. attendance.present = 1          → present
+//  2. attendance.present = 0          → missed
+//  3. response.status = 'declined'    → excused
+//  4. sonst                           → unknown (Datenloch)
+//
+// Jede Form der Absage zählt als entschuldigtes Fehlen — sowohl die
+// automatische Absage aus einer erfassten Abwesenheit (member_absences, mit
+// gesetzter absence_id) als auch die manuelle Absage des Mitglieds selbst
+// (absence_id NULL). Die frühere Zusatzbedingung `absence_id ≠ ∅` entfällt
+// bewusst.
 //
 // Liegt eine Attendance vor, überschreibt sie eine etwaige
 // Auto-Decline-Response (D1: explizite Trainer-Erfassung gewinnt).
-func Classify(present *bool, declined bool, hasAbsence bool) Category {
+func Classify(present *bool, declined bool) Category {
 	if present != nil {
 		if *present {
 			return CategoryPresent
 		}
 		return CategoryMissed
 	}
-	if declined && hasAbsence {
+	if declined {
 		return CategoryExcused
 	}
 	return CategoryUnknown

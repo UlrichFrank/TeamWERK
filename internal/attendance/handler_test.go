@@ -103,6 +103,26 @@ func recordExcusedTrainingResponse(t *testing.T, db *sql.DB, sessionID, memberID
 	}
 }
 
+// recordManualDeclineTrainingResponse legt eine manuelle Absage des Mitglieds
+// OHNE hinterlegte Abwesenheit an (absence_id NULL) — fachlich ebenfalls ein
+// entschuldigtes Fehlen.
+func recordManualDeclineTrainingResponse(t *testing.T, db *sql.DB, sessionID, memberID, respondedBy int) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO training_responses (training_id, member_id, responded_by, status) VALUES (?, ?, ?, 'declined')`,
+		sessionID, memberID, respondedBy); err != nil {
+		t.Fatalf("training_responses: %v", err)
+	}
+}
+
+// recordManualDeclineGameResponse: analoge manuelle Spiel-Absage ohne absence_id.
+func recordManualDeclineGameResponse(t *testing.T, db *sql.DB, gameID, memberID, respondedBy int) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status) VALUES (?, ?, ?, 'declined')`,
+		gameID, memberID, respondedBy); err != nil {
+		t.Fatalf("game_responses: %v", err)
+	}
+}
+
 func setSessionCancelled(t *testing.T, db *sql.DB, sessionID int) {
 	t.Helper()
 	if _, err := db.Exec(`UPDATE training_sessions SET status='cancelled' WHERE id=?`, sessionID); err != nil {
@@ -669,5 +689,203 @@ func TestGetTeamOpen_ShowsSessionWithTrackedFalse(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected reset session to appear in attendance-open list, got %v", resp.Open)
+	}
+}
+
+// ---------- Jede Form der Absage zählt als entschuldigt ----------
+
+// Eine manuelle Absage des Mitglieds ohne hinterlegte Abwesenheit
+// (absence_id NULL) muss in der Mitglieds-Detailliste als "excused"
+// erscheinen — nicht als "unknown" wie vor diesem Change.
+func TestGetMemberStats_ManualDeclineWithoutAbsenceIsExcused(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	user := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, user)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	addKaderMember(t, db, kaderID, memberID)
+
+	ts := testutil.CreateTrainingSession(t, db, teamID, seasonID, pastDate1)
+	recordManualDeclineTrainingResponse(t, db, ts, memberID, user)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, user, "standard", []string{"spieler"})
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/members/%d/attendance-stats", memberID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	events := body["events"].([]any)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if got := events[0].(map[string]any)["category"].(string); got != "excused" {
+		t.Errorf("manuelle Absage ohne absence_id muss excused sein, got %q", got)
+	}
+	counts := body["counts"].(map[string]any)
+	if int(counts["training_excused"].(float64)) != 1 {
+		t.Errorf("training_excused=1 erwartet, got %v", counts["training_excused"])
+	}
+}
+
+// Dieselbe manuelle Absage muss auch im Team-Aggregat (eigene SQL-native
+// Implementierung) als excused gezählt werden — Trainings und Spiele.
+func TestGetTeamStats_ManualDeclineWithoutAbsenceCountsExcused(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	trainerUserID, kaderID := makeTrainer(t, db, teamID, seasonID)
+	player := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderID, player)
+
+	ts := testutil.CreateTrainingSession(t, db, teamID, seasonID, pastDate1)
+	recordManualDeclineTrainingResponse(t, db, ts, player, trainerUserID)
+	game := testutil.CreateGame(t, db, seasonID, teamID, pastDate2)
+	recordManualDeclineGameResponse(t, db, game, player, trainerUserID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
+	res := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/attendance-stats", teamID), token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]any
+	json.NewDecoder(res.Body).Decode(&body)
+	regular := body["regular_members"].([]any)
+	if len(regular) != 1 {
+		t.Fatalf("expected 1 regular member, got %d", len(regular))
+	}
+	m := regular[0].(map[string]any)
+	if int(m["training_excused"].(float64)) != 1 {
+		t.Errorf("training_excused=1 erwartet, got %v", m["training_excused"])
+	}
+	if int(m["game_excused"].(float64)) != 1 {
+		t.Errorf("game_excused=1 erwartet, got %v", m["game_excused"])
+	}
+}
+
+// Divergenz-Schutz: die zwei parallelen Klassifikations-Implementierungen
+// (Go-seitig loadMemberEvents, SQL-seitig loadCounts) müssen für ein Mitglied
+// mit gemischten Absage-Formen dieselbe Anzahl entschuldigter Termine liefern.
+func TestAttendanceStats_TeamAggregateMatchesMemberDetail_MixedDeclineForms(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	trainerUserID, kaderID := makeTrainer(t, db, teamID, seasonID)
+	player := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderID, player)
+
+	// Zwei Trainings: eines mit Auto-Absage (absence_id gesetzt), eines mit
+	// manueller Absage (absence_id NULL). Beide zählen als entschuldigt.
+	tsAuto := testutil.CreateTrainingSession(t, db, teamID, seasonID, pastDate1)
+	recordExcusedTrainingResponse(t, db, tsAuto, player, trainerUserID)
+	tsManual := testutil.CreateTrainingSession(t, db, teamID, seasonID, pastDate2)
+	recordManualDeclineTrainingResponse(t, db, tsManual, player, trainerUserID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
+
+	teamRes := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/attendance-stats", teamID), token)
+	defer teamRes.Body.Close()
+	var teamBody map[string]any
+	json.NewDecoder(teamRes.Body).Decode(&teamBody)
+	teamExcused := int(teamBody["regular_members"].([]any)[0].(map[string]any)["training_excused"].(float64))
+
+	memberRes := testutil.Get(t, srv, fmt.Sprintf("/api/members/%d/attendance-stats", player), token)
+	defer memberRes.Body.Close()
+	var memberBody map[string]any
+	json.NewDecoder(memberRes.Body).Decode(&memberBody)
+	detailExcused := 0
+	for _, ev := range memberBody["events"].([]any) {
+		if ev.(map[string]any)["category"].(string) == "excused" {
+			detailExcused++
+		}
+	}
+
+	if teamExcused != 2 {
+		t.Errorf("Team-Aggregat: training_excused=2 erwartet (Auto + manuell), got %d", teamExcused)
+	}
+	if detailExcused != teamExcused {
+		t.Errorf("Divergenz zwischen Team-Aggregat (%d) und Mitglieds-Detailliste (%d)",
+			teamExcused, detailExcused)
+	}
+}
+
+// End-to-End-Regression zum ursprünglichen Bug-Report: Ein Mitglied hat für
+// ein Spiel abgesagt, der Trainer klickt auf demselben Termin die Checkbox
+// eines ANDEREN Mitglieds an. Das Frontend schickt dabei das komplette Roster,
+// unberührte Mitglieder mit present=false. Danach muss die Statistik für das
+// abgesagte Mitglied weiterhin "excused" zeigen — nicht "missed".
+func TestBugReport_BulkSaveDoesNotDowngradeDeclinedToMissed(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		withAbsence bool
+	}{
+		{"Absage mit hinterlegter Abwesenheit", true},
+		{"manuelle Absage ohne Abwesenheit", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testutil.NewDB(t)
+			seasonID := testutil.CreateSeason(t, db, "2025/26")
+			teamID := testutil.CreateTeam(t, db, "Team A")
+			trainerUserID, kaderID := makeTrainer(t, db, teamID, seasonID)
+			declinedUser := testutil.CreateUser(t, db, "standard")
+			declinedMember := testutil.CreateMember(t, db, declinedUser)
+			otherMember := testutil.CreateMember(t, db, 0)
+			addKaderMember(t, db, kaderID, declinedMember)
+			addKaderMember(t, db, kaderID, otherMember)
+
+			game := testutil.CreateGame(t, db, seasonID, teamID, pastDate1)
+			if tc.withAbsence {
+				res, err := db.Exec(`INSERT INTO member_absences (member_id, type, start_date, end_date, created_by) VALUES (?, 'vacation', '2026-04-01', '2026-04-30', ?)`,
+					declinedMember, trainerUserID)
+				if err != nil {
+					t.Fatalf("member_absences: %v", err)
+				}
+				absenceID, _ := res.LastInsertId()
+				if _, err := db.Exec(`INSERT INTO game_responses (game_id, member_id, responded_by, status, absence_id) VALUES (?, ?, ?, 'declined', ?)`,
+					game, declinedMember, declinedUser, absenceID); err != nil {
+					t.Fatalf("game_responses: %v", err)
+				}
+			} else {
+				recordManualDeclineGameResponse(t, db, game, declinedMember, declinedUser)
+			}
+
+			srv := testServer(t, db)
+			trainerToken := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
+
+			// Trainer hakt otherMember ab → Frontend sendet das ganze Roster,
+			// declinedMember rutscht als present=false mit.
+			body := []map[string]any{
+				{"member_id": otherMember, "present": true},
+				{"member_id": declinedMember, "present": false},
+			}
+			saveRes := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", game), trainerToken, body)
+			saveRes.Body.Close()
+
+			statsRes := testutil.Get(t, srv,
+				fmt.Sprintf("/api/members/%d/attendance-stats", declinedMember), trainerToken)
+			defer statsRes.Body.Close()
+			var stats map[string]any
+			json.NewDecoder(statsRes.Body).Decode(&stats)
+			events := stats["events"].([]any)
+			if len(events) != 1 {
+				t.Fatalf("expected 1 event, got %d", len(events))
+			}
+			if got := events[0].(map[string]any)["category"].(string); got != "excused" {
+				t.Errorf("Absage muss nach fremdem Bulk-Save weiterhin excused sein, got %q", got)
+			}
+			counts := stats["counts"].(map[string]any)
+			if int(counts["game_missed"].(float64)) != 0 {
+				t.Errorf("game_missed muss 0 bleiben, got %v", counts["game_missed"])
+			}
+			if int(counts["game_excused"].(float64)) != 1 {
+				t.Errorf("game_excused=1 erwartet, got %v", counts["game_excused"])
+			}
+		})
 	}
 }

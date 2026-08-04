@@ -58,6 +58,31 @@ func sessionUnavailabilityForMember(ctx context.Context, q rowQuerier, sessionID
 	return true, reason, nil
 }
 
+// declinedMembersForSession liefert alle Mitglieder, die für diese Session
+// abgesagt haben — unabhängig davon, ob die Absage automatisch aus einer
+// erfassten Abwesenheit stammt (absence_id gesetzt) oder manuell erfolgte
+// (absence_id NULL). Beide Formen zählen fachlich als entschuldigtes Fehlen,
+// deshalb darf ein `present=false` aus dem Bulk-Save sie nicht auf "fehlt"
+// herabstufen. Bewusst getrennt von unavailableMembersForSession: die
+// Serien-Abmeldung schließt eine Session komplett aus, eine Absage nicht.
+func declinedMembersForSession(ctx context.Context, q rowQuerier, sessionID int) (map[int]bool, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT member_id FROM training_responses WHERE training_id = ? AND status = 'declined'`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]bool{}
+	for rows.Next() {
+		var mid int
+		if err := rows.Scan(&mid); err != nil {
+			return nil, err
+		}
+		out[mid] = true
+	}
+	return out, rows.Err()
+}
+
 // unavailableMembersForSession liefert die Batch-Variante: alle Mitglieder mit einer
 // greifenden Serien-Abmeldung für die gegebene Session, gemappt auf ihren Status.
 // Pro Mitglied gewinnt die erste (permanent-bevorzugte) Zeile; Einzeltermine

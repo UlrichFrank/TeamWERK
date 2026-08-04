@@ -1769,9 +1769,25 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Abgesagte Mitglieder werden gegen ein `present=false` aus dem Bulk-Save
+	// geschützt: Das Frontend schickt bei jedem Checkbox-Klick das komplette
+	// Roster, unberührte Mitglieder defaulten dabei auf false. Für eine Absage
+	// (egal ob automatisch aus einer Abwesenheit oder manuell) wäre das eine
+	// stille Herabstufung von "entschuldigt" auf "fehlt". `present=true` bleibt
+	// erlaubt — der Trainer kann bewusst erfassen, dass jemand trotz Absage da war.
+	declined, err := declinedMembersForSession(r.Context(), tx, sessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "SaveAttendances declined lookup: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	wroteAny := false
 	for _, e := range entries {
 		if _, skip := unavailable[e.MemberID]; skip {
+			continue
+		}
+		if !e.Present && declined[e.MemberID] {
 			continue
 		}
 		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die zum Kader-Trainerstab

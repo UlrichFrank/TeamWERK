@@ -487,3 +487,171 @@ func TestResetGameAttendanceTracking_Unauthenticated_401(t *testing.T) {
 		t.Errorf("expected 401, got %d", res.StatusCode)
 	}
 }
+
+// ---------- Absagen sind entschuldigtes Fehlen ----------
+
+// declineGame legt eine Absage für ein Spiel an. Mit withAbsence=true entsteht
+// zusätzlich ein member_absences-Eintrag (automatische Absage), sonst bleibt
+// absence_id NULL (manuelle Absage des Mitglieds).
+func declineGame(t *testing.T, db *sql.DB, gameID, memberID, respondedBy int, withAbsence bool) {
+	t.Helper()
+	if !withAbsence {
+		if _, err := db.Exec(
+			`INSERT INTO game_responses (game_id, member_id, responded_by, status) VALUES (?, ?, ?, 'declined')`,
+			gameID, memberID, respondedBy); err != nil {
+			t.Fatalf("game_responses: %v", err)
+		}
+		return
+	}
+	res, err := db.Exec(
+		`INSERT INTO member_absences (member_id, type, start_date, end_date, created_by) VALUES (?, 'vacation', '2026-06-01', '2026-06-30', ?)`,
+		memberID, respondedBy)
+	if err != nil {
+		t.Fatalf("member_absences: %v", err)
+	}
+	absenceID, _ := res.LastInsertId()
+	if _, err := db.Exec(
+		`INSERT INTO game_responses (game_id, member_id, responded_by, status, absence_id) VALUES (?, ?, ?, 'declined', ?)`,
+		gameID, memberID, respondedBy, absenceID); err != nil {
+		t.Fatalf("game_responses: %v", err)
+	}
+}
+
+func gameAttendanceRowCount(t *testing.T, db *sql.DB, gameID, memberID int) int {
+	t.Helper()
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM game_attendances WHERE game_id=? AND member_id=?`,
+		gameID, memberID).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	return n
+}
+
+// present=false darf eine Absage mit hinterlegter Abwesenheit nicht auf
+// "fehlt" herabstufen; die übrigen Einträge des Pakets werden normal gespeichert.
+func TestSaveGameAttendances_DeclinedWithAbsence_PresentFalseSkipped(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	trainerUserID := makeTrainer(t, db, teamID, seasonID)
+	kaderID := kaderOf(t, db, teamID, seasonID)
+	excused := testutil.CreateMember(t, db, 0)
+	other := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderID, excused)
+	addKaderMember(t, db, kaderID, other)
+	declineGame(t, db, gameID, excused, trainerUserID, true)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	body := []map[string]any{
+		{"member_id": excused, "present": false},
+		{"member_id": other, "present": true},
+	}
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", gameID), token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if n := gameAttendanceRowCount(t, db, gameID, excused); n != 0 {
+		t.Errorf("entschuldigtes Mitglied darf keine game_attendances-Zeile bekommen, got %d", n)
+	}
+	var present int
+	if err := db.QueryRow(
+		`SELECT present FROM game_attendances WHERE game_id=? AND member_id=?`,
+		gameID, other).Scan(&present); err != nil {
+		t.Fatalf("übriger Eintrag nicht persistiert: %v", err)
+	}
+	if present != 1 {
+		t.Errorf("expected present=1 für unbeteiligtes Mitglied, got %d", present)
+	}
+}
+
+// Dieselbe Regel gilt für die manuelle Absage ohne hinterlegte Abwesenheit.
+func TestSaveGameAttendances_ManualDeclineWithoutAbsence_PresentFalseSkipped(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	trainerUserID := makeTrainer(t, db, teamID, seasonID)
+	member := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderOf(t, db, teamID, seasonID), member)
+	declineGame(t, db, gameID, member, trainerUserID, false)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	body := []map[string]any{{"member_id": member, "present": false}}
+	res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", gameID), token, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if n := gameAttendanceRowCount(t, db, gameID, member); n != 0 {
+		t.Errorf("manuelle Absage darf keine game_attendances-Zeile bekommen, got %d", n)
+	}
+}
+
+// present=true bleibt erlaubt: "war trotz Absage doch da" (D1-Override).
+func TestSaveGameAttendances_DeclinedButPresentTrue_StillPersisted(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		withAbsence bool
+	}{
+		{"mit Abwesenheit", true},
+		{"manuelle Absage", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testutil.NewDB(t)
+			seasonID := testutil.CreateSeason(t, db, "2025/26")
+			teamID := testutil.CreateTeam(t, db, "Team A")
+			gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+			trainerUserID := makeTrainer(t, db, teamID, seasonID)
+			member := testutil.CreateMember(t, db, 0)
+			addKaderMember(t, db, kaderOf(t, db, teamID, seasonID), member)
+			declineGame(t, db, gameID, member, trainerUserID, tc.withAbsence)
+
+			srv := testServer(t, db)
+			token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+			body := []map[string]any{{"member_id": member, "present": true}}
+			res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", gameID), token, body)
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusNoContent {
+				t.Fatalf("expected 204, got %d", res.StatusCode)
+			}
+			var present int
+			if err := db.QueryRow(
+				`SELECT present FROM game_attendances WHERE game_id=? AND member_id=?`,
+				gameID, member).Scan(&present); err != nil {
+				t.Fatalf("present=true muss persistiert werden: %v", err)
+			}
+			if present != 1 {
+				t.Errorf("expected present=1, got %d", present)
+			}
+		})
+	}
+}
+
+// Wiederholte Bulk-Saves (Frontend schickt bei jedem Klick das ganze Roster)
+// dürfen die Absage nicht doch noch herabstufen.
+func TestSaveGameAttendances_RepeatedPresentFalseStaysIdempotent(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	trainerUserID := makeTrainer(t, db, teamID, seasonID)
+	member := testutil.CreateMember(t, db, 0)
+	addKaderMember(t, db, kaderOf(t, db, teamID, seasonID), member)
+	declineGame(t, db, gameID, member, trainerUserID, false)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+	body := []map[string]any{{"member_id": member, "present": false}}
+	for i := 0; i < 3; i++ {
+		res := testutil.Post(t, srv, fmt.Sprintf("/api/games/%d/attendances", gameID), token, body)
+		res.Body.Close()
+	}
+	if n := gameAttendanceRowCount(t, db, gameID, member); n != 0 {
+		t.Errorf("nach wiederholtem Bulk-Save weiterhin keine Zeile erwartet, got %d", n)
+	}
+}

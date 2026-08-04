@@ -3068,6 +3068,31 @@ func (h *Handler) canRecordGameAttendance(ctx context.Context, claims *auth.Clai
 // POST /api/games/{id}/attendances — Bulk-Upsert der Spiel-Anwesenheit.
 // Erlaubt: admin, sportliche_leitung, Trainer eines beteiligten Teams.
 // Nur für Spiele, deren Datum <= heute liegt.
+// declinedMembersForGame liefert alle Mitglieder, die für dieses Spiel abgesagt
+// haben — unabhängig davon, ob die Absage automatisch aus einer erfassten
+// Abwesenheit stammt (absence_id gesetzt) oder manuell erfolgte (absence_id
+// NULL). Beide Formen zählen fachlich als entschuldigtes Fehlen, deshalb darf
+// ein `present=false` aus dem Bulk-Save sie nicht auf "fehlt" herabstufen.
+func declinedMembersForGame(ctx context.Context, q interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}, gameID int) (map[int]bool, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT member_id FROM game_responses WHERE game_id = ? AND status = 'declined'`, gameID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]bool{}
+	for rows.Next() {
+		var mid int
+		if err := rows.Scan(&mid); err != nil {
+			return nil, err
+		}
+		out[mid] = true
+	}
+	return out, rows.Err()
+}
+
 func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	gameID, err := strconv.Atoi(r.PathValue("id"))
@@ -3119,8 +3144,24 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	// Abgesagte Mitglieder werden gegen ein `present=false` aus dem Bulk-Save
+	// geschützt: Das Frontend schickt bei jedem Checkbox-Klick das komplette
+	// Roster, unberührte Mitglieder defaulten dabei auf false. Für eine Absage
+	// (egal ob automatisch aus einer Abwesenheit oder manuell) wäre das eine
+	// stille Herabstufung von "entschuldigt" auf "fehlt". `present=true` bleibt
+	// erlaubt — der Trainer kann bewusst erfassen, dass jemand trotz Absage da war.
+	declined, err := declinedMembersForGame(r.Context(), tx, gameID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "SaveGameAttendances declined lookup: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	wroteAny := false
 	for _, e := range entries {
+		if !e.Present && declined[e.MemberID] {
+			continue
+		}
 		// Trainer haben keine Anwesenheitserfassung — Ziel-Members, die als Trainer eines
 		// beteiligten Teams eingetragen sind und nicht auch als Spieler geführt werden,
 		// werden still übersprungen. Die Teilnehmer-Antwort enthält Trainer-Zeilen (eigene

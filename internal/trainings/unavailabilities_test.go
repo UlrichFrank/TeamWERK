@@ -317,3 +317,167 @@ func TestGetAttendances_UnavailableField(t *testing.T) {
 		t.Fatalf("both players must be present in roster (visible), sawUnavail=%v sawNormal=%v", sawUnavail, sawNormal)
 	}
 }
+
+// --- Absagen sind entschuldigtes Fehlen ---------------------------------
+
+// declineSession legt eine Absage für eine Session an. Mit withAbsence=true
+// entsteht zusätzlich ein member_absences-Eintrag (automatische Absage), sonst
+// bleibt absence_id NULL (manuelle Absage des Mitglieds).
+func declineSession(t *testing.T, db *sql.DB, sessionID, memberID, respondedBy int, withAbsence bool) {
+	t.Helper()
+	if !withAbsence {
+		if _, err := db.Exec(
+			`INSERT INTO training_responses (training_id, member_id, responded_by, status) VALUES (?, ?, ?, 'declined')`,
+			sessionID, memberID, respondedBy); err != nil {
+			t.Fatalf("training_responses: %v", err)
+		}
+		return
+	}
+	res, err := db.Exec(
+		`INSERT INTO member_absences (member_id, type, start_date, end_date, created_by) VALUES (?, 'vacation', '2026-03-01', '2026-03-31', ?)`,
+		memberID, respondedBy)
+	if err != nil {
+		t.Fatalf("member_absences: %v", err)
+	}
+	absenceID, _ := res.LastInsertId()
+	if _, err := db.Exec(
+		`INSERT INTO training_responses (training_id, member_id, responded_by, status, absence_id) VALUES (?, ?, ?, 'declined', ?)`,
+		sessionID, memberID, respondedBy, absenceID); err != nil {
+		t.Fatalf("training_responses: %v", err)
+	}
+}
+
+func trainingAttendanceRowCount(t *testing.T, db *sql.DB, sessionID, memberID int) int {
+	t.Helper()
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM training_attendances WHERE training_id=? AND member_id=?`,
+		sessionID, memberID).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	return n
+}
+
+// present=false darf eine Absage mit hinterlegter Abwesenheit nicht auf
+// "fehlt" herabstufen; die übrigen Einträge des Pakets werden normal gespeichert.
+func TestSaveAttendances_DeclinedWithAbsence_PresentFalseSkipped(t *testing.T) {
+	_, sc := setupUnavail(t)
+	pastSession := testutil.CreateTrainingSessionForSeries(t, sc.db, sc.teamID, sc.seasonID, sc.seriesID, "2026-03-15")
+	excused := testutil.CreateMember(t, sc.db, 0)
+	other := testutil.CreateMember(t, sc.db, 0)
+	sc.db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, sc.kaderID, excused)
+	sc.db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, sc.kaderID, other)
+	declineSession(t, sc.db, pastSession, excused, sc.trainerUser, true)
+
+	body := []map[string]any{
+		{"member_id": excused, "present": false},
+		{"member_id": other, "present": true},
+	}
+	res := testutil.Post(t, sc.srv, fmt.Sprintf("/api/training-sessions/%d/attendances", pastSession), sc.trainerToken, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if n := trainingAttendanceRowCount(t, sc.db, pastSession, excused); n != 0 {
+		t.Errorf("entschuldigtes Mitglied darf keine training_attendances-Zeile bekommen, got %d", n)
+	}
+	if n := trainingAttendanceRowCount(t, sc.db, pastSession, other); n != 1 {
+		t.Errorf("übriger Eintrag muss gespeichert werden, got %d", n)
+	}
+}
+
+// Dieselbe Regel gilt für die manuelle Absage ohne hinterlegte Abwesenheit.
+func TestSaveAttendances_ManualDeclineWithoutAbsence_PresentFalseSkipped(t *testing.T) {
+	_, sc := setupUnavail(t)
+	pastSession := testutil.CreateTrainingSessionForSeries(t, sc.db, sc.teamID, sc.seasonID, sc.seriesID, "2026-03-15")
+	member := testutil.CreateMember(t, sc.db, 0)
+	sc.db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, sc.kaderID, member)
+	declineSession(t, sc.db, pastSession, member, sc.trainerUser, false)
+
+	body := []map[string]any{{"member_id": member, "present": false}}
+	res := testutil.Post(t, sc.srv, fmt.Sprintf("/api/training-sessions/%d/attendances", pastSession), sc.trainerToken, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if n := trainingAttendanceRowCount(t, sc.db, pastSession, member); n != 0 {
+		t.Errorf("manuelle Absage darf keine training_attendances-Zeile bekommen, got %d", n)
+	}
+}
+
+// present=true bleibt erlaubt: "war trotz Absage doch da" (D1-Override).
+func TestSaveAttendances_DeclinedButPresentTrue_StillPersisted(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		withAbsence bool
+	}{
+		{"mit Abwesenheit", true},
+		{"manuelle Absage", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, sc := setupUnavail(t)
+			pastSession := testutil.CreateTrainingSessionForSeries(t, sc.db, sc.teamID, sc.seasonID, sc.seriesID, "2026-03-15")
+			member := testutil.CreateMember(t, sc.db, 0)
+			sc.db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, sc.kaderID, member)
+			declineSession(t, sc.db, pastSession, member, sc.trainerUser, tc.withAbsence)
+
+			body := []map[string]any{{"member_id": member, "present": true}}
+			res := testutil.Post(t, sc.srv, fmt.Sprintf("/api/training-sessions/%d/attendances", pastSession), sc.trainerToken, body)
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusNoContent {
+				t.Fatalf("expected 204, got %d", res.StatusCode)
+			}
+			var present int
+			if err := sc.db.QueryRow(
+				`SELECT present FROM training_attendances WHERE training_id=? AND member_id=?`,
+				pastSession, member).Scan(&present); err != nil {
+				t.Fatalf("present=true muss persistiert werden: %v", err)
+			}
+			if present != 1 {
+				t.Errorf("expected present=1, got %d", present)
+			}
+		})
+	}
+}
+
+// Beide Skips (Serien-Abmeldung und Absage) dürfen sich nicht gegenseitig
+// blockieren: der Serien-Skip greift weiterhin auch für present=true, der
+// Absage-Skip nur für present=false, und normale Mitglieder bleiben unberührt.
+func TestSaveAttendances_UnavailableAndDeclinedSkipsCoexist(t *testing.T) {
+	_, sc := setupUnavail(t)
+	pastSession := testutil.CreateTrainingSessionForSeries(t, sc.db, sc.teamID, sc.seasonID, sc.seriesID, "2026-03-15")
+	unavailPlayer := testutil.CreateMember(t, sc.db, 0)
+	declinedPlayer := testutil.CreateMember(t, sc.db, 0)
+	normalPlayer := testutil.CreateMember(t, sc.db, 0)
+	for _, m := range []int{unavailPlayer, declinedPlayer, normalPlayer} {
+		sc.db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, sc.kaderID, m)
+	}
+	testutil.CreateSeriesUnavailability(t, sc.db, unavailPlayer, sc.seriesID, "", "", "", sc.trainerUser)
+	declineSession(t, sc.db, pastSession, declinedPlayer, sc.trainerUser, false)
+
+	body := []map[string]any{
+		{"member_id": unavailPlayer, "present": true},   // Serien-Skip: greift wertunabhängig
+		{"member_id": declinedPlayer, "present": false}, // Absage-Skip: greift nur bei false
+		{"member_id": normalPlayer, "present": false},   // regulär: wird gespeichert
+	}
+	res := testutil.Post(t, sc.srv, fmt.Sprintf("/api/training-sessions/%d/attendances", pastSession), sc.trainerToken, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if n := trainingAttendanceRowCount(t, sc.db, pastSession, unavailPlayer); n != 0 {
+		t.Errorf("serien-abgemeldetes Mitglied: keine Zeile erwartet, got %d", n)
+	}
+	if n := trainingAttendanceRowCount(t, sc.db, pastSession, declinedPlayer); n != 0 {
+		t.Errorf("abgesagtes Mitglied: keine Zeile erwartet, got %d", n)
+	}
+	var present int
+	if err := sc.db.QueryRow(
+		`SELECT present FROM training_attendances WHERE training_id=? AND member_id=?`,
+		pastSession, normalPlayer).Scan(&present); err != nil {
+		t.Fatalf("normales Mitglied muss erfasst werden: %v", err)
+	}
+	if present != 0 {
+		t.Errorf("expected present=0 für regulär erfasstes Fehlen, got %d", present)
+	}
+}

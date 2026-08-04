@@ -138,7 +138,6 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		       COALESCE(SUM(CASE WHEN ta.present = 0 AND msu.id IS NULL THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ta.present IS NULL
 		                          AND tr.status = 'declined'
-		                          AND tr.absence_id IS NOT NULL
 		                          AND msu.id IS NULL THEN 1 ELSE 0 END), 0)
 		FROM members m` + memberJoin + `
 		LEFT JOIN training_sessions ts ON ts.team_id = k.team_id
@@ -189,8 +188,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 		       COALESCE(SUM(CASE WHEN ga.present = 1 THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ga.present = 0 THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ga.present IS NULL
-		                          AND gr.status = 'declined'
-		                          AND gr.absence_id IS NOT NULL THEN 1 ELSE 0 END), 0)
+		                          AND gr.status = 'declined' THEN 1 ELSE 0 END), 0)
 		FROM members m` + memberJoin + `
 		LEFT JOIN game_teams gt ON gt.team_id = k.team_id
 		LEFT JOIN games g ON g.id = gt.game_id
@@ -455,7 +453,7 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 	// Kader das Mitglied in dieser Saison steht.
 	trainingRows, err := h.db.QueryContext(ctx, `
 		SELECT ts.id, ts.date, ts.title, ts.status,
-		       ta.present, tr.status, tr.absence_id IS NOT NULL, tr.reason,
+		       ta.present, tr.status, tr.reason,
 		       msu.id IS NOT NULL, msu.reason
 		FROM training_sessions ts
 		LEFT JOIN training_attendances ta ON ta.training_id = ts.id AND ta.member_id = ? AND ts.attendance_tracked = 1
@@ -484,9 +482,9 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		var status string
 		var present sql.NullInt64
 		var respStatus, reason, unavailReason sql.NullString
-		var hasAbsence, unavailable bool
+		var unavailable bool
 		if err := trainingRows.Scan(&ev.EventID, &ev.Date, &ev.Title, &status,
-			&present, &respStatus, &hasAbsence, &reason, &unavailable, &unavailReason); err != nil {
+			&present, &respStatus, &reason, &unavailable, &unavailReason); err != nil {
 			trainingRows.Close()
 			return nil, counts, err
 		}
@@ -506,7 +504,7 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 				ev.Reason = &s
 			}
 		default:
-			ev.Category = classifyRow(present, respStatus, hasAbsence)
+			ev.Category = classifyRow(present, respStatus)
 			tallyCount(&counts, ev.EventType, ev.Category)
 		}
 		if ev.Reason == nil && reason.Valid && reason.String != "" {
@@ -522,7 +520,7 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 	gameRows, err := h.db.QueryContext(ctx, `
 		SELECT g.id, g.date,
 		       COALESCE(NULLIF(g.opponent, ''), 'Spiel'),
-		       ga.present, gr.status, gr.absence_id IS NOT NULL, gr.reason
+		       ga.present, gr.status, gr.reason
 		FROM games g
 		LEFT JOIN game_attendances ga ON ga.game_id = g.id AND ga.member_id = ? AND g.attendance_tracked = 1
 		LEFT JOIN game_responses   gr ON gr.game_id = g.id AND gr.member_id = ?
@@ -547,13 +545,12 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 		var ev eventDetail
 		var present sql.NullInt64
 		var respStatus, reason sql.NullString
-		var hasAbsence bool
 		if err := gameRows.Scan(&ev.EventID, &ev.Date, &ev.Title,
-			&present, &respStatus, &hasAbsence, &reason); err != nil {
+			&present, &respStatus, &reason); err != nil {
 			return nil, counts, err
 		}
 		ev.EventType = "game"
-		ev.Category = classifyRow(present, respStatus, hasAbsence)
+		ev.Category = classifyRow(present, respStatus)
 		tallyCount(&counts, ev.EventType, ev.Category)
 		if reason.Valid && reason.String != "" {
 			s := reason.String
@@ -566,14 +563,14 @@ func (h *Handler) loadMemberEvents(ctx context.Context, memberID, seasonID int, 
 
 // classifyRow ist die SQL-Adapter-Variante von Classify: nimmt die rohen
 // NullInt64/NullString-Werte und ruft die reine Funktion auf.
-func classifyRow(present sql.NullInt64, respStatus sql.NullString, hasAbsence bool) Category {
+func classifyRow(present sql.NullInt64, respStatus sql.NullString) Category {
 	var p *bool
 	if present.Valid {
 		b := present.Int64 == 1
 		p = &b
 	}
 	declined := respStatus.Valid && respStatus.String == "declined"
-	return Classify(p, declined, hasAbsence)
+	return Classify(p, declined)
 }
 
 func tallyCount(c *memberCounts, evType string, cat Category) {
