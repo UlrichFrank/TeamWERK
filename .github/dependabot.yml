@@ -40,6 +40,17 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Tailwind v4 ist eine UI-weite Migration, kein Dependency-Bump:
+      # CSS-first-Konfiguration statt tailwind.config.js, @import statt
+      # @tailwind-Direktiven, @tailwindcss/postcss statt tailwindcss+
+      # autoprefixer, umbenannte Utilities (shadow-sm→shadow-xs, andere
+      # Ring-Breiten und Border-Default-Farbe) quer durch die verbindlichen
+      # Klassen-Strings. Der Stack ist bewusst auf v3 festgelegt
+      # (docs/agent/05-frontend.md); der Major-PR kam sonst wöchentlich wieder
+      # (#171, geschlossen). Minor/Patch innerhalb v3 laufen weiter.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
