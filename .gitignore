@@ -18,6 +18,7 @@ backup.*/
 storage/
 *.db-shm
 *.db-wal
+*.db.bak
 
 # SQL-Dumps (PII)
 /*.sql
