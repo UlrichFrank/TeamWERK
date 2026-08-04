@@ -98,7 +98,7 @@ jobs:
 
       # Chromium-Binary aus dem Cache (Key an das Lockfile / die @playwright/test-Version
       # gebunden, damit ein Upgrade den Cache invalidiert). Spart ~200 MB ab dem 2. Lauf.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
