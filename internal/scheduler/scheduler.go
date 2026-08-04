@@ -60,6 +60,7 @@ func (s *Scheduler) Run() {
 	s.failStaleVideoUploads()
 	s.cleanFailedVideoRaw()
 	s.runVideoRetention()
+	s.runTrainingDiaryRetention()
 	s.sendAttendanceReminders()
 	s.sendMatchReportReviewReminders()
 	s.recordHeartbeat()
