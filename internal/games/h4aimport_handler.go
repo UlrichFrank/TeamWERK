@@ -75,7 +75,11 @@ type h4aPlanGame struct {
 	Status         string           `json:"status"` // "new" | "changed" | "unchanged"
 	Changes        []h4aFieldChange `json:"changes,omitempty"`
 	ExistingGameID *int             `json:"existing_game_id,omitempty"`
-	Warnings       []string         `json:"warnings,omitempty"`
+	// DuplicateOfGameID zeigt auf ein manuell angelegtes Bestandsspiel (ohne
+	// external_id) mit gleichem Datum und Gegner — Kandidat für eine Dublette,
+	// die der Importeur im Modal manuell verknüpfen/abwählen muss (design.md §6).
+	DuplicateOfGameID *int     `json:"duplicate_of_game_id,omitempty"`
+	Warnings          []string `json:"warnings,omitempty"`
 }
 
 type h4aPreviewResponse struct {
@@ -219,6 +223,7 @@ func (h *Handler) classifyH4AGame(ctx context.Context, pg *h4aPlanGame) {
 		pg.GameNo).Scan(&id, &date, &tim, &opponent, &isHome, &venueID)
 	if err == sql.ErrNoRows {
 		pg.Status = "new"
+		h.markPossibleDuplicate(ctx, pg)
 		return
 	}
 	if err != nil {
@@ -253,6 +258,31 @@ func (h *Handler) classifyH4AGame(ctx context.Context, pg *h4aPlanGame) {
 		pg.Status = "changed"
 		pg.Changes = changes
 	}
+}
+
+// markPossibleDuplicate sucht zu einer als „neu" eingestuften Zeile ein manuell
+// angelegtes Bestandsspiel (external_id IS NULL) mit gleichem Datum und Gegner.
+// Vor dem ersten H4A-Import tragen alle Spiele keine external_id — ohne diesen
+// Hinweis würde der Import Dubletten neben die Handarbeit legen (design.md §6).
+// Ist die Mannschaft bekannt, muss sie zusätzlich übereinstimmen.
+func (h *Handler) markPossibleDuplicate(ctx context.Context, pg *h4aPlanGame) {
+	query := `SELECT g.id FROM games g
+	           WHERE g.external_id IS NULL AND substr(g.date,1,10) = ?
+	             AND lower(trim(g.opponent)) = lower(?)`
+	args := []any{pg.Date, pg.Opponent}
+	if pg.TeamID != nil {
+		query += ` AND EXISTS (SELECT 1 FROM game_teams gt WHERE gt.game_id = g.id AND gt.team_id = ?)`
+		args = append(args, *pg.TeamID)
+	}
+	query += ` LIMIT 1`
+
+	var dupID int
+	if err := h.db.QueryRowContext(ctx, query, args...).Scan(&dupID); err != nil {
+		return
+	}
+	pg.DuplicateOfGameID = &dupID
+	pg.Warnings = append(pg.Warnings,
+		"mögliche Dublette zu einem bereits angelegten Spiel am selben Datum")
 }
 
 func (h *Handler) lookupStaffelTeam(ctx context.Context, staffel, alias string) (int, string, bool) {

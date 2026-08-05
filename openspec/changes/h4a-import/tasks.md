@@ -23,30 +23,30 @@
 
 ## 4. Backend — Mapping (Staffel→Mannschaft, Halle→Venue, Typ)
 
-- [ ] 4.1 Entscheidung + Migration/Tabelle für gelerntes Staffel→Team-Mapping (`h4a_staffel_team_map (staffel TEXT, club_alias TEXT, team_id INTEGER)` oder Spalte an `teams`) — in derselben Migration 042 oder Folge-Task
-- [ ] 4.2 Vereinsnamen-Alias-Liste („Team Stuttgart", „Team Stuttgart 2") für Eigenerkennung; Typ heim/auswärts aus Heim==eigener-Verein (nicht aus is_home_venue, siehe design)
-- [ ] 4.3 Halle→Venue-Auflösung über `venues.hall_number`; unaufgelöste Hallen als Warnung
-- [ ] 4.4 Unit-Tests für Mapping-Logik (bekannte/unbekannte Staffel, unaufgelöste Halle)
+- [x] 4.1 Entscheidung + Migration/Tabelle für gelerntes Staffel→Team-Mapping (`h4a_staffel_team_map (staffel TEXT, club_alias TEXT, team_id INTEGER)` oder Spalte an `teams`) — in derselben Migration 042 oder Folge-Task
+- [x] 4.2 Vereinsnamen-Alias-Liste („Team Stuttgart", „Team Stuttgart 2") für Eigenerkennung; Typ heim/auswärts aus Heim==eigener-Verein (nicht aus is_home_venue, siehe design)
+- [x] 4.3 Halle→Venue-Auflösung über `venues.hall_number`; unaufgelöste Hallen als Warnung
+- [x] 4.4 Unit-Tests für Mapping-Logik (bekannte/unbekannte Staffel, unaufgelöste Halle)
 
 ## 5. Backend — Preview/Apply-Handler + Routen
 
   (Package-Zuschnitt: Handler liegen in `internal/games/h4aimport_handler.go` und nutzen
   `runAutoRegen`; `internal/h4aimport/` bleibt reiner Client+Parser. Siehe design.md §8.)
 
-- [ ] 5.1 `internal/games/h4aimport_handler.go`: `PreviewH4AImport(w,r)` — Auth (vorstand/admin), Credentials aus Body, `h4aimport`-Client Login→Fetch→Parse→Map→Diff gegen `games` (Anker external_id), Logout, Plan zurück; Credentials nie in Response/Log
-- [ ] 5.2 `Diff`-Logik: new/changed/unchanged; changed mit Feld-Alt/Neu; keine Löschungen; mögliche-Dublette-Erkennung (gleiches Datum+Team+Gegner ohne external_id)
-- [ ] 5.3 `Apply(w,r)`: Entscheidungen entgegennehmen, je Zeile re-validieren (aktive Saison, team/venue existiert, template gültig), INSERT/UPDATE `games` + `game_teams`, external_id setzen
-- [ ] 5.4 Batch-Regen: EIN `runAutoRegen` über Vereinigungsmenge aller Datumsfenster; EIN `hub.Broadcast("games")`; Spieler-Pushes unterdrückt (nur Regen-Summary an Importeur)
-- [ ] 5.5 `internal/app/router.go`: `POST /api/games/import/h4a/preview` + `.../apply` im Vorstand-Tier registrieren; `Handlers`-Struct + `main.go`-Verdrahtung (`NewHandler(db, hub, cfg)`)
-- [ ] 5.6 `internal/arch/broadcast_test.go`: `preview` in `broadcastAllowlist` mit Begründung („read-only, externer Abruf, kein DB-Write"); `apply` broadcastet regulär
+- [x] 5.1 `internal/games/h4aimport_handler.go`: `PreviewH4AImport(w,r)` — Auth (vorstand/admin), Credentials aus Body, `h4aimport`-Client Login→Fetch→Parse→Map→Diff gegen `games` (Anker external_id), Logout, Plan zurück; Credentials nie in Response/Log
+- [x] 5.2 `Diff`-Logik: new/changed/unchanged; changed mit Feld-Alt/Neu; keine Löschungen; mögliche-Dublette-Erkennung (gleiches Datum+Team+Gegner ohne external_id)
+- [x] 5.3 `Apply(w,r)`: Entscheidungen entgegennehmen, je Zeile re-validieren (aktive Saison, team/venue existiert, template gültig), INSERT/UPDATE `games` + `game_teams`, external_id setzen
+- [x] 5.4 Batch-Regen: EIN `runAutoRegen` über Vereinigungsmenge aller Datumsfenster; EIN `hub.Broadcast("games")`; Spieler-Pushes unterdrückt (nur Regen-Summary an Importeur)
+- [x] 5.5 `internal/app/router.go`: `POST /api/games/import/h4a/preview` + `.../apply` im Vorstand-Tier registrieren; `Handlers`-Struct + `main.go`-Verdrahtung (`NewHandler(db, hub, cfg)`)
+- [x] 5.6 `internal/arch/broadcast_test.go`: `preview` in `broadcastAllowlist` mit Begründung („read-only, externer Abruf, kein DB-Write"); `apply` broadcastet regulär
 
 ## 6. Backend — Tests (Route-Pflicht: Happy + Fehlerfall)
 
-- [ ] 6.1 `preview`: Happy-Path mit gemocktem H4A-Client (kein echter Netzugriff im Test) → 200 + Plan; Fehlerfälle 403 (kein vorstand), 502 (Login-Fehler), 400 (fehlende Felder)
-- [ ] 6.2 `apply`: Happy-Path (new+changed geschrieben, external_id gesetzt) → 200; Fehlerfälle 400 (keine aktive Saison), 403 (Auth), skipped-Zählung bei fehlender Mannschaft
-- [ ] 6.3 Idempotenz-Test: zweimaliges Apply desselben Plans erzeugt keine Duplikate (Anker external_id)
-- [ ] 6.4 Credential-Nichtpersistenz-Test: nach Preview kein Passwort in Log-Buffer/DB (Assertion über injizierten Logger)
-- [ ] 6.5 Batch-Test: Apply über mehrere Tage → genau ein Broadcast, ein Regen-Lauf (Spy auf hub/regen)
+- [x] 6.1 `preview`: Happy-Path mit gemocktem H4A-Client (kein echter Netzugriff im Test) → 200 + Plan; Fehlerfälle 403 (kein vorstand), 502 (Login-Fehler), 400 (fehlende Felder)
+- [x] 6.2 `apply`: Happy-Path (new+changed geschrieben, external_id gesetzt) → 200; Fehlerfälle 400 (keine aktive Saison), 403 (Auth), skipped-Zählung bei fehlender Mannschaft
+- [x] 6.3 Idempotenz-Test: zweimaliges Apply desselben Plans erzeugt keine Duplikate (Anker external_id)
+- [x] 6.4 Credential-Nichtpersistenz-Test: nach Preview kein Passwort in Log-Buffer/DB (Assertion über injizierten Logger)
+- [x] 6.5 Batch-Test: Apply über mehrere Tage → genau ein Broadcast, ein Regen-Lauf (Spy auf hub/regen)
 
 ## 7. Frontend — Import-Modal im Kalender
 
