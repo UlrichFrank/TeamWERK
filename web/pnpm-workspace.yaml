@@ -1,0 +1,3 @@
+# Supply-chain protection: only resolve versions published at least 8 days
+# (11520 minutes) ago, so a compromised release is withdrawn before we pick it up.
+minimumReleaseAge: 11520
