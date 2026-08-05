@@ -294,6 +294,44 @@
     margin:.7rem 0 .2rem;
   }
 
+  /* ---------- Howto (aufklappbare Schritt-fuer-Schritt-Anleitung) ---------- */
+  details.howto{
+    margin:.5rem 0 .2rem;
+    border:1px solid var(--border-subtle);
+    border-radius:.5rem;
+    background:var(--white);
+  }
+  details.howto[open]{border-color:var(--blue);}
+  details.howto summary{
+    cursor:pointer;
+    list-style:none;
+    padding:.5rem .75rem;
+    font-size:.85rem;
+    font-weight:600;
+    color:var(--blue);
+    display:flex;
+    align-items:center;
+    gap:.5rem;
+    user-select:none;
+  }
+  details.howto summary::-webkit-details-marker{display:none;}
+  details.howto summary::before{
+    content:'';
+    width:0;height:0;
+    border-left:5px solid var(--blue);
+    border-top:4px solid transparent;
+    border-bottom:4px solid transparent;
+    flex:none;
+    transition:transform .15s;
+  }
+  details.howto[open] summary::before{transform:rotate(90deg);}
+  details.howto .howto-body{
+    padding:.2rem 1rem .8rem 1.9rem;
+    border-top:1px solid var(--border-subtle);
+  }
+  details.howto ol{margin:.55rem 0 0;padding-left:1.1rem;}
+  details.howto li{margin:.32rem 0;font-size:.87rem;color:var(--text);}
+
   /* ---------- Hinweis-Box ---------- */
   .note{
     border-radius:.6rem;
@@ -498,71 +536,385 @@
 
       <h3>Für alle angemeldeten Nutzer</h3>
       <ul>
-        <li><strong>Dashboard:</strong> Persönliche Übersicht – nächste Termine, offene Dienste, eigene Dienst-Bilanz (Soll/Ist), offene Mitfahrgelegenheiten, ungelesene Nachrichten.</li>
-        <li><strong>Mein Profil:</strong> Stammdaten, Kontakt, Telefonnummern, Foto, Sichtbarkeits-Einstellungen, Fahrzeugdaten für Mitfahrten, <strong>Kartendienst-Präferenz</strong> (Google Maps / Apple Maps / automatisch) für die Navigation zu Spielorten sowie <strong>Benachrichtigungs-Präferenzen</strong> pro Kategorie (Spiele, Trainings, Dienste, Chat, …). Anzeigename und E-Mail-Adresse lassen sich selbst ändern (E-Mail-Änderung verlangt das aktuelle Passwort). Ein eigener <strong>Datenschutz-Tab</strong> bündelt Sichtbarkeits-Einstellungen (inkl. WhatsApp-Sichtbarkeit) sowie die Einwilligung zur <strong>Foto-Veröffentlichung</strong> in Spielberichten und auf der Website.</li>
-        <li><strong>Anwesenheits-Historie:</strong> Eigene Anwesenheiten (Spieler) bzw. die deiner Kinder (Eltern) einsehen.</li>
-        <li><strong>Trainingstagebuch (nur Spieler):</strong> Eigene Trainingseinheiten außerhalb des Mannschaftstrainings protokollieren – Art, Dauer und Belastung (RPE-Skala 1–10), optional mit Nachweisfoto. Rein persönlich, Trainer und Eltern können mitlesen.</li>
-        <li><strong>Kinderprofile (Eltern):</strong> Daten der eigenen Kinder verwalten – inkl. clientseitig verschlüsselter Bankdaten, Fotos, Kontakt, Stammdaten und Anwesenheiten. Gilt sowohl für Kinder ohne eigenen Account als auch für Kinder mit eigenem Kinderaccount.</li>
-        <li><strong>Kalender &amp; Termine:</strong> Trainings, Spiele, sonstige Termine ansehen, zu-/absagen (RSVP) – bei Absage oder „Vielleicht" wird optional eine kurze Begründung erfragt; Maps-Link zum Spielort; persönlicher iCal-Abo-Link zum Einbinden in fremde Kalender-Apps.</li>
-        <li><strong>Abwesenheiten melden:</strong> Krankheit, Urlaub o.&nbsp;Ä. eintragen; betroffene Termine werden angezeigt.</li>
-        <li><strong>Mein Team:</strong> Mannschaftszugehörigkeit, Aufstellung, <strong>Aufgaben</strong> (z.&nbsp;B. Mannschaftskasse, Getränkewart) und <strong>Mannschafts-Strafen</strong> einsehen.</li>
-        <li><strong>Dienstbörse:</strong> Offene Dienst-Slots ansehen und sich anmelden; eigenes Dienst-Konto einsehen; Anleitungen zu Dienst-Typen aufrufen. Eltern können einen Dienst auch <strong>stellvertretend für ihr Kind</strong> übernehmen.</li>
-        <li><strong>Mitfahrgelegenheiten:</strong> Fahrten zu Auswärtsspielen anbieten oder suchen; Paarungen bestätigen/ablehnen.</li>
-        <li><strong>Nachrichten / Chat:</strong> Einzel- und Gruppenchats mit Reaktionen, Antworten mit Zitat, nachträglichem Bearbeiten/Löschen eigener Nachrichten, Lesebestätigungen (Haken, in Gruppen als „N/M gelesen") und Push-Benachrichtigungen; zusätzlich <strong>Mitteilungen</strong> (Broadcasts vom Vorstand, vom Absender nachträglich editierbar); Team-Gruppen als Direkt-Adressat.</li>
-        <li><strong>Dokumente:</strong> Ordnerbasiertes Dokumenten-Archiv mit Berechtigungen; PDF- und Bild-Ansicht direkt in der App.</li>
-        <li><strong>Videos:</strong> Spiel- und Trainingsvideos streamen (HLS), Weitergabe an TV per <strong>AirPlay</strong> (Apple) oder <strong>Chromecast</strong> (Android/Google) – je nach Berechtigung der Mannschaft.</li>
-        <li><strong>PWA / Push:</strong> Zur Startseite hinzufügen, Push-Berechtigung erlauben und den Badge (ungelesene Nachrichten) am App-Symbol nutzen – Details siehe <a class="inline" href="#k7">Kapitel 07</a>.</li>
+        <li><strong>Dashboard:</strong> Persönliche Übersicht – nächste Termine, offene Dienste, eigene Dienst-Bilanz (Soll/Ist), offene Mitfahrgelegenheiten, ungelesene Nachrichten.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Öffnet sich automatisch nach der Anmeldung; jederzeit erreichbar über Menü → <strong>Nutzer → Dashboard</strong>.</li>
+            <li>Jede Kachel ist klickbar und führt direkt zum jeweiligen Bereich (z.&nbsp;B. ein Termin öffnet ihn im Kalender).</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Mein Profil:</strong> Stammdaten, Kontakt, Telefonnummern, Foto, Sichtbarkeits-Einstellungen, Fahrzeugdaten für Mitfahrten, <strong>Kartendienst-Präferenz</strong> (Google Maps / Apple Maps / automatisch) für die Navigation zu Spielorten sowie <strong>Benachrichtigungs-Präferenzen</strong> pro Kategorie (Spiele, Trainings, Dienste, Chat, …). Anzeigename und E-Mail-Adresse lassen sich selbst ändern (E-Mail-Änderung verlangt das aktuelle Passwort). Ein eigener <strong>Datenschutz-Tab</strong> bündelt Sichtbarkeits-Einstellungen (inkl. WhatsApp-Sichtbarkeit) sowie die Einwilligung zur <strong>Foto-Veröffentlichung</strong> in Spielberichten und auf der Website.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Nutzer → Mein Profil</strong> öffnen.</li>
+            <li>Oben zwischen den Reitern wechseln: <strong>Konto</strong> (Login, Anzeigename, E-Mail), <strong>Kontakt</strong> (Adresse, Telefon, Foto, Kartendienst-Präferenz, Fahrzeugdaten), <strong>Mitgliedsdaten</strong>, <strong>Bankdaten</strong>, <strong>Anwesenheit</strong>, <strong>Trainingstagebuch</strong>, <strong>Kalender-Abo</strong>, <strong>Datenschutz</strong>, <strong>Sonstiges</strong> (Benachrichtigungs-Präferenzen).</li>
+            <li>Änderungen im jeweiligen Reiter speichern. Manche Felder (z.&nbsp;B. Mitgliedsdaten, Bankdaten) laufen als <strong>Änderungsantrag</strong> über den Vorstand statt sofort zu greifen – der Reiter zeigt den Antrag als „ausstehend" an, bis er geprüft ist.</li>
+            <li>E-Mail ändern: im Reiter „Konto" neue Adresse eintragen und das aktuelle Passwort bestätigen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Anwesenheits-Historie:</strong> Eigene Anwesenheiten (Spieler) bzw. die deiner Kinder (Eltern) einsehen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Im eigenen Profil (oder im Kind-Profil) den Reiter <strong>Anwesenheit</strong> öffnen – nur sichtbar bei Vereinsfunktion <em>spieler</em>.</li>
+            <li>Zeigt vergangene Trainings und Spiele mit Status (anwesend / entschuldigt / unentschuldigt).</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Trainingstagebuch (nur Spieler):</strong> Eigene Trainingseinheiten außerhalb des Mannschaftstrainings protokollieren – Art, Dauer und Belastung (RPE-Skala 1–10), optional mit Nachweisfoto. Rein persönlich, Trainer und Eltern können mitlesen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Mein Trainingstagebuch</strong> öffnen (oder Reiter „Trainingstagebuch" im eigenen Profil).</li>
+            <li>Button <strong>Einheit erfassen</strong> klicken.</li>
+            <li>Datum, Art (Kraft, Ausdauer, Athletik, Technik, Beweglichkeit, Reha, Sonstiges), Dauer in Minuten und Belastung (RPE 1–10) eintragen.</li>
+            <li>Optional ein Nachweisfoto anhängen (JPG/PNG/WebP/PDF, max. 1&nbsp;MB) – lässt sich später jederzeit nachreichen oder entfernen.</li>
+            <li>Einträge bleiben dauerhaft in der Historie; Trainer und Eltern können mitlesen, aber nicht bearbeiten.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Kinderprofile (Eltern):</strong> Daten der eigenen Kinder verwalten – inkl. clientseitig verschlüsselter Bankdaten, Fotos, Kontakt, Stammdaten und Anwesenheiten. Gilt sowohl für Kinder ohne eigenen Account als auch für Kinder mit eigenem Kinderaccount.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>In der Seitenleiste erscheinen die Namen der eigenen Kinder direkt unter „Mein Profil" (Menü-Gruppe <strong>Nutzer</strong>).</li>
+            <li>Klick auf den Namen öffnet das Kind-Profil mit denselben Reitern wie im eigenen Profil (Kontakt, Mitgliedsdaten, Bankdaten, Anwesenheit, Trainingstagebuch, Kalender-Abo, Datenschutz).</li>
+            <li>Bankdaten der Kinder werden clientseitig genauso verschlüsselt wie die eigenen – siehe <a class="inline" href="#k4">Kapitel 04</a>.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Kalender &amp; Termine:</strong> Trainings, Spiele, sonstige Termine ansehen, zu-/absagen (RSVP) – bei Absage oder „Vielleicht" wird optional eine kurze Begründung erfragt; Maps-Link zum Spielort; persönlicher iCal-Abo-Link zum Einbinden in fremde Kalender-Apps.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Kalender</strong> öffnen.</li>
+            <li>Termin anklicken öffnet die Detailansicht mit den Buttons <strong>Zusagen</strong>, <strong>Absagen</strong> und <strong>Vielleicht</strong>.</li>
+            <li>Bei Absage oder Vielleicht öffnet sich ein kurzes Begründungsfeld, bevor die Antwort gespeichert wird.</li>
+            <li>Ist ein Spielort mit Adresse hinterlegt, führt ein Maps-Symbol direkt zur Navigation (Google oder Apple Maps, je nach Profil-Einstellung).</li>
+            <li>Eigenen Kalender abonnieren: Profil → Reiter <strong>Kalender-Abo</strong> → Link kopieren und in der externen Kalender-App (z.&nbsp;B. Apple/Google Kalender) als Web-Abo hinzufügen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Abwesenheiten melden:</strong> Krankheit, Urlaub o.&nbsp;Ä. eintragen; betroffene Termine werden angezeigt.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Im Kalender oben den gelben Button <strong>Abwesenheit</strong> klicken (bei Trainer/Vorstand: Button „Event" → Kachel „Abwesenheit" wählen).</li>
+            <li>Zeitraum (Von/Bis) und Typ angeben: <strong>Urlaub / Sonstige Abwesenheit</strong> oder <strong>Verletzung / Sportverbot</strong>.</li>
+            <li>Eltern wählen zusätzlich aus, für welches Kind die Abwesenheit gilt.</li>
+            <li>Eine Vorschau zeigt die betroffenen Termine; überschneidet sich der Zeitraum mit einer bereits bestehenden Abwesenheit, wird die Eintragung mit einer Fehlermeldung abgelehnt.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Mein Team:</strong> Mannschaftszugehörigkeit, Aufstellung, <strong>Aufgaben</strong> (z.&nbsp;B. Mannschaftskasse, Getränkewart) und <strong>Mannschafts-Strafen</strong> einsehen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Mein Team</strong> öffnen.</li>
+            <li>Reiter oben: <strong>Team</strong> (Kader-Übersicht inkl. zugewiesener Aufgaben), <strong>Trainer</strong>, <strong>Eltern</strong>, sowie – falls für das Team aktiv – <strong>Strafen</strong> (eigenes Strafenkonto) und <strong>Kasse</strong> (Mannschaftskasse).</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Dienstbörse:</strong> Offene Dienst-Slots ansehen und sich anmelden; eigenes Dienst-Konto einsehen; Anleitungen zu Dienst-Typen aufrufen. Eltern können einen Dienst auch <strong>stellvertretend für ihr Kind</strong> übernehmen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Dienste</strong> öffnen.</li>
+            <li>Offene Slots sind nach Datum sortiert; ein Klick auf <strong>Eintragen</strong> übernimmt den Dienst sofort – ohne weitere Bestätigung.</li>
+            <li>Bei verknüpften Kindern mit Proxy-Account fragt ein kurzer Dialog, ob der Dienst für dich selbst oder für das Kind gebucht wird.</li>
+            <li>Zum Zurücktreten <strong>Austragen</strong> klicken (nur vor dem Termin möglich).</li>
+            <li>Gibt es zum Diensttyp eine Anleitung, erscheint ein Buch-Symbol neben dem Slot – öffnet die Markdown-Anleitung des Vorstands.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Mitfahrgelegenheiten:</strong> Fahrten zu Auswärtsspielen anbieten oder suchen; Paarungen bestätigen/ablehnen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Mitfahrten</strong> öffnen.</li>
+            <li>Beim jeweiligen Auswärtsspiel entweder <strong>Platz anbieten</strong> (du fährst, hast freie Plätze) oder <strong>Mitfahrt anfragen</strong> (du suchst eine Mitfahrgelegenheit) wählen.</li>
+            <li>Fahrzeugdaten/Sitzplätze werden aus dem eigenen Profil vorausgefüllt (dort im Reiter „Kontakt" hinterlegbar).</li>
+            <li>Ein passendes Gegenstück lässt sich direkt bestätigen oder ablehnen – nach Bestätigung sind beide Seiten für die Fahrt verbindlich gepaart.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Nachrichten / Chat:</strong> Einzel- und Gruppenchats mit Reaktionen, Antworten mit Zitat, nachträglichem Bearbeiten/Löschen eigener Nachrichten, Lesebestätigungen (Haken, in Gruppen als „N/M gelesen") und Push-Benachrichtigungen; zusätzlich <strong>Mitteilungen</strong> (Broadcasts vom Vorstand, vom Absender nachträglich editierbar); Team-Gruppen als Direkt-Adressat.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Nachrichten</strong> öffnen.</li>
+            <li>Zwei Reiter oben: <strong>Chats</strong> (Einzel-/Gruppengespräche) und <strong>Mitteilungen</strong> (Broadcasts, mit Ungelesen-Zähler).</li>
+            <li>Button <strong>Neues Gespräch</strong> startet einen Einzel- oder Gruppenchat.</li>
+            <li>Auf eine eigene Nachricht länger tippen bzw. rechtsklicken, um sie zu bearbeiten, zu löschen oder mit Zitat zu beantworten.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Dokumente:</strong> Ordnerbasiertes Dokumenten-Archiv mit Berechtigungen; PDF- und Bild-Ansicht direkt in der App.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Dokumente</strong> öffnen.</li>
+            <li>Durch die Ordnerstruktur navigieren – sichtbar ist nur, wofür eine Leseberechtigung besteht.</li>
+            <li>Mit Schreibrecht: <strong>Hochladen</strong> legt eine Datei im aktuellen Ordner ab, <strong>Neuer Ordner</strong> legt eine Unterstruktur an.</li>
+            <li>PDF- und Bilddateien öffnen sich direkt in der App; andere Formate werden heruntergeladen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Videos:</strong> Spiel- und Trainingsvideos streamen (HLS), Weitergabe an TV per <strong>AirPlay</strong> (Apple) oder <strong>Chromecast</strong> (Android/Google) – je nach Berechtigung der Mannschaft.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Videos</strong> öffnen.</li>
+            <li>Video antippen startet den Stream direkt im Browser.</li>
+            <li>TV-Wiedergabe: auf iPhone/iPad über die native AirPlay-Funktion des Video-Players, auf Android/Chrome über das Cast-Symbol (Chromecast) im Player.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>PWA / Push:</strong> Zur Startseite hinzufügen, Push-Berechtigung erlauben und den Badge (ungelesene Nachrichten) am App-Symbol nutzen – Details siehe <a class="inline" href="#k7">Kapitel 07</a>.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Im Browser-Menü <strong>„Zum Startbildschirm hinzufügen"</strong> bzw. <strong>„App installieren"</strong> wählen.</li>
+            <li>Beim ersten Start fragt das Betriebssystem nach der Push-Berechtigung – erlauben.</li>
+            <li>Kommen Push-Mitteilungen nicht oder verspätet an: Schritt-für-Schritt-Fehlersuche in <a class="inline" href="#k7">Kapitel 07</a>.</li>
+          </ol></div></details>
+        </li>
       </ul>
 
       <h3>Trainer &amp; sportliche Leitung</h3>
       <ul>
-        <li><strong>Trainings planen:</strong> Einzeltrainings und ganze Serien anlegen, ändern, absagen; Trainings-Notizen pflegen; einzelne Spieler bei Bedarf dauerhaft von einer Trainings-Serie abmelden.</li>
-        <li><strong>Anwesenheiten erfassen</strong> bei Trainings und Spielen – auch rückwirkend – sowie Team-Anwesenheits-Statistiken einsehen.</li>
-        <li><strong>Spiele verwalten:</strong> Heim-, Auswärts- und generische Events; Aufstellung/Kader-Nominierung, Spiel-Notizen, Spielorte.</li>
-        <li><strong>Kaderplanung:</strong> Saison-Kader zusammenstellen, Vorschläge &amp; Auto-Zuweisung, Kader aus Vorsaison kopieren, Spiele pro Saison patchen. <strong>Erweiterter Kader:</strong> Gelegenheitsspieler ohne volle Mitgliedschaft können einem Team zugeordnet werden – sie trainieren mit und sehen die Trainings, zählen aber nicht zum Spielkader.</li>
-        <li><strong>Trainingsgruppen</strong> (z.&nbsp;B. Förderkader, Perspektivkader): nicht-spielgebundene Kader für Talent-/Gastkinder außerhalb der regulären Mannschaftsstruktur.</li>
-        <li><strong>Dienste organisieren:</strong> Dienst-Slots anlegen/anpassen, Erfüllung bestätigen, Bar-Ersatz buchen; automatische Neuerzeugung bei Spieländerungen.</li>
-        <li><strong>Videos hochladen</strong> (resumable Upload) und Video-Metadaten pflegen für die eigene Mannschaft.</li>
-        <li><strong>Mein Team – Verwaltung:</strong> Aufgaben-Katalog pflegen und Aufgaben zuweisen, Strafen-Katalog pflegen, <strong>Strafenwart</strong> ernennen.</li>
-        <li><strong>Mitglieder suchen</strong> (eingeschränkt auf die eigenen Kader bzw. vereinsweite Trainerliste).</li>
+        <li><strong>Trainings planen:</strong> Einzeltrainings und ganze Serien anlegen, ändern, absagen; Trainings-Notizen pflegen; einzelne Spieler bei Bedarf dauerhaft von einer Trainings-Serie abmelden.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Kalender</strong> öffnen.</li>
+            <li>Auf ein Tagesfeld zeigen — ein Plus-Symbol erscheint; anklicken öffnet den Event-Assistenten. Dort <strong>Einzeltraining</strong> oder <strong>Trainingsserie</strong> wählen.</li>
+            <li>Pflichtfelder ausfüllen (Datum/Wochentag, Startzeit, Endzeit, Mannschaft; bei Serien zusätzlich „Gültig von"/„Gültig bis") und mit <strong>Training anlegen</strong> bzw. <strong>Serie anlegen</strong> bestätigen.</li>
+            <li>Zum Ändern: Trainings-Kachel im Kalender anklicken, im Infofenster das Stift-Symbol <strong>Bearbeiten</strong> — bei Serien-Terminen zuerst den „Bearbeitungsumfang" wählen (Nur dieser Termin / Dieser und folgende / Alle der Serie). Löschen über das Mülleimer-Symbol im selben Dialog.</li>
+            <li>Kurzfristige Hinweise zum Termin trägst du im Infofenster unter „Hinweis" ein.</li>
+            <li>Um einen Spieler dauerhaft aus einer Serie zu nehmen: den Termin unter <strong>Termine</strong> öffnen, in der Teilnahme-Tabelle beim Spieler das Aktionsmenü öffnen und <strong>Dauerhaft abmelden</strong> wählen (umkehrbar über „Wieder anmelden").</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Anwesenheiten erfassen</strong> bei Trainings und Spielen – auch rückwirkend – sowie Team-Anwesenheits-Statistiken einsehen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Termine</strong> öffnen und den vergangenen Trainings- oder Spieltermin anklicken.</li>
+            <li>In der Teilnahme-Tabelle erscheint bei vergangenen Terminen die Spalte <strong>Anwesend</strong> — Häkchen pro Mitglied setzen; gespeichert wird sofort bei jedem Klick.</li>
+            <li>Bei Spielen zusätzlich die Spalte <strong>Aufstellung</strong> nutzen, um die nominierten Spieler zu markieren.</li>
+            <li>Team-Statistik: Menü → <strong>Spielbetrieb → Anwesenheit</strong> zeigt Trainings-/Spiel-Quoten je Mitglied inkl. Team-Durchschnitt.</li>
+            <li>Offene Erfassungen listet dieselbe Seite oben unter „X offene Erfassungen" — pro Eintrag direkt zum Termin springen oder per Augen-Symbol aus der Statistik ausschließen.</li>
+            <li>Eine bereits erfasste Anwesenheit lässt sich über den Link „Anwesenheits-Erfassung zurücksetzen" oberhalb der Teilnahme-Tabelle zurücksetzen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Spiele verwalten:</strong> Heim-, Auswärts- und generische Events; Aufstellung/Kader-Nominierung, Spiel-Notizen, Spielorte.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Kalender</strong> → Plus-Symbol auf dem Zieltag → <strong>Heimspiel</strong>, <strong>Auswärtsspiel</strong> oder <strong>Sonstiges Event</strong> wählen.</li>
+            <li>Datum, Uhrzeit, Gegner (bzw. Event-Name), Ort und Mannschaft(en) eintragen; bei „Sonstiges Event" zusätzlich Ende, Enddatum und mehrere Mannschaften möglich.</li>
+            <li>Im nächsten Schritt optional eine Dienstplan-Vorlage wählen — die daraus erzeugten Dienst-Slots lassen sich vor dem endgültigen Anlegen einzeln abwählen.</li>
+            <li>Zum Bearbeiten: Spiel-Kachel im Kalender anklicken → Stift-Symbol <strong>Bearbeiten</strong> öffnet Gegner/Termin/Ort/Mannschaften/Dienstplan-Vorlage; das Mülleimer-Symbol löscht das Event samt verknüpfter Dienste.</li>
+            <li>Aufstellung/Kader-Nominierung: den Termin unter <strong>Termine</strong> öffnen und in der Teilnahme-Tabelle die Spalte „Aufstellung" ankreuzen.</li>
+            <li>Spiel-Notizen pflegst du im Kalender-Infofenster unter „Hinweis".</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Kaderplanung:</strong> Saison-Kader zusammenstellen, Vorschläge &amp; Auto-Zuweisung, Kader aus Vorsaison kopieren, Spiele pro Saison patchen. <strong>Erweiterter Kader:</strong> Gelegenheitsspieler ohne volle Mitgliedschaft können einem Team zugeordnet werden – sie trainieren mit und sehen die Trainings, zählen aber nicht zum Spielkader.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Kader</strong> öffnen, oben die Saison wählen.</li>
+            <li><strong>+ Mannschaft</strong> legt einen neuen Kader an (Altersklasse, Geschlecht, Jahrgang); <strong>Aus vorheriger Saison kopieren</strong> übernimmt den Kaderstand der Vorsaison, <strong>Auto-Assign</strong> schlägt automatisch Zuordnungen vor.</li>
+            <li>Jahrgänge je Kader über den Umschalter „Gemischt"/„Dediziert" festlegen; das Feld „Spiele" setzt die Anzahl Spiele pro Saison.</li>
+            <li>Über <strong>Mitglied suchen…</strong> Spieler zum Stammkader hinzufügen (Checkbox „Jahrgang filtern" schränkt auf den passenden Jahrgang ein).</li>
+            <li>Über <strong>Mitglied für erweiterten Kader suchen…</strong> im Bereich „Erweiterter Kader" Gelegenheitsspieler hinzufügen; Entfernen jeweils über das X-Symbol am Eintrag.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Trainingsgruppen</strong> (z.&nbsp;B. Förderkader, Perspektivkader): nicht-spielgebundene Kader für Talent-/Gastkinder außerhalb der regulären Mannschaftsstruktur.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Kader</strong> → <strong>+ Mannschaft</strong>.</li>
+            <li>Im Feld „Altersklasse" die Gruppe <strong>Trainingsgruppen</strong> öffnen und die gewünschte Kategorie (z.&nbsp;B. Förderkader, Perspektivkader) statt einer Wettkampf-Altersklasse wählen.</li>
+            <li>Geschlecht und optional einen Jahrgang setzen, dann mit <strong>Anlegen</strong> bestätigen.</li>
+            <li>Die neue Trainingsgruppe erscheint als eigener Reiter in der Altersklassen-Leiste und wird wie ein normaler Kader über „Mitglied suchen…"/„Trainer suchen…" befüllt.</li>
+            <li>Bestehende Kader lassen sich nachträglich über das „Altersklasse"-Dropdown der Kader-Karte in eine Trainingsgruppe umhängen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Dienste organisieren:</strong> Dienst-Slots anlegen/anpassen, Erfüllung bestätigen, Bar-Ersatz buchen; automatische Neuerzeugung bei Spieländerungen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Kalender</strong> → betroffene Spiel-Kachel anklicken → im Infofenster auf das Klemmbrett-Symbol <strong>Dienste</strong>.</li>
+            <li><strong>+ Dienst hinzufügen</strong> öffnet den Dialog für einen neuen Slot: Diensttyp, Uhrzeit, Anzahl Personen und optional Zielgruppe wählen.</li>
+            <li>Bestehende Slots über <strong>Bearbeiten</strong> (Uhrzeit, Personenzahl, Zielgruppe) anpassen oder über das Mülleimer-Symbol löschen — bei bereits besetzten Slots erscheint vorher eine Sicherheitsabfrage.</li>
+            <li>Wiederkehrende Dienst-Zuschnitte pflegst du unter Menü → <strong>Verwaltung → Dienstplan-Vorlagen</strong> (<strong>+ Vorlage</strong>, Dienst-Einträge mit Diensttyp/Personen/Anker/Versatz); eine beim Spiel ausgewählte Vorlage erzeugt die Slots automatisch.</li>
+            <li>Bei jeder Spieländerung (Datum/Zeit) werden verknüpfte Dienst-Slots automatisch neu berechnet — eine Zusammenfassung der Änderungen erscheint danach oben auf der Kalenderseite.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Videos hochladen</strong> (resumable Upload) und Video-Metadaten pflegen für die eigene Mannschaft.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Spielbetrieb → Videos</strong> öffnen und den Hochladen-Button anklicken.</li>
+            <li>Titel eingeben oder alternativ im Feld „Spiel" ein Spiel wählen (der Titel wird dann automatisch aus Datum und Gegner gebildet); Team ist Pflichtfeld, Beschreibung optional.</li>
+            <li>Videodatei auswählen (maximal 15&nbsp;GB) und <strong>Hochladen</strong> klicken — der Fortschrittsbalken zeigt Prozent und geschätzte Restzeit.</li>
+            <li>Wird der Upload unterbrochen: beim erneuten Öffnen mit derselben Datei bietet die Seite <strong>Upload fortsetzen</strong> an.</li>
+            <li>Nach Abschluss führt <strong>Zum Video</strong> zur Detailseite; die Konvertierung läuft im Hintergrund, eine Push-Benachrichtigung informiert Uploader, Spieler, Eltern und Trainer, sobald das Video abspielbar ist.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Mein Team – Verwaltung:</strong> Aufgaben-Katalog pflegen und Aufgaben zuweisen, Strafen-Katalog pflegen, <strong>Strafenwart</strong> ernennen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Mein Team</strong> öffnen, Reiter <strong>Verwalten</strong> wählen (nur sichtbar mit Verwaltungsrecht für das Team).</li>
+            <li>Unter „Aufgaben-Katalog" neue Aufgaben-Bezeichnungen im Eingabefeld eintragen und mit dem Plus-Button hinzufügen, per X-Symbol wieder löschen.</li>
+            <li>Unter „Aufgabe zuweisen" Spieler und Aufgabe aus den Dropdowns wählen und mit dem Plus-Button zuweisen; zugewiesene Aufgaben erscheinen als Chips mit X-Symbol zum Entfernen.</li>
+            <li>Unter „Strafen-Katalog" Grund und Betrag (bzw. Anzahl Striche, je nach oben gewählter „Einheit" Euro/Striche) erfassen und mit dem Plus-Button hinzufügen.</li>
+            <li>Unter „Strafenwart" bzw. „Kassenwart" eine Person aus der Liste wählen und über den Plus-Button ernennen (Entfernen per X-Symbol am Chip).</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Mitglieder suchen</strong> (eingeschränkt auf die eigenen Kader bzw. vereinsweite Trainerliste).
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Eine eigenständige Suchseite gibt es dafür nicht — die Suche steckt in Menü → <strong>Verwaltung → Kader</strong>, direkt an der jeweiligen Kader-Karte.</li>
+            <li>Über <strong>Mitglied suchen…</strong> findest du Spieler für den Stammkader (Checkbox „Jahrgang filtern" grenzt auf den passenden Jahrgang ein).</li>
+            <li>Über <strong>Trainer suchen…</strong> am selben Kader durchsuchst du bei aktivierter Checkbox „Nur Trainer" die vereinsweite Liste aller Mitglieder mit der Vereinsfunktion Trainer — unabhängig vom eigenen Kader.</li>
+            <li>Ein Treffer aus der Vorschlagsliste fügt die Person per Klick direkt zum Kader bzw. als Trainer hinzu.</li>
+          </ol></div></details>
+        </li>
       </ul>
 
       <h3>Strafenwart (teaminterne Ernennung)</h3>
       <ul>
-        <li>Vom Trainer der Mannschaft ernannt; <strong>bucht Strafen</strong> aus dem Team-Katalog auf einzelne Spieler, storniert Fehlbuchungen, setzt Konten zurück.</li>
-        <li>Sieht die Strafen des eigenen Teams; keine Rechte in anderen Mannschaften.</li>
+        <li><strong>Vom Trainer der Mannschaft ernannt; bucht Strafen</strong> aus dem Team-Katalog auf einzelne Spieler, storniert Fehlbuchungen, setzt Konten zurück.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Mein Team</strong> öffnen und (bei mehreren Teams) die betroffene Team-Karte aufklappen.</li>
+            <li>Tab <strong>Strafen</strong> wählen.</li>
+            <li>Unter „Strafe verhängen": <strong>Spieler</strong> und <strong>Grund</strong> aus dem Strafen-Katalog auswählen, mit dem Plus-Button bestätigen – die Buchung erscheint sofort in der Liste.</li>
+            <li>Eine einzelne Fehlbuchung stornieren: Papierkorb-Symbol neben dem Eintrag anklicken.</li>
+            <li>Alle Strafen einer Person auf einmal löschen: <strong>Zurücksetzen</strong> neben dem Namen (mit Sicherheitsabfrage).</li>
+          </ol></div></details>
+        </li>
+        <li>Sieht die Strafen des eigenen Teams; keine Rechte in anderen Mannschaften.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Der Tab <strong>Strafen</strong> und die Aktionen darin (Verhängen, Stornieren, Zurücksetzen) erscheinen nur in der Team-Karte, in der man vom Trainer als Strafenwart ernannt wurde.</li>
+            <li>In anderen eigenen Team-Karten (z.&nbsp;B. als Spieler eines anderen Kaders) bleibt die Strafenliste – falls überhaupt sichtbar – rein lesend, ohne Verhängen/Stornieren-Buttons.</li>
+          </ol></div></details>
+        </li>
       </ul>
 
       <h3>Presseteam &amp; Medien-Freigeber (Spielberichte)</h3>
       <ul>
-        <li><strong>Presseteam</strong> (System-Rolle): Spielbericht als Entwurf anlegen, Bilder hochladen, bearbeiten und <em>zur Prüfung</em> einreichen.</li>
-        <li><strong>Medien</strong> (Vereinsfunktion) und <strong>Vorstand</strong>: eingereichte Berichte prüfen und <strong>veröffentlichen</strong>; der Autor bekommt fehlgeschlagene Publish-Läufe zurück.</li>
-        <li>Übersicht der eigenen Entwürfe unter <em>Spielberichte</em>, Freigabe-Warteschlange unter <em>Spielbericht prüfen</em>.</li>
+        <li><strong>Presseteam</strong> (System-Rolle): Spielbericht als Entwurf anlegen, Bilder hochladen, bearbeiten und <em>zur Prüfung</em> einreichen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Spielberichte</strong> öffnen.</li>
+            <li>Unter „Offene Aufträge" erscheint jeder Dienst-Slot vom Typ Spielbericht, den du übernommen hast; <strong>Bericht schreiben</strong> klicken, um den Entwurf anzulegen.</li>
+            <li>Titel, Endstand (Heim/Gast, optional Halbzeitstand), Abstract (Teaser, max. 500 Zeichen) und den eigentlichen Bericht als Markdown-Text ausfüllen. Für Turniere die Checkbox <strong>„Turnier (kein Endergebnis nötig)"</strong> setzen. Über <strong>Vorschau</strong> lässt sich der gerenderte Markdown-Text jederzeit gegenprüfen.</li>
+            <li>Bis zu 10 Bilder über <strong>Bilder wählen</strong> hochladen (JPG/PNG, werden automatisch verkleinert); erscheint der Hinweis <strong>„Foto-Freigabe fehlt bei: …"</strong>, unbedingt prüfen, dass diese Personen auf den Bildern nicht erkennbar sind.</li>
+            <li>Zwischenstand jederzeit mit <strong>Entwurf speichern</strong> sichern.</li>
+            <li><strong>Zur Prüfung senden</strong> klicken, sobald der Bericht fertig ist — danach kannst du selbst nichts mehr ändern, nur noch Medien oder Vorstand.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Medien</strong> (Vereinsfunktion) und <strong>Vorstand</strong>: eingereichte Berichte prüfen und <strong>veröffentlichen</strong>; der Autor bekommt fehlgeschlagene Publish-Läufe zurück.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verein → Spielbericht prüfen</strong> öffnen — die Liste zeigt alle Berichte im Status „Wartet auf Freigabe", sortiert mit Autor, Spieldatum und Bildanzahl; seit über 5 Tagen offene Berichte sind rot mit <strong>„Überfällig"</strong> markiert.</li>
+            <li>Mit <strong>Prüfen</strong> den Bericht öffnen; Titel, Ergebnis, Abstract, Text und Bilder lassen sich hier direkt korrigieren.</li>
+            <li>Passt alles, <strong>Veröffentlichen</strong> klicken und die Sicherheitsabfrage bestätigen — der Bericht geht live nach TYPO3, danach sind Änderungen nur noch direkt in TYPO3 möglich.</li>
+            <li>Schlägt der Publish-Lauf fehl (z.&nbsp;B. TYPO3 nicht erreichbar), springt der Bericht in den Status <strong>„Fehler"</strong> zurück und zeigt den Fehlertext im Banner „Letzter Publish-Fehler"; einfach nach Prüfung erneut auf <strong>Veröffentlichen</strong> klicken, um den Lauf zu wiederholen.</li>
+            <li>Fehlt eine aktive Saison, erscheint stattdessen der Hinweis „Keine aktive Saison" — dann zuerst unter Einstellungen (Tab „Saisons") eine Saison aktivieren.</li>
+          </ol></div></details>
+        </li>
+        <li>Übersicht der eigenen Entwürfe unter <em>Spielberichte</em>, Freigabe-Warteschlange unter <em>Spielbericht prüfen</em>.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li><strong>Verein → Spielberichte</strong> zeigt „Meine Berichte" mit Status je Bericht (Entwurf, Wartet auf Freigabe, Wird veröffentlicht…, Veröffentlicht, Fehler) — Klick auf <strong>Öffnen</strong> springt in den jeweiligen Bericht.</li>
+            <li>Bereits veröffentlichte Berichte zeigen zusätzlich einen Link <strong>Homepage</strong>, der direkt zur TYPO3-Seite führt.</li>
+            <li><strong>Verein → Spielbericht prüfen</strong> ist nur für Medien/Vorstand/Admin sichtbar und listet ausschließlich Berichte, die aktuell auf Freigabe warten.</li>
+          </ol></div></details>
+        </li>
       </ul>
 
       <h3>Vorstand</h3>
       <ul>
-        <li><strong>Mitgliederverwaltung:</strong> anlegen (Mitgliedsnummer wird automatisch vergeben), bearbeiten, Status pflegen (siehe <a class="inline" href="#k2">Kapitel 02</a>), Familien-Verknüpfungen anlegen/lösen, Proxy- oder Kinderaccounts erzeugen, Willkommens-Mail auslösen, löschen, im-/exportieren.</li>
-        <li><strong>Änderungsanträge</strong> (auch verschlüsselte Bankdaten-Anträge) prüfen und annehmen/ablehnen.</li>
-        <li><strong>Nutzer &amp; Konten:</strong> Konten anlegen, System-Rolle vergeben, Einladungen einzeln oder per CSV-Import, Beitrittsanfragen genehmigen/ablehnen, Recovery-E-Mails setzen.</li>
-        <li><strong>Stammdaten:</strong> Teams, Saisons (inkl. aktiver Saison, Dienst-Zielen und Halbierungs-Kennung), Stammvereine, Veranstaltungsorte (auch Import), Dienst-Typen mit Markdown-Anleitungen, Dienstplan-Vorlagen.</li>
-        <li><strong>Vereinseinstellungen:</strong> Vereinsstammdaten, Alters­klassen-Regeln, Tresor-Passphrase-Rotation.</li>
+        <li><strong>Mitgliederverwaltung:</strong> anlegen (Mitgliedsnummer wird automatisch vergeben), bearbeiten, Status pflegen (siehe <a class="inline" href="#k2">Kapitel 02</a>), Familien-Verknüpfungen anlegen/lösen, Proxy- oder Kinderaccounts erzeugen, Willkommens-Mail auslösen, löschen, im-/exportieren.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Mitglieder</strong> öffnen.</li>
+            <li>Neu anlegen: oben rechts <strong>+ Neu</strong> klicken, Stammdaten ausfüllen und speichern – die Mitgliedsnummer wird automatisch vergeben.</li>
+            <li>Import/Export: Pfeil neben <strong>+ Neu</strong> öffnet das Menü mit <strong>Import CSV</strong> (mit Vorschau, Modus „Anhängen"/„Aktualisieren"/„Anreichern") und <strong>Export CSV</strong>.</li>
+            <li>Ein Mitglied öffnen und im Tab <strong>Stammdaten</strong> unter „Status" den passenden Status per Klick setzen (z.&nbsp;B. aktiv, verletzt, pausiert, ausgetreten).</li>
+            <li>Im Tab <strong>Familie</strong> Erziehungsberechtigte über die Suche hinzufügen/entfernen; hat das Mitglied noch keinen Nutzeraccount, lässt sich dort ein <strong>Proxy-Account anlegen</strong> (Dienst-Zuordnung ohne Login).</li>
+            <li>Im Tab <strong>Admin</strong> einen bestehenden Nutzer verknüpfen oder die <strong>Willkommensmail senden</strong> (Vereinssatzung, Gebührenordnung, Leitbild).</li>
+            <li>Löschen erfolgt über das <strong>⋮</strong>-Aktionsmenü der Mitgliederzeile → <strong>Löschen</strong> (mit Sicherheitsabfrage).</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Änderungsanträge</strong> (auch verschlüsselte Bankdaten-Anträge) prüfen und annehmen/ablehnen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Mitglieder</strong> öffnen und den Filter <strong>„Mit Änderungsantrag"</strong> aktivieren, um nur betroffene Mitglieder zu sehen.</li>
+            <li>Das gewünschte Mitglied öffnen – im Tab <strong>Stammdaten</strong> erscheinen offene Anträge zu Name/Profildaten direkt bei den betroffenen Feldern.</li>
+            <li>Für Bankdaten- oder SEPA-Mandats-Änderungen im Tab <strong>Bankdaten</strong> nachsehen (dort erscheinen sie ebenfalls inline am jeweiligen Feld).</li>
+            <li>Pro Antrag steht <strong>✓ Annehmen</strong> oder <strong>✗ Ablehnen</strong> zur Verfügung.</li>
+            <li>Bei verschlüsselten Bankdaten-Anträgen den <strong>Tresor</strong> vorher entsperren, sonst lässt sich der Inhalt nicht einsehen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Nutzer &amp; Konten:</strong> Konten anlegen, System-Rolle vergeben, Einladungen einzeln oder per CSV-Import, Beitrittsanfragen genehmigen/ablehnen, Recovery-E-Mails setzen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Nutzerverwaltung</strong> öffnen.</li>
+            <li>Einzeleinladung: oben rechts <strong>+ Neu</strong> klickt „Einladung versenden" auf; alternativ über den Pfeil daneben <strong>Account anlegen</strong> (Direktanlage ohne Einladungsmail) oder <strong>CSV importieren</strong> (Massen-Einladung).</li>
+            <li>Beitrittsanfragen und offene Einladungen stehen im Block <strong>„Ausstehende Anfragen &amp; Einladungen"</strong>; über das <strong>⋮</strong>-Menü der Zeile <strong>Genehmigen</strong>/<strong>Ablehnen</strong> (Anfragen) bzw. <strong>Einladung senden</strong>, <strong>Mit Mitglied verknüpfen</strong>, <strong>Löschen</strong> (Einladungen) wählen.</li>
+            <li>Bei registrierten Nutzern die System-Rolle direkt in der Tabellenzeile über das Dropdown ändern (nur für Admins verfügbar, eigener Account und andere Admins sind gesperrt).</li>
+            <li>Recovery-E-Mail für Kinder-/Proxy-Accounts über das <strong>⋮</strong>-Menü der Zeile → <strong>Eltern-E-Mail setzen</strong>.</li>
+            <li>Proxy-Accounts lassen sich dort ebenfalls über <strong>Aktivieren</strong> in einen echten Login-Account umwandeln.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Stammdaten:</strong> Teams, Saisons (inkl. aktiver Saison, Dienst-Zielen und Halbierungs-Kennung), Stammvereine, Veranstaltungsorte (auch Import), Dienst-Typen mit Markdown-Anleitungen, Dienstplan-Vorlagen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li><strong>Teams/Mannschaften:</strong> Menü → <strong>Verwaltung → Kader</strong>, Saison oben auswählen und über <strong>+ Mannschaft</strong> eine neue Mannschaft anlegen oder mit <strong>Aus vorheriger Saison kopieren</strong> den kompletten Kaderstand übernehmen.</li>
+            <li><strong>Saisons:</strong> Menü → <strong>Verwaltung → Einstellungen</strong>, Tab <strong>Saisons</strong> → <strong>+ Saison anlegen</strong>; dort auch die aktive Saison, Dienst-Ziele und die Kennung für das erste Abrechnungsjahr (Halbierung) pflegen.</li>
+            <li><strong>Stammvereine:</strong> im selben Bereich Tab <strong>Stammvereine</strong> – Name eingeben und anlegen; aktiv/inaktiv lässt sich per Klick umschalten.</li>
+            <li><strong>Veranstaltungsorte:</strong> Menü → <strong>Verwaltung → Veranstaltungsorte</strong> – einzeln anlegen oder über das Aktionsmenü <strong>Import CSV</strong> nutzen.</li>
+            <li><strong>Diensttypen:</strong> Menü → <strong>Verwaltung → Diensttypen</strong> – neuen Typ anlegen und über das <strong>⋮</strong>-Menü der Zeile <strong>Anleitung</strong> öffnen, um die Markdown-Anleitung zu pflegen.</li>
+            <li><strong>Dienstplan-Vorlagen:</strong> Menü → <strong>Verwaltung → Dienstplan-Vorlagen</strong> – legt fest, welche Diensttypen bei welchen Spiel-/Trainingskonstellationen automatisch Slots erzeugen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Vereinseinstellungen:</strong> Vereinsstammdaten, Alters­klassen-Regeln, Tresor-Passphrase-Rotation.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li><strong>Vereinsstammdaten &amp; SEPA:</strong> Menü → <strong>Verwaltung → Einstellungen</strong>, Tab <strong>Verein</strong> – Name, Adresse und (bei entsperrtem Tresor) Gläubiger-ID/IBAN/BIC/Kontoinhaber pflegen und speichern.</li>
+            <li><strong>Altersklassen-Regeln:</strong> im selben Bereich Tab <strong>Altersklassen</strong> – Halbzeit- und Pausenzeiten je Klasse anpassen und pro Zeile mit <strong>Speichern</strong> übernehmen (steuert die Spieldauer-Berechnung für Slots).</li>
+            <li><strong>Tresor-Passphrase-Rotation:</strong> Menü → <strong>Verwaltung → Tresor</strong> öffnen, Tresor mit der aktuellen Passphrase entsperren.</li>
+            <li>Dort <strong>Passphrase ändern</strong> klicken, neue Passphrase zweimal eingeben und mit <strong>Passphrase rotieren</strong> bestätigen.</li>
+            <li>Achtung: Es gibt <strong>kein Zurücksetzen</strong> – die neue Passphrase muss sofort allen Berechtigten (Vorstand/Kassierer) sicher mitgeteilt werden, sonst sind die Bankdaten unwiederbringlich verloren.</li>
+          </ol></div></details>
+        </li>
       </ul>
 
       <h3>Vorstand &amp; Kassierer (Finanzen)</h3>
       <ul>
-        <li><strong>Mitglieder-Stammdaten</strong> lesen und exportieren.</li>
-        <li><strong>Bankdaten:</strong> SEPA-Mandate hochladen (clientseitig verschlüsselt), Bankdaten pflegen und Kinder-Bankdaten korrigieren – siehe <a class="inline" href="#k4">Kapitel 04</a>.</li>
-        <li><strong>Vereins-Stammdaten</strong> (SEPA-Gläubiger-ID, Konto, Kontoinhaber) pflegen.</li>
-        <li><strong>Beitragsmatrix</strong> je Kategorie und Stichtag verwalten (mit Historie).</li>
-        <li><strong>Beitragslauf:</strong> SEPA-Lastschriftlauf erstellen – Vorschau prüfen, SEPA-Datei im Browser erzeugen, Lauf bestätigen und in einem Saison-Protokoll dokumentieren.</li>
-        <li><strong>Tresor</strong> entsperren (Voraussetzung für Bankdaten &amp; Beitragslauf); Passphrase-Rotation.</li>
+        <li><strong>Mitglieder-Stammdaten</strong> lesen und exportieren.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Mitglieder</strong> öffnen.</li>
+            <li>Mit der Suche (serverseitig) filtern; über <strong>„Mehr laden"</strong> weitere Mitglieder nachladen.</li>
+            <li>Klick auf einen Namen öffnet die Detailseite. Kassierer ohne Vorstands-Funktion sehen dort nur den Tab <strong>„Bankdaten"</strong>, Vorstand alle Tabs.</li>
+            <li>Für den Export oben rechts auf den Pfeil neben <strong>„+ Neu"</strong> (weitere Aktionen) klicken, dann <strong>„Export CSV"</strong> wählen.</li>
+            <li>Der Export-Button ist an Vorstands-Rechte gebunden — ein reiner Kassierer (ohne zusätzliche Vorstandsfunktion) sieht die Liste nur lesend, ohne „+ Neu"/Export.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Bankdaten:</strong> SEPA-Mandate hochladen (clientseitig verschlüsselt), Bankdaten pflegen und Kinder-Bankdaten korrigieren – siehe <a class="inline" href="#k4">Kapitel 04</a>.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li><strong>Zuerst den Tresor entsperren</strong> (Menü → Verwaltung → Tresor, Passphrase eingeben, „Entsperren"). Ohne entsperrten Tresor bleiben Kontoinhaber und IBAN im Formular leer, auch wenn bereits Daten hinterlegt sind — ein „Speichern" in diesem Zustand würde vorhandene Bankdaten löschen statt sie zu zeigen.</li>
+            <li>Menü → <strong>Verwaltung → Mitglieder</strong> öffnen, gewünschtes Mitglied (auch das Kind eines Elternteils) anklicken.</li>
+            <li>Auf der Detailseite den Tab <strong>„Bankdaten"</strong> wählen (bei reinen Kassierer-Accounts ist er ohnehin der einzige sichtbare Tab).</li>
+            <li>Kontoinhaber und IBAN prüfen bzw. korrigieren; eine ungültige IBAN wird direkt beim Verlassen des Feldes rot markiert.</li>
+            <li>Liegt ein Bankdaten-Änderungsantrag vor, erscheint oben ein Hinweis mit den (bei entsperrtem Tresor entschlüsselten) beantragten Werten – <strong>„Annehmen"</strong> übernimmt sie ins Formular, <strong>„Ablehnen"</strong> verwirft den Antrag.</li>
+            <li>Für das SEPA-Mandat: <strong>„Dokument hochladen"</strong> bzw. <strong>„Dokument ersetzen"</strong> wählt eine PDF/Bild-Datei (max. 2&nbsp;MB), die vor dem Hochladen im Browser verschlüsselt wird.</li>
+            <li>Unten <strong>„Speichern"</strong> klicken — erst danach sind Änderungen serverseitig übernommen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Vereins-Stammdaten</strong> (SEPA-Gläubiger-ID, Konto, Kontoinhaber) pflegen.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Einstellungen</strong>, Tab <strong>„Verein"</strong> öffnen.</li>
+            <li>Vereinsname und Adresse lassen sich jederzeit ändern und speichern, auch ohne Tresor.</li>
+            <li>Für die SEPA-Felder (Gläubiger-ID, Kontoinhaber, IBAN, BIC) zuerst den <strong>Tresor entsperren</strong> (Menü „Tresor") — solange er gesperrt ist, sind diese Felder deaktiviert und zeigen nur einen Hinweistext.</li>
+            <li>Nach dem Entsperren werden bereits hinterlegte SEPA-Stammdaten automatisch entschlüsselt eingeblendet; Felder bearbeiten (Gläubiger-ID z.&nbsp;B. <code>DE98ZZZ09999999999</code>).</li>
+            <li><strong>„Speichern"</strong> klicken. Ohne entsperrten Tresor wird nur Name/Adresse übernommen, vorhandene SEPA-Daten bleiben unverändert.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Beitragsmatrix</strong> je Kategorie und Stichtag verwalten (mit Historie).
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Einstellungen</strong>, Tab <strong>„Beiträge"</strong> öffnen.</li>
+            <li>Für jede der drei Kategorien („Aktiv (ohne Stammverein)", „Aktiv (mit Stammverein)", „Passiv") zeigt eine eigene Karte alle bisherigen Sätze mit „Gültig ab" und Betrag.</li>
+            <li>Neuen Satz erfassen: Datum im Feld <strong>„Gültig ab"</strong> wählen, Betrag in Euro eintragen, <strong>„Hinzufügen"</strong> klicken — der bisherige Satz bleibt als Historieneintrag erhalten, es wird nichts überschrieben.</li>
+            <li>Ein fehlerhaft erfasster Satz lässt sich über das Papierkorb-Symbol in seiner Zeile löschen (mit Bestätigungsdialog).</li>
+            <li>Welcher Satz gilt, ermittelt der Beitragslauf automatisch anhand des jüngsten „Gültig ab" vor dem Stichtag.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Beitragslauf:</strong> SEPA-Lastschriftlauf erstellen – Vorschau prüfen, SEPA-Datei im Browser erzeugen, Lauf bestätigen und in einem Saison-Protokoll dokumentieren.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li><strong>Voraussetzungen zuerst prüfen:</strong> Vereins-SEPA-Stammdaten unter Einstellungen → Verein vollständig gepflegt, und der <strong>Tresor entsperrt</strong> (Menü → Verwaltung → Tresor) — ohne entsperrten Tresor bricht der spätere XML-Export mit einem Hinweis ab.</li>
+            <li>Menü → <strong>Verwaltung → Beitragslauf</strong> öffnen; oben die gewünschte Saison wählen (vorbelegt ist die aktive Saison).</li>
+            <li>Die Vorschau-Tabelle zeigt pro Mitglied Kategorie und Betrag sowie ggf. einen <strong>Ausschlussgrund</strong> (z.&nbsp;B. „kein SEPA-Mandat", „IBAN fehlt", „beitragsfrei", „kein Beitragssatz hinterlegt") oder die Warnung „Stammverein unklar". Ausgeschlossene Zeilen sind grau hinterlegt und nicht anhakbar. Über die Filter „Kategorie" und „Hinweis" lässt sich die Liste eingrenzen.</li>
+            <li>Vorbelegte Häkchen bei Bedarf einzeln abwählen, um Mitglieder aus diesem Lauf herauszunehmen; die Fälligkeit (Einzugsdatum) lässt sich über das Datumsfeld anpassen (Default: 01.07. der Saison).</li>
+            <li><strong>„XML herunterladen"</strong> klicken, im Dialog die gewünschten Kategorien bestätigen — die pain.008-Datei wird lokal im Browser erzeugt, nie klartext-IBAN an den Server geschickt. Werden Feldlängen (z.&nbsp;B. Name) für den DK-TVS-Standard gekürzt, erscheint vorher ein Bestätigungsdialog mit den betroffenen Feldern.</li>
+            <li>Die heruntergeladene XML-Datei außerhalb von TeamWERK bei der Bank einreichen.</li>
+            <li>Erst <strong>nachdem</strong> die Bank den Einzug ausgeführt (oder abgelehnt) hat: <strong>„Lauf bestätigen"</strong> klicken, im Dialog einzelne Mitglieder mit fehlgeschlagenem Einzug als „nicht eingezogen" markieren, dann <strong>„Bestätigen (N)"</strong> — schreibt das Ergebnis unwiderruflich ins Saison-Protokoll. Über <strong>„Protokoll ansehen"</strong> lässt sich das append-only Protokoll jederzeit einsehen.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Tresor</strong> entsperren (Voraussetzung für Bankdaten &amp; Beitragslauf); Passphrase-Rotation.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Tresor</strong> öffnen.</li>
+            <li>Beim allerersten Mal (Tresor noch nicht eingerichtet): eine neue gemeinsame Passphrase (mind. 12 Zeichen) zweimal eingeben und <strong>„Tresor einrichten"</strong> klicken. Der Warnhinweis ist ernst gemeint: es gibt <strong>kein Zurücksetzen</strong>.</li>
+            <li>Ist der Tresor bereits eingerichtet, aber gesperrt: Passphrase eingeben, <strong>„Entsperren"</strong> klicken. Bei falscher Eingabe erscheint „Falsche Passphrase.".</li>
+            <li>Nach dem Entsperren zeigt die Seite „Tresor entsperrt"; die Sitzung sperrt sich automatisch nach <strong>30 Minuten Inaktivität</strong> oder sofort über „Jetzt sperren".</li>
+            <li>Für die Passphrase-Rotation (z.&nbsp;B. nach einem Personalwechsel): bei entsperrtem Tresor <strong>„Passphrase ändern"</strong> klicken, neue Passphrase zweimal eingeben, <strong>„Passphrase rotieren"</strong> — die bereits hinterlegten Bankdaten bleiben erhalten, nur die Passphrase ändert sich; die alte wird danach wertlos.</li>
+            <li>Die neue Passphrase umgehend an alle übrigen Berechtigten weitergeben und sicher hinterlegen — sie sollte mindestens zwei Personen bekannt sein.</li>
+          </ol></div></details>
+        </li>
       </ul>
 
       <h3>Admin</h3>
       <ul>
-        <li><strong>Impersonation</strong> (im Namen eines anderen Kontos handeln) – ausschließlich zur technischen Fehlersuche.</li>
-        <li><strong>Wartungsmodus</strong> ein-/ausschalten: sperrt Schreibzugriffe außerhalb der Anmeldung (z.&nbsp;B. für Migrations-Fenster).</li>
+        <li><strong>Impersonation</strong> (im Namen eines anderen Kontos handeln) – ausschließlich zur technischen Fehlersuche.
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Nutzerverwaltung</strong> öffnen.</li>
+            <li>Bei einem Nutzer (nicht bei Admin-Konten, nicht beim eigenen Account) über das Drei-Punkte-Menü <strong>Testen als</strong> wählen.</li>
+            <li>Ein gelbes Banner „Admin-Vorschau: <em>Name</em>" erscheint oben in der App – die Session agiert jetzt mit den Rechten dieses Kontos.</li>
+            <li>Zum Beenden im Banner auf <strong>Beenden</strong> klicken – das kehrt sofort zum eigenen Admin-Konto zurück. Ohne diesen Klick bleibt die Vorschau-Session aktiv, bis sie beendet wird.</li>
+          </ol></div></details>
+        </li>
+        <li><strong>Wartungsmodus</strong> ein-/ausschalten: sperrt Schreibzugriffe außerhalb der Anmeldung (z.&nbsp;B. für Migrations-Fenster).
+          <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
+            <li>Menü → <strong>Verwaltung → Wartungsmodus</strong> öffnen.</li>
+            <li>Aktuellen Zustand prüfen (Ein/Aus, inkl. Zeitpunkt und Name der letzten Änderung).</li>
+            <li>Mit <strong>Wartungsmodus einschalten</strong> bzw. <strong>Wartungsmodus ausschalten</strong> umschalten – wirkt sofort für alle Sessions per Banner.</li>
+            <li>Ausgenommen bleiben Anmelde-Routen (Selbst-Aussperr-Schutz) sowie Admin-Konten, die weiterhin schreiben können.</li>
+            <li>Notfall-Fallback, falls die Oberfläche nicht erreichbar ist: <code>teamwerk maintenance on|off --db /var/lib/teamwerk/teamwerk.db</code> direkt auf dem Server; der laufende Prozess übernimmt den Zustand binnen 10&nbsp;Sekunden.</li>
+          </ol></div></details>
+        </li>
       </ul>
     </section>
 
