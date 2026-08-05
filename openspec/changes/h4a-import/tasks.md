@@ -67,6 +67,6 @@
 ## 9. Verifikation
 
 - [ ] 9.1 Prod-Vorbereitung: Hallennummer-Backfill-Report einmal gegen Prod-`venues` ziehen und mit der lokalen Verifikation (1017 eindeutig / 1 ambig / 7 no-match) abgleichen
-- [ ] 9.2 `/verify-change` (go vet/test/lint, pnpm build/test/lint, openspec validate, Broadcast-Gate, brand/lucide/Migrationsnummer)
-- [ ] 9.3 `openspec validate h4a-import --strict`
+- [x] 9.2 `/verify-change` (go vet/test/lint, pnpm build/test/lint, openspec validate, Broadcast-Gate, brand/lucide/Migrationsnummer)
+- [x] 9.3 `openspec validate h4a-import --strict`
 - [ ] 9.4 Manueller End-to-End-Test mit echtem H4A-Login gegen lokales Backend (ein realer Import, Diff prüfen, Apply, Idempotenz durch zweiten Lauf)

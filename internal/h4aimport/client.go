@@ -3,6 +3,7 @@ package h4aimport
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,7 +50,7 @@ func readBody(resp *http.Response) (string, error) {
 	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("Antwort von Handball4All nicht lesbar: %w", err)
+		return "", fmt.Errorf("antwort von Handball4All nicht lesbar: %w", err)
 	}
 	return string(b), nil
 }
@@ -75,7 +76,7 @@ func (c *Client) Login(ctx context.Context, user, pw string) error {
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// http.Client-Fehler enthalten nur URL/Netzinfo, nie den Body/Credentials.
-		return fmt.Errorf("Anmeldung bei Handball4All fehlgeschlagen: %w", err)
+		return fmt.Errorf("anmeldung bei Handball4All fehlgeschlagen: %w", err)
 	}
 	body, err := readBody(resp)
 	if err != nil {
@@ -83,7 +84,7 @@ func (c *Client) Login(ctx context.Context, user, pw string) error {
 	}
 	if !strings.Contains(body, "ABMELDEN") {
 		// Generische Meldung, kein Passwort-Echo, kein Timing-Orakel.
-		return fmt.Errorf("Anmeldung bei Handball4All fehlgeschlagen")
+		return errors.New("anmeldung bei Handball4All fehlgeschlagen")
 	}
 	return nil
 }
@@ -98,11 +99,11 @@ func (c *Client) FetchPeriods(ctx context.Context) ([]Period, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/games/edit.php", nil)
 	if err != nil {
-		return nil, fmt.Errorf("Perioden-Request konnte nicht gebaut werden: %w", err)
+		return nil, fmt.Errorf("perioden-Request konnte nicht gebaut werden: %w", err)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Perioden von Handball4All nicht abrufbar: %w", err)
+		return nil, fmt.Errorf("perioden von Handball4All nicht abrufbar: %w", err)
 	}
 	body, err := readBody(resp)
 	if err != nil {
@@ -171,7 +172,7 @@ func (c *Client) FetchGamesHTML(ctx context.Context, periodID string) (string, e
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("Spielabruf bei Handball4All fehlgeschlagen: %w", err)
+		return "", fmt.Errorf("spielabruf bei Handball4All fehlgeschlagen: %w", err)
 	}
 	raw, err := readBody(resp)
 	if err != nil {
@@ -201,11 +202,11 @@ func (c *Client) Logout(ctx context.Context) error {
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/logout.php", nil)
 	if err != nil {
-		return fmt.Errorf("Logout-Request konnte nicht gebaut werden: %w", err)
+		return fmt.Errorf("logout-Request konnte nicht gebaut werden: %w", err)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("Abmeldung bei Handball4All fehlgeschlagen: %w", err)
+		return fmt.Errorf("abmeldung bei Handball4All fehlgeschlagen: %w", err)
 	}
 	resp.Body.Close()
 	return nil

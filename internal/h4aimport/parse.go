@@ -1,6 +1,7 @@
 package h4aimport
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"regexp"
@@ -47,7 +48,7 @@ const (
 func ParseGames(htmlStr string) ([]RawGame, error) {
 	anchors := reGameRow.FindAllStringSubmatchIndex(htmlStr, -1)
 	if len(anchors) == 0 {
-		return nil, fmt.Errorf("H4A-Spieltabelle nicht erkannt — Format geändert?")
+		return nil, errors.New("H4A-Spieltabelle nicht erkannt — Format geändert?")
 	}
 
 	games := make([]RawGame, 0, len(anchors))
@@ -109,7 +110,7 @@ func normalizeDate(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	m := reDate.FindStringSubmatch(s)
 	if m == nil {
-		return "", fmt.Errorf("Datum %q nicht im Format DD.MM.YYYY", s)
+		return "", fmt.Errorf("datum %q nicht im Format DD.MM.YYYY", s)
 	}
 	return fmt.Sprintf("%s-%s-%s", m[3], m[2], m[1]), nil
 }

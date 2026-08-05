@@ -1,8 +1,8 @@
 package h4aimport
 
 import (
-	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -73,7 +73,7 @@ func BuildGamesFormBody(periodID string, unixMs int64) string {
 	var b strings.Builder
 	b.WriteString("xjxfun=xajax_update")
 	b.WriteString("&xjxr=")
-	b.WriteString(fmt.Sprintf("%d", unixMs))
+	b.WriteString(strconv.FormatInt(unixMs, 10))
 	b.WriteString("&xjxargs[]=")
 	b.WriteString(url.QueryEscape(a1))
 	b.WriteString("&xjxargs[]=")

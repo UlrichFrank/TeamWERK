@@ -118,7 +118,9 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_login_failed"})
 		return
 	}
-	defer client.Logout(context.WithoutCancel(r.Context()))
+	// Fehler beim Abmelden sind für den Import folgenlos: die H4A-Session läuft
+	// ohnehin serverseitig ab und der Plan ist zu diesem Zeitpunkt schon gebaut.
+	defer func() { _ = client.Logout(context.WithoutCancel(r.Context())) }()
 
 	if req.PeriodID == "" {
 		periods, err := client.FetchPeriods(r.Context())
