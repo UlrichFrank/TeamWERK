@@ -211,6 +211,25 @@ type importResult struct {
 	Updated  int           `json:"updated"`
 	Skipped  int           `json:"skipped"`
 	Errors   []importError `json:"errors"`
+
+	// Hallennummer-Backfill (H4A-Import, design.md §5): assigned = erfolgreich
+	// gesetzte hall_number (Insert oder Update); ambiguous = Anzahl distinkter
+	// (Name,Ort,Straße)-Adressen mit >1 unterschiedlicher Nummer in der CSV
+	// (BWHV-Datenfehler, z.B. Sandberghalle Flein); unmatched = Zeile mit
+	// eindeutiger Nummer, die aber keinem Venue exakt per (Name,Ort,Straße)
+	// zugeordnet werden konnte (Namens-/Ortstreffer mit abweichender Straße,
+	// oder Nummer bereits an ein anderes Venue vergeben — Partial-Unique-Index).
+	HallNumbersAssigned  int `json:"hall_numbers_assigned"`
+	HallNumbersAmbiguous int `json:"hall_numbers_ambiguous"`
+	HallNumbersUnmatched int `json:"hall_numbers_unmatched"`
+}
+
+// isUniqueViolation erkennt SQLite-UNIQUE-Constraint-Verletzungen (z.B. der
+// Partial-Unique-Index auf venues.hall_number). Treiber-agnostischer
+// Fehlertext-Match, weil modernc/sqlite keine typisierten Constraint-Errors
+// exportiert (gleiches Muster wie internal/matchreports/create.go).
+func isUniqueViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
 // POST /api/admin/venues/import
@@ -252,6 +271,8 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 	type venueRow struct {
 		name, street, postalCode, city, note string
+		hallNumber                           int
+		hasHallNumber                        bool // row[1] war eine gültige Zahl
 	}
 
 	var rows []venueRow
@@ -278,6 +299,15 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		vr := venueRow{name: name}
+		// row[1] = Nummer (Hallennummer). Nicht-numerisch oder leer → keine
+		// Nummer für diese Zeile (bewusst kein Fehler, BWHV-Liste hat auch
+		// Zeilen ohne Nummer).
+		if len(row) > 1 {
+			if n, convErr := strconv.Atoi(strings.TrimSpace(row[1])); convErr == nil {
+				vr.hallNumber = n
+				vr.hasHallNumber = true
+			}
+		}
 		if len(row) > 2 {
 			vr.street = strings.TrimSpace(row[2])
 		}
@@ -301,6 +331,31 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, vr)
 	}
 
+	// Pre-Pass (design.md §5): Hallenlisten-Zeilen nach (Name, Ort, Straße)
+	// gruppieren. Trägt eine Adresse mehr als eine distinkte Hallennummer,
+	// ist das ein BWHV-Datenfehler (z.B. „Sandberghalle, Flein, Talheimer
+	// Straße" → 1018 UND 1066) — für alle Zeilen dieser Adresse bleibt
+	// hall_number NULL, egal welche Nummer einzeln dastünde.
+	type addrKey struct{ name, city, street string }
+	numbersByAddr := make(map[addrKey]map[int]bool)
+	for _, vr := range rows {
+		if !vr.hasHallNumber {
+			continue
+		}
+		k := addrKey{vr.name, vr.city, vr.street}
+		if numbersByAddr[k] == nil {
+			numbersByAddr[k] = make(map[int]bool)
+		}
+		numbersByAddr[k][vr.hallNumber] = true
+	}
+	ambiguousAddr := make(map[addrKey]bool)
+	for k, nums := range numbersByAddr {
+		if len(nums) > 1 {
+			ambiguousAddr[k] = true
+		}
+	}
+	result.HallNumbersAmbiguous = len(ambiguousAddr)
+
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -309,20 +364,49 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	for _, vr := range rows {
+		// Nummer nur verwenden, wenn sie geparst und ihre Adresse nicht
+		// mehrdeutig ist.
+		useHallNumber := vr.hasHallNumber && !ambiguousAddr[addrKey{vr.name, vr.city, vr.street}]
+
 		var existingID int
+		var existingStreet string
+		var existingHallNumber sql.NullInt64
 		err := tx.QueryRowContext(r.Context(),
-			`SELECT id FROM venues WHERE name = ? AND city = ?`, vr.name, vr.city).Scan(&existingID)
+			`SELECT id, street, hall_number FROM venues WHERE name = ? AND city = ?`,
+			vr.name, vr.city).Scan(&existingID, &existingStreet, &existingHallNumber)
 		if err == sql.ErrNoRows {
+			var hallParam sql.NullInt64
+			if useHallNumber {
+				hallParam = sql.NullInt64{Int64: int64(vr.hallNumber), Valid: true}
+			}
+			numberAssigned := false
 			_, err = tx.ExecContext(r.Context(),
-				`INSERT INTO venues (name, street, city, postal_code, country, note, is_home_venue)
-				 VALUES (?, ?, ?, ?, 'DE', ?, 0)`,
-				vr.name, vr.street, vr.city, vr.postalCode, vr.note)
+				`INSERT INTO venues (name, street, city, postal_code, country, note, is_home_venue, hall_number)
+				 VALUES (?, ?, ?, ?, 'DE', ?, 0, ?)`,
+				vr.name, vr.street, vr.city, vr.postalCode, vr.note, hallParam)
+			if err == nil {
+				numberAssigned = hallParam.Valid
+			} else if useHallNumber && isUniqueViolation(err) {
+				// Nummer ist bereits an ein anderes Venue vergeben (CSV-
+				// Datenfehler, z.B. exakte Dublette wie 5044) → Venue ohne
+				// Nummer anlegen statt den ganzen Import zu brechen.
+				_, err = tx.ExecContext(r.Context(),
+					`INSERT INTO venues (name, street, city, postal_code, country, note, is_home_venue, hall_number)
+					 VALUES (?, ?, ?, ?, 'DE', ?, 0, NULL)`,
+					vr.name, vr.street, vr.city, vr.postalCode, vr.note)
+				if err == nil {
+					result.HallNumbersUnmatched++
+				}
+			}
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "venues Import insert: %v\n", err)
 				result.Skipped++
 				continue
 			}
 			result.Imported++
+			if numberAssigned {
+				result.HallNumbersAssigned++
+			}
 		} else if err != nil {
 			fmt.Fprintf(os.Stderr, "venues Import lookup: %v\n", err)
 			result.Skipped++
@@ -336,6 +420,32 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			result.Updated++
+
+			if useHallNumber {
+				switch {
+				case existingHallNumber.Valid:
+					// hall_number bereits gesetzt (frühere Zuordnung) →
+					// nichts zu tun, kein erneuter Backfill nötig.
+				case strings.TrimSpace(existingStreet) != vr.street:
+					// (Name,Ort) getroffen, aber Straße weicht ab → nicht die
+					// per (Name,Ort,Straße) gemeinte Adresse; Nummer nicht
+					// zuordnen, um nicht das falsche gleichnamige Venue zu
+					// nummerieren.
+					result.HallNumbersUnmatched++
+				default:
+					_, hnErr := tx.ExecContext(r.Context(),
+						`UPDATE venues SET hall_number=? WHERE id=?`, vr.hallNumber, existingID)
+					switch {
+					case hnErr == nil:
+						result.HallNumbersAssigned++
+					case isUniqueViolation(hnErr):
+						// Nummer bereits an ein anderes Venue vergeben.
+						result.HallNumbersUnmatched++
+					default:
+						fmt.Fprintf(os.Stderr, "venues Import hall_number backfill: %v\n", hnErr)
+					}
+				}
+			}
 		}
 	}
 

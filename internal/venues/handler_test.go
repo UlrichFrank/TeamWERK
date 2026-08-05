@@ -344,3 +344,264 @@ func TestVenues_Import_InsertsAndUpserts(t *testing.T) {
 		t.Errorf("note=%q, want \"Aktualisierte Notiz\"", note)
 	}
 }
+
+// importResultCounters spiegelt importResult (unexported) für Decode in Tests.
+type importResultCounters struct {
+	Imported             int `json:"imported"`
+	Updated              int `json:"updated"`
+	Skipped              int `json:"skipped"`
+	HallNumbersAssigned  int `json:"hall_numbers_assigned"`
+	HallNumbersAmbiguous int `json:"hall_numbers_ambiguous"`
+	HallNumbersUnmatched int `json:"hall_numbers_unmatched"`
+}
+
+// TestVenues_Import_HallNumber_UniqueAddressSetsNumber — eine CSV-Zeile mit
+// eindeutiger Nummer (3029) und eindeutiger Adresse legt ein neues Venue mit
+// gesetzter hall_number an (design.md §5 Backfill-Strategie).
+func TestVenues_Import_HallNumber_UniqueAddressSetsNumber(t *testing.T) {
+	database := testutil.NewDB(t)
+	h := venues.NewHandler(database, hub.NewHub())
+	srv := mutationServer(t, h)
+	tok := vorstandToken(t, database)
+
+	csv := strings.Join([]string{
+		"Vereinsexport Spielstätten",
+		"Erstellt am 2026-07-18",
+		"Quelle: BWHV",
+		"Name,Nummer,Straße,PLZ,Ort,Kennzeichnung",
+		"Fellbach-Oeffingen,3029,Rembrandtstr. 1,70736,Fellbach,",
+	}, "\n")
+
+	res := testutil.PostMultipart(t, srv, "/api/venues/import", tok, "file", "hallen.csv", []byte(csv))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("Import: status %d, want 200 (body=%q)", res.StatusCode, string(body))
+	}
+	var result importResultCounters
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.Imported != 1 {
+		t.Errorf("Imported=%d, want 1", result.Imported)
+	}
+	if result.HallNumbersAssigned != 1 {
+		t.Errorf("HallNumbersAssigned=%d, want 1", result.HallNumbersAssigned)
+	}
+
+	var hallNumber sql.NullInt64
+	if err := database.QueryRow(
+		`SELECT hall_number FROM venues WHERE name = 'Fellbach-Oeffingen' AND city = 'Fellbach'`).
+		Scan(&hallNumber); err != nil {
+		t.Fatalf("Venue nicht gefunden: %v", err)
+	}
+	if !hallNumber.Valid || hallNumber.Int64 != 3029 {
+		t.Errorf("hall_number=%v, want 3029", hallNumber)
+	}
+}
+
+// TestVenues_Import_HallNumber_AmbiguousAddressStaysNull — zwei Zeilen mit
+// derselben Adresse (Name,Ort,Straße), aber unterschiedlichen Nummern, sind
+// ein BWHV-Datenfehler (design.md §5, Beispiel „Sandberghalle Flein"): das
+// Venue bleibt bei hall_number=NULL, der Fall zählt als ambiguous.
+func TestVenues_Import_HallNumber_AmbiguousAddressStaysNull(t *testing.T) {
+	database := testutil.NewDB(t)
+	h := venues.NewHandler(database, hub.NewHub())
+	srv := mutationServer(t, h)
+	tok := vorstandToken(t, database)
+
+	csv := strings.Join([]string{
+		"Vereinsexport Spielstätten",
+		"Erstellt am 2026-07-18",
+		"Quelle: BWHV",
+		"Name,Nummer,Straße,PLZ,Ort,Kennzeichnung",
+		"Sandberghalle,1018,Talheimer Straße 1,74223,Flein,A",
+		"Sandberghalle,1066,Talheimer Straße 1,74223,Flein,B",
+	}, "\n")
+
+	res := testutil.PostMultipart(t, srv, "/api/venues/import", tok, "file", "hallen.csv", []byte(csv))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("Import: status %d, want 200 (body=%q)", res.StatusCode, string(body))
+	}
+	var result importResultCounters
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.HallNumbersAmbiguous != 1 {
+		t.Errorf("HallNumbersAmbiguous=%d, want 1", result.HallNumbersAmbiguous)
+	}
+	if result.HallNumbersAssigned != 0 {
+		t.Errorf("HallNumbersAssigned=%d, want 0", result.HallNumbersAssigned)
+	}
+
+	// Beide Zeilen matchen per (name,city) auf dasselbe Venue (nur die zweite
+	// Zeile überlebt als Bestand, da name+city identisch sind) — es bleibt in
+	// jedem Fall bei hall_number=NULL.
+	var count int
+	var hallNumber sql.NullInt64
+	if err := database.QueryRow(
+		`SELECT COUNT(*) FROM venues WHERE name = 'Sandberghalle' AND city = 'Flein'`).Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count=%d, want 1", count)
+	}
+	if err := database.QueryRow(
+		`SELECT hall_number FROM venues WHERE name = 'Sandberghalle' AND city = 'Flein'`).Scan(&hallNumber); err != nil {
+		t.Fatalf("Venue nicht gefunden: %v", err)
+	}
+	if hallNumber.Valid {
+		t.Errorf("hall_number=%v, want NULL", hallNumber)
+	}
+}
+
+// TestVenues_Import_HallNumber_BackfillsExistingVenue — eine bestehende Venue
+// (angelegt ohne hall_number) wird bei erneutem Import über (Name,Ort,Straße)
+// mit ihrer Hallennummer nachgetragen (Backfill, design.md §5).
+func TestVenues_Import_HallNumber_BackfillsExistingVenue(t *testing.T) {
+	database := testutil.NewDB(t)
+	if _, err := database.Exec(
+		`INSERT INTO venues (name, street, city, postal_code, note) VALUES
+		 ('Schmidener Halle', 'Bahnhofstr. 12', 'Fellbach', '70736', '')`); err != nil {
+		t.Fatalf("seed venue: %v", err)
+	}
+	h := venues.NewHandler(database, hub.NewHub())
+	srv := mutationServer(t, h)
+	tok := vorstandToken(t, database)
+
+	csv := strings.Join([]string{
+		"Vereinsexport Spielstätten",
+		"Erstellt am 2026-07-18",
+		"Quelle: BWHV",
+		"Name,Nummer,Straße,PLZ,Ort,Kennzeichnung",
+		"Schmidener Halle,3041,Bahnhofstr. 12,70736,Fellbach,",
+	}, "\n")
+
+	res := testutil.PostMultipart(t, srv, "/api/venues/import", tok, "file", "hallen.csv", []byte(csv))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("Import: status %d, want 200 (body=%q)", res.StatusCode, string(body))
+	}
+	var result importResultCounters
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.Updated != 1 {
+		t.Errorf("Updated=%d, want 1", result.Updated)
+	}
+	if result.HallNumbersAssigned != 1 {
+		t.Errorf("HallNumbersAssigned=%d, want 1", result.HallNumbersAssigned)
+	}
+
+	var hallNumber sql.NullInt64
+	if err := database.QueryRow(
+		`SELECT hall_number FROM venues WHERE name = 'Schmidener Halle' AND city = 'Fellbach'`).
+		Scan(&hallNumber); err != nil {
+		t.Fatalf("Venue nicht gefunden: %v", err)
+	}
+	if !hallNumber.Valid || hallNumber.Int64 != 3041 {
+		t.Errorf("hall_number=%v, want 3041", hallNumber)
+	}
+}
+
+// TestVenues_Import_HallNumber_ManualVenueWithoutCsvMatchStaysNull — ein
+// manuell angelegtes Venue (z.B. Vereinsgaststätte), das keiner CSV-Zeile
+// entspricht (anderer Name), bleibt unverändert bei hall_number=NULL.
+func TestVenues_Import_HallNumber_ManualVenueWithoutCsvMatchStaysNull(t *testing.T) {
+	database := testutil.NewDB(t)
+	if _, err := database.Exec(
+		`INSERT INTO venues (name, street, city, postal_code, note) VALUES
+		 ('Vereinsgaststätte', 'Clubweg 3', 'Stuttgart', '70199', 'kein BWHV-Venue')`); err != nil {
+		t.Fatalf("seed venue: %v", err)
+	}
+	h := venues.NewHandler(database, hub.NewHub())
+	srv := mutationServer(t, h)
+	tok := vorstandToken(t, database)
+
+	// CSV kennt nur eine andere Halle — die manuelle Venue taucht nicht auf.
+	csv := strings.Join([]string{
+		"Vereinsexport Spielstätten",
+		"Erstellt am 2026-07-18",
+		"Quelle: BWHV",
+		"Name,Nummer,Straße,PLZ,Ort,Kennzeichnung",
+		"Fellbach-Oeffingen,3029,Rembrandtstr. 1,70736,Fellbach,",
+	}, "\n")
+
+	res := testutil.PostMultipart(t, srv, "/api/venues/import", tok, "file", "hallen.csv", []byte(csv))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("Import: status %d, want 200 (body=%q)", res.StatusCode, string(body))
+	}
+
+	var hallNumber sql.NullInt64
+	var street, note string
+	if err := database.QueryRow(
+		`SELECT hall_number, street, note FROM venues WHERE name = 'Vereinsgaststätte'`).
+		Scan(&hallNumber, &street, &note); err != nil {
+		t.Fatalf("Venue nicht gefunden: %v", err)
+	}
+	if hallNumber.Valid {
+		t.Errorf("hall_number=%v, want NULL", hallNumber)
+	}
+	if street != "Clubweg 3" || note != "kein BWHV-Venue" {
+		t.Errorf("Venue wurde verändert: street=%q note=%q", street, note)
+	}
+}
+
+// TestVenues_Import_HallNumber_StreetMismatchCountsUnmatched — (Name,Ort)
+// matcht ein bestehendes Venue, aber die Straße weicht ab → hall_number wird
+// NICHT gesetzt (sonst würde das falsche gleichnamige Venue nummeriert), die
+// Zeile zählt als unmatched.
+func TestVenues_Import_HallNumber_StreetMismatchCountsUnmatched(t *testing.T) {
+	database := testutil.NewDB(t)
+	if _, err := database.Exec(
+		`INSERT INTO venues (name, street, city, postal_code, note) VALUES
+		 ('Sporthalle', 'Alte Adresse 1', 'Esslingen', '73728', '')`); err != nil {
+		t.Fatalf("seed venue: %v", err)
+	}
+	h := venues.NewHandler(database, hub.NewHub())
+	srv := mutationServer(t, h)
+	tok := vorstandToken(t, database)
+
+	// Gleicher Name+Ort, aber andere Straße als im Bestand.
+	csv := strings.Join([]string{
+		"Vereinsexport Spielstätten",
+		"Erstellt am 2026-07-18",
+		"Quelle: BWHV",
+		"Name,Nummer,Straße,PLZ,Ort,Kennzeichnung",
+		"Sporthalle,4020,Neue Adresse 9,73728,Esslingen,",
+	}, "\n")
+
+	res := testutil.PostMultipart(t, srv, "/api/venues/import", tok, "file", "hallen.csv", []byte(csv))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("Import: status %d, want 200 (body=%q)", res.StatusCode, string(body))
+	}
+	var result importResultCounters
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.HallNumbersUnmatched != 1 {
+		t.Errorf("HallNumbersUnmatched=%d, want 1", result.HallNumbersUnmatched)
+	}
+	if result.HallNumbersAssigned != 0 {
+		t.Errorf("HallNumbersAssigned=%d, want 0", result.HallNumbersAssigned)
+	}
+
+	// Bestehendes Venue: street/note aus der CSV übernommen (bestehendes
+	// (name,city)-Upsert-Verhalten unverändert), aber hall_number bleibt NULL.
+	var hallNumber sql.NullInt64
+	if err := database.QueryRow(
+		`SELECT hall_number FROM venues WHERE name = 'Sporthalle' AND city = 'Esslingen'`).
+		Scan(&hallNumber); err != nil {
+		t.Fatalf("Venue nicht gefunden: %v", err)
+	}
+	if hallNumber.Valid {
+		t.Errorf("hall_number=%v, want NULL", hallNumber)
+	}
+}
