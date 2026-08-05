@@ -70,7 +70,7 @@ type MemberRow struct {
 }
 
 // LoadMembersForLauf lädt alle für den Beitragslauf relevanten Mitglieder.
-// Status, die fachlich nie einen Beitrag zahlen (honorar, anwaerter, foerderkind),
+// Status, die fachlich nie einen Beitrag zahlen (extern, anwaerter, foerderkind),
 // werden bereits hier ausgefiltert. `ausgetreten` bleibt bewusst drin: ein unterjähriger
 // Austritt (exit_date im Saisonfenster) wird im Compute wieder einbezogen und
 // halbiert; ein früherer Austritt wird dort als status_inaktiv ausgeschlossen.
@@ -87,7 +87,7 @@ func LoadMembersForLauf(db *sql.DB) ([]MemberRow, error) {
 		       COALESCE(ms.ciphertext,''), COALESCE(ms.dek_enc_vorstand,'')
 		FROM members m
 		LEFT JOIN member_sensitive ms ON ms.member_id = m.id
-		WHERE m.status NOT IN ('honorar','anwaerter','foerderkind')`)
+		WHERE m.status NOT IN ('extern','anwaerter','foerderkind')`)
 	if err != nil {
 		return nil, err
 	}

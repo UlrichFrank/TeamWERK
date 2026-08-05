@@ -180,7 +180,7 @@ func TestUpdateMember_NonAdmin_CannotChangeNumber(t *testing.T) {
 	}
 }
 
-// ── 5.4: List liefert Konflikt-Flag für alle drei Typen, nicht für honorar ─────
+// ── 5.4: List liefert Konflikt-Flag für alle drei Typen, nicht für extern ─────
 
 func TestList_MemberNumberConflictFlags(t *testing.T) {
 	database := testutil.NewDB(t)
@@ -212,7 +212,7 @@ func TestList_MemberNumberConflictFlags(t *testing.T) {
 	dup2 := insert("Dup2", "aktiv", "5")
 	nonNum := insert("NonNum", "aktiv", "M-100")
 	missing := insert("Missing", "passiv", "")
-	honorar := insert("Honorar", "honorar", "")
+	extern := insert("Extern", "extern", "")
 	ok := insert("Ok", "aktiv", "10")
 
 	srv := newMembersServer(t, database)
@@ -243,7 +243,7 @@ func TestList_MemberNumberConflictFlags(t *testing.T) {
 		{dup2, "duplicate", "Dup2"},
 		{nonNum, "non_numeric", "NonNum"},
 		{missing, "missing", "Missing"},
-		{honorar, "", "Honorar"},
+		{extern, "", "Extern"},
 		{ok, "", "Ok"},
 	}
 	for _, c := range checks {

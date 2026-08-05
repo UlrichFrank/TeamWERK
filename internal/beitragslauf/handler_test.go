@@ -375,14 +375,14 @@ func TestPreview_ErstjahrAlleHalb(t *testing.T) {
 	}
 }
 
-// Mitglieder mit Status ausgetreten/honorar/anwaerter/foerderkind sind fachlich
+// Mitglieder mit Status ausgetreten/extern/anwaerter/foerderkind sind fachlich
 // nie Teil des Beitragslaufs und werden deshalb gar nicht erst geladen — weder in
 // der Preview-Tabelle noch in den Summen.
 func TestPreview_StatusOhneBeitragNichtImPreview(t *testing.T) {
 	srv, db, _ := setupSrv(t)
 	s := insertSeason2027(t, db)
 	aktivID := insertMember(t, db, "Aktiv", defaultMember())
-	for i, status := range []string{"ausgetreten", "honorar", "anwaerter", "foerderkind"} {
+	for i, status := range []string{"ausgetreten", "extern", "anwaerter", "foerderkind"} {
 		m := defaultMember()
 		m.status = status
 		m.memberNumber = "200" + itoa(i)

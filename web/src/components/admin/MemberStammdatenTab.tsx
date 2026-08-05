@@ -59,7 +59,7 @@ const GENDER_OPTIONS = [
 ]
 
 
-const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'honorar', 'anwaerter', 'foerderkind', 'ausgetreten']
+const STATUS_OPTIONS = ['aktiv', 'verletzt', 'pausiert', 'passiv', 'extern', 'anwaerter', 'foerderkind', 'ausgetreten']
 // Nicht-beitragspflichtige Talent-Status ohne Eintrittsdatum-Zwang (kein Beitrag → kein Beitrags-relevantes join_date).
 const STATUS_WITHOUT_JOIN_DATE = ['anwaerter', 'foerderkind']
 const HANDBALL_POSITIONS = ['Torwart', 'Linksaußen', 'Rechtsaußen', 'Rückraum Links', 'Rückraum Mitte', 'Rückraum Rechts', 'Kreisläufer']
@@ -109,11 +109,11 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const clubFunctions = form.club_functions ?? []
   const hasSpieler = clubFunctions.includes('spieler')
 
-  const isHonorar = form.status === 'honorar'
+  const isExtern = form.status === 'extern'
   const joinDateRequired = !STATUS_WITHOUT_JOIN_DATE.includes(form.status)
 
   const toggleClubFunction = (fn: string) => {
-    if (isHonorar && fn !== 'trainer') return
+    if (isExtern && fn !== 'trainer') return
     const next = clubFunctions.includes(fn)
       ? clubFunctions.filter(f => f !== fn)
       : [...clubFunctions, fn]
@@ -271,7 +271,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
-          {!isHonorar && (
+          {!isExtern && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mitgliedsnummer</label>
               {isNew ? (
@@ -372,7 +372,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                 type="button"
                 onClick={() => {
                   const updates: Record<string, unknown> = { status: s }
-                  if (s === 'honorar') {
+                  if (s === 'extern') {
                     updates.club_functions = clubFunctions.filter(f => f === 'trainer')
                     updates.member_number = ''
                     updates.pass_number = ''
@@ -428,7 +428,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           <label className="block text-sm font-medium text-gray-700 mb-2">Vereinsfunktion</label>
           <div className="flex flex-wrap gap-2">
             {CLUB_FUNCTION_OPTIONS.map(opt => {
-              const disabled = isHonorar && opt.value !== 'trainer'
+              const disabled = isExtern && opt.value !== 'trainer'
               return (
                 <label key={opt.value} className={`flex items-center gap-2 select-none ${disabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}>
                   <input
@@ -445,8 +445,8 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           </div>
         </div>
 
-        {/* Stammverein + Zweitspielrecht — nicht für Honorar-Mitglieder */}
-        {!isHonorar && (
+        {/* Stammverein + Zweitspielrecht — nicht für Extern-Mitglieder */}
+        {!isExtern && (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Stammverein</label>
             <select

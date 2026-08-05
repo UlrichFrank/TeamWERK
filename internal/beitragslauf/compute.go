@@ -51,7 +51,7 @@ func inWindow(date string, start, end time.Time) bool {
 }
 
 // BeitragsGruppe bildet den Member-Status auf die Beitragsgruppe ab.
-// "" bedeutet: nicht einzuziehen (ausgetreten/honorar/anwaerter o. Ä.).
+// "" bedeutet: nicht einzuziehen (ausgetreten/extern/anwaerter o. Ä.).
 func BeitragsGruppe(status string) string {
 	switch status {
 	case "aktiv", "verletzt":

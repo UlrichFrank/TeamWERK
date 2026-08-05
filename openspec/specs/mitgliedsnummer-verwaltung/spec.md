@@ -47,21 +47,21 @@ Das System SHALL die Eindeutigkeit der Mitgliedsnummer erzwingen. Setzt ein Admi
 - **WHEN** ein Admin ein Mitglied speichert, ohne dessen Nummer zu ändern
 - **THEN** wird kein Konflikt gemeldet und die Anfrage ist erfolgreich (HTTP 200)
 
-### Requirement: Honorar-Mitglieder ohne Nummer
-Das System SHALL für Mitglieder mit Status `honorar` keine Mitgliedsnummer führen (bestehendes Verhalten bleibt erhalten). Beim Setzen des Status `honorar` wird die `member_number` geleert. Ein Honorar-Mitglied ohne Nummer ist KEIN Konflikt.
+### Requirement: Extern-Mitglieder ohne Nummer
+Das System SHALL für Mitglieder mit Status `extern` keine Mitgliedsnummer führen (bestehendes Verhalten bleibt erhalten). Beim Setzen des Status `extern` wird die `member_number` geleert. Ein Extern-Mitglied ohne Nummer ist KEIN Konflikt.
 
-#### Scenario: Status honorar leert die Nummer
-- **WHEN** ein Mitglied auf Status `honorar` gesetzt wird
+#### Scenario: Status extern leert die Nummer
+- **WHEN** ein Mitglied auf Status `extern` gesetzt wird
 - **THEN** entfernt das System dessen `member_number`
 
-#### Scenario: Honorar ohne Nummer ist kein Konflikt
-- **WHEN** die Konflikt-Erkennung über ein Honorar-Mitglied ohne Nummer läuft
+#### Scenario: Extern ohne Nummer ist kein Konflikt
+- **WHEN** die Konflikt-Erkennung über ein Extern-Mitglied ohne Nummer läuft
 - **THEN** wird dieses Mitglied nicht als Konflikt markiert
 
 ### Requirement: Konflikt-Erkennung und -Anzeige in der Mitglieder-Übersicht
-Das System SHALL Nummern-Konflikte erkennen und in der Mitglieder-Übersicht (`/mitglieder`) sichtbar machen. `GET /api/members` MUST pro Mitglied einen Konflikt-Indikator liefern. Als Konflikt gelten: (a) eine Nummer, die mehrfach vorkommt (Dublette), (b) ein nicht-numerischer `member_number`-Wert, (c) ein Nicht-`honorar`-Mitglied ohne Nummer. Das Frontend markiert betroffene Zeilen mit einem Hinweis (lucide `AlertTriangle`, `brand-*`-Tokens).
+Das System SHALL Nummern-Konflikte erkennen und in der Mitglieder-Übersicht (`/mitglieder`) sichtbar machen. `GET /api/members` MUST pro Mitglied einen Konflikt-Indikator liefern. Als Konflikt gelten: (a) eine Nummer, die mehrfach vorkommt (Dublette), (b) ein nicht-numerischer `member_number`-Wert, (c) ein Nicht-`extern`-Mitglied ohne Nummer. Das Frontend markiert betroffene Zeilen mit einem Hinweis (lucide `AlertTriangle`, `brand-*`-Tokens).
 
-#### Scenario: Nicht-honorar-Mitglied ohne Nummer
+#### Scenario: Nicht-extern-Mitglied ohne Nummer
 - **WHEN** ein Mitglied mit Status `aktiv`, `passiv` oder `anwaerter` keine Mitgliedsnummer hat
 - **THEN** kennzeichnet das System es als Konflikt vom Typ „fehlende Nummer"
 

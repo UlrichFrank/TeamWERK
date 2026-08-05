@@ -187,10 +187,10 @@ func isNumericMemberNumber(s string) bool {
 }
 
 // memberNumberConflict klassifiziert den Nummern-Konflikt eines Mitglieds.
-// honorar-Mitglieder ohne Nummer sind kein Konflikt.
+// extern-Mitglieder ohne Nummer sind kein Konflikt.
 func memberNumberConflict(number, status string, duplicates map[string]bool) string {
 	if number == "" {
-		if status == "honorar" {
+		if status == "extern" {
 			return ""
 		}
 		return "missing"
@@ -489,7 +489,7 @@ func buildListArgs(prefix []any, clubFunc, search, status string, limit, offset 
 // Muss mit dem CHECK-Constraint auf members.status (Migrationen) übereinstimmen.
 func isValidMemberStatus(s string) bool {
 	switch s {
-	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter", "foerderkind":
+	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "extern", "anwaerter", "foerderkind":
 		return true
 	}
 	return false
@@ -832,7 +832,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Status != "ausgetreten" {
 		req.ExitDate = ""
 	}
-	if req.Status == "honorar" {
+	if req.Status == "extern" {
 		req.MemberNumber = ""
 		req.PassNumber = ""
 		req.HomeClub = ""
@@ -858,9 +858,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Die Mitgliedsnummer ist systemverwaltet und read-only. Nur Admins dürfen sie
 	// nachträglich korrigieren; für alle anderen bleibt der bestehende Wert erhalten.
-	// (honorar leert die Nummer oben bereits für alle — bewusst beibehalten.)
+	// (extern leert die Nummer oben bereits für alle — bewusst beibehalten.)
 	memberNumber := req.MemberNumber
-	if req.Status != "honorar" {
+	if req.Status != "extern" {
 		if claims.Role == "admin" {
 			if memberNumber != "" {
 				var otherID int
@@ -1718,7 +1718,7 @@ func normalizeStatus(s string) string {
 	switch strings.TrimSpace(s) {
 	case "":
 		return ""
-	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "honorar", "anwaerter", "foerderkind":
+	case "aktiv", "verletzt", "pausiert", "ausgetreten", "passiv", "extern", "anwaerter", "foerderkind":
 		return s
 	case "gekündigt", "Vereinswechsel":
 		return "ausgetreten"

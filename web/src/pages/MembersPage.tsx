@@ -91,7 +91,7 @@ const genderLabel = (g?: string) => g === 'm' ? 'm' : g === 'f' ? 'w' : 'd'
 const statusBadgeStyles = (status: string) => {
   if (status === 'aktiv') return 'bg-brand-black text-white'
   if (status === 'verletzt') return 'bg-brand-yellow text-brand-black'
-  if (status === 'honorar') return 'bg-brand-blue/10 text-brand-blue'
+  if (status === 'extern') return 'bg-brand-blue/10 text-brand-blue'
   if (status === 'anwaerter') return 'bg-brand-green/10 text-brand-green'
   if (status === 'foerderkind') return 'bg-brand-info/10 text-brand-info'
   return 'bg-brand-border-subtle text-brand-text-muted'
@@ -102,7 +102,7 @@ const STATUS_LABEL: Record<string, string> = {
   verletzt: 'Verletzt',
   pausiert: 'Pausiert',
   passiv: 'Passiv',
-  honorar: 'Honorar',
+  extern: 'Extern',
   anwaerter: 'Anwärter',
   foerderkind: 'Förderkind',
   ausgetreten: 'Ausgetreten',

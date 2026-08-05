@@ -415,9 +415,10 @@
         <li><strong>Neu dabei?</strong> Es gibt zwei Wege ins System:
           <ul>
             <li><strong>Einladung:</strong> Der Vorstand verschickt eine persönliche Einladung per E-Mail.</li>
-            <li><strong>Beitrittsanfrage:</strong> Über das öffentliche Beitrittsformular meldet man sich selbst; der Vorstand prüft und genehmigt.</li>
+            <li><strong>Beitrittsanfrage:</strong> Über das öffentliche Beitrittsformular meldet man sich selbst; der Vorstand prüft und genehmigt. Für Kinder ohne eigene E-Mail-Adresse gibt es dort die Variante <strong>„Kinderaccount anlegen"</strong> – erfasst werden Name des Kindes und die E-Mail eines Elternteils zur Verwaltung.</li>
           </ul>
         </li>
+        <li><strong>Anmelden ohne E-Mail:</strong> Kinderaccounts loggen sich statt mit E-Mail mit ihrem <strong>Spielernamen</strong> ein (Format <code>Vorname.Nachname</code>). Das Login-Feld akzeptiert beides.</li>
         <li><strong>Sitzung:</strong> Man bleibt eine Weile angemeldet; die Anmeldung wird im Hintergrund erneuert. Nach längerer Inaktivität ist eine Neuanmeldung nötig.</li>
       </ul>
       <div class="note info">
@@ -472,6 +473,23 @@
           </ul>
         </div>
       </div>
+
+      <h3>Mitglieds-Status – wer ist wie erfasst?</h3>
+      <p>Neben Vereinsfunktion und System-Rolle pflegt der Vorstand pro Mitglied einen <strong>Status</strong>. Für die tägliche Nutzung sind vor allem zwei Sonderfälle relevant:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Status</th><th>Bedeutung</th></tr></thead>
+          <tbody>
+            <tr><td><code>aktiv</code></td><td>Reguläres, beitragspflichtiges Mitglied – der Normalfall.</td></tr>
+            <tr><td><code>anwaerter</code></td><td>Spieler in der Probezeit; noch kein vollwertiges Mitglied und braucht keinen eigenen Account.</td></tr>
+            <tr><td><code>foerderkind</code></td><td>Jahrgangsbezogenes Talent-/Gastkind (häufig aus dem Stammverein), das in einer Trainingsgruppe mittrainiert, aber nicht beitragspflichtig ist.</td></tr>
+            <tr><td><code>verletzt</code> / <code>pausiert</code></td><td>Temporär inaktiv, bleibt Mitglied.</td></tr>
+            <tr><td><code>passiv</code></td><td>Fördermitgliedschaft ohne aktiven Spielbetrieb – zahlt einen eigenen (reduzierten) Beitrag.</td></tr>
+            <tr><td><code>extern</code></td><td>Bezahlte oder ehrenamtliche Trainer:innen und andere Helfer ohne eigene Vereinsmitgliedschaft – kein Beitrag, keine Mitgliedspflichten.</td></tr>
+            <tr><td><code>ausgetreten</code></td><td>Mitgliedschaft beendet.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- 03 -->
@@ -481,15 +499,16 @@
       <h3>Für alle angemeldeten Nutzer</h3>
       <ul>
         <li><strong>Dashboard:</strong> Persönliche Übersicht – nächste Termine, offene Dienste, eigene Dienst-Bilanz (Soll/Ist), offene Mitfahrgelegenheiten, ungelesene Nachrichten.</li>
-        <li><strong>Mein Profil:</strong> Stammdaten, Kontakt, Telefonnummern, Foto, Sichtbarkeits-Einstellungen, Fahrzeugdaten für Mitfahrten sowie <strong>Benachrichtigungs-Präferenzen</strong> pro Kategorie (Spiele, Trainings, Dienste, Chat, …).</li>
+        <li><strong>Mein Profil:</strong> Stammdaten, Kontakt, Telefonnummern, Foto, Sichtbarkeits-Einstellungen, Fahrzeugdaten für Mitfahrten, <strong>Kartendienst-Präferenz</strong> (Google Maps / Apple Maps / automatisch) für die Navigation zu Spielorten sowie <strong>Benachrichtigungs-Präferenzen</strong> pro Kategorie (Spiele, Trainings, Dienste, Chat, …). Anzeigename und E-Mail-Adresse lassen sich selbst ändern (E-Mail-Änderung verlangt das aktuelle Passwort). Ein eigener <strong>Datenschutz-Tab</strong> bündelt Sichtbarkeits-Einstellungen (inkl. WhatsApp-Sichtbarkeit) sowie die Einwilligung zur <strong>Foto-Veröffentlichung</strong> in Spielberichten und auf der Website.</li>
         <li><strong>Anwesenheits-Historie:</strong> Eigene Anwesenheiten (Spieler) bzw. die deiner Kinder (Eltern) einsehen.</li>
-        <li><strong>Kinderprofile (Eltern):</strong> Daten der eigenen Kinder verwalten – inkl. clientseitig verschlüsselter Bankdaten, Fotos, Kontakt und Anwesenheiten.</li>
-        <li><strong>Kalender &amp; Termine:</strong> Trainings, Spiele, sonstige Termine ansehen, zu-/absagen (RSVP); persönlicher iCal-Abo-Link zum Einbinden in fremde Kalender-Apps.</li>
+        <li><strong>Trainingstagebuch (nur Spieler):</strong> Eigene Trainingseinheiten außerhalb des Mannschaftstrainings protokollieren – Art, Dauer und Belastung (RPE-Skala 1–10), optional mit Nachweisfoto. Rein persönlich, Trainer und Eltern können mitlesen.</li>
+        <li><strong>Kinderprofile (Eltern):</strong> Daten der eigenen Kinder verwalten – inkl. clientseitig verschlüsselter Bankdaten, Fotos, Kontakt, Stammdaten und Anwesenheiten. Gilt sowohl für Kinder ohne eigenen Account als auch für Kinder mit eigenem Kinderaccount.</li>
+        <li><strong>Kalender &amp; Termine:</strong> Trainings, Spiele, sonstige Termine ansehen, zu-/absagen (RSVP) – bei Absage oder „Vielleicht" wird optional eine kurze Begründung erfragt; Maps-Link zum Spielort; persönlicher iCal-Abo-Link zum Einbinden in fremde Kalender-Apps.</li>
         <li><strong>Abwesenheiten melden:</strong> Krankheit, Urlaub o.&nbsp;Ä. eintragen; betroffene Termine werden angezeigt.</li>
         <li><strong>Mein Team:</strong> Mannschaftszugehörigkeit, Aufstellung, <strong>Aufgaben</strong> (z.&nbsp;B. Mannschaftskasse, Getränkewart) und <strong>Mannschafts-Strafen</strong> einsehen.</li>
-        <li><strong>Dienstbörse:</strong> Offene Dienst-Slots ansehen und sich anmelden; eigenes Dienst-Konto einsehen; Anleitungen zu Dienst-Typen aufrufen.</li>
+        <li><strong>Dienstbörse:</strong> Offene Dienst-Slots ansehen und sich anmelden; eigenes Dienst-Konto einsehen; Anleitungen zu Dienst-Typen aufrufen. Eltern können einen Dienst auch <strong>stellvertretend für ihr Kind</strong> übernehmen.</li>
         <li><strong>Mitfahrgelegenheiten:</strong> Fahrten zu Auswärtsspielen anbieten oder suchen; Paarungen bestätigen/ablehnen.</li>
-        <li><strong>Nachrichten / Chat:</strong> Einzel- und Gruppenchats mit Reaktionen und Push-Benachrichtigungen; zusätzlich <strong>Mitteilungen</strong> (Broadcasts vom Vorstand); Team-Gruppen als Direkt-Adressat.</li>
+        <li><strong>Nachrichten / Chat:</strong> Einzel- und Gruppenchats mit Reaktionen, Antworten mit Zitat, nachträglichem Bearbeiten/Löschen eigener Nachrichten, Lesebestätigungen (Haken, in Gruppen als „N/M gelesen") und Push-Benachrichtigungen; zusätzlich <strong>Mitteilungen</strong> (Broadcasts vom Vorstand, vom Absender nachträglich editierbar); Team-Gruppen als Direkt-Adressat.</li>
         <li><strong>Dokumente:</strong> Ordnerbasiertes Dokumenten-Archiv mit Berechtigungen; PDF- und Bild-Ansicht direkt in der App.</li>
         <li><strong>Videos:</strong> Spiel- und Trainingsvideos streamen (HLS), Weitergabe an TV per <strong>AirPlay</strong> (Apple) oder <strong>Chromecast</strong> (Android/Google) – je nach Berechtigung der Mannschaft.</li>
         <li><strong>PWA / Push:</strong> Zur Startseite hinzufügen, Push-Berechtigung erlauben und den Badge (ungelesene Nachrichten) am App-Symbol nutzen – Details siehe <a class="inline" href="#k7">Kapitel 07</a>.</li>
@@ -497,10 +516,11 @@
 
       <h3>Trainer &amp; sportliche Leitung</h3>
       <ul>
-        <li><strong>Trainings planen:</strong> Einzeltrainings und ganze Serien anlegen, ändern, absagen; Trainings-Notizen pflegen.</li>
+        <li><strong>Trainings planen:</strong> Einzeltrainings und ganze Serien anlegen, ändern, absagen; Trainings-Notizen pflegen; einzelne Spieler bei Bedarf dauerhaft von einer Trainings-Serie abmelden.</li>
         <li><strong>Anwesenheiten erfassen</strong> bei Trainings und Spielen – auch rückwirkend – sowie Team-Anwesenheits-Statistiken einsehen.</li>
         <li><strong>Spiele verwalten:</strong> Heim-, Auswärts- und generische Events; Aufstellung/Kader-Nominierung, Spiel-Notizen, Spielorte.</li>
-        <li><strong>Kaderplanung:</strong> Saison-Kader zusammenstellen, Vorschläge &amp; Auto-Zuweisung, Kader aus Vorsaison kopieren, Spiele pro Saison patchen.</li>
+        <li><strong>Kaderplanung:</strong> Saison-Kader zusammenstellen, Vorschläge &amp; Auto-Zuweisung, Kader aus Vorsaison kopieren, Spiele pro Saison patchen. <strong>Erweiterter Kader:</strong> Gelegenheitsspieler ohne volle Mitgliedschaft können einem Team zugeordnet werden – sie trainieren mit und sehen die Trainings, zählen aber nicht zum Spielkader.</li>
+        <li><strong>Trainingsgruppen</strong> (z.&nbsp;B. Förderkader, Perspektivkader): nicht-spielgebundene Kader für Talent-/Gastkinder außerhalb der regulären Mannschaftsstruktur.</li>
         <li><strong>Dienste organisieren:</strong> Dienst-Slots anlegen/anpassen, Erfüllung bestätigen, Bar-Ersatz buchen; automatische Neuerzeugung bei Spieländerungen.</li>
         <li><strong>Videos hochladen</strong> (resumable Upload) und Video-Metadaten pflegen für die eigene Mannschaft.</li>
         <li><strong>Mein Team – Verwaltung:</strong> Aufgaben-Katalog pflegen und Aufgaben zuweisen, Strafen-Katalog pflegen, <strong>Strafenwart</strong> ernennen.</li>
@@ -522,7 +542,7 @@
 
       <h3>Vorstand</h3>
       <ul>
-        <li><strong>Mitgliederverwaltung:</strong> anlegen, bearbeiten, Status ändern (aktiv / verletzt / pausiert / ausgetreten), Familien-Verknüpfungen anlegen/lösen, Proxy-Konten für Kinder erzeugen, Willkommens-Mail auslösen, löschen, im-/exportieren.</li>
+        <li><strong>Mitgliederverwaltung:</strong> anlegen (Mitgliedsnummer wird automatisch vergeben), bearbeiten, Status pflegen (siehe <a class="inline" href="#k2">Kapitel 02</a>), Familien-Verknüpfungen anlegen/lösen, Proxy- oder Kinderaccounts erzeugen, Willkommens-Mail auslösen, löschen, im-/exportieren.</li>
         <li><strong>Änderungsanträge</strong> (auch verschlüsselte Bankdaten-Anträge) prüfen und annehmen/ablehnen.</li>
         <li><strong>Nutzer &amp; Konten:</strong> Konten anlegen, System-Rolle vergeben, Einladungen einzeln oder per CSV-Import, Beitrittsanfragen genehmigen/ablehnen, Recovery-E-Mails setzen.</li>
         <li><strong>Stammdaten:</strong> Teams, Saisons (inkl. aktiver Saison, Dienst-Zielen und Halbierungs-Kennung), Stammvereine, Veranstaltungsorte (auch Import), Dienst-Typen mit Markdown-Anleitungen, Dienstplan-Vorlagen.</li>
@@ -574,7 +594,7 @@
       <div class="role">
         <h4>Mitglied / Spieler (Standard)</h4>
         <p class="rights-label">Darf</p>
-        <p>Eigenes Profil pflegen, zu-/absagen, Dienste übernehmen, Mitfahrten anbieten/suchen, chatten, Dokumente lesen.</p>
+        <p>Eigenes Profil pflegen, zu-/absagen, Dienste übernehmen, eigenes Trainingstagebuch führen, Mitfahrten anbieten/suchen, chatten, Dokumente lesen.</p>
         <p class="duties-label">Pflichten</p>
         <ul><li>Eigene Kontaktdaten <strong>aktuell halten</strong>.</li><li>Zu Trainings und Spielen <strong>rechtzeitig zu-/absagen</strong>.</li><li>Übernommene <strong>Dienste auch erfüllen</strong>.</li><li>Zugangsdaten geheim halten; Konto nicht weitergeben.</li></ul>
       </div>
@@ -582,7 +602,7 @@
       <div class="role">
         <h4>Eltern</h4>
         <p class="rights-label">Darf</p>
-        <p>Profile der eigenen Kinder pflegen, Bankdaten der Kinder hinterlegen, für die Kinder zu-/absagen.</p>
+        <p>Profile der eigenen Kinder pflegen, Bankdaten der Kinder hinterlegen, für die Kinder zu-/absagen, stellvertretend Dienste für die Kinder übernehmen.</p>
         <p class="duties-label">Pflichten</p>
         <ul><li>Nur die <strong>eigenen</strong> Kinder verwalten.</li><li>Bankdaten korrekt und aktuell halten (Voraussetzung für korrekten Beitragseinzug).</li></ul>
       </div>
@@ -616,7 +636,7 @@
         <p class="rights-label">Darf</p>
         <p>Eingereichte Spielberichte prüfen und veröffentlichen.</p>
         <p class="duties-label">Pflichten</p>
-        <ul><li>Berichte <strong>vor der Veröffentlichung</strong> auf Verein-Ton, Recht und Vollständigkeit prüfen.</li><li>Fehlgeschlagene oder ungeeignete Berichte an den Autor <strong>mit Begründung</strong> zurückgeben.</li></ul>
+        <ul><li>Berichte <strong>vor der Veröffentlichung</strong> auf Verein-Ton, Recht und Vollständigkeit prüfen.</li><li>Die <strong>Foto-Veröffentlichungs-Einwilligung</strong> der abgebildeten Mitglieder beachten.</li><li>Fehlgeschlagene oder ungeeignete Berichte an den Autor <strong>mit Begründung</strong> zurückgeben.</li></ul>
       </div>
 
       <div class="role">
@@ -665,6 +685,7 @@
         <li><strong>Datensparsamkeit bei Rollen:</strong> Funktionen wie <em>vorstand</em> oder <em>kassierer</em> öffnen den Blick auf viele Mitgliederdaten. → Nur vergeben, wer sie wirklich braucht; ausgeschiedene Funktionsträger zeitnah herabstufen.</li>
         <li><strong>Zweckbindung:</strong> Daten dürfen nur für Vereinszwecke genutzt werden – nicht für private Hände, andere Vereine oder Werbung.</li>
         <li><strong>Kein Export „auf Vorrat":</strong> Mitglieder-Exporte und Beitragsdaten nur bei konkretem Anlass erstellen und nicht ungeschützt speichern/weiterleiten.</li>
+        <li><strong>Foto-Veröffentlichung:</strong> Jedes Mitglied hinterlegt im Profil eine Einwilligung zur öffentlichen Foto-Veröffentlichung. Presseteam und Medien-Freigeber müssen diese vor der Veröffentlichung eines Spielberichts beachten.</li>
         <li><strong>Bankdaten besonders geschützt:</strong> Den Tresor nur entsperren, wenn die Aufgabe es erfordert, und die Sitzung nicht offen am ungesicherten Gerät stehen lassen.</li>
         <li><strong>Kein Account-Sharing:</strong> Jede Person nutzt ihr eigenes Konto. Geteilte Logins zerstören die Nachvollziehbarkeit.</li>
         <li><strong>Impersonation ist sensibel:</strong> Das Handeln im Namen anderer (Admin) ist nur zur technischen Hilfe gedacht – nie, um fremde Inhalte einzusehen.</li>

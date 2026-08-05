@@ -21,7 +21,7 @@ func TestBeitragsGruppe_AlleStatus(t *testing.T) {
 		"pausiert":    "passiv",
 		"passiv":      "passiv",
 		"ausgetreten": "",
-		"honorar":     "",
+		"extern":     "",
 		"anwaerter":   "",
 	}
 	for status, want := range cases {

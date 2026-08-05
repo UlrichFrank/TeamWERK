@@ -8,7 +8,7 @@ Diese Spezifikation beschreibt die Capability `members-csv-enrich-mode`. (Automa
 
 ### Requirement: Status-Spalte „Status TeamWERK"
 
-Das System SHALL beim CSV-Import den Lebenszyklus-Status eines Mitglieds ausschließlich aus der CSV-Spalte `Status TeamWERK` ableiten. Erlaubte Eingabewerte sind die zulässigen Werte des CHECK-Constraint auf `members.status` (`aktiv`, `verletzt`, `pausiert`, `ausgetreten`, `passiv`, `honorar`, `anwaerter`) sowie der Alias `gekündigt` → `ausgetreten`. Unbekannte Werte werden beim Anlegen auf `aktiv` gemappt; beim Update wird `members.status` in diesem Fall nicht verändert.
+Das System SHALL beim CSV-Import den Lebenszyklus-Status eines Mitglieds ausschließlich aus der CSV-Spalte `Status TeamWERK` ableiten. Erlaubte Eingabewerte sind die zulässigen Werte des CHECK-Constraint auf `members.status` (`aktiv`, `verletzt`, `pausiert`, `ausgetreten`, `passiv`, `extern`, `anwaerter`) sowie der Alias `gekündigt` → `ausgetreten`. Unbekannte Werte werden beim Anlegen auf `aktiv` gemappt; beim Update wird `members.status` in diesem Fall nicht verändert.
 
 #### Scenario: Status TeamWERK = passiv legt passives Mitglied an
 

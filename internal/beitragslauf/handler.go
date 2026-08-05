@@ -82,7 +82,7 @@ func (h *Handler) buildPreview(ctx context.Context, saisonID int) (*previewResul
 	res := &previewResult{SaisonID: saisonID, SaisonLabel: season.Label, SaisonKurz: season.Label, Faelligkeit: effectiveFaelligkeit(season.Stichtag, time.Now())}
 	for _, m := range members {
 		// Früher (oder ohne Austrittsdatum) ausgetretene Mitglieder gar nicht
-		// anzeigen — wie honorar/anwaerter. Nur unterjährige Austritte
+		// anzeigen — wie extern/anwaerter. Nur unterjährige Austritte
 		// (exit_date im Saisonfenster) werden einbezogen und halbiert.
 		if m.Status == "ausgetreten" && !inWindow(m.ExitDate, season.Start, season.End) {
 			continue

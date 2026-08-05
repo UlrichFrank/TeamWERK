@@ -16,7 +16,7 @@ Nutzer mit Vereinsfunktion `vorstand` oder `kassierer` (sowie System-Rolle `admi
 
 ### Requirement: Ein- und Ausschlussregeln
 
-Der Vorschau-Endpoint MUST Mitglieder mit `status IN ('honorar','anwaerter','foerderkind')`
+Der Vorschau-Endpoint MUST Mitglieder mit `status IN ('extern','anwaerter','foerderkind')`
 oder `beitragsfrei = 1` ausschließen, ebenso Mitglieder ohne gültiges SEPA-Mandat
 (`sepa_mandat = 0`), ohne Mitgliedsnummer oder mit unvollständiger Adresse — diese
 Prüfungen erfolgen serverseitig anhand **nicht-verschlüsselter** Felder. Mitglieder mit

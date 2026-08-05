@@ -132,8 +132,8 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
             <li key={t.id} className="flex items-center justify-between py-2 gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <PersonChip userId={t.user_id} name={t.name} />
-                {t.status === 'honorar' && (
-                  <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-blue/10 text-brand-blue shrink-0">Honorar</span>
+                {t.status === 'extern' && (
+                  <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-blue/10 text-brand-blue shrink-0">Extern</span>
                 )}
               </div>
               <button
