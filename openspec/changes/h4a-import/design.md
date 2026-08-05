@@ -219,6 +219,14 @@ POST /api/games/import/h4a/apply     RequireClubFunction("vorstand")
 Der erweiterte Hallenlisten-Import bleibt auf seinem bestehenden Tier
 (`POST /api/venues/import`).
 
+**Package-Zuschnitt (bei der Umsetzung präzisiert):** `internal/h4aimport/` enthält **nur**
+den H4A-Client (Login, xajax-Request, `edit.php`-Abruf) und den HTML-Parser — reine
+Foundation, importiert nur stdlib, keine Domänen-Packages. Die **preview/apply-HTTP-Handler
+leben in `internal/games/`** (neue Datei `h4aimport_handler.go`), weil `apply` den
+unexportierten `runAutoRegen` und die Game-Insert-Logik wiederverwenden muss. `games`
+(Domain) importiert `h4aimport` (Foundation) — vom Arch-Test erlaubt; `h4aimport` ist im
+`arch_test.go` als Foundation zu klassifizieren.
+
 **Broadcast-Gate:** `preview` mutiert nichts → Allowlist-Eintrag mit Begründung
 („read-only, ruft externe Quelle ab, kein DB-Write"). `apply` mutiert → broadcastet `games`.
 

@@ -1,25 +1,25 @@
 ## 1. Migration — DB-Felder
 
-- [ ] 1.1 `internal/db/migrations/042_h4a_import_ids.up.sql`: `ALTER TABLE venues ADD COLUMN hall_number INTEGER;` + `CREATE UNIQUE INDEX idx_venues_hall_number ON venues(hall_number) WHERE hall_number IS NOT NULL;`
-- [ ] 1.2 Gleiche Migration: `ALTER TABLE games ADD COLUMN external_id TEXT;` + `CREATE INDEX idx_games_external_id ON games(external_id) WHERE external_id IS NOT NULL;` (kein globaler UNIQUE — Bestandsspiele ohne external_id koexistieren; Eindeutigkeit pro Saison später fachlich prüfen)
-- [ ] 1.3 `042_h4a_import_ids.down.sql`: Indizes + Spalten via Tabellen-Rebuild entfernen (SQLite kennt kein DROP COLUMN mit Index sauber — Rebuild-Muster wie in `018_*` verwenden)
-- [ ] 1.4 `make migrate-up` lokal + `make migrate-down`/`up` Roundtrip prüfen
+- [x] 1.1 `internal/db/migrations/042_h4a_import_ids.up.sql`: `ALTER TABLE venues ADD COLUMN hall_number INTEGER;` + `CREATE UNIQUE INDEX idx_venues_hall_number ON venues(hall_number) WHERE hall_number IS NOT NULL;`
+- [x] 1.2 Gleiche Migration: `ALTER TABLE games ADD COLUMN external_id TEXT;` + `CREATE INDEX idx_games_external_id ON games(external_id) WHERE external_id IS NOT NULL;` (kein globaler UNIQUE — Bestandsspiele ohne external_id koexistieren; Eindeutigkeit pro Saison später fachlich prüfen)
+- [x] 1.3 `042_h4a_import_ids.down.sql`: Indizes + Spalten entfernen (DROP INDEX + DROP COLUMN — im Repo unterstützt, vgl. `036_*`); zusätzlich `h4a_staffel_team_map`-Tabelle (Task 4.1) mit angelegt
+- [x] 1.4 `make migrate-up` lokal + `make migrate-down`/`up` Roundtrip geprüft (grün)
 
 ## 2. Backend — Hallenlisten-Import erweitert (venue-csv-import)
 
-- [ ] 2.1 `internal/venues/handler.go` `Import`: Spalte `Nummer` (`row[1]`) lesen und in eine `hallNumber`-Struktur je Zeile übernehmen (bislang bewusst verworfen)
-- [ ] 2.2 Backfill-Match auf `(name, city, street)` statt nur `(name, city)`; bei eindeutigem Treffer `venues.hall_number` setzen
-- [ ] 2.3 Mehrdeutigkeit (mehrere Nummern für gleiche Adresse) und No-Match erkennen → `hall_number` NULL lassen, in `importResult` als `ambiguous`/`unmatched` zählen
-- [ ] 2.4 `importResult`-Struct um `HallNumbersAssigned`, `HallNumbersAmbiguous`, `HallNumbersUnmatched` erweitern
-- [ ] 2.5 `internal/venues/handler_test.go`: Test „eindeutiger Backfill setzt hall_number", „mehrdeutige Adresse bleibt NULL + im Report", „manuelles Venue bleibt NULL", „neue Halle mit Nummer angelegt"
+- [x] 2.1 `internal/venues/handler.go` `Import`: Spalte `Nummer` (`row[1]`) lesen und in eine `hallNumber`-Struktur je Zeile übernehmen (bislang bewusst verworfen)
+- [x] 2.2 Backfill-Match auf `(name, city, street)` statt nur `(name, city)`; bei eindeutigem Treffer `venues.hall_number` setzen
+- [x] 2.3 Mehrdeutigkeit (mehrere Nummern für gleiche Adresse) und No-Match erkennen → `hall_number` NULL lassen, in `importResult` als `ambiguous`/`unmatched` zählen
+- [x] 2.4 `importResult`-Struct um `HallNumbersAssigned`, `HallNumbersAmbiguous`, `HallNumbersUnmatched` erweitern
+- [x] 2.5 `internal/venues/handler_test.go`: Test „eindeutiger Backfill setzt hall_number", „mehrdeutige Adresse bleibt NULL + im Report", „manuelles Venue bleibt NULL", „neue Halle mit Nummer angelegt"
 
 ## 3. Backend — Neues Package internal/h4aimport (H4A-Client + Parser)
 
-- [ ] 3.1 `internal/h4aimport/client.go`: HTTP-Client mit `cookiejar`, `Login(user,pw)` (Formular-POST an `index.php`, PHPSESSID), TLS-Pflicht (nur https), Timeout; Credentials nie loggen
-- [ ] 3.2 `internal/h4aimport/client.go`: `FetchPeriods()` (GET edit.php → `ge_periods`-Optionen parsen) und `FetchGames(periodId)` (POST xajax `xajax_update`, S-kodierte Args + `opOwnGames=Son`, JSON→`gametable_container`-HTML extrahieren)
-- [ ] 3.3 `internal/h4aimport/encode.go`: xajax-Argument-Encoder (`S`-Präfix + CDATA für Sonderzeichen), Unit-Test gegen den in `design.md` dokumentierten erwarteten Payload
-- [ ] 3.4 `internal/h4aimport/parse.go`: HTML-Tabellen-Parser (`id="game<n>"` → Zeile; Spalten Staffel/Nr./Halle/Datum/Zeit/Heim/Gast/Kommentar); defensiv, klare Fehlermeldung bei Formatbruch statt stiller Teilergebnisse
-- [ ] 3.5 `internal/h4aimport/parse_test.go`: Test gegen eingecheckte HTML-Fixture `testdata/edit_owngames.html` (aus dem echten Response entnommen, ohne Zugangsdaten) — 146-Zeilen-Fixture nicht nötig, repräsentative Teilmenge; prüft Nr./Halle/Heim-Gast/Typ-Ableitung
+- [x] 3.1 `internal/h4aimport/client.go`: HTTP-Client mit `cookiejar`, `Login(user,pw)` (Formular-POST an `index.php`, PHPSESSID), TLS-Pflicht (nur https), Timeout; Credentials nie loggen
+- [x] 3.2 `internal/h4aimport/client.go`: `FetchPeriods()` (GET edit.php → `ge_periods`-Optionen parsen) und `FetchGames(periodId)` (POST xajax `xajax_update`, S-kodierte Args + `opOwnGames=Son`, JSON→`gametable_container`-HTML extrahieren)
+- [x] 3.3 `internal/h4aimport/encode.go`: xajax-Argument-Encoder (`S`-Präfix + CDATA für Sonderzeichen), Unit-Test gegen den in `design.md` dokumentierten erwarteten Payload
+- [x] 3.4 `internal/h4aimport/parse.go`: HTML-Tabellen-Parser (`id="game<n>"` → Zeile; Spalten Staffel/Nr./Halle/Datum/Zeit/Heim/Gast/Kommentar); defensiv, klare Fehlermeldung bei Formatbruch statt stiller Teilergebnisse
+- [x] 3.5 `internal/h4aimport/parse_test.go`: Test gegen eingecheckte HTML-Fixture `testdata/edit_owngames.html` (aus dem echten Response entnommen, ohne Zugangsdaten) — 146-Zeilen-Fixture nicht nötig, repräsentative Teilmenge; prüft Nr./Halle/Heim-Gast/Typ-Ableitung
 
 ## 4. Backend — Mapping (Staffel→Mannschaft, Halle→Venue, Typ)
 
@@ -30,7 +30,10 @@
 
 ## 5. Backend — Preview/Apply-Handler + Routen
 
-- [ ] 5.1 `internal/h4aimport/handler.go`: `Preview(w,r)` — Auth (vorstand/admin), Credentials aus Body, Login→Fetch→Parse→Map→Diff gegen `games` (Anker external_id), Logout, Plan zurück; Credentials nie in Response/Log
+  (Package-Zuschnitt: Handler liegen in `internal/games/h4aimport_handler.go` und nutzen
+  `runAutoRegen`; `internal/h4aimport/` bleibt reiner Client+Parser. Siehe design.md §8.)
+
+- [ ] 5.1 `internal/games/h4aimport_handler.go`: `PreviewH4AImport(w,r)` — Auth (vorstand/admin), Credentials aus Body, `h4aimport`-Client Login→Fetch→Parse→Map→Diff gegen `games` (Anker external_id), Logout, Plan zurück; Credentials nie in Response/Log
 - [ ] 5.2 `Diff`-Logik: new/changed/unchanged; changed mit Feld-Alt/Neu; keine Löschungen; mögliche-Dublette-Erkennung (gleiches Datum+Team+Gegner ohne external_id)
 - [ ] 5.3 `Apply(w,r)`: Entscheidungen entgegennehmen, je Zeile re-validieren (aktive Saison, team/venue existiert, template gültig), INSERT/UPDATE `games` + `game_teams`, external_id setzen
 - [ ] 5.4 Batch-Regen: EIN `runAutoRegen` über Vereinigungsmenge aller Datumsfenster; EIN `hub.Broadcast("games")`; Spieler-Pushes unterdrückt (nur Regen-Summary an Importeur)
