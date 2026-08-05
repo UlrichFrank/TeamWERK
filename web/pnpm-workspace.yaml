@@ -1,3 +1,10 @@
-# Supply-chain protection: only resolve versions published at least 8 days
-# (11520 minutes) ago, so a compromised release is withdrawn before we pick it up.
-minimumReleaseAge: 11520
+# Supply-chain protection: only resolve versions published at least 3 days
+# (4320 minutes) ago, so a compromised release is withdrawn before we pick it up.
+#
+# Why 3 and not 8 days: our package.json carries caret ranges pinned to the
+# newest release of each dependency (e.g. axios ^1.19.0). A longer window leaves
+# no satisfiable version at all — pnpm then fails resolution outright
+# (ERR_PNPM_NO_MATURE_MATCHING_VERSION) instead of falling back to an older one.
+# Three days still covers the hours-to-days window in which a compromised
+# release is typically spotted and yanked.
+minimumReleaseAge: 4320
