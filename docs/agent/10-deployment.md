@@ -61,3 +61,27 @@ Tresor-Passphrase verloren (alle Inhaber), sind **alle Bank-/SEPA-Daten unwieder
 verloren** (`group_private_key_enc` ist dann nicht mehr entschlüsselbar). Passphrase
 mindestens zwei verantwortlichen Personen bekannt machen + sicher hinterlegen
 (Passwort-Manager des Vorstands). **DB-Backup vor dem Migrationslauf** ziehen.
+
+## H4A-Spielimport — Betriebsvorbehalte
+
+**ToS (vor Produktivnahme klären):** Der Import meldet sich mit den Zugangsdaten des
+geteilten Vereins-Accounts server-seitig bei Handball4All an und liest `edit.php`.
+Automatisierter Login-Zugriff kann die H4A-Nutzungsbedingungen berühren. Die gewählte
+Form ist die mildeste (**admin-getriggert, kein Cron, kein Dauer-Polling**) — vor dem
+ersten produktiven Lauf trotzdem kurz mit BWHV/H4A abstimmen. Kein Rechtsrat, nur ein
+festgehaltener Vorbehalt aus `openspec/changes/h4a-import/design.md` §2.
+
+**Vor dem ersten Lauf auf Prod:**
+1. Hallenliste unter `/veranstaltungsorte` neu importieren — erst dadurch bekommen die
+   Bestands-Venues ihre `hall_number`, über die der Spielimport den Spielort auflöst.
+   Den ausgewiesenen Report (zugeordnet / mehrdeutig / ohne Treffer) mit der lokalen
+   Verifikation abgleichen; Abweichungen sind unkritisch (fail-safe: unsichere Zeilen
+   bleiben NULL), sagen aber, wie viel Handarbeit im Diff anfällt.
+2. Aktive Saison muss gesetzt sein (`/admin/saisons`) — `apply` antwortet sonst HTTP 400.
+3. Manuell gepflegte Bestandsspiele tragen keine `external_id`. Der erste Import meldet
+   sie als **mögliche Dubletten**; diese Zeilen im Modal prüfen und ggf. abwählen, statt
+   sie blind zu übernehmen.
+
+**Der Vereins-Account ist geteilt.** Der Server sieht das Passwort transient (er stellt den
+H4A-Request), speichert es aber nirgends. Diese Modellgrenze muss dem Vorstand bewusst
+sein — sie ist bewusst schwächer als der Zero-Knowledge-Kurs bei den Bankdaten.

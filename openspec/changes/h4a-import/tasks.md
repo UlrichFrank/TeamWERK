@@ -50,19 +50,19 @@
 
 ## 7. Frontend — Import-Modal im Kalender
 
-- [ ] 7.1 `web/src/components/H4AImportModal.tsx`: Schritt 1 Credentials-Eingabe (user/pw, Saison-Dropdown aus preview-Vorabruf oder festes Feld), Schritt 2 Diff-Anzeige
-- [ ] 7.2 Diff-Darstellung: Abschnitte NEU / GEÄNDERT (Alt→Neu pro Feld) / UNVERÄNDERT (ausblendbar); pro Zeile Checkbox, Staffel→Mannschaft-Select, Venue/Typ-Anzeige
-- [ ] 7.3 Template-Auswahl: Batch je Typ (Heim/Auswärts → Template-Select) + selektiv je Zeile; brand-Tokens, lucide-Icons, verbindliche Klassen-Strings
-- [ ] 7.4 `api.post('/games/import/h4a/preview', …)` → `apply`; `useLiveUpdates('games')` nach Apply reload; Fehlerbehandlung (502 generische Meldung)
-- [ ] 7.5 Import-Button in `KalenderPage.tsx` (nur vorstand/admin sichtbar), öffnet Modal
-- [ ] 7.6 `web/src/pages/AdminVenuesPage.tsx`: Import-Ergebnis um hall_number-Report (zugeordnet/mehrdeutig/nicht zugeordnet) erweitern
-- [ ] 7.7 Vitest: Modal rendert Diff-Abschnitte, Batch-Template setzt alle, selektive Wahl überschreibt, nicht zugeordnete Zeile ist nicht bestätigbar
+- [x] 7.1 `web/src/components/H4AImportModal.tsx`: Schritt 1 Credentials-Eingabe (user/pw, Saison-Dropdown aus preview-Vorabruf oder festes Feld), Schritt 2 Diff-Anzeige
+- [x] 7.2 Diff-Darstellung: Abschnitte NEU / GEÄNDERT (Alt→Neu pro Feld) / UNVERÄNDERT (ausblendbar); pro Zeile Checkbox, Staffel→Mannschaft-Select, Venue/Typ-Anzeige
+- [x] 7.3 Template-Auswahl: Batch je Typ (Heim/Auswärts → Template-Select) + selektiv je Zeile; brand-Tokens, lucide-Icons, verbindliche Klassen-Strings
+- [x] 7.4 `api.post('/games/import/h4a/preview', …)` → `apply`; `useLiveUpdates('games')` nach Apply reload; Fehlerbehandlung (502 generische Meldung)
+- [x] 7.5 Import-Button in `KalenderPage.tsx` (nur vorstand/admin sichtbar), öffnet Modal
+- [x] 7.6 `web/src/pages/AdminVenuesPage.tsx`: Import-Ergebnis um hall_number-Report (zugeordnet/mehrdeutig/nicht zugeordnet) erweitern
+- [x] 7.7 Vitest: Modal rendert Diff-Abschnitte, Batch-Template setzt alle, selektive Wahl überschreibt, nicht zugeordnete Zeile ist nicht bestätigbar
 
 ## 8. Doku & Sicherheit
 
-- [ ] 8.1 `docs/agent/06-gotchas.md`: Gotcha „H4A-Import — fremde Zugangsdaten transient, nie loggen/persistieren, HTTPS-only, admin-getriggert, HTML-Parsing brüchig"
-- [ ] 8.2 `docs/agent/04-api-db.md`: neue Routen im Vorstand-Tier ergänzen; `venues.hall_number`/`games.external_id` in Schema-Konventionen
-- [ ] 8.3 ToS-Hinweis (BWHV/H4A-Rücksprache vor Produktivnahme) im Deployment-/Betriebsteil vermerken
+- [x] 8.1 `docs/agent/06-gotchas.md`: Gotcha „H4A-Import — fremde Zugangsdaten transient, nie loggen/persistieren, HTTPS-only, admin-getriggert, HTML-Parsing brüchig"
+- [x] 8.2 `docs/agent/04-api-db.md`: neue Routen im Vorstand-Tier ergänzen; `venues.hall_number`/`games.external_id` in Schema-Konventionen
+- [x] 8.3 ToS-Hinweis (BWHV/H4A-Rücksprache vor Produktivnahme) im Deployment-/Betriebsteil vermerken
 
 ## 9. Verifikation
 
