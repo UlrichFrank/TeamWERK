@@ -470,6 +470,43 @@ func TestPreviewH4A_CredentialsWerdenNichtPersistiertOderGeloggt(t *testing.T) {
 	}
 }
 
+// Der Fehlerpfad ist die gefährlichste Stelle: dort landen erfahrungsgemäß
+// Request-Dumps im Log. Die Diagnose-Ausgabe muss den Grund nennen, aber
+// niemals die Zugangsdaten.
+func TestPreviewH4A_FehlerdiagnoseOhneZugangsdaten(t *testing.T) {
+	const password = "S3hrGeheimesPasswort!"
+	const user = "v_109"
+	db := testutil.NewDB(t)
+	h4aBaseData(t, db)
+	fake := &fakeH4A{loginErr: errors.New("Post \"https://meinh4a.handball4all.de/index.php\": dial tcp: i/o timeout")}
+	srv, _ := h4aTestServer(t, db, fake)
+
+	var logBuf strings.Builder
+	old := h4aLogOut
+	h4aLogOut = &logBuf
+	t.Cleanup(func() { h4aLogOut = old })
+
+	res := testutil.Post(t, srv, "/api/games/import/h4a/preview", vorstandToken(t, db),
+		map[string]any{"user": user, "pw": password, "period_id": "142"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadGateway {
+		t.Fatalf("erwartet 502, got %d", res.StatusCode)
+	}
+
+	logged := logBuf.String()
+	// Der Grund muss drinstehen — sonst ist ein Fehlschlag nicht diagnostizierbar.
+	if !strings.Contains(logged, "login") || !strings.Contains(logged, "i/o timeout") {
+		t.Errorf("Fehlergrund fehlt im Log: %q", logged)
+	}
+	// Die Zugangsdaten dürfen es nicht sein.
+	if strings.Contains(logged, password) {
+		t.Errorf("Passwort im Diagnose-Log: %q", logged)
+	}
+	if strings.Contains(logged, user) {
+		t.Errorf("Benutzername im Diagnose-Log: %q", logged)
+	}
+}
+
 // findStringInDB durchsucht alle Tabellen/Spalten nach needle und liefert den
 // ersten Fundort (leer, wenn nirgends gefunden).
 func findStringInDB(t *testing.T, db *sql.DB, needle string) (string, string) {

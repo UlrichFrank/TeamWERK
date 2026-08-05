@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -114,7 +116,12 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 
 	client := h.newH4A()
 	if err := client.Login(r.Context(), req.User, req.Pw); err != nil {
-		// Generisch — nie das Passwort oder H4A-interne Details zurückspiegeln.
+		// Antwort generisch — nie das Passwort oder H4A-Interna zurückspiegeln.
+		// Der Grund gehört aber ins Server-Log, sonst ist ein fehlgeschlagener
+		// Import nicht diagnostizierbar (die drei Fehlercodes sind von außen
+		// nicht einmal an der Response-Länge unterscheidbar). Die Fehlerwerte
+		// des Clients enthalten nur URL/Netzinfo, keine Zugangsdaten.
+		logH4AFailure("login", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_login_failed"})
 		return
 	}
@@ -125,6 +132,7 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 	if req.PeriodID == "" {
 		periods, err := client.FetchPeriods(r.Context())
 		if err != nil {
+			logH4AFailure("fetch-periods", err)
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_fetch_failed"})
 			return
 		}
@@ -134,11 +142,14 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 
 	htmlStr, err := client.FetchGamesHTML(r.Context(), req.PeriodID)
 	if err != nil {
+		logH4AFailure("fetch-games", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_fetch_failed"})
 		return
 	}
 	games, err := h4aimport.ParseGames(htmlStr)
 	if err != nil {
+		logH4AFailure("parse", err)
+		fmt.Fprintf(h4aLogOut, "h4a-import parse: %d Bytes empfangen, Anfang: %.200q\n", len(htmlStr), htmlStr)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_parse_failed"})
 		return
 	}
@@ -461,6 +472,18 @@ func (h *Handler) ApplyH4AImport(w http.ResponseWriter, r *http.Request) {
 	}
 	h.dispatchRegenNotifications(summary)
 	writeJSON(w, http.StatusOK, result)
+}
+
+// h4aLogOut ist die Senke der Import-Diagnose. Als Variable, damit der Test
+// mitlesen kann, dass hier niemals Zugangsdaten landen (die Zusicherung ist
+// wertlos, wenn sie nicht am tatsächlichen Ziel geprüft wird).
+var h4aLogOut io.Writer = os.Stderr
+
+// logH4AFailure schreibt den Grund eines fehlgeschlagenen H4A-Schritts ins
+// Server-Log. Bewusst nur der Fehlerwert des Clients (URL/HTTP-Status/Netzinfo)
+// — Benutzername und Passwort werden nie übergeben und tauchen dort nicht auf.
+func logH4AFailure(step string, err error) {
+	fmt.Fprintf(h4aLogOut, "h4a-import %s fehlgeschlagen: %v\n", step, err)
 }
 
 // canImportH4A: Vorstand-Funktion oder System-Admin.
