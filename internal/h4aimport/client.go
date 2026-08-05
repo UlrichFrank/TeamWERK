@@ -174,25 +174,46 @@ func (c *Client) FetchGamesHTML(ctx context.Context, periodID string) (string, e
 	if err != nil {
 		return "", fmt.Errorf("spielabruf bei Handball4All fehlgeschlagen: %w", err)
 	}
+	status := resp.StatusCode
 	raw, err := readBody(resp)
 	if err != nil {
 		return "", err
 	}
+	// Ohne Status-Prüfung liefe eine HTML-Fehlerseite in den JSON-Parser und
+	// produzierte eine irreführende „kein JSON"-Meldung.
+	if status != http.StatusOK {
+		return "", fmt.Errorf("spielabruf bei Handball4All: HTTP %d, Antwort beginnt mit %s", status, snippet(raw))
+	}
 
 	var parsed xajaxResponse
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return "", fmt.Errorf("xajax-Antwort von Handball4All nicht als JSON lesbar: %w", err)
+		// Der Anfang der Antwort ist die entscheidende Information: daran ist zu
+		// erkennen, ob H4A eine Login-/Fehlerseite statt der xajax-Hülle liefert.
+		return "", fmt.Errorf("xajax-Antwort von Handball4All nicht als JSON lesbar (%d Bytes, beginnt mit %s): %w", len(raw), snippet(raw), err)
 	}
 	best := ""
+	var seen []string
 	for _, o := range parsed.Xjxobj {
+		seen = append(seen, fmt.Sprintf("%s/%s(%d)", o.Cmd, o.ID, len(o.Data)))
 		if o.Cmd == "as" && o.ID == "gametable_container" && len(o.Data) > 50 && len(o.Data) > len(best) {
 			best = o.Data
 		}
 	}
 	if best == "" {
-		return "", fmt.Errorf("xajax-Antwort ohne gametable_container-HTML — Format geändert?")
+		return "", fmt.Errorf("xajax-Antwort ohne gametable_container-HTML — Format geändert? Enthaltene Kommandos: %s", strings.Join(seen, ", "))
 	}
 	return best, nil
+}
+
+// snippet kürzt eine Antwort auf einen loggbaren Anfang. Der Spielplan enthält
+// keine Zugangsdaten; abgeschnitten wird trotzdem, damit das Log nicht volläuft.
+func snippet(s string) string {
+	const max = 200
+	s = strings.TrimSpace(s)
+	if len(s) > max {
+		return fmt.Sprintf("%q…", s[:max])
+	}
+	return fmt.Sprintf("%q", s)
 }
 
 // Logout beendet die H4A-Session (best effort — die Session verfällt ohnehin serverseitig).
