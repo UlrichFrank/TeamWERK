@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle } from 'lucide-react'
+import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle, Download } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
@@ -17,6 +17,7 @@ import SpieltagDetailModal from '../components/SpieltagDetailModal'
 import VenuePicker, { Venue as VenueType } from '../components/VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
+import H4AImportModal from '../components/H4AImportModal'
 
 interface VenueRef {
   id: number
@@ -122,6 +123,9 @@ export default function KalenderPage() {
   // (admin/vorstand/trainer/sportliche_leitung); training creation = manage_trainings
   // (admin/trainer/sportliche_leitung, no pure vorstand).
   const canEdit = hasCapability('manage_games')
+  // Enger als canEdit: der H4A-Import nimmt fremde Zugangsdaten entgegen und bleibt
+  // beim Vorstand, obwohl Trainer/sportliche Leitung Spiele pflegen dürfen.
+  const canImportGames = hasCapability('import_games')
   const canSeeTeamAbsences = canEdit
   const canManageTrainings = hasCapability('manage_trainings')
   const [searchParams] = useSearchParams()
@@ -150,6 +154,8 @@ export default function KalenderPage() {
   const compact = useCompactHeader(950)
 
   const [regenSummary, setRegenSummary] = useState<RegenSummary | null>(null)
+  const [showH4AImport, setShowH4AImport] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; updated: number; skipped: number } | null>(null)
 
   // Wizard dialog
   const [showCreate, setShowCreate] = useState(false)
@@ -709,6 +715,18 @@ export default function KalenderPage() {
       {regenSummary && (
         <RegenSummaryCard summary={regenSummary} onDismiss={() => setRegenSummary(null)} />
       )}
+      {importResult && (
+        <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text flex items-start gap-2">
+          <Check className="w-4 h-4 mt-0.5 shrink-0" />
+          <span className="flex-1">
+            H4A-Import: {importResult.imported} neu angelegt, {importResult.updated} aktualisiert
+            {importResult.skipped > 0 && `, ${importResult.skipped} übersprungen`}.
+          </span>
+          <button onClick={() => setImportResult(null)} aria-label="Hinweis schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
         <select
@@ -778,6 +796,17 @@ export default function KalenderPage() {
           >
             <Plus className="w-3.5 h-3.5" />
             {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
+          </button>
+        )}
+        {canImportGames && (
+          <button
+            onClick={() => setShowH4AImport(true)}
+            aria-label="Spielplan aus Handball4All importieren"
+            title="Spielplan aus Handball4All importieren"
+            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-white text-brand-text-muted border border-brand-border hover:border-brand-text hover:text-brand-text transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'}`}
+          >
+            <Download className="w-3.5 h-3.5" />
+            {!compact && <span>H4A-Import</span>}
           </button>
         )}
       </div>
@@ -1560,6 +1589,19 @@ export default function KalenderPage() {
           onChanged={loadGames}
           onDeleted={() => { loadGames(); setDetailGameId(null) }}
         />
+      )}
+      {/* Nur im geöffneten Zustand gemountet — beim Schließen verschwinden die
+          eingegebenen H4A-Zugangsdaten mit dem Komponenten-State. */}
+      {showH4AImport && (
+      <H4AImportModal
+        isOpen
+        onClose={() => setShowH4AImport(false)}
+        onImported={result => {
+          setImportResult({ imported: result.imported, updated: result.updated, skipped: result.skipped })
+          if (result.regen_summary) setRegenSummary(result.regen_summary as RegenSummary)
+          loadGames()
+        }}
+      />
       )}
     </div>
   )
