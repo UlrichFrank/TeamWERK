@@ -283,6 +283,14 @@ func TestCapabilities_TrainerLike(t *testing.T) {
 		if hasCap(caps, policy.CapManageMembers) {
 			t.Errorf("trainer-like %v should NOT have manage_members", p.ClubFunctions)
 		}
+		// Spiele pflegen ja, H4A-Import nein — der nimmt fremde Zugangsdaten
+		// entgegen und bleibt beim Vorstand (Tier in router.go).
+		if !hasCap(caps, policy.CapManageGames) {
+			t.Errorf("trainer-like %v should have manage_games", p.ClubFunctions)
+		}
+		if hasCap(caps, policy.CapImportGames) {
+			t.Errorf("trainer-like %v should NOT have import_games", p.ClubFunctions)
+		}
 	}
 }
 
@@ -307,6 +315,16 @@ func TestCapabilities_Vorstand(t *testing.T) {
 	// Aber: Vorstand legt Ordner auf oberster Ebene an — engeres Recht als manage_documents.
 	if !hasCap(caps, policy.CapCreateRootFolder) {
 		t.Error("vorstand should have create_root_folder")
+	}
+	// H4A-Import ist Vorstand-Tier (Admin per Bypass) — die Capability steuert die
+	// Sichtbarkeit des Import-Buttons im Kalender.
+	for _, p := range []*policy.Principal{vorstandP(), adminP()} {
+		if !hasCap(policy.Capabilities(p), policy.CapImportGames) {
+			t.Errorf("%v should have import_games", p.ClubFunctions)
+		}
+	}
+	if hasCap(policy.Capabilities(spielerP()), policy.CapImportGames) {
+		t.Error("spieler should NOT have import_games")
 	}
 }
 

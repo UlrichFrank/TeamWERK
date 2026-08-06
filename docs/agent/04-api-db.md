@@ -18,7 +18,7 @@
 | Authenticated | alle Eingeloggten (Profil, Dienstbörse, Spiele, Chat, …) |
 | Trainer + sportliche_leitung | Slots, Anfragen, Training |
 | Vorstand (+ Trainer/sL) | Spiele, Kader, Duty-Slots, Saisons (lesen), Venues (CRUD) |
-| Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates |
+| Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates, H4A-Spielimport (`POST /api/games/import/h4a/preview` + `/apply`) |
 | Vorstand + Kassierer | Mitglieder lesen, `PUT /members/{id}/bank-details` (Feld-Whitelist), Fee-Run |
 | Admin only | Impersonate |
 
@@ -28,6 +28,7 @@
 - **`player_memberships` ist eine View** über `kader_members` — kein direktes INSERT; stattdessen `INSERT INTO kader_members (kader_id, member_id) …`.
 - **Beitragslauf-Protokoll ist keine Tabelle**, sondern append-only Textdatei pro Saison unter `BEITRAGSLAUF_DIR` (`./storage/beitragslauf-protokolle`) — ins Backup aufnehmen.
 - **Status-Felder** sind CHECK-Constraints (z.B. `members.status`: `aktiv|verletzt|pausiert|ausgetreten`) — gültige Werte in der jeweiligen Migration nachsehen.
+- **`venues.hall_number`** (BWHV-Hallennummer) und **`games.external_id`** (BWHV-Spielnummer) sind die Fremdschlüssel des H4A-Imports (Migration `042`). Beide nullable: `hall_number` mit **Partial-Unique-Index** (`WHERE hall_number IS NOT NULL` — nicht zuordenbare Nicht-BWHV-Orte bleiben NULL), `external_id` **ohne** UNIQUE (manuell angelegte Spiele koexistieren; die Eindeutigkeit prüft der Import fachlich).
 - **`members.join_date`/`exit_date`** steuern die Beitrags-Halbierung (Migration `014`): `join_date` ist App-Pflichtfeld (DB nullbar), `exit_date` Pflicht bei `status='ausgetreten'`. **`seasons.is_inaugural`** (INTEGER 0/1) markiert das erste Abrechnungsjahr (alle zahlen halb). Details siehe Gotcha „SEPA-Beitragslauf".
 
 ## Paginierung

@@ -31,6 +31,12 @@ interface ImportResult {
   updated: number
   skipped: number
   errors: { line: number; reason: string }[]
+  // Hallennummern-Backfill: die BWHV-Nummer ist der Fremdschlüssel, über den der
+  // H4A-Spielimport den Spielort auflöst. Mehrdeutige oder nicht zuordenbare
+  // Zeilen bleiben bewusst NULL statt geraten zu werden.
+  hall_numbers_assigned: number
+  hall_numbers_ambiguous: number
+  hall_numbers_unmatched: number
 }
 
 const emptyForm: VenueForm = {
@@ -422,6 +428,20 @@ export default function AdminVenuesPage() {
                     {' · '}
                     <span className="font-semibold text-brand-text">{importResult.skipped}</span> übersprungen
                   </p>
+                  <p className="text-sm text-brand-text-muted">
+                    Hallennummern:{' '}
+                    <span className="font-semibold text-brand-text">{importResult.hall_numbers_assigned}</span> zugeordnet
+                    {' · '}
+                    <span className="font-semibold text-brand-text">{importResult.hall_numbers_ambiguous}</span> mehrdeutig
+                    {' · '}
+                    <span className="font-semibold text-brand-text">{importResult.hall_numbers_unmatched}</span> ohne Treffer
+                  </p>
+                  {(importResult.hall_numbers_ambiguous > 0 || importResult.hall_numbers_unmatched > 0) && (
+                    <p className="text-xs text-brand-text-muted">
+                      Ohne Hallennummer kann der H4A-Spielimport den Spielort nicht automatisch
+                      zuordnen — betroffene Spiele lassen sich im Import-Dialog manuell zuweisen.
+                    </p>
+                  )}
                   {importResult.errors.length > 0 && (
                     <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg">
                       <p className="text-xs font-medium text-brand-danger mb-1">{importResult.errors.length} Fehler:</p>

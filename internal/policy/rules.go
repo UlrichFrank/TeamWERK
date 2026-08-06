@@ -188,6 +188,7 @@ func CanCreateRootFolder(p *Principal) bool {
 const (
 	CapManageMembers    = "manage_members"
 	CapManageGames      = "manage_games"
+	CapImportGames      = "import_games"
 	CapManageDuties     = "manage_duties"
 	CapManageKader      = "manage_kader"
 	CapManageUsers      = "manage_users"
@@ -209,7 +210,11 @@ const (
 func Capabilities(p *Principal) []string {
 	caps := []string{}
 	if IsVorstandLike(p) {
-		caps = append(caps, CapManageMembers, CapManageGames, CapManageDuties, CapManageKader, CapManageUsers, CapManageSeasons, CapManageDutyTypes)
+		// CapImportGames ist bewusst enger als CapManageGames: der H4A-Import nimmt
+		// fremde Zugangsdaten entgegen und schreibt den halben Spielplan — das
+		// bleibt beim Vorstand, obwohl Trainer/sportliche Leitung Spiele pflegen
+		// dürfen. Spiegelt das Vorstand-Tier der Import-Routen in router.go.
+		caps = append(caps, CapManageMembers, CapManageGames, CapImportGames, CapManageDuties, CapManageKader, CapManageUsers, CapManageSeasons, CapManageDutyTypes)
 	} else if IsTrainerLike(p) {
 		caps = append(caps, CapManageGames, CapManageDuties, CapManageKader)
 	}

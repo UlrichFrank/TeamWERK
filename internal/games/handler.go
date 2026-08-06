@@ -22,14 +22,15 @@ import (
 )
 
 type Handler struct {
-	db  *sql.DB
-	cfg *appconfig.Config
-	hub *hub.EventHub
-	now func() time.Time
+	db     *sql.DB
+	cfg    *appconfig.Config
+	hub    *hub.EventHub
+	now    func() time.Time
+	newH4A func() h4aFetcher // H4A-Client-Factory, in Tests überschreibbar (kein echter Netzzugriff)
 }
 
 func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
-	return &Handler{db: db, cfg: cfg, hub: h, now: time.Now}
+	return &Handler{db: db, cfg: cfg, hub: h, now: time.Now, newH4A: defaultH4AFetcher}
 }
 
 // broadcastGame sends event only to the team audience of the given game (team

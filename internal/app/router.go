@@ -566,6 +566,8 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/members", h.Members.Create)
 			r.Put("/api/members/{id}", h.Members.Update)
 			r.Put("/api/members/{id}/status", h.Members.UpdateStatus)
+			r.Post("/api/games/import/h4a/preview", h.Games.PreviewH4AImport)
+			r.Post("/api/games/import/h4a/apply", h.Games.ApplyH4AImport)
 			r.Post("/api/seasons", h.Config.CreateSeason)
 			r.Put("/api/seasons/{id}", h.Config.UpdateSeason)
 			r.Put("/api/seasons/{id}/activate", h.Config.ActivateSeason)

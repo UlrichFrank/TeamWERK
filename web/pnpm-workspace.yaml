@@ -1,0 +1,11 @@
+# Supply-chain protection: only resolve versions published at least 8 days
+# (11520 minutes) ago, so a compromised release is withdrawn before we pick it up.
+#
+# Caveat when bumping dependencies: package.json carries caret ranges pinned to
+# the newest release of each dependency (e.g. axios ^1.19.0). While such a pin is
+# younger than the window, NO version in the range satisfies the policy and pnpm
+# aborts resolution with ERR_PNPM_NO_MATURE_MATCHING_VERSION — it does not fall
+# back to an older release. `pnpm install` is then blocked until the pinned
+# versions have aged in. Keep Dependabot's cooldown aligned with this window so
+# incoming PRs do not land pins that block installs for everyone.
+minimumReleaseAge: 11520

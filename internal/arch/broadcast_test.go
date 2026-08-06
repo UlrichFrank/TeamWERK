@@ -75,6 +75,8 @@ var broadcastAllowlist = map[string]string{
 	"Upload.DeleteSepaMandat": "PII-Datei-Löschung, kein Live-Listen-State",
 	// Reine Selbst-Präferenz, erscheint in keiner fremden Ansicht.
 	"Members.UpdateReminderPreference": "eigene Dienst-Erinnerungs-Präferenz (users.duty_reminder_days), kein geteilter View",
+	// Read-only: ruft H4A extern ab und liefert einen Diff-Plan zurück, schreibt nichts in die DB (Apply broadcastet).
+	"Games.PreviewH4AImport": "read-only externer H4A-Abruf, kein DB-Write; ApplyH4AImport broadcastet 'games'",
 }
 
 // resolveHandlerPackages liest den Handlers-Struct und die Import-Aliase aus

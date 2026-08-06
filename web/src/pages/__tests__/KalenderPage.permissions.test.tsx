@@ -6,6 +6,7 @@
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import KalenderPage from '../KalenderPage'
 import { renderAsPersona, flushAsync } from '../../test/renderAsPersona'
 import { PERSONAS } from '../../test/personas'
@@ -90,5 +91,45 @@ describe('KalenderPage — canCreateAbsence-Gate: "Abwesenheit"-Button', () => {
         `Persona ${persona.id}: kein "Abwesenheit"-Button erwartet`,
       ).toBeNull()
     }
+  })
+})
+
+// canImportGames = import_games (nur Vorstand/Admin, enger als manage_games).
+const CAN_IMPORT_IDS = ['admin', 'vorstand', 'vorstand_elternteil']
+
+describe('KalenderPage — import_games-Gate: H4A-Import im Aktionsmenü', () => {
+  test.each(PERSONAS)('Persona $id', async (persona) => {
+    renderAsPersona(<KalenderPage />, persona.id, {
+      mocks: [
+        { url: /\/games/, data: [] },
+        { url: /\/training-sessions/, data: [] },
+        { url: /\/teams/, data: [] },
+        { url: /\/absences/, data: [] },
+      ],
+    })
+    await flushAsync()
+
+    const menuBtn = screen.queryByRole('button', { name: /Weitere Aktionen/i })
+    if (!CAN_IMPORT_IDS.includes(persona.id)) {
+      expect(
+        menuBtn,
+        `Persona ${persona.id}: ohne import_games kein Aktionsmenü erwartet`,
+      ).toBeNull()
+      return
+    }
+
+    expect(
+      menuBtn,
+      `Persona ${persona.id} (import_games): Aktionsmenü muss vorhanden sein`,
+    ).not.toBeNull()
+
+    // Der Import liegt hinter dem Dropdown — erst nach Klick sichtbar. Genau das
+    // ist der Regressionsschutz: vorher war es ein eigener Button.
+    expect(screen.queryByRole('menuitem', { name: /Handball4All/i })).toBeNull()
+    await userEvent.click(menuBtn!)
+    expect(
+      screen.queryByRole('menuitem', { name: /Handball4All/i }),
+      `Persona ${persona.id}: H4A-Import muss im geöffneten Menü stehen`,
+    ).not.toBeNull()
   })
 })

@@ -36,7 +36,8 @@ function personaCapabilities(p: Persona): string[] {
   const isKassiererLike = isVorstandLike || cf.includes('kassierer')
   const caps: string[] = []
   if (isVorstandLike) {
-    caps.push('manage_members', 'manage_games', 'manage_duties', 'manage_kader',
+    // import_games ist enger als manage_games — H4A-Import bleibt beim Vorstand.
+    caps.push('manage_members', 'manage_games', 'import_games', 'manage_duties', 'manage_kader',
       'manage_users', 'manage_seasons', 'manage_duty_types')
   } else if (isTrainerLike) {
     caps.push('manage_games', 'manage_duties', 'manage_kader')
