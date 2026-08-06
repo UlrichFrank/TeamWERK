@@ -74,6 +74,48 @@ func TestFetchGamesHTML_ExtractsContainer(t *testing.T) {
 	}
 }
 
+// H4A schickt in derselben Kommandoliste Kommandos mit Array-data (Optionslisten
+// für Selects). Ein string-typisiertes data ließ das Unmarshal der gesamten
+// Antwort scheitern — der vollständig gelieferte Spielplan ging mit unter
+// ("json: cannot unmarshal array into Go struct field .xjxobj.data").
+func TestFetchGamesHTML_ToleriertNichtStringData(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"xjxobj":[` +
+			`{"cmd":"as","id":"gametable_container","prop":"innerHTML","data":"<table class=\"ge_gameday\">viel viel viel viel viel Inhalt hier drin</table>"},` +
+			`{"cmd":"as","id":"ge_dasel","data":[["all;all","Alle"],["1;2","Staffel"]]},` +
+			`{"cmd":"as","id":"leer","data":null}` +
+			`]}`))
+	}))
+	defer ts.Close()
+
+	got, err := newTestClient(ts).FetchGamesHTML(context.Background(), "142")
+	if err != nil {
+		t.Fatalf("FetchGamesHTML: %v", err)
+	}
+	if !strings.Contains(got, "ge_gameday") {
+		t.Errorf("Container-HTML trotz Array-data eines anderen Kommandos nicht extrahiert: %q", got)
+	}
+}
+
+// Fehlt der Container, muss der Fehler weiterhin laut sein — die Toleranz oben
+// darf nicht in stilles Teilergebnis umschlagen.
+func TestFetchGamesHTML_FehltLautOhneContainer(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"xjxobj":[{"cmd":"as","id":"ge_dasel","data":[["all;all","Alle"]]}]}`))
+	}))
+	defer ts.Close()
+
+	_, err := newTestClient(ts).FetchGamesHTML(context.Background(), "142")
+	if err == nil {
+		t.Fatal("erwartet Fehler, wenn gametable_container fehlt")
+	}
+	if !strings.Contains(err.Error(), "ge_dasel") {
+		t.Errorf("Fehler soll die enthaltenen Kommandos benennen, war: %v", err)
+	}
+}
+
 func TestFetchPeriods_ParsesOptions(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html><body>

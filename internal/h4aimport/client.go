@@ -148,12 +148,29 @@ func extractSelect(htmlStr, id string) string {
 
 // xajaxResponse ist die JSON-Hülle der xajax-Antwort. Jedes Kommando (cmd) adressiert
 // per id ein DOM-Element; "as" = assign HTML.
+//
+// Data ist bewusst json.RawMessage und nicht string: H4A liefert in derselben
+// Kommandoliste auch Kommandos, deren data ein Array ist (z.B. Optionslisten für
+// Selects). Mit string-Typisierung scheitert dann das Unmarshal der GESAMTEN
+// Antwort — inklusive des gametable_container-Kommandos, das wir brauchen und das
+// vollständig vorliegt.
 type xajaxResponse struct {
 	Xjxobj []struct {
-		Cmd  string `json:"cmd"`
-		ID   string `json:"id"`
-		Data string `json:"data"`
+		Cmd  string          `json:"cmd"`
+		ID   string          `json:"id"`
+		Data json.RawMessage `json:"data"`
 	} `json:"xjxobj"`
+}
+
+// dataString liefert den String-Inhalt eines xajax-Kommandos. Nicht-String-data
+// (Arrays, Objekte, null) ist für den Spielplan-Abruf ohne Belang und wird als
+// „nicht verwertbar" gemeldet, statt die Antwort zu verwerfen.
+func dataString(raw json.RawMessage) (string, bool) {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return "", false
+	}
+	return s, true
 }
 
 // FetchGamesHTML ruft den Spielplan der Periode ab und extrahiert das HTML aus dem
@@ -194,9 +211,14 @@ func (c *Client) FetchGamesHTML(ctx context.Context, periodID string) (string, e
 	best := ""
 	var seen []string
 	for _, o := range parsed.Xjxobj {
-		seen = append(seen, fmt.Sprintf("%s/%s(%d)", o.Cmd, o.ID, len(o.Data)))
-		if o.Cmd == "as" && o.ID == "gametable_container" && len(o.Data) > 50 && len(o.Data) > len(best) {
-			best = o.Data
+		data, ok := dataString(o.Data)
+		if !ok {
+			seen = append(seen, fmt.Sprintf("%s/%s(kein String)", o.Cmd, o.ID))
+			continue
+		}
+		seen = append(seen, fmt.Sprintf("%s/%s(%d)", o.Cmd, o.ID, len(data)))
+		if o.Cmd == "as" && o.ID == "gametable_container" && len(data) > 50 && len(data) > len(best) {
+			best = data
 		}
 	}
 	if best == "" {
