@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, CalendarDays, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle, Download } from 'lucide-react'
+import { Home, Plane, Calendar, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle, Download, UserX } from 'lucide-react'
 import { api } from '../lib/api'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
@@ -155,6 +155,7 @@ export default function KalenderPage() {
 
   const [regenSummary, setRegenSummary] = useState<RegenSummary | null>(null)
   const [showH4AImport, setShowH4AImport] = useState(false)
+  const [showEventMenu, setShowEventMenu] = useState(false)
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; skipped: number } | null>(null)
 
   // Wizard dialog
@@ -320,6 +321,7 @@ export default function KalenderPage() {
   }
 
   const calendarRef = useRef<HTMLDivElement>(null)
+  const eventMenuRef = useRef<HTMLDivElement>(null)
   const pointerStart = useRef<{ x: number; y: number; committed: boolean } | null>(null)
   const SWIPE_THRESHOLD = 50
 
@@ -705,8 +707,21 @@ export default function KalenderPage() {
     editingGame ? () => setEditingGame(null) :
     editingTraining ? () => setEditingTraining(null) :
     infoItem ? () => setInfoItem(null) :
+    showEventMenu ? () => setShowEventMenu(false) :
     null
   )
+
+  // Klick außerhalb schließt das Aktionsmenü (gleiches Muster wie MembersPage).
+  useEffect(() => {
+    if (!showEventMenu) return
+    const handler = (e: MouseEvent) => {
+      if (eventMenuRef.current && !eventMenuRef.current.contains(e.target as Node)) {
+        setShowEventMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showEventMenu])
 
   const canCreateAbsence = Boolean(user && (user.clubFunctions?.includes('spieler') || user.isParent))
 
@@ -777,53 +792,77 @@ export default function KalenderPage() {
                 : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
             }`}
           >
-            <CalendarDays className="w-3.5 h-3.5" />
+            <UserX className="w-3.5 h-3.5" />
             {!compact && <span>Abwesenheit</span>}
           </button>
         )}
-        {(canEdit || canCreateAbsence) && (
-          <button
-            onClick={() => {
-              if (!canEdit && canCreateAbsence) {
-                setEventType('abwesenheit')
-                setWizardStep(2)
-                if (user?.isParent && absenceChildren.length === 0) loadAbsenceChildren()
-              }
-              setShowCreate(true)
-            }}
-            aria-label={canEdit ? 'Event' : 'Abwesenheit'}
-            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'}`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
-          </button>
-        )}
-        {canImportGames && (
-          <button
-            onClick={() => setShowH4AImport(true)}
-            aria-label="Spielplan aus Handball4All importieren"
-            title="Spielplan aus Handball4All importieren"
-            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium bg-white text-brand-text-muted border border-brand-border hover:border-brand-text hover:text-brand-text transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'}`}
-          >
-            <Download className="w-3.5 h-3.5" />
-            {!compact && <span>H4A-Import</span>}
-          </button>
+        {(canEdit || canCreateAbsence || canImportGames) && (
+          <div ref={eventMenuRef} className="relative shrink-0">
+            <div className="flex">
+              {(canEdit || canCreateAbsence) && (
+                <button
+                  onClick={() => {
+                    if (!canEdit && canCreateAbsence) {
+                      setEventType('abwesenheit')
+                      setWizardStep(2)
+                      if (user?.isParent && absenceChildren.length === 0) loadAbsenceChildren()
+                    }
+                    setShowCreate(true)
+                  }}
+                  aria-label={canEdit ? 'Event' : 'Abwesenheit'}
+                  className={`flex items-center gap-1 py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors ${compact ? 'px-2' : 'px-3'} ${canImportGames ? 'rounded-l-md' : 'rounded-md'}`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
+                </button>
+              )}
+              {canImportGames && (
+                <button
+                  onClick={() => setShowEventMenu(v => !v)}
+                  aria-label="Weitere Aktionen"
+                  aria-expanded={showEventMenu}
+                  aria-haspopup="menu"
+                  className={`flex items-center py-1.5 px-2 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors ${
+                    canEdit || canCreateAbsence ? 'border-l border-l-brand-black/20 rounded-r-md' : 'rounded-md'
+                  }`}
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {showEventMenu && canImportGames && (
+              <div role="menu" className="absolute right-0 mt-1 w-60 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
+                <button
+                  role="menuitem"
+                  onClick={() => { setShowEventMenu(false); setShowH4AImport(true) }}
+                  className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                >
+                  <Download className="w-4 h-4 shrink-0" />
+                  Spielplan aus Handball4All
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* Month navigation */}
       <div className="flex items-center gap-4 mb-4">
-        <button onClick={prevMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">◀</button>
+        <button onClick={prevMonth} aria-label="Vorheriger Monat" className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
         <span className="text-lg font-semibold w-44 text-center">{MONTHS[month]} {year}</span>
-        <button onClick={nextMonth} className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">▶</button>
+        <button onClick={nextMonth} aria-label="Nächster Monat" className="p-2 hover:bg-brand-border-subtle rounded-lg transition-colors text-brand-text">
+          <ChevronRight className="w-5 h-5" />
+        </button>
         <button
           onClick={goToToday}
           disabled={year === now.getFullYear() && month === now.getMonth()}
-          aria-label="Heute"
-          title="Heute"
-          className="rounded-md p-2 bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Zum aktuellen Monat springen"
+          className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <CalendarDays className="w-4 h-4" />
+          <CalendarClock className="w-4 h-4" />
+          <span>Heute</span>
         </button>
         <div className="flex-1" />
       </div>
