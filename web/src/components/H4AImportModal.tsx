@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Copy, Home, MapPin, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Copy, Home, Lightbulb, MapPin, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 
@@ -27,6 +27,9 @@ export interface H4APlanGame {
   hall_number: string
   team_id: number | null
   team_name: string
+  /** 'gelernt' = bestätigte Zuordnung aus früherem Import, 'vorschlag' = aus dem
+   *  Staffelcode abgeleitet und noch ungeprüft. */
+  team_source?: 'gelernt' | 'vorschlag'
   venue_id: number | null
   venue_name: string
   status: string
@@ -479,7 +482,7 @@ function PlanSection({
                     </div>
                   )}
 
-                  {g.warnings?.filter(wn => !wn.startsWith('mögliche Dublette')).map(wn => (
+                  {g.warnings?.filter(wn => !wn.startsWith('mögliche Dublette') && !wn.startsWith('Mannschaft vorgeschlagen')).map(wn => (
                     <div key={wn} className="flex items-center gap-1 text-xs text-brand-danger">
                       <AlertTriangle className="w-3.5 h-3.5" />
                       {wn}
@@ -514,10 +517,20 @@ function PlanSection({
                     </select>
 
                     {!unresolved && (
-                      <span className="flex items-center gap-1 text-xs text-brand-text-muted">
-                        <Check className="w-3.5 h-3.5" />
-                        {teams.find(tm => tm.id === teamId)?.name ?? g.team_name}
-                      </span>
+                      teamOverrides[key] === undefined && g.team_source === 'vorschlag' ? (
+                        <span
+                          className="flex items-center gap-1 text-xs text-brand-text"
+                          title={`Aus Staffel ${g.staffel} abgeleitet — bitte prüfen`}
+                        >
+                          <Lightbulb className="w-3.5 h-3.5" />
+                          Vorschlag: {teams.find(tm => tm.id === teamId)?.name ?? g.team_name}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs text-brand-text-muted">
+                          <Check className="w-3.5 h-3.5" />
+                          {teams.find(tm => tm.id === teamId)?.name ?? g.team_name}
+                        </span>
+                      )
                     )}
                   </div>
                 </div>

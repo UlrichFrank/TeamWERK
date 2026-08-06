@@ -69,10 +69,14 @@ type h4aPlanGame struct {
 	EventType  string `json:"event_type"`
 	HallNumber string `json:"hall_number"`
 
-	TeamID    *int   `json:"team_id"`
-	TeamName  string `json:"team_name"`
-	VenueID   *int   `json:"venue_id"`
-	VenueName string `json:"venue_name"`
+	TeamID   *int   `json:"team_id"`
+	TeamName string `json:"team_name"`
+	// TeamSource unterscheidet die bestätigte Zuordnung ("gelernt") vom aus dem
+	// Staffelcode abgeleiteten Vorschlag ("vorschlag"). Das Modal markiert
+	// Vorschläge sichtbar — sie sind überprüfenswert, eine gelernte Zuordnung nicht.
+	TeamSource string `json:"team_source,omitempty"`
+	VenueID    *int   `json:"venue_id"`
+	VenueName  string `json:"venue_name"`
 
 	Status         string           `json:"status"` // "new" | "changed" | "unchanged"
 	Changes        []h4aFieldChange `json:"changes,omitempty"`
@@ -166,6 +170,9 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 // external_id (= Spielnummer) in new/changed/unchanged ein.
 func (h *Handler) buildH4APlan(ctx context.Context, raw []h4aimport.RawGame) (h4aPreviewResponse, error) {
 	var resp h4aPreviewResponse
+	// Vorschläge einmal plan-weit ableiten: die Regel „Team Stuttgart 2 = niedrigere
+	// Staffel" braucht alle Staffeln einer Altersklasse gleichzeitig.
+	suggestions, rejectReasons := h.suggestStaffelTeams(ctx, raw)
 	for _, g := range raw {
 		alias, isHome, _ := ownAlias(g)
 		opponent := strings.TrimSpace(g.Home)
@@ -191,9 +198,17 @@ func (h *Handler) buildH4APlan(ctx context.Context, raw []h4aimport.RawGame) (h4
 			pg.Warnings = append(pg.Warnings, "keine Uhrzeit im H4A-Datensatz")
 		}
 
-		// Staffel → Mannschaft (gelerntes Mapping).
+		// Staffel → Mannschaft: erst das gelernte Mapping, sonst der aus dem
+		// Staffelcode abgeleitete Vorschlag (beim ersten Import ist die Lerntabelle
+		// leer — ohne Vorschlag wäre jede Zeile Handarbeit).
 		if tid, tname, ok := h.lookupStaffelTeam(ctx, g.Staffel, alias); ok {
-			pg.TeamID, pg.TeamName = &tid, tname
+			pg.TeamID, pg.TeamName, pg.TeamSource = &tid, tname, "gelernt"
+		} else if c, ok := suggestions[staffelKey{g.Staffel, alias}]; ok {
+			tid := c.id
+			pg.TeamID, pg.TeamName, pg.TeamSource = &tid, c.name, "vorschlag"
+			pg.Warnings = append(pg.Warnings, "Mannschaft vorgeschlagen aus Staffel "+g.Staffel+" — bitte prüfen")
+		} else if grund := rejectReasons[staffelKey{g.Staffel, alias}]; grund != "" {
+			pg.Warnings = append(pg.Warnings, "Mannschaft nicht zugeordnet: "+grund)
 		} else {
 			pg.Warnings = append(pg.Warnings, "Mannschaft nicht zugeordnet")
 		}
