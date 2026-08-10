@@ -382,3 +382,32 @@ func TestCapabilities_Spieler(t *testing.T) {
 		}
 	}
 }
+
+// Stummes Löschen ist echte Teilmenge des Löschrechts: wer löschen darf
+// (admin, vorstand, trainer, sportliche_leitung), darf noch lange nicht
+// stumm löschen (nur admin, vorstand).
+func TestCapabilities_SuppressEventNotification(t *testing.T) {
+	for _, p := range []*policy.Principal{vorstandP(), adminP()} {
+		if !hasCap(policy.Capabilities(p), policy.CapSuppressEventNotification) {
+			t.Errorf("%v/%s should have suppress_event_notification", p.ClubFunctions, p.Role)
+		}
+	}
+	for _, p := range []*policy.Principal{trainerP(), slP(), kassiererP(), spielerP()} {
+		if hasCap(policy.Capabilities(p), policy.CapSuppressEventNotification) {
+			t.Errorf("%v should NOT have suppress_event_notification", p.ClubFunctions)
+		}
+	}
+}
+
+// Das Löschrecht selbst bleibt breiter — sonst wäre die eigene Capability
+// überflüssig und jemand könnte sie später gegen CanDeleteGame kollabieren.
+func TestSuppressIstEngerAlsLoeschrecht(t *testing.T) {
+	for _, p := range []*policy.Principal{trainerP(), slP()} {
+		if !policy.CanDeleteGame(p) {
+			t.Errorf("%v should still be allowed to delete games", p.ClubFunctions)
+		}
+		if policy.CanSuppressEventNotification(p) {
+			t.Errorf("%v must not be allowed to suppress notifications", p.ClubFunctions)
+		}
+	}
+}

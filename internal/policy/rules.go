@@ -157,6 +157,22 @@ func CanModerateChat(p *Principal) bool {
 	return p.Role == "admin"
 }
 
+// CanSuppressEventNotification returns true if the caller may delete a game,
+// training or duty slot *without* notifying the affected people.
+//
+// Deliberately narrower than the delete right itself: CanDeleteGame (and
+// trainings.hasTeamAccess) also cover trainer and sportliche_leitung. A trainer
+// may cancel a game, but the team always hears about it. Suppression exists for
+// corrections — import duplicates, typo events — where an "abgesagt" push to
+// players and parents would be pure noise.
+//
+// Callers must treat a silent request from someone without this right as
+// "notify anyway", not as an error: the deletion itself is allowed, and failing
+// it over an extra flag would block a legitimate action.
+func CanSuppressEventNotification(p *Principal) bool {
+	return IsVorstandLike(p)
+}
+
 // ScopeMembersQuery returns a SQL WHERE fragment that restricts a members query to the
 // set visible to the caller. needsUserIDArg=true means the caller must supply Principal.UserID
 // as the next query argument.
@@ -204,6 +220,8 @@ const (
 	CapBroadcast        = "broadcast_messages"
 	CapBroadcastAll     = "broadcast_all"
 	CapModerateChat     = "moderate_chat"
+
+	CapSuppressEventNotification = "suppress_event_notification"
 )
 
 // Capabilities returns the list of capability strings for a given principal.
@@ -239,6 +257,11 @@ func Capabilities(p *Principal) []string {
 	}
 	if CanCreateRootFolder(p) {
 		caps = append(caps, CapCreateRootFolder)
+	}
+	// Stummes Löschen — enger als das Löschrecht selbst, siehe
+	// CanSuppressEventNotification.
+	if CanSuppressEventNotification(p) {
+		caps = append(caps, CapSuppressEventNotification)
 	}
 	if p.Role == "admin" {
 		caps = append(caps, CapImpersonate, CapManageDocuments, CapModerateChat)

@@ -517,21 +517,48 @@ func (h *Handler) DeleteSlot(w http.ResponseWriter, r *http.Request) {
 	assigned := h.assignedUsers(id)
 	// Team des Slots VOR dem Löschen auflösen (danach ist die Zeile weg).
 	teamIDs := hub.NewAudience(h.db).TeamIDsForDutySlot(r.Context(), id)
-	res, err := h.db.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE id=?`, id)
+
+	// silent ist ein Wunsch, keine Zusage: fehlt die Capability, wird stumm
+	// wieder auf false gesetzt statt mit 403 abzulehnen — das Löschrecht
+	// bleibt unberührt (design.md §4).
+	reason, silent := notify.DecodeCancellation(r)
+	claims := auth.ClaimsFromCtx(r.Context())
+	if silent {
+		p := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
+		silent = policy.CanSuppressEventNotification(p)
+	}
+
+	// Event-Name, -Datum und Dienstart VOR dem Löschen laden — für die
+	// Absage-Meldung an eingetragene Nutzer; danach ist die Zeile weg.
+	var eventName, eventDate, dutyTypeName string
+	err := h.db.QueryRowContext(r.Context(), `
+		SELECT ds.event_name, ds.event_date, dt.name
+		FROM duty_slots ds
+		JOIN duty_types dt ON dt.id = ds.duty_type_id
+		WHERE ds.id = ?`, id).Scan(&eventName, &eventDate, &dutyTypeName)
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
+
+	if _, err := h.db.ExecContext(r.Context(), `DELETE FROM duty_slots WHERE id=?`, id); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
 	// Team-Audience + bereits eingetragene Nutzer (die den Slot verlieren).
+	// Läuft immer, auch bei silent — Live-Updates sind nicht unterdrückbar.
 	h.broadcastDutyTeams(r.Context(), teamIDs, assigned...)
-	if len(assigned) > 0 {
-		notify.Send(h.db, h.cfg, assigned, "duties",
-			"Dienst abgesagt", "Ein Dienst, für den du eingetragen warst, wurde abgesagt", "/dienste")
+	if len(assigned) > 0 && !silent {
+		actor := notify.ActorName(h.db, claims.UserID)
+		body := notify.CancellationBody(dutyTypeName+" zum "+eventName, "am "+notify.FormatDateDMY(eventDate), actor, reason)
+		// url bleibt "/dienste": die Dienstbörse existiert nach der Löschung
+		// weiter, der Nutzer kann sich dort neu eintragen.
+		notify.Send(h.db, h.cfg, assigned, "duties", "Dienst abgesagt", body, "/dienste")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

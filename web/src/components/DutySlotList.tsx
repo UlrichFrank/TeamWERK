@@ -8,6 +8,7 @@ import { useWindowedList } from '../hooks/useWindowedList'
 import WindowedTableBody from './WindowedTableBody'
 import PersonChip from './PersonChip'
 import ActionMenu from './ActionMenu'
+import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
 
@@ -52,12 +53,14 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
   const { containerRef: slotContainerRef, start: slotStart, end: slotEnd, padTop: slotPadTop, padBottom: slotPadBottom } =
     useWindowedList({ count: slots.length, estimatedRowHeight: 52, scroll: 'window' })
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteSilent, setDeleteSilent] = useState(false)
   const [claimDialog, setClaimDialog] = useState<{ slotId: number; selectedUserId: number | null } | null>(null)
   const [claimLoading, setClaimLoading] = useState(false)
   const [noInstructionOpen, setNoInstructionOpen] = useState(false)
 
   useEscapeKey(
-    deleteConfirm !== null ? () => setDeleteConfirm(null)
+    deleteConfirm !== null ? () => closeDeleteConfirm()
       : claimDialog !== null ? () => setClaimDialog(null)
       : noInstructionOpen ? () => setNoInstructionOpen(false)
       : null,
@@ -97,15 +100,24 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
     }
   }
 
-  const deleteSlot = async (slotId: number) => {
+  // withReason=false ist der Direktlöschpfad für unbesetzte Slots: dort gibt es
+  // niemanden zu benachrichtigen, also auch keinen Grund zu erfassen.
+  const deleteSlot = async (slotId: number, withReason: boolean) => {
     try {
-      await api.delete(`/duty-slots/${slotId}`)
-onSlotDeleted?.(slotId)
+      await api.delete(`/duty-slots/${slotId}`,
+        withReason ? { data: deletionPayload(deleteReason, deleteSilent) } : undefined)
+      onSlotDeleted?.(slotId)
       onReload()
     } catch {
       alert('Löschen fehlgeschlagen.')
     }
+    closeDeleteConfirm()
+  }
+
+  const closeDeleteConfirm = () => {
     setDeleteConfirm(null)
+    setDeleteReason('')
+    setDeleteSilent(false)
   }
 
   const handleDeleteClick = (slot: BoardSlot) => {
@@ -113,7 +125,7 @@ onSlotDeleted?.(slotId)
     if (slotsFilled > 0) {
       setDeleteConfirm(slot.id)
     } else {
-      deleteSlot(slot.id)
+      deleteSlot(slot.id, false)
     }
   }
 
@@ -249,15 +261,22 @@ onSlotDeleted?.(slotId)
             <p className="text-sm text-brand-text-muted mb-4">
               Dieser Slot hat bereits Zuteilungen. Alle Zuteilungen werden ebenfalls gelöscht.
             </p>
+            <DeleteReasonFields
+              reason={deleteReason}
+              onReasonChange={setDeleteReason}
+              silent={deleteSilent}
+              onSilentChange={setDeleteSilent}
+              idPrefix="duty-slot-delete"
+            />
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setDeleteConfirm(null)}
+                onClick={closeDeleteConfirm}
                 className="text-sm px-4 py-2 rounded border border-brand-border text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
               >
                 Abbrechen
               </button>
               <button
-                onClick={() => deleteSlot(deleteConfirm)}
+                onClick={() => deleteSlot(deleteConfirm, true)}
                 className="text-sm px-4 py-2 rounded bg-brand-danger text-white font-medium hover:bg-brand-danger/90 transition-colors"
               >
                 Löschen

@@ -6,6 +6,7 @@ import { errorStatus } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import VenuePicker from './VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
+import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 
 interface TeamRef {
   id: number
@@ -83,6 +84,8 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteSilent, setDeleteSilent] = useState(false)
 
   useEscapeKey(onClose)
 
@@ -110,7 +113,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
     setDeleting(true)
     setError(null)
     try {
-      const r = await api.delete(`/games/${game.id}`)
+      const r = await api.delete(`/games/${game.id}`, { data: deletionPayload(deleteReason, deleteSilent) })
       onDeleted?.(r.data?.regen_summary)
     } catch {
       setError('Löschen fehlgeschlagen.')
@@ -278,6 +281,13 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         {confirmDelete ? (
           <div className="mt-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg">
             <p className="text-sm text-brand-danger mb-3">Event und alle zugehörigen Dienst-Slots löschen?</p>
+            <DeleteReasonFields
+              idPrefix="game-delete"
+              reason={deleteReason}
+              onReasonChange={setDeleteReason}
+              silent={deleteSilent}
+              onSilentChange={setDeleteSilent}
+            />
             <div className="flex gap-2">
               <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>Abbrechen</button>
               <button

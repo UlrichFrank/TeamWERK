@@ -3,6 +3,7 @@ import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import VenuePicker from './VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
+import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 
 interface VenueRef { id: number; name: string; street: string; city: string; postal_code: string; note: string }
 
@@ -65,6 +66,8 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteSilent, setDeleteSilent] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -143,13 +146,14 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
     setDeleting(true)
     setError(null)
     try {
+      const payload = deletionPayload(deleteReason, deleteSilent)
       if (scope === 'this_one') {
-        await api.delete(`/training-sessions/${session.id}`)
+        await api.delete(`/training-sessions/${session.id}`, { data: payload })
       } else if (series) {
         const fromParam = scope === 'this_and_following'
           ? `&from=${session.date.slice(0, 10)}`
           : ''
-        await api.delete(`/training-series/${series.id}?scope=${scope}${fromParam}`)
+        await api.delete(`/training-series/${series.id}?scope=${scope}${fromParam}`, { data: payload })
       }
       onSaved()
     } catch {
@@ -246,6 +250,13 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
               {scope === 'this_and_following' && 'Diesen und alle folgenden Termine der Serie löschen?'}
               {scope === 'all' && 'Die gesamte Serie und alle Termine löschen?'}
             </p>
+            <DeleteReasonFields
+              idPrefix="training-delete"
+              reason={deleteReason}
+              onReasonChange={setDeleteReason}
+              silent={deleteSilent}
+              onSilentChange={setDeleteSilent}
+            />
             <div className="flex gap-2">
               <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>Abbrechen</button>
               <button

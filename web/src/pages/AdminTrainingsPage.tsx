@@ -7,6 +7,7 @@ import { buildTeamShortNames } from '../lib/teamName'
 import VenuePicker from '../components/VenuePicker'
 import MapsLink from '../components/MapsLink'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
+import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
@@ -132,6 +133,8 @@ export default function AdminTrainingsPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'series' | 'session'; id: number } | null>(null)
   const [deleteScope, setDeleteScope] = useState<'future' | 'all'>('future')
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteSilent, setDeleteSilent] = useState(false)
 
   const activeSeasonId = seasons.find(s => s.is_active)?.id ?? 0
   const isNewSeries = seriesModal !== null && seriesModal.id === undefined
@@ -278,16 +281,23 @@ export default function AdminTrainingsPage() {
     }
   }
 
-  const handleDeleteSeries = async (id: number) => {
-    await api.delete(`/training-series/${id}?scope=${deleteScope === 'all' ? 'all' : 'future'}`)
+  const closeDeleteConfirm = () => {
     setDeleteConfirm(null)
     setDeleteScope('future')
+    setDeleteReason('')
+    setDeleteSilent(false)
+  }
+
+  const handleDeleteSeries = async (id: number) => {
+    await api.delete(`/training-series/${id}?scope=${deleteScope === 'all' ? 'all' : 'future'}`,
+      { data: deletionPayload(deleteReason, deleteSilent) })
+    closeDeleteConfirm()
     loadSeries()
   }
 
   const handleDeleteSession = async (id: number) => {
-    await api.delete(`/training-sessions/${id}`)
-    setDeleteConfirm(null)
+    await api.delete(`/training-sessions/${id}`, { data: deletionPayload(deleteReason, deleteSilent) })
+    closeDeleteConfirm()
     loadStandalone()
   }
 
@@ -368,13 +378,13 @@ export default function AdminTrainingsPage() {
 
       {/* Delete confirmation modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => { setDeleteConfirm(null); setDeleteScope('future') }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => closeDeleteConfirm()}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">
                 {deleteConfirm.type === 'series' ? 'Serie löschen' : 'Einzeltermin löschen'}
               </h2>
-              <button onClick={() => { setDeleteConfirm(null); setDeleteScope('future') }} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
+              <button onClick={() => closeDeleteConfirm()} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -392,12 +402,20 @@ export default function AdminTrainingsPage() {
                 </label>
               </div>
             ) : (
-              <p className="text-sm text-brand-text-muted mb-6">Dieser Einzeltermin wird unwiderruflich gelöscht.</p>
+              <p className="text-sm text-brand-text-muted mb-4">Dieser Einzeltermin wird unwiderruflich gelöscht.</p>
             )}
+
+            <DeleteReasonFields
+              idPrefix="admin-training-delete"
+              reason={deleteReason}
+              onReasonChange={setDeleteReason}
+              silent={deleteSilent}
+              onSilentChange={setDeleteSilent}
+            />
 
             <div className="flex gap-2 justify-end">
               <button
-                onClick={() => { setDeleteConfirm(null); setDeleteScope('future') }}
+                onClick={() => closeDeleteConfirm()}
                 className="bg-white border border-brand-border text-brand-text rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors"
               >
                 Abbrechen

@@ -143,19 +143,57 @@ self.addEventListener('message', (event) => {
   if ((event.data as { type: string })?.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
-// Open the app at the correct URL when notification is clicked
+// Open the app at the correct URL when notification is clicked.
+//
+// `data.url` kann bewusst leer sein (Absage-Benachrichtigungen ohne Ziel, siehe
+// design.md §3): `?? '/'` greift nur bei null/undefined, NICHT beim leeren String —
+// ein naives `navigate('')` löst relativ gegen die Client-URL auf und lädt die
+// gerade offene Seite neu. Die Zielauflösung steckt deshalb in einer exportierten,
+// reinen Funktion, testbar ohne Service-Worker-Laufzeit (analog zur exportierten
+// Factory in VideoUploadPage.tsx).
+export function resolveClickTarget(data: unknown): { navigate: boolean; url: string } {
+  if (typeof data !== 'object' || data === null) return { navigate: false, url: '/' }
+  const url = (data as { url?: unknown }).url
+  if (typeof url !== 'string' || url === '') return { navigate: false, url: '/' }
+  return { navigate: true, url }
+}
+
+// Minimal an Shape, die eine Fokussierung/Navigation braucht — bewusst schmaler
+// als `WindowClient`, damit Tests einfache Fakes (statt echter Service-Worker-
+// Clients) übergeben können.
+interface FocusableClient {
+  url: string
+  focus(): unknown
+  navigate(url: string): unknown
+}
+
+// Client-Auswahl + Fokus-/Navigations-Entscheidung, getrennt von der
+// addEventListener-Verdrahtung exportiert, damit der Pfad ohne echte
+// Service-Worker-Clients testbar ist. Verhalten für gesetzte URLs unverändert:
+// Fenster fokussieren + navigieren (bzw. neues Fenster mit der Ziel-URL öffnen).
+// Bei `navigate: false` wird NICHT navigiert — nur fokussiert bzw. die App-Wurzel
+// geöffnet, falls kein Fenster existiert.
+export function applyClickTarget(
+  target: { navigate: boolean; url: string },
+  clientList: readonly FocusableClient[],
+  origin: string,
+  openWindow: (url: string) => void
+): void {
+  const existing = clientList.find((c) => c.url.includes(origin))
+  if (existing) {
+    existing.focus()
+    if (target.navigate) existing.navigate(target.url)
+  } else {
+    openWindow(target.navigate ? target.url : '/')
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data as { url: string })?.url ?? '/'
+  const target = resolveClickTarget(event.notification.data)
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((c) => c.url.includes(self.location.origin))
-      if (existing) {
-        existing.focus()
-        existing.navigate(url)
-      } else {
-        self.clients.openWindow(url)
-      }
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      applyClickTarget(target, clientList, self.location.origin, (url) => self.clients.openWindow(url))
     })
   )
 })

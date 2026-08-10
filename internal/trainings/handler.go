@@ -17,6 +17,7 @@ import (
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
 type Handler struct {
@@ -531,6 +532,52 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"sessions_created": len(dates)})
 }
 
+// cancellationRequest liest den optionalen {reason,silent}-Body einer Absage.
+// Fehlt die Capability zum Stummschalten, wird das Flag stillschweigend ignoriert
+// statt mit 403 quittiert: die Löschung selbst ist erlaubt, und benachrichtigen
+// ist der sichere Default (design.md §4).
+func cancellationRequest(r *http.Request, claims *auth.Claims) (reason string, silent bool) {
+	reason, silent = notify.DecodeCancellation(r)
+	if silent && !policy.CanSuppressEventNotification(&policy.Principal{
+		UserID:        claims.UserID,
+		Role:          claims.Role,
+		ClubFunctions: claims.ClubFunctions,
+	}) {
+		silent = false
+	}
+	return reason, silent
+}
+
+// sessionSubject ist der Name einer Einheit im Benachrichtigungstext.
+// training_sessions.title ist DEFAULT ” — dann trägt "Training" den Satz.
+func sessionSubject(title string) string {
+	if s := strings.TrimSpace(title); s != "" {
+		return s
+	}
+	return "Training"
+}
+
+// cancellationWhen baut die Zeitangabe "am TT.MM.JJJJ" für CancellationBody.
+// Ohne Datum bleibt sie leer — der Satz kommt dann ohne Zeitangabe aus.
+func cancellationWhen(date string) string {
+	if d := notify.FormatDateDMY(strings.TrimSpace(date)); d != "" {
+		return "am " + d
+	}
+	return ""
+}
+
+// seriesPeriod baut die Zeitangabe einer beendeten Serie: "ab 01.10.2025 bis
+// 30.06.2026". `from` ist der erste tatsächlich gelöschte Tag, nicht zwingend
+// valid_from. Liegt das Serienende davor (Löschung nach dem letzten Termin),
+// bleibt nur das "ab".
+func seriesPeriod(from, until string) string {
+	s := "ab " + notify.FormatDateDMY(from)
+	if until > from {
+		s += " bis " + notify.FormatDateDMY(until)
+	}
+	return s
+}
+
 // DELETE /api/training-series/{id}
 func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -540,8 +587,10 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var teamID int
+	var seriesName, validFrom, validUntil string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id FROM training_series WHERE id = ?`, seriesID).Scan(&teamID)
+		`SELECT team_id, name, date(valid_from), date(valid_until) FROM training_series WHERE id = ?`,
+		seriesID).Scan(&teamID, &seriesName, &validFrom, &validUntil)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -555,6 +604,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	reason, silent := cancellationRequest(r, claims)
 	scope := r.URL.Query().Get("scope")
 	fromDate := r.URL.Query().Get("from")
 	// event-notes: pending Push-Rows der betroffenen Sessions vorab aufräumen.
@@ -563,17 +613,24 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 			`DELETE FROM pending_event_notes_push WHERE ref_type='training' AND ref_id IN (
 				SELECT id FROM training_sessions WHERE series_id = ?`+extra+`)`, args...)
 	}
+	// affectedFrom ist der erste tatsächlich gelöschte Tag — er trägt die
+	// Zeitangabe der Benachrichtigung, denn der scope bestimmt, wie viel der
+	// Serie überhaupt entfällt.
+	var affectedFrom string
 	var execErr error
 	if scope == "all" {
+		affectedFrom = validFrom
 		cleanupPending("", seriesID)
 		_, execErr = h.db.ExecContext(r.Context(),
 			`DELETE FROM training_sessions WHERE series_id = ?`, seriesID)
 	} else if scope == "this_and_following" && fromDate != "" {
+		affectedFrom = fromDate
 		cleanupPending(" AND date >= ?", seriesID, fromDate)
 		_, execErr = h.db.ExecContext(r.Context(),
 			`DELETE FROM training_sessions WHERE series_id = ? AND date >= ?`, seriesID, fromDate)
 	} else {
 		today := time.Now().Format("2006-01-02")
+		affectedFrom = today
 		cleanupPending(" AND date >= ?", seriesID, today)
 		_, execErr = h.db.ExecContext(r.Context(),
 			`DELETE FROM training_sessions WHERE series_id = ? AND date >= ?`, seriesID, today)
@@ -586,10 +643,17 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	// Serie gelöscht → Team aus dem vorab geladenen teamID scopen.
+	// Serie gelöscht → Team aus dem vorab geladenen teamID scopen. Das
+	// Live-Update läuft immer, `silent` betrifft nur notify.Send (design.md §8).
 	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
-	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
-		"trainings", "Trainingsserie gelöscht", "Eine Trainingsserie wurde beendet", "/termine")
+	if !silent {
+		// Kein Direktlink: die Serie existiert nicht mehr, /termine hätte dem
+		// Empfänger nur eine Lücke gezeigt.
+		notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+			"trainings", "Trainingsserie beendet",
+			notify.CancellationBody(seriesName, seriesPeriod(affectedFrom, validUntil),
+				notify.ActorName(h.db, claims.UserID), reason), "")
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -602,8 +666,10 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var teamID int
+	var title, date string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+		`SELECT team_id, title, date(date) FROM training_sessions WHERE id = ?`,
+		sessionID).Scan(&teamID, &title, &date)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -617,6 +683,7 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	reason, silent := cancellationRequest(r, claims)
 	if _, err = h.db.ExecContext(r.Context(),
 		`DELETE FROM pending_event_notes_push WHERE ref_type='training' AND ref_id=?`, sessionID); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -626,10 +693,17 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	// Session gelöscht → Team aus dem vorab geladenen teamID scopen.
+	// Session gelöscht → Team aus dem vorab geladenen teamID scopen. Das
+	// Live-Update läuft immer, `silent` betrifft nur notify.Send (design.md §8).
 	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
-	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
-		"trainings", "Training abgesagt", "Eine Trainingseinheit wurde abgesagt", "/termine")
+	if !silent {
+		// Kein Direktlink: die Einheit existiert nicht mehr, /termine hätte dem
+		// Empfänger nur eine Lücke gezeigt.
+		notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+			"trainings", "Training abgesagt",
+			notify.CancellationBody(sessionSubject(title), cancellationWhen(date),
+				notify.ActorName(h.db, claims.UserID), reason), "")
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -788,9 +862,14 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	// prevStatus wird vor dem UPDATE gelesen: nur der Wechsel nach 'cancelled'
+	// ist eine Absage. Ohne diesen Vergleich schickte jede spätere Korrektur an
+	// einer bereits abgesagten Einheit erneut "Training abgesagt" ans Team.
 	var teamID int
+	var prevStatus string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+		`SELECT team_id, status FROM training_sessions WHERE id = ?`,
+		sessionID).Scan(&teamID, &prevStatus)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -882,8 +961,16 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.broadcastSession(r.Context(), sessionID, "trainings")
+	// Der Link bleibt auch bei der Absage bestehen: die Einheit existiert weiter
+	// und zeigt auf /termine ihren Absagegrund an.
+	notifyTitle, notifyBody := "Training geändert", "Eine Trainingseinheit wurde aktualisiert"
+	if prevStatus != status && status == "cancelled" {
+		notifyTitle = "Training abgesagt"
+		notifyBody = notify.CancellationBody(sessionSubject(req.Title), cancellationWhen(req.Date),
+			notify.ActorName(h.db, claims.UserID), req.CancelReason)
+	}
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
-		"trainings", "Training geändert", "Eine Trainingseinheit wurde aktualisiert", fmt.Sprintf("/termine?focus=training-%d", sessionID))
+		"trainings", notifyTitle, notifyBody, fmt.Sprintf("/termine?focus=training-%d", sessionID))
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -1402,13 +1402,27 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"regen_summary": summary})
 }
 
-// DELETE /api/admin/games/{id}
+// DELETE /api/games/{id}
 // Deletes a game (incl. generic events) together with all duty_slots and
 // duty_assignments referencing it (via ON DELETE CASCADE since migration 027).
 // For each fulfilled assignment that gets cascade-deleted, the corresponding
 // duty_accounts.ist is recomputed in the same transaction so no orphan hours
 // remain on user accounts.
 func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
+	// Der optionale {reason, silent}-Body wird als Allererstes gelesen — danach
+	// ist er verbraucht. Fehlt er (alte PWA aus dem Service-Worker-Cache) oder
+	// ist er kaputt, heißt das „kein Grund, nicht stumm", nie HTTP 400.
+	reason, silent := notify.DecodeCancellation(r)
+	claims := auth.ClaimsFromCtx(r.Context())
+	// Stummschalten ist ein eigenes, engeres Recht als das Löschrecht. Fehlt es,
+	// wird das Flag ignoriert statt die Löschung mit 403 abzubrechen —
+	// benachrichtigen ist der sichere Default.
+	if silent {
+		silent = claims != nil && policy.CanSuppressEventNotification(&policy.Principal{
+			UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions,
+		})
+	}
+
 	id := r.PathValue("id")
 	// Fetch team IDs before deleting (game_teams rows are cascade-deleted)
 	teamIDs := h.gameTeamIDs(id)
@@ -1439,7 +1453,7 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	mayMutate, err := h.canMutateGame(r.Context(), auth.ClaimsFromCtx(r.Context()), gameIDInt)
+	mayMutate, err := h.canMutateGame(r.Context(), claims, gameIDInt)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1514,19 +1528,35 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	// delete, plus the duty assignees whose slots vanished, as the audience.
 	h.broadcastGameTeams(r.Context(), teamIDs, "games", append(append([]int{}, assignedUIDs...), fulfilledUIDs...)...)
 
-	// Targeted notification to duty assignees in their "duties" category.
-	if len(assignedUIDs) > 0 {
+	// Absage-Meldungen. `silent` betrifft ausschließlich notify.Send — Broadcast
+	// (oben) und Regen-Meldungen (unten) laufen immer, sonst zeigten offene
+	// Sessions den gelöschten Termin weiter an.
+	if !silent {
+		actor := notify.ActorName(h.db, claims.UserID)
 		eventName := opponent
 		if eventName == "" {
-			eventName = "Termin am " + formatDateDMY(eventDate)
+			eventName = "Termin" // generische Events ohne Gegnerfeld
 		}
-		body := fmt.Sprintf("Dein Dienst zum %s am %s wurde gelöscht.", eventName, formatDateDMY(eventDate))
-		notify.Send(h.db, h.cfg, assignedUIDs, "duties", "Dienst entfällt", body, "/dienste")
-	}
+		eventDay := formatDateDMY(eventDate)
 
-	// Team-wide event-cancellation notification in "games" category (unchanged audience).
-	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamIDs),
-		"games", "Spiel abgesagt", "Ein Spiel wurde abgesagt", "/termine")
+		// Targeted notification to duty assignees in their "duties" category.
+		// Der erste Satz ist als Wortlaut in specs/push-duties festgeschrieben
+		// und bleibt deshalb unverändert; angehängt werden nur Aktor und Grund.
+		// Der Link bleibt /dienste — die Dienstbörse existiert nach der Löschung
+		// weiter, der Empfänger kann sich dort neu eintragen.
+		if len(assignedUIDs) > 0 {
+			body := fmt.Sprintf("Dein Dienst zum %s am %s wurde gelöscht. %s",
+				eventName, eventDay, notify.ActorClause(actor, reason))
+			notify.Send(h.db, h.cfg, assignedUIDs, "duties", "Dienst entfällt", body, "/dienste")
+		}
+
+		// Team-wide event-cancellation notification in "games" category (unchanged
+		// audience). Das Linkziel ist bewusst leer: /termine zeigt den Termin nach
+		// der Löschung nicht mehr, ein Sprung dorthin wirkt wie ein Fehler.
+		notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamIDs),
+			"games", "Spiel abgesagt",
+			notify.CancellationBody(eventName, "am "+eventDay, actor, reason), "")
+	}
 
 	h.dispatchRegenNotifications(summary)
 
@@ -1565,13 +1595,9 @@ func (h *Handler) dutyAssigneesForGame(ctx context.Context, gameID string) (assi
 }
 
 // formatDateDMY turns "2026-06-14" (or an ISO timestamp) into "14.06.2026".
-func formatDateDMY(s string) string {
-	if len(s) < 10 {
-		return s
-	}
-	d := s[:10]
-	return d[8:10] + "." + d[5:7] + "." + d[0:4]
-}
+// Dünner Alias auf notify.FormatDateDMY, damit das Datumsformat der
+// Absage-Texte nur eine Implementierung hat.
+func formatDateDMY(s string) string { return notify.FormatDateDMY(s) }
 
 // GET /api/teams — filtered by user role
 func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {

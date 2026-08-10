@@ -6,6 +6,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus } from '../lib/errors'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from './DutySlotList'
+import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 
 interface GameDetail {
@@ -73,9 +74,13 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
   const [deleteSlotId, setDeleteSlotId] = useState<number | null>(null)
   const [deleteSaving, setDeleteSaving] = useState(false)
+  const [slotDeleteReason, setSlotDeleteReason] = useState('')
+  const [slotDeleteSilent, setSlotDeleteSilent] = useState(false)
 
   const [showDeleteGame, setShowDeleteGame] = useState(false)
   const [deletingGame, setDeletingGame] = useState(false)
+  const [gameDeleteReason, setGameDeleteReason] = useState('')
+  const [gameDeleteSilent, setGameDeleteSilent] = useState(false)
 
   useEscapeKey(
     showDeleteGame ? () => setShowDeleteGame(false) :
@@ -188,9 +193,11 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
     if (deleteSlotId === null) return
     setDeleteSaving(true)
     try {
-      await api.delete(`/duty-slots/${deleteSlotId}`)
+      await api.delete(`/duty-slots/${deleteSlotId}`, { data: deletionPayload(slotDeleteReason, slotDeleteSilent) })
       await reloadAfterMutation()
       setDeleteSlotId(null)
+      setSlotDeleteReason('')
+      setSlotDeleteSilent(false)
     } finally {
       setDeleteSaving(false)
     }
@@ -199,7 +206,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
   const handleDeleteGame = async () => {
     setDeletingGame(true)
     try {
-      await api.delete(`/games/${gameId}`)
+      await api.delete(`/games/${gameId}`, { data: deletionPayload(gameDeleteReason, gameDeleteSilent) })
       onDeleted?.()
       onClose()
     } finally {
@@ -377,7 +384,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
             <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
               <h3 className="font-bold mb-2 text-brand-text">Dienst löschen?</h3>
-              <p className="text-sm text-brand-text-muted mb-5">Dieser Dienst wird endgültig gelöscht.</p>
+              <p className="text-sm text-brand-text-muted mb-4">Dieser Dienst wird endgültig gelöscht.</p>
+              <DeleteReasonFields
+                idPrefix="slot-delete"
+                reason={slotDeleteReason}
+                onReasonChange={setSlotDeleteReason}
+                silent={slotDeleteSilent}
+                onSilentChange={setSlotDeleteSilent}
+              />
               <div className="flex gap-2">
                 <button onClick={() => setDeleteSlotId(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 <button onClick={handleDeleteSlot} disabled={deleteSaving}
@@ -400,6 +414,13 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               <p className="text-sm text-brand-text-muted mb-4">
                 Dieses Spiel wird endgültig gelöscht.{slots.length > 0 && ` Dabei werden auch ${slots.length} ${slots.length === 1 ? 'verknüpfter Dienst' : 'verknüpfte Dienste'} gelöscht.`}
               </p>
+              <DeleteReasonFields
+                idPrefix="spieltag-game-delete"
+                reason={gameDeleteReason}
+                onReasonChange={setGameDeleteReason}
+                silent={gameDeleteSilent}
+                onSilentChange={setGameDeleteSilent}
+              />
               <div className="flex gap-2">
                 <button onClick={() => setShowDeleteGame(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 <button onClick={handleDeleteGame} disabled={deletingGame}

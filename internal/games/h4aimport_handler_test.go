@@ -508,56 +508,12 @@ func TestPreviewH4A_FehlerdiagnoseOhneZugangsdaten(t *testing.T) {
 }
 
 // findStringInDB durchsucht alle Tabellen/Spalten nach needle und liefert den
-// ersten Fundort (leer, wenn nirgends gefunden).
+// ersten Fundort (leer, wenn nirgends gefunden). Dünner Alias auf den geteilten
+// Scanner — dieselbe Zusage wird auch für den Löschgrund der Absage-Meldungen
+// geprüft (cancellation_test.go).
 func findStringInDB(t *testing.T, db *sql.DB, needle string) (string, string) {
 	t.Helper()
-	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
-	if err != nil {
-		t.Fatalf("Tabellenliste: %v", err)
-	}
-	var tables []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err == nil {
-			tables = append(tables, name)
-		}
-	}
-	rows.Close()
-
-	for _, tbl := range tables {
-		r, err := db.Query(`SELECT * FROM "` + tbl + `"`)
-		if err != nil {
-			continue
-		}
-		cols, _ := r.Columns()
-		for r.Next() {
-			vals := make([]any, len(cols))
-			ptrs := make([]any, len(cols))
-			for i := range vals {
-				ptrs[i] = &vals[i]
-			}
-			if err := r.Scan(ptrs...); err != nil {
-				continue
-			}
-			for i, v := range vals {
-				var s string
-				switch tv := v.(type) {
-				case string:
-					s = tv
-				case []byte:
-					s = string(tv)
-				default:
-					continue
-				}
-				if strings.Contains(s, needle) {
-					r.Close()
-					return tbl, cols[i]
-				}
-			}
-		}
-		r.Close()
-	}
-	return "", ""
+	return testutil.FindStringInDB(t, db, needle)
 }
 
 // --- 6.2 Apply ------------------------------------------------------------------
