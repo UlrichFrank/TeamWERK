@@ -68,4 +68,5 @@
 - [x] 9.2 Prüfen, dass die drei MODIFIED-Requirements den Wortlaut der Bestands-Specs vollständig ersetzen (nicht ergänzen) — insbesondere die `/termine`-Zusage in `push-games` und `push-trainings`, die dieser Change aufhebt
 - [x] 9.3 `/verify-change` ausführen (Build/Test/Lint + Route→Tests, Mutation→Broadcast, brand-Tokens, lucide-Icons, `openspec validate`)
 - [x] 9.4 `openspec validate absage-benachrichtigung --strict`
-- [ ] 9.5 Proposal archivieren
+- [x] 9.5 **Nachgezogen:** `DELETE /api/games/{id}` meldete jeden Termin als „Spiel abgesagt" — auch generische Events (Turnier, Vereinsfest, Zusatztermin), die über dieselbe Route laufen. Titel folgt jetzt dem `games.event_type` (`cancellationTitle`: `generisch` → „Termin abgesagt", sonst „Spiel abgesagt"); Body und Dienst-Meldung unverändert. Tests: `TestDeleteGame_GenerischesEventMeldetTerminAbgesagt`, `TestDeleteGame_AuswaertsspielBleibtSpielAbgesagt`
+- [ ] 9.6 Proposal archivieren

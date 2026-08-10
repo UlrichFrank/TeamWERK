@@ -19,6 +19,11 @@ fokussiert die App, ohne zu navigieren.
 Die Benachrichtigung über ein gelöschtes Spiel SHALL Gegner, Datum und den Namen des
 auslösenden Nutzers enthalten sowie — falls angegeben — den Löschgrund.
 
+Der **Titel** der Absage-Meldung SHALL dem `games.event_type` folgen: `heim` und `auswärts`
+ergeben „Spiel abgesagt", `generisch` ergibt „Termin abgesagt". Die Route trägt auch Termine,
+die keine Spiele sind (Turnier, Vereinsfest, Zusatztermin) — ein pauschales „Spiel abgesagt"
+benennt dort das falsche Ereignis.
+
 #### Scenario: Neues Spiel erstellt
 - **WHEN** ein Admin oder Trainer ein neues Spiel über `POST /api/games` anlegt
 - **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams + deren Elternteile eine Push Notification mit Titel „Neues Spiel" und der Gegnerinfo
@@ -30,10 +35,15 @@ auslösenden Nutzers enthalten sowie — falls angegeben — den Löschgrund.
 - **THEN** zeigt der Klick-Link auf `/termine?focus=game-<id>`
 
 #### Scenario: Spiel abgesagt (gelöscht)
-- **WHEN** ein Admin oder Trainer ein Spiel über `DELETE /api/games/{id}` löscht
+- **WHEN** ein Admin oder Trainer ein Spiel (`event_type` `heim` oder `auswärts`) über `DELETE /api/games/{id}` löscht
 - **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams + deren Elternteile eine Push Notification „Spiel abgesagt"
 - **THEN** enthält der Body Gegner, Datum im Format `TT.MM.JJJJ` und den Namen des auslösenden Nutzers
 - **THEN** ist die `url` der leere String
+
+#### Scenario: Generisches Event abgesagt (gelöscht)
+- **WHEN** ein Admin oder Trainer ein Event mit `event_type='generisch'` über `DELETE /api/games/{id}` löscht
+- **THEN** lautet der Titel der Push Notification „Termin abgesagt" und NICHT „Spiel abgesagt"
+- **THEN** enthält der Body den Event-Namen, das Datum im Format `TT.MM.JJJJ` und den Namen des auslösenden Nutzers
 
 #### Scenario: Spiel mit Grund abgesagt
 - **WHEN** ein Admin oder Trainer ein Spiel mit `{"reason":"Halle gesperrt"}` löscht

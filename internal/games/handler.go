@@ -1432,10 +1432,11 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		seasonID  int
 		opponent  string
 		eventDate string
+		eventType string
 	)
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT season_id, COALESCE(opponent, ''), date FROM games WHERE id=?`, id).
-		Scan(&seasonID, &opponent, &eventDate)
+		`SELECT season_id, COALESCE(opponent, ''), date, event_type FROM games WHERE id=?`, id).
+		Scan(&seasonID, &opponent, &eventDate, &eventType)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1554,7 +1555,7 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		// audience). Das Linkziel ist bewusst leer: /termine zeigt den Termin nach
 		// der Löschung nicht mehr, ein Sprung dorthin wirkt wie ein Fehler.
 		notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamIDs),
-			"games", "Spiel abgesagt",
+			"games", cancellationTitle(eventType),
 			notify.CancellationBody(eventName, "am "+eventDay, actor, reason), "")
 	}
 
@@ -1562,6 +1563,20 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"regen_summary": summary})
+}
+
+// cancellationTitle wählt die Überschrift der Absage-Meldung passend zum
+// games.event_type. Die Route trägt drei fachlich verschiedene Termine: heim und
+// auswärts sind Spiele, `generisch` ist alles andere (Turnier, Vereinsfest,
+// Zusatztraining) — dort war "Spiel abgesagt" schlicht falsch. Unbekannte Werte
+// fallen bewusst auf den Spiel-Titel zurück: der CHECK-Constraint der Tabelle
+// lässt nur diese drei zu, ein vierter wäre ein Migrations-Fehler und soll die
+// Meldung nicht verschlucken.
+func cancellationTitle(eventType string) string {
+	if eventType == "generisch" {
+		return "Termin abgesagt"
+	}
+	return "Spiel abgesagt"
 }
 
 // dutyAssigneesForGame returns the user IDs of all duty_assignments for slots

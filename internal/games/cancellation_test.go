@@ -276,6 +276,60 @@ func TestDeleteGame_UeberlangerGrundWirdGekuerzt(t *testing.T) {
 	}
 }
 
+// ── Titel passend zum event_type ─────────────────────────────────────────────
+
+// setEventType schaltet das Fixture-Spiel auf einen anderen event_type um und
+// setzt dabei den Terminnamen (bei generisch trägt `opponent` den Event-Namen).
+func (f *cancelFixture) setEventType(t *testing.T, eventType, name string) {
+	t.Helper()
+	if _, err := f.db.Exec(
+		`UPDATE games SET event_type=?, is_home=?, opponent=? WHERE id=?`,
+		eventType, eventType == "heim", name, f.game); err != nil {
+		t.Fatalf("setEventType: %v", err)
+	}
+}
+
+// Ein generisches Event ist kein Spiel — die Absage darf nicht "Spiel abgesagt"
+// heißen. Der Body bleibt unverändert (Event-Name aus `opponent`).
+func TestDeleteGame_GenerischesEventMeldetTerminAbgesagt(t *testing.T) {
+	f := newCancelFixture(t)
+	f.setEventType(t, "generisch", "Sommerfest")
+
+	res := f.delete(t, f.vorstandToken(t), map[string]any{"reason": "Regen"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, got %d", res.StatusCode)
+	}
+
+	if got := f.rec.byTitle("Spiel abgesagt"); len(got) != 0 {
+		t.Errorf("generisches Event darf nicht als Spiel gemeldet werden, got %v", f.rec.titles())
+	}
+	n := f.rec.one(t, "Termin abgesagt")
+	for _, want := range []string{"Sommerfest", "14.09.2026", "Tim Meier", "Regen"} {
+		if !strings.Contains(n.body, want) {
+			t.Errorf("Body muss %q enthalten, got %q", want, n.body)
+		}
+	}
+}
+
+// Auswärtsspiele bleiben Spiele — die Titel-Wahl hängt am event_type, nicht am
+// Heimrecht.
+func TestDeleteGame_AuswaertsspielBleibtSpielAbgesagt(t *testing.T) {
+	f := newCancelFixture(t)
+	f.setEventType(t, "auswärts", "HSG Ostfildern")
+
+	res := f.delete(t, f.vorstandToken(t), map[string]any{})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, got %d", res.StatusCode)
+	}
+
+	if got := f.rec.byTitle("Termin abgesagt"); len(got) != 0 {
+		t.Errorf("Auswärtsspiel muss als Spiel gemeldet werden, got %v", f.rec.titles())
+	}
+	f.rec.one(t, "Spiel abgesagt")
+}
+
 // ── Dienst-Meldung ───────────────────────────────────────────────────────────
 
 // Der Satz "Dein Dienst zum X am Y wurde gelöscht." ist in specs/push-duties als
