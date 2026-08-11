@@ -242,8 +242,25 @@ export default function AdminDutyTypesPage() {
 
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(`Diensttyp „${name}" wirklich löschen?`)) return
-    await api.delete(`/duty-types/${id}`)
-    load()
+    try {
+      await api.delete(`/duty-types/${id}`)
+      load()
+    } catch (err) {
+      const ax = err as { response?: { status?: number; data?: string } }
+      if (ax.response?.status === 409) {
+        const msg = typeof ax.response.data === 'string' ? ax.response.data.trim() : 'Diensttyp wird noch verwendet.'
+        if (confirm(`${msg}\n\nTrotzdem inkl. aller Dienste, Vorlagen-Einträge und Varianten-Verknüpfungen löschen? Das kann nicht rückgängig gemacht werden.`)) {
+          try {
+            await api.delete(`/duty-types/${id}?force=true`)
+            load()
+          } catch {
+            alert('Löschen fehlgeschlagen.')
+          }
+        }
+      } else {
+        alert('Löschen fehlgeschlagen.')
+      }
+    }
   }
 
   return (

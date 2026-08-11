@@ -123,6 +123,7 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))
 			r.Put("/api/duty-types/{id}/instruction", h.SetInstruction)
+			r.Delete("/api/duty-types/{id}", h.DeleteType)
 		})
 	})
 }
@@ -1324,6 +1325,141 @@ func TestDeleteSlot_WithAssignments(t *testing.T) {
 	}
 	if got := countRows(t, db, "duty_assignments", "duty_slot_id=?", slotID); got != 0 {
 		t.Errorf("assignments not cascade-deleted: got %d rows", got)
+	}
+}
+
+// TestDeleteType_Unused verifies that a duty type with no referencing slots,
+// templates or variant links can be deleted (204, row gone).
+func TestDeleteType_Unused(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/duty-types/"+itoa(dtID), token, nil)
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if got := countRows(t, db, "duty_types", "id=?", dtID); got != 0 {
+		t.Errorf("duty type not deleted: got %d rows", got)
+	}
+}
+
+// TestDeleteType_InUse_ReturnsConflict verifies that deleting a duty type
+// still referenced by a duty_slots row (ON DELETE RESTRICT) fails with 409
+// instead of silently no-op'ing — regression test for a bug where the
+// handler ignored the FK-constraint error from ExecContext and always
+// returned 204, leaving the row (and its dependents) in place.
+func TestDeleteType_InUse_ReturnsConflict(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+	createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/duty-types/"+itoa(dtID), token, nil)
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", res.StatusCode)
+	}
+	if got := countRows(t, db, "duty_types", "id=?", dtID); got != 1 {
+		t.Errorf("duty type should still exist after rejected delete: got %d rows", got)
+	}
+}
+
+// TestDeleteType_Force_CascadesReferences verifies that ?force=true deletes
+// a duty type together with everything ON DELETE RESTRICT would otherwise
+// block: duty_slots (and their duty_assignments via cascade),
+// game_template_items, and nulls out other duty_types' variant links that
+// pointed at the deleted row instead of leaving them dangling or blocked.
+func TestDeleteType_Force_CascadesReferences(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+	slotID := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	helperID := testutil.CreateUser(t, db, "standard")
+	insertDutyAssignment(t, db, slotID, helperID, "assigned")
+
+	otherDtID := createDutyType(t, db, "Abbau", 1.0)
+	if _, err := db.Exec(`UPDATE duty_types SET consecutive_variant_id=? WHERE id=?`, dtID, otherDtID); err != nil {
+		t.Fatalf("link consecutive_variant_id: %v", err)
+	}
+
+	templateRes, err := db.Exec(`INSERT INTO game_templates (name, duration_minutes, is_active, template_type) VALUES ('Heimspiel', 90, 1, 'heim')`)
+	if err != nil {
+		t.Fatalf("create game_template: %v", err)
+	}
+	templateID, _ := templateRes.LastInsertId()
+	if _, err := db.Exec(
+		`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		 VALUES (?, ?, 'start', 0, 1, 0)`, templateID, dtID); err != nil {
+		t.Fatalf("create game_template_item: %v", err)
+	}
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/duty-types/"+itoa(dtID)+"?force=true", token, nil)
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if got := countRows(t, db, "duty_types", "id=?", dtID); got != 0 {
+		t.Errorf("duty type not deleted: got %d rows", got)
+	}
+	if got := countRows(t, db, "duty_slots", "id=?", slotID); got != 0 {
+		t.Errorf("duty_slots not cascade-deleted: got %d rows", got)
+	}
+	if got := countRows(t, db, "duty_assignments", "duty_slot_id=?", slotID); got != 0 {
+		t.Errorf("duty_assignments not cascade-deleted: got %d rows", got)
+	}
+	if got := countRows(t, db, "game_template_items", "duty_type_id=?", dtID); got != 0 {
+		t.Errorf("game_template_items not deleted: got %d rows", got)
+	}
+	var variant sql.NullInt64
+	if err := db.QueryRow(`SELECT consecutive_variant_id FROM duty_types WHERE id=?`, otherDtID).Scan(&variant); err != nil {
+		t.Fatalf("scan variant: %v", err)
+	}
+	if variant.Valid {
+		t.Errorf("expected consecutive_variant_id nulled out, got %v", variant.Int64)
+	}
+}
+
+// TestDeleteType_ForceOnUnusedType_StillDeletes verifies that ?force=true on
+// a duty type with no references behaves like a normal delete (204, gone).
+func TestDeleteType_ForceOnUnusedType_StillDeletes(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminID, "admin", nil)
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/duty-types/"+itoa(dtID)+"?force=true", token, nil)
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	if got := countRows(t, db, "duty_types", "id=?", dtID); got != 0 {
+		t.Errorf("duty type not deleted: got %d rows", got)
 	}
 }
 

@@ -312,11 +312,81 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /api/admin/duty-types/:id
+// ?force=true löscht zusätzlich alle Referenzen (duty_slots inkl. ihrer
+// duty_assignments per ON DELETE CASCADE, game_template_items) statt mit 409
+// abzulehnen, und hängt Varianten-Verknüpfungen anderer duty_types auf NULL.
+// Wie beim H4A-Bulk-Apply bewusst ein einzelner Broadcast statt
+// Einzel-Benachrichtigungen pro betroffenem Slot (Admin-Aufräumaktion).
 func (h *Handler) DeleteType(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	h.db.ExecContext(r.Context(), `DELETE FROM duty_types WHERE id=?`, id)
+	force := r.URL.Query().Get("force") == "true"
+
+	if force {
+		if err := h.deleteTypeCascade(r.Context(), id); err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		h.hub.Broadcast("duties")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM duty_types WHERE id=?`, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "FOREIGN KEY constraint failed") {
+			http.Error(w, "Diensttyp wird noch verwendet (Dienste, Vorlagen oder als Varianten-Verknüpfung) und kann nicht gelöscht werden", http.StatusConflict)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteTypeCascade removes a duty_types row together with everything that
+// would otherwise block it via ON DELETE RESTRICT: game_template_items,
+// duty_slots (and thereby duty_assignments), plus nulling out any
+// consecutive_/same_day_/adjacent_day_variant_id on other duty_types that
+// point at this one. duty_season_targets is already ON DELETE CASCADE.
+func (h *Handler) deleteTypeCascade(ctx context.Context, id string) error {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM game_template_items WHERE duty_type_id=?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM duty_slots WHERE duty_type_id=?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE duty_types SET consecutive_variant_id=NULL WHERE consecutive_variant_id=?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE duty_types SET same_day_variant_id=NULL WHERE same_day_variant_id=?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE duty_types SET adjacent_day_variant_id=NULL WHERE adjacent_day_variant_id=?`, id); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM duty_types WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return tx.Commit()
 }
 
 // PUT /api/duty-types/{id}/instruction
