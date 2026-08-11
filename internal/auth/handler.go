@@ -1237,6 +1237,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM invitation_tokens WHERE used_at IS NULL AND LOWER(email) = LOWER((SELECT email FROM users WHERE id = ?))`,
 		`DELETE FROM invitation_tokens WHERE member_id IN (SELECT id FROM members WHERE user_id = ?)`,
 		`DELETE FROM password_reset_tokens WHERE user_id = ?`,
+		`DELETE FROM broadcast_reads WHERE user_id = ?`,
 		`DELETE FROM family_links WHERE parent_user_id = ?`,
 		`DELETE FROM duty_assignments WHERE user_id = ?`,
 		`DELETE FROM duty_accounts WHERE user_id = ?`,
