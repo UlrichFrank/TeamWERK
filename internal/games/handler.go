@@ -453,13 +453,14 @@ type templateItemRow struct {
 	AdjacentDayBehavior  string
 	AdjacentDayVariantID sql.NullInt64
 	Audiences            sql.NullString
+	TeamIDs              []int
 }
 
 func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]templateItemRow, error) {
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
-		        gti.audiences
+		        gti.audiences, gti.team_ids
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -469,9 +470,11 @@ func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]temp
 	var result []templateItemRow
 	for rows.Next() {
 		var it templateItemRow
+		var teamIDs sql.NullString
 		rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
-			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences)
+			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs)
+		it.TeamIDs = teamIDsFromDB(teamIDs)
 		result = append(result, it)
 	}
 	return result, nil
@@ -1704,11 +1707,14 @@ type templateItem struct {
 	OffsetMinutes int      `json:"offset_minutes"`
 	SlotsCount    int      `json:"slots_count"`
 	Audiences     []string `json:"audiences,omitempty"`
+	// TeamIDs schränkt ein, für welche Teams eines Spiels aus diesem Item ein
+	// Slot entsteht. Leer/NULL = alle Teams (umgekehrte Leer-Semantik zu Audiences).
+	TeamIDs []int `json:"team_ids,omitempty"`
 }
 
 func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templateItem {
 	rows, _ := h.db.QueryContext(ctx,
-		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.audiences
+		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.audiences, gti.team_ids
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	items := []templateItem{}
@@ -1718,9 +1724,10 @@ func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templ
 	defer rows.Close()
 	for rows.Next() {
 		var it templateItem
-		var audiences sql.NullString
-		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &audiences)
+		var audiences, teamIDs sql.NullString
+		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &audiences, &teamIDs)
 		it.Audiences = audiencesFromDB(audiences)
+		it.TeamIDs = teamIDsFromDB(teamIDs)
 		items = append(items, it)
 	}
 	return items
@@ -1853,6 +1860,17 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid duty_type_id", http.StatusBadRequest)
 			return
 		}
+		// team_ids wird nur gegen die Existenz in teams geprüft, bewusst NICHT
+		// gegen die aktive Saison: eine Vorlage überlebt Saisonwechsel, und
+		// zwischen Saisonende und Kader-Kopie gäbe es sonst ein Speicher-Loch.
+		for _, tid := range it.TeamIDs {
+			var teamExists int
+			if err := h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM teams WHERE id=?`, tid).Scan(&teamExists); err != nil || teamExists == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_team"})
+				return
+			}
+		}
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -1882,9 +1900,10 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, it := range req.Items {
 		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences)
-			 VALUES (?,?,?,?,?,?,?)`,
-			id, it.DutyTypeID, it.Anchor, it.OffsetMinutes, it.SlotsCount, i, audiencesToDB(it.Audiences))
+			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids)
+			 VALUES (?,?,?,?,?,?,?,?)`,
+			id, it.DutyTypeID, it.Anchor, it.OffsetMinutes, it.SlotsCount, i,
+			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs))
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -2943,6 +2962,31 @@ func audiencesToDB(audiences []string) *string {
 		return nil
 	}
 	b, _ := json.Marshal(audiences)
+	s := string(b)
+	return &s
+}
+
+// teamIDsFromDB/teamIDsToDB sind die Geschwister von audiencesFromDB/audiencesToDB
+// für die Team-Allowlist eines Vorlagen-Items. NULL und [] werden beide als nil
+// gelesen — „leer" ist ein einziger Zustand (kein Tri-State) und bedeutet
+// „gilt für alle Teams des Spiels".
+func teamIDsFromDB(ns sql.NullString) []int {
+	if !ns.Valid || ns.String == "" {
+		return nil
+	}
+	var result []int
+	json.Unmarshal([]byte(ns.String), &result)
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func teamIDsToDB(teamIDs []int) *string {
+	if len(teamIDs) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(teamIDs)
 	s := string(b)
 	return &s
 }

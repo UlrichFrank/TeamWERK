@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -448,30 +449,50 @@ func (h *Handler) regenGameItems(
 			return err
 		}
 
+		// matchedTeams = Anzahl der Teams, für die dieses Item einen Slot erzeugt
+		// hat. Ohne Team-Allowlist sind das alle Teams des Spiels, mit Allowlist
+		// nur deren Schnittmenge — die Zählung in der Zusammenfassung darf nicht
+		// mehr Slots melden, als tatsächlich entstanden sind.
+		matchedTeams := 0
 		if g.EventType == "generisch" {
 			// generisch never reaches here (skipped above), but kept defensive.
+			// Die Team-Allowlist greift hier bewusst nicht: generische Slots
+			// tragen gar keine team_id.
 			if err := insertOne(sql.NullInt64{}); err != nil {
 				return RegenSummary{}, nil, err
 			}
+			matchedTeams = 1
 		} else {
 			for _, tid := range teamIDs {
+				if len(it.TeamIDs) > 0 && !slices.Contains(it.TeamIDs, tid) {
+					continue // Team nicht in der Item-Allowlist — kein Slot dafür
+				}
+				matchedTeams++
 				if err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}); err != nil {
 					return RegenSummary{}, nil, err
 				}
 			}
+		}
+		if matchedTeams == 0 {
+			// Kein Team des Spiels steht in der Allowlist → dieses Item hat nichts
+			// erzeugt und taucht deshalb auch nicht in der Zusammenfassung auf.
+			// Der outcome bleibt ungesetzt; buildNotificationIntents behandelt einen
+			// fehlenden Eintrag als "removed", was für einen gelöschten Bestandsslot
+			// genau richtig ist.
+			continue
 		}
 
 		if isReduce {
 			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "reduced", newType: resultTypeName}
 			summary.Reduced = append(summary.Reduced, ReducedEntry{
 				Date: date, From: it.DutyTypeName, To: resultTypeName,
-				Count: max(1, len(teamIDs)) * n,
+				Count: matchedTeams * n,
 			})
 		} else {
 			outcomeByOriginalType[it.DutyTypeID] = itemOutcome{kind: "created"}
 			summary.Created = append(summary.Created, CreatedEntry{
 				Date: date, DutyType: it.DutyTypeName,
-				Count: max(1, len(teamIDs)) * n,
+				Count: matchedTeams * n,
 			})
 		}
 	}
@@ -627,7 +648,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 	rows, err := tx.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
-		        gti.audiences
+		        gti.audiences, gti.team_ids
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -637,11 +658,13 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 	var result []templateItemRow
 	for rows.Next() {
 		var it templateItemRow
+		var teamIDs sql.NullString
 		if err := rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
-			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences); err != nil {
+			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs); err != nil {
 			return nil, err
 		}
+		it.TeamIDs = teamIDsFromDB(teamIDs)
 		result = append(result, it)
 	}
 	return result, nil
