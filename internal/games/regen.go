@@ -364,6 +364,29 @@ func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, sea
 	return dayGames, nil
 }
 
+// itemAppliesToTeam entscheidet, ob aus einem Vorlagen-Item für ein bestimmtes Team
+// ein Slot entsteht. Leere Allowlist = gilt für alle Teams. Einzige Quelle dieser
+// Bedingung — die Vorschau (PreviewSlots) muss dieselbe benutzen, sonst zeigt sie
+// Einträge, die real nie entstehen (oder verschweigt welche, die entstehen).
+func itemAppliesToTeam(allowlist []int, teamID int) bool {
+	return len(allowlist) == 0 || slices.Contains(allowlist, teamID)
+}
+
+// itemAppliesToAnyTeam ist die Vorschau-Variante: erzeugt das Item für mindestens
+// eines der übergebenen Teams einen Slot? Bei leerer Teamliste (Aufrufer kennt die
+// Teams nicht) bleibt das Item sichtbar — nicht filtern ist ehrlicher als raten.
+func itemAppliesToAnyTeam(allowlist []int, teamIDs []int) bool {
+	if len(allowlist) == 0 || len(teamIDs) == 0 {
+		return true
+	}
+	for _, tid := range teamIDs {
+		if slices.Contains(allowlist, tid) {
+			return true
+		}
+	}
+	return false
+}
+
 // itemOutcome records what happened to one template item's duty type, keyed by the
 // item's original DutyTypeID, so notification intents can distinguish removed vs. variant-changed.
 type itemOutcome struct {
@@ -464,7 +487,7 @@ func (h *Handler) regenGameItems(
 			matchedTeams = 1
 		} else {
 			for _, tid := range teamIDs {
-				if len(it.TeamIDs) > 0 && !slices.Contains(it.TeamIDs, tid) {
+				if !itemAppliesToTeam(it.TeamIDs, tid) {
 					continue // Team nicht in der Item-Allowlist — kein Slot dafür
 				}
 				matchedTeams++

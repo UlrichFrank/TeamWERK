@@ -59,6 +59,44 @@ Kader steht, bleibt ein gültiger Wert.
   `PUT /api/duty-templates/{id}` aufruft
 - **THEN** antwortet das System mit HTTP 403
 
+### Requirement: Slot-Vorschau spiegelt die Team-Einschränkung
+
+Die Vorschau (`GET /api/duty-templates/{id}/preview`) SHALL dieselbe Team-Einschränkung
+anwenden wie die Auto-Regeneration, damit ein Eintrag, der für die gewählten Teams keinen
+Slot erzeugen würde, in der Vorschau nicht erscheint. Dazu MUSS die Vorschau die Teams des
+geplanten Events kennen: über den Query-Parameter `team_ids` (komma-separierte `teams.id`)
+oder — falls dieser fehlt und `game_id` gesetzt ist — abgeleitet aus `game_teams`. Sind
+weder `team_ids` noch `game_id` gesetzt, MUSS die Vorschau ungefiltert bleiben
+(Bestandsverhalten).
+
+Die Einschränkung DARF NUR für Vorlagen vom Typ `heim`/`auswärts` angewandt werden. Bei
+`template_type='generisch'` ignoriert die Regeneration `team_ids` — die Vorschau MUSS das
+ebenso tun, sonst verschwiege sie einen Slot, der real entsteht.
+
+#### Scenario: Eingeschränkter Eintrag verschwindet aus der Vorschau
+- **WHEN** ein Vorlagen-Item `team_ids: [mA1.id]` hat
+- **AND** die Vorschau mit `team_ids=<mA2.id>` abgerufen wird
+- **THEN** enthält die Antwort diesen Eintrag **nicht**
+
+#### Scenario: Eingeschränkter Eintrag bleibt bei passendem Team sichtbar
+- **WHEN** ein Vorlagen-Item `team_ids: [mA1.id, mB1.id]` hat
+- **AND** die Vorschau mit `team_ids=<mA2.id>,<mB1.id>` abgerufen wird
+- **THEN** enthält die Antwort diesen Eintrag (mB1 trifft die Allowlist)
+
+#### Scenario: Uneingeschränkter Eintrag bleibt immer sichtbar
+- **WHEN** ein Vorlagen-Item keine `team_ids` hat
+- **AND** die Vorschau mit einem beliebigen `team_ids` abgerufen wird
+- **THEN** enthält die Antwort diesen Eintrag
+
+#### Scenario: Ohne Team-Angabe bleibt die Vorschau ungefiltert
+- **WHEN** die Vorschau ohne `team_ids` und ohne `game_id` abgerufen wird
+- **THEN** enthält die Antwort alle Einträge der Vorlage, auch team-eingeschränkte
+
+#### Scenario: Generische Vorlage wird nicht gefiltert
+- **WHEN** eine Vorlage mit `template_type='generisch'` ein Item mit `team_ids: [mA1.id]` hat
+- **AND** die Vorschau mit `team_ids=<mA2.id>` abgerufen wird
+- **THEN** enthält die Antwort diesen Eintrag, weil die Regeneration ihn ebenfalls erzeugt
+
 ### Requirement: Vorlagen-Editor bietet nur Kaderteams der aktiven Saison zur Auswahl an
 
 Das Frontend SHALL im Vorlagen-Editor pro Item eine Team-Auswahl anbieten, deren Optionen auf
@@ -67,10 +105,17 @@ die Kaderteams der **aktiven** Saison beschränkt sind (Teams mit einem `kader`-
 der Auswahlliste erscheinen, auch wenn bereits gespeicherte `team_ids` eines Items auf sie
 verweisen.
 
+Die Auswahl SHALL NICHT angeboten werden, wenn die Vorlage vom Typ `generisch` ist — dort
+ignoriert die Regeneration `team_ids`, ein Bedienelement ohne Wirkung wäre irreführend.
+
 #### Scenario: Editor zeigt nur aktive Kaderteams
 - **WHEN** ein Vorstand ein Vorlagen-Item öffnet
 - **THEN** enthält die Team-Auswahlliste nur Teams, die einen `kader`-Eintrag der aktiven
   Saison haben, dargestellt mit ihrem berechneten Kurznamen (z.B. "mA1")
+
+#### Scenario: Generische Vorlage bietet keine Team-Auswahl
+- **WHEN** ein Vorstand eine Vorlage mit `template_type='generisch'` öffnet
+- **THEN** erscheint die Kaderteams-Auswahl nicht
 
 #### Scenario: Gespeichertes Team ist in der aktiven Saison nicht mehr im Kader
 - **WHEN** ein Item bereits `team_ids` enthält, von denen eine `teams.id` in der aktiven

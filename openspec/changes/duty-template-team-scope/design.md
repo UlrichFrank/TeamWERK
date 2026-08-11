@@ -122,6 +122,39 @@ kein zusätzlicher Query. Die Zählung für `RegenSummary.Created[].Count`
 Teammenge umgestellt werden (Anzahl tatsächlich ausgeführter `insertOne`-Aufrufe je Item),
 sonst meldet die Zusammenfassung mehr erzeugte Slots, als tatsächlich entstanden sind.
 
+### 6. Vorschau bekommt die Teams als Parameter, nicht als zweiten Regen-Lauf
+
+`GET /api/duty-templates/{id}/preview` (`handler.go`, einziger Aufrufer
+`KalenderPage.tsx:581`) rendert Schritt 4 des Anlege-Wizards. Ohne Team-Wissen zeigt sie
+team-eingeschränkte Einträge auch dann, wenn real kein Slot entstünde — der Wizard kennt die
+Auswahl (`selectedTeamIds`), reichte sie bisher nur nicht weiter.
+
+Gewählt: **`team_ids` als komma-separierter Query-Parameter**, ersatzweise aus `game_id` über
+`game_teams` abgeleitet, sonst ungefiltert. Alternativen und warum nicht:
+
+- *Preview durch `regenGameItems` laufen lassen (echter Dry-Run)*: bräuchte eine Transaktion,
+  ein Spiel-Objekt und einen Rollback für einen reinen Lesepfad. Die Vorschau ist bewusst eine
+  vereinfachte Projektion (ein Eintrag je Item, nicht je Item × Team) — ein echter Dry-Run
+  würde diese Struktur sprengen, ohne dem Nutzer mehr zu sagen.
+- *Teams serverseitig aus der aktiven Saison raten*: der Wizard legt ein Event für eine
+  konkrete Auswahl an; jede Ableitung wäre eine Vermutung.
+
+**Zwei Fallstricke, die die Filterbedingung bestimmen:**
+
+1. **Ohne Team-Angabe nicht filtern.** Ein Aufruf ohne `team_ids` darf nicht plötzlich alle
+   eingeschränkten Einträge verlieren — das wäre eine stille Verhaltensänderung für jeden
+   Bestandsaufrufer und in der Wirkung schlimmer als die zu behebende Ungenauigkeit.
+2. **`generisch` nie filtern.** Der Regen ignoriert `team_ids` bei generischen Events
+   (Entscheidung aus Task 3.5, generische Slots tragen keine `team_id`). Würde die Vorschau
+   dort filtern, verschwiege sie einen Slot, der real entsteht — die Lüge nur umgedreht.
+   Deshalb lädt die Vorschau zusätzlich `template_type` und wendet den Filter nur auf
+   `heim`/`auswärts` an.
+
+Konsequenz fürs Frontend: die Kaderteams-Auswahl im Editor wird bei `generisch`-Vorlagen
+**ausgeblendet** statt wirkungslos angeboten. Bereits gespeicherte `team_ids` einer solchen
+Vorlage bleiben unangetastet in der DB (kein Aufräum-Schreibvorgang) — sie sind lediglich
+folgenlos, in Editor wie Vorschau wie Regen konsistent.
+
 ## Risks / Trade-offs
 
 - **[Risiko] Stiller Nulleffekt.** Ist ein Item auf Teams beschränkt, die nie gemeinsam an

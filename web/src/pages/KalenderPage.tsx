@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle, Download, UserX } from 'lucide-react'
 import { api } from '../lib/api'
+import { buildPreviewUrl } from '../lib/dutyPreview'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
 import { errorStatus } from '../lib/errors'
@@ -576,9 +577,14 @@ export default function KalenderPage() {
     if (!selectedTemplate || !selectedDate || selectedTeamIds.length === 0) return
     setPreviewLoading(true)
     try {
-      const dateParam = eventType === 'heim' ? `&date=${selectedDate}` : ''
-      const endTimeParam = eventType === 'generisch' ? `&end_time=${selectedEndTime}` : ''
-      const r = await api.get(`/duty-templates/${selectedTemplate}/preview?time=${selectedTime}${dateParam}${endTimeParam}`)
+      const r = await api.get(buildPreviewUrl({
+        templateId: selectedTemplate,
+        eventType,
+        time: selectedTime,
+        date: selectedDate,
+        endTime: selectedEndTime,
+        teamIds: selectedTeamIds,
+      }))
       const slots: SlotPreview[] = r.data ?? []
       setPreview(slots)
       setSelectedSlotIndices(new Set(slots.map((_, i) => i)))

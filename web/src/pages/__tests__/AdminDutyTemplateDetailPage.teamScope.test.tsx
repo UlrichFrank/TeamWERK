@@ -121,3 +121,30 @@ describe('AdminDutyTemplateDetailPage — Kaderteams pro Eintrag', () => {
     expect(JSON.parse(put!.data).items[0].team_ids).toEqual([99, 8])
   })
 })
+
+describe('AdminDutyTemplateDetailPage — generische Vorlagen', () => {
+  test('bietet keine Kaderteams-Auswahl an (Regen ignoriert team_ids dort)', async () => {
+    renderAsPersona(
+      <Routes>
+        <Route path="/dienstplan-vorlagen/:id" element={<AdminDutyTemplateDetailPage />} />
+      </Routes>,
+      'vorstand',
+      { route: '/dienstplan-vorlagen/9' },
+    )
+    const mock = getApiMock()
+    mock.reset()
+    mock.onGet('/duty-templates/9').reply(200, {
+      id: 9, name: 'Turnier', template_type: 'generisch', duration_minutes: 120,
+      items: [{ duty_type_id: 3, anchor: 'start', offset_minutes: -60, slots_count: 1, audiences: [] }],
+    })
+    mock.onGet('/duty-types').reply(200, DUTY_TYPES)
+    mock.onGet('/teams/names').reply(200, TEAMS)
+    mock.onAny().reply(200, [])
+    await flushAsync()
+
+    expect(screen.queryByText(/Kaderteams/)).toBeNull()
+    expect(screen.queryByText('mA1')).toBeNull()
+    // Die Zielgruppen-Auswahl bleibt davon unberührt.
+    expect(screen.getAllByText(/leer = keine/).length).toBeGreaterThan(0)
+  })
+})

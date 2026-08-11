@@ -24,6 +24,11 @@ auseinanderdriften, sobald ein gemeinsames Item geändert wird.
   Item, analog zur bestehenden `audiences`-Checkbox-Zeile, aber mit umgekehrter Leer-Semantik
   (leer = **alle** Teams, nicht „keine"). Auswahloptionen sind die Kaderteams der **aktiven**
   Saison (über `kader.team_id`), nicht die vollständige `teams`-Tabelle.
+- **Vorschau spiegelt den Filter**: `GET /api/duty-templates/{id}/preview` nimmt die Teams des
+  geplanten Events entgegen (`team_ids`, ersatzweise abgeleitet aus `game_id`) und blendet
+  Einträge aus, die für diese Teams keinen Slot erzeugen würden. Ohne Team-Angabe bleibt die
+  Vorschau ungefiltert; bei `generisch` bleibt sie es immer (dort ignoriert auch die
+  Regeneration `team_ids`).
 - **Kein Migrations-Bruch**: bestehende Items ohne Team-Zuordnung verhalten sich exakt wie
   bisher (alle Teams des Spiels).
 
@@ -69,8 +74,15 @@ dokumentierten Verträge aus `games-regen-refactor` (Zerlegung, `regen_summary`-
 | | Vorstand, `team_ids` enthält unbekannte `teams.id` | 400 `invalid_team` |
 | | Standard-Nutzer ohne `vorstand` | 403 |
 | `GET /api/duty-templates/{id}` | beliebiger authentifizierter Nutzer | 200, `team_ids` je Item im Response (leer-Array bei Default) |
+| `GET /api/duty-templates/{id}/preview` | `team_ids` trifft die Allowlist eines Items nicht | 200, Item fehlt in der Vorschau |
+| | `team_ids` trifft die Allowlist (mind. ein Team) | 200, Item ist in der Vorschau |
+| | ohne `team_ids`/`game_id` | 200, ungefiltert (Bestandsverhalten) |
+| | `template_type='generisch'` mit gesetzten `team_ids` | 200, ungefiltert |
 
 **Garantierte Invarianten:**
+
+0. **Vorschau lügt nicht.** Ein Eintrag erscheint in der Vorschau genau dann, wenn die
+   Regeneration für dieselbe Team-Menge mindestens einen Slot daraus erzeugt.
 
 1. **Rückwärtskompatibel.** Ein Item ohne `team_ids` (bzw. leeres Array) erzeugt bei der
    Regeneration weiterhin für **jedes** Team des Spiels einen Slot — bit-identisches Verhalten

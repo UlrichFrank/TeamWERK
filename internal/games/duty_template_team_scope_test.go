@@ -354,3 +354,160 @@ func TestRegen_ZaehlungBeruecksichtigtTeamFilter(t *testing.T) {
 		t.Errorf("expected Created entry for Kamera, got %+v", summary.Created)
 	}
 }
+
+// ── Vorschau (GET /api/duty-templates/{id}/preview) ──────────────────────────
+//
+// Die Vorschau muss dieselbe Team-Einschränkung anwenden wie der Regen: ein
+// Eintrag erscheint genau dann, wenn für mindestens eines der übergebenen Teams
+// real ein Slot entstünde. Ohne Team-Angabe bleibt sie ungefiltert, bei
+// generischen Vorlagen immer (dort ignoriert auch der Regen team_ids).
+
+// previewDutyTypes ruft die Vorschau ab und gibt die Diensttyp-Namen zurück.
+func previewDutyTypes(t *testing.T, srv *httptest.Server, templateID int, query, token string) []string {
+	t.Helper()
+	res := testutil.Get(t, srv, "/api/duty-templates/"+strconv.Itoa(templateID)+"/preview?time=14:00"+query, token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("preview: expected 200, got %d", res.StatusCode)
+	}
+	var items []struct {
+		DutyTypeName string `json:"duty_type_name"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&items); err != nil {
+		t.Fatalf("decode preview: %v", err)
+	}
+	names := []string{}
+	for _, it := range items {
+		names = append(names, it.DutyTypeName)
+	}
+	return names
+}
+
+func contains(names []string, want string) bool {
+	for _, n := range names {
+		if n == want {
+			return true
+		}
+	}
+	return false
+}
+
+// seedPreviewFixture: Heim-Vorlage mit "Kamera" (nur teamA) und "Kasse" (alle Teams).
+func seedPreviewFixture(t *testing.T, db *sql.DB, teamA int) int {
+	t.Helper()
+	kamera := insertDutyType(t, db, "Kamera", 2.0)
+	kasse := insertDutyType(t, db, "Kasse", 2.0)
+	templateID := seedTeamScopeTemplate(t, db, "Heim", kamera, []int{teamA})
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
+		VALUES (?, ?, 'start', -30, 1, 1)`, templateID, kasse); err != nil {
+		t.Fatalf("seed second item: %v", err)
+	}
+	return templateID
+}
+
+func TestPreview_TeamEingeschraenktesItemFehltBeiFremdemTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "2025/26")
+	teamA, teamB := seedTwoTeamsSameAgeClass(t, db)
+	templateID := seedPreviewFixture(t, db, teamA)
+
+	userID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "admin", []string{"vorstand"})
+
+	names := previewDutyTypes(t, srv, templateID, "&team_ids="+strconv.Itoa(teamB), token)
+	if contains(names, "Kamera") {
+		t.Errorf("Kamera darf für Team B nicht in der Vorschau stehen, got %v", names)
+	}
+	if !contains(names, "Kasse") {
+		t.Errorf("Kasse (ohne Einschränkung) muss in der Vorschau stehen, got %v", names)
+	}
+}
+
+func TestPreview_TeamEingeschraenktesItemSichtbarBeiTreffer(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "2025/26")
+	teamA, teamB := seedTwoTeamsSameAgeClass(t, db)
+	templateID := seedPreviewFixture(t, db, teamA)
+
+	userID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "admin", []string{"vorstand"})
+
+	// Mehrteam-Event: teamA trifft die Allowlist → Eintrag bleibt sichtbar.
+	// Trennzeichen bewusst prozent-kodiert (%2C) — genau so schickt es der Wizard,
+	// seit buildPreviewUrl die Query über URLSearchParams baut.
+	q := "&team_ids=" + strconv.Itoa(teamB) + "%2C" + strconv.Itoa(teamA)
+	names := previewDutyTypes(t, srv, templateID, q, token)
+	if !contains(names, "Kamera") {
+		t.Errorf("Kamera muss bei Treffer sichtbar sein, got %v", names)
+	}
+}
+
+func TestPreview_OhneTeamAngabeUngefiltert(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "2025/26")
+	teamA, _ := seedTwoTeamsSameAgeClass(t, db)
+	templateID := seedPreviewFixture(t, db, teamA)
+
+	userID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "admin", []string{"vorstand"})
+
+	names := previewDutyTypes(t, srv, templateID, "", token)
+	if !contains(names, "Kamera") {
+		t.Errorf("ohne team_ids muss die Vorschau ungefiltert bleiben, got %v", names)
+	}
+}
+
+func TestPreview_TeamsAusGameIdAbgeleitet(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA, teamB := seedTwoTeamsSameAgeClass(t, db)
+	templateID := seedPreviewFixture(t, db, teamA)
+	// Spiel hängt nur an teamB → Kamera (nur teamA) darf nicht erscheinen.
+	gameID := testutil.CreateGame(t, db, seasonID, teamB, "2026-06-13")
+
+	userID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "admin", []string{"vorstand"})
+
+	names := previewDutyTypes(t, srv, templateID, "&game_id="+strconv.Itoa(gameID), token)
+	if contains(names, "Kamera") {
+		t.Errorf("Teams aus game_id müssen den Filter speisen, got %v", names)
+	}
+	if !contains(names, "Kasse") {
+		t.Errorf("Kasse muss sichtbar bleiben, got %v", names)
+	}
+}
+
+func TestPreview_GenerischeVorlageWirdNichtGefiltert(t *testing.T) {
+	db := testutil.NewDB(t)
+	testutil.CreateSeason(t, db, "2025/26")
+	teamA, teamB := seedTwoTeamsSameAgeClass(t, db)
+
+	kamera := insertDutyType(t, db, "Kamera", 2.0)
+	tr, err := db.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES ('Turnier', 'generisch', 120)`)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := tr.LastInsertId()
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, team_ids)
+		VALUES (?, ?, 'start', -60, 1, 0, ?)`, templateID, kamera, "["+strconv.Itoa(teamA)+"]"); err != nil {
+		t.Fatalf("seed item: %v", err)
+	}
+
+	userID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "admin", []string{"vorstand"})
+
+	// teamB trifft die Allowlist nicht — bei generisch ignoriert der Regen sie aber,
+	// die Vorschau muss den Eintrag also trotzdem zeigen.
+	names := previewDutyTypes(t, srv, int(templateID), "&team_ids="+strconv.Itoa(teamB), token)
+	if !contains(names, "Kamera") {
+		t.Errorf("generische Vorlage darf nicht team-gefiltert werden, got %v", names)
+	}
+}

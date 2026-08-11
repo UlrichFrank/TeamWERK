@@ -117,3 +117,32 @@
 - [x] 7.3 Commit(s) nach Conventional-Commits-Konvention, Scope `duties` oder `games`
       (`feat(games): Dienstplan-Vorlagen-Items auf Kaderteams einschränkbar` o.ä.), ein Commit
       pro sinnvoll abgeschlossenem Task-Block statt eines Monolith-Commits.
+
+## 8. Nachtrag — Vorschau spiegelt den Team-Filter
+
+Aufgedeckt beim Live-Test nach Abschluss von 1–7: der Wizard zeigte „Kamera" für mA2, obwohl
+die Regeneration den Slot nicht erzeugt. Ursache war der ungefilterte Vorschau-Pfad (siehe
+design.md Entscheidung 6).
+
+- [x] 8.1 `PreviewSlots` (`internal/games/handler.go`): Query-Parameter `team_ids`
+      (komma-separiert) einlesen; fehlt er und ist `game_id` gesetzt, Teams über
+      `game_teams` nachladen. Keine der beiden Quellen vorhanden → ungefiltert (Bestand).
+- [x] 8.2 `template_type` in die bestehende `SELECT id, duration_minutes …`-Query aufnehmen
+      und den Filter **nur** für `heim`/`auswärts` anwenden — bei `generisch` ignoriert der
+      Regen `team_ids`, die Vorschau muss das ebenso tun.
+- [x] 8.3 Filter in der Item-Schleife: Item überspringen, wenn `len(it.TeamIDs) > 0` und
+      keines der Request-Teams in der Allowlist steht (gleiche Bedingung wie
+      `regenGameItems`, gemeinsame Helper-Funktion statt Copy-Paste).
+- [x] 8.4 `KalenderPage.tsx:581`: `selectedTeamIds` als `&team_ids=…` an die Vorschau hängen.
+- [x] 8.5 Kaderteams-Auswahl im Editor bei `template_type='generisch'` ausblenden (kein
+      wirkungsloses Bedienelement). Bestehende `team_ids` solcher Vorlagen bleiben in der DB.
+- [x] 8.6 Go-Tests: Item ausgeblendet bei nicht-passendem Team · sichtbar bei Treffer ·
+      sichtbar ohne `team_ids`-Parameter · sichtbar bei `generisch` · Teams aus `game_id`
+      abgeleitet.
+- [x] 8.7 Vitest: Wizard sendet `team_ids`; Editor zeigt die Auswahl bei `generisch` nicht.
+      Der URL-Bau wurde dafür als reine Funktion nach `web/src/lib/dutyPreview.ts`
+      ausgelagert (`buildPreviewUrl`) — den 4-Schritt-Wizard durchzuklicken wäre teuer und
+      spröde, und ein Nicht-Komponenten-Export in `KalenderPage.tsx` hebelt Fast Refresh aus
+      (`react-refresh/only-export-components`).
+- [x] 8.8 Gates erneut grün (`make test`, `make lint`, `pnpm -C web build`),
+      `openspec validate --strict`, Commit.

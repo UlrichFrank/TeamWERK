@@ -100,6 +100,11 @@ export default function AdminDutyTemplateDetailPage() {
     ]).finally(() => setLoading(false))
   }, [id])
 
+  // Bei generischen Vorlagen ignoriert die Regeneration team_ids (generische Slots
+  // tragen keine team_id) — die Auswahl wird dort gar nicht erst angeboten, statt
+  // wirkungslos dazustehen. Bereits gespeicherte Werte bleiben in der DB unangetastet.
+  const teamScopeSupported = template?.template_type !== 'generisch'
+  const scopeTeams = teamScopeSupported ? teams : []
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
 
   useLiveUpdates(event => {
@@ -309,7 +314,7 @@ export default function AdminDutyTemplateDetailPage() {
                         </div>
                       </div>
                       <TeamScopeField
-                        teams={teams}
+                        teams={scopeTeams}
                         shortNames={teamShortNames}
                         selected={item.team_ids ?? []}
                         onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}
@@ -399,7 +404,7 @@ export default function AdminDutyTemplateDetailPage() {
                 </div>
                 <div className="mt-3">
                   <TeamScopeField
-                    teams={teams}
+                    teams={scopeTeams}
                     shortNames={teamShortNames}
                     selected={item.team_ids ?? []}
                     onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}

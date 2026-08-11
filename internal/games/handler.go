@@ -1937,7 +1937,7 @@ func (h *Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// GET /api/admin/duty-templates/{id}/preview?time=HH:MM&game_id=N
+// GET /api/admin/duty-templates/{id}/preview?time=HH:MM&game_id=N&team_ids=1,2
 func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	templateIDStr := r.PathValue("id")
 	gameTime := r.URL.Query().Get("time")
@@ -1950,9 +1950,10 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	dateStr := r.URL.Query().Get("date")
 
 	var templateID, durationMins int
+	var templateType string
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, duration_minutes FROM game_templates WHERE id=?`, templateIDStr).
-		Scan(&templateID, &durationMins)
+		`SELECT id, duration_minutes, template_type FROM game_templates WHERE id=?`, templateIDStr).
+		Scan(&templateID, &durationMins, &templateType)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1960,6 +1961,36 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	// Teams des geplanten Events, damit die Vorschau dieselbe Team-Einschränkung
+	// anwendet wie der Regen. Explizite team_ids gewinnen (Anlege-Wizard, das Event
+	// existiert noch nicht); sonst aus dem bestehenden Spiel ableiten. Ist keins von
+	// beidem da, bleibt die Vorschau ungefiltert — nicht filtern ist ehrlicher als
+	// raten und hält Bestandsaufrufer unverändert.
+	// generisch ist ausgenommen: dort ignoriert auch der Regen team_ids, ein Filter
+	// würde hier einen Slot verschweigen, der real entsteht.
+	var previewTeamIDs []int
+	if templateType != "generisch" {
+		if raw := r.URL.Query().Get("team_ids"); raw != "" {
+			for _, part := range strings.Split(raw, ",") {
+				if id, convErr := strconv.Atoi(strings.TrimSpace(part)); convErr == nil && id > 0 {
+					previewTeamIDs = append(previewTeamIDs, id)
+				}
+			}
+		} else if gameIDStr != "" {
+			rows, qErr := h.db.QueryContext(r.Context(),
+				`SELECT team_id FROM game_teams WHERE game_id=?`, gameIDStr)
+			if qErr == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var id int
+					if rows.Scan(&id) == nil {
+						previewTeamIDs = append(previewTeamIDs, id)
+					}
+				}
+			}
+		}
 	}
 
 	var allGameTimes []string
@@ -2014,6 +2045,9 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	}
 	result := []preview{}
 	for _, it := range items {
+		if !itemAppliesToAnyTeam(it.TeamIDs, previewTeamIDs) {
+			continue // Item erzeugt für keines der gewählten Teams einen Slot
+		}
 		var eventTime string
 		if it.Anchor == "end" && gameEndTime != "" {
 			eventTime = addMinutes(gameEndTime, it.OffsetMinutes)
