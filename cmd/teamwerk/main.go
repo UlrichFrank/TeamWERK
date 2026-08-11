@@ -300,7 +300,7 @@ func serve() {
 		Videos:              videosHandler,
 		VideosTus:           videosTus,
 		MatchReports:        matchreports.NewHandler(database, hubInstance, cfg),
-		Settings:            settings.NewHandler(settingsStore, hubInstance),
+		Settings:            settings.NewHandler(database, settingsStore, hubInstance),
 		SettingsStore:       settingsStore,
 		Hub:                 hub.NewHandler(hubInstance, buildHash, auth.UserIDFromCtx),
 		JWTSecret:           cfg.JWTSecret,

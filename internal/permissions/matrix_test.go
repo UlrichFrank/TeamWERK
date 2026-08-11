@@ -380,6 +380,8 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/duty-accounts", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots/{id}/assignments", expected: exAuth},
+	// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis, lesbar für alle Eingeloggten.
+	{method: "GET", path: "/api/settings/bewirtung", expected: exAuth},
 
 	// Mitfahrgelegenheiten
 	{method: "GET", path: "/api/mitfahrgelegenheiten", expected: exAuth},
@@ -658,6 +660,8 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/duty-types/{id}/instruction", expected: exVorstand},
 	{method: "DELETE", path: "/api/duty-types/{id}", expected: exVorstand},
 	{method: "GET", path: "/api/duty-accounts/export", expected: exVorstand},
+	// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis ändern.
+	{method: "PUT", path: "/api/settings/bewirtung", expected: exVorstand},
 	{method: "POST", path: "/api/duty-templates", expected: exVorstand},
 	{method: "PUT", path: "/api/duty-templates/{id}", expected: exVorstand},
 	{method: "DELETE", path: "/api/duty-templates/{id}", expected: exVorstand},

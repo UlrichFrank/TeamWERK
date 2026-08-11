@@ -78,7 +78,7 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Calendar:       calendar.NewHandler(database),
 		Videos:         videos.NewHandler(database, hubInstance, cfg),
 		MatchReports:   matchreports.NewHandler(database, hubInstance, cfg),
-		Settings:       settings.NewHandler(settingsStore, hubInstance),
+		Settings:       settings.NewHandler(database, settingsStore, hubInstance),
 		SettingsStore:  settingsStore,
 		Stammvereine:   stammvereine.NewHandler(database, hubInstance),
 		Hub:            hub.NewHandler(hubInstance, "test", auth.UserIDFromCtx),

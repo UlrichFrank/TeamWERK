@@ -8,6 +8,7 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { errorData } from '../lib/errors'
 
 interface DutyType {
   id: number
@@ -25,6 +26,14 @@ interface TemplateItem {
   audiences?: string[] | null
   /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
   team_ids?: number[] | null
+  /**
+   * Bewirtungsrotation (kuchendienst-rotation): null/fehlend = deaktiviert
+   * (bisheriges Verhalten, ein Slot pro Team des jeweiligen Spiels). Gesetzt
+   * aktiviert die tagesweite Team-Warteschlange mit diesem Cap pro Team —
+   * setzt serverseitig same_day_behavior/adjacent_day_behavior='normal' beim
+   * referenzierten Diensttyp voraus (400 rotation_requires_normal_behavior sonst).
+   */
+  rotation_max_per_team?: number | null
 }
 
 interface Template {
@@ -72,6 +81,41 @@ function TeamScopeField({ teams, shortNames, selected, onToggle }: {
           </label>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Bewirtungsrotations-Cap eines Vorlagen-Eintrags (kuchendienst-rotation).
+ * Leer = Rotation deaktiviert (Default, bisheriges Verhalten). Ein gesetzter
+ * Wert aktiviert die tagesweite Team-Warteschlange — setzt serverseitig
+ * same_day_behavior/adjacent_day_behavior='normal' beim Diensttyp voraus,
+ * die Prüfung selbst läuft aber nur serverseitig (kein Client-Vorab-Check).
+ */
+function RotationCapField({ id, value, onChange }: {
+  id: string
+  value: number | null | undefined
+  onChange: (v: number | null) => void
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs text-brand-text-muted mb-1">
+        Max. Kuchen pro Mannschaft <span className="text-brand-text-subtle">(leer = Rotation deaktiviert)</span>
+      </label>
+      <input
+        id={id}
+        type="number"
+        min={1}
+        value={value ?? ''}
+        onChange={e => {
+          const raw = e.target.value
+          onChange(raw === '' ? null : Number(raw))
+        }}
+        className="w-24 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+      />
+      <p className="text-xs text-brand-text-subtle mt-1">
+        Setzt voraus, dass „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" beim Diensttyp auf „Normal (immer)" stehen.
+      </p>
     </div>
   )
 }
@@ -157,8 +201,13 @@ export default function AdminDutyTemplateDetailPage() {
       await api.put(`/duty-templates/${id}`, template)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch {
-      setSaveError('Speichern fehlgeschlagen.')
+    } catch (e) {
+      const code = errorData<{ error?: string }>(e)?.error
+      setSaveError(
+        code === 'rotation_requires_normal_behavior'
+          ? 'Rotations-Cap erfordert „Normal (immer)" bei „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" des zugehörigen Diensttyps.'
+          : 'Speichern fehlgeschlagen.',
+      )
     } finally {
       setSaving(false)
     }
@@ -319,6 +368,11 @@ export default function AdminDutyTemplateDetailPage() {
                         selected={item.team_ids ?? []}
                         onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}
                       />
+                      <RotationCapField
+                        id={`rotation-cap-mobile-${i}`}
+                        value={item.rotation_max_per_team}
+                        onChange={v => updateItem(i, { rotation_max_per_team: v })}
+                      />
                     </div>
                   </div>
                 )
@@ -402,12 +456,17 @@ export default function AdminDutyTemplateDetailPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap gap-6">
                   <TeamScopeField
                     teams={scopeTeams}
                     shortNames={teamShortNames}
                     selected={item.team_ids ?? []}
                     onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}
+                  />
+                  <RotationCapField
+                    id={`rotation-cap-desktop-${i}`}
+                    value={item.rotation_max_per_team}
+                    onChange={v => updateItem(i, { rotation_max_per_team: v })}
                   />
                 </div>
                 </div>

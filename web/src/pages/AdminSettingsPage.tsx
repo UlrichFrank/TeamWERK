@@ -721,6 +721,84 @@ function BeitraegeTab() {
   )
 }
 
+// ─── Bewirtung Tab ────────────────────────────────────────────────────────────
+
+/** Akzeptiert deutsches Komma und Punkt als Dezimaltrennzeichen. */
+function parseDecimalInput(raw: string): number {
+  return parseFloat(raw.trim().replace(',', '.'))
+}
+
+function BewirtungTab() {
+  const [verhaeltnis, setVerhaeltnis] = useState('')
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => {
+    api.get('/settings/bewirtung').then(r => {
+      setVerhaeltnis(String(r.data?.verhaeltnis ?? ''))
+      setLoaded(true)
+    })
+  }
+  useEffect(() => { if (!loaded) load() }, [loaded])
+  // "settings-changed" ist dasselbe SSE-Event wie beim Wartungsmodus-Toggle —
+  // hier noch nicht generisch abonniert, also direkt in diesem Tab anschließen.
+  useLiveUpdates(event => { if (event === 'settings-changed') load() })
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setSaved(false)
+    const value = parseDecimalInput(verhaeltnis)
+    if (isNaN(value) || value <= 0) {
+      setError('Bitte eine Zahl größer 0 angeben (Komma oder Punkt als Dezimaltrennzeichen).')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.put('/settings/bewirtung', { verhaeltnis: value })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      setError(
+        errorStatus(e) === 403
+          ? 'Keine Berechtigung, das Verhältnis zu ändern.'
+          : 'Speichern fehlgeschlagen – bitte Eingabe prüfen.',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-5 max-w-lg">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="bewirtung-verhaeltnis" className="block text-sm font-medium text-brand-text-muted mb-1">Kuchen je Spiel</label>
+          <input
+            id="bewirtung-verhaeltnis"
+            type="text"
+            inputMode="decimal"
+            value={verhaeltnis}
+            onChange={e => setVerhaeltnis(e.target.value)}
+            className={`${INPUT} w-32`}
+          />
+        </div>
+        <p className="text-sm text-brand-text-muted">
+          Anzahl benötigter Kuchen = aufgerundet(Anzahl Heimspiele × Verhältnis), gedeckelt auf die Anzahl der Heimspiele.
+        </p>
+        {error && (
+          <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
+        )}
+        <button type="submit" disabled={saving} className={BTN_PRIMARY}>
+          {saving ? 'Speichern…' : saved ? 'Gespeichert ✓' : 'Speichern'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 // ─── Stammvereine Tab ───────────────────────────────────────────────────────
 
 type Stammverein = { id: number; name: string; aktiv: boolean; sort_order: number }
@@ -896,18 +974,22 @@ function StammvereineTab() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege' | 'stammvereine'
+type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege' | 'stammvereine' | 'bewirtung'
 // Sichtbarkeit pro Tab über Capabilities (nie über role/clubFunctions direkt):
 //   Kassierer      → manage_club + manage_fees      → Verein, Beiträge
 //   Vorstand/Admin → zusätzlich manage_seasons      → alle Tabs
 // Stammvereine: manage_seasons (vorstand/admin) — deckt sich mit den
 // vorstand-only-Mutationen im Backend; Kassierer sieht den Tab bewusst nicht.
+// Bewirtung: PUT /api/settings/bewirtung ist im Backend im selben
+// vorstand-only-Routen-Block wie Duty-Types/-Templates gegated — dieselbe
+// Capability (manage_duty_types) wie dort, kein exaktes 1:1-Cap vorhanden.
 const TABS: { id: Tab; label: string; cap: string }[] = [
   { id: 'verein', label: 'Verein', cap: 'manage_club' },
   { id: 'saisons', label: 'Saisons', cap: 'manage_seasons' },
   { id: 'altersklassen', label: 'Altersklassen', cap: 'manage_seasons' },
   { id: 'stammvereine', label: 'Stammvereine', cap: 'manage_seasons' },
   { id: 'beitraege', label: 'Beiträge', cap: 'manage_fees' },
+  { id: 'bewirtung', label: 'Bewirtung', cap: 'manage_duty_types' },
 ]
 
 export default function AdminSettingsPage() {
@@ -945,6 +1027,7 @@ export default function AdminSettingsPage() {
       {activeTab === 'altersklassen' && <AltersklassenTab />}
       {activeTab === 'stammvereine' && <StammvereineTab />}
       {activeTab === 'beitraege' && <BeitraegeTab />}
+      {activeTab === 'bewirtung' && <BewirtungTab />}
     </div>
   )
 }

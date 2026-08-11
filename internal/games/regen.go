@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/notify"
+	"github.com/teamstuttgart/teamwerk/internal/settings"
 )
 
 // RegenSummary aggregates the effect of an auto-regen window on duty_slots.
@@ -20,6 +22,12 @@ type RegenSummary struct {
 	Skipped       []SkippedEntry  `json:"skipped"`
 	NotifiedUsers []int           `json:"notified_users"`
 	Conflicts     []ConflictEntry `json:"conflicts"`
+
+	// Unassigned lists rotation slots that were created without a team because the
+	// day's team queue ran out before the demand was covered (kuchendienst-rotation
+	// design.md Decision 7). Purely informational — the slot itself exists with
+	// team_id=NULL and is open to every eligible user.
+	Unassigned []UnassignedEntry `json:"unassigned"`
 
 	// PerGame carries one entry per regenerated game, for callers (the bulk-regen
 	// preview) that need to attribute deltas to individual games instead of just a
@@ -62,6 +70,14 @@ type ReducedEntry struct {
 type SkippedEntry struct {
 	Date     string `json:"date"`
 	DutyType string `json:"duty_type"`
+}
+
+// UnassignedEntry names one rotation slot that ended up without a team (cap overflow,
+// see RegenSummary.Unassigned).
+type UnassignedEntry struct {
+	Date     string `json:"date"`
+	DutyType string `json:"duty_type"`
+	GameID   int    `json:"game_id"`
 }
 
 type ConflictEntry struct {
@@ -148,6 +164,15 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		return RegenSummary{}, err
 	}
 
+	// Tagesweite Bewirtungsrotation: muss VOR der Pro-Spiel-Schleife stehen, weil der
+	// Kuchenbedarf von der Gesamtzahl der Heimspiele des Tages abhängt (design.md
+	// Decision 1). Ohne rotations-aktivierte Items ist der Plan leer und alles unten
+	// verhält sich exakt wie vorher.
+	rotation, err := h.buildRotationPlan(ctx, tx, dayGames)
+	if err != nil {
+		return RegenSummary{}, err
+	}
+
 	var summary RegenSummary
 	for _, g := range dayGames {
 		// templateID == 0 bedeutet: keine Auto-Slots für dieses Event. Es gibt
@@ -185,6 +210,17 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 
 		eventName := composeEventName(g.EventType, g.IsHome, g.Opponent)
 
+		// rotationTypes = die duty_type_ids, die für DIESES Spiel rotations-aktiv sind.
+		// Für sie fällt team_id aus allen customKey-Vergleichen heraus (design.md
+		// Decision 5): die Team-Zurechnung eines Rotations-Slots ist aus der Tages-
+		// reihenfolge abgeleitet und damit kein stabiles Merkmal des Slots.
+		rotationTypes := map[int]bool{}
+		for _, it := range items {
+			if it.RotationMaxPerTeam.Valid {
+				rotationTypes[it.DutyTypeID] = true
+			}
+		}
+
 		// Step 1: snapshot to-be-deleted slots with their assignments.
 		slotsByID, err := h.snapshotDeletedSlots(ctx, tx, g.ID)
 		if err != nil {
@@ -192,7 +228,7 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		}
 
 		// Step 2: load is_custom=1 slots so we can detect conflicts before inserting.
-		customSlots, err := h.snapshotCustomSlots(ctx, tx, g.ID)
+		customSlots, err := h.snapshotCustomSlots(ctx, tx, g.ID, rotationTypes)
 		if err != nil {
 			return RegenSummary{}, err
 		}
@@ -206,7 +242,7 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		// Step 4: per template item, compute behavior and insert.
 		gameSummary, outcomeByOriginalType, err := h.regenGameItems(
 			ctx, tx, g, items, durationMins, allGameTimes,
-			hasPrevDay, hasNextDay, teamIDs, customSlots, eventName, date, seasonID)
+			hasPrevDay, hasNextDay, teamIDs, customSlots, eventName, date, seasonID, rotation)
 		if err != nil {
 			return RegenSummary{}, err
 		}
@@ -214,12 +250,13 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		summary.Reduced = append(summary.Reduced, gameSummary.Reduced...)
 		summary.Skipped = append(summary.Skipped, gameSummary.Skipped...)
 		summary.Conflicts = append(summary.Conflicts, gameSummary.Conflicts...)
+		summary.Unassigned = append(summary.Unassigned, gameSummary.Unassigned...)
 
 		// Step 5: restore duty_assignments whose slot reappeared with an identical
 		// (duty_type_id, event_time, team_id) — see restoreAssignments doc comment.
 		// Must run after the inserts above so the new slot IDs exist to restore into,
 		// and before buildNotificationIntents so restored assignments are excluded.
-		assignmentsKept, assignmentsLost, err := h.restoreAssignments(ctx, tx, g.ID, slotsByID)
+		assignmentsKept, assignmentsLost, err := h.restoreAssignments(ctx, tx, g.ID, slotsByID, rotationTypes)
 		if err != nil {
 			return RegenSummary{}, fmt.Errorf("restore assignments for game %d: %w", g.ID, err)
 		}
@@ -309,9 +346,26 @@ type customKey struct {
 	HasTeam    bool
 }
 
+// makeCustomKey baut den Match-/Konflikt-Schlüssel eines Slots. Für rotations-aktive
+// Duty-Types (rotationTypes) bleibt TeamID/HasTeam bewusst leer — unabhängig davon, ob
+// die Zeile selbst ein team_id trägt (kuchendienst-rotation design.md Decision 5):
+// die Team-Zurechnung eines Rotations-Slots stammt aus der Tagesreihenfolge und
+// verschiebt sich bei jeder Spielplanänderung; ein Match darüber würde bestehende
+// Zusagen grundlos als verloren melden. Einzige Stelle, die diesen Schlüssel baut —
+// snapshotCustomSlots, loadNewAutoSlotsKeyed, restoreAssignments und die Konflikt-
+// prüfung in regenGameItems müssen deckungsgleich bleiben.
+func makeCustomKey(dutyTypeID int, eventTime string, teamID sql.NullInt64, rotationTypes map[int]bool) customKey {
+	k := customKey{DutyTypeID: dutyTypeID, EventTime: eventTime}
+	if teamID.Valid && !rotationTypes[dutyTypeID] {
+		k.TeamID = teamID.Int64
+		k.HasTeam = true
+	}
+	return k
+}
+
 // snapshotCustomSlots reads the is_custom=1 slots of a game into a set keyed by customKey,
 // so the regen can skip inserting a template slot that would collide with a manual one.
-func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[customKey]bool, error) {
+func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID int, rotationTypes map[int]bool) (map[customKey]bool, error) {
 	customRows, err := tx.QueryContext(ctx, `
 		SELECT duty_type_id, event_time, team_id
 		FROM duty_slots WHERE game_id=? AND is_custom=1`, gameID)
@@ -320,21 +374,14 @@ func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID in
 	}
 	customSlots := map[customKey]bool{}
 	for customRows.Next() {
-		var k customKey
+		var dutyTypeID int
 		var et sql.NullString
 		var tid sql.NullInt64
-		if err := customRows.Scan(&k.DutyTypeID, &et, &tid); err != nil {
+		if err := customRows.Scan(&dutyTypeID, &et, &tid); err != nil {
 			customRows.Close()
 			return nil, err
 		}
-		if et.Valid {
-			k.EventTime = et.String
-		}
-		if tid.Valid {
-			k.TeamID = tid.Int64
-			k.HasTeam = true
-		}
-		customSlots[k] = true
+		customSlots[makeCustomKey(dutyTypeID, et.String, tid, rotationTypes)] = true
 	}
 	customRows.Close()
 	return customSlots, nil
@@ -434,8 +481,8 @@ type newAutoSlot struct {
 //
 // duty_slots.slots_filled is denormalized (no trigger, see duties/handler.go) and is
 // updated here for every slot that received at least one restored assignment.
-func (h *Handler) restoreAssignments(ctx context.Context, tx *sql.Tx, gameID int, slotsByID map[int]*deletedSlot) (kept, lost int, err error) {
-	newSlots, err := h.loadNewAutoSlotsKeyed(ctx, tx, gameID)
+func (h *Handler) restoreAssignments(ctx context.Context, tx *sql.Tx, gameID int, slotsByID map[int]*deletedSlot, rotationTypes map[int]bool) (kept, lost int, err error) {
+	newSlots, err := h.loadNewAutoSlotsKeyed(ctx, tx, gameID, rotationTypes)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -451,12 +498,7 @@ func (h *Handler) restoreAssignments(ctx context.Context, tx *sql.Tx, gameID int
 
 	for _, oldID := range oldSlotIDs {
 		ds := slotsByID[oldID]
-		k := customKey{DutyTypeID: ds.DutyTypeID, EventTime: ds.EventTime}
-		if ds.TeamID.Valid {
-			k.TeamID = ds.TeamID.Int64
-			k.HasTeam = true
-		}
-		target := newSlots[k]
+		target := newSlots[makeCustomKey(ds.DutyTypeID, ds.EventTime, ds.TeamID, rotationTypes)]
 		for i := range ds.Assignments {
 			a := &ds.Assignments[i]
 			if target == nil || target.filled >= target.SlotsTotal {
@@ -497,7 +539,7 @@ type restoreTarget struct {
 // loadNewAutoSlotsKeyed loads the is_custom=0 slots just (re-)created for a game, keyed by
 // the same customKey used for is_custom=1 conflict detection — the restore match key is
 // deliberately identical (design.md §4: "derselbe Dreier").
-func (h *Handler) loadNewAutoSlotsKeyed(ctx context.Context, tx *sql.Tx, gameID int) (map[customKey]*restoreTarget, error) {
+func (h *Handler) loadNewAutoSlotsKeyed(ctx context.Context, tx *sql.Tx, gameID int, rotationTypes map[int]bool) (map[customKey]*restoreTarget, error) {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, duty_type_id, event_time, team_id, slots_total
 		FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID)
@@ -513,14 +555,7 @@ func (h *Handler) loadNewAutoSlotsKeyed(ctx context.Context, tx *sql.Tx, gameID 
 		if err := rows.Scan(&id, &dutyTypeID, &et, &tid, &slotsTotal); err != nil {
 			return nil, err
 		}
-		k := customKey{DutyTypeID: dutyTypeID}
-		if et.Valid {
-			k.EventTime = et.String
-		}
-		if tid.Valid {
-			k.TeamID = tid.Int64
-			k.HasTeam = true
-		}
+		k := makeCustomKey(dutyTypeID, et.String, tid, rotationTypes)
 		byKey[k] = &restoreTarget{newAutoSlot: newAutoSlot{ID: id, SlotsTotal: slotsTotal}}
 	}
 	return byKey, nil
@@ -567,6 +602,138 @@ func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, sea
 	return dayGames, nil
 }
 
+// rotationAssignment ist das Ergebnis der tagesweiten Bewirtungsrotation für genau ein
+// (duty_type_id, game_id)-Paar: bekommt dieses Spiel für dieses Item einen Slot, und
+// wenn ja, welcher Mannschaft wird er zugerechnet? Ein ungültiges TeamID ist der
+// bewusste "unassigned"-Fall (Warteschlange erschöpft, siehe design.md Decision 1/7) —
+// kein Fehler.
+type rotationAssignment struct {
+	HasSlot bool
+	TeamID  sql.NullInt64
+}
+
+// rotationPlan bildet duty_type_id → game_id → rotationAssignment ab. Fehlt ein
+// Eintrag, entsteht für dieses Spiel kein Rotations-Slot (Verhältnis < 1, kein
+// Heimspiel, oder das Spiel referenziert dieses Item gar nicht).
+type rotationPlan map[int]map[int]rotationAssignment
+
+// rotationGroup sammelt pro rotations-aktiviertem duty_type_id die Heimspiele des Tages
+// (chronologisch, weil loadDayGames nach time,id sortiert), die zugehörige Team-
+// Warteschlange (jedes Team genau einmal, an der Position seines ersten Heimspiels)
+// und den Cap pro Mannschaft.
+type rotationGroup struct {
+	gameIDs []int
+	queue   []int
+	inQueue map[int]bool
+	cap     int
+}
+
+// buildRotationPlan berechnet die tagesweite Bewirtungsrotation VOR der Pro-Spiel-
+// Schleife (kuchendienst-rotation design.md Decision 1–3). Nötig, weil der Bedarf
+// eines Tages von der Gesamtzahl seiner Heimspiele abhängt — die Pro-Spiel-Schleife
+// allein kann das strukturell nicht wissen.
+//
+// Ablauf je Gruppe (gruppiert nach duty_type_id der Items mit gesetztem
+// rotation_max_per_team):
+//  1. Heimspiele des Tages (event_type='heim') in chronologischer Reihenfolge, aber
+//     nur die, deren Vorlage dieses Item überhaupt trägt.
+//  2. Team-Warteschlange: jedes Team des Spiels tritt bei seinem ersten Auftreten ein
+//     (mehrere Teams an einem Spiel treten unabhängig ein, Reihenfolge = DB-Rückgabe
+//     von loadGameTeamIDsTx, siehe design.md Risks).
+//  3. Bedarf = min(Anzahl Heimspiele, aufgerundet(Anzahl × Verhältnis)) — ein Verhältnis
+//     > 1 wirkt nur bis zur Spieleanzahl, weil pro Spiel höchstens ein Rotations-Slot
+//     entsteht (Decision 2).
+//  4. Greedy-Zuteilung: die ersten `cap` Slots an Team 1 der Warteschlange, die nächsten
+//     an Team 2 usw. Ist die Warteschlange erschöpft, entsteht der Slot ohne Team
+//     (team_id=NULL) — der Cap wird nie verletzt und kein Team doppelt herangezogen.
+//
+// Es gibt bewusst KEINEN Zustand über Tagesgrenzen hinweg: jeder Spieltag startet die
+// Warteschlange bei Position 1 (Non-Goal aus design.md).
+func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []dayGame) (rotationPlan, error) {
+	groups := map[int]*rotationGroup{}
+
+	for _, g := range dayGames {
+		if g.EventType != "heim" || !g.TemplateID.Valid {
+			continue
+		}
+		items, err := h.loadTemplateItemsTx(ctx, tx, int(g.TemplateID.Int64))
+		if err != nil {
+			return nil, fmt.Errorf("rotation: load template %d: %w", g.TemplateID.Int64, err)
+		}
+		var rotationItems []templateItemRow
+		for _, it := range items {
+			if it.RotationMaxPerTeam.Valid {
+				rotationItems = append(rotationItems, it)
+			}
+		}
+		if len(rotationItems) == 0 {
+			continue
+		}
+
+		teamIDs, err := h.loadGameTeamIDsTx(ctx, tx, g.ID)
+		if err != nil {
+			return nil, fmt.Errorf("rotation: load teams for game %d: %w", g.ID, err)
+		}
+
+		for _, it := range rotationItems {
+			grp := groups[it.DutyTypeID]
+			if grp == nil {
+				// Der Cap kommt vom ersten Spiel der Gruppe. Unterschiedliche Caps für
+				// denselben Duty-Type an einem Tag (verschiedene Vorlagen) sind nicht
+				// definiert — "erster gewinnt" statt stiller Mischung.
+				grp = &rotationGroup{inQueue: map[int]bool{}, cap: int(it.RotationMaxPerTeam.Int64)}
+				groups[it.DutyTypeID] = grp
+			}
+			grp.gameIDs = append(grp.gameIDs, g.ID)
+			for _, tid := range teamIDs {
+				if !grp.inQueue[tid] {
+					grp.inQueue[tid] = true
+					grp.queue = append(grp.queue, tid)
+				}
+			}
+		}
+	}
+	if len(groups) == 0 {
+		return rotationPlan{}, nil
+	}
+
+	verhaeltnis, err := settings.GetBewirtungVerhaeltnis(ctx, tx)
+	if err != nil {
+		return nil, fmt.Errorf("rotation: read bewirtung_verhaeltnis: %w", err)
+	}
+
+	plan := rotationPlan{}
+	for dutyTypeID, grp := range groups {
+		gameCount := len(grp.gameIDs)
+		demand := int(math.Ceil(float64(gameCount) * verhaeltnis))
+		if demand > gameCount {
+			demand = gameCount
+		}
+		if demand < 0 {
+			demand = 0
+		}
+
+		byGame := make(map[int]rotationAssignment, demand)
+		queueIdx, usedByCurrent := 0, 0
+		for i := 0; i < demand; i++ {
+			a := rotationAssignment{HasSlot: true}
+			if grp.cap > 0 {
+				for queueIdx < len(grp.queue) && usedByCurrent >= grp.cap {
+					queueIdx++
+					usedByCurrent = 0
+				}
+				if queueIdx < len(grp.queue) {
+					a.TeamID = sql.NullInt64{Int64: int64(grp.queue[queueIdx]), Valid: true}
+					usedByCurrent++
+				}
+			}
+			byGame[grp.gameIDs[i]] = a
+		}
+		plan[dutyTypeID] = byGame
+	}
+	return plan, nil
+}
+
 // itemAppliesToTeam entscheidet, ob aus einem Vorlagen-Item für ein bestimmtes Team
 // ein Slot entsteht. Leere Allowlist = gilt für alle Teams. Einzige Quelle dieser
 // Bedingung — die Vorschau (PreviewSlots) muss dieselbe benutzen, sonst zeigt sie
@@ -605,6 +772,7 @@ func (h *Handler) regenGameItems(
 	ctx context.Context, tx *sql.Tx, g dayGame, items []templateItemRow, durationMins int,
 	allGameTimes []string, hasPrevDay, hasNextDay bool, teamIDs []int,
 	customSlots map[customKey]bool, eventName, date string, seasonID int,
+	rotation rotationPlan,
 ) (RegenSummary, map[int]itemOutcome, error) {
 	var summary RegenSummary
 	outcomeByOriginalType := map[int]itemOutcome{}
@@ -648,18 +816,22 @@ func (h *Handler) regenGameItems(
 		}
 		slotAudiences := audiencesToDB(audiencesFromDB(it.Audiences))
 
-		insertOne := func(teamID sql.NullInt64) error {
-			k := customKey{DutyTypeID: resultDutyTypeID, EventTime: eventTime}
-			if teamID.Valid {
-				k.TeamID = teamID.Int64
-				k.HasTeam = true
-			}
+		// Rotations-Items sind laut Route-Validierung immer same_day/adjacent_day
+		// 'normal' → resultDutyTypeID == it.DutyTypeID. Der Schlüssel lässt team_id
+		// deshalb konsistent mit makeCustomKey weg (design.md Decision 5).
+		itemRotationTypes := map[int]bool{}
+		if it.RotationMaxPerTeam.Valid {
+			itemRotationTypes[resultDutyTypeID] = true
+		}
+
+		insertOne := func(teamID sql.NullInt64) (bool, error) {
+			k := makeCustomKey(resultDutyTypeID, eventTime, teamID, itemRotationTypes)
 			if customSlots[k] {
 				summary.Conflicts = append(summary.Conflicts, ConflictEntry{
 					Date: date, DutyTypeID: resultDutyTypeID,
 					EventTime: eventTime, GameIDs: []int{g.ID},
 				})
-				return nil
+				return false, nil
 			}
 			var teamVal any
 			if teamID.Valid {
@@ -672,7 +844,10 @@ func (h *Handler) regenGameItems(
 				VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
 				eventName, date, eventTime, resultDutyTypeID, "",
 				n, teamVal, seasonID, g.ID, slotAudiences)
-			return err
+			if err != nil {
+				return false, err
+			}
+			return true, nil
 		}
 
 		// matchedTeams = Anzahl der Teams, für die dieses Item einen Slot erzeugt
@@ -680,21 +855,43 @@ func (h *Handler) regenGameItems(
 		// nur deren Schnittmenge — die Zählung in der Zusammenfassung darf nicht
 		// mehr Slots melden, als tatsächlich entstanden sind.
 		matchedTeams := 0
-		if g.EventType == "generisch" {
-			// generisch never reaches here (skipped above), but kept defensive.
-			// Die Team-Allowlist greift hier bewusst nicht: generische Slots
-			// tragen gar keine team_id.
-			if err := insertOne(sql.NullInt64{}); err != nil {
+		switch {
+		case it.RotationMaxPerTeam.Valid:
+			// Rotations-Item: kein Team-Loop. Ob dieses Spiel einen Slot bekommt und
+			// welchem Team er zugerechnet wird, hat buildRotationPlan tagesweit
+			// entschieden. Kein Plan-Eintrag (Verhältnis < 1, oder gar kein Heimspiel)
+			// → wie ein Allowlist-Miss: kein Slot, kein Skipped-Eintrag.
+			a := rotation[it.DutyTypeID][g.ID]
+			if !a.HasSlot {
+				continue
+			}
+			inserted, err := insertOne(a.TeamID)
+			if err != nil {
 				return RegenSummary{}, nil, err
 			}
 			matchedTeams = 1
-		} else {
+			if inserted && !a.TeamID.Valid {
+				// Warteschlange erschöpft — Slot entsteht mit team_id=NULL statt den
+				// Cap zu verletzen (design.md Decision 7).
+				summary.Unassigned = append(summary.Unassigned, UnassignedEntry{
+					Date: date, DutyType: it.DutyTypeName, GameID: g.ID,
+				})
+			}
+		case g.EventType == "generisch":
+			// generisch never reaches here (skipped above), but kept defensive.
+			// Die Team-Allowlist greift hier bewusst nicht: generische Slots
+			// tragen gar keine team_id.
+			if _, err := insertOne(sql.NullInt64{}); err != nil {
+				return RegenSummary{}, nil, err
+			}
+			matchedTeams = 1
+		default:
 			for _, tid := range teamIDs {
 				if !itemAppliesToTeam(it.TeamIDs, tid) {
 					continue // Team nicht in der Item-Allowlist — kein Slot dafür
 				}
 				matchedTeams++
-				if err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}); err != nil {
+				if _, err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}); err != nil {
 					return RegenSummary{}, nil, err
 				}
 			}
@@ -753,6 +950,7 @@ func mergeSummary(dst *RegenSummary, src RegenSummary) {
 	dst.Reduced = append(dst.Reduced, src.Reduced...)
 	dst.Skipped = append(dst.Skipped, src.Skipped...)
 	dst.Conflicts = append(dst.Conflicts, src.Conflicts...)
+	dst.Unassigned = append(dst.Unassigned, src.Unassigned...)
 	dst.NotifiedUsers = append(dst.NotifiedUsers, src.NotifiedUsers...)
 	dst.PerGame = append(dst.PerGame, src.PerGame...)
 	dst.Notifications = append(dst.Notifications, src.Notifications...)
@@ -772,6 +970,9 @@ func capSummary(s *RegenSummary) {
 	}
 	if len(s.Conflicts) > summaryCap {
 		s.Conflicts = s.Conflicts[:summaryCap]
+	}
+	if len(s.Unassigned) > summaryCap {
+		s.Unassigned = s.Unassigned[:summaryCap]
 	}
 	if len(s.NotifiedUsers) > summaryCap {
 		s.NotifiedUsers = s.NotifiedUsers[:summaryCap]
@@ -877,7 +1078,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 	rows, err := tx.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
-		        gti.audiences, gti.team_ids
+		        gti.audiences, gti.team_ids, gti.rotation_max_per_team
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -890,7 +1091,8 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 		var teamIDs sql.NullString
 		if err := rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
-			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs); err != nil {
+			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
+			&it.RotationMaxPerTeam); err != nil {
 			return nil, err
 		}
 		it.TeamIDs = teamIDsFromDB(teamIDs)

@@ -30,7 +30,7 @@ func TestRouter_MaintenanceModeOn_BlocksNonAdminMutation(t *testing.T) {
 	if err := settingsStore.SetMaintenanceMode(context.Background(), true, adminID); err != nil {
 		t.Fatalf("preset on: %v", err)
 	}
-	settingsHandler := settings.NewHandler(settingsStore, hub.NewHub())
+	settingsHandler := settings.NewHandler(db, settingsStore, hub.NewHub())
 
 	// Minimaler Handlers-Container mit den für die Router-Kette Pflicht-
 	// Handlern. Nicht-benutzte Handler bleiben nil; der Router legt sie

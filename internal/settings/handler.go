@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -9,14 +10,16 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
-// Handler bündelt die HTTP-Routen rund um system_settings/maintenance_mode.
+// Handler bündelt die HTTP-Routen rund um system_settings (maintenance_mode,
+// bewirtung_verhaeltnis).
 type Handler struct {
+	db    *sql.DB
 	store *Store
 	hub   *hub.EventHub
 }
 
-func NewHandler(store *Store, h *hub.EventHub) *Handler {
-	return &Handler{store: store, hub: h}
+func NewHandler(db *sql.DB, store *Store, h *hub.EventHub) *Handler {
+	return &Handler{db: db, store: store, hub: h}
 }
 
 // GetPublicStatus liefert `{"enabled": bool}` — ohne Auth erreichbar, damit
@@ -71,6 +74,51 @@ func (h *Handler) SetMaintenanceMode(w http.ResponseWriter, r *http.Request) {
 		h.hub.Broadcast("settings-changed")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
+}
+
+// GetBewirtung liefert das aktuelle Spiele-zu-Kuchen-Verhältnis. Authenticated-
+// Tier — jeder eingeloggte Nutzer darf lesen (siehe spec bewirtungsrotation).
+func (h *Handler) GetBewirtung(w http.ResponseWriter, r *http.Request) {
+	v, err := GetBewirtungVerhaeltnis(r.Context(), h.db)
+	if err != nil {
+		slog.Error("settings: get bewirtung_verhaeltnis failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"verhaeltnis": v})
+}
+
+// SetBewirtung ändert das Spiele-zu-Kuchen-Verhältnis. Erwartet Body
+// `{"verhaeltnis": number}`; Gating (vorstand/admin) sitzt in der Router-
+// Middleware. Validiert > 0 (400 sonst, nichts wird persistiert) und
+// broadcastet "settings-changed" (gleiches SSE-Event wie der Wartungsmodus-
+// Toggle) nach erfolgreichem Schreiben.
+func (h *Handler) SetBewirtung(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var body struct {
+		Verhaeltnis float64 `json:"verhaeltnis"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if err := SetBewirtungVerhaeltnis(r.Context(), h.db, body.Verhaeltnis, claims.UserID); err != nil {
+		if err == ErrInvalidVerhaeltnis {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_verhaeltnis"})
+			return
+		}
+		slog.Error("settings: set bewirtung_verhaeltnis failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if h.hub != nil {
+		h.hub.Broadcast("settings-changed")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"verhaeltnis": body.Verhaeltnis})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

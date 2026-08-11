@@ -30,7 +30,7 @@ func serverSetup(t *testing.T, enabled bool) (srv *testHTTPServer, store *settin
 		}
 	}
 	evHub = hub.NewHub()
-	handler := settings.NewHandler(store, evHub)
+	handler := settings.NewHandler(db, store, evHub)
 
 	srv = newTestHTTPServer(t, func(r chi.Router) {
 		// Public — kein Auth

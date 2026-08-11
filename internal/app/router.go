@@ -284,6 +284,12 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/duty-accounts", h.Duties.Accounts)
 		r.Get("/api/duty-slots", h.Duties.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", h.Duties.ListAssignments)
+		// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis, lesbar für alle
+		// Eingeloggten (PUT ist Vorstand/Admin, siehe unten). Settings kann
+		// in Tests nil sein.
+		if h.Settings != nil {
+			r.Get("/api/settings/bewirtung", h.Settings.GetBewirtung)
+		}
 
 		// Mitfahrgelegenheiten
 		r.Get("/api/mitfahrgelegenheiten", h.Carpool.List)
@@ -605,6 +611,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Put("/api/duty-types/{id}", h.Duties.UpdateType)
 			r.Put("/api/duty-types/{id}/instruction", h.Duties.SetInstruction)
 			r.Delete("/api/duty-types/{id}", h.Duties.DeleteType)
+			if h.Settings != nil {
+				r.Put("/api/settings/bewirtung", h.Settings.SetBewirtung)
+			}
 			r.Get("/api/duty-accounts/export", h.Duties.ExportAccounts)
 			r.Post("/api/duty-templates", h.Games.CreateTemplate)
 			r.Put("/api/duty-templates/{id}", h.Games.UpdateTemplate)
