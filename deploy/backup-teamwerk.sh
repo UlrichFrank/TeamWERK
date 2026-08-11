@@ -41,9 +41,14 @@
 #   3. Verbindung testen:
 #        ssh -i ~/.ssh/teamwerk_backup tw-backup@teamwerk.team-stuttgart.org \
 #          'sqlite3 -readonly /var/lib/teamwerk/teamwerk.db "SELECT COUNT(*) FROM members"'
-#   4. Ziel-Verzeichnis auf Mittwald: mkdir -p ~/teamwerk-backup
-#   5. Cronjob auf Mittwald (Web-UI oder crontab -e):
-#        15 3 * * *  BACKUP_ROOT=/backup bash /backup/backup-teamwerk.sh >> /backup/backup.log 2>&1
+#   4. Ziel-Verzeichnis auf Mittwald: mkdir -p /backup
+#   5. Cronjob auf Mittwald (mStudio-Cronjob-UI, Tab "Benutzerdefinierter Aufruf"):
+#      Dateipfad /backup/backup-teamwerk.sh, Interpreter /bin/bash, Parameter leer,
+#      Zeitplan z.B. 02:00 täglich.
+#      HINWEIS: Die mStudio-UI hat kein Feld für Env-Variablen — BACKUP_ROOT steht
+#      deshalb unten als fester Default auf /backup (nicht mehr per Env-Var
+#      injizierbar); wer's lokal woanders hinlegen will, exportiert BACKUP_ROOT
+#      trotzdem vor dem Aufruf, das Skript respektiert einen gesetzten Wert weiter.
 #      HINWEIS: Mittwald-Home /backup ist noexec — Skript daher explizit via
 #      `bash /pfad/...` starten (NICHT direkt ausführen).
 #   6. Nach dem ersten Lauf: Restore einmal auf Test-VPS durchspielen.
@@ -64,7 +69,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 : "${VPS_SSH:=tw-backup@teamwerk.team-stuttgart.org}" # SSH-Ziel (least-privilege user)
 : "${SSH_KEY:=$HOME/.ssh/teamwerk_backup}"            # Private Key
-: "${BACKUP_ROOT:=$HOME/teamwerk-backup}"             # Lokale Backup-Wurzel
+: "${BACKUP_ROOT:=/backup}"                           # Lokale Backup-Wurzel (mStudio-Cron kann kein Env setzen)
 : "${VPS_DB:=/var/lib/teamwerk/teamwerk.db}"          # Pfad DB auf VPS
 : "${VPS_VARLIB:=/var/lib/teamwerk}"                  # PII/Docs/Uploads/Protokolle
 : "${VPS_ENVFILE:=/etc/teamwerk/env}"                 # Config mit Secrets
