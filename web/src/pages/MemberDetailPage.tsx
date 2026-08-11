@@ -18,6 +18,7 @@ interface Member {
   date_of_birth: string
   member_number: string
   pass_number: string
+  handball_360_id: string
   jersey_number?: number
   position: string
   gender: string
@@ -77,7 +78,7 @@ export default function MemberDetailPage() {
   }, [activeTab])
 
   const [form, setForm] = useState<Omit<Member, 'id'>>({
-    first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '',
+    first_name: '', last_name: '', date_of_birth: '', member_number: '', pass_number: '', handball_360_id: '',
     jersey_number: undefined, position: '', gender: 'u', status: 'aktiv', club_functions: [],
     home_club: '', home_club_id: null, street: '', zip: '', city: '', join_date: '', exit_date: '', iban: '', account_holder: '',
     photo_url: '', photo_visible: false,
@@ -125,6 +126,7 @@ export default function MemberDetailPage() {
       date_of_birth: m.date_of_birth?.slice(0, 10) ?? '',
       member_number: m.member_number ?? '',
       pass_number: m.pass_number ?? '',
+      handball_360_id: m.handball_360_id ?? '',
       jersey_number: m.jersey_number, position: m.position ?? '',
       gender: m.gender ?? 'u', status: m.status,
       club_functions: m.club_functions ?? [],

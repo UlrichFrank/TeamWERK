@@ -14,7 +14,7 @@ import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 
 export interface Member {
   id: number; first_name: string; last_name: string
-  date_of_birth: string; pass_number: string
+  date_of_birth: string; pass_number: string; handball_360_id?: string
   jersey_number?: number; position: string; status: string
   street?: string; zip?: string; city?: string
   iban?: string

@@ -98,6 +98,7 @@ type Member struct {
 	BirthYear     *int     `json:"birth_year,omitempty"`
 	MemberNumber  string   `json:"member_number,omitempty"`
 	PassNumber    string   `json:"pass_number,omitempty"`
+	Handball360ID string   `json:"handball_360_id,omitempty"`
 	JerseyNumber  *int     `json:"jersey_number,omitempty"`
 	Position      string   `json:"position,omitempty"`
 	Gender        string   `json:"gender"`
@@ -514,6 +515,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		DateOfBirth   string   `json:"date_of_birth"`
 		MemberNumber  string   `json:"member_number"`
 		PassNumber    string   `json:"pass_number"`
+		Handball360ID string   `json:"handball_360_id"`
 		Position      string   `json:"position"`
 		Gender        string   `json:"gender"`
 		Status        string   `json:"status"`
@@ -553,9 +555,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		res, err := h.db.ExecContext(r.Context(),
-			`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, position, gender, status, join_date) VALUES (?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO members (first_name, last_name, date_of_birth, member_number, pass_number, handball_360_id, position, gender, status, join_date) VALUES (?,?,?,?,?,?,?,?,?,?)`,
 			req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(memberNumber),
-			nullableString(req.PassNumber), nullableString(req.Position), req.Gender, req.Status, nullableString(req.JoinDate))
+			nullableString(req.PassNumber), nullableString(req.Handball360ID), nullableString(req.Position), req.Gender, req.Status, nullableString(req.JoinDate))
 		if err != nil {
 			if attempt == 2 {
 				http.Error(w, "duplicate pass number or internal error", http.StatusConflict)
@@ -580,7 +582,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	row := h.db.QueryRowContext(r.Context(), `
 		SELECT m.id, m.first_name, m.last_name,
-		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''), COALESCE(m.handball_360_id,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.home_club, m.home_club_id, COALESCE(sv.name,''), m.join_date, m.exit_date,
@@ -610,7 +612,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	err := row.Scan(
 		&base.ID, &base.FirstName, &base.LastName, &base.DateOfBirth,
-		&base.MemberNumber, &base.PassNumber,
+		&base.MemberNumber, &base.PassNumber, &base.Handball360ID,
 		&jerseyNum, &base.Position, &base.Gender, &base.Status, &userID, &clubFunctionsStr,
 		&mStreet, &mZip, &mCity, &mHomeClub, &homeClubID, &mHomeClubName, &joinDate, &exitDate,
 		&dsgvoVerarb, &dsgvoVerarbDate,
@@ -774,6 +776,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		DateOfBirth   string   `json:"date_of_birth"`
 		MemberNumber  string   `json:"member_number"`
 		PassNumber    string   `json:"pass_number"`
+		Handball360ID string   `json:"handball_360_id"`
 		JerseyNumber  *int     `json:"jersey_number"`
 		Position      string   `json:"position"`
 		Gender        string   `json:"gender"`
@@ -879,7 +882,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET
-			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?,
+			first_name=?, last_name=?, date_of_birth=?, member_number=?, pass_number=?, handball_360_id=?,
 			jersey_number=?, position=?, gender=?,
 			street=?, zip=?, city=?, home_club=?, home_club_id=?,
 			status=?,
@@ -889,7 +892,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			updated_at=?
 		WHERE id=?`,
 		req.FirstName, req.LastName, nullableString(req.DateOfBirth), nullableString(memberNumber),
-		nullableString(req.PassNumber), req.JerseyNumber, nullableString(req.Position), req.Gender,
+		nullableString(req.PassNumber), nullableString(req.Handball360ID), req.JerseyNumber, nullableString(req.Position), req.Gender,
 		nullableString(req.Street), nullableString(req.Zip), nullableString(req.City), nullableString(req.HomeClub), req.HomeClubID,
 		req.Status,
 		nullableString(req.JoinDate), nullableString(req.ExitDate),

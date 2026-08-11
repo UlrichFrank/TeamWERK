@@ -12,6 +12,7 @@ interface Member {
   date_of_birth: string
   member_number: string
   pass_number: string
+  handball_360_id: string
   jersey_number?: number
   position: string
   gender: string
@@ -292,6 +293,15 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               )}
             </div>
           )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Handball 360 ID</label>
+            <input
+              type="text"
+              value={form.handball_360_id}
+              onChange={e => onFormChange({ handball_360_id: e.target.value })}
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            />
+          </div>
           {hasSpieler && (
             <>
               <div>

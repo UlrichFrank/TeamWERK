@@ -69,7 +69,7 @@ func redactBankDrafts(drafts []ChangeDraft, reveal bool) {
 func (h *Handler) getMember(memberID int) (*Member, error) {
 	row := h.db.QueryRow(`
 		SELECT m.id, m.first_name, m.last_name,
-		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''),
+		       COALESCE(m.date_of_birth,''), COALESCE(m.member_number,''), COALESCE(m.pass_number,''), COALESCE(m.handball_360_id,''),
 		       m.jersey_number, COALESCE(m.position,''), COALESCE(m.gender,'u'), m.status, m.user_id,
 		       COALESCE((SELECT GROUP_CONCAT(mcf.function,',') FROM member_club_functions mcf WHERE mcf.member_id=m.id),''),
 		       m.street, m.zip, m.city, m.join_date,
@@ -102,7 +102,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 
 	err := row.Scan(
 		&m.ID, &m.FirstName, &m.LastName, &m.DateOfBirth,
-		&m.MemberNumber, &m.PassNumber,
+		&m.MemberNumber, &m.PassNumber, &m.Handball360ID,
 		&jerseyNum, &m.Position, &m.Gender, &m.Status, &userID, &clubFunctionsStr,
 		&street, &zip, &city, &joinDate,
 		&photoVisible, &photoPath,

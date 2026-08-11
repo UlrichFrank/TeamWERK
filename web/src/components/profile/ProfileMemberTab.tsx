@@ -155,6 +155,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
             </div>
             <div className="space-y-3 text-sm pt-2 border-t border-brand-border-subtle">
               <Row label="Passnummer" value={ownMember.pass_number || '–'} />
+              <Row label="Handball 360 ID" value={ownMember.handball_360_id || '–'} />
               <Row label="Status" value={ownMember.status || '–'} />
               {(ownMember.club_functions ?? []).length > 0 && (
                 <Row label="Vereinsfunktion" value={(ownMember.club_functions ?? []).map(f => CLUB_FUNCTION_LABELS[f] ?? f).join(', ')} />
@@ -180,6 +181,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
             <Row label="Nachname" value={ownMember.last_name} />
             <Row label="Geburtsdatum" value={formatDate(ownMember.date_of_birth)} />
             <Row label="Passnummer" value={ownMember.pass_number || '–'} />
+            <Row label="Handball 360 ID" value={ownMember.handball_360_id || '–'} />
             <Row label="Rückennummer" value={ownMember.jersey_number?.toString() ?? '–'} />
             <Row label="Position" value={ownMember.position || '–'} />
             <Row label="Status" value={ownMember.status || '–'} />
