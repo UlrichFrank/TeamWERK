@@ -36,8 +36,9 @@ function personaCapabilities(p: Persona): string[] {
   const isKassiererLike = isVorstandLike || cf.includes('kassierer')
   const caps: string[] = []
   if (isVorstandLike) {
-    // import_games ist enger als manage_games — H4A-Import bleibt beim Vorstand.
-    caps.push('manage_members', 'manage_games', 'import_games', 'manage_duties', 'manage_kader',
+    // import_games/bulk_regen_duties sind enger als manage_games/manage_duties —
+    // H4A-Import und Massen-Regeneration bleiben beim Vorstand.
+    caps.push('manage_members', 'manage_games', 'import_games', 'bulk_regen_duties', 'manage_duties', 'manage_kader',
       'manage_users', 'manage_seasons', 'manage_duty_types')
   } else if (isTrainerLike) {
     caps.push('manage_games', 'manage_duties', 'manage_kader')

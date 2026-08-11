@@ -173,6 +173,13 @@ func CanSuppressEventNotification(p *Principal) bool {
 	return IsVorstandLike(p)
 }
 
+// CanBulkRegenDuties gates the mass duty-slot regeneration endpoints
+// (/api/duty-slots/bulk-regen/*). Bewusst enger als CanManageDuties (das auch
+// Trainer/sportliche Leitung erlaubt) — siehe CapBulkRegenDuties.
+func CanBulkRegenDuties(p *Principal) bool {
+	return IsVorstandLike(p)
+}
+
 // ScopeMembersQuery returns a SQL WHERE fragment that restricts a members query to the
 // set visible to the caller. needsUserIDArg=true means the caller must supply Principal.UserID
 // as the next query argument.
@@ -222,6 +229,11 @@ const (
 	CapModerateChat     = "moderate_chat"
 
 	CapSuppressEventNotification = "suppress_event_notification"
+
+	// CapBulkRegenDuties ist bewusst enger als CapManageDuties (das auch Trainer
+	// haben): ein Lauf über die Restsaison kann hunderte Slots löschen/neu
+	// anlegen. Gleiche Begründung und gleiches Tier wie CapImportGames.
+	CapBulkRegenDuties = "bulk_regen_duties"
 )
 
 // Capabilities returns the list of capability strings for a given principal.
@@ -262,6 +274,9 @@ func Capabilities(p *Principal) []string {
 	// CanSuppressEventNotification.
 	if CanSuppressEventNotification(p) {
 		caps = append(caps, CapSuppressEventNotification)
+	}
+	if CanBulkRegenDuties(p) {
+		caps = append(caps, CapBulkRegenDuties)
 	}
 	if p.Role == "admin" {
 		caps = append(caps, CapImpersonate, CapManageDocuments, CapModerateChat)

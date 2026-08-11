@@ -469,7 +469,7 @@ func (h *Handler) ApplyH4AImport(w http.ResponseWriter, r *http.Request) {
 		dates = append(dates, dateWindow(d)...)
 	}
 	sort.Strings(dates)
-	summary, err := h.runAutoRegen(r.Context(), tx, dates, seasonID)
+	summary, err := h.runAutoRegen(r.Context(), tx, dates, seasonID, nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

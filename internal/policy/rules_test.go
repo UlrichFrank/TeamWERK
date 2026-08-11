@@ -399,6 +399,22 @@ func TestCapabilities_SuppressEventNotification(t *testing.T) {
 	}
 }
 
+// bulk_regen_duties ist bewusst enger als manage_duties (das auch Trainer/
+// sportliche Leitung haben): ein Massenlauf kann hunderte Slots betreffen.
+func TestCapabilities_BulkRegenDuties(t *testing.T) {
+	for _, p := range []*policy.Principal{vorstandP(), adminP()} {
+		if !hasCap(policy.Capabilities(p), policy.CapBulkRegenDuties) {
+			t.Errorf("%v/%s should have bulk_regen_duties", p.ClubFunctions, p.Role)
+		}
+	}
+	standardP := &policy.Principal{UserID: 99, Role: "standard"}
+	for _, p := range []*policy.Principal{trainerP(), slP(), kassiererP(), spielerP(), standardP} {
+		if hasCap(policy.Capabilities(p), policy.CapBulkRegenDuties) {
+			t.Errorf("%v should NOT have bulk_regen_duties", p.ClubFunctions)
+		}
+	}
+}
+
 // Das Löschrecht selbst bleibt breiter — sonst wäre die eigene Capability
 // überflüssig und jemand könnte sie später gegen CanDeleteGame kollabieren.
 func TestSuppressIstEngerAlsLoeschrecht(t *testing.T) {

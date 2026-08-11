@@ -620,6 +620,8 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/members/{id}/status", expected: exVorstand},
 	{method: "POST", path: "/api/games/import/h4a/preview", expected: exVorstand},
 	{method: "POST", path: "/api/games/import/h4a/apply", expected: exVorstand},
+	{method: "POST", path: "/api/duty-slots/bulk-regen/preview", expected: exVorstand},
+	{method: "POST", path: "/api/duty-slots/bulk-regen/apply", expected: exVorstand},
 	{method: "POST", path: "/api/seasons", expected: exVorstand},
 	{method: "PUT", path: "/api/seasons/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/seasons/{id}/activate", expected: exVorstand},

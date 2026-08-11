@@ -21,9 +21,29 @@ type RegenSummary struct {
 	NotifiedUsers []int           `json:"notified_users"`
 	Conflicts     []ConflictEntry `json:"conflicts"`
 
+	// PerGame carries one entry per regenerated game, for callers (the bulk-regen
+	// preview) that need to attribute deltas to individual games instead of just a
+	// day-level total. Deliberately NOT capped at summaryCap — the row list IS the
+	// product of the bulk-regen preview (design.md §9); the day-level lists above
+	// keep their existing cap.
+	PerGame []GameDelta `json:"per_game"`
+
 	// Notifications carries per-user dispatch intents. Not serialized — the caller
 	// fans these out via notify.Send after tx.Commit.
 	Notifications []NotificationIntent `json:"-"`
+}
+
+// GameDelta attributes one game's regeneration outcome. Created/DeletedAuto are total
+// slot capacity (slots_total), matching the unit CreatedEntry/ReducedEntry already use —
+// not row counts. AssignmentsKept/AssignmentsLost count individual duty_assignments
+// (see restoreAssignments); Conflicts counts this game's entries in RegenSummary.Conflicts.
+type GameDelta struct {
+	GameID          int `json:"game_id"`
+	Created         int `json:"created"`
+	DeletedAuto     int `json:"deleted_auto"`
+	AssignmentsKept int `json:"assignments_kept"`
+	AssignmentsLost int `json:"assignments_lost"`
+	Conflicts       int `json:"conflicts"`
 }
 
 type CreatedEntry struct {
@@ -80,7 +100,10 @@ func dateWindow(date string) []string {
 
 // runAutoRegen regenerates duty slots for the union of given dates.
 // All reads and writes go through tx so the regen sees uncommitted game mutations.
-func (h *Handler) runAutoRegen(ctx context.Context, tx *sql.Tx, dates []string, seasonID int) (RegenSummary, error) {
+// skip names game IDs to exclude from the mutation (their duty_slots stay untouched) —
+// they remain part of the same-day/adjacent-day context, see loadSameDayContextTx and
+// design.md §2. nil (or empty) skips nothing, matching the pre-bulk-regen callers.
+func (h *Handler) runAutoRegen(ctx context.Context, tx *sql.Tx, dates []string, seasonID int, skip map[int]bool) (RegenSummary, error) {
 	seen := map[string]bool{}
 	unique := make([]string, 0, len(dates))
 	for _, d := range dates {
@@ -94,7 +117,7 @@ func (h *Handler) runAutoRegen(ctx context.Context, tx *sql.Tx, dates []string, 
 
 	var summary RegenSummary
 	for _, d := range unique {
-		daySummary, err := h.regenSingleDay(ctx, tx, d, seasonID)
+		daySummary, err := h.regenSingleDay(ctx, tx, d, seasonID, skip)
 		if err != nil {
 			return RegenSummary{}, fmt.Errorf("regen %s: %w", d, err)
 		}
@@ -111,13 +134,16 @@ func (h *Handler) runAutoRegen(ctx context.Context, tx *sql.Tx, dates []string, 
 //  3. For each template item: compute event_time, applyBehavior, then either skip,
 //     insert (with potential conflict against is_custom=1 slots), or insert variant.
 //  4. Match deleted-slot users to "removed" or "variant_changed" notification intents.
-func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, seasonID int) (RegenSummary, error) {
+//
+// skip excludes games from this mutation (see runAutoRegen) but NOT from the same-day
+// context computed just below — loadSameDayContextTx is deliberately called without it.
+func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, seasonID int, skip map[int]bool) (RegenSummary, error) {
 	allGameTimes, hasPrevDay, hasNextDay, err := h.loadSameDayContextTx(ctx, tx, date, seasonID)
 	if err != nil {
 		return RegenSummary{}, fmt.Errorf("loadSameDayContext: %w", err)
 	}
 
-	dayGames, err := h.loadDayGames(ctx, tx, date, seasonID)
+	dayGames, err := h.loadDayGames(ctx, tx, date, seasonID, skip)
 	if err != nil {
 		return RegenSummary{}, err
 	}
@@ -189,10 +215,39 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		summary.Skipped = append(summary.Skipped, gameSummary.Skipped...)
 		summary.Conflicts = append(summary.Conflicts, gameSummary.Conflicts...)
 
-		// Step 5: turn deleted-slot user assignments into notification intents.
+		// Step 5: restore duty_assignments whose slot reappeared with an identical
+		// (duty_type_id, event_time, team_id) — see restoreAssignments doc comment.
+		// Must run after the inserts above so the new slot IDs exist to restore into,
+		// and before buildNotificationIntents so restored assignments are excluded.
+		assignmentsKept, assignmentsLost, err := h.restoreAssignments(ctx, tx, g.ID, slotsByID)
+		if err != nil {
+			return RegenSummary{}, fmt.Errorf("restore assignments for game %d: %w", g.ID, err)
+		}
+
+		// Step 6: turn NOT-restored deleted-slot user assignments into notification intents.
 		notifiedUsers, notifications := buildNotificationIntents(slotsByID, outcomeByOriginalType, eventName, date)
 		summary.NotifiedUsers = append(summary.NotifiedUsers, notifiedUsers...)
 		summary.Notifications = append(summary.Notifications, notifications...)
+
+		created := 0
+		for _, c := range gameSummary.Created {
+			created += c.Count
+		}
+		for _, c := range gameSummary.Reduced {
+			created += c.Count
+		}
+		deletedAuto := 0
+		for _, ds := range slotsByID {
+			deletedAuto += ds.SlotsTotal
+		}
+		summary.PerGame = append(summary.PerGame, GameDelta{
+			GameID:          g.ID,
+			Created:         created,
+			DeletedAuto:     deletedAuto,
+			AssignmentsKept: assignmentsKept,
+			AssignmentsLost: assignmentsLost,
+			Conflicts:       len(gameSummary.Conflicts),
+		})
 	}
 
 	return summary, nil
@@ -202,12 +257,14 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 // intents, using the per-original-type outcomes: a slot whose type was reduced yields a
 // "variant_changed" intent (carrying the new type name), everything else (skipped, or
 // recreated identical) yields "removed". Each user is notified at most once per game.
+// Assignments already restored by restoreAssignments (Restored=true) are skipped — a
+// restored assignment survived the regen and gets no notification.
 func buildNotificationIntents(slotsByID map[int]*deletedSlot, outcomeByOriginalType map[int]itemOutcome, eventName, date string) ([]int, []NotificationIntent) {
 	var notifiedUsers []int
 	var notifications []NotificationIntent
 	notifiedSeen := map[int]bool{}
 	for _, ds := range slotsByID {
-		if len(ds.UserIDs) == 0 {
+		if len(ds.Assignments) == 0 {
 			continue
 		}
 		outcome, ok := outcomeByOriginalType[ds.DutyTypeID]
@@ -227,14 +284,14 @@ func buildNotificationIntents(slotsByID map[int]*deletedSlot, outcomeByOriginalT
 				kind = "removed"
 			}
 		}
-		for _, uid := range ds.UserIDs {
-			if notifiedSeen[uid] {
+		for _, a := range ds.Assignments {
+			if a.Restored || notifiedSeen[a.UserID] {
 				continue
 			}
-			notifiedSeen[uid] = true
-			notifiedUsers = append(notifiedUsers, uid)
+			notifiedSeen[a.UserID] = true
+			notifiedUsers = append(notifiedUsers, a.UserID)
 			notifications = append(notifications, NotificationIntent{
-				UserID: uid, Kind: kind,
+				UserID: a.UserID, Kind: kind,
 				EventName: eventName, EventDate: date,
 				NewType: newType,
 			})
@@ -283,23 +340,42 @@ func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID in
 	return customSlots, nil
 }
 
-// deletedSlot captures an is_custom=0 slot (and its assigned users) before deletion,
-// so removed assignments can be turned into notification intents.
+// deletedAssignment snapshots one duty_assignments row of a to-be-deleted slot, so it can
+// be restored (see restoreAssignments) or turned into a notification intent.
+type deletedAssignment struct {
+	ID          int
+	UserID      int
+	Status      string
+	CashAmount  sql.NullFloat64
+	FulfilledAt sql.NullString
+	// Restored is set by restoreAssignments once this assignment has been
+	// reinserted against a matching new slot; buildNotificationIntents skips it.
+	Restored bool
+}
+
+// deletedSlot captures an is_custom=0 slot (and its assignments) before deletion, so
+// assignments can be restored onto an identical reappearing slot or turned into
+// notification intents. Assignments is ordered ascending by original id (oldest first) —
+// restoreAssignments relies on this order when capacity shrinks.
 type deletedSlot struct {
-	DutyTypeID int
-	EventTime  string
-	TeamID     sql.NullInt64
-	UserIDs    []int
+	DutyTypeID  int
+	EventTime   string
+	TeamID      sql.NullInt64
+	SlotsTotal  int
+	Assignments []deletedAssignment
 }
 
 // snapshotDeletedSlots reads the is_custom=0 slots of a game together with their
-// assignments, keyed by slot id. Multiple assignment rows per slot accumulate into UserIDs.
+// assignments, keyed by slot id. ORDER BY da.id ensures each slot's Assignments arrive
+// oldest-first without an extra sort.
 func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[int]*deletedSlot, error) {
 	snapRows, err := tx.QueryContext(ctx, `
-		SELECT ds.id, ds.duty_type_id, ds.event_time, ds.team_id, da.user_id
+		SELECT ds.id, ds.duty_type_id, ds.event_time, ds.team_id, ds.slots_total,
+		       da.id, da.user_id, da.status, da.cash_amount, da.fulfilled_at
 		FROM duty_slots ds
 		LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id
-		WHERE ds.game_id=? AND ds.is_custom=0`, gameID)
+		WHERE ds.game_id=? AND ds.is_custom=0
+		ORDER BY da.id`, gameID)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot deleted: %w", err)
 	}
@@ -308,8 +384,12 @@ func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID i
 		var slotID int
 		var s deletedSlot
 		var et sql.NullString
-		var uid sql.NullInt64
-		if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.TeamID, &uid); err != nil {
+		var aid, uid sql.NullInt64
+		var status sql.NullString
+		var cashAmount sql.NullFloat64
+		var fulfilledAt sql.NullString
+		if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.TeamID, &s.SlotsTotal,
+			&aid, &uid, &status, &cashAmount, &fulfilledAt); err != nil {
 			snapRows.Close()
 			return nil, err
 		}
@@ -318,15 +398,132 @@ func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID i
 		}
 		existing, ok := slotsByID[slotID]
 		if !ok {
-			existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, TeamID: s.TeamID}
+			existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, TeamID: s.TeamID, SlotsTotal: s.SlotsTotal}
 			slotsByID[slotID] = existing
 		}
-		if uid.Valid {
-			existing.UserIDs = append(existing.UserIDs, int(uid.Int64))
+		if aid.Valid {
+			existing.Assignments = append(existing.Assignments, deletedAssignment{
+				ID: int(aid.Int64), UserID: int(uid.Int64), Status: status.String,
+				CashAmount: cashAmount, FulfilledAt: fulfilledAt,
+			})
 		}
 	}
 	snapRows.Close()
 	return slotsByID, nil
+}
+
+// newAutoSlot is one freshly (re-)inserted is_custom=0 slot, loaded after regenGameItems
+// so restoreAssignments can match deleted slots against it by (duty_type_id, event_time,
+// team_id) and knows its capacity for the fill-up-to-slots_total rule.
+type newAutoSlot struct {
+	ID         int
+	SlotsTotal int
+}
+
+// restoreAssignments reinserts duty_assignments of deleted (is_custom=0) slots onto the
+// freshly regenerated slots of the same game, wherever a new slot with an identical
+// (duty_type_id, event_time, team_id) exists — the same key snapshotCustomSlots/insertOne
+// use for conflict detection (design.md §4: "Kein Fuzzy-Matching"). Must run AFTER
+// regenGameItems has inserted the new slots.
+//
+// Per matched slot, at most slots_total assignments are restored, oldest original
+// duty_assignments.id first (deletedSlot.Assignments is already in that order) — the
+// deterministic "wer zuerst da war"-Regel from design.md §4. Any assignment beyond
+// capacity, or whose slot key has no match at all, counts as lost and is left for
+// buildNotificationIntents (Restored stays false).
+//
+// duty_slots.slots_filled is denormalized (no trigger, see duties/handler.go) and is
+// updated here for every slot that received at least one restored assignment.
+func (h *Handler) restoreAssignments(ctx context.Context, tx *sql.Tx, gameID int, slotsByID map[int]*deletedSlot) (kept, lost int, err error) {
+	newSlots, err := h.loadNewAutoSlotsKeyed(ctx, tx, gameID)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Deterministic iteration over the deleted slots themselves (map order is not).
+	// Only matters for the pathological case of two old slots colliding on the same
+	// new-slot key; it does not affect the within-slot oldest-first rule.
+	oldSlotIDs := make([]int, 0, len(slotsByID))
+	for id := range slotsByID {
+		oldSlotIDs = append(oldSlotIDs, id)
+	}
+	sort.Ints(oldSlotIDs)
+
+	for _, oldID := range oldSlotIDs {
+		ds := slotsByID[oldID]
+		k := customKey{DutyTypeID: ds.DutyTypeID, EventTime: ds.EventTime}
+		if ds.TeamID.Valid {
+			k.TeamID = ds.TeamID.Int64
+			k.HasTeam = true
+		}
+		target := newSlots[k]
+		for i := range ds.Assignments {
+			a := &ds.Assignments[i]
+			if target == nil || target.filled >= target.SlotsTotal {
+				lost++
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO duty_assignments (duty_slot_id, user_id, status, cash_amount, fulfilled_at)
+				VALUES (?,?,?,?,?)`,
+				target.ID, a.UserID, a.Status, a.CashAmount, a.FulfilledAt); err != nil {
+				return 0, 0, fmt.Errorf("restore assignment %d onto slot %d: %w", a.ID, target.ID, err)
+			}
+			a.Restored = true
+			target.filled++
+			kept++
+		}
+	}
+
+	for _, s := range newSlots {
+		if s.filled > 0 {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE duty_slots SET slots_filled=? WHERE id=?`, s.filled, s.ID); err != nil {
+				return 0, 0, fmt.Errorf("update slots_filled for slot %d: %w", s.ID, err)
+			}
+		}
+	}
+
+	return kept, lost, nil
+}
+
+// restoreTarget tracks a newly (re-)created slot's remaining restore capacity while
+// restoreAssignments fills it up.
+type restoreTarget struct {
+	newAutoSlot
+	filled int
+}
+
+// loadNewAutoSlotsKeyed loads the is_custom=0 slots just (re-)created for a game, keyed by
+// the same customKey used for is_custom=1 conflict detection — the restore match key is
+// deliberately identical (design.md §4: "derselbe Dreier").
+func (h *Handler) loadNewAutoSlotsKeyed(ctx context.Context, tx *sql.Tx, gameID int) (map[customKey]*restoreTarget, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, duty_type_id, event_time, team_id, slots_total
+		FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("load new auto slots: %w", err)
+	}
+	defer rows.Close()
+	byKey := map[customKey]*restoreTarget{}
+	for rows.Next() {
+		var id, slotsTotal, dutyTypeID int
+		var et sql.NullString
+		var tid sql.NullInt64
+		if err := rows.Scan(&id, &dutyTypeID, &et, &tid, &slotsTotal); err != nil {
+			return nil, err
+		}
+		k := customKey{DutyTypeID: dutyTypeID}
+		if et.Valid {
+			k.EventTime = et.String
+		}
+		if tid.Valid {
+			k.TeamID = tid.Int64
+			k.HasTeam = true
+		}
+		byKey[k] = &restoreTarget{newAutoSlot: newAutoSlot{ID: id, SlotsTotal: slotsTotal}}
+	}
+	return byKey, nil
 }
 
 // dayGame is one row of games for the regen target date+season.
@@ -340,8 +537,11 @@ type dayGame struct {
 	TemplateID sql.NullInt64
 }
 
-// loadDayGames loads all games for the given date+season, ordered by time then id.
-func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, seasonID int) ([]dayGame, error) {
+// loadDayGames loads all games for the given date+season, ordered by time then id,
+// excluding any game ID present in skip — those stay out of the mutation set entirely
+// (design.md §2: they remain part of the same-day context via loadSameDayContextTx,
+// which is queried separately and never filtered).
+func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, seasonID int, skip map[int]bool) ([]dayGame, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT id, time, end_time, opponent, is_home, event_type, template_id
 		 FROM games WHERE date=? AND season_id=? ORDER BY time, id`,
@@ -356,6 +556,9 @@ func (h *Handler) loadDayGames(ctx context.Context, tx *sql.Tx, date string, sea
 		if err := rows.Scan(&g.ID, &g.Time, &g.EndTime, &g.Opponent, &isHome, &g.EventType, &g.TemplateID); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		if skip[g.ID] {
+			continue
 		}
 		g.IsHome = isHome == 1
 		dayGames = append(dayGames, g)
@@ -551,9 +754,12 @@ func mergeSummary(dst *RegenSummary, src RegenSummary) {
 	dst.Skipped = append(dst.Skipped, src.Skipped...)
 	dst.Conflicts = append(dst.Conflicts, src.Conflicts...)
 	dst.NotifiedUsers = append(dst.NotifiedUsers, src.NotifiedUsers...)
+	dst.PerGame = append(dst.PerGame, src.PerGame...)
 	dst.Notifications = append(dst.Notifications, src.Notifications...)
 }
 
+// capSummary truncates the day-level display lists to summaryCap entries.
+// PerGame is deliberately excluded — see the RegenSummary.PerGame doc comment.
 func capSummary(s *RegenSummary) {
 	if len(s.Created) > summaryCap {
 		s.Created = s.Created[:summaryCap]

@@ -1135,7 +1135,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	summary, err := h.runAutoRegen(r.Context(), tx, dateWindow(req.Date), req.SeasonID)
+	summary, err := h.runAutoRegen(r.Context(), tx, dateWindow(req.Date), req.SeasonID, nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1372,7 +1372,7 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	regenDates := append(dateWindow(oldDate), dateWindow(req.Date)...)
-	summary, err := h.runAutoRegen(r.Context(), tx, regenDates, oldSeasonID)
+	summary, err := h.runAutoRegen(r.Context(), tx, regenDates, oldSeasonID, nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1517,7 +1517,7 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	// Regen adjacent days — the deleted date itself has no slots anymore.
 	window := dateWindow(eventDate)
 	neighborDates := []string{window[0], window[2]}
-	summary, err := h.runAutoRegen(r.Context(), tx, neighborDates, seasonID)
+	summary, err := h.runAutoRegen(r.Context(), tx, neighborDates, seasonID, nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -2123,7 +2123,7 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID)
+	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID, nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -2165,7 +2165,7 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID)
+	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID, nil)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

@@ -18,7 +18,7 @@
 | Authenticated | alle Eingeloggten (Profil, Dienstbörse, Spiele, Chat, …) |
 | Trainer + sportliche_leitung | Slots, Anfragen, Training |
 | Vorstand (+ Trainer/sL) | Spiele, Kader, Duty-Slots, Saisons (lesen), Venues (CRUD) |
-| Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates, H4A-Spielimport (`POST /api/games/import/h4a/preview` + `/apply`) |
+| Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates, H4A-Spielimport (`POST /api/games/import/h4a/preview` + `/apply`), Massen-Dienstregeneration (`POST /api/duty-slots/bulk-regen/preview` + `/apply`) |
 | Vorstand + Kassierer | Mitglieder lesen, `PUT /members/{id}/bank-details` (Feld-Whitelist), Fee-Run |
 | Admin only | Impersonate |
 

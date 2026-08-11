@@ -77,6 +77,9 @@ var broadcastAllowlist = map[string]string{
 	"Members.UpdateReminderPreference": "eigene Dienst-Erinnerungs-Präferenz (users.duty_reminder_days), kein geteilter View",
 	// Read-only: ruft H4A extern ab und liefert einen Diff-Plan zurück, schreibt nichts in die DB (Apply broadcastet).
 	"Games.PreviewH4AImport": "read-only externer H4A-Abruf, kein DB-Write; ApplyH4AImport broadcastet 'games'",
+	// Dry-Run derselben Transaktion wie ApplyBulkRegen, abgeschlossen mit Rollback statt
+	// Commit — kein DB-Write überlebt den Request. ApplyBulkRegen broadcastet 'duties'+'games'.
+	"Games.PreviewBulkRegen": "Dry-Run mit Rollback, kein DB-Write; ApplyBulkRegen broadcastet 'duties'+'games'",
 }
 
 // resolveHandlerPackages liest den Handlers-Struct und die Import-Aliase aus
