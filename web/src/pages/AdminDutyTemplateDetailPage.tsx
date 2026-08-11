@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Trash2, Check } from 'lucide-react'
 import { api } from '../lib/api'
@@ -7,6 +7,7 @@ import ActionMenu from '../components/ActionMenu'
 import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
+import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 
 interface DutyType {
   id: number
@@ -22,6 +23,8 @@ interface TemplateItem {
   offset_minutes: number
   slots_count: number
   audiences?: string[] | null
+  /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
+  team_ids?: number[] | null
 }
 
 interface Template {
@@ -33,7 +36,44 @@ interface Template {
 }
 
 function newItem(): TemplateItem {
-  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [] }
+  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [], team_ids: [] }
+}
+
+/**
+ * Team-Einschränkung eines Vorlagen-Eintrags. Achtung: umgekehrte Leer-Semantik
+ * zur Zielgruppe direkt daneben — keine Auswahl heißt hier „gilt für alle Teams",
+ * nicht „für niemanden". Deshalb steht „alle" im Hinweis hervorgehoben.
+ * Optionen sind die Kaderteams der aktiven Saison; bereits gespeicherte Teams
+ * ohne aktuellen Kader-Eintrag tauchen hier nicht auf, bleiben aber erhalten
+ * (der Toggle baut das Array nie neu auf).
+ */
+function TeamScopeField({ teams, shortNames, selected, onToggle }: {
+  teams: TeamForName[]
+  shortNames: Map<number, string>
+  selected: number[]
+  onToggle: (teamID: number, checked: boolean) => void
+}) {
+  if (teams.length === 0) return null
+  return (
+    <div>
+      <label className="block text-xs text-brand-text-muted mb-1">
+        Kaderteams <span className="text-brand-text-subtle">(leer = <strong className="font-semibold">alle</strong> Teams)</span>
+      </label>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {teams.map(t => (
+          <label key={t.id} className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={selected.includes(t.id)}
+              onChange={e => onToggle(t.id, e.target.checked)}
+              className="accent-brand-yellow"
+            />
+            {shortNames.get(t.id) ?? String(t.id)}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -44,6 +84,7 @@ export default function AdminDutyTemplateDetailPage() {
 
   const [template, setTemplate] = useState<Template | null>(null)
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
+  const [teams, setTeams] = useState<TeamForName[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -53,8 +94,13 @@ export default function AdminDutyTemplateDetailPage() {
     Promise.all([
       api.get(`/duty-templates/${id}`).then(r => setTemplate(r.data)),
       api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])),
+      // /teams/names liefert bereits genau die Kaderteams der aktiven Saison —
+      // kein zusätzlicher /kader-Abruf nötig.
+      api.get<TeamForName[]>('/teams/names').then(r => setTeams(r.data ?? [])).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [id])
+
+  const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
 
   useLiveUpdates(event => {
     if (event === 'games' && id) api.get(`/duty-templates/${id}`).then(r => setTemplate(r.data)).catch(() => {})
@@ -62,6 +108,26 @@ export default function AdminDutyTemplateDetailPage() {
 
   const updateItem = (i: number, patch: Partial<TemplateItem>) => {
     setTemplate(t => t ? { ...t, items: t.items.map((item, idx) => idx === i ? { ...item, ...patch } : item) } : t)
+  }
+
+  // Togglet genau eine Team-Checkbox. Bewusst additiv/subtraktiv statt „Array aus
+  // den sichtbaren Optionen neu bauen": ein gespeichertes Team, das in der aktiven
+  // Saison keinen Kader mehr hat, ist unsichtbar und würde sonst beim Speichern
+  // stillschweigend verschwinden.
+  const toggleItemTeam = (i: number, teamID: number, checked: boolean) => {
+    setTemplate(t => t ? {
+      ...t,
+      items: t.items.map((item, idx) => {
+        if (idx !== i) return item
+        const current = item.team_ids ?? []
+        return {
+          ...item,
+          team_ids: checked
+            ? (current.includes(teamID) ? current : [...current, teamID])
+            : current.filter(x => x !== teamID),
+        }
+      }),
+    } : t)
   }
 
   const addItem = () => {
@@ -242,6 +308,12 @@ export default function AdminDutyTemplateDetailPage() {
                           ))}
                         </div>
                       </div>
+                      <TeamScopeField
+                        teams={teams}
+                        shortNames={teamShortNames}
+                        selected={item.team_ids ?? []}
+                        onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}
+                      />
                     </div>
                   </div>
                 )
@@ -251,7 +323,8 @@ export default function AdminDutyTemplateDetailPage() {
             {/* Desktop */}
             <div className="hidden sm:block divide-y divide-brand-border-subtle">
               {template.items.map((item, i) => (
-                <div key={i} className="p-4 grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 items-center">
+                <div key={i} className="p-4">
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 items-center">
                   <div>
                     <label className="block text-xs text-brand-text-muted mb-1">Diensttyp</label>
                     <select
@@ -323,6 +396,15 @@ export default function AdminDutyTemplateDetailPage() {
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
+                </div>
+                <div className="mt-3">
+                  <TeamScopeField
+                    teams={teams}
+                    shortNames={teamShortNames}
+                    selected={item.team_ids ?? []}
+                    onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}
+                  />
+                </div>
                 </div>
               ))}
             </div>
