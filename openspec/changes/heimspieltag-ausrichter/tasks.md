@@ -72,12 +72,12 @@
 
 ## 10. Frontend: Kalender
 
-- [ ] 10.1 Ausrichter-Feld im **Termin-Detail-Modal** (`EventInfoModal` in `KalenderPage.tsx`) bei Heim-Terminen — es gibt **keine Tagesansicht**, siehe design.md Decision 10. Sichtbar für alle, änderbar nur mit `manage_games`, gekennzeichnet ob explizit gesetzt oder vom Default geerbt. **Keine** Darstellung in der Monatsübersicht.
-- [ ] 10.2 Vorschau-Modal mit der Bilanz (`created`/`deleted`/`assignments_lost`) vor dem Anwenden — gespeist aus `POST /api/game-days/host/preview`.
-- [ ] 10.3 Termin-Wizard: Ausrichter-Feld bei Heim-Terminen, vorbelegt mit dem geltenden Wert, **erkennbar tagesbezogen beschriftet** („Ausrichter am 14.09. — gilt für alle Termine dieses Tages"). Weicht der Wert ab, läuft das Speichern über dasselbe Vorschau-Modal (design.md Decision 9).
-- [ ] 10.4 Massenlauf-Dialog (`web/src/components/DutyBulkRegenModal.tsx` — eigene Komponente, **nicht** in `KalenderPage.tsx`): Die Zeilen sind heute **flach je Termin**; für die Ausrichter-Spalte je Tag muss `preview.rows` clientseitig nach `row.date` gruppiert und eine Tages-Zwischenebene ins Rendering eingezogen werden. Kennzeichnung geerbt/gesetzt; Änderungen gehen als `host_overrides` mit. Kein zweiter Bestätigungsdialog.
-- [ ] 10.5 `useLiveUpdates` für die betroffenen Events, damit fremde Änderungen die Ansicht aktualisieren.
-- [ ] 10.6 Vitest: Wizard-Feld ist tagesbezogen beschriftet und vorbelegt; abweichende Wahl öffnet die Vorschau; ohne `manage_games` ist der Picker nur lesend; Massenlauf sendet `host_overrides`.
+- [x] 10.1 Ausrichter-Feld im **Termin-Detail-Modal** (`EventInfoModal` in `KalenderPage.tsx`) bei Heim-Terminen — es gibt **keine Tagesansicht**, siehe design.md Decision 10. Sichtbar für alle, änderbar nur mit `manage_games`, gekennzeichnet ob explizit gesetzt oder vom Default geerbt. **Keine** Darstellung in der Monatsübersicht.
+- [x] 10.2 Vorschau-Modal mit der Bilanz (`created`/`deleted`/`assignments_lost`) vor dem Anwenden — gespeist aus `POST /api/game-days/host/preview`.
+- [x] 10.3 Termin-Wizard: Ausrichter-Feld bei Heim-Terminen, vorbelegt mit dem geltenden Wert, **erkennbar tagesbezogen beschriftet** („Ausrichter am 14.09. — gilt für alle Termine dieses Tages"). Weicht der Wert ab, läuft das Speichern über dasselbe Vorschau-Modal (design.md Decision 9).
+- [x] 10.4 Massenlauf-Dialog (`web/src/components/DutyBulkRegenModal.tsx` — eigene Komponente, **nicht** in `KalenderPage.tsx`): Die Zeilen sind heute **flach je Termin**; für die Ausrichter-Spalte je Tag muss `preview.rows` clientseitig nach `row.date` gruppiert und eine Tages-Zwischenebene ins Rendering eingezogen werden. Kennzeichnung geerbt/gesetzt; Änderungen gehen als `host_overrides` mit. Kein zweiter Bestätigungsdialog.
+- [x] 10.5 `useLiveUpdates` für die betroffenen Events, damit fremde Änderungen die Ansicht aktualisieren.
+- [x] 10.6 Vitest: Wizard-Feld ist tagesbezogen beschriftet und vorbelegt; abweichende Wahl öffnet die Vorschau; ohne `manage_games` ist der Picker nur lesend; Massenlauf sendet `host_overrides`.
 
 ## 11. Abschluss
 
