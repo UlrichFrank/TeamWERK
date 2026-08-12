@@ -81,9 +81,9 @@
 
 ## 11. Abschluss
 
-- [ ] 11.0 **Permission-Matrix nachziehen** (`internal/permissions/matrix_test.go`): alle sechs neuen Routen ins `matrix`-Array mit erwarteter Berechtigung eintragen (`GET /api/ausrichter`, `GET /api/ausrichter/{id}/usage`, `POST /api/ausrichter`, `PUT|DELETE /api/ausrichter/{id}`, `GET /api/game-days/{date}/host`, `POST /api/game-days/host/preview|apply`). `TestPermissionMatrix_Backend` läuft per `chi.Walk` über den echten Router und failt bei **jeder** nicht eingetragenen Route — ein zweites, vom Broadcast-Gate unabhängiges Gate, das im ursprünglichen Design fehlte.
-- [ ] 11.1 `make test` (inkl. Architektur-, Broadcast- und Permission-Matrix-Gate), `make lint`, `pnpm -C web build/test/lint`.
-- [ ] 11.2 `/verify-change` durchlaufen (Route→Tests, Mutation→`Broadcast`/`useLiveUpdates`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).
-- [ ] 11.3 Gotcha in `docs/agent/06-gotchas.md` ergänzen: Ausrichter als Tages-Eigenschaft, totale Auflösung über den Default, Gate an **zwei** Stellen im Regen (inkl. Begründung, warum `buildRotationPlan` mitgatet werden muss), und die asymmetrische Lösch-Semantik (Spieltage `SET NULL`, Vorlagen-Zeilen mitlöschen).
-- [ ] 11.4 Ein Commit je Task-Gruppe, Conventional Commits mit Scope `games`/`settings`/`db`.
+- [x] 11.0 **Permission-Matrix nachziehen** (`internal/permissions/matrix_test.go`): alle sechs neuen Routen ins `matrix`-Array mit erwarteter Berechtigung eintragen (`GET /api/ausrichter`, `GET /api/ausrichter/{id}/usage`, `POST /api/ausrichter`, `PUT|DELETE /api/ausrichter/{id}`, `GET /api/game-days/{date}/host`, `POST /api/game-days/host/preview|apply`). `TestPermissionMatrix_Backend` läuft per `chi.Walk` über den echten Router und failt bei **jeder** nicht eingetragenen Route — ein zweites, vom Broadcast-Gate unabhängiges Gate, das im ursprünglichen Design fehlte.
+- [x] 11.1 `make test` (inkl. Architektur-, Broadcast- und Permission-Matrix-Gate), `make lint`, `pnpm -C web build/test/lint`.
+- [x] 11.2 `/verify-change` durchlaufen (Route→Tests, Mutation→`Broadcast`/`useLiveUpdates`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).
+- [x] 11.3 Gotcha in `docs/agent/06-gotchas.md` ergänzen: Ausrichter als Tages-Eigenschaft, totale Auflösung über den Default, Gate an **zwei** Stellen im Regen (inkl. Begründung, warum `buildRotationPlan` mitgatet werden muss), und die asymmetrische Lösch-Semantik (Spieltage `SET NULL`, Vorlagen-Zeilen mitlöschen).
+- [x] 11.4 Ein Commit je Task-Gruppe, Conventional Commits mit Scope `games`/`settings`/`db`.
 - [ ] 11.5 Change archivieren.
