@@ -34,4 +34,4 @@
 
 - [x] 5.1 `docs/agent/06-gotchas.md`, Gotcha „Bewirtungs-/Kuchendienst-Rotation": Cap-Herkunft (Settings statt Item), Schalter `rotation_enabled`, Wegfall des „erster gewinnt"-Sonderfalls.
 - [x] 5.2 `make test` + `make lint` + `pnpm -C web test`/`build` grün; `openspec validate --all`.
-- [ ] 5.3 Change archivieren.
+- [x] 5.3 Change archivieren.
