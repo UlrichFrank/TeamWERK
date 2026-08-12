@@ -1,11 +1,13 @@
 /**
- * Einstellungen-Tab „Bewirtung": zeigt/ändert die beiden vereinsweiten Werte —
- * Spiele-zu-Kuchen-Verhältnis und Obergrenze pro Mannschaft.
+ * Kachel „Bewirtung" im Einstellungen-Tab „Heimspieltage": zeigt/ändert die
+ * beiden vereinsweiten Werte — Spiele-zu-Kuchen-Verhältnis und Obergrenze
+ * pro Mannschaft. Der Tab selbst hieß früher „Bewirtung" und wurde im Zuge
+ * von heimspieltag-ausrichter in „Heimspieltage" umbenannt (zweite Kachel
+ * „Ausrichter" siehe AdminSettingsPage.ausrichter.test.tsx); der alte
+ * Query-Parameter `?tab=bewirtung` bleibt als Alias gültig.
  *
- * Quelle: openspec/changes/bewirtung-cap-global/specs/bewirtungsrotation/spec.md
- * — Requirement "Vereinsweites Spiele-zu-Kuchen-Verhältnis",
- *   Requirement "Vereinsweiter Cap „Max. Kuchen pro Mannschaft"",
- *   Requirement "Einstellungen-UI Tab „Bewirtung"".
+ * Quelle: openspec/changes/heimspieltag-ausrichter/specs/bewirtungsrotation/spec.md
+ * — Requirement "Einstellungen-UI Tab „Bewirtung"" (MODIFIED).
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
@@ -40,7 +42,7 @@ describe('AdminSettingsPage — Bewirtung-Tab', () => {
     renderBewirtung()
     await flushAsync()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bewirtung' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heimspieltage' }))
     await flushAsync()
 
     expect((screen.getByLabelText('Kuchen je Spiel') as HTMLInputElement).value).toBe('1')
@@ -51,7 +53,7 @@ describe('AdminSettingsPage — Bewirtung-Tab', () => {
     renderBewirtung()
     await flushAsync()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bewirtung' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heimspieltage' }))
     await flushAsync()
 
     expect(screen.getByText(/Dienst-Generierung bei/)).toBeTruthy()
@@ -62,7 +64,7 @@ describe('AdminSettingsPage — Bewirtung-Tab', () => {
     const mock = renderBewirtung([200, { verhaeltnis: 0.5, max_per_team: 3 }])
     await flushAsync()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bewirtung' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heimspieltage' }))
     await flushAsync()
 
     // Deutsches Komma als Dezimaltrennzeichen.
@@ -85,7 +87,7 @@ describe('AdminSettingsPage — Bewirtung-Tab', () => {
     renderBewirtung([403, { error: 'forbidden' }])
     await flushAsync()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bewirtung' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heimspieltage' }))
     await flushAsync()
 
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }))
@@ -98,7 +100,7 @@ describe('AdminSettingsPage — Bewirtung-Tab', () => {
     renderBewirtung([400, { error: 'invalid_verhaeltnis' }])
     await flushAsync()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bewirtung' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heimspieltage' }))
     await flushAsync()
 
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }))
@@ -111,7 +113,7 @@ describe('AdminSettingsPage — Bewirtung-Tab', () => {
     const mock = renderBewirtung()
     await flushAsync()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bewirtung' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heimspieltage' }))
     await flushAsync()
 
     fireEvent.change(screen.getByLabelText('Kuchen je Spiel'), { target: { value: 'abc' } })
@@ -132,7 +134,7 @@ describe('AdminSettingsPage — Bewirtung-Tab', () => {
     const mock = renderBewirtung()
     await flushAsync()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bewirtung' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heimspieltage' }))
     await flushAsync()
 
     fireEvent.change(screen.getByLabelText('Max. Kuchen pro Mannschaft'), { target: { value: '' } })
