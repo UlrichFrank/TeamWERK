@@ -355,3 +355,128 @@ func TestMigration023_SystemSettings_Idempotent(t *testing.T) {
 		t.Error("system_settings sollte nach 023 down weg sein")
 	}
 }
+
+// seed046Template legt eine Vorlage mit einem Item an und setzt dessen
+// rotation_max_per_team (nil = NULL). Liefert die Item-ID.
+func seed046Item(t *testing.T, sqlDB *sql.DB, dutyTypeID int64, maxPerTeam any) int64 {
+	t.Helper()
+	tr, err := sqlDB.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES ('Heim','heim',75)`)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := tr.LastInsertId()
+	ir, err := sqlDB.Exec(`
+		INSERT INTO game_template_items
+		  (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, rotation_max_per_team)
+		VALUES (?, ?, 'start', 0, 1, 0, ?)`, templateID, dutyTypeID, maxPerTeam)
+	if err != nil {
+		t.Fatalf("seed item: %v", err)
+	}
+	itemID, _ := ir.LastInsertId()
+	return itemID
+}
+
+// TestMigration046_CapWirdVereinsweit prüft den Datenübergang von
+// game_template_items.rotation_max_per_team zum vereinsweiten
+// system_settings-Key bewirtung_max_per_team plus dem Item-Schalter
+// rotation_enabled (bewirtung-cap-global). Das ist der riskante Teil des
+// Changes: konfigurierte Rotationen dürfen den Deploy nicht verlieren.
+func TestMigration046_CapWirdVereinsweit(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(45); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 45: %v", err)
+	}
+
+	dtr, err := sqlDB.Exec(`INSERT INTO duty_types (name, hours_value) VALUES ('Kuchen', 2.0)`)
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := dtr.LastInsertId()
+
+	itemOhne := seed046Item(t, sqlDB, dutyTypeID, nil)
+	itemEins := seed046Item(t, sqlDB, dutyTypeID, 1)
+	itemDrei := seed046Item(t, sqlDB, dutyTypeID, 3)
+
+	if err := m.Migrate(46); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 46: %v", err)
+	}
+
+	if hasColumn(t, sqlDB, "game_template_items", "rotation_max_per_team") {
+		t.Error("rotation_max_per_team sollte nach 046 up weg sein")
+	}
+	if !hasColumn(t, sqlDB, "game_template_items", "rotation_enabled") {
+		t.Fatal("erwartet Spalte rotation_enabled nach 046 up")
+	}
+
+	// Der vereinsweite Startwert ist der GRÖSSTE bestehende Item-Cap — ein
+	// kleinerer würde bereits eingespielte Rotationen stillschweigend enger
+	// machen, als der Verein sie konfiguriert hatte.
+	var value string
+	if err := sqlDB.QueryRow(
+		`SELECT value FROM system_settings WHERE key='bewirtung_max_per_team'`).Scan(&value); err != nil {
+		t.Fatalf("query bewirtung_max_per_team: %v", err)
+	}
+	if value != "3" {
+		t.Errorf("erwartet Startwert '3' (größter Alt-Cap), bekam %q", value)
+	}
+
+	for _, tc := range []struct {
+		itemID int64
+		want   bool
+		label  string
+	}{
+		{itemOhne, false, "Item ohne Cap"},
+		{itemEins, true, "Item mit Cap 1"},
+		{itemDrei, true, "Item mit Cap 3"},
+	} {
+		var enabled bool
+		if err := sqlDB.QueryRow(
+			`SELECT rotation_enabled FROM game_template_items WHERE id=?`, tc.itemID).Scan(&enabled); err != nil {
+			t.Fatalf("query rotation_enabled (%s): %v", tc.label, err)
+		}
+		if enabled != tc.want {
+			t.Errorf("%s: erwartet rotation_enabled=%v, bekam %v", tc.label, tc.want, enabled)
+		}
+	}
+
+	// Down schreibt den vereinsweiten Cap auf die aktivierten Items zurück.
+	if err := m.Migrate(45); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate down to 45: %v", err)
+	}
+	if hasColumn(t, sqlDB, "game_template_items", "rotation_enabled") {
+		t.Error("rotation_enabled sollte nach 046 down weg sein")
+	}
+	var restored sql.NullInt64
+	if err := sqlDB.QueryRow(
+		`SELECT rotation_max_per_team FROM game_template_items WHERE id=?`, itemEins).Scan(&restored); err != nil {
+		t.Fatalf("query restored cap: %v", err)
+	}
+	if !restored.Valid || restored.Int64 != 3 {
+		t.Errorf("erwartet zurückgeschriebenen Cap 3, bekam valid=%v value=%d", restored.Valid, restored.Int64)
+	}
+	if err := sqlDB.QueryRow(
+		`SELECT rotation_max_per_team FROM game_template_items WHERE id=?`, itemOhne).Scan(&restored); err != nil {
+		t.Fatalf("query non-rotation cap: %v", err)
+	}
+	if restored.Valid {
+		t.Errorf("Item ohne Rotation sollte NULL bleiben, bekam %d", restored.Int64)
+	}
+}
+
+// TestMigration046_OhneKonfigurierteRotation_SetztDefault: ohne einen einzigen
+// Alt-Cap greift der fachliche Default 1.
+func TestMigration046_OhneKonfigurierteRotation_SetztDefault(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(46); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 46: %v", err)
+	}
+	var value string
+	if err := sqlDB.QueryRow(
+		`SELECT value FROM system_settings WHERE key='bewirtung_max_per_team'`).Scan(&value); err != nil {
+		t.Fatalf("query bewirtung_max_per_team: %v", err)
+	}
+	if value != "1" {
+		t.Errorf("erwartet Default '1', bekam %q", value)
+	}
+}

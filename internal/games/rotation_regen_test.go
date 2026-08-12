@@ -8,22 +8,50 @@ package games
 
 import (
 	"database/sql"
+	"strconv"
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
 // insertRotationTemplateI legt eine Heim-Vorlage mit genau einem rotations-aktivierten
-// Item an (rotation_max_per_team = maxPerTeam).
+// Item an und setzt den vereinsweiten Cap.
+//
+// Der Cap ist seit bewirtung-cap-global KEINE Item-Eigenschaft mehr (system_settings,
+// Key bewirtung_max_per_team) — er bleibt hier trotzdem Parameter, weil jeder Testfall
+// ihn zusammen mit seiner Vorlage aufsetzt. Zwei Aufrufe mit UNTERSCHIEDLICHEN Caps im
+// selben Test wären widersprüchlich; setMaxPerTeamI schlägt in dem Fall fehl, statt den
+// vorherigen Wert still zu überschreiben.
 func insertRotationTemplateI(t *testing.T, db *sql.DB, dutyTypeID, offsetMin, slotsCount, maxPerTeam int) int {
 	t.Helper()
 	templateID := insertTemplateI(t, db, dutyTypeID, offsetMin, slotsCount)
 	if _, err := db.Exec(
-		`UPDATE game_template_items SET rotation_max_per_team=? WHERE template_id=?`,
-		maxPerTeam, templateID); err != nil {
-		t.Fatalf("set rotation_max_per_team: %v", err)
+		`UPDATE game_template_items SET rotation_enabled=1 WHERE template_id=?`,
+		templateID); err != nil {
+		t.Fatalf("set rotation_enabled: %v", err)
 	}
+	setMaxPerTeamI(t, db, maxPerTeam)
 	return templateID
+}
+
+// setMaxPerTeamI überschreibt den vereinsweiten Cap „Max. Kuchen pro Mannschaft".
+// Schlägt fehl, wenn die von Migration 046 angelegte Row fehlt — oder wenn bereits ein
+// abweichender Wert gesetzt wurde (siehe insertRotationTemplateI).
+func setMaxPerTeamI(t *testing.T, db *sql.DB, value int) {
+	t.Helper()
+	var current string
+	if err := db.QueryRow(
+		`SELECT value FROM system_settings WHERE key='bewirtung_max_per_team'`).Scan(&current); err != nil {
+		t.Fatalf("read bewirtung_max_per_team: %v", err)
+	}
+	want := strconv.Itoa(value)
+	if current != "1" && current != want {
+		t.Fatalf("bewirtung_max_per_team ist bereits %q — zwei abweichende Caps in einem Test", current)
+	}
+	if _, err := db.Exec(
+		`UPDATE system_settings SET value=? WHERE key='bewirtung_max_per_team'`, want); err != nil {
+		t.Fatalf("set bewirtung_max_per_team: %v", err)
+	}
 }
 
 // setVerhaeltnisI überschreibt das vereinsweite Spiele-zu-Kuchen-Verhältnis. Schlägt
@@ -348,7 +376,7 @@ func TestRotation_ZusageUeberlebtVerschobeneTeamZuordnung(t *testing.T) {
 }
 
 // TestRotation_NichtRotationsItemBehaeltTeamImMatchKey (spec: "Nicht-Rotations-Item behält
-// das bestehende Matching", Regressionstest): ohne rotation_max_per_team bleibt team_id
+// das bestehende Matching", Regressionstest): ohne rotation_enabled bleibt team_id
 // Teil des Dreier-Keys — wechselt das Team des Spiels, ist die Zusage verloren und der
 // Nutzer wird benachrichtigt. Zusätzlich entsteht weiterhin ein Slot pro Team des Spiels.
 func TestRotation_NichtRotationsItemBehaeltTeamImMatchKey(t *testing.T) {
@@ -362,7 +390,7 @@ func TestRotation_NichtRotationsItemBehaeltTeamImMatchKey(t *testing.T) {
 	userID := testutil.CreateUser(t, db, "standard")
 
 	kasse := insertDutyTypeI(t, db, "Kasse", "", 0, "", 0)
-	tpl := insertTemplateI(t, db, kasse, 0, 1) // kein rotation_max_per_team
+	tpl := insertTemplateI(t, db, kasse, 0, 1) // rotation_enabled bleibt 0
 	gameID := insertGameI(t, db, seasonID, teamA, "2026-06-13", "10:00", tpl)
 
 	// Zweites Team am selben Spiel → weiterhin ein Slot pro Team.
@@ -436,4 +464,33 @@ func TestRotation_EinSlotProSpielTrotzZweierTeams(t *testing.T) {
 	}
 	// Warteschlange [A,B] (beide über Spiel 1 eingetreten), Cap 1 → A, dann B.
 	assertTeams(t, db, kuchen, []int{game1, game2}, []int{teamA, teamB})
+}
+
+// TestRotation_CapGiltVorlagenuebergreifend (spec: "Ein geänderter Cap wirkt sofort für
+// alle Vorlagen", bewirtung-cap-global): zwei Heim-Vorlagen tragen rotations-aktive Items
+// desselben Duty-Types. Vor dem Umzug in die Einstellungen hätte der Cap der ERSTEN
+// Vorlage für beide gegolten ("erster gewinnt"); jetzt gibt es nur noch einen Wert.
+func TestRotation_CapGiltVorlagenuebergreifend(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B")
+	seedAgeClassRuleI(t, db, teamA)
+	seedAgeClassRuleI(t, db, teamB)
+	h := newRegenTestHandler(t, db)
+
+	kuchen := insertDutyTypeI(t, db, "Kuchen", "", 0, "", 0)
+	tplEins := insertRotationTemplateI(t, db, kuchen, 0, 1, 2)
+	tplZwei := insertRotationTemplateI(t, db, kuchen, 0, 1, 2)
+
+	// Vier Heimspiele, abwechselnd aus beiden Vorlagen, Warteschlange [A,B], Cap 2.
+	game1 := insertGameI(t, db, seasonID, teamA, "2026-06-13", "09:00", tplEins)
+	game2 := insertGameI(t, db, seasonID, teamB, "2026-06-13", "10:00", tplZwei)
+	game3 := insertGameI(t, db, seasonID, teamA, "2026-06-13", "11:00", tplZwei)
+	game4 := insertGameI(t, db, seasonID, teamB, "2026-06-13", "12:00", tplEins)
+
+	regenDate(t, h, db, "2026-06-13", seasonID, nil)
+
+	// Ein einziger Cap 2 über beide Vorlagen hinweg → A, A, B, B.
+	assertTeams(t, db, kuchen, []int{game1, game2, game3, game4}, []int{teamA, teamA, teamB, teamB})
 }

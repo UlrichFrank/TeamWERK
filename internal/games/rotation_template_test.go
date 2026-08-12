@@ -10,11 +10,13 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
-// Tests für die optionale Rotations-Cap-Spalte eines Vorlagen-Items
-// (game_template_items.rotation_max_per_team, kuchendienst-rotation).
-// NULL (Default) lässt das bestehende Verhalten unverändert; ein gesetzter
-// Wert aktiviert den Rotations-Modus und setzt same_day_behavior='normal'
-// UND adjacent_day_behavior='normal' auf dem referenzierten Duty-Type voraus.
+// Tests für den Rotations-Schalter eines Vorlagen-Items
+// (game_template_items.rotation_enabled, kuchendienst-rotation +
+// bewirtung-cap-global). 0 (Default) lässt das bestehende Verhalten unverändert;
+// 1 aktiviert den Rotations-Modus und setzt same_day_behavior='normal' UND
+// adjacent_day_behavior='normal' auf dem referenzierten Duty-Type voraus. Die
+// Obergrenze pro Mannschaft steckt nicht mehr hier, sondern vereinsweit in
+// system_settings (siehe internal/settings/bewirtung_test.go).
 
 // insertDutyTypeWithBehavior legt einen duty_types-Eintrag mit explizitem
 // same_day_behavior/adjacent_day_behavior an — Geschwister von insertDutyType
@@ -31,10 +33,10 @@ func insertDutyTypeWithBehavior(t *testing.T, db *sql.DB, name, sameDayBehavior,
 	return int(id)
 }
 
-// TestUpdateTemplate_RotationMaxPerTeam_GespeichertBeiNormalBehavior: ein
-// Vorstand kann den Rotations-Cap setzen, wenn der Duty-Type same_day_behavior
+// TestUpdateTemplate_RotationEnabled_GespeichertBeiNormalBehavior: ein
+// Vorstand kann die Rotation aktivieren, wenn der Duty-Type same_day_behavior
 // UND adjacent_day_behavior auf 'normal' stehen (Bestandswert von 'Kuchen').
-func TestUpdateTemplate_RotationMaxPerTeam_GespeichertBeiNormalBehavior(t *testing.T) {
+func TestUpdateTemplate_RotationEnabled_GespeichertBeiNormalBehavior(t *testing.T) {
 	db := testutil.NewDB(t)
 	dutyTypeID := insertDutyTypeWithBehavior(t, db, "Kuchen", "normal", "normal")
 	templateID := seedTeamScopeTemplate(t, db, "Heim", dutyTypeID, nil)
@@ -48,7 +50,7 @@ func TestUpdateTemplate_RotationMaxPerTeam_GespeichertBeiNormalBehavior(t *testi
 		"items": []map[string]any{{
 			"duty_type_id": dutyTypeID, "anchor": "start",
 			"offset_minutes": -60, "slots_count": 1,
-			"rotation_max_per_team": 2,
+			"rotation_enabled": true,
 		}},
 	})
 	res.Body.Close()
@@ -56,29 +58,28 @@ func TestUpdateTemplate_RotationMaxPerTeam_GespeichertBeiNormalBehavior(t *testi
 		t.Fatalf("expected 204, got %d", res.StatusCode)
 	}
 
-	var stored sql.NullInt64
+	var stored bool
 	if err := db.QueryRow(
-		`SELECT rotation_max_per_team FROM game_template_items WHERE template_id=?`, templateID).Scan(&stored); err != nil {
-		t.Fatalf("read rotation_max_per_team: %v", err)
+		`SELECT rotation_enabled FROM game_template_items WHERE template_id=?`, templateID).Scan(&stored); err != nil {
+		t.Fatalf("read rotation_enabled: %v", err)
 	}
-	if !stored.Valid || stored.Int64 != 2 {
-		t.Errorf("expected rotation_max_per_team=2, got valid=%v value=%v", stored.Valid, stored.Int64)
+	if !stored {
+		t.Error("expected rotation_enabled=1")
 	}
 
 	items := templateItemsFromAPI(t, srv, templateID, token)
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
-	got, ok := items[0]["rotation_max_per_team"].(float64)
-	if !ok || int(got) != 2 {
-		t.Errorf("expected rotation_max_per_team=2 in response, got %#v", items[0]["rotation_max_per_team"])
+	if got, ok := items[0]["rotation_enabled"].(bool); !ok || !got {
+		t.Errorf("expected rotation_enabled=true in response, got %#v", items[0]["rotation_enabled"])
 	}
 }
 
-// TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesSameDayBehaviorAb:
-// same_day_behavior != 'normal' + gesetzter Cap → 400 rotation_requires_normal_behavior,
+// TestUpdateTemplate_RotationEnabled_LehntAbweichendesSameDayBehaviorAb:
+// same_day_behavior != 'normal' + aktivierte Rotation → 400 rotation_requires_normal_behavior,
 // die gesamte Vorlage bleibt unverändert (kein Teil-Write).
-func TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesSameDayBehaviorAb(t *testing.T) {
+func TestUpdateTemplate_RotationEnabled_LehntAbweichendesSameDayBehaviorAb(t *testing.T) {
 	db := testutil.NewDB(t)
 	dutyTypeID := insertDutyTypeWithBehavior(t, db, "Kuchen", "skip", "normal")
 	templateID := seedTeamScopeTemplate(t, db, "Heim", dutyTypeID, nil)
@@ -92,7 +93,7 @@ func TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesSameDayBehaviorAb(t 
 		"items": []map[string]any{{
 			"duty_type_id": dutyTypeID, "anchor": "start",
 			"offset_minutes": -60, "slots_count": 1,
-			"rotation_max_per_team": 2,
+			"rotation_enabled": true,
 		}},
 	})
 	defer res.Body.Close()
@@ -107,22 +108,22 @@ func TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesSameDayBehaviorAb(t 
 		t.Errorf("expected error rotation_requires_normal_behavior, got %q", errBody.Error)
 	}
 
-	// Nichts wurde persistiert — weder Name noch die (fehlende) rotation_max_per_team-Spalte.
+	// Nichts wurde persistiert — weder Name noch der Rotations-Schalter.
 	var name string
 	db.QueryRow(`SELECT name FROM game_templates WHERE id=?`, templateID).Scan(&name)
 	if name != "Heim" {
 		t.Errorf("expected template name unchanged (Heim), got %q", name)
 	}
-	var stored sql.NullInt64
-	db.QueryRow(`SELECT rotation_max_per_team FROM game_template_items WHERE template_id=?`, templateID).Scan(&stored)
-	if stored.Valid {
-		t.Errorf("expected rotation_max_per_team still NULL, got %v", stored.Int64)
+	var stored bool
+	db.QueryRow(`SELECT rotation_enabled FROM game_template_items WHERE template_id=?`, templateID).Scan(&stored)
+	if stored {
+		t.Error("expected rotation_enabled still 0")
 	}
 }
 
-// TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesAdjacentDayBehaviorAb:
+// TestUpdateTemplate_RotationEnabled_LehntAbweichendesAdjacentDayBehaviorAb:
 // dieselbe Ablehnung gilt für adjacent_day_behavior != 'normal'.
-func TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesAdjacentDayBehaviorAb(t *testing.T) {
+func TestUpdateTemplate_RotationEnabled_LehntAbweichendesAdjacentDayBehaviorAb(t *testing.T) {
 	db := testutil.NewDB(t)
 	dutyTypeID := insertDutyTypeWithBehavior(t, db, "Kuchen", "normal", "reduced")
 	templateID := seedTeamScopeTemplate(t, db, "Heim", dutyTypeID, nil)
@@ -136,7 +137,7 @@ func TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesAdjacentDayBehaviorA
 		"items": []map[string]any{{
 			"duty_type_id": dutyTypeID, "anchor": "start",
 			"offset_minutes": -60, "slots_count": 1,
-			"rotation_max_per_team": 1,
+			"rotation_enabled": true,
 		}},
 	})
 	defer res.Body.Close()
@@ -152,10 +153,10 @@ func TestUpdateTemplate_RotationMaxPerTeam_LehntAbweichendesAdjacentDayBehaviorA
 	}
 }
 
-// TestUpdateTemplate_RotationMaxPerTeam_StandardNutzerVerboten: ohne
+// TestUpdateTemplate_RotationEnabled_StandardNutzerVerboten: ohne
 // Vereinsfunktion vorstand bleibt PUT gesperrt (403), auch wenn der Request
-// ein rotation_max_per_team-Feld trägt.
-func TestUpdateTemplate_RotationMaxPerTeam_StandardNutzerVerboten(t *testing.T) {
+// ein rotation_enabled-Feld trägt.
+func TestUpdateTemplate_RotationEnabled_StandardNutzerVerboten(t *testing.T) {
 	db := testutil.NewDB(t)
 	dutyTypeID := insertDutyTypeWithBehavior(t, db, "Kuchen", "normal", "normal")
 	templateID := seedTeamScopeTemplate(t, db, "Heim", dutyTypeID, nil)
@@ -169,7 +170,7 @@ func TestUpdateTemplate_RotationMaxPerTeam_StandardNutzerVerboten(t *testing.T) 
 		"items": []map[string]any{{
 			"duty_type_id": dutyTypeID, "anchor": "start",
 			"offset_minutes": -60, "slots_count": 1,
-			"rotation_max_per_team": 3,
+			"rotation_enabled": true,
 		}},
 	})
 	defer res.Body.Close()
@@ -177,9 +178,9 @@ func TestUpdateTemplate_RotationMaxPerTeam_StandardNutzerVerboten(t *testing.T) 
 		t.Fatalf("expected 403, got %d", res.StatusCode)
 	}
 
-	var stored sql.NullInt64
-	db.QueryRow(`SELECT rotation_max_per_team FROM game_template_items WHERE template_id=?`, templateID).Scan(&stored)
-	if stored.Valid {
-		t.Errorf("expected rotation_max_per_team still NULL, got %v", stored.Int64)
+	var stored bool
+	db.QueryRow(`SELECT rotation_enabled FROM game_template_items WHERE template_id=?`, templateID).Scan(&stored)
+	if stored {
+		t.Error("expected rotation_enabled still 0")
 	}
 }

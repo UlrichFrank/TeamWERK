@@ -216,7 +216,7 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		// reihenfolge abgeleitet und damit kein stabiles Merkmal des Slots.
 		rotationTypes := map[int]bool{}
 		for _, it := range items {
-			if it.RotationMaxPerTeam.Valid {
+			if it.RotationEnabled {
 				rotationTypes[it.DutyTypeID] = true
 			}
 		}
@@ -618,14 +618,14 @@ type rotationAssignment struct {
 type rotationPlan map[int]map[int]rotationAssignment
 
 // rotationGroup sammelt pro rotations-aktiviertem duty_type_id die Heimspiele des Tages
-// (chronologisch, weil loadDayGames nach time,id sortiert), die zugehörige Team-
-// Warteschlange (jedes Team genau einmal, an der Position seines ersten Heimspiels)
-// und den Cap pro Mannschaft.
+// (chronologisch, weil loadDayGames nach time,id sortiert) und die zugehörige Team-
+// Warteschlange (jedes Team genau einmal, an der Position seines ersten Heimspiels).
+// Der Cap pro Mannschaft gehört bewusst NICHT hierher: er ist seit
+// bewirtung-cap-global vereinsweit und damit für alle Gruppen eines Laufs derselbe.
 type rotationGroup struct {
 	gameIDs []int
 	queue   []int
 	inQueue map[int]bool
-	cap     int
 }
 
 // buildRotationPlan berechnet die tagesweite Bewirtungsrotation VOR der Pro-Spiel-
@@ -633,8 +633,7 @@ type rotationGroup struct {
 // eines Tages von der Gesamtzahl seiner Heimspiele abhängt — die Pro-Spiel-Schleife
 // allein kann das strukturell nicht wissen.
 //
-// Ablauf je Gruppe (gruppiert nach duty_type_id der Items mit gesetztem
-// rotation_max_per_team):
+// Ablauf je Gruppe (gruppiert nach duty_type_id der Items mit rotation_enabled=1):
 //  1. Heimspiele des Tages (event_type='heim') in chronologischer Reihenfolge, aber
 //     nur die, deren Vorlage dieses Item überhaupt trägt.
 //  2. Team-Warteschlange: jedes Team des Spiels tritt bei seinem ersten Auftreten ein
@@ -643,9 +642,11 @@ type rotationGroup struct {
 //  3. Bedarf = min(Anzahl Heimspiele, aufgerundet(Anzahl × Verhältnis)) — ein Verhältnis
 //     > 1 wirkt nur bis zur Spieleanzahl, weil pro Spiel höchstens ein Rotations-Slot
 //     entsteht (Decision 2).
-//  4. Greedy-Zuteilung: die ersten `cap` Slots an Team 1 der Warteschlange, die nächsten
-//     an Team 2 usw. Ist die Warteschlange erschöpft, entsteht der Slot ohne Team
+//  4. Greedy-Zuteilung: die ersten `maxPerTeam` Slots an Team 1 der Warteschlange, die
+//     nächsten an Team 2 usw. Ist die Warteschlange erschöpft, entsteht der Slot ohne Team
 //     (team_id=NULL) — der Cap wird nie verletzt und kein Team doppelt herangezogen.
+//     `maxPerTeam` ist vereinsweit (system_settings) und gilt für alle Gruppen dieses
+//     Laufs gleichermaßen — es gibt keinen vorlagenabhängigen Cap mehr.
 //
 // Es gibt bewusst KEINEN Zustand über Tagesgrenzen hinweg: jeder Spieltag startet die
 // Warteschlange bei Position 1 (Non-Goal aus design.md).
@@ -662,7 +663,7 @@ func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []
 		}
 		var rotationItems []templateItemRow
 		for _, it := range items {
-			if it.RotationMaxPerTeam.Valid {
+			if it.RotationEnabled {
 				rotationItems = append(rotationItems, it)
 			}
 		}
@@ -678,10 +679,7 @@ func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []
 		for _, it := range rotationItems {
 			grp := groups[it.DutyTypeID]
 			if grp == nil {
-				// Der Cap kommt vom ersten Spiel der Gruppe. Unterschiedliche Caps für
-				// denselben Duty-Type an einem Tag (verschiedene Vorlagen) sind nicht
-				// definiert — "erster gewinnt" statt stiller Mischung.
-				grp = &rotationGroup{inQueue: map[int]bool{}, cap: int(it.RotationMaxPerTeam.Int64)}
+				grp = &rotationGroup{inQueue: map[int]bool{}}
 				groups[it.DutyTypeID] = grp
 			}
 			grp.gameIDs = append(grp.gameIDs, g.ID)
@@ -697,9 +695,14 @@ func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []
 		return rotationPlan{}, nil
 	}
 
+	// Beide Vereinswerte einmal pro Lauf, in derselben tx wie der Rest des Regens.
 	verhaeltnis, err := settings.GetBewirtungVerhaeltnis(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("rotation: read bewirtung_verhaeltnis: %w", err)
+	}
+	maxPerTeam, err := settings.GetBewirtungMaxPerTeam(ctx, tx)
+	if err != nil {
+		return nil, fmt.Errorf("rotation: read bewirtung_max_per_team: %w", err)
 	}
 
 	plan := rotationPlan{}
@@ -717,8 +720,8 @@ func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []
 		queueIdx, usedByCurrent := 0, 0
 		for i := 0; i < demand; i++ {
 			a := rotationAssignment{HasSlot: true}
-			if grp.cap > 0 {
-				for queueIdx < len(grp.queue) && usedByCurrent >= grp.cap {
+			if maxPerTeam > 0 {
+				for queueIdx < len(grp.queue) && usedByCurrent >= maxPerTeam {
 					queueIdx++
 					usedByCurrent = 0
 				}
@@ -820,7 +823,7 @@ func (h *Handler) regenGameItems(
 		// 'normal' → resultDutyTypeID == it.DutyTypeID. Der Schlüssel lässt team_id
 		// deshalb konsistent mit makeCustomKey weg (design.md Decision 5).
 		itemRotationTypes := map[int]bool{}
-		if it.RotationMaxPerTeam.Valid {
+		if it.RotationEnabled {
 			itemRotationTypes[resultDutyTypeID] = true
 		}
 
@@ -856,7 +859,7 @@ func (h *Handler) regenGameItems(
 		// mehr Slots melden, als tatsächlich entstanden sind.
 		matchedTeams := 0
 		switch {
-		case it.RotationMaxPerTeam.Valid:
+		case it.RotationEnabled:
 			// Rotations-Item: kein Team-Loop. Ob dieses Spiel einen Slot bekommt und
 			// welchem Team er zugerechnet wird, hat buildRotationPlan tagesweit
 			// entschieden. Kein Plan-Eintrag (Verhältnis < 1, oder gar kein Heimspiel)
@@ -1078,7 +1081,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 	rows, err := tx.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
-		        gti.audiences, gti.team_ids, gti.rotation_max_per_team
+		        gti.audiences, gti.team_ids, gti.rotation_enabled
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -1092,7 +1095,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 		if err := rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
-			&it.RotationMaxPerTeam); err != nil {
+			&it.RotationEnabled); err != nil {
 			return nil, err
 		}
 		it.TeamIDs = teamIDsFromDB(teamIDs)

@@ -454,18 +454,19 @@ type templateItemRow struct {
 	AdjacentDayVariantID sql.NullInt64
 	Audiences            sql.NullString
 	TeamIDs              []int
-	// RotationMaxPerTeam aktiviert für dieses Item den Bewirtungsrotations-
-	// Modus (kuchendienst-rotation): NULL = bestehendes Verhalten (ein Slot
-	// pro Team des jeweiligen Spiels), gesetzt = Cap pro Team in der
-	// tagesweiten Team-Warteschlange (siehe regen.go, buildRotationPlan).
-	RotationMaxPerTeam sql.NullInt64
+	// RotationEnabled schaltet für dieses Item den Bewirtungsrotations-Modus
+	// ein (kuchendienst-rotation): false = bestehendes Verhalten (ein Slot pro
+	// Team des jeweiligen Spiels), true = tagesweite Team-Warteschlange (siehe
+	// regen.go, buildRotationPlan). Die Obergrenze pro Mannschaft steht seit
+	// bewirtung-cap-global vereinsweit in system_settings, nicht mehr hier.
+	RotationEnabled bool
 }
 
 func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]templateItemRow, error) {
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
-		        gti.audiences, gti.team_ids, gti.rotation_max_per_team
+		        gti.audiences, gti.team_ids, gti.rotation_enabled
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -479,7 +480,7 @@ func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]temp
 		rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
-			&it.RotationMaxPerTeam)
+			&it.RotationEnabled)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
 		result = append(result, it)
 	}
@@ -1716,16 +1717,17 @@ type templateItem struct {
 	// TeamIDs schränkt ein, für welche Teams eines Spiels aus diesem Item ein
 	// Slot entsteht. Leer/NULL = alle Teams (umgekehrte Leer-Semantik zu Audiences).
 	TeamIDs []int `json:"team_ids,omitempty"`
-	// RotationMaxPerTeam (kuchendienst-rotation): nil = Rotation deaktiviert
-	// (bestehendes Verhalten), gesetzt = Cap pro Team in der tagesweiten
-	// Bewirtungs-Warteschlange. Setzt same_day_behavior/adjacent_day_behavior
-	// des Duty-Types = 'normal' voraus (UpdateTemplate validiert das).
-	RotationMaxPerTeam *int `json:"rotation_max_per_team,omitempty"`
+	// RotationEnabled (kuchendienst-rotation): false = Rotation deaktiviert
+	// (bestehendes Verhalten), true = tagesweite Bewirtungs-Warteschlange. Die
+	// Obergrenze pro Mannschaft ist vereinsweit (settings, Tab „Bewirtung"),
+	// nicht Teil des Items. Setzt same_day_behavior/adjacent_day_behavior des
+	// Duty-Types = 'normal' voraus (UpdateTemplate validiert das).
+	RotationEnabled bool `json:"rotation_enabled"`
 }
 
 func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templateItem {
 	rows, _ := h.db.QueryContext(ctx,
-		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.audiences, gti.team_ids, gti.rotation_max_per_team
+		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.audiences, gti.team_ids, gti.rotation_enabled
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	items := []templateItem{}
@@ -1736,14 +1738,9 @@ func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templ
 	for rows.Next() {
 		var it templateItem
 		var audiences, teamIDs sql.NullString
-		var rotationMax sql.NullInt64
-		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &audiences, &teamIDs, &rotationMax)
+		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &audiences, &teamIDs, &it.RotationEnabled)
 		it.Audiences = audiencesFromDB(audiences)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
-		if rotationMax.Valid {
-			v := int(rotationMax.Int64)
-			it.RotationMaxPerTeam = &v
-		}
 		items = append(items, it)
 	}
 	return items
@@ -1885,16 +1882,12 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		// Rotations-Cap setzt same_day_behavior='normal' UND
+		// Rotation setzt same_day_behavior='normal' UND
 		// adjacent_day_behavior='normal' voraus — sonst müsste die Rotation
 		// zusätzlich mit variantenwechselndem Duty-Type umgehen (siehe
 		// design.md). Nichts wird persistiert, wenn diese Prüfung fehlschlägt.
-		if it.RotationMaxPerTeam != nil && (sameDayBehavior != "normal" || adjacentDayBehavior != "normal") {
+		if it.RotationEnabled && (sameDayBehavior != "normal" || adjacentDayBehavior != "normal") {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rotation_requires_normal_behavior"})
-			return
-		}
-		if it.RotationMaxPerTeam != nil && *it.RotationMaxPerTeam <= 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_rotation_max_per_team"})
 			return
 		}
 		// team_ids wird nur gegen die Existenz in teams geprüft, bewusst NICHT
@@ -1936,15 +1929,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i, it := range req.Items {
-		var rotationMaxVal any
-		if it.RotationMaxPerTeam != nil {
-			rotationMaxVal = *it.RotationMaxPerTeam
-		}
 		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_max_per_team)
+			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled)
 			 VALUES (?,?,?,?,?,?,?,?,?)`,
 			id, it.DutyTypeID, it.Anchor, it.OffsetMinutes, it.SlotsCount, i,
-			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), rotationMaxVal)
+			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

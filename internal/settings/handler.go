@@ -76,8 +76,10 @@ func (h *Handler) SetMaintenanceMode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
 }
 
-// GetBewirtung liefert das aktuelle Spiele-zu-Kuchen-Verhältnis. Authenticated-
-// Tier — jeder eingeloggte Nutzer darf lesen (siehe spec bewirtungsrotation).
+// GetBewirtung liefert die beiden vereinsweiten Bewirtungswerte: das
+// Spiele-zu-Kuchen-Verhältnis und die Obergrenze pro Mannschaft.
+// Authenticated-Tier — jeder eingeloggte Nutzer darf lesen (siehe spec
+// bewirtungsrotation).
 func (h *Handler) GetBewirtung(w http.ResponseWriter, r *http.Request) {
 	v, err := GetBewirtungVerhaeltnis(r.Context(), h.db)
 	if err != nil {
@@ -85,13 +87,25 @@ func (h *Handler) GetBewirtung(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"verhaeltnis": v})
+	maxPerTeam, err := GetBewirtungMaxPerTeam(r.Context(), h.db)
+	if err != nil {
+		slog.Error("settings: get bewirtung_max_per_team failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"verhaeltnis": v, "max_per_team": maxPerTeam})
 }
 
-// SetBewirtung ändert das Spiele-zu-Kuchen-Verhältnis. Erwartet Body
-// `{"verhaeltnis": number}`; Gating (vorstand/admin) sitzt in der Router-
-// Middleware. Validiert > 0 (400 sonst, nichts wird persistiert) und
-// broadcastet "settings-changed" (gleiches SSE-Event wie der Wartungsmodus-
+// SetBewirtung ändert Verhältnis und/oder Cap. Erwartet Body
+// `{"verhaeltnis": number, "max_per_team": number}`; Gating (vorstand/admin)
+// sitzt in der Router-Middleware.
+//
+// Beide Felder sind Pointer: ein im Body fehlendes Feld bleibt unverändert.
+// Beide werden VOR dem ersten Schreibvorgang validiert — sonst könnte ein
+// gültiges Verhältnis zusammen mit einem ungültigen Cap eine Teil-Persistenz
+// hinterlassen, obwohl der Aufrufer ein 400 sieht.
+//
+// Broadcast "settings-changed" (gleiches SSE-Event wie der Wartungsmodus-
 // Toggle) nach erfolgreichem Schreiben.
 func (h *Handler) SetBewirtung(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -100,25 +114,42 @@ func (h *Handler) SetBewirtung(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Verhaeltnis float64 `json:"verhaeltnis"`
+		Verhaeltnis *float64 `json:"verhaeltnis"`
+		MaxPerTeam  *int     `json:"max_per_team"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if err := SetBewirtungVerhaeltnis(r.Context(), h.db, body.Verhaeltnis, claims.UserID); err != nil {
-		if err == ErrInvalidVerhaeltnis {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_verhaeltnis"})
+	if body.Verhaeltnis != nil && *body.Verhaeltnis <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_verhaeltnis"})
+		return
+	}
+	if body.MaxPerTeam != nil && *body.MaxPerTeam <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_max_per_team"})
+		return
+	}
+
+	if body.Verhaeltnis != nil {
+		if err := SetBewirtungVerhaeltnis(r.Context(), h.db, *body.Verhaeltnis, claims.UserID); err != nil {
+			slog.Error("settings: set bewirtung_verhaeltnis failed", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		slog.Error("settings: set bewirtung_verhaeltnis failed", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+	}
+	if body.MaxPerTeam != nil {
+		if err := SetBewirtungMaxPerTeam(r.Context(), h.db, *body.MaxPerTeam, claims.UserID); err != nil {
+			slog.Error("settings: set bewirtung_max_per_team failed", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 	}
 	if h.hub != nil {
 		h.hub.Broadcast("settings-changed")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"verhaeltnis": body.Verhaeltnis})
+	// Antwort spiegelt den Zustand nach dem Schreiben — inklusive der Felder,
+	// die der Aufrufer nicht mitgeschickt hat.
+	h.GetBewirtung(w, r)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
