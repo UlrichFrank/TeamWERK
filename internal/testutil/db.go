@@ -3,6 +3,9 @@ package testutil
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -14,26 +17,87 @@ import (
 
 var dbCounter atomic.Uint64
 
-// NewDB opens a fresh in-memory SQLite database with all migrations applied.
-// Each test gets its own named shared-cache database so that multiple goroutines
-// (e.g. HTTP handlers in httptest servers) can share the migrated schema without
-// needing SetMaxOpenConns(1), which would serialize concurrent-claim tests.
-// The connection is closed automatically when the test ends.
+var (
+	goldenOnce  sync.Once
+	goldenBytes []byte
+	goldenErr   error
+)
+
+// goldenSchema migriert einmal pro Testbinary eine vollständige SQLite-Datei
+// (alle Migrationen + seedBaseData) und hält ihre Bytes im Speicher vor.
+// NewDB kopiert diese Bytes statt bei jedem Test alle Migrationen erneut
+// abzuspielen: bei ~500 Testfunktionen allein in internal/auth, internal/games
+// und internal/members sprengte das wiederholte db.Migrate() unter `-race`
+// (~10× langsamer als ohne, siehe Makefile test-race) den 10-Minuten-Timeout
+// von `go test` (deploy.yml gate, gescheitert am 2026-07-17).
+func goldenSchema() ([]byte, error) {
+	goldenOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "teamwerk-golden")
+		if err != nil {
+			goldenErr = fmt.Errorf("golden tempdir: %w", err)
+			return
+		}
+		defer os.RemoveAll(dir)
+
+		path := filepath.Join(dir, "golden.db")
+		database, err := sql.Open("sqlite-busy-counting", fmt.Sprintf("file:%s?_pragma=foreign_keys=on", path))
+		if err != nil {
+			goldenErr = fmt.Errorf("golden open: %w", err)
+			return
+		}
+		// Ephemere Einmal-Datei — Durability ist irrelevant, nur Tempo zählt.
+		if _, err := database.Exec(`PRAGMA synchronous=OFF`); err != nil {
+			database.Close()
+			goldenErr = fmt.Errorf("golden pragma: %w", err)
+			return
+		}
+		if err := db.Migrate(database, db.MigrationsFS); err != nil {
+			database.Close()
+			goldenErr = fmt.Errorf("golden migrate: %w", err)
+			return
+		}
+		if err := seedBaseData(database); err != nil {
+			database.Close()
+			goldenErr = fmt.Errorf("golden seed: %w", err)
+			return
+		}
+		if err := database.Close(); err != nil {
+			goldenErr = fmt.Errorf("golden close: %w", err)
+			return
+		}
+		goldenBytes, err = os.ReadFile(path)
+		if err != nil {
+			goldenErr = fmt.Errorf("golden read: %w", err)
+		}
+	})
+	return goldenBytes, goldenErr
+}
+
+// NewDB liefert eine aus der golden schema kopierte SQLite-Datei mit allen
+// Migrationen + Basisdaten. Jeder Test bekommt seine eigene, in t.TempDir()
+// liegende Kopie — eine echte Datei statt des früheren ":memory:"-Shared-Cache-
+// Tricks, dadurch teilen sich mehrere Goroutinen (z.B. HTTP-Handler in
+// httptest-Servern) die DB weiterhin ohne SetMaxOpenConns(1) (das
+// Concurrent-Claim-Tests serialisieren würde) — SQLite-Dateien sind dafür
+// naturgemäß ausgelegt, ganz ohne cache=shared-Sonderfall.
+// Die Verbindung wird beim Testende automatisch geschlossen.
 func NewDB(t *testing.T) *sql.DB {
 	t.Helper()
-	name := fmt.Sprintf("testdb_%d", dbCounter.Add(1))
-	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared&_pragma=foreign_keys=on", name)
-	database, err := sql.Open("sqlite-busy-counting", dsn)
+	schema, err := goldenSchema()
+	if err != nil {
+		t.Fatalf("testutil.NewDB golden schema: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), fmt.Sprintf("testdb_%d.db", dbCounter.Add(1)))
+	if err := os.WriteFile(path, schema, 0o600); err != nil {
+		t.Fatalf("testutil.NewDB write: %v", err)
+	}
+	database, err := sql.Open("sqlite-busy-counting", fmt.Sprintf("file:%s?_pragma=foreign_keys=on", path))
 	if err != nil {
 		t.Fatalf("testutil.NewDB open: %v", err)
 	}
-	if err := db.Migrate(database, db.MigrationsFS); err != nil {
+	if _, err := database.Exec(`PRAGMA synchronous=OFF`); err != nil {
 		database.Close()
-		t.Fatalf("testutil.NewDB migrate: %v", err)
-	}
-	if err := seedBaseData(database); err != nil {
-		database.Close()
-		t.Fatalf("testutil.NewDB seed: %v", err)
+		t.Fatalf("testutil.NewDB pragma: %v", err)
 	}
 	t.Cleanup(func() { database.Close() })
 	return database
