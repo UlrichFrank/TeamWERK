@@ -460,13 +460,19 @@ type templateItemRow struct {
 	// regen.go, buildRotationPlan). Die Obergrenze pro Mannschaft steht seit
 	// bewirtung-cap-global vereinsweit in system_settings, nicht mehr hier.
 	RotationEnabled bool
+	// AusrichterID bindet dieses Item an einen Ausrichter (heimspieltag-ausrichter):
+	// NULL = die Zeile gilt an jedem Spieltag (unverändertes Verhalten), gesetzt =
+	// die Zeile erzeugt nur an Spieltagen Slots, deren aufgelöster Tages-Ausrichter
+	// übereinstimmt. Das Gate selbst wertet regen.go aus, hier wird der Wert nur
+	// gelesen/mitgeführt.
+	AusrichterID sql.NullInt64
 }
 
 func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]templateItemRow, error) {
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
-		        gti.audiences, gti.team_ids, gti.rotation_enabled
+		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -480,7 +486,7 @@ func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]temp
 		rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
-			&it.RotationEnabled)
+			&it.RotationEnabled, &it.AusrichterID)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
 		result = append(result, it)
 	}
@@ -1723,11 +1729,16 @@ type templateItem struct {
 	// nicht Teil des Items. Setzt same_day_behavior/adjacent_day_behavior des
 	// Duty-Types = 'normal' voraus (UpdateTemplate validiert das).
 	RotationEnabled bool `json:"rotation_enabled"`
+	// AusrichterID (heimspieltag-ausrichter): nil = Item gilt an jedem
+	// Spieltag; gesetzt = nur an Spieltagen mit diesem aufgelösten
+	// Tages-Ausrichter. Nur auf Vorlagen mit template_type='heim' zulässig
+	// (UpdateTemplate validiert das vor dem ersten Schreibvorgang).
+	AusrichterID *int `json:"ausrichter_id,omitempty"`
 }
 
 func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templateItem {
 	rows, _ := h.db.QueryContext(ctx,
-		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.audiences, gti.team_ids, gti.rotation_enabled
+		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	items := []templateItem{}
@@ -1738,9 +1749,14 @@ func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templ
 	for rows.Next() {
 		var it templateItem
 		var audiences, teamIDs sql.NullString
-		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &audiences, &teamIDs, &it.RotationEnabled)
+		var ausrichterID sql.NullInt64
+		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &audiences, &teamIDs, &it.RotationEnabled, &ausrichterID)
 		it.Audiences = audiencesFromDB(audiences)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
+		if ausrichterID.Valid {
+			v := int(ausrichterID.Int64)
+			it.AusrichterID = &v
+		}
 		items = append(items, it)
 	}
 	return items
@@ -1901,6 +1917,22 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		// ausrichter_id (heimspieltag-ausrichter): nur auf Heim-Vorlagen zulässig
+		// (design.md Decision 5, gleiches Muster wie rotation_requires_normal_behavior
+		// oben) und muss auf eine existierende Zeile verweisen. Beide Prüfungen laufen
+		// hier, VOR tx.BeginTx unten, damit ein 400 keine Teil-Persistenz hinterlässt.
+		if it.AusrichterID != nil {
+			if req.TemplateType != "heim" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ausrichter_requires_heim_template"})
+				return
+			}
+			var ausrichterExists int
+			if err := h.db.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM ausrichter WHERE id=?`, *it.AusrichterID).Scan(&ausrichterExists); err != nil || ausrichterExists == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_ausrichter"})
+				return
+			}
+		}
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -1929,11 +1961,15 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i, it := range req.Items {
+		var ausrichterID any
+		if it.AusrichterID != nil {
+			ausrichterID = *it.AusrichterID
+		}
 		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled)
-			 VALUES (?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled, ausrichter_id)
+			 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 			id, it.DutyTypeID, it.Anchor, it.OffsetMinutes, it.SlotsCount, i,
-			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled)
+			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled, ausrichterID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
