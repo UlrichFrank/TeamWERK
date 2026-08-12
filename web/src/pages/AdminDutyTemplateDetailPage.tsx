@@ -8,6 +8,8 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { TeamScopeField, RotationCapField } from '../components/DutyTemplateItemFields'
+import { toggleTeamID } from '../lib/dutyTemplateItems'
 import { errorData } from '../lib/errors'
 
 interface DutyType {
@@ -46,78 +48,6 @@ interface Template {
 
 function newItem(): TemplateItem {
   return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [], team_ids: [] }
-}
-
-/**
- * Team-Einschränkung eines Vorlagen-Eintrags. Achtung: umgekehrte Leer-Semantik
- * zur Zielgruppe direkt daneben — keine Auswahl heißt hier „gilt für alle Teams",
- * nicht „für niemanden". Deshalb steht „alle" im Hinweis hervorgehoben.
- * Optionen sind die Kaderteams der aktiven Saison; bereits gespeicherte Teams
- * ohne aktuellen Kader-Eintrag tauchen hier nicht auf, bleiben aber erhalten
- * (der Toggle baut das Array nie neu auf).
- */
-function TeamScopeField({ teams, shortNames, selected, onToggle }: {
-  teams: TeamForName[]
-  shortNames: Map<number, string>
-  selected: number[]
-  onToggle: (teamID: number, checked: boolean) => void
-}) {
-  if (teams.length === 0) return null
-  return (
-    <div>
-      <label className="block text-xs text-brand-text-muted mb-1">
-        Kaderteams <span className="text-brand-text-subtle">(leer = <strong className="font-semibold">alle</strong> Teams)</span>
-      </label>
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {teams.map(t => (
-          <label key={t.id} className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={selected.includes(t.id)}
-              onChange={e => onToggle(t.id, e.target.checked)}
-              className="accent-brand-yellow"
-            />
-            {shortNames.get(t.id) ?? String(t.id)}
-          </label>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/**
- * Bewirtungsrotations-Cap eines Vorlagen-Eintrags (kuchendienst-rotation).
- * Leer = Rotation deaktiviert (Default, bisheriges Verhalten). Ein gesetzter
- * Wert aktiviert die tagesweite Team-Warteschlange — setzt serverseitig
- * same_day_behavior/adjacent_day_behavior='normal' beim Diensttyp voraus,
- * die Prüfung selbst läuft aber nur serverseitig (kein Client-Vorab-Check).
- */
-function RotationCapField({ id, value, onChange }: {
-  id: string
-  value: number | null | undefined
-  onChange: (v: number | null) => void
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-xs text-brand-text-muted mb-1">
-        Max. Kuchen pro Mannschaft <span className="text-brand-text-subtle">(leer = Rotation deaktiviert)</span>
-      </label>
-      <input
-        id={id}
-        type="number"
-        min={1}
-        value={value ?? ''}
-        onChange={e => {
-          const raw = e.target.value
-          onChange(raw === '' ? null : Number(raw))
-        }}
-        className="w-24 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
-      />
-      <p className="text-xs text-brand-text-subtle mt-1">
-        Setzt voraus, dass „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" beim Diensttyp auf „Normal (immer)" stehen.
-      </p>
-    </div>
-  )
 }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -166,16 +96,9 @@ export default function AdminDutyTemplateDetailPage() {
   const toggleItemTeam = (i: number, teamID: number, checked: boolean) => {
     setTemplate(t => t ? {
       ...t,
-      items: t.items.map((item, idx) => {
-        if (idx !== i) return item
-        const current = item.team_ids ?? []
-        return {
-          ...item,
-          team_ids: checked
-            ? (current.includes(teamID) ? current : [...current, teamID])
-            : current.filter(x => x !== teamID),
-        }
-      }),
+      items: t.items.map((item, idx) =>
+        idx === i ? { ...item, team_ids: toggleTeamID(item.team_ids, teamID, checked) } : item,
+      ),
     } : t)
   }
 

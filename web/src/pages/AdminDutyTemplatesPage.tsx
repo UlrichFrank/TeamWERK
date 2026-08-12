@@ -7,6 +7,9 @@ import EditModal from '../components/EditModal'
 import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
+import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { TeamScopeField, RotationCapField } from '../components/DutyTemplateItemFields'
+import { toggleTeamID } from '../lib/dutyTemplateItems'
 
 interface DutyType {
   id: number
@@ -22,6 +25,10 @@ interface TemplateItem {
   offset_minutes: number
   slots_count: number
   audiences: string[]
+  /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
+  team_ids?: number[] | null
+  /** Bewirtungsrotation: null/fehlend = deaktiviert. Siehe DutyTemplateItemFields. */
+  rotation_max_per_team?: number | null
 }
 
 interface DutyTemplate {
@@ -64,14 +71,20 @@ function newTemplate(): TemplateFormState {
 }
 
 function newItem(): TemplateItem {
-  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [] }
+  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [], team_ids: [] }
 }
 
-function TemplateForm({ template, onChange, dutyTypes }: {
+function TemplateForm({ template, onChange, dutyTypes, teams }: {
   template: TemplateFormState
   onChange: (template: TemplateFormState) => void
   dutyTypes: DutyType[]
+  teams: TeamForName[]
 }) {
+  // Wie auf der Detailseite: generische Vorlagen erzeugen Slots ohne team_id,
+  // die Regeneration ignoriert team_ids dort — die Auswahl wird deshalb gar
+  // nicht erst angeboten. Gespeicherte Werte bleiben unangetastet.
+  const scopeTeams = template.template_type === 'generisch' ? [] : teams
+  const teamShortNames = buildTeamShortNames(teams)
   const updateItem = (index: number, patch: Partial<TemplateItem>) => {
     onChange({
       ...template,
@@ -205,6 +218,21 @@ function TemplateForm({ template, onChange, dutyTypes }: {
                       ))}
                     </div>
                   </div>
+
+                  <TeamScopeField
+                    teams={scopeTeams}
+                    shortNames={teamShortNames}
+                    selected={item.team_ids ?? []}
+                    onToggle={(teamID, checked) => updateItem(index, {
+                      team_ids: toggleTeamID(item.team_ids, teamID, checked),
+                    })}
+                  />
+                  <RotationCapField
+                    id={`rotation-cap-modal-${index}`}
+                    value={item.rotation_max_per_team}
+                    onChange={v => updateItem(index, { rotation_max_per_team: v })}
+                  />
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-brand-text-muted mb-1">Anker</label>
@@ -243,6 +271,7 @@ function TemplateForm({ template, onChange, dutyTypes }: {
 export default function AdminDutyTemplatesPage() {
   const [templates, setTemplates] = useState<DutyTemplate[]>([])
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
+  const [teams, setTeams] = useState<TeamForName[]>([])
   const [loading, setLoading] = useState(true)
   const [deleteError, setDeleteError] = useState('')
   const [modalTemplate, setModalTemplate] = useState<TemplateFormState | null>(null)
@@ -259,6 +288,8 @@ export default function AdminDutyTemplatesPage() {
     Promise.all([
       api.get('/duty-templates').then(r => setTemplates(r.data ?? [])),
       api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])),
+      // Kaderteams der aktiven Saison für die Team-Einschränkung pro Eintrag.
+      api.get<TeamForName[]>('/teams/names').then(r => setTeams(r.data ?? [])),
     ]).finally(() => setLoading(false))
   }, [])
 
@@ -436,7 +467,7 @@ export default function AdminDutyTemplatesPage() {
       >
         {modalTemplate ? (
           <>
-            <TemplateForm template={modalTemplate} onChange={setModalTemplate} dutyTypes={dutyTypes} />
+            <TemplateForm template={modalTemplate} onChange={setModalTemplate} dutyTypes={dutyTypes} teams={teams} />
             {modalError && (
               <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
                 {modalError}
