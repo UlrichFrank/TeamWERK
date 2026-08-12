@@ -26,6 +26,7 @@ export interface Member {
   address_visible?: boolean
   email_visible?: boolean
   cross_team_visible?: boolean
+  chat_visible?: boolean
   dsgvo_verarbeitung?: boolean
   dsgvo_verarbeitung_date?: string
   dsgvo_weitergabe?: boolean

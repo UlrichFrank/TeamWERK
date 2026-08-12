@@ -339,6 +339,8 @@ var matrix = []endpointCase{
 	// cross-team-visible: Handler-interner Ownership-Check (eigenes Member, Eltern,
 	// vorstand, admin); andere Authenticated-Caller → 403 im Handler.
 	{method: "PUT", path: "/api/members/{id}/cross-team-visible", expected: exAuth},
+	// chat-visible: gleicher Handler-interner Ownership-Check wie cross-team-visible.
+	{method: "PUT", path: "/api/members/{id}/chat-visible", expected: exAuth},
 	{method: "GET", path: "/api/profile/notification-preferences", expected: exAuth},
 	{method: "PUT", path: "/api/profile/notification-preferences", expected: exAuth},
 

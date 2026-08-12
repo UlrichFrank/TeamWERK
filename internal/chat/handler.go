@@ -121,7 +121,8 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 			WHERE id != ? AND (first_name || ' ' || last_name LIKE ? OR email LIKE ?)
 			ORDER BY first_name, last_name LIMIT 50`, claims.UserID, q, q)
 	case inCircle:
-		// Zugriffskreis-Mitglied: User mit gemeinsamem Team ∪ gesamter Zugriffskreis.
+		// Zugriffskreis-Mitglied: User mit gemeinsamem Team ∪ gesamter Zugriffskreis
+		// ∪ Mitglieder mit chat_visible=1 (Opt-in, teamunabhängig).
 		rows, err = h.db.QueryContext(r.Context(), `
 			SELECT id, name FROM (
 				SELECT u.id AS id, u.first_name || ' ' || u.last_name AS name
@@ -135,18 +136,34 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 				UNION
 				SELECT user_id AS id, name FROM (`+trainerCircleMemberQuery()+`)
 				WHERE user_id != ? AND name LIKE ?
+				UNION
+				SELECT u.id AS id, u.first_name || ' ' || u.last_name AS name
+				FROM users u
+				JOIN members m ON m.user_id = u.id
+				WHERE u.id != ? AND m.chat_visible = 1
+				  AND (u.first_name || ' ' || u.last_name LIKE ? OR u.email LIKE ?)
 			)
-			ORDER BY name LIMIT 50`, claims.UserID, q, q, claims.UserID, claims.UserID, q)
+			ORDER BY name LIMIT 50`, claims.UserID, q, q, claims.UserID, claims.UserID, q, claims.UserID, q, q)
 	default:
+		// Team-Overlap ∪ Mitglieder mit chat_visible=1 (Opt-in, teamunabhängig).
 		rows, err = h.db.QueryContext(r.Context(), `
-			SELECT DISTINCT u.id, u.first_name || ' ' || u.last_name AS name FROM users u
-			JOIN user_accessible_teams uat ON uat.user_id = u.id
-			WHERE u.id != ?
-			  AND (u.first_name || ' ' || u.last_name LIKE ? OR u.email LIKE ?)
-			  AND uat.team_id IN (
-			    SELECT team_id FROM user_accessible_teams WHERE user_id = ?
-			  )
-			ORDER BY u.first_name, u.last_name LIMIT 50`, claims.UserID, q, q, claims.UserID)
+			SELECT id, name FROM (
+				SELECT u.id AS id, u.first_name || ' ' || u.last_name AS name
+				FROM users u
+				JOIN user_accessible_teams uat ON uat.user_id = u.id
+				WHERE u.id != ?
+				  AND (u.first_name || ' ' || u.last_name LIKE ? OR u.email LIKE ?)
+				  AND uat.team_id IN (
+				    SELECT team_id FROM user_accessible_teams WHERE user_id = ?
+				  )
+				UNION
+				SELECT u.id AS id, u.first_name || ' ' || u.last_name AS name
+				FROM users u
+				JOIN members m ON m.user_id = u.id
+				WHERE u.id != ? AND m.chat_visible = 1
+				  AND (u.first_name || ' ' || u.last_name LIKE ? OR u.email LIKE ?)
+			)
+			ORDER BY name LIMIT 50`, claims.UserID, q, q, claims.UserID, claims.UserID, q, q)
 	}
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)

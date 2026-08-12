@@ -40,6 +40,7 @@ interface Member {
   photo_url?: string
   photo_visible?: boolean
   cross_team_visible?: boolean
+  chat_visible?: boolean
   dsgvo_verarbeitung?: boolean
   dsgvo_verarbeitung_date?: string
   dsgvo_weitergabe?: boolean
@@ -140,6 +141,7 @@ export default function MemberDetailPage() {
       photo_url: m.photo_url ?? '',
       photo_visible: m.photo_visible ?? false,
       cross_team_visible: m.cross_team_visible ?? false,
+      chat_visible: m.chat_visible ?? false,
       dsgvo_verarbeitung: m.dsgvo_verarbeitung ?? false,
       dsgvo_verarbeitung_date: m.dsgvo_verarbeitung_date?.slice(0, 10) ?? '',
       dsgvo_weitergabe: m.dsgvo_weitergabe ?? false,

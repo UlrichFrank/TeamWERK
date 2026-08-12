@@ -77,6 +77,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		       COALESCE(m.phones_visible,0), COALESCE(m.address_visible,0), COALESCE(m.email_visible,0),
 		       COALESCE(m.absences_public,0),
 		       COALESCE(m.cross_team_visible,0),
+		       COALESCE(m.chat_visible,0),
 		       m.dsgvo_verarbeitung, m.dsgvo_verarbeitung_date,
 		       m.dsgvo_weitergabe, m.dsgvo_weitergabe_date,
 		       m.foto_veroeffentlichung, m.foto_veroeffentlichung_date,
@@ -92,7 +93,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	var clubFunctionsStr string
 	var street, zip, city, joinDate, photoPath sql.NullString
 	var photoVisible, phonesVisible, addressVisible, emailVisible int64
-	var crossTeamVisible, dsgvoVerarbeitung, dsgvoWeitergabe int64
+	var crossTeamVisible, chatVisible, dsgvoVerarbeitung, dsgvoWeitergabe int64
 	var dsgvoVerarbDate, dsgvoWeiterDate sql.NullString
 	var fotoVeroeff int64
 	var fotoVeroeffDate sql.NullString
@@ -109,6 +110,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 		&phonesVisible, &addressVisible, &emailVisible,
 		&m.AbsencesPublic,
 		&crossTeamVisible,
+		&chatVisible,
 		&dsgvoVerarbeitung, &dsgvoVerarbDate,
 		&dsgvoWeitergabe, &dsgvoWeiterDate,
 		&fotoVeroeff, &fotoVeroeffDate,
@@ -150,6 +152,7 @@ func (h *Handler) getMember(memberID int) (*Member, error) {
 	m.AddressVisible = addressVisible != 0
 	m.EmailVisible = emailVisible != 0
 	m.CrossTeamVisible = crossTeamVisible != 0
+	m.ChatVisible = chatVisible != 0
 	m.DsgvoVerarbeitung = dsgvoVerarbeitung != 0
 	if dsgvoVerarbDate.Valid {
 		m.DsgvoVerarbeitungDate = &dsgvoVerarbDate.String

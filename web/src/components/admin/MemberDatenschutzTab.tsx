@@ -6,6 +6,7 @@ interface Member {
   foto_veroeffentlichung?: boolean
   foto_veroeffentlichung_date?: string
   cross_team_visible?: boolean
+  chat_visible?: boolean
 }
 
 interface Draft {
@@ -56,6 +57,19 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
           />
           <span className="text-sm text-brand-text">Sichtbarkeit für Mitglieder</span>
         </label>
+        <label className="flex items-center gap-2 cursor-pointer mt-3">
+          <input
+            type="checkbox"
+            checked={form.chat_visible || false}
+            onChange={e => onFormChange({ chat_visible: e.target.checked })}
+            className="w-4 h-4 accent-brand-yellow"
+          />
+          <span className="text-sm text-brand-text">Sichtbarkeit in Nachrichten</span>
+        </label>
+        <p className="ml-6 text-xs text-brand-text-muted">
+          Wenn aktiviert, ist dieses Mitglied im „Neue Nachricht"-Dialog auch für Mitglieder
+          ohne gemeinsame Mannschaft auswählbar.
+        </p>
       </div>
 
       {/* DSGVO */}

@@ -19,6 +19,10 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
   const [savingVisibility, setSavingVisibility] = useState(false)
   const [visibilityError, setVisibilityError] = useState<string | null>(null)
 
+  const [chatVisible, setChatVisible] = useState<boolean>(!!ownMember.chat_visible)
+  const [savingChatVisibility, setSavingChatVisibility] = useState(false)
+  const [chatVisibilityError, setChatVisibilityError] = useState<string | null>(null)
+
   const [verarbeitung, setVerarbeitung] = useState<boolean>(!!ownMember.dsgvo_verarbeitung)
   const [weitergabe, setWeitergabe] = useState<boolean>(!!ownMember.dsgvo_weitergabe)
   const [fotoVeroeff, setFotoVeroeff] = useState<boolean>(!!ownMember.foto_veroeffentlichung)
@@ -33,12 +37,14 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     setCrossTeamVisible(!!ownMember.cross_team_visible)
+    setChatVisible(!!ownMember.chat_visible)
     setVerarbeitung(!!ownMember.dsgvo_verarbeitung)
     setWeitergabe(!!ownMember.dsgvo_weitergabe)
     setFotoVeroeff(!!ownMember.foto_veroeffentlichung)
     setVisibilityError(null)
+    setChatVisibilityError(null)
     setDsgvoError(null)
-  }, [ownMember.id, ownMember.cross_team_visible, ownMember.dsgvo_verarbeitung, ownMember.dsgvo_weitergabe, ownMember.foto_veroeffentlichung])
+  }, [ownMember.id, ownMember.cross_team_visible, ownMember.chat_visible, ownMember.dsgvo_verarbeitung, ownMember.dsgvo_weitergabe, ownMember.foto_veroeffentlichung])
 
   const loadDraft = () => {
     api.get(`/members/${ownMember.id}/change-drafts`).then(r => {
@@ -65,6 +71,22 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
       setVisibilityError('Speichern fehlgeschlagen. Bitte erneut versuchen.')
     } finally {
       setSavingVisibility(false)
+    }
+  }
+
+  const toggleChatVisible = async () => {
+    const next = !chatVisible
+    setChatVisible(next)
+    setSavingChatVisibility(true)
+    setChatVisibilityError(null)
+    try {
+      await api.put(`/members/${ownMember.id}/chat-visible`, { chat_visible: next })
+      onUpdated()
+    } catch {
+      setChatVisible(!next)
+      setChatVisibilityError('Speichern fehlgeschlagen. Bitte erneut versuchen.')
+    } finally {
+      setSavingChatVisibility(false)
     }
   }
 
@@ -137,6 +159,22 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
               enabled={crossTeamVisible}
               onToggle={() => { if (!savingVisibility) toggleCrossTeamVisible() }}
               label="Sichtbarkeit für Mitglieder"
+            />
+          </div>
+          <div className="flex items-start justify-between gap-4 px-6 py-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-brand-text">Sichtbarkeit in Nachrichten</p>
+              <p className="mt-1 text-xs text-brand-text-muted">
+                Wenn aktiviert, kannst du auch von Mitgliedern ohne gemeinsame Mannschaft für
+                eine neue Nachricht ausgewählt werden. Für Trainer, Sportliche Leitung,
+                Vorstand, Vorstands-Beisitzer und Kassierer ist das standardmäßig an. Standard: aus.
+              </p>
+              {chatVisibilityError && <p className="mt-2 text-xs text-brand-danger">{chatVisibilityError}</p>}
+            </div>
+            <Toggle
+              enabled={chatVisible}
+              onToggle={() => { if (!savingChatVisibility) toggleChatVisible() }}
+              label="Sichtbarkeit in Nachrichten"
             />
           </div>
         </div>

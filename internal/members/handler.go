@@ -125,6 +125,7 @@ type Member struct {
 	AddressVisible   bool    `json:"address_visible,omitempty"`
 	EmailVisible     bool    `json:"email_visible,omitempty"`
 	CrossTeamVisible bool    `json:"cross_team_visible,omitempty"`
+	ChatVisible      bool    `json:"chat_visible,omitempty"`
 
 	DsgvoVerarbeitung     bool    `json:"dsgvo_verarbeitung,omitempty"`
 	DsgvoVerarbeitungDate *string `json:"dsgvo_verarbeitung_date,omitempty"`
@@ -795,6 +796,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 		PhotoVisible     bool `json:"photo_visible"`
 		CrossTeamVisible bool `json:"cross_team_visible"`
+		ChatVisible      bool `json:"chat_visible"`
 
 		DsgvoVerarbeitung         bool   `json:"dsgvo_verarbeitung"`
 		DsgvoVerarbeitungDate     string `json:"dsgvo_verarbeitung_date"`
@@ -888,6 +890,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			status=?,
 			join_date=?, exit_date=?,
 			cross_team_visible=?,
+			chat_visible=?,
 			zweitspielrecht=?,
 			updated_at=?
 		WHERE id=?`,
@@ -897,6 +900,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		req.Status,
 		nullableString(req.JoinDate), nullableString(req.ExitDate),
 		boolToInt(req.CrossTeamVisible),
+		boolToInt(req.ChatVisible),
 		boolToInt(req.Zweitspielrecht),
 		time.Now(), id)
 	if err != nil {
@@ -2564,6 +2568,60 @@ func (h *Handler) UpdateCrossTeamVisible(w http.ResponseWriter, r *http.Request)
 	if _, err := h.db.ExecContext(r.Context(),
 		`UPDATE members SET cross_team_visible=?, updated_at=? WHERE id=?`,
 		boolToInt(req.CrossTeamVisible), time.Now(), memberID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.broadcastMembers(r.Context(), []int{memberID})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/members/{id}/chat-visible
+//
+// Persönliche Privacy-Präferenz pro Member — unabhängig von cross_team_visible,
+// gleiche Auth-Regeln (Owner, Elternteil, admin/vorstand). Steuert nur, ob das
+// Member im "Neue Nachricht"-Dialog auch für Nutzer ohne gemeinsames Team
+// zusätzlich auswählbar ist (siehe internal/chat/handler.go Users).
+func (h *Handler) UpdateChatVisible(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	memberID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	var ownerUserID sql.NullInt64
+	if err := h.db.QueryRowContext(r.Context(), `SELECT user_id FROM members WHERE id=?`, memberID).Scan(&ownerUserID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	allowed := claims.Role == "admin" || claims.HasFunction("vorstand")
+	if !allowed && ownerUserID.Valid && int(ownerUserID.Int64) == claims.UserID {
+		allowed = true
+	}
+	if !allowed && h.isParentOf(r.Context(), claims.UserID, memberID) {
+		allowed = true
+	}
+	if !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		ChatVisible bool `json:"chat_visible"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE members SET chat_visible=?, updated_at=? WHERE id=?`,
+		boolToInt(req.ChatVisible), time.Now(), memberID); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
