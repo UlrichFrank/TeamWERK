@@ -33,12 +33,12 @@
 
 ## 5. Backend: Gate im Auto-Regen
 
-- [ ] 5.1 `internal/games/regen.go`, `loadTemplateItemsTx` und der zweite Item-Query in `regen.go`: `gti.ausrichter_id` mitlesen.
-- [ ] 5.2 `regenSingleDay`: nach `loadDayGames` einmal `settings.ResolveAusrichterForDay(ctx, tx, date, seasonID)` aufrufen und das Ergebnis an `buildRotationPlan` und `regenGameItems` durchreichen.
-- [ ] 5.3 `buildRotationPlan`: in der Schleife, die rotations-aktive Items sammelt, zusätzlich das Ausrichter-Gate anwenden — **vor** der Bedarfsrechnung. Ohne das verbraucht die Warteschlange Positionen für Slots, die danach verworfen werden, und der ausgewiesene Bedarf ist falsch (design.md Decision 4).
-- [ ] 5.4 `regenGameItems`: Item überspringen, wenn `ausrichter_id` gesetzt ist und nicht dem Tages-Ausrichter entspricht. Gate nur bei `event_type='heim'` (Sicherung — Vorlagen anderen Typs dürfen das Feld ohnehin nicht tragen).
-- [ ] 5.5 Prüfen, ob das Gate Auswirkungen auf `snapshotCustomSlots`/`restoreAssignments` hat: ein ausgegatetes Item erzeugt keinen neuen Slot, die Zusage läuft also regulär in `buildNotificationIntents` als „entfernt". Kein Sonderfall nötig — im Test festhalten, nicht nur annehmen.
-- [ ] 5.6 Tests `internal/games/regen_test.go`: ausgegatetes Rotations-Item → Bedarf `0` und **kein** `team_id=NULL`-Slot; teilweise gegateter Tag → Bedarf zählt nur passende Spiele; Item ohne Bindung → Slots bitgleich zum Bestandsverhalten (Charakterisierung); Auswärts/generisch unberührt; Ausrichter wird einmal je Tag aufgelöst.
+- [x] 5.1 `internal/games/regen.go`, `loadTemplateItemsTx` und der zweite Item-Query in `regen.go`: `gti.ausrichter_id` mitlesen.
+- [x] 5.2 `regenSingleDay`: nach `loadDayGames` einmal `settings.ResolveAusrichterForDay(ctx, tx, date, seasonID)` aufrufen und das Ergebnis an `buildRotationPlan` und `regenGameItems` durchreichen.
+- [x] 5.3 `buildRotationPlan`: in der Schleife, die rotations-aktive Items sammelt, zusätzlich das Ausrichter-Gate anwenden — **vor** der Bedarfsrechnung. Ohne das verbraucht die Warteschlange Positionen für Slots, die danach verworfen werden, und der ausgewiesene Bedarf ist falsch (design.md Decision 4).
+- [x] 5.4 `regenGameItems`: Item überspringen, wenn `ausrichter_id` gesetzt ist und nicht dem Tages-Ausrichter entspricht. Gate nur bei `event_type='heim'` (Sicherung — Vorlagen anderen Typs dürfen das Feld ohnehin nicht tragen).
+- [x] 5.5 Prüfen, ob das Gate Auswirkungen auf `snapshotCustomSlots`/`restoreAssignments` hat: ein ausgegatetes Item erzeugt keinen neuen Slot, die Zusage läuft also regulär in `buildNotificationIntents` als „entfernt". Kein Sonderfall nötig — im Test festhalten, nicht nur annehmen.
+- [x] 5.6 Tests `internal/games/regen_test.go`: ausgegatetes Rotations-Item → Bedarf `0` und **kein** `team_id=NULL`-Slot; teilweise gegateter Tag → Bedarf zählt nur passende Spiele; Item ohne Bindung → Slots bitgleich zum Bestandsverhalten (Charakterisierung); Auswärts/generisch unberührt; Ausrichter wird einmal je Tag aufgelöst.
 
 ## 6. Backend: Preview/Apply für den Tages-Ausrichter
 

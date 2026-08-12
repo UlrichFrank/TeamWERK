@@ -164,11 +164,26 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		return RegenSummary{}, err
 	}
 
+	// Tages-Ausrichter: GENAU EINMAL je Tag aufgelöst, nicht je Spiel
+	// (heimspieltag-ausrichter design.md Decision 4). Das Ergebnis ist ein einfacher
+	// int, der an beide Gate-Stellen weitergereicht wird — dadurch kann keine der
+	// beiden nachträglich noch einmal lesen und die Spiele eines Tages können gar
+	// nicht gegen unterschiedliche Werte gegatet werden.
+	//
+	// Die Auflösung ist total: sie liefert immer einen Ausrichter (expliziter
+	// Tageswert, sonst der Default). Fehlt die Default-Zeile, ist das ein Datenfehler
+	// und der Lauf bricht laut ab — still weiterlaufen hieße, mit einer nicht
+	// existierenden ID zu gaten und damit jedes gebundene Item auszufiltern.
+	dayAusrichterID, err := settings.ResolveAusrichterForDay(ctx, tx, date, seasonID)
+	if err != nil {
+		return RegenSummary{}, fmt.Errorf("resolve ausrichter: %w", err)
+	}
+
 	// Tagesweite Bewirtungsrotation: muss VOR der Pro-Spiel-Schleife stehen, weil der
 	// Kuchenbedarf von der Gesamtzahl der Heimspiele des Tages abhängt (design.md
 	// Decision 1). Ohne rotations-aktivierte Items ist der Plan leer und alles unten
 	// verhält sich exakt wie vorher.
-	rotation, err := h.buildRotationPlan(ctx, tx, dayGames)
+	rotation, err := h.buildRotationPlan(ctx, tx, dayGames, dayAusrichterID)
 	if err != nil {
 		return RegenSummary{}, err
 	}
@@ -242,7 +257,8 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		// Step 4: per template item, compute behavior and insert.
 		gameSummary, outcomeByOriginalType, err := h.regenGameItems(
 			ctx, tx, g, items, durationMins, allGameTimes,
-			hasPrevDay, hasNextDay, teamIDs, customSlots, eventName, date, seasonID, rotation)
+			hasPrevDay, hasNextDay, teamIDs, customSlots, eventName, date, seasonID, rotation,
+			dayAusrichterID)
 		if err != nil {
 			return RegenSummary{}, err
 		}
@@ -628,6 +644,30 @@ type rotationGroup struct {
 	inQueue map[int]bool
 }
 
+// itemPassesAusrichterGate entscheidet, ob ein Vorlagen-Item am Spieltag mit dem
+// aufgelösten Ausrichter dayAusrichterID überhaupt Slots erzeugen darf
+// (heimspieltag-ausrichter design.md Decision 4).
+//
+//	ausrichter_id IS NULL  → die Zeile gilt an jedem Spieltag (Bestandsverhalten,
+//	                          rein additiver Change: solange niemand bindet, ist das
+//	                          Gate für alle Zeilen offen)
+//	ausrichter_id gesetzt  → nur an Spieltagen mit passendem Tages-Ausrichter
+//
+// Das Gate wirkt AUSSCHLIESSLICH bei event_type='heim'. Auswärts- und generische
+// Termine ignorieren die Bindung vollständig: Vorlagen mit template_type != 'heim'
+// dürfen das Feld laut Route-Validierung gar nicht erst tragen (Decision 5), dieser
+// Zweig ist also eine Sicherung gegen Altbestand/Direkteingriffe, keine Fachlogik.
+//
+// Einzige Stelle, die diese Bedingung formuliert — beide Gates (buildRotationPlan
+// und regenGameItems) müssen deckungsgleich bleiben, sonst rechnet der Bedarf über
+// Slots, die anschließend verworfen werden.
+func itemPassesAusrichterGate(it templateItemRow, eventType string, dayAusrichterID int) bool {
+	if eventType != "heim" || !it.AusrichterID.Valid {
+		return true
+	}
+	return int(it.AusrichterID.Int64) == dayAusrichterID
+}
+
 // buildRotationPlan berechnet die tagesweite Bewirtungsrotation VOR der Pro-Spiel-
 // Schleife (kuchendienst-rotation design.md Decision 1–3). Nötig, weil der Bedarf
 // eines Tages von der Gesamtzahl seiner Heimspiele abhängt — die Pro-Spiel-Schleife
@@ -650,7 +690,11 @@ type rotationGroup struct {
 //
 // Es gibt bewusst KEINEN Zustand über Tagesgrenzen hinweg: jeder Spieltag startet die
 // Warteschlange bei Position 1 (Non-Goal aus design.md).
-func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []dayGame) (rotationPlan, error) {
+//
+// dayAusrichterID ist das GATE #1 des heimspieltag-ausrichter-Changes: es filtert die
+// rotations-aktiven Items schon beim Sammeln, also vor Warteschlange und Bedarf (siehe
+// die Schleife unten).
+func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []dayGame, dayAusrichterID int) (rotationPlan, error) {
 	groups := map[int]*rotationGroup{}
 
 	for _, g := range dayGames {
@@ -661,9 +705,20 @@ func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []
 		if err != nil {
 			return nil, fmt.Errorf("rotation: load template %d: %w", g.TemplateID.Int64, err)
 		}
+		// GATE #1 (heimspieltag-ausrichter design.md Decision 4): das Ausrichter-Gate
+		// muss GENAU HIER greifen — im selben Durchlauf, der die rotations-aktiven
+		// Items sammelt — und damit vor beidem, was daraus folgt:
+		//   - dem Füllen der Team-Warteschlange (unten), und
+		//   - der Bedarfsrechnung (demand, weiter unten).
+		// Filterte man erst in regenGameItems (Gate #2), rechnete buildRotationPlan
+		// den Kuchenbedarf über Heimspiele, deren Slots danach verworfen werden: die
+		// Warteschlange verbrauchte Positionen für nie entstehende Slots, und der im
+		// RegenSummary ausgewiesene Bedarf wäre schlicht falsch. Gate #2 allein
+		// genügt also nicht, Gate #1 allein aber auch nicht — nicht-rotierende Items
+		// laufen an dieser Funktion vorbei.
 		var rotationItems []templateItemRow
 		for _, it := range items {
-			if it.RotationEnabled {
+			if it.RotationEnabled && itemPassesAusrichterGate(it, g.EventType, dayAusrichterID) {
 				rotationItems = append(rotationItems, it)
 			}
 		}
@@ -775,12 +830,24 @@ func (h *Handler) regenGameItems(
 	ctx context.Context, tx *sql.Tx, g dayGame, items []templateItemRow, durationMins int,
 	allGameTimes []string, hasPrevDay, hasNextDay bool, teamIDs []int,
 	customSlots map[customKey]bool, eventName, date string, seasonID int,
-	rotation rotationPlan,
+	rotation rotationPlan, dayAusrichterID int,
 ) (RegenSummary, map[int]itemOutcome, error) {
 	var summary RegenSummary
 	outcomeByOriginalType := map[int]itemOutcome{}
 
 	for _, it := range items {
+		// GATE #2 (heimspieltag-ausrichter design.md Decision 4): an einen anderen
+		// Ausrichter gebundene Zeilen erzeugen an diesem Tag nichts. Bewusst ein
+		// nacktes `continue` OHNE Eintrag in outcomeByOriginalType — exakt wie der
+		// Rotations-Miss und der Allowlist-Miss weiter unten: buildNotificationIntents
+		// behandelt einen fehlenden Eintrag als "removed", was für eine Zusage auf
+		// einem eben gelöschten Bestandsslot genau richtig ist. Ein eigener
+		// Skipped-Eintrag wäre falsch (das meint die Varianten-Logik, nicht "gilt hier
+		// nicht"), ein eigener Sonderfall unnötig.
+		if !itemPassesAusrichterGate(it, g.EventType, dayAusrichterID) {
+			continue
+		}
+
 		var eventTime string
 		if it.Anchor == "end" && g.EndTime.Valid {
 			eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
@@ -1081,7 +1148,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 	rows, err := tx.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
-		        gti.audiences, gti.team_ids, gti.rotation_enabled
+		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	if err != nil {
@@ -1095,7 +1162,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 		if err := rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
-			&it.RotationEnabled); err != nil {
+			&it.RotationEnabled, &it.AusrichterID); err != nil {
 			return nil, err
 		}
 		it.TeamIDs = teamIDsFromDB(teamIDs)
