@@ -8,7 +8,7 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { TeamScopeField, RotationEnabledField } from '../components/DutyTemplateItemFields'
+import { TeamScopeField, RotationEnabledField, AusrichterField } from '../components/DutyTemplateItemFields'
 import { toggleTeamID } from '../lib/dutyTemplateItems'
 import { errorData } from '../lib/errors'
 
@@ -18,6 +18,14 @@ interface DutyType {
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
   audiences?: string[] | null
+}
+
+interface Ausrichter {
+  id: number
+  name: string
+  aktiv: boolean
+  is_default: boolean
+  sort_order: number
 }
 
 interface TemplateItem {
@@ -37,6 +45,8 @@ interface TemplateItem {
    * referenzierten Diensttyp voraus (400 rotation_requires_normal_behavior sonst).
    */
   rotation_enabled?: boolean
+  /** Ausrichter-Einschränkung (heimspieltag-ausrichter): null/fehlend = für alle Ausrichter. */
+  ausrichter_id?: number | null
 }
 
 interface Template {
@@ -60,6 +70,7 @@ export default function AdminDutyTemplateDetailPage() {
   const [template, setTemplate] = useState<Template | null>(null)
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
   const [teams, setTeams] = useState<TeamForName[]>([])
+  const [ausrichter, setAusrichter] = useState<Ausrichter[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -72,6 +83,8 @@ export default function AdminDutyTemplateDetailPage() {
       // /teams/names liefert bereits genau die Kaderteams der aktiven Saison —
       // kein zusätzlicher /kader-Abruf nötig.
       api.get<TeamForName[]>('/teams/names').then(r => setTeams(r.data ?? [])).catch(() => {}),
+      // Ausrichter für die Ausrichter-Auswahl pro Eintrag (nur aktive).
+      api.get<{ items: Ausrichter[] }>('/ausrichter').then(r => setAusrichter((r.data?.items ?? []).filter(a => a.aktiv))).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [id])
 
@@ -80,6 +93,8 @@ export default function AdminDutyTemplateDetailPage() {
   // wirkungslos dazustehen. Bereits gespeicherte Werte bleiben in der DB unangetastet.
   const teamScopeSupported = template?.template_type !== 'generisch'
   const scopeTeams = teamScopeSupported ? teams : []
+  // Ausrichter-Auswahl nur für Heim-Vorlagen; für andere template_type wird nichts angeboten.
+  const ausrichterOptions = template?.template_type === 'heim' ? ausrichter : []
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
 
   useLiveUpdates(event => {
@@ -130,6 +145,8 @@ export default function AdminDutyTemplateDetailPage() {
       setSaveError(
         code === 'rotation_requires_normal_behavior'
           ? 'Bewirtungsrotation erfordert „Normal (immer)" bei „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" des zugehörigen Diensttyps.'
+          : code === 'ausrichter_requires_heim_template'
+          ? 'Ausrichter-Auswahl ist nur bei Heim-Vorlagen erlaubt.'
           : 'Speichern fehlgeschlagen.',
       )
     } finally {
@@ -297,6 +314,14 @@ export default function AdminDutyTemplateDetailPage() {
                         value={item.rotation_enabled}
                         onChange={v => updateItem(i, { rotation_enabled: v })}
                       />
+                      {ausrichterOptions.length > 0 && (
+                        <AusrichterField
+                          id={`ausrichter-mobile-${i}`}
+                          value={item.ausrichter_id}
+                          options={ausrichterOptions}
+                          onChange={v => updateItem(i, { ausrichter_id: v })}
+                        />
+                      )}
                     </div>
                   </div>
                 )
@@ -392,6 +417,14 @@ export default function AdminDutyTemplateDetailPage() {
                     value={item.rotation_enabled}
                     onChange={v => updateItem(i, { rotation_enabled: v })}
                   />
+                  {ausrichterOptions.length > 0 && (
+                    <AusrichterField
+                      id={`ausrichter-desktop-${i}`}
+                      value={item.ausrichter_id}
+                      options={ausrichterOptions}
+                      onChange={v => updateItem(i, { ausrichter_id: v })}
+                    />
+                  )}
                 </div>
                 </div>
               ))}

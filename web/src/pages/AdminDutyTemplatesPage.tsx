@@ -8,7 +8,7 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { TeamScopeField, RotationEnabledField } from '../components/DutyTemplateItemFields'
+import { TeamScopeField, RotationEnabledField, AusrichterField } from '../components/DutyTemplateItemFields'
 import { toggleTeamID } from '../lib/dutyTemplateItems'
 
 interface DutyType {
@@ -17,6 +17,14 @@ interface DutyType {
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
   audiences?: string[] | null
+}
+
+interface Ausrichter {
+  id: number
+  name: string
+  aktiv: boolean
+  is_default: boolean
+  sort_order: number
 }
 
 interface TemplateItem {
@@ -29,6 +37,8 @@ interface TemplateItem {
   team_ids?: number[] | null
   /** Bewirtungsrotation: false/fehlend = deaktiviert. Siehe DutyTemplateItemFields. */
   rotation_enabled?: boolean
+  /** Ausrichter-Einschränkung (heimspieltag-ausrichter): null/fehlend = für alle Ausrichter. */
+  ausrichter_id?: number | null
 }
 
 interface DutyTemplate {
@@ -74,16 +84,19 @@ function newItem(): TemplateItem {
   return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [], team_ids: [] }
 }
 
-function TemplateForm({ template, onChange, dutyTypes, teams }: {
+function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
   template: TemplateFormState
   onChange: (template: TemplateFormState) => void
   dutyTypes: DutyType[]
   teams: TeamForName[]
+  ausrichter: Ausrichter[]
 }) {
   // Wie auf der Detailseite: generische Vorlagen erzeugen Slots ohne team_id,
   // die Regeneration ignoriert team_ids dort — die Auswahl wird deshalb gar
   // nicht erst angeboten. Gespeicherte Werte bleiben unangetastet.
   const scopeTeams = template.template_type === 'generisch' ? [] : teams
+  // Ausrichter-Auswahl nur für Heim-Vorlagen; für andere template_type wird nichts angeboten.
+  const ausrichterOptions = template.template_type === 'heim' ? ausrichter : []
   const teamShortNames = buildTeamShortNames(teams)
   const updateItem = (index: number, patch: Partial<TemplateItem>) => {
     onChange({
@@ -232,6 +245,14 @@ function TemplateForm({ template, onChange, dutyTypes, teams }: {
                     value={item.rotation_enabled}
                     onChange={v => updateItem(index, { rotation_enabled: v })}
                   />
+                  {ausrichterOptions.length > 0 && (
+                    <AusrichterField
+                      id={`ausrichter-modal-${index}`}
+                      value={item.ausrichter_id}
+                      options={ausrichterOptions}
+                      onChange={v => updateItem(index, { ausrichter_id: v })}
+                    />
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -272,6 +293,7 @@ export default function AdminDutyTemplatesPage() {
   const [templates, setTemplates] = useState<DutyTemplate[]>([])
   const [dutyTypes, setDutyTypes] = useState<DutyType[]>([])
   const [teams, setTeams] = useState<TeamForName[]>([])
+  const [ausrichter, setAusrichter] = useState<Ausrichter[]>([])
   const [loading, setLoading] = useState(true)
   const [deleteError, setDeleteError] = useState('')
   const [modalTemplate, setModalTemplate] = useState<TemplateFormState | null>(null)
@@ -290,6 +312,8 @@ export default function AdminDutyTemplatesPage() {
       api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])),
       // Kaderteams der aktiven Saison für die Team-Einschränkung pro Eintrag.
       api.get<TeamForName[]>('/teams/names').then(r => setTeams(r.data ?? [])),
+      // Ausrichter für die Ausrichter-Auswahl pro Eintrag (nur aktive).
+      api.get<{ items: Ausrichter[] }>('/ausrichter').then(r => setAusrichter((r.data?.items ?? []).filter(a => a.aktiv))),
     ]).finally(() => setLoading(false))
   }, [])
 
@@ -467,7 +491,7 @@ export default function AdminDutyTemplatesPage() {
       >
         {modalTemplate ? (
           <>
-            <TemplateForm template={modalTemplate} onChange={setModalTemplate} dutyTypes={dutyTypes} teams={teams} />
+            <TemplateForm template={modalTemplate} onChange={setModalTemplate} dutyTypes={dutyTypes} teams={teams} ausrichter={ausrichter} />
             {modalError && (
               <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
                 {modalError}
