@@ -8,7 +8,7 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { TeamScopeField, RotationCapField } from '../components/DutyTemplateItemFields'
+import { TeamScopeField, RotationEnabledField } from '../components/DutyTemplateItemFields'
 import { toggleTeamID } from '../lib/dutyTemplateItems'
 import { errorData } from '../lib/errors'
 
@@ -29,13 +29,14 @@ interface TemplateItem {
   /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
   team_ids?: number[] | null
   /**
-   * Bewirtungsrotation (kuchendienst-rotation): null/fehlend = deaktiviert
-   * (bisheriges Verhalten, ein Slot pro Team des jeweiligen Spiels). Gesetzt
-   * aktiviert die tagesweite Team-Warteschlange mit diesem Cap pro Team —
-   * setzt serverseitig same_day_behavior/adjacent_day_behavior='normal' beim
+   * Bewirtungsrotation (kuchendienst-rotation): false/fehlend = deaktiviert
+   * (bisheriges Verhalten, ein Slot pro Team des jeweiligen Spiels). true
+   * aktiviert die tagesweite Team-Warteschlange; die Obergrenze pro Mannschaft
+   * ist vereinsweit (Einstellungen → Bewirtung), nicht Teil des Eintrags.
+   * Setzt serverseitig same_day_behavior/adjacent_day_behavior='normal' beim
    * referenzierten Diensttyp voraus (400 rotation_requires_normal_behavior sonst).
    */
-  rotation_max_per_team?: number | null
+  rotation_enabled?: boolean
 }
 
 interface Template {
@@ -128,7 +129,7 @@ export default function AdminDutyTemplateDetailPage() {
       const code = errorData<{ error?: string }>(e)?.error
       setSaveError(
         code === 'rotation_requires_normal_behavior'
-          ? 'Rotations-Cap erfordert „Normal (immer)" bei „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" des zugehörigen Diensttyps.'
+          ? 'Bewirtungsrotation erfordert „Normal (immer)" bei „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" des zugehörigen Diensttyps.'
           : 'Speichern fehlgeschlagen.',
       )
     } finally {
@@ -291,10 +292,10 @@ export default function AdminDutyTemplateDetailPage() {
                         selected={item.team_ids ?? []}
                         onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}
                       />
-                      <RotationCapField
-                        id={`rotation-cap-mobile-${i}`}
-                        value={item.rotation_max_per_team}
-                        onChange={v => updateItem(i, { rotation_max_per_team: v })}
+                      <RotationEnabledField
+                        id={`rotation-enabled-mobile-${i}`}
+                        value={item.rotation_enabled}
+                        onChange={v => updateItem(i, { rotation_enabled: v })}
                       />
                     </div>
                   </div>
@@ -386,10 +387,10 @@ export default function AdminDutyTemplateDetailPage() {
                     selected={item.team_ids ?? []}
                     onToggle={(teamID, checked) => toggleItemTeam(i, teamID, checked)}
                   />
-                  <RotationCapField
-                    id={`rotation-cap-desktop-${i}`}
-                    value={item.rotation_max_per_team}
-                    onChange={v => updateItem(i, { rotation_max_per_team: v })}
+                  <RotationEnabledField
+                    id={`rotation-enabled-desktop-${i}`}
+                    value={item.rotation_enabled}
+                    onChange={v => updateItem(i, { rotation_enabled: v })}
                   />
                 </div>
                 </div>

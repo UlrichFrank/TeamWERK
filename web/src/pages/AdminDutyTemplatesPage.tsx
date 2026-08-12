@@ -8,7 +8,7 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { TeamScopeField, RotationCapField } from '../components/DutyTemplateItemFields'
+import { TeamScopeField, RotationEnabledField } from '../components/DutyTemplateItemFields'
 import { toggleTeamID } from '../lib/dutyTemplateItems'
 
 interface DutyType {
@@ -27,8 +27,8 @@ interface TemplateItem {
   audiences: string[]
   /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
   team_ids?: number[] | null
-  /** Bewirtungsrotation: null/fehlend = deaktiviert. Siehe DutyTemplateItemFields. */
-  rotation_max_per_team?: number | null
+  /** Bewirtungsrotation: false/fehlend = deaktiviert. Siehe DutyTemplateItemFields. */
+  rotation_enabled?: boolean
 }
 
 interface DutyTemplate {
@@ -227,10 +227,10 @@ function TemplateForm({ template, onChange, dutyTypes, teams }: {
                       team_ids: toggleTeamID(item.team_ids, teamID, checked),
                     })}
                   />
-                  <RotationCapField
-                    id={`rotation-cap-modal-${index}`}
-                    value={item.rotation_max_per_team}
-                    onChange={v => updateItem(index, { rotation_max_per_team: v })}
+                  <RotationEnabledField
+                    id={`rotation-enabled-modal-${index}`}
+                    value={item.rotation_enabled}
+                    onChange={v => updateItem(index, { rotation_enabled: v })}
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -28,7 +28,7 @@ const SAVED_ITEM = {
   slots_count: 1,
   audiences: [],
   team_ids: [15],
-  rotation_max_per_team: 2,
+  rotation_enabled: true,
 }
 
 function mockApi(templateType = 'heim') {
@@ -68,11 +68,25 @@ describe('AdminDutyTemplatesPage — Teamauswahl im Bearbeiten-Modal', () => {
     mockPut.mockReset()
   })
 
-  test('bietet Kaderteams und Rotations-Cap im Modal an', async () => {
+  test('bietet Kaderteams und Rotations-Schalter im Modal an', async () => {
     mockApi()
     await openEditModal()
     expect(screen.getByText(/Kaderteams/)).toBeTruthy()
-    expect(screen.getByText(/Max. Kuchen pro Mannschaft/)).toBeTruthy()
+    const rotation = screen.getByLabelText(/Bewirtungsrotation/) as HTMLInputElement
+    expect(rotation.type).toBe('checkbox')
+    expect(rotation.checked).toBe(true) // SAVED_ITEM.rotation_enabled
+  })
+
+  /**
+   * Der Cap gehört seit bewirtung-cap-global in die Einstellungen. Der Modal-Editor
+   * darf dafür kein eigenes Eingabefeld mehr anbieten — sonst gäbe es zwei Quellen
+   * für denselben Wert.
+   */
+  test('bietet im Modal kein Cap-Eingabefeld mehr an, sondern verweist auf die Einstellungen', async () => {
+    mockApi()
+    await openEditModal()
+    expect(screen.queryByLabelText(/Max\. Kuchen pro Mannschaft/)).toBeNull()
+    expect(screen.getByText(/Einstellungen → Bewirtung/)).toBeTruthy()
   })
 
   test('zeigt die gespeicherte Team-Einschränkung als angehakt', async () => {
@@ -96,8 +110,8 @@ describe('AdminDutyTemplatesPage — Teamauswahl im Bearbeiten-Modal', () => {
     expect(url).toBe('/duty-templates/1')
     // Bestehende Auswahl bleibt erhalten, neue kommt dazu.
     expect(body.items[0].team_ids).toEqual([15, 13])
-    // Der Rotations-Cap darf beim Speichern nicht verloren gehen.
-    expect(body.items[0].rotation_max_per_team).toBe(2)
+    // Der Rotations-Schalter darf beim Speichern nicht verloren gehen.
+    expect(body.items[0].rotation_enabled).toBe(true)
   })
 
   test('blendet die Teamauswahl bei generischen Vorlagen aus', async () => {

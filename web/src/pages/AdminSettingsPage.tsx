@@ -730,6 +730,7 @@ function parseDecimalInput(raw: string): number {
 
 function BewirtungTab() {
   const [verhaeltnis, setVerhaeltnis] = useState('')
+  const [maxPerTeam, setMaxPerTeam] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -738,6 +739,7 @@ function BewirtungTab() {
   const load = () => {
     api.get('/settings/bewirtung').then(r => {
       setVerhaeltnis(String(r.data?.verhaeltnis ?? ''))
+      setMaxPerTeam(String(r.data?.max_per_team ?? ''))
       setLoaded(true)
     })
   }
@@ -752,18 +754,23 @@ function BewirtungTab() {
     setSaved(false)
     const value = parseDecimalInput(verhaeltnis)
     if (isNaN(value) || value <= 0) {
-      setError('Bitte eine Zahl größer 0 angeben (Komma oder Punkt als Dezimaltrennzeichen).')
+      setError('Kuchen je Spiel: bitte eine Zahl größer 0 angeben (Komma oder Punkt als Dezimaltrennzeichen).')
+      return
+    }
+    const max = parseInt(maxPerTeam.trim(), 10)
+    if (isNaN(max) || max <= 0) {
+      setError('Max. Kuchen pro Mannschaft: bitte eine ganze Zahl größer 0 angeben.')
       return
     }
     setSaving(true)
     try {
-      await api.put('/settings/bewirtung', { verhaeltnis: value })
+      await api.put('/settings/bewirtung', { verhaeltnis: value, max_per_team: max })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
       setError(
         errorStatus(e) === 403
-          ? 'Keine Berechtigung, das Verhältnis zu ändern.'
+          ? 'Keine Berechtigung, die Bewirtungs-Einstellungen zu ändern.'
           : 'Speichern fehlgeschlagen – bitte Eingabe prüfen.',
       )
     } finally {
@@ -774,6 +781,11 @@ function BewirtungTab() {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-5 max-w-lg">
       <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+          Diese Werte steuern die automatische Dienst-Generierung bei <strong className="font-semibold">Heimspielen</strong>:
+          wie viele Bewirtungs-/Kuchendienste ein Spieltag braucht und wie sie auf die Mannschaften verteilt werden.
+          Sie wirken nur für Vorlagen-Einträge, bei denen die Bewirtungsrotation aktiviert ist.
+        </p>
         <div>
           <label htmlFor="bewirtung-verhaeltnis" className="block text-sm font-medium text-brand-text-muted mb-1">Kuchen je Spiel</label>
           <input
@@ -784,10 +796,27 @@ function BewirtungTab() {
             onChange={e => setVerhaeltnis(e.target.value)}
             className={`${INPUT} w-32`}
           />
+          <p className="text-sm text-brand-text-muted mt-1">
+            Anzahl benötigter Kuchen = aufgerundet(Anzahl Heimspiele × Verhältnis), gedeckelt auf die Anzahl der Heimspiele.
+          </p>
         </div>
-        <p className="text-sm text-brand-text-muted">
-          Anzahl benötigter Kuchen = aufgerundet(Anzahl Heimspiele × Verhältnis), gedeckelt auf die Anzahl der Heimspiele.
-        </p>
+        <div>
+          <label htmlFor="bewirtung-max-per-team" className="block text-sm font-medium text-brand-text-muted mb-1">Max. Kuchen pro Mannschaft</label>
+          <input
+            id="bewirtung-max-per-team"
+            type="number"
+            min={1}
+            step={1}
+            value={maxPerTeam}
+            onChange={e => setMaxPerTeam(e.target.value)}
+            className={`${INPUT} w-32`}
+          />
+          <p className="text-sm text-brand-text-muted mt-1">
+            Obergrenze je Mannschaft und Spieltag. Reicht die Zahl der Mannschaften bei dieser Grenze nicht
+            für den Bedarf, entstehen die übrigen Dienste ohne feste Mannschaft — statt eine Mannschaft
+            über die Grenze hinaus einzuteilen.
+          </p>
+        </div>
         {error && (
           <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
         )}

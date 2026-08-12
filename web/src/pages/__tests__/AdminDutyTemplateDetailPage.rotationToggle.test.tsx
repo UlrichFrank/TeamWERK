@@ -1,8 +1,10 @@
 /**
- * Bewirtungsrotations-Cap eines Vorlagen-Eintrags (kuchendienst-rotation).
+ * Bewirtungsrotations-Schalter eines Vorlagen-Eintrags (kuchendienst-rotation,
+ * bewirtung-cap-global).
  *
- * Quelle: openspec/changes/kuchendienst-rotation/specs/bewirtungsrotation/spec.md
- * — Requirement "Max-Kuchen-pro-Team-Cap pro Vorlagen-Item".
+ * Quelle: openspec/changes/bewirtung-cap-global/specs/bewirtungsrotation/spec.md
+ * — Requirement "Rotations-Schalter pro Vorlagen-Item",
+ *   Requirement "Vorlagen-Editor zeigt den Rotations-Schalter statt eines Cap-Feldes".
  */
 import { describe, test, expect, vi } from 'vitest'
 import { Routes, Route } from 'react-router-dom'
@@ -18,12 +20,12 @@ const DUTY_TYPES = [
 ]
 
 /**
- * rotationMaxPerTeam = bereits gespeicherter Wert des einen Vorlagen-Items.
+ * rotationEnabled = bereits gespeicherter Schalter des einen Vorlagen-Items.
  * `putReply` MUSS vor dem `onAny()`-Catch-all registriert werden — axios-mock-adapter
  * matched Handler in Registrierungsreihenfolge, ein später hinzugefügter `onPut`
  * würde vom bereits registrierten Catch-all maskiert (falscher Grün-Test).
  */
-function renderEditor(rotationMaxPerTeam: number | null, putReply?: [number, unknown]) {
+function renderEditor(rotationEnabled: boolean, putReply?: [number, unknown]) {
   renderAsPersona(
     <Routes>
       <Route path="/dienstplan-vorlagen/:id" element={<AdminDutyTemplateDetailPage />} />
@@ -40,7 +42,7 @@ function renderEditor(rotationMaxPerTeam: number | null, putReply?: [number, unk
     duration_minutes: 75,
     items: [{
       duty_type_id: 11, anchor: 'start', offset_minutes: -60, slots_count: 1,
-      audiences: [], team_ids: [], rotation_max_per_team: rotationMaxPerTeam,
+      audiences: [], team_ids: [], rotation_enabled: rotationEnabled,
     }],
   })
   mock.onGet('/duty-types').reply(200, DUTY_TYPES)
@@ -50,27 +52,37 @@ function renderEditor(rotationMaxPerTeam: number | null, putReply?: [number, unk
   return mock
 }
 
-function capInput(): HTMLInputElement {
-  return screen.getAllByLabelText(/Max\. Kuchen pro Mannschaft/)[0] as HTMLInputElement
+/** Die Seite rendert Mobile- und Desktop-Variante parallel — [0] genügt. */
+function rotationCheckbox(): HTMLInputElement {
+  return screen.getAllByLabelText(/Bewirtungsrotation/)[0] as HTMLInputElement
 }
 
-describe('AdminDutyTemplateDetailPage — Bewirtungsrotations-Cap', () => {
-  test('rendert leer, wenn kein Cap gespeichert ist', async () => {
-    renderEditor(null)
+describe('AdminDutyTemplateDetailPage — Bewirtungsrotations-Schalter', () => {
+  test('rendert ungesetzt, wenn die Rotation deaktiviert ist', async () => {
+    renderEditor(false)
     await flushAsync()
 
-    expect(capInput().value).toBe('')
+    expect(rotationCheckbox().checked).toBe(false)
   })
 
-  test('rendert den gespeicherten Cap-Wert', async () => {
-    renderEditor(2)
+  test('rendert gesetzt, wenn die Rotation aktiviert ist', async () => {
+    renderEditor(true)
     await flushAsync()
 
-    expect(capInput().value).toBe('2')
+    expect(rotationCheckbox().checked).toBe(true)
   })
 
-  test('leer gelassen: kein rotation_max_per_team im Payload', async () => {
-    const mock = renderEditor(null, [204, undefined])
+  test('verweist für die Obergrenze auf die Einstellungen statt ein Zahlenfeld anzubieten', async () => {
+    renderEditor(true)
+    await flushAsync()
+
+    expect(screen.getAllByText(/Einstellungen → Bewirtung/).length).toBeGreaterThan(0)
+    // Der Cap ist keine Item-Eigenschaft mehr — hier darf kein Eingabefeld dafür stehen.
+    expect(screen.queryByLabelText(/Max\. Kuchen pro Mannschaft/)).toBeNull()
+  })
+
+  test('aus gelassen: rotation_enabled=false im Payload', async () => {
+    const mock = renderEditor(false, [204, undefined])
     await flushAsync()
 
     fireEvent.click(screen.getByRole('button', { name: 'Vorlage speichern' }))
@@ -79,29 +91,29 @@ describe('AdminDutyTemplateDetailPage — Bewirtungsrotations-Cap', () => {
     const put = mock.history.put.find(r => r.url === '/duty-templates/5')
     expect(put).toBeTruthy()
     const body = JSON.parse(put!.data)
-    expect(body.items[0].rotation_max_per_team ?? null).toBeNull()
+    expect(body.items[0].rotation_enabled ?? false).toBe(false)
   })
 
-  test('gesetzt: rotation_max_per_team steht im Payload', async () => {
-    const mock = renderEditor(null, [204, undefined])
+  test('eingeschaltet: rotation_enabled=true im Payload', async () => {
+    const mock = renderEditor(false, [204, undefined])
     await flushAsync()
 
-    fireEvent.change(capInput(), { target: { value: '3' } })
+    fireEvent.click(rotationCheckbox())
     fireEvent.click(screen.getByRole('button', { name: 'Vorlage speichern' }))
     await flushAsync()
 
     const put = mock.history.put.find(r => r.url === '/duty-templates/5')
     const body = JSON.parse(put!.data)
-    expect(body.items[0].rotation_max_per_team).toBe(3)
+    expect(body.items[0].rotation_enabled).toBe(true)
   })
 
   test('Server-Fehler rotation_requires_normal_behavior wird lesbar angezeigt', async () => {
-    renderEditor(2, [400, { error: 'rotation_requires_normal_behavior' }])
+    renderEditor(true, [400, { error: 'rotation_requires_normal_behavior' }])
     await flushAsync()
 
     fireEvent.click(screen.getByRole('button', { name: 'Vorlage speichern' }))
     await flushAsync()
 
-    expect(screen.getByText(/Rotations-Cap erfordert/)).toBeTruthy()
+    expect(screen.getByText(/Bewirtungsrotation erfordert/)).toBeTruthy()
   })
 })

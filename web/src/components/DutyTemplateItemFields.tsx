@@ -48,35 +48,39 @@ export function TeamScopeField({ teams, shortNames, selected, onToggle }: {
 }
 
 /**
- * Bewirtungsrotations-Cap eines Vorlagen-Eintrags (kuchendienst-rotation).
- * Leer = Rotation deaktiviert (Default, bisheriges Verhalten). Ein gesetzter
- * Wert aktiviert die tagesweite Team-Warteschlange — setzt serverseitig
- * same_day_behavior/adjacent_day_behavior='normal' beim Diensttyp voraus,
- * die Prüfung selbst läuft aber nur serverseitig (kein Client-Vorab-Check).
+ * Bewirtungsrotations-Schalter eines Vorlagen-Eintrags (kuchendienst-rotation).
+ * Aus (Default) = bisheriges Verhalten, ein Slot pro Team des Spiels. An =
+ * tagesweite Team-Warteschlange über alle Heimspiele des Spieltags.
+ *
+ * Die Obergrenze pro Mannschaft steht bewusst NICHT hier, sondern vereinsweit
+ * unter Einstellungen → Bewirtung (bewirtung-cap-global): sie ist eine
+ * Vereinsregel, keine Eigenschaft einer einzelnen Vorlage — zwei Vorlagen mit
+ * abweichenden Obergrenzen für denselben Diensttyp wären nicht auflösbar.
+ *
+ * Die Voraussetzung „Normal (immer)" beim Diensttyp prüft nur der Server
+ * (400 rotation_requires_normal_behavior), kein Client-Vorab-Check.
  */
-export function RotationCapField({ id, value, onChange }: {
+export function RotationEnabledField({ id, value, onChange }: {
   id: string
-  value: number | null | undefined
-  onChange: (v: number | null) => void
+  value: boolean | undefined
+  onChange: (v: boolean) => void
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-xs text-brand-text-muted mb-1">
-        Max. Kuchen pro Mannschaft <span className="text-brand-text-subtle">(leer = Rotation deaktiviert)</span>
+      <label htmlFor={id} className="flex items-center gap-2 text-xs text-brand-text-muted cursor-pointer">
+        <input
+          id={id}
+          type="checkbox"
+          checked={value ?? false}
+          onChange={e => onChange(e.target.checked)}
+          className="accent-brand-yellow"
+        />
+        Bewirtungsrotation über den ganzen Spieltag
       </label>
-      <input
-        id={id}
-        type="number"
-        min={1}
-        value={value ?? ''}
-        onChange={e => {
-          const raw = e.target.value
-          onChange(raw === '' ? null : Number(raw))
-        }}
-        className="w-24 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
-      />
       <p className="text-xs text-brand-text-subtle mt-1">
-        Setzt voraus, dass „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" beim Diensttyp auf „Normal (immer)" stehen.
+        Max. Kuchen pro Mannschaft wird unter Einstellungen → Bewirtung gepflegt. Setzt voraus,
+        dass „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" beim Diensttyp
+        auf „Normal (immer)" stehen.
       </p>
     </div>
   )
