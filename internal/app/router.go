@@ -291,6 +291,12 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		if h.Settings != nil {
 			r.Get("/api/settings/bewirtung", h.Settings.GetBewirtung)
 		}
+		// Ausrichter-Liste: Kalender und Termin-Wizard brauchen sie für alle
+		// Eingeloggten (Mutation ist Vorstand-Tier, siehe unten).
+		if h.Settings != nil {
+			r.Get("/api/ausrichter", h.Settings.ListAusrichter)
+			r.Get("/api/ausrichter/{id}/usage", h.Settings.AusrichterUsage)
+		}
 
 		// Mitfahrgelegenheiten
 		r.Get("/api/mitfahrgelegenheiten", h.Carpool.List)
@@ -614,6 +620,15 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Delete("/api/duty-types/{id}", h.Duties.DeleteType)
 			if h.Settings != nil {
 				r.Put("/api/settings/bewirtung", h.Settings.SetBewirtung)
+			}
+			// Ausrichter-Liste pflegen (Vorstand). Löschen ist der einzige
+			// unumkehrbare Schritt (gebundene Vorlagen-Zeilen fallen mit weg,
+			// siehe DeleteAusrichter) — GET .../usage benennt die Betroffenen
+			// vorab, liegt aber bewusst im Authenticated-Block oben.
+			if h.Settings != nil {
+				r.Post("/api/ausrichter", h.Settings.CreateAusrichter)
+				r.Put("/api/ausrichter/{id}", h.Settings.UpdateAusrichter)
+				r.Delete("/api/ausrichter/{id}", h.Settings.DeleteAusrichter)
 			}
 			r.Get("/api/duty-accounts/export", h.Duties.ExportAccounts)
 			r.Post("/api/duty-templates", h.Games.CreateTemplate)

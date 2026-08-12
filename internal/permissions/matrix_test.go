@@ -384,6 +384,9 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/duty-slots/{id}/assignments", expected: exAuth},
 	// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis, lesbar für alle Eingeloggten.
 	{method: "GET", path: "/api/settings/bewirtung", expected: exAuth},
+	// Ausrichter-Liste: lesbar für alle Eingeloggten (Kalender/Termin-Wizard); Mutation ist exVorstand (unten).
+	{method: "GET", path: "/api/ausrichter", expected: exAuth},
+	{method: "GET", path: "/api/ausrichter/{id}/usage", expected: exAuth},
 
 	// Mitfahrgelegenheiten
 	{method: "GET", path: "/api/mitfahrgelegenheiten", expected: exAuth},
@@ -664,6 +667,10 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/duty-accounts/export", expected: exVorstand},
 	// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis ändern.
 	{method: "PUT", path: "/api/settings/bewirtung", expected: exVorstand},
+	// Ausrichter-Liste pflegen.
+	{method: "POST", path: "/api/ausrichter", expected: exVorstand},
+	{method: "PUT", path: "/api/ausrichter/{id}", expected: exVorstand},
+	{method: "DELETE", path: "/api/ausrichter/{id}", expected: exVorstand},
 	{method: "POST", path: "/api/duty-templates", expected: exVorstand},
 	{method: "PUT", path: "/api/duty-templates/{id}", expected: exVorstand},
 	{method: "DELETE", path: "/api/duty-templates/{id}", expected: exVorstand},
