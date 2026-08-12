@@ -387,6 +387,8 @@ var matrix = []endpointCase{
 	// Ausrichter-Liste: lesbar für alle Eingeloggten (Kalender/Termin-Wizard); Mutation ist exVorstand (unten).
 	{method: "GET", path: "/api/ausrichter", expected: exAuth},
 	{method: "GET", path: "/api/ausrichter/{id}/usage", expected: exAuth},
+	// Aufgelöster Tages-Ausrichter: sichtbar für alle Eingeloggten, änderbar nur mit manage_games (unten).
+	{method: "GET", path: "/api/game-days/{date}/host", expected: exAuth},
 
 	// Mitfahrgelegenheiten
 	{method: "GET", path: "/api/mitfahrgelegenheiten", expected: exAuth},
@@ -557,6 +559,9 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/duty-slots/{id}", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/games/{id}/regenerate", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/games/regenerate-day", expected: exVorstandTrainer},
+	// Tages-Ausrichter ändern (Capability manage_games); Lesen ist exAuth (oben).
+	{method: "POST", path: "/api/game-days/host/preview", expected: exVorstandTrainer},
+	{method: "POST", path: "/api/game-days/host/apply", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/members/{id}/change-drafts/{draftId}/accept", expected: exVorstandTrainer},
 	{method: "DELETE", path: "/api/members/{id}/change-drafts/{draftId}", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/age-class-rules", expected: exVorstandTrainer},
