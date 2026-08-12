@@ -2,34 +2,34 @@
 
 ## 1. Datenbank
 
-- [ ] 1.1 Migrationsnummer bestimmen: `ls internal/db/migrations/ | sort -V | tail -1` — zum Zeitpunkt des Designs ist `046_bewirtung_cap_global` die höchste, dieser Change wird also `047_*`. Nie eine Nummer ≤ aktueller DB-Version vergeben (golang-migrate überspringt sie lautlos).
-- [ ] 1.2 `047_heimspieltag_ausrichter.up.sql`: Tabelle `ausrichter` (`id`, `name TEXT NOT NULL UNIQUE`, `aktiv INTEGER NOT NULL DEFAULT 1`, `is_default INTEGER NOT NULL DEFAULT 0`, `sort_order INTEGER NOT NULL DEFAULT 0`, `created_at`) + `CREATE UNIQUE INDEX idx_ausrichter_default ON ausrichter(is_default) WHERE is_default = 1;`
-- [ ] 1.3 `047_*.up.sql`: Tabelle `spieltag_ausrichter` (`date DATE NOT NULL`, `season_id INTEGER NOT NULL REFERENCES seasons(id) ON DELETE CASCADE`, `ausrichter_id INTEGER REFERENCES ausrichter(id) ON DELETE SET NULL`, `updated_at`, `updated_by INTEGER REFERENCES users(id)`, `PRIMARY KEY (date, season_id)`)
-- [ ] 1.4 `047_*.up.sql`: `ALTER TABLE game_template_items ADD COLUMN ausrichter_id INTEGER REFERENCES ausrichter(id) ON DELETE RESTRICT;` — bewusst `RESTRICT` statt `SET NULL`, damit es keinen stillen Pfad gibt, der eine gebundene Zeile auf „gilt immer" hebt (design.md Decision 6).
-- [ ] 1.5 `047_*.up.sql`: Seed genau einer Default-Zeile idempotent (`INSERT OR IGNORE … is_default=1`). Ohne diesen Seed ist die Auflösung aus Decision 2 nicht total.
-- [ ] 1.6 `047_*.down.sql`: Spalte und beide Tabellen entfernen (Reihenfolge: erst `game_template_items.ausrichter_id`, dann `spieltag_ausrichter`, dann `ausrichter`).
-- [ ] 1.7 Up/Down gegen eine **isolierte Kopie** verifizieren, nicht gegen die echte `teamwerk.db`. Bekannte Repo-Einschränkung: `make migrate-down` ist ein No-Op (`db.Migrate()` ruft nur `m.Up()`), das Down also direkt per `sqlite3 < …down.sql` prüfen.
-- [ ] 1.8 `internal/db/migrations_test.go` um die neuen Objekte ergänzen (Schema-Assertions wie bei den Vorgänger-Migrationen).
+- [x] 1.1 Migrationsnummer bestimmen: `ls internal/db/migrations/ | sort -V | tail -1`. **Ergebnis: `048`** — zwischen Design und Umsetzung ist `047_member_chat_visible` dazugekommen (Commit `b3d1086e`), die im Design genannte `047` ist also vergeben. Nie eine Nummer ≤ aktueller DB-Version vergeben (golang-migrate überspringt sie lautlos).
+- [x] 1.2 `048_heimspieltag_ausrichter.up.sql`: Tabelle `ausrichter` (`id`, `name TEXT NOT NULL UNIQUE`, `aktiv INTEGER NOT NULL DEFAULT 1`, `is_default INTEGER NOT NULL DEFAULT 0`, `sort_order INTEGER NOT NULL DEFAULT 0`, `created_at`) + `CREATE UNIQUE INDEX idx_ausrichter_default ON ausrichter(is_default) WHERE is_default = 1;`
+- [x] 1.3 `047_*.up.sql`: Tabelle `spieltag_ausrichter` (`date DATE NOT NULL`, `season_id INTEGER NOT NULL REFERENCES seasons(id) ON DELETE CASCADE`, `ausrichter_id INTEGER REFERENCES ausrichter(id) ON DELETE SET NULL`, `updated_at`, `updated_by INTEGER REFERENCES users(id)`, `PRIMARY KEY (date, season_id)`)
+- [x] 1.4 `047_*.up.sql`: `ALTER TABLE game_template_items ADD COLUMN ausrichter_id INTEGER REFERENCES ausrichter(id) ON DELETE RESTRICT;` — bewusst `RESTRICT` statt `SET NULL`, damit es keinen stillen Pfad gibt, der eine gebundene Zeile auf „gilt immer" hebt (design.md Decision 6).
+- [x] 1.5 `047_*.up.sql`: Seed genau einer Default-Zeile idempotent (`INSERT OR IGNORE … is_default=1`). Ohne diesen Seed ist die Auflösung aus Decision 2 nicht total.
+- [x] 1.6 `047_*.down.sql`: Spalte und beide Tabellen entfernen (Reihenfolge: erst `game_template_items.ausrichter_id`, dann `spieltag_ausrichter`, dann `ausrichter`).
+- [x] 1.7 Up/Down gegen eine **isolierte Kopie** verifizieren, nicht gegen die echte `teamwerk.db`. Bekannte Repo-Einschränkung: `make migrate-down` ist ein No-Op (`db.Migrate()` ruft nur `m.Up()`), das Down also direkt per `sqlite3 < …down.sql` prüfen.
+- [x] 1.8 `internal/db/migrations_test.go` um die neuen Objekte ergänzen (Schema-Assertions wie bei den Vorgänger-Migrationen).
 
 ## 2. Backend: Ausrichter-Liste und Auflösung (Foundation)
 
-- [ ] 2.1 `internal/settings/ausrichter.go` anlegen: Typ `Ausrichter`, `ListAusrichter`, `GetAusrichter`, `CreateAusrichter`, `UpdateAusrichter`, `DeleteAusrichter`, `AusrichterUsage`. Package-Wahl ist durch den Architektur-Test erzwungen — `settings` ist Foundation und wird von `internal/games` bereits importiert; ein Domain-Package `internal/ausrichter` wäre ein Domain→Domain-Import (design.md Decision 3).
-- [ ] 2.2 `ResolveAusrichterForDay(ctx, RowQuerier, date string, seasonID int) (int, error)` — nimmt das schmale `RowQuerier`-Interface (wie `GetBewirtungVerhaeltnis`), damit die Regen-Engine innerhalb ihrer `tx` liest. Kein `Store`/Cache (kein Hot-Path). Liefert bei fehlender Zeile **und** bei `ausrichter_id IS NULL` den Default.
-- [ ] 2.3 Default-Wechsel als eine Transaktion: bisherigen Default auf `0`, neuen auf `1`. Der Partial-Unique-Index ist die eigentliche Garantie — der Handler-Code darf sich nicht allein darauf verlassen, dass er richtig rechnet.
-- [ ] 2.4 `DeleteAusrichter`: `409 default_ausrichter_undeletable` beim Default; sonst in einer Transaktion `spieltag_ausrichter.ausrichter_id` auf `NULL` und gebundene `game_template_items` **löschen** (design.md Decision 6).
-- [ ] 2.5 Tests `internal/settings/ausrichter_test.go`: Auflösung total (fehlende Zeile / `NULL` / expliziter Wert), Default-Invariante über alle Schreibpfade, Saison-Trennung bei gleichem Datum, Lösch-Kaskade (Spieltage auf `NULL`, Items weg), Default nicht löschbar.
+- [x] 2.1 `internal/settings/ausrichter.go` anlegen: Typ `Ausrichter`, `ListAusrichter`, `GetAusrichter`, `CreateAusrichter`, `UpdateAusrichter`, `DeleteAusrichter`, `AusrichterUsage`. Package-Wahl ist durch den Architektur-Test erzwungen — `settings` ist Foundation und wird von `internal/games` bereits importiert; ein Domain-Package `internal/ausrichter` wäre ein Domain→Domain-Import (design.md Decision 3).
+- [x] 2.2 `ResolveAusrichterForDay(ctx, RowQuerier, date string, seasonID int) (int, error)` — nimmt das schmale `RowQuerier`-Interface (wie `GetBewirtungVerhaeltnis`), damit die Regen-Engine innerhalb ihrer `tx` liest. Kein `Store`/Cache (kein Hot-Path). Liefert bei fehlender Zeile **und** bei `ausrichter_id IS NULL` den Default.
+- [x] 2.3 Default-Wechsel als eine Transaktion: bisherigen Default auf `0`, neuen auf `1`. Der Partial-Unique-Index ist die eigentliche Garantie — der Handler-Code darf sich nicht allein darauf verlassen, dass er richtig rechnet.
+- [x] 2.4 `DeleteAusrichter`: `409 default_ausrichter_undeletable` beim Default; sonst in einer Transaktion `spieltag_ausrichter.ausrichter_id` auf `NULL` und gebundene `game_template_items` **löschen** (design.md Decision 6).
+- [x] 2.5 Tests `internal/settings/ausrichter_test.go`: Auflösung total (fehlende Zeile / `NULL` / expliziter Wert), Default-Invariante über alle Schreibpfade, Saison-Trennung bei gleichem Datum, Lösch-Kaskade (Spieltage auf `NULL`, Items weg), Default nicht löschbar.
 
 ## 3. Backend: Routen der Ausrichter-Liste
 
-- [ ] 3.1 `internal/settings/handler.go`: `ListAusrichter` (`GET /api/ausrichter`), `CreateAusrichter`, `UpdateAusrichter`, `DeleteAusrichter`, `AusrichterUsage` (`GET /api/ausrichter/{id}/usage`). Jede Mutation ruft `h.hub.Broadcast("settings-changed")`.
-- [ ] 3.2 `internal/app/router.go`: `GET /api/ausrichter` und `GET /api/ausrichter/{id}/usage` in den Authenticated-Block (Kalender und Wizard brauchen die Liste), die drei Mutationen in den bestehenden `vorstand`-Block neben `PUT /api/settings/bewirtung`.
-- [ ] 3.3 Route-Tests `internal/settings/ausrichter_handler_test.go`: Happy-Path je Route, `401` unauthentifiziert, `403` ohne `vorstand`, `409` bei Namensdublette, `409` beim Default-Löschen — jeweils mit Assertion, dass nichts geschrieben wurde.
+- [x] 3.1 `internal/settings/handler.go`: `ListAusrichter` (`GET /api/ausrichter`), `CreateAusrichter`, `UpdateAusrichter`, `DeleteAusrichter`, `AusrichterUsage` (`GET /api/ausrichter/{id}/usage`). Jede Mutation ruft `h.hub.Broadcast("settings-changed")`.
+- [x] 3.2 `internal/app/router.go`: `GET /api/ausrichter` und `GET /api/ausrichter/{id}/usage` in den Authenticated-Block (Kalender und Wizard brauchen die Liste), die drei Mutationen in den bestehenden `vorstand`-Block neben `PUT /api/settings/bewirtung`.
+- [x] 3.3 Route-Tests `internal/settings/ausrichter_handler_test.go`: Happy-Path je Route, `401` unauthentifiziert, `403` ohne `vorstand`, `409` bei Namensdublette, `409` beim Default-Löschen — jeweils mit Assertion, dass nichts geschrieben wurde.
 
 ## 4. Backend: Vorlagen-Item-Bindung
 
-- [ ] 4.1 `internal/games/handler.go`: `ausrichter_id` in `templateItemRow` (Scan als `sql.NullInt64`) und `templateItem` (JSON `*int`), in allen `SELECT`s der Vorlagen-Items ergänzen (`loadTemplateItemsTx`, Detail-Handler) und im `INSERT` mitschreiben.
-- [ ] 4.2 Validierung vor dem ersten Schreibvorgang: gesetztes `ausrichter_id` auf einer Vorlage mit `template_type != 'heim'` → `400 ausrichter_requires_heim_template`; unbekannter `ausrichter_id` → `400`. Beide Prüfungen laufen **vor** allen Inserts, damit ein Fehler keine Teil-Persistenz hinterlässt (gleiches Muster wie bei `PUT /api/settings/bewirtung`).
-- [ ] 4.3 Tests: Happy-Path (Bindung wird gespeichert und zurückgeliefert), `400` auf Auswärts-/generischer Vorlage, `400` bei unbekanntem Ausrichter, und dass ein Item ohne Bindung unverändert `NULL` bleibt.
+- [x] 4.1 `ausrichter_id` in `templateItemRow` (Scan als `sql.NullInt64`) und im DTO `templateItem` (JSON `*int`) ergänzen — und in **allen drei** SELECTs auf `game_template_items`: `loadTemplateItems` (non-tx, `handler.go`, für `PreviewSlots`), `scanTemplateItems` (`handler.go`, Admin-CRUD) und `loadTemplateItemsTx` (`regen.go`). Im `INSERT` mitschreiben.
+- [x] 4.2 Validierung vor dem ersten Schreibvorgang: gesetztes `ausrichter_id` auf einer Vorlage mit `template_type != 'heim'` → `400 ausrichter_requires_heim_template`; unbekannter `ausrichter_id` → `400`. Beide Prüfungen laufen **vor** allen Inserts, damit ein Fehler keine Teil-Persistenz hinterlässt (gleiches Muster wie bei `PUT /api/settings/bewirtung`).
+- [x] 4.3 Tests: Happy-Path (Bindung wird gespeichert und zurückgeliefert), `400` auf Auswärts-/generischer Vorlage, `400` bei unbekanntem Ausrichter, und dass ein Item ohne Bindung unverändert `NULL` bleibt.
 
 ## 5. Backend: Gate im Auto-Regen
 
@@ -72,16 +72,17 @@
 
 ## 10. Frontend: Kalender
 
-- [ ] 10.1 Tages-Picker in der Kalender-Tagesansicht, sichtbar für alle, änderbar nur mit `manage_games`. Kennzeichnen, ob der Wert explizit gesetzt oder vom Default geerbt ist.
+- [ ] 10.1 Ausrichter-Feld im **Termin-Detail-Modal** (`EventInfoModal` in `KalenderPage.tsx`) bei Heim-Terminen — es gibt **keine Tagesansicht**, siehe design.md Decision 10. Sichtbar für alle, änderbar nur mit `manage_games`, gekennzeichnet ob explizit gesetzt oder vom Default geerbt. **Keine** Darstellung in der Monatsübersicht.
 - [ ] 10.2 Vorschau-Modal mit der Bilanz (`created`/`deleted`/`assignments_lost`) vor dem Anwenden — gespeist aus `POST /api/game-days/host/preview`.
 - [ ] 10.3 Termin-Wizard: Ausrichter-Feld bei Heim-Terminen, vorbelegt mit dem geltenden Wert, **erkennbar tagesbezogen beschriftet** („Ausrichter am 14.09. — gilt für alle Termine dieses Tages"). Weicht der Wert ab, läuft das Speichern über dasselbe Vorschau-Modal (design.md Decision 9).
-- [ ] 10.4 Massenlauf-Dialog: Ausrichter-Spalte je Tag mit Kennzeichnung geerbt/gesetzt; Änderungen gehen als `host_overrides` mit. Kein zweiter Bestätigungsdialog.
+- [ ] 10.4 Massenlauf-Dialog (`web/src/components/DutyBulkRegenModal.tsx` — eigene Komponente, **nicht** in `KalenderPage.tsx`): Die Zeilen sind heute **flach je Termin**; für die Ausrichter-Spalte je Tag muss `preview.rows` clientseitig nach `row.date` gruppiert und eine Tages-Zwischenebene ins Rendering eingezogen werden. Kennzeichnung geerbt/gesetzt; Änderungen gehen als `host_overrides` mit. Kein zweiter Bestätigungsdialog.
 - [ ] 10.5 `useLiveUpdates` für die betroffenen Events, damit fremde Änderungen die Ansicht aktualisieren.
 - [ ] 10.6 Vitest: Wizard-Feld ist tagesbezogen beschriftet und vorbelegt; abweichende Wahl öffnet die Vorschau; ohne `manage_games` ist der Picker nur lesend; Massenlauf sendet `host_overrides`.
 
 ## 11. Abschluss
 
-- [ ] 11.1 `make test` (inkl. Architektur- und Broadcast-Gate), `make lint`, `pnpm -C web build/test/lint`.
+- [ ] 11.0 **Permission-Matrix nachziehen** (`internal/permissions/matrix_test.go`): alle sechs neuen Routen ins `matrix`-Array mit erwarteter Berechtigung eintragen (`GET /api/ausrichter`, `GET /api/ausrichter/{id}/usage`, `POST /api/ausrichter`, `PUT|DELETE /api/ausrichter/{id}`, `GET /api/game-days/{date}/host`, `POST /api/game-days/host/preview|apply`). `TestPermissionMatrix_Backend` läuft per `chi.Walk` über den echten Router und failt bei **jeder** nicht eingetragenen Route — ein zweites, vom Broadcast-Gate unabhängiges Gate, das im ursprünglichen Design fehlte.
+- [ ] 11.1 `make test` (inkl. Architektur-, Broadcast- und Permission-Matrix-Gate), `make lint`, `pnpm -C web build/test/lint`.
 - [ ] 11.2 `/verify-change` durchlaufen (Route→Tests, Mutation→`Broadcast`/`useLiveUpdates`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`).
 - [ ] 11.3 Gotcha in `docs/agent/06-gotchas.md` ergänzen: Ausrichter als Tages-Eigenschaft, totale Auflösung über den Default, Gate an **zwei** Stellen im Regen (inkl. Begründung, warum `buildRotationPlan` mitgatet werden muss), und die asymmetrische Lösch-Semantik (Spieltage `SET NULL`, Vorlagen-Zeilen mitlöschen).
 - [ ] 11.4 Ein Commit je Task-Gruppe, Conventional Commits mit Scope `games`/`settings`/`db`.
