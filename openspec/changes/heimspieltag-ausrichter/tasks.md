@@ -42,11 +42,11 @@
 
 ## 6. Backend: Preview/Apply für den Tages-Ausrichter
 
-- [ ] 6.1 `internal/games/ausrichter_handler.go` anlegen: `GET /api/game-days/{date}/host` (aufgelöster Wert + `is_explicit`), `POST /api/game-days/host/preview`, `POST /api/game-days/host/apply`. Muss in `games` liegen, weil es den unexportierten `runAutoRegen` braucht — dieselbe Begründung wie bei `h4aimport_handler.go`.
-- [ ] 6.2 Gemeinsame Funktion für beide Endpoints: Tageswert schreiben → `runAutoRegen` für den Tag → Bilanz aus `RegenSummary` + Vor-/Nach-Zählung von `duty_slots`/`duty_assignments` → `Rollback` (preview) oder `Commit` + `Broadcast` (apply). Kein zweiter Codepfad.
-- [ ] 6.3 Validierung: unbekannter oder inaktiver `ausrichter_id` → `400`; Capability `manage_games` → `403` sonst.
-- [ ] 6.4 Routen in `internal/app/router.go` eintragen. `preview` schreibt nichts und braucht daher einen Eintrag in der `broadcastAllowlist` (`internal/arch/broadcast_test.go`) **mit Begründung** — sonst schlägt das Broadcast-Gate fehl.
-- [ ] 6.5 Tests: Vorschau schreibfrei (DB-Zustand vor/nach identisch, inkl. `spieltag_ausrichter`), Apply setzt Wert + regeneriert + broadcastet, Vorschau und Apply liefern dieselbe Bilanz, `400` bei unbekanntem Ausrichter, `403` ohne `manage_games`.
+- [x] 6.1 `internal/games/ausrichter_handler.go` anlegen: `GET /api/game-days/{date}/host` (aufgelöster Wert + `is_explicit`), `POST /api/game-days/host/preview`, `POST /api/game-days/host/apply`. Muss in `games` liegen, weil es den unexportierten `runAutoRegen` braucht — dieselbe Begründung wie bei `h4aimport_handler.go`.
+- [x] 6.2 Gemeinsame Funktion für beide Endpoints: Tageswert schreiben → `runAutoRegen` für den Tag → Bilanz aus `RegenSummary` + Vor-/Nach-Zählung von `duty_slots`/`duty_assignments` → `Rollback` (preview) oder `Commit` + `Broadcast` (apply). Kein zweiter Codepfad.
+- [x] 6.3 Validierung: unbekannter oder inaktiver `ausrichter_id` → `400`; Capability `manage_games` → `403` sonst.
+- [x] 6.4 Routen in `internal/app/router.go` eintragen. `preview` schreibt nichts und braucht daher einen Eintrag in der `broadcastAllowlist` (`internal/arch/broadcast_test.go`) **mit Begründung** — sonst schlägt das Broadcast-Gate fehl.
+- [x] 6.5 Tests: Vorschau schreibfrei (DB-Zustand vor/nach identisch, inkl. `spieltag_ausrichter`), Apply setzt Wert + regeneriert + broadcastet, Vorschau und Apply liefern dieselbe Bilanz, `400` bei unbekanntem Ausrichter, `403` ohne `manage_games`.
 
 ## 7. Backend: Massenlauf
 
@@ -56,19 +56,19 @@
 
 ## 8. Frontend: Einstellungen
 
-- [ ] 8.1 `web/src/pages/AdminSettingsPage.tsx`: Tab-Label `Bewirtung` → `Heimspieltage`. Der alte Query-Parameter `?tab=bewirtung` muss weiterhin auf diesem Tab landen (Alias auf die Tab-ID), damit bestehende Links nicht ins Leere laufen.
-- [ ] 8.2 Bestehende Felder in eine Kachel **„Bewirtung"** fassen (Kachel-Klassen aus `docs/agent/05-frontend.md`), Inhalt unverändert.
-- [ ] 8.3 Neue Kachel **„Ausrichter"**: CRUD-Liste nach dem Muster von `StammvereineTab` (anlegen, umbenennen, deaktivieren, löschen, sortieren) plus Default-Markierung. `useLiveUpdates` auf `settings-changed`.
-- [ ] 8.4 Löschen führt über `GET /api/ausrichter/{id}/usage` und zeigt die betroffenen Spieltage **und Vorlagen-Zeilen** an, bevor bestätigt wird — die Vorlagen-Zeilen verschwinden mit, das darf nicht überraschen.
-- [ ] 8.5 Nur `brand-*`-Tokens, `lucide-react`-Icons, Icon-only-Buttons mit `aria-label`. Mobile: Card-Layout statt Tabelle, Touch-Targets `py-2.5`.
-- [ ] 8.6 Vitest: Tab-Rendering mit beiden Kacheln, Alias des alten Tab-Parameters, CRUD-Requests, Default-Wechsel, Lösch-Dialog listet Vorlagen-Zeilen.
+- [x] 8.1 `web/src/pages/AdminSettingsPage.tsx`: Tab-Label `Bewirtung` → `Heimspieltage`. Der alte Query-Parameter `?tab=bewirtung` muss weiterhin auf diesem Tab landen (Alias auf die Tab-ID), damit bestehende Links nicht ins Leere laufen.
+- [x] 8.2 Bestehende Felder in eine Kachel **„Bewirtung"** fassen (Kachel-Klassen aus `docs/agent/05-frontend.md`), Inhalt unverändert.
+- [x] 8.3 Neue Kachel **„Ausrichter"**: CRUD-Liste nach dem Muster von `StammvereineTab` (anlegen, umbenennen, deaktivieren, löschen, sortieren) plus Default-Markierung. `useLiveUpdates` auf `settings-changed`.
+- [x] 8.4 Löschen führt über `GET /api/ausrichter/{id}/usage` und zeigt die betroffenen Spieltage **und Vorlagen-Zeilen** an, bevor bestätigt wird — die Vorlagen-Zeilen verschwinden mit, das darf nicht überraschen.
+- [x] 8.5 Nur `brand-*`-Tokens, `lucide-react`-Icons, Icon-only-Buttons mit `aria-label`. Mobile: Card-Layout statt Tabelle, Touch-Targets `py-2.5`.
+- [x] 8.6 Vitest: Tab-Rendering mit beiden Kacheln, Alias des alten Tab-Parameters, CRUD-Requests, Default-Wechsel, Lösch-Dialog listet Vorlagen-Zeilen.
 
 ## 9. Frontend: Vorlagen-Editor
 
-- [ ] 9.1 `web/src/components/DutyTemplateItemFields.tsx`: Ausrichter-Auswahl je Item, nur bei `template_type='heim'`. Leerwert = „gilt immer" und muss im UI als solcher benannt sein, nicht als leeres Feld.
-- [ ] 9.2 `AdminDutyTemplatesPage.tsx` und `AdminDutyTemplateDetailPage.tsx`: Feld in Typ und Payload aufnehmen.
-- [ ] 9.3 Je Zeile im Klartext anzeigen, wann sie greift (z. B. „nur wenn TV Ötlingen ausrichtet") — ein Konfigurationsfehler fällt sonst erst am erzeugten Dienstplan auf (design.md Risks).
-- [ ] 9.4 Vitest: Auswahl erscheint nur bei Heim-Vorlagen, Wert landet im Request, Leerwert sendet `null`.
+- [x] 9.1 `web/src/components/DutyTemplateItemFields.tsx`: Ausrichter-Auswahl je Item, nur bei `template_type='heim'`. Leerwert = „gilt immer" und muss im UI als solcher benannt sein, nicht als leeres Feld.
+- [x] 9.2 `AdminDutyTemplatesPage.tsx` und `AdminDutyTemplateDetailPage.tsx`: Feld in Typ und Payload aufnehmen.
+- [x] 9.3 Je Zeile im Klartext anzeigen, wann sie greift (z. B. „nur wenn TV Ötlingen ausrichtet") — ein Konfigurationsfehler fällt sonst erst am erzeugten Dienstplan auf (design.md Risks).
+- [x] 9.4 Vitest: Auswahl erscheint nur bei Heim-Vorlagen, Wert landet im Request, Leerwert sendet `null`.
 
 ## 10. Frontend: Kalender
 
