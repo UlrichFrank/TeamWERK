@@ -8,10 +8,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/settings"
 )
 
 // --- Request/Response-Typen (design.md §9) --------------------------------------
@@ -27,11 +31,20 @@ type bulkRegenOverride struct {
 	TemplateID *int   `json:"template_id,omitempty"`
 }
 
+// bulkRegenHostOverride setzt den Ausrichter eines Spieltags für diesen Lauf.
+// Der Wert ist tagesbezogen, nicht terminbezogen (heimspieltag-ausrichter,
+// design.md Decision 1) — deshalb ein Datum als Schlüssel und keine game_id.
+type bulkRegenHostOverride struct {
+	Date         string `json:"date"`
+	AusrichterID int    `json:"ausrichter_id"`
+}
+
 type bulkRegenRequest struct {
 	From            string                     `json:"from"`
 	To              string                     `json:"to"`
 	Defaults        map[string]bulkRegenAction `json:"defaults"`
 	Overrides       []bulkRegenOverride        `json:"overrides"`
+	HostOverrides   []bulkRegenHostOverride    `json:"host_overrides"`
 	ExcludedGameIDs []int                      `json:"excluded_game_ids"`
 	Notify          *bool                      `json:"notify"`
 }
@@ -66,6 +79,18 @@ type bulkRegenRow struct {
 	Conflicts           int                `json:"conflicts"`
 }
 
+// bulkRegenDay ist die Tages-Zwischenebene der Antwort: die rows sind flach je
+// Termin, der Ausrichter ist aber eine Eigenschaft des Tages. StoredAusrichterID
+// ist der Wert, der VOR dem Lauf in spieltag_ausrichter stand (nil = kein
+// expliziter Eintrag), EffectiveAusrichterID der danach wirksame — bei einem
+// host_override also der überschriebene.
+type bulkRegenDay struct {
+	Date                  string `json:"date"`
+	StoredAusrichterID    *int   `json:"stored_ausrichter_id,omitempty"`
+	EffectiveAusrichterID int    `json:"effective_ausrichter_id"`
+	IsExplicit            bool   `json:"is_explicit"`
+}
+
 type bulkRegenTotals struct {
 	Games           int `json:"games"`
 	Created         int `json:"created"`
@@ -81,6 +106,7 @@ type bulkRegenTotals struct {
 type bulkRegenResponse struct {
 	Range    bulkRegenRange  `json:"range"`
 	Rows     []bulkRegenRow  `json:"rows"`
+	Days     []bulkRegenDay  `json:"days"`
 	Totals   bulkRegenTotals `json:"totals"`
 	Warnings []string        `json:"warnings"`
 	Applied  bool            `json:"applied,omitempty"`
@@ -184,6 +210,15 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusBadRequest, "invalid_range")
 	}
 
+	// Ausrichter-Überschreibungen vollständig prüfen, BEVOR die Mutationsschleife
+	// den ersten UPDATE absetzt — sonst hinterließe ein 400 auf Override Nr. 3 die
+	// template_id-Schreibvorgänge der ersten beiden (dieselbe Reihenfolge-Regel wie
+	// bei PUT /api/settings/bewirtung).
+	hostOverrides, apiErr := validateHostOverrides(ctx, tx, req.HostOverrides, from, to)
+	if apiErr != nil {
+		return bulkRegenResponse{}, RegenSummary{}, notify, apiErr
+	}
+
 	overridesByGame := map[int]bulkRegenOverride{}
 	for _, ov := range req.Overrides {
 		overridesByGame[ov.GameID] = ov
@@ -228,14 +263,47 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 		})
 	}
 
+	// Tagesmenge des Laufs: alle Termindaten plus die Tage, für die ein
+	// Ausrichter-Override kam (auch terminlose — der Regen ist dort ein No-Op,
+	// der Tageswert aber trotzdem gültig und in der Antwort sichtbar).
+	dateSet := map[string]bool{}
+	for _, pg := range planned {
+		dateSet[pg.g.Date] = true
+	}
+	for date := range hostOverrides {
+		dateSet[date] = true
+	}
+
+	// Gespeicherte Tageswerte VOR den Overrides festhalten — danach ist nicht mehr
+	// unterscheidbar, was schon dastand und was dieser Lauf gerade geschrieben hat.
+	storedHosts, err := loadStoredHosts(ctx, tx, seasonID, dateSet)
+	if err != nil {
+		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+	}
+
+	var updatedBy any
+	if claims := auth.ClaimsFromCtx(ctx); claims != nil {
+		updatedBy = claims.UserID
+	}
+	for date, ausrichterID := range hostOverrides {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO spieltag_ausrichter (date, season_id, ausrichter_id, updated_at, updated_by)
+			VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+			ON CONFLICT(date, season_id) DO UPDATE SET
+				ausrichter_id = excluded.ausrichter_id,
+				updated_at    = CURRENT_TIMESTAMP,
+				updated_by    = excluded.updated_by`,
+			date, seasonID, ausrichterID, updatedBy); err != nil {
+			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+		}
+	}
+
 	// Mutations: template_id per included game, plus a full duty_slots purge for
 	// "purge" games (both is_custom values — the regen engine only ever deletes
 	// is_custom=0 itself, see design.md's transaction sketch).
-	dateSet := map[string]bool{}
 	skip := map[int]bool{}
 	for i := range planned {
 		pg := &planned[i]
-		dateSet[pg.g.Date] = true
 		if pg.excluded {
 			skip[pg.g.ID] = true
 			continue
@@ -323,9 +391,27 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 	}
 	totals.NotifiedUsers = len(notifiedSeen)
 
+	// Tageszeilen NACH dem Lauf auflösen, innerhalb derselben Transaktion: damit
+	// weist effective_ausrichter_id genau den Wert aus, mit dem der Regen oben
+	// gerechnet hat — auch dann, wenn ein Override gerade erst geschrieben wurde.
+	days := make([]bulkRegenDay, 0, len(dates))
+	for _, date := range dates {
+		effective, explicit, err := settings.ResolveAusrichterForDayDetailed(ctx, tx, date, seasonID)
+		if err != nil {
+			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+		}
+		day := bulkRegenDay{Date: date, EffectiveAusrichterID: effective, IsExplicit: explicit}
+		if stored, ok := storedHosts[date]; ok {
+			id := stored
+			day.StoredAusrichterID = &id
+		}
+		days = append(days, day)
+	}
+
 	resp := bulkRegenResponse{
 		Range:    bulkRegenRange{From: from, To: to},
 		Rows:     rows,
+		Days:     days,
 		Totals:   totals,
 		Warnings: []string{},
 	}
@@ -355,6 +441,68 @@ func resolveBulkAction(g bulkGame, overrides map[int]bulkRegenOverride, defaults
 		return "template", &id
 	}
 	return "none", nil
+}
+
+// validateHostOverrides prüft die Ausrichter-Überschreibungen vollständig und
+// liefert sie als date → ausrichter_id. Alle Fehlerfälle sind 400 und laufen vor
+// dem ersten Schreibvorgang.
+//
+// Ein Override außerhalb von [from, to] wird abgelehnt statt still ignoriert: er
+// würde einen Tageswert setzen, den dieser Lauf nicht regeneriert — die Vorschau
+// zeigte dann eine Bilanz, die den geschriebenen Wert nicht enthält.
+func validateHostOverrides(ctx context.Context, tx *sql.Tx, overrides []bulkRegenHostOverride, from, to string) (map[string]int, *bulkRegenAPIError) {
+	result := map[string]int{}
+	for _, ho := range overrides {
+		// SQLite-DATE-Gotcha (docs/agent/06-gotchas.md) auf der Schreibseite: ein
+		// ISO-Timestamp in der Spalte würde von der Auflösung nie gefunden — der
+		// Tageswert wäre gespeichert und trotzdem wirkungslos.
+		date := dayKey(ho.Date)
+		if _, err := time.Parse("2006-01-02", date); err != nil {
+			return nil, bulkRegenErr(http.StatusBadRequest, "invalid_host_override")
+		}
+		if date < from || date > to {
+			return nil, bulkRegenErr(http.StatusBadRequest, "host_override_out_of_range")
+		}
+		a, err := settings.GetAusrichter(ctx, tx, ho.AusrichterID)
+		if errors.Is(err, settings.ErrAusrichterNotFound) {
+			return nil, bulkRegenErr(http.StatusBadRequest, "unknown_ausrichter")
+		}
+		if err != nil {
+			return nil, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+		}
+		// Gleiche Regel wie im Einzeltag-Handler: ein ausgemusterter Verein ist
+		// kein gültiges Ziel, sonst zeigte ein Spieltag auf einen Eintrag, den die
+		// UI gar nicht mehr anbietet.
+		if !a.Aktiv {
+			return nil, bulkRegenErr(http.StatusBadRequest, "inactive_ausrichter")
+		}
+		result[date] = a.ID
+	}
+	return result, nil
+}
+
+// loadStoredHosts liest die bereits gespeicherten Tageswerte der übergebenen
+// Tage. Fehlende Zeile UND ausrichter_id IS NULL sind beide "nicht gesetzt" und
+// fehlen deshalb gleichermaßen in der Map (design.md Decision 2: NULL ist der
+// wohldefinierte "gilt der Default"-Zustand, kein eigener Wert).
+func loadStoredHosts(ctx context.Context, tx *sql.Tx, seasonID int, dates map[string]bool) (map[string]int, error) {
+	stored := map[string]int{}
+	for date := range dates {
+		var id sql.NullInt64
+		err := tx.QueryRowContext(ctx,
+			`SELECT ausrichter_id FROM spieltag_ausrichter WHERE date=? AND season_id=?`,
+			date, seasonID).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if id.Valid {
+			stored[date] = int(id.Int64)
+		}
+	}
+	return stored, nil
 }
 
 // bulkGame is one row of games loaded for the bulk-regen range.

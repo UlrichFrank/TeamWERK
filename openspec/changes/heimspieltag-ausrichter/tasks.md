@@ -50,9 +50,9 @@
 
 ## 7. Backend: Massenlauf
 
-- [ ] 7.1 `internal/games/bulkregen_handler.go`: `HostOverrides []bulkRegenHostOverride` (`{date, ausrichter_id}`) im Request, `Days []bulkRegenDay` (`{date, stored_ausrichter_id, effective_ausrichter_id, is_explicit}`) in der Response.
-- [ ] 7.2 Overrides vor dem Lauf validieren (unbekannter Ausrichter → `400`, nichts geschrieben) und im Lauf wie explizit gesetzte Tageswerte behandeln; ohne Angabe gilt der gespeicherte Wert bzw. der Default.
-- [ ] 7.3 Tests: Preview mit `host_override` weist die Wirkung aus und schreibt nicht; Apply persistiert den Tageswert und die Dienste entsprechen der Vorschau; ohne `host_overrides` bleibt `spieltag_ausrichter` unverändert; `400` bei unbekanntem Ausrichter.
+- [x] 7.1 `internal/games/bulkregen_handler.go`: `HostOverrides []bulkRegenHostOverride` (`{date, ausrichter_id}`) im Request, `Days []bulkRegenDay` (`{date, stored_ausrichter_id, effective_ausrichter_id, is_explicit}`) in der Response.
+- [x] 7.2 Overrides vor dem Lauf validieren (unbekannter Ausrichter → `400`, nichts geschrieben) und im Lauf wie explizit gesetzte Tageswerte behandeln; ohne Angabe gilt der gespeicherte Wert bzw. der Default.
+- [x] 7.3 Tests: Preview mit `host_override` weist die Wirkung aus und schreibt nicht; Apply persistiert den Tageswert und die Dienste entsprechen der Vorschau; ohne `host_overrides` bleibt `spieltag_ausrichter` unverändert; `400` bei unbekanntem Ausrichter.
 
 ## 8. Frontend: Einstellungen
 
