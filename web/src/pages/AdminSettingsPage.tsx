@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, X } from 'lucide-react'
+import { Trash2, X, Star } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useVault } from '../contexts/VaultContext'
@@ -721,14 +721,15 @@ function BeitraegeTab() {
   )
 }
 
-// ─── Bewirtung Tab ────────────────────────────────────────────────────────────
+// ─── Heimspieltage Tab (Bewirtung + Ausrichter) ────────────────────────────────
 
 /** Akzeptiert deutsches Komma und Punkt als Dezimaltrennzeichen. */
 function parseDecimalInput(raw: string): number {
   return parseFloat(raw.trim().replace(',', '.'))
 }
 
-function BewirtungTab() {
+/** Kachel „Bewirtung": die beiden vereinsweiten Bewirtungswerte (unverändert gegenüber dem alten Tab). */
+function BewirtungKachel() {
   const [verhaeltnis, setVerhaeltnis] = useState('')
   const [maxPerTeam, setMaxPerTeam] = useState('')
   const [loaded, setLoaded] = useState(false)
@@ -780,12 +781,8 @@ function BewirtungTab() {
 
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-5 max-w-lg">
+      <h2 className="text-sm font-semibold text-brand-text mb-4">Bewirtung</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
-          Diese Werte steuern die automatische Dienst-Generierung bei <strong className="font-semibold">Heimspielen</strong>:
-          wie viele Bewirtungs-/Kuchendienste ein Spieltag braucht und wie sie auf die Mannschaften verteilt werden.
-          Sie wirken nur für Vorlagen-Einträge, bei denen die Bewirtungsrotation aktiviert ist.
-        </p>
         <div>
           <label htmlFor="bewirtung-verhaeltnis" className="block text-sm font-medium text-brand-text-muted mb-1">Kuchen je Spiel</label>
           <input
@@ -824,6 +821,370 @@ function BewirtungTab() {
           {saving ? 'Speichern…' : saved ? 'Gespeichert ✓' : 'Speichern'}
         </button>
       </form>
+    </div>
+  )
+}
+
+// ─── Kachel „Ausrichter" ────────────────────────────────────────────────────
+
+type Ausrichter = { id: number; name: string; aktiv: boolean; is_default: boolean; sort_order: number }
+type AusrichterGameDay = { date: string; season_id: number; season_name: string }
+type AusrichterTemplateItem = { id: number; template_id: number; template_name: string; duty_type_name: string }
+type AusrichterUsageReport = { game_days: AusrichterGameDay[]; template_items: AusrichterTemplateItem[] }
+
+// Default-Wechsel (is_default) und Deaktivieren (aktiv) teilen sich denselben
+// Fehlerpfad: der Default-Eintrag ist server-seitig weder abwählbar noch
+// deaktivierbar (HTTP 409 „default_required") — der Weg führt immer über
+// "einen anderen Eintrag zum Default machen".
+const DEFAULT_REQUIRED_MESSAGE = 'Erst einen anderen Eintrag zum Default machen.'
+
+function AusrichterKachel() {
+  const [ausrichter, setAusrichter] = useState<Ausrichter[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [neu, setNeu] = useState('')
+  const [editId, setEditId] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Ausrichter | null>(null)
+  const [usage, setUsage] = useState<AusrichterUsageReport | null>(null)
+  const [usageLoading, setUsageLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const load = () => {
+    api.get('/ausrichter?include_inactive=1').then(r => {
+      setAusrichter(r.data.items ?? [])
+      setLoaded(true)
+    })
+  }
+  useEffect(() => { if (!loaded) load() }, [loaded])
+  useLiveUpdates(event => { if (event === 'settings-changed') load() })
+
+  const add = async () => {
+    setError(null)
+    const name = neu.trim()
+    if (!name) return
+    try {
+      await api.post('/ausrichter', { name })
+      setNeu('')
+      load()
+    } catch (e) {
+      setError(errorStatus(e) === 409 ? 'Ein Ausrichter mit diesem Namen existiert bereits.' : 'Anlegen fehlgeschlagen.')
+    }
+  }
+
+  const rename = async (id: number) => {
+    const name = editName.trim()
+    if (!name) return
+    setError(null)
+    try {
+      await api.put(`/ausrichter/${id}`, { name })
+      setEditId(null)
+      load()
+    } catch (e) {
+      setError(errorStatus(e) === 409 ? 'Ein Ausrichter mit diesem Namen existiert bereits.' : 'Umbenennen fehlgeschlagen.')
+    }
+  }
+
+  // Klick auf den Stern eines noch-nicht-Default-Eintrags macht ihn zum Default;
+  // Klick auf den Stern des aktuellen Defaults versucht, ihn abzuwählen — das
+  // lehnt der Server mit 409 ab (siehe DEFAULT_REQUIRED_MESSAGE).
+  const toggleDefault = async (a: Ausrichter) => {
+    setError(null)
+    try {
+      await api.put(`/ausrichter/${a.id}`, { is_default: !a.is_default })
+      load()
+    } catch (e) {
+      setError(errorStatus(e) === 409 ? DEFAULT_REQUIRED_MESSAGE : 'Aktion fehlgeschlagen.')
+    }
+  }
+
+  const toggleAktiv = async (a: Ausrichter) => {
+    setError(null)
+    try {
+      await api.put(`/ausrichter/${a.id}`, { aktiv: !a.aktiv })
+      load()
+    } catch (e) {
+      setError(errorStatus(e) === 409 ? DEFAULT_REQUIRED_MESSAGE : 'Aktion fehlgeschlagen.')
+    }
+  }
+
+  // Vor dem eigentlichen Löschen die Verwendungsübersicht holen — das Löschen
+  // eines Ausrichters ist die einzige Stelle im Feature, an der mehr als der
+  // Listeneintrag verschwindet (gebundene Vorlagen-Zeilen werden mitgelöscht).
+  const openDeleteConfirm = async (a: Ausrichter) => {
+    setError(null)
+    setDeleteTarget(a)
+    setUsage(null)
+    setUsageLoading(true)
+    try {
+      const r = await api.get(`/ausrichter/${a.id}/usage`)
+      setUsage(r.data)
+    } catch {
+      setUsage({ game_days: [], template_items: [] })
+    } finally {
+      setUsageLoading(false)
+    }
+  }
+
+  const closeDeleteConfirm = () => {
+    setDeleteTarget(null)
+    setUsage(null)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setError(null)
+    try {
+      await api.delete(`/ausrichter/${deleteTarget.id}`)
+      closeDeleteConfirm()
+      load()
+    } catch (e) {
+      setError(errorStatus(e) === 409 ? 'Der Default-Ausrichter kann nicht gelöscht werden.' : 'Löschen fehlgeschlagen.')
+      closeDeleteConfirm()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  useEscapeKey(deleteTarget ? closeDeleteConfirm : null)
+
+  return (
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-5">
+      <h2 className="text-sm font-semibold text-brand-text mb-4">Ausrichter</h2>
+      {error && (
+        <div className="mb-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
+      )}
+      <p className="text-sm text-brand-text-muted mb-3">
+        Vorlagen-Zeilen können an einen Ausrichter gebunden werden und erzeugen dann nur an
+        Spieltagen dieses Ausrichters Dienste. Genau ein Eintrag ist der Default — er gilt für
+        alle Spieltage ohne explizit gesetzten Ausrichter.
+      </p>
+
+      <div className="flex flex-wrap gap-2 items-end mb-4">
+        <input
+          type="text"
+          placeholder="Name des Ausrichters"
+          value={neu}
+          onChange={e => setNeu(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') add() }}
+          className={`${INPUT} w-auto flex-1 min-w-[16rem]`}
+        />
+        <button type="button" onClick={add} className={BTN_SM}>Hinzufügen</button>
+      </div>
+
+      {/* Mobile: Cards */}
+      <div className="sm:hidden space-y-0">
+        {ausrichter.length === 0 ? (
+          <p className="text-sm text-brand-text-muted py-4">Noch keine Ausrichter angelegt.</p>
+        ) : (
+          ausrichter.map(a => (
+            editId === a.id ? (
+              <div key={a.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 mb-3 space-y-3">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') rename(a.id) }}
+                  className={INPUT}
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+                  <button type="button" onClick={() => rename(a.id)} className={BTN_SM}>Speichern</button>
+                </div>
+              </div>
+            ) : (
+              <MobileCard
+                key={a.id}
+                title={a.name}
+                subtitle={a.aktiv ? 'Aktiv' : 'Deaktiviert'}
+                badge={a.is_default ? { label: 'Default', variant: 'yellow' } : undefined}
+                actions={[
+                  { label: 'Umbenennen', onClick: () => { setEditId(a.id); setEditName(a.name) } },
+                  a.is_default
+                    ? { label: 'Default abwählen', onClick: () => toggleDefault(a) }
+                    : { label: 'Als Default festlegen', onClick: () => toggleDefault(a) },
+                  a.aktiv
+                    ? { label: 'Deaktivieren', onClick: () => toggleAktiv(a), variant: 'danger' as const }
+                    : { label: 'Aktivieren', onClick: () => toggleAktiv(a) },
+                  ...(!a.is_default ? [{ label: 'Löschen', onClick: () => openDeleteConfirm(a), variant: 'danger' as const }] : []),
+                ]}
+              />
+            )
+          ))
+        )}
+      </div>
+
+      {/* Desktop: Table */}
+      <div className="hidden sm:block rounded-lg border border-brand-border-subtle overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-brand-surface-card text-brand-text-muted text-xs uppercase text-left">
+              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-right">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ausrichter.length === 0 && (
+              <tr><td colSpan={3} className="px-4 py-3 text-brand-text-muted">Noch keine Ausrichter angelegt.</td></tr>
+            )}
+            {ausrichter.map(a => (
+              <tr key={a.id} className="border-t border-brand-border-subtle hover:bg-brand-table-select transition-colors">
+                <td className="px-4 py-3 text-brand-text">
+                  {editId === a.id ? (
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') rename(a.id) }}
+                      className={`${INPUT} w-auto`}
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleDefault(a)}
+                        aria-label={a.is_default ? 'Ist Default-Ausrichter, klicken zum Abwählen' : 'Als Default festlegen'}
+                        className={a.is_default ? 'text-brand-yellow' : 'text-brand-text-subtle hover:text-brand-yellow transition-colors'}
+                      >
+                        <Star className="w-4 h-4" fill={a.is_default ? 'currentColor' : 'none'} />
+                      </button>
+                      <span className={a.aktiv ? '' : 'text-brand-text-muted line-through'}>{a.name}</span>
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-brand-text-muted">{a.aktiv ? 'Aktiv' : 'Deaktiviert'}</td>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  {editId === a.id ? (
+                    <>
+                      <button type="button" onClick={() => rename(a.id)} className={`${BTN_SM} mr-2`}>Speichern</button>
+                      <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => { setEditId(a.id); setEditName(a.name) }} className={`${BTN_SM} mr-2`}>Umbenennen</button>
+                      <button type="button" onClick={() => toggleAktiv(a)} className={`${a.aktiv ? BTN_DANGER_SM : BTN_SM} mr-2`}>{a.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteConfirm(a)}
+                        disabled={a.is_default}
+                        aria-label={`${a.name} löschen`}
+                        title={a.is_default ? 'Der Default-Ausrichter kann nicht gelöscht werden.' : undefined}
+                        className={a.is_default ? 'text-brand-text-subtle cursor-not-allowed' : 'text-brand-text-muted hover:text-brand-danger transition-colors'}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Löschen-Bestätigung mit Vorab-Bilanz (Spieltage + gebundene Vorlagen-Zeilen) */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
+              <h2 className="font-semibold text-lg text-brand-text">Ausrichter löschen?</h2>
+              <button onClick={closeDeleteConfirm} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
+              <p className="text-sm text-brand-text">
+                <strong className="font-semibold">{deleteTarget.name}</strong> wird gelöscht.
+              </p>
+              {usageLoading ? (
+                <p className="text-sm text-brand-text-muted">Lade Verwendungsübersicht…</p>
+              ) : (
+                <>
+                  {/* Defensiv gegen ein unerwartetes Response-Shape (z.B. Netzwerkfehler-Fallback) —
+                      ?? [] statt eines Crashs beim Rendern der Bilanz. */}
+                  {(() => {
+                    const gameDays = usage?.game_days ?? []
+                    const templateItems = usage?.template_items ?? []
+                    return (
+                      <>
+                        <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                          {gameDays.length > 0 ? (
+                            <>
+                              <p className="font-medium mb-1">
+                                {gameDays.length} Spieltag{gameDays.length !== 1 ? 'e' : ''} fallen auf den Default-Ausrichter zurück:
+                              </p>
+                              <ul className="list-disc list-inside">
+                                {gameDays.map(gd => (
+                                  <li key={`${gd.date}-${gd.season_id}`}>{gd.date.slice(0, 10)} ({gd.season_name})</li>
+                                ))}
+                              </ul>
+                            </>
+                          ) : (
+                            <p>Keine Spieltage sind explizit an diesen Ausrichter gebunden.</p>
+                          )}
+                        </div>
+                        <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+                          {templateItems.length > 0 ? (
+                            <>
+                              <p className="font-medium mb-1">
+                                {templateItems.length} Vorlagen-Zeile{templateItems.length !== 1 ? 'n' : ''} werden mitgelöscht:
+                              </p>
+                              <ul className="list-disc list-inside">
+                                {templateItems.map(ti => (
+                                  <li key={ti.id}>{ti.template_name} – {ti.duty_type_name}</li>
+                                ))}
+                              </ul>
+                            </>
+                          ) : (
+                            <p>Keine Vorlagen-Zeilen sind an diesen Ausrichter gebunden.</p>
+                          )}
+                        </div>
+                      </>
+                    )
+                  })()}
+                </>
+              )}
+            </div>
+            <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle shrink-0">
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting || usageLoading}
+                className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Löschen…' : 'Endgültig löschen'}
+              </button>
+              <button
+                type="button"
+                onClick={closeDeleteConfirm}
+                className="px-4 py-2.5 sm:py-2 text-sm border border-brand-border rounded-md text-brand-text hover:bg-brand-surface-card transition-colors"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Heimspieltage Tab (Wrapper) ────────────────────────────────────────────
+
+function HeimspieltageTab() {
+  return (
+    <div className="space-y-6">
+      <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+        Diese Einstellungen steuern die automatische Dienst-Generierung bei <strong className="font-semibold">Heimspielen</strong>:
+        wie viele Bewirtungs-/Kuchendienste ein Spieltag braucht, wie sie auf die Mannschaften verteilt werden,
+        und welcher Ausrichter für vorlagen-gebundene Dienste an einem Spieltag gilt.
+      </p>
+      <BewirtungKachel />
+      <AusrichterKachel />
     </div>
   )
 }
@@ -1003,22 +1364,23 @@ function StammvereineTab() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege' | 'stammvereine' | 'bewirtung'
+type Tab = 'verein' | 'saisons' | 'altersklassen' | 'beitraege' | 'stammvereine' | 'heimspieltage'
 // Sichtbarkeit pro Tab über Capabilities (nie über role/clubFunctions direkt):
 //   Kassierer      → manage_club + manage_fees      → Verein, Beiträge
 //   Vorstand/Admin → zusätzlich manage_seasons      → alle Tabs
 // Stammvereine: manage_seasons (vorstand/admin) — deckt sich mit den
 // vorstand-only-Mutationen im Backend; Kassierer sieht den Tab bewusst nicht.
-// Bewirtung: PUT /api/settings/bewirtung ist im Backend im selben
-// vorstand-only-Routen-Block wie Duty-Types/-Templates gegated — dieselbe
-// Capability (manage_duty_types) wie dort, kein exaktes 1:1-Cap vorhanden.
+// Heimspieltage (Bewirtung + Ausrichter): PUT /api/settings/bewirtung und die
+// Ausrichter-Mutationen liegen im Backend im selben vorstand-only-Routen-Block
+// wie Duty-Types/-Templates — dieselbe Capability (manage_duty_types) wie dort,
+// kein exaktes 1:1-Cap vorhanden.
 const TABS: { id: Tab; label: string; cap: string }[] = [
   { id: 'verein', label: 'Verein', cap: 'manage_club' },
   { id: 'saisons', label: 'Saisons', cap: 'manage_seasons' },
   { id: 'altersklassen', label: 'Altersklassen', cap: 'manage_seasons' },
   { id: 'stammvereine', label: 'Stammvereine', cap: 'manage_seasons' },
   { id: 'beitraege', label: 'Beiträge', cap: 'manage_fees' },
-  { id: 'bewirtung', label: 'Bewirtung', cap: 'manage_duty_types' },
+  { id: 'heimspieltage', label: 'Heimspieltage', cap: 'manage_duty_types' },
 ]
 
 export default function AdminSettingsPage() {
@@ -1026,7 +1388,10 @@ export default function AdminSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const visibleTabs = TABS.filter(t => hasCapability(t.cap))
   const rawTab = searchParams.get('tab')
-  const activeTab: Tab = visibleTabs.find(t => t.id === rawTab)?.id ?? visibleTabs[0]?.id ?? 'verein'
+  // Alias: der Tab hieß früher „Bewirtung" (`?tab=bewirtung`); bestehende
+  // Links/Lesezeichen sollen weiterhin auf dem umbenannten Tab landen.
+  const resolvedTab = rawTab === 'bewirtung' ? 'heimspieltage' : rawTab
+  const activeTab: Tab = visibleTabs.find(t => t.id === resolvedTab)?.id ?? visibleTabs[0]?.id ?? 'verein'
 
   const setTab = (id: Tab) => setSearchParams({ tab: id }, { replace: true })
 
@@ -1056,7 +1421,7 @@ export default function AdminSettingsPage() {
       {activeTab === 'altersklassen' && <AltersklassenTab />}
       {activeTab === 'stammvereine' && <StammvereineTab />}
       {activeTab === 'beitraege' && <BeitraegeTab />}
-      {activeTab === 'bewirtung' && <BewirtungTab />}
+      {activeTab === 'heimspieltage' && <HeimspieltageTab />}
     </div>
   )
 }

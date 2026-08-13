@@ -52,12 +52,20 @@ type bulkRegenRowDTO struct {
 	AssignmentsLost int    `json:"assignments_lost"`
 }
 
+type bulkRegenDayDTO struct {
+	Date                  string `json:"date"`
+	StoredAusrichterID    *int   `json:"stored_ausrichter_id"`
+	EffectiveAusrichterID int    `json:"effective_ausrichter_id"`
+	IsExplicit            bool   `json:"is_explicit"`
+}
+
 type bulkRegenResponseDTO struct {
 	Range struct {
 		From string `json:"from"`
 		To   string `json:"to"`
 	} `json:"range"`
 	Rows     []bulkRegenRowDTO  `json:"rows"`
+	Days     []bulkRegenDayDTO  `json:"days"`
 	Totals   bulkRegenTotalsDTO `json:"totals"`
 	Warnings []string           `json:"warnings"`
 	Applied  bool               `json:"applied"`

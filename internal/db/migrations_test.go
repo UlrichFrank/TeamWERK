@@ -480,3 +480,186 @@ func TestMigration046_OhneKonfigurierteRotation_SetztDefault(t *testing.T) {
 		t.Errorf("erwartet Default '1', bekam %q", value)
 	}
 }
+
+// seed048Item legt eine Heim-Vorlage mit genau einem Item an, das an den
+// übergebenen Ausrichter gebunden ist. Liefert die Item-ID.
+func seed048Item(t *testing.T, sqlDB *sql.DB, dutyTypeID, ausrichterID int64) int64 {
+	t.Helper()
+	tr, err := sqlDB.Exec(
+		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES ('Heim','heim',75)`)
+	if err != nil {
+		t.Fatalf("seed template: %v", err)
+	}
+	templateID, _ := tr.LastInsertId()
+	ir, err := sqlDB.Exec(`
+		INSERT INTO game_template_items
+		  (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, ausrichter_id)
+		VALUES (?, ?, 'start', 0, 1, 0, ?)`, templateID, dutyTypeID, ausrichterID)
+	if err != nil {
+		t.Fatalf("seed item: %v", err)
+	}
+	itemID, _ := ir.LastInsertId()
+	return itemID
+}
+
+// TestMigration048_LegtTabellenUndDefaultAn prüft die Grundstruktur der
+// heimspieltag-ausrichter-Migration: beide Tabellen, die neue Spalte auf
+// game_template_items, und dass der Seed genau eine Default-Zeile anlegt.
+// Weil in einer frischen Test-DB nie eine `clubs`-Zeile existiert, muss der
+// Name auf den neutralen Platzhalter zurückfallen (design.md, Migration Plan
+// Schritt 2 — kein hartcodierter Vereinsname wegen der laufenden Entbrandung).
+func TestMigration048_LegtTabellenUndDefaultAn(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(48); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 48: %v", err)
+	}
+
+	if !tableExists(t, sqlDB, "ausrichter") {
+		t.Error("erwartet Tabelle ausrichter nach 048 up")
+	}
+	if !tableExists(t, sqlDB, "spieltag_ausrichter") {
+		t.Error("erwartet Tabelle spieltag_ausrichter nach 048 up")
+	}
+	if !hasColumn(t, sqlDB, "game_template_items", "ausrichter_id") {
+		t.Error("erwartet Spalte game_template_items.ausrichter_id nach 048 up")
+	}
+
+	var count int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM ausrichter WHERE is_default = 1`).Scan(&count); err != nil {
+		t.Fatalf("query default count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("erwartet genau eine Default-Zeile, bekam %d", count)
+	}
+
+	var name string
+	if err := sqlDB.QueryRow(`SELECT name FROM ausrichter WHERE is_default = 1`).Scan(&name); err != nil {
+		t.Fatalf("query default name: %v", err)
+	}
+	if name != "Eigener Verein" {
+		t.Errorf("erwartet Fallback-Name 'Eigener Verein' (keine clubs-Zeile vorhanden), bekam %q", name)
+	}
+}
+
+// TestMigration048_Idempotent führt den Seed-Insert aus 048_*.up.sql ein
+// zweites Mal gegen dieselbe DB aus (der Rest der Migration ist reines DDL und
+// bei erneuter Ausführung nicht das Risiko) und erwartet weiterhin genau eine
+// Zeile. Das ist die Eigenschaft, auf der Decision 2 aufbaut: die Auflösung
+// darf nie mehr als einen Default sehen.
+func TestMigration048_Idempotent(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(48); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 48: %v", err)
+	}
+
+	seedSQL := `INSERT OR IGNORE INTO ausrichter (name, is_default)
+		SELECT COALESCE((SELECT name FROM clubs ORDER BY id LIMIT 1), 'Eigener Verein'), 1`
+
+	if _, err := sqlDB.Exec(seedSQL); err != nil {
+		t.Fatalf("seed erneut ausführen: %v", err)
+	}
+
+	var total, defaults int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM ausrichter`).Scan(&total); err != nil {
+		t.Fatalf("query total: %v", err)
+	}
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM ausrichter WHERE is_default = 1`).Scan(&defaults); err != nil {
+		t.Fatalf("query defaults: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("erwartet genau eine Zeile nach zweifachem Seed, bekam %d", total)
+	}
+	if defaults != 1 {
+		t.Errorf("erwartet genau eine Default-Zeile nach zweifachem Seed, bekam %d", defaults)
+	}
+}
+
+// TestMigration048_PartialIndexVerhindertZweitenDefault ist der wichtigste
+// Test dieser Migration: er beweist, dass "genau ein Default" mechanisch über
+// idx_ausrichter_default erzwungen wird und nicht bloß eine Konvention im
+// Handler-Code ist (design.md Decision 2, Kommentar im up.sql).
+func TestMigration048_PartialIndexVerhindertZweitenDefault(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(48); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 48: %v", err)
+	}
+
+	// Der Seed hat bereits einen Default angelegt (siehe
+	// TestMigration048_LegtTabellenUndDefaultAn) — ein zweiter, andersnamiger
+	// Eintrag mit is_default=1 muss am Partial-Index scheitern.
+	_, err := sqlDB.Exec(`INSERT INTO ausrichter (name, is_default) VALUES ('Zweiter Verein', 1)`)
+	if err == nil {
+		t.Fatal("erwartet UNIQUE-Verletzung auf idx_ausrichter_default für einen zweiten Default")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "unique") {
+		t.Errorf("erwartet unique-Fehler, bekam: %v", err)
+	}
+
+	var count int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM ausrichter WHERE is_default = 1`).Scan(&count); err != nil {
+		t.Fatalf("query default count: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("erwartet weiterhin genau eine Default-Zeile, bekam %d", count)
+	}
+}
+
+// TestMigration048_RestrictVerhindertLoeschenGebundenerVorlage prüft die
+// asymmetrische Lösch-Semantik aus design.md Decision 6: anders als
+// spieltag_ausrichter.ausrichter_id (SET NULL) darf ein Ausrichter, an den
+// noch eine Vorlagen-Zeile gebunden ist, NICHT direkt gelöscht werden können —
+// sonst würde die Zeile beim Löschen still auf "gilt immer" springen.
+//
+// newMigrator lässt FK-Enforcement bewusst ausgeschaltet (No-op innerhalb der
+// von golang-migrate genutzten Transaktion, siehe deren Doc-Kommentar). Nach
+// Abschluss der Migration läuft keine Transaktion mehr, deshalb genügt hier
+// dasselbe Wiedereinschalten wie in db.Migrate(), um RESTRICT tatsächlich
+// greifen zu lassen.
+func TestMigration048_RestrictVerhindertLoeschenGebundenerVorlage(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(48); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 48: %v", err)
+	}
+	if _, err := sqlDB.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatalf("pragma on: %v", err)
+	}
+
+	dtr, err := sqlDB.Exec(`INSERT INTO duty_types (name, hours_value) VALUES ('Kasse', 2.0)`)
+	if err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	dutyTypeID, _ := dtr.LastInsertId()
+
+	ar, err := sqlDB.Exec(`INSERT INTO ausrichter (name) VALUES ('TV Ötlingen')`)
+	if err != nil {
+		t.Fatalf("seed ausrichter: %v", err)
+	}
+	ausrichterID, _ := ar.LastInsertId()
+
+	itemID := seed048Item(t, sqlDB, dutyTypeID, ausrichterID)
+
+	_, err = sqlDB.Exec(`DELETE FROM ausrichter WHERE id = ?`, ausrichterID)
+	if err == nil {
+		t.Fatal("erwartet FK-RESTRICT-Verletzung beim Löschen eines gebundenen Ausrichters")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "constraint") {
+		t.Errorf("erwartet constraint-Fehler, bekam: %v", err)
+	}
+
+	// Nichts wurde gelöscht: Ausrichter und die gebundene Vorlagen-Zeile
+	// existieren nach dem gescheiterten DELETE unverändert weiter.
+	var stillThere int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM ausrichter WHERE id = ?`, ausrichterID).Scan(&stillThere); err != nil {
+		t.Fatalf("query ausrichter: %v", err)
+	}
+	if stillThere != 1 {
+		t.Errorf("erwartet Ausrichter unverändert vorhanden, bekam count=%d", stillThere)
+	}
+	var itemStillThere int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM game_template_items WHERE id = ?`, itemID).Scan(&itemStillThere); err != nil {
+		t.Fatalf("query item: %v", err)
+	}
+	if itemStillThere != 1 {
+		t.Errorf("erwartet Vorlagen-Zeile unverändert vorhanden, bekam count=%d", itemStillThere)
+	}
+}

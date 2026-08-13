@@ -4,6 +4,7 @@ import { AlertTriangle, Check, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { errorData, errorMessage } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useAusrichterOptions } from './GameDayHostPicker'
 
 // Massen-Regeneration der Dienst-Slots über einen wählbaren Zeitraum
 // (openspec/changes/duty-bulk-regen). Jede Eingabe-Änderung löst — entprellt und mit
@@ -40,6 +41,15 @@ interface BulkRegenRow {
   conflicts: number
 }
 
+// Tages-Zwischenebene der Serverantwort (heimspieltag-ausrichter): der
+// Ausrichter ist eine Eigenschaft des Spieltags, die rows sind flach je Termin.
+interface BulkRegenDay {
+  date: string
+  stored_ausrichter_id?: number
+  effective_ausrichter_id: number
+  is_explicit: boolean
+}
+
 interface BulkRegenTotals {
   games: number
   created: number
@@ -55,6 +65,7 @@ interface BulkRegenTotals {
 export interface BulkRegenResult {
   range: { from: string; to: string }
   rows: BulkRegenRow[]
+  days?: BulkRegenDay[]
   totals: BulkRegenTotals
   warnings: string[]
   applied?: boolean
@@ -101,6 +112,10 @@ function describeBulkRegenError(err: unknown): string {
   if (code === 'range_in_past') return 'Der Zeitraum darf nicht in der Vergangenheit beginnen.'
   if (code === 'invalid_template') return 'Eine gewählte Dienst-Vorlage existiert nicht (mehr).'
   if (code === 'invalid_action') return 'Ungültiger Zustand gewählt.'
+  if (code === 'unknown_ausrichter') return 'Ein gewählter Ausrichter existiert nicht (mehr).'
+  if (code === 'inactive_ausrichter') return 'Ein gewählter Ausrichter ist deaktiviert.'
+  if (code === 'host_override_out_of_range') return 'Ein gewählter Ausrichter gehört zu einem Tag außerhalb des Zeitraums.'
+  if (code === 'invalid_host_override') return 'Ungültiges Datum für einen Ausrichter-Wechsel.'
   if (code === 'no_active_season') return 'Keine aktive Saison eingestellt.'
   if (status === 400) return 'Keine aktive Saison eingestellt.'
   return errorMessage(err, 'Der Lauf ist fehlgeschlagen.')
@@ -108,6 +123,17 @@ function describeBulkRegenError(err: unknown): string {
 
 function errorStatusOf(err: unknown): number | undefined {
   return axios.isAxiosError(err) ? err.response?.status : undefined
+}
+
+/** Gruppiert die flachen Termin-Zeilen nach Datum, Reihenfolge wie geliefert (chronologisch). */
+function groupRowsByDate(rows: BulkRegenRow[]): Array<[string, BulkRegenRow[]]> {
+  const byDate = new Map<string, BulkRegenRow[]>()
+  for (const row of rows) {
+    const existing = byDate.get(row.date)
+    if (existing) existing.push(row)
+    else byDate.set(row.date, [row])
+  }
+  return Array.from(byDate.entries())
 }
 
 function formatDate(iso: string): string {
@@ -122,8 +148,13 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
   const [overrides, setOverrides] = useState<Record<number, BulkAction>>({})
   const [excluded, setExcluded] = useState<Set<number>>(new Set())
   const [notify, setNotify] = useState(true)
+  // Ausrichter-Wechsel je Spieltag (date → ausrichter_id). Wird wie jede andere
+  // Eingabe erst mit apply persistiert; die Vorschau weist die Wirkung in
+  // derselben Bilanz aus wie Vorlagen-Änderungen (kein zweiter Dialog).
+  const [hostOverrides, setHostOverrides] = useState<Record<string, number>>({})
 
   const [templates, setTemplates] = useState<Template[]>([])
+  const ausrichter = useAusrichterOptions(isOpen)
   const [preview, setPreview] = useState<BulkRegenResult | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -141,6 +172,7 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
 
   const defaultsKey = JSON.stringify(defaults)
   const overridesKey = JSON.stringify(overrides)
+  const hostOverridesKey = JSON.stringify(hostOverrides)
   const excludedKey = useMemo(() => Array.from(excluded).sort((a, b) => a - b).join(','), [excluded])
 
   function requestBody(withNotify: boolean) {
@@ -149,9 +181,22 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
       to: to || undefined,
       defaults,
       overrides: Object.entries(overrides).map(([gameId, action]) => ({ game_id: Number(gameId), ...action })),
+      host_overrides: Object.entries(hostOverrides).map(([date, ausrichterId]) => ({ date, ausrichter_id: ausrichterId })),
       excluded_game_ids: Array.from(excluded),
       notify: withNotify,
     }
+  }
+
+  // Zeitraum-Änderung: Ausrichter-Wechsel außerhalb des neuen Fensters
+  // verwerfen. Der Server lehnt sie mit 400 ab (host_override_out_of_range) —
+  // eine stehengebliebene Auswahl aus einem verschobenen Zeitraum würde den
+  // ganzen Dialog blockieren, ohne dass sichtbar wäre, woran es liegt.
+  function pruneHostOverrides(nextFrom: string, nextTo: string) {
+    setHostOverrides(prev => {
+      const kept = Object.entries(prev).filter(([date]) =>
+        (!nextFrom || date >= nextFrom) && (!nextTo || date <= nextTo))
+      return kept.length === Object.keys(prev).length ? prev : Object.fromEntries(kept)
+    })
   }
 
   // Live-Vorschau: jede Änderung an Zeitraum/Pauschalwahl/Override/Ausnahme fordert
@@ -182,7 +227,7 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
     }, 400)
     return () => { clearTimeout(timer); controller.abort() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, from, to, defaultsKey, overridesKey, excludedKey])
+  }, [isOpen, from, to, defaultsKey, overridesKey, hostOverridesKey, excludedKey])
 
   async function apply() {
     setApplying(true)
@@ -229,11 +274,11 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label htmlFor="bulk-regen-from" className="block text-xs text-brand-text-muted mb-1">Von</label>
-              <input id="bulk-regen-from" type="date" className={INPUT} value={from} onChange={e => setFrom(e.target.value)} />
+              <input id="bulk-regen-from" type="date" className={INPUT} value={from} onChange={e => { setFrom(e.target.value); pruneHostOverrides(e.target.value, to) }} />
             </div>
             <div>
               <label htmlFor="bulk-regen-to" className="block text-xs text-brand-text-muted mb-1">Bis</label>
-              <input id="bulk-regen-to" type="date" className={INPUT} value={to} onChange={e => setTo(e.target.value)} />
+              <input id="bulk-regen-to" type="date" className={INPUT} value={to} onChange={e => { setTo(e.target.value); pruneHostOverrides(from, e.target.value) }} />
             </div>
           </div>
 
@@ -292,29 +337,67 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
             </div>
           )}
 
-          <ul className="space-y-2">
-            {(preview?.rows ?? []).map(row => (
-              <BulkRegenRowItem
-                key={row.game_id}
-                row={row}
-                templates={templates}
-                overrideValue={actionToValue(overrides[row.game_id])}
-                onOverrideChange={v => setOverrides(prev => {
-                  const next = { ...prev }
-                  const action = valueToAction(v)
-                  if (action == null) delete next[row.game_id]
-                  else next[row.game_id] = action
-                  return next
-                })}
-                excluded={excluded.has(row.game_id)}
-                onToggleExcluded={() => setExcluded(prev => {
-                  const next = new Set(prev)
-                  if (next.has(row.game_id)) next.delete(row.game_id)
-                  else next.add(row.game_id)
-                  return next
-                })}
-              />
-            ))}
+          {/* Zwei Ebenen: der Ausrichter gehört zum Tag, Vorlage/Ausnahme zum
+              einzelnen Termin. Die Serverantwort liefert rows flach je Termin,
+              die Tages-Klammer wird deshalb hier über row.date gebildet. */}
+          <ul className="space-y-4">
+            {groupRowsByDate(preview?.rows ?? []).map(([date, dayRows]) => {
+              const day = preview?.days?.find(d => d.date === date)
+              return (
+                <li key={date} className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-brand-text">{formatDate(date)}</span>
+                    {day && ausrichter.length > 0 && (
+                      <>
+                        <span className="text-xs text-brand-text-muted">Ausrichter</span>
+                        <select
+                          // Tagesbezogenes Label: im Dialog stehen mehrere dieser
+                          // Auswahlen untereinander, ein blankes "Ausrichter" wäre
+                          // für Screenreader nicht unterscheidbar.
+                          aria-label={`Ausrichter am ${formatDate(date)}`}
+                          className={SELECT_SM}
+                          value={hostOverrides[date] ?? day.effective_ausrichter_id}
+                          onChange={e => setHostOverrides(prev => ({ ...prev, [date]: Number(e.target.value) }))}
+                        >
+                          {ausrichter.map(a => (
+                            <option key={a.id} value={a.id}>{a.name}{a.is_default ? ' (Standard)' : ''}</option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-brand-text-subtle">
+                          {hostOverrides[date] != null && hostOverrides[date] !== day.effective_ausrichter_id
+                            ? 'wird geändert'
+                            : day.is_explicit ? 'festgelegt' : 'geerbt'}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <ul className="space-y-2">
+                    {dayRows.map(row => (
+                      <BulkRegenRowItem
+                        key={row.game_id}
+                        row={row}
+                        templates={templates}
+                        overrideValue={actionToValue(overrides[row.game_id])}
+                        onOverrideChange={v => setOverrides(prev => {
+                          const next = { ...prev }
+                          const action = valueToAction(v)
+                          if (action == null) delete next[row.game_id]
+                          else next[row.game_id] = action
+                          return next
+                        })}
+                        excluded={excluded.has(row.game_id)}
+                        onToggleExcluded={() => setExcluded(prev => {
+                          const next = new Set(prev)
+                          if (next.has(row.game_id)) next.delete(row.game_id)
+                          else next.add(row.game_id)
+                          return next
+                        })}
+                      />
+                    ))}
+                  </ul>
+                </li>
+              )
+            })}
           </ul>
 
           <label className="flex items-center gap-2 text-sm text-brand-text">

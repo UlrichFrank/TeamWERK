@@ -134,6 +134,16 @@ Auflösung: Das Feld ist explizit tagesbezogen beschriftet („Ausrichter am 14.
 
 Alternative wäre gewesen, das Feld im Wizard nur anzuzeigen und Änderungen ausschließlich in der Tagesansicht zuzulassen (ein einziger Schreibpfad, Falle existiert nicht). Verworfen, weil der häufigste Fall — „ich lege den Spieltag an und weiß dabei, wer ausrichtet" — dann zwei getrennte Arbeitsschritte bräuchte.
 
+### Decision 10: Der Picker sitzt im Termin-Detail-Modal — es gibt keine Tagesansicht
+
+Bei der Umsetzung stellte sich heraus, dass `KalenderPage.tsx` eine **reine Monatsansicht** ist: ein Klick auf einen Termin öffnet ein Modal für genau diesen einen Termin, ein Tages-Panel existiert nicht (auch `SpieltagDetailModal` zeigt trotz des Namens nur ein einzelnes Spiel). Die ursprüngliche Formulierung „Kalender-Tagesansicht" hatte kein Gegenstück im Code.
+
+Gewählt: der Ausrichter erscheint im **Detail-Modal jedes Heim-Termins**, tagesbezogen beschriftet, und wird dort geändert. Verworfen wurde eine eigens gebaute Tages-Detail-Komponente (sauberster Ort für eine Tages-Eigenschaft, aber neues UI für einen Wert, den man selten anfasst).
+
+**Preis, bewusst getragen:** derselbe Wert erscheint an jedem Heim-Termin des Tages, und wer ihn an einem Termin ändert, ändert ihn für die anderen mit — die Falle aus Decision 9, nur an mehr Stellen. Die Gegenmittel sind dieselben und gelten hier unverändert: tagesbezogene Beschriftung plus Vorschau vor dem Schreiben.
+
+In der Monatsübersicht wird der Ausrichter bewusst **nicht** angezeigt (keine Badge, auch nicht bei Abweichung vom Default) — die Zellen sind bereits dicht, und der Wert ist kein Tagesgeschäft.
+
 ## Risks / Trade-offs
 
 - **Der Default kann still falsch sein.** Ein Tag ohne expliziten Eintrag erzeugt Dienste nach dem Default, ohne dass irgendwo „ungeprüft" steht. Mitigation: die Kalender-Tagesansicht zeigt sichtbar, ob der Wert explizit gesetzt oder geerbt ist (`is_explicit`).
@@ -153,5 +163,13 @@ Alternative wäre gewesen, das Feld im Wizard nur anzuzeigen und Änderungen aus
 
 ## Open Questions
 
-- Wo genau in der Kalender-Tagesansicht der Picker sitzt (Tages-Header vs. Event-Info-Modal) — reine UI-Frage, in der Umsetzung zu entscheiden.
+- ~~Wo genau der Picker sitzt~~ — entschieden, siehe Decision 10 (Termin-Detail-Modal, keine Badge in der Monatsübersicht).
 - Ob die Ausrichter-Liste ein SSE-Event `settings-changed` mitnutzt (wie die Bewirtungs-Felder) oder ein eigenes bekommt. Vorschlag: mitnutzen, solange nur der Einstellungen-Tab darauf hört; der Kalender lädt den Tageswert ohnehin mit dem Tag.
+
+## Nachträge aus der Umsetzung
+
+Drei Befunde aus der Code-Erkundung, die das Design beim Schreiben noch nicht kannte:
+
+1. **`internal/permissions/matrix_test.go` ist ein zweites, unabhängiges Gate.** Jede neu registrierte Route muss dort im `matrix`-Array mit ihrer erwarteten Berechtigung stehen, sonst schlägt der Drift-Check fehl (`TestPermissionMatrix_Backend` läuft per `chi.Walk` über den echten Router). Betrifft alle sechs neuen Routen dieses Changes.
+2. **`game_template_items` wird an drei Stellen gelesen**, nicht an zwei: `loadTemplateItems` (non-tx, für `PreviewSlots`), `scanTemplateItems` (Admin-CRUD, nutzt den DTO `templateItem`) und `loadTemplateItemsTx` (Regen). Alle drei brauchen die neue Spalte.
+3. **`StammvereineTab` kennt kein echtes Löschen** — nur einen `aktiv`-Toggle, weil `members.home_club_id` darauf zeigt. Für die Ausrichter-Kachel ist das kein Vorbild: dort ist echtes Löschen mit Kaskade spezifiziert (Decision 6). Vorbild für den Lösch-Interaktionspfad ist stattdessen `SaisonsTab.handleDelete` (Bestätigung + `DELETE` + `deleting`-State).

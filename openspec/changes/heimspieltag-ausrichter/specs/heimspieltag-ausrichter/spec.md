@@ -8,6 +8,8 @@ Die Liste SHALL über `GET /api/ausrichter` für alle Eingeloggten lesbar sein (
 
 Namen SHALL eindeutig sein; ein Duplikat SHALL mit HTTP 409 abgelehnt werden, ohne zu schreiben.
 
+Der Default-Eintrag SHALL zusätzlich gegen zwei Zustände geschützt sein, die die totale Auflösung aushebeln würden: er SHALL weder **abwählbar** sein (`is_default` auf `false` setzen, es bliebe kein Default übrig) noch **deaktivierbar** (`aktiv` auf `false`, jeder ungepflegte Spieltag löste dann auf einen inaktiven Ausrichter auf — einen Wert, den die Schreibrouten selbst mit HTTP 400 zurückweisen). Beide SHALL mit HTTP 409 abgelehnt werden, ohne zu schreiben. Der Weg bleibt in beiden Fällen: erst einen anderen Eintrag zum Default machen, dann den alten ändern.
+
 #### Scenario: Migration legt genau eine Default-Zeile an
 
 - **WHEN** die Migration zweimal hintereinander auf derselben DB ausgeführt wird
@@ -30,6 +32,18 @@ Namen SHALL eindeutig sein; ein Duplikat SHALL mit HTTP 409 abgelehnt werden, oh
 
 - **WHEN** ein Vorstand einen anderen Eintrag per `PUT /api/ausrichter/{id}` als Default markiert
 - **THEN** trägt danach genau eine Zeile `is_default = 1`, nämlich die neu markierte
+
+#### Scenario: Der Default lässt sich nicht abwählen
+
+- **WHEN** ein Vorstand den Default-Eintrag per `PUT` auf `is_default: false` setzen will
+- **THEN** antwortet das System mit HTTP 409
+- **AND** es bleibt genau eine Zeile mit `is_default = 1`
+
+#### Scenario: Der Default lässt sich nicht deaktivieren
+
+- **WHEN** ein Vorstand den Default-Eintrag per `PUT` auf `aktiv: false` setzen will
+- **THEN** antwortet das System mit HTTP 409
+- **AND** der Eintrag bleibt aktiv
 
 #### Scenario: Standard-Nutzer darf die Liste lesen, aber nicht ändern
 
@@ -193,14 +207,26 @@ Das System SHALL beim Löschen eines Ausrichters zwei Referenzen unterschiedlich
 
 ### Requirement: Der Ausrichter ist im Kalender und im Termin-Wizard als Tages-Eigenschaft erkennbar
 
-Das System SHALL den Ausrichter in der Kalender-Tagesansicht anzeigen und für Nutzer mit der Capability `manage_games` änderbar machen. Dabei SHALL sichtbar sein, ob der Wert explizit gesetzt oder vom Default geerbt ist.
+Das System SHALL den Ausrichter im **Termin-Detail-Modal jedes Heim-Termins** anzeigen und für Nutzer mit der Capability `manage_games` änderbar machen. Dabei SHALL sichtbar sein, ob der Wert explizit gesetzt oder vom Default geerbt ist.
+
+Weil der Kalender keine Tagesansicht besitzt, erscheint derselbe Tageswert am Modal **jedes** Heim-Termins dieses Tages. Das Feld SHALL deshalb dort ebenso erkennbar tagesbezogen beschriftet sein wie im Wizard, und eine Änderung SHALL über dieselbe Vorschau laufen. In der Monatsübersicht SHALL der Ausrichter bewusst **nicht** dargestellt werden.
 
 Im Termin-Wizard SHALL das Feld bei Heim-Terminen erscheinen, mit dem aktuell geltenden Wert vorbelegt sein und **erkennbar tagesbezogen** beschriftet sein (etwa „Ausrichter am 14.09. — gilt für alle Termine dieses Tages"), weil eine Änderung dort den ganzen Tag samt bereits bestehender Termine betrifft. Weicht der gewählte Wert vom gespeicherten ab, SHALL das Speichern über dieselbe Vorschau laufen wie im Kalender.
 
-#### Scenario: Tagesansicht unterscheidet gesetzt von geerbt
+#### Scenario: Termin-Modal unterscheidet gesetzt von geerbt
 
-- **WHEN** ein Berechtigter einen Spieltag ohne expliziten Eintrag öffnet
+- **WHEN** ein Berechtigter das Detail-Modal eines Heim-Termins an einem Tag ohne expliziten Eintrag öffnet
 - **THEN** wird der Default-Ausrichter angezeigt und als geerbt gekennzeichnet
+
+#### Scenario: Alle Termine desselben Tages zeigen denselben Wert
+
+- **WHEN** an einem Tag zwei Heim-Termine existieren und für einen davon der Ausrichter geändert wird
+- **THEN** zeigt auch das Modal des anderen Termins den neuen Wert
+
+#### Scenario: Monatsübersicht bleibt frei vom Ausrichter
+
+- **WHEN** ein Berechtigter die Monatsübersicht öffnet
+- **THEN** wird dort kein Ausrichter dargestellt
 
 #### Scenario: Wizard-Feld ist als Tages-Feld beschriftet
 

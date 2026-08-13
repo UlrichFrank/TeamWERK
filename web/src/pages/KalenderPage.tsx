@@ -20,6 +20,16 @@ import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaults
 import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
 import H4AImportModal from '../components/H4AImportModal'
 import DutyBulkRegenModal, { BulkRegenResult } from '../components/DutyBulkRegenModal'
+import {
+  GameDayHostSelect,
+  GameDayHostPreviewDialog,
+  useAusrichterOptions,
+  fetchGameDayHost,
+  previewGameDayHost,
+  applyGameDayHost,
+  describeHostError,
+  type GameDayHost,
+} from '../components/GameDayHostPicker'
 
 interface VenueRef {
   id: number
@@ -203,6 +213,16 @@ export default function KalenderPage() {
   const [absenceChildren, setAbsenceChildren] = useState<Array<{ id: number; name: string }>>([])
   const [absenceSaving, setAbsenceSaving] = useState(false)
   const [absenceError, setAbsenceError] = useState('')
+  // Ausrichter des gewählten Spieltags im Wizard (heimspieltag-ausrichter,
+  // design.md Decision 9). Der Wert ist tagesbezogen und wird deshalb NICHT mit
+  // dem Termin angelegt, sondern — falls er vom geltenden abweicht — vor dem
+  // Anlegen über dieselbe Vorschau geschrieben wie im Detail-Modal.
+  const ausrichterOptions = useAusrichterOptions(canEdit)
+  const [wizardHost, setWizardHost] = useState<GameDayHost | null>(null)
+  const [wizardHostId, setWizardHostId] = useState<number | null>(null)
+  const [hostPreview, setHostPreview] = useState<GameDayHost | null>(null)
+  const [hostBusy, setHostBusy] = useState(false)
+  const [hostError, setHostError] = useState<string | null>(null)
   // Inline edit modal
   const [editingTraining, setEditingTraining] = useState<Training | null>(null)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
@@ -311,6 +331,25 @@ export default function KalenderPage() {
       setAbsenceForm(f => ({ ...f, member_ids: [absenceChildren[0].id] }))
     }
   }, [eventType, absenceChildren, absenceForm.member_ids.length])
+
+  // Geltenden Tages-Ausrichter laden, sobald im Wizard ein Heimspiel-Datum
+  // feststeht — die Auswahl startet damit auf dem Wert, der ohne Zutun gälte.
+  useEffect(() => {
+    if (!showCreate || eventType !== 'heim' || !selectedDate || !canEdit) return
+    let cancelled = false
+    fetchGameDayHost(selectedDate)
+      .then(h => {
+        if (cancelled) return
+        setWizardHost(h)
+        setWizardHostId(h.ausrichter_id)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setWizardHost(null)
+        setWizardHostId(null)
+      })
+    return () => { cancelled = true }
+  }, [showCreate, eventType, selectedDate, canEdit])
 
   useLiveUpdates((event) => {
     if (event === 'games') loadGames()
@@ -463,6 +502,45 @@ export default function KalenderPage() {
           isLast: a.end_date === dateStr || isSunday,
         }
       })
+  }
+
+  // Abweichender Tages-Ausrichter im Wizard: erst die Vorschau (Decision 9), dann
+  // schreiben, dann den Termin anlegen. Die Reihenfolge ist wesentlich — der
+  // Auto-Regen beim Anlegen liest den Tageswert und würde bei umgekehrter Folge
+  // noch mit dem alten Ausrichter rechnen.
+  const hostDiffersInWizard = eventType === 'heim' && wizardHost != null
+    && wizardHostId != null && wizardHostId !== wizardHost.ausrichter_id
+
+  const confirmCreateGame = async (slots: SlotPreview[]) => {
+    if (!hostDiffersInWizard || wizardHostId == null) {
+      await doCreateGame(slots)
+      return
+    }
+    setHostBusy(true)
+    setHostError(null)
+    try {
+      setHostPreview(await previewGameDayHost(selectedDate, wizardHostId))
+    } catch (e) {
+      setCreateError(describeHostError(e))
+    } finally {
+      setHostBusy(false)
+    }
+  }
+
+  const applyHostThenCreate = async (slots: SlotPreview[]) => {
+    if (wizardHostId == null) return
+    setHostBusy(true)
+    setHostError(null)
+    try {
+      const applied = await applyGameDayHost(selectedDate, wizardHostId)
+      setWizardHost(applied)
+      setHostPreview(null)
+      await doCreateGame(slots)
+    } catch (e) {
+      setHostError(describeHostError(e))
+    } finally {
+      setHostBusy(false)
+    }
   }
 
   const doCreateGame = async (slots: SlotPreview[]) => {
@@ -710,6 +788,10 @@ export default function KalenderPage() {
     setGameDefaultPlayers('none')
     setGameDefaultExtended('none')
     setGameRsvpRequireReason(1)
+    setWizardHost(null)
+    setWizardHostId(null)
+    setHostPreview(null)
+    setHostError(null)
     setAbsenceForm({ member_ids: [], type: 'vacation', start_date: '', end_date: '', note: '' })
     setAbsencePreviewEvents(null)
     setAbsencePreviewLoading(false)
@@ -1212,6 +1294,22 @@ export default function KalenderPage() {
                     <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
                     <VenuePicker value={selectedVenueId} onChange={setSelectedVenueId} />
                   </div>
+                  {eventType === 'heim' && canEdit && selectedDate && wizardHost && (
+                    <div>
+                      <GameDayHostSelect
+                        id="wizard-game-day-host"
+                        date={selectedDate}
+                        value={wizardHostId}
+                        options={ausrichterOptions}
+                        onChange={setWizardHostId}
+                      />
+                      {hostDiffersInWizard && (
+                        <p className="text-xs text-brand-text-muted mt-1">
+                          Weicht vom geltenden Wert ab ({wizardHost.ausrichter_name}) — vor dem Anlegen erscheint eine Vorschau.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-brand-text-muted mb-2">
                       {eventType === 'generisch' ? 'Mannschaften *' : 'Mannschaft *'}
@@ -1614,8 +1712,8 @@ export default function KalenderPage() {
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => setWizardStep(3)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
-                    onClick={() => doCreateGame(selectedTemplate ? preview.filter((_, i) => selectedSlotIndices.has(i)) : [])}
-                    disabled={creating}
+                    onClick={() => confirmCreateGame(selectedTemplate ? preview.filter((_, i) => selectedSlotIndices.has(i)) : [])}
+                    disabled={creating || hostBusy}
                     className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Bestätigen'}
@@ -1625,6 +1723,16 @@ export default function KalenderPage() {
             )}
           </div>
         </div>
+      )}
+      {hostPreview && (
+        <GameDayHostPreviewDialog
+          preview={hostPreview}
+          targetName={ausrichterOptions.find(o => o.id === wizardHostId)?.name ?? ''}
+          busy={hostBusy || creating}
+          error={hostError}
+          onCancel={() => { setHostPreview(null); setHostError(null) }}
+          onConfirm={() => applyHostThenCreate(selectedTemplate ? preview.filter((_, i) => selectedSlotIndices.has(i)) : [])}
+        />
       )}
       {editingGame && (
         <GameEditModal
@@ -1658,6 +1766,8 @@ export default function KalenderPage() {
             : undefined}
           canEditAbsence={infoItem.type === 'absence' && !!infoItem.absence && infoItem.absence.can_edit}
           onAbsenceChanged={() => { loadAbsences(); setInfoItem(null) }}
+          canManageGameDayHost={canEdit}
+          onGameDayHostApplied={loadGames}
         />
       )}
       {detailGameId !== null && (

@@ -6,6 +6,7 @@ import { formatTeamList } from '../lib/teamName'
 import MapsLink from './MapsLink'
 import EventNoteIndicator from './EventNoteIndicator'
 import EventNoteEditor from './EventNoteEditor'
+import GameDayHostSection from './GameDayHostPicker'
 import { api } from '../lib/api'
 
 interface VenueRef {
@@ -71,6 +72,14 @@ interface Props {
   onDienste?: () => void
   canEditAbsence?: boolean
   onAbsenceChanged?: () => void
+  /**
+   * Ausrichter des Spieltags anzeigen (heimspieltag-ausrichter, design.md
+   * Decision 10). Nur bei Heim-Terminen sinnvoll: der Wert ist eine Eigenschaft
+   * des Tages, und nur Heim-Vorlagen dürfen eine Bindung tragen. Ändern darf ihn
+   * nur, wer manage_games hat — deshalb ein zweites Flag.
+   */
+  canManageGameDayHost?: boolean
+  onGameDayHostApplied?: () => void
 }
 
 function formatDate(dateStr: string): string {
@@ -107,7 +116,7 @@ function RsvpRow({ confirmed, declined, maybe }: { confirmed: number; declined: 
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
-export default function EventInfoModal({ type, game, training, absence, onClose, onEdit, onDienste, canEditAbsence, onAbsenceChanged }: Props) {
+export default function EventInfoModal({ type, game, training, absence, onClose, onEdit, onDienste, canEditAbsence, onAbsenceChanged, canManageGameDayHost, onGameDayHostApplied }: Props) {
   useEscapeKey(onClose)
   const navigate = useNavigate()
 
@@ -225,6 +234,13 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               </div>
             )}
             <RsvpRow confirmed={game.confirmed_count} declined={game.declined_count} maybe={game.maybe_count} />
+            {game.event_type === 'heim' && (
+              <GameDayHostSection
+                date={game.date}
+                canEdit={!!canManageGameDayHost}
+                onApplied={onGameDayHostApplied}
+              />
+            )}
             <EventNoteIndicator variant="inline" note={game.note ?? ''} className="pt-1" />
             {(game.slot_count ?? 0) > 0 && (game.filled_count ?? 0) < (game.total_count ?? 0) && (
               <p className="text-sm text-brand-text-muted mt-1 flex items-center gap-1.5">

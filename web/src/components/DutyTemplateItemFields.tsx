@@ -85,3 +85,37 @@ export function RotationEnabledField({ id, value, onChange }: {
     </div>
   )
 }
+
+/**
+ * Ausrichter-Auswahl eines Vorlagen-Eintrags (heimspieltag-ausrichter).
+ * null/fehlend = Eintrag gilt für ALLE Heimspiele (bisheriges Verhalten).
+ * Gesetzt = Eintrag erzeugt nur Dienste bei Spielen mit diesem Ausrichter.
+ *
+ * Diese Komponente ist rein presentational und kennt nicht den template_type —
+ * die Sichtbarkeitsentscheidung trifft der Aufrufer.
+ */
+export function AusrichterField({ id, value, options, onChange }: {
+  id: string
+  value: number | null | undefined
+  options: Array<{ id: number; name: string }>
+  onChange: (v: number | null) => void
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs text-brand-text-muted mb-1">
+        Ausrichter <span className="text-brand-text-subtle">(leer = <strong className="font-semibold">alle</strong>)</span>
+      </label>
+      <select
+        id={id}
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+      >
+        <option value="">Gilt immer (unabhängig vom Ausrichter)</option>
+        {options.map(opt => (
+          <option key={opt.id} value={opt.id}>{opt.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}

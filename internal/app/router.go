@@ -291,6 +291,17 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		if h.Settings != nil {
 			r.Get("/api/settings/bewirtung", h.Settings.GetBewirtung)
 		}
+		// Ausrichter-Liste: Kalender und Termin-Wizard brauchen sie für alle
+		// Eingeloggten (Mutation ist Vorstand-Tier, siehe unten).
+		if h.Settings != nil {
+			r.Get("/api/ausrichter", h.Settings.ListAusrichter)
+			r.Get("/api/ausrichter/{id}/usage", h.Settings.AusrichterUsage)
+		}
+		// Aufgelöster Ausrichter eines Spieltags (+ is_explicit). Lesen darf
+		// jeder Eingeloggte — das Termin-Detail-Modal zeigt den Wert an;
+		// geändert wird er nur über die beiden Preview/Apply-Routen im
+		// Vorstand+Trainer+sL-Block (Capability manage_games).
+		r.Get("/api/game-days/{date}/host", h.Games.GetGameDayHost)
 
 		// Mitfahrgelegenheiten
 		r.Get("/api/mitfahrgelegenheiten", h.Carpool.List)
@@ -475,6 +486,10 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Delete("/api/duty-slots/{id}", h.Duties.DeleteSlot)
 			r.Post("/api/games/{id}/regenerate", h.Games.RegenerateSlots)
 			r.Post("/api/games/regenerate-day", h.Games.RegenerateDaySlots)
+			// Tages-Ausrichter ändern — beide Wege derselbe Codepfad, preview
+			// endet mit Rollback (steht deshalb in der broadcastAllowlist).
+			r.Post("/api/game-days/host/preview", h.Games.PreviewGameDayHost)
+			r.Post("/api/game-days/host/apply", h.Games.ApplyGameDayHost)
 			r.Post("/api/members/{id}/change-drafts/{draftId}/accept", h.Members.AcceptChangeRequestHandler)
 			r.Delete("/api/members/{id}/change-drafts/{draftId}", h.Members.RejectChangeRequestHandler)
 			r.Get("/api/age-class-rules", h.Config.GetAgeClassRulesHandler)
@@ -614,6 +629,15 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Delete("/api/duty-types/{id}", h.Duties.DeleteType)
 			if h.Settings != nil {
 				r.Put("/api/settings/bewirtung", h.Settings.SetBewirtung)
+			}
+			// Ausrichter-Liste pflegen (Vorstand). Löschen ist der einzige
+			// unumkehrbare Schritt (gebundene Vorlagen-Zeilen fallen mit weg,
+			// siehe DeleteAusrichter) — GET .../usage benennt die Betroffenen
+			// vorab, liegt aber bewusst im Authenticated-Block oben.
+			if h.Settings != nil {
+				r.Post("/api/ausrichter", h.Settings.CreateAusrichter)
+				r.Put("/api/ausrichter/{id}", h.Settings.UpdateAusrichter)
+				r.Delete("/api/ausrichter/{id}", h.Settings.DeleteAusrichter)
 			}
 			r.Get("/api/duty-accounts/export", h.Duties.ExportAccounts)
 			r.Post("/api/duty-templates", h.Games.CreateTemplate)
