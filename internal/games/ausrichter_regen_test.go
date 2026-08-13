@@ -4,7 +4,7 @@ package games
 // Decision 4). Internes Test-Package wie rotation_regen_test.go, weil hier
 // runAutoRegen/regenSingleDay direkt getrieben werden; die Helfer (insertDutyTypeI,
 // insertTemplateI, insertGameI, insertRotationTemplateI, regenDate, assignI,
-// assertTeams, countRowsI, …) stammen aus regen_bulk_context_test.go /
+// assertRotation, countRowsI, …) stammen aus regen_bulk_context_test.go /
 // regen_bulk_restore_test.go / rotation_regen_test.go.
 //
 // Das Gate sitzt an ZWEI Stellen, und die Reihenfolge ist der eigentliche Inhalt
@@ -143,7 +143,7 @@ func TestAusrichterGate_AusgegatetesRotationsItemErzeugtKeinenBedarf(t *testing.
 
 	summary := regenDate(t, h, db, "2026-06-13", seasonID, nil)
 
-	assertTeams(t, db, kuchen, games, []int{-1, -1})
+	assertRotation(t, db, kuchen, games, [][]rotSlot{nil, nil})
 	if got := countRowsI(t, db, "duty_slots", "duty_type_id=?", kuchen); got != 0 {
 		t.Errorf("expected no rotation slots at all, got %d", got)
 	}
@@ -159,7 +159,7 @@ func TestAusrichterGate_AusgegatetesRotationsItemErzeugtKeinenBedarf(t *testing.
 		t.Fatalf("unbind: %v", err)
 	}
 	regenDate(t, h, db, "2026-06-13", seasonID, nil)
-	assertTeams(t, db, kuchen, games, []int{teamA, teamA})
+	assertRotation(t, db, kuchen, games, [][]rotSlot{{{teamA, 2}}, nil})
 }
 
 // TestAusrichterGate_TeilweiseGegateterTagZaehltNurPassendeSpiele (spec: "Teilweise
@@ -167,12 +167,17 @@ func TestAusrichterGate_AusgegatetesRotationsItemErzeugtKeinenBedarf(t *testing.
 // aber nur zwei tragen eine Vorlage, deren rotations-aktives Item das Gate passiert →
 // Bedarf 2, nicht 4.
 //
-// Das ist der Test, der die REIHENFOLGE der beiden Gates festnagelt. Filterte man
-// erst in regenGameItems, rechnete buildRotationPlan über alle vier Spiele: Bedarf 4,
-// Warteschlange [A, B] mit Cap 2 → die Positionen 1+2 verbrauchten die gegateten
-// Spiele, und der Slot des 11:00-Spiels landete bei B statt bei A. Es entstünden
-// zufällig ebenfalls zwei Slots — nur an der falschen Mannschaft. Genau darauf zielt
-// die Team-Assertion unten, nicht nur auf die Anzahl.
+// Das ist der Test, der die REIHENFOLGE der beiden Gates festnagelt. Die gegateten
+// Spiele liegen deshalb bewusst an Position 1 und 4, und der Cap ist 1:
+//
+//	richtig (Gate #1 vor der Bedarfsrechnung): Warteschlange nur aus den passierenden
+//	Spielen [B (10:00), A (11:00)], Bedarf 2, Cap 1 → je ein Kuchen für B und A.
+//
+//	falsch (erst Gate #2): Bedarf 4 über alle Spiele, Warteschlange [A (09:00),
+//	B (10:00)] — A tritt über das GEGATETE 09:00-Spiel ein und verankert seinen Slot
+//	dort. Cap 1 → A und B je ein Kuchen, Rest 2 verfällt. Der Slot von A fällt danach
+//	in Gate #2 weg: übrig bliebe EIN Slot statt zwei, plus ein unassigned-Eintrag über
+//	zwei Kuchen, die es gar nicht gibt.
 func TestAusrichterGate_TeilweiseGegateterTagZaehltNurPassendeSpiele(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -185,22 +190,24 @@ func TestAusrichterGate_TeilweiseGegateterTagZaehltNurPassendeSpiele(t *testing.
 
 	fremder := insertAusrichterI(t, db, "TV Ötlingen")
 	kuchen := insertDutyTypeI(t, db, "Kuchen", "", 0, "", 0)
-	tplPass := insertRotationTemplateI(t, db, kuchen, 0, 1, 2)  // ungebunden → gilt immer
-	tplGated := insertRotationTemplateI(t, db, kuchen, 0, 1, 2) // an `fremder` gebunden
+	tplPass := insertRotationTemplateI(t, db, kuchen, 0, 1, 1)  // ungebunden → gilt immer
+	tplGated := insertRotationTemplateI(t, db, kuchen, 0, 1, 1) // an `fremder` gebunden
 	bindItemsToAusrichterI(t, db, tplGated, fremder)
 
 	games := []int{
-		insertGameI(t, db, seasonID, teamA, "2026-06-13", "09:00", tplPass),
-		insertGameI(t, db, seasonID, teamB, "2026-06-13", "10:00", tplGated),
-		insertGameI(t, db, seasonID, teamB, "2026-06-13", "11:00", tplPass),
-		insertGameI(t, db, seasonID, teamA, "2026-06-13", "12:00", tplGated),
+		insertGameI(t, db, seasonID, teamA, "2026-06-13", "09:00", tplGated),
+		insertGameI(t, db, seasonID, teamB, "2026-06-13", "10:00", tplPass),
+		insertGameI(t, db, seasonID, teamA, "2026-06-13", "11:00", tplPass),
+		insertGameI(t, db, seasonID, teamB, "2026-06-13", "12:00", tplGated),
 	}
 
 	summary := regenDate(t, h, db, "2026-06-13", seasonID, nil)
 
-	// Warteschlange nur aus den passierenden Spielen: [A (09:00), B (11:00)], Cap 2
-	// → beide Slots an A. Ohne Gate #1 wären es vier Slots (A, A, B, B).
-	assertTeams(t, db, kuchen, games, []int{teamA, -1, teamA, -1})
+	// Warteschlange nur aus den passierenden Spielen: [B (10:00), A (11:00)], Bedarf 2,
+	// Cap 1 → je ein Kuchen, jeder am eigenen Termin.
+	assertRotation(t, db, kuchen, games, [][]rotSlot{
+		nil, {{teamB, 1}}, {{teamA, 1}}, nil,
+	})
 	if got := countRowsI(t, db, "duty_slots", "duty_type_id=?", kuchen); got != 2 {
 		t.Errorf("expected Bedarf 2 (nur die passierenden Heimspiele zählen), got %d Slots", got)
 	}
@@ -450,7 +457,7 @@ func TestAusrichterGate_GebundenAnTagesAusrichterErzeugtSlots(t *testing.T) {
 
 	summary := regenDate(t, h, db, "2026-06-13", seasonID, nil)
 
-	assertTeams(t, db, kuchen, games, []int{teamA, teamA})
+	assertRotation(t, db, kuchen, games, [][]rotSlot{{{teamA, 2}}, nil})
 	if len(summary.Unassigned) != 0 {
 		t.Errorf("expected no unassigned entries, got %+v", summary.Unassigned)
 	}

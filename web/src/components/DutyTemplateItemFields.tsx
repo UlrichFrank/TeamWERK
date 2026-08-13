@@ -48,6 +48,44 @@ export function TeamScopeField({ teams, shortNames, selected, onToggle }: {
 }
 
 /**
+ * Personenzahl eines Vorlagen-Eintrags (`slots_count`).
+ *
+ * Bei aktiver Bewirtungsrotation ist das Feld wirkungslos und deshalb deaktiviert
+ * (bewirtung-kuchen-statt-slots): die Personenzahl eines Rotations-Slots ergibt sich
+ * aus der Kuchen-Zuteilung des Spieltags (Bedarf, gedeckelt durch „Max. Kuchen pro
+ * Mannschaft"), nicht aus der Vorlage. Der gespeicherte Wert bleibt erhalten und wirkt
+ * wieder, sobald die Rotation abgeschaltet wird — deshalb wird er hier nicht genullt.
+ */
+export function SlotsCountField({ id, value, onChange, rotationEnabled, inputClassName }: {
+  id: string
+  value: number
+  onChange: (v: number) => void
+  rotationEnabled: boolean | undefined
+  inputClassName: string
+}) {
+  const disabled = rotationEnabled === true
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs text-brand-text-muted mb-1">Personen</label>
+      <input
+        id={id}
+        type="number"
+        min={1}
+        value={value}
+        disabled={disabled}
+        onChange={e => onChange(Number(e.target.value))}
+        className={`${inputClassName} disabled:opacity-40 disabled:cursor-not-allowed`}
+      />
+      {disabled && (
+        <p className="text-xs text-brand-text-subtle mt-1">
+          Ergibt sich bei aktiver Bewirtungsrotation aus der Zuteilung des Spieltags.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
  * Bewirtungsrotations-Schalter eines Vorlagen-Eintrags (kuchendienst-rotation).
  * Aus (Default) = bisheriges Verhalten, ein Slot pro Team des Spiels. An =
  * tagesweite Team-Warteschlange über alle Heimspiele des Spieltags.

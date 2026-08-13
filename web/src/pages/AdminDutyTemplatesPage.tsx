@@ -8,7 +8,7 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { TeamScopeField, RotationEnabledField, AusrichterField } from '../components/DutyTemplateItemFields'
+import { TeamScopeField, RotationEnabledField, AusrichterField, SlotsCountField } from '../components/DutyTemplateItemFields'
 import { toggleTeamID } from '../lib/dutyTemplateItems'
 
 interface DutyType {
@@ -199,16 +199,13 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">Personen</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={item.slots_count}
-                        onChange={e => updateItem(index, { slots_count: Number(e.target.value) })}
-                        className={INPUT_SM}
-                      />
-                    </div>
+                    <SlotsCountField
+                      id={`slots-count-${index}`}
+                      value={item.slots_count}
+                      onChange={v => updateItem(index, { slots_count: v })}
+                      rotationEnabled={item.rotation_enabled}
+                      inputClassName={INPUT_SM}
+                    />
                   </div>
 
                   <div>

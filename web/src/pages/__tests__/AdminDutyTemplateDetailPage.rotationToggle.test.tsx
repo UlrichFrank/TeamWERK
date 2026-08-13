@@ -57,6 +57,10 @@ function rotationCheckbox(): HTMLInputElement {
   return screen.getAllByLabelText(/Bewirtungsrotation/)[0] as HTMLInputElement
 }
 
+function personenFelder(): HTMLInputElement[] {
+  return screen.getAllByLabelText('Personen') as HTMLInputElement[]
+}
+
 describe('AdminDutyTemplateDetailPage — Bewirtungsrotations-Schalter', () => {
   test('rendert ungesetzt, wenn die Rotation deaktiviert ist', async () => {
     renderEditor(false)
@@ -79,6 +83,35 @@ describe('AdminDutyTemplateDetailPage — Bewirtungsrotations-Schalter', () => {
     expect(screen.getAllByText(/Einstellungen → Bewirtung/).length).toBeGreaterThan(0)
     // Der Cap ist keine Item-Eigenschaft mehr — hier darf kein Eingabefeld dafür stehen.
     expect(screen.queryByLabelText(/Max\. Kuchen pro Mannschaft/)).toBeNull()
+  })
+
+  // bewirtung-kuchen-statt-slots: die Personenzahl eines Rotations-Slots kommt aus der
+  // Zuteilung des Spieltags, slots_count der Vorlage bleibt wirkungslos.
+  test('Personen-Feld ist bei aktiver Rotation deaktiviert und begründet', async () => {
+    renderEditor(true)
+    await flushAsync()
+
+    const felder = personenFelder()
+    expect(felder.length).toBeGreaterThan(0)
+    for (const f of felder) expect(f.disabled).toBe(true)
+    expect(screen.getAllByText(/aus der Zuteilung des Spieltags/).length).toBeGreaterThan(0)
+  })
+
+  test('Personen-Feld bleibt ohne Rotation bedienbar', async () => {
+    renderEditor(false)
+    await flushAsync()
+
+    for (const f of personenFelder()) expect(f.disabled).toBe(false)
+    expect(screen.queryByText(/aus der Zuteilung des Spieltags/)).toBeNull()
+  })
+
+  test('Einschalten der Rotation deaktiviert das Personen-Feld sofort', async () => {
+    renderEditor(false)
+    await flushAsync()
+
+    fireEvent.click(rotationCheckbox())
+
+    for (const f of personenFelder()) expect(f.disabled).toBe(true)
   })
 
   test('aus gelassen: rotation_enabled=false im Payload', async () => {

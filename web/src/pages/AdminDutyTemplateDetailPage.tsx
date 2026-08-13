@@ -8,7 +8,7 @@ import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { TeamScopeField, RotationEnabledField, AusrichterField } from '../components/DutyTemplateItemFields'
+import { TeamScopeField, RotationEnabledField, AusrichterField, SlotsCountField } from '../components/DutyTemplateItemFields'
 import { toggleTeamID } from '../lib/dutyTemplateItems'
 import { errorData } from '../lib/errors'
 
@@ -273,16 +273,13 @@ export default function AdminDutyTemplateDetailPage() {
                           />
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-xs text-brand-text-muted mb-1">Personen</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={item.slots_count}
-                          onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                          className={INPUT_SM}
-                        />
-                      </div>
+                      <SlotsCountField
+                        id={`slots-count-mobile-${i}`}
+                        value={item.slots_count}
+                        onChange={v => updateItem(i, { slots_count: v })}
+                        rotationEnabled={item.rotation_enabled}
+                        inputClassName={INPUT_SM}
+                      />
                       <div>
                         <label className="block text-xs text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle">(leer = keine)</span></label>
                         <div className="grid grid-cols-2 gap-1">
@@ -367,16 +364,13 @@ export default function AdminDutyTemplateDetailPage() {
                       className="w-28 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs text-brand-text-muted mb-1">Personen</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={item.slots_count}
-                      onChange={e => updateItem(i, { slots_count: Number(e.target.value) })}
-                      className="w-16 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
-                    />
-                  </div>
+                  <SlotsCountField
+                    id={`slots-count-desktop-${i}`}
+                    value={item.slots_count}
+                    onChange={v => updateItem(i, { slots_count: v })}
+                    rotationEnabled={item.rotation_enabled}
+                    inputClassName="w-16 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                  />
                   <div>
                     <label className="block text-xs text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle text-xs">(leer = keine)</span></label>
                     <div className="space-y-1">
