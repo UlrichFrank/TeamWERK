@@ -91,10 +91,23 @@ func NewDB(t *testing.T) *sql.DB {
 	if err := os.WriteFile(path, schema, 0o600); err != nil {
 		t.Fatalf("testutil.NewDB write: %v", err)
 	}
-	database, err := sql.Open("sqlite-busy-counting", fmt.Sprintf("file:%s?_pragma=foreign_keys=on", path))
+	// busy_timeout wie in db.Open (Produktion): ohne ihn scheitert ein zweiter
+	// gleichzeitiger Schreiber SOFORT mit SQLITE_BUSY, statt kurz auf die Sperre zu
+	// warten. Genau daran kippte TestClaimDutySlot_NoConcurrentOverclaim sporadisch —
+	// der geprüfte Zielzustand („genau einer gewinnt") war gar nicht erreichbar, beide
+	// Anfragen liefen in 409/500.
+	//
+	// journal_mode bleibt bewusst der Default (delete) statt WAL wie in Produktion:
+	// WAL legt -wal/-shm neben die Datei, und in Tests mit Hintergrund-Goroutinen
+	// (videos-Transcode-Worker) kollidieren diese Dateien mit dem RemoveAll von
+	// t.TempDir() → "directory not empty". Für die Sperr-Semantik, um die es hier geht,
+	// ist der busy_timeout der wirksame Teil.
+	database, err := sql.Open("sqlite-busy-counting",
+		fmt.Sprintf("file:%s?_pragma=foreign_keys=on&_pragma=busy_timeout(5000)", path))
 	if err != nil {
 		t.Fatalf("testutil.NewDB open: %v", err)
 	}
+	// Ephemere Datei je Test — Durability ist irrelevant, nur Tempo zählt.
 	if _, err := database.Exec(`PRAGMA synchronous=OFF`); err != nil {
 		database.Close()
 		t.Fatalf("testutil.NewDB pragma: %v", err)

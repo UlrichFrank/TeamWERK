@@ -17,7 +17,15 @@ func Open(path string) (*sql.DB, error) {
 	// _pragma=foreign_keys=on is applied to every new connection in the pool,
 	// not just the first one. Without this, ON DELETE CASCADE is silently skipped
 	// on connections that don't have the PRAGMA set.
-	db, err := sql.Open(busyDriverName, path+"?_pragma=foreign_keys=on")
+	//
+	// busy_timeout gilt aus demselben Grund pro Verbindung. Ohne ihn scheitert ein
+	// zweiter gleichzeitiger Schreiber SOFORT mit SQLITE_BUSY — WAL erlaubt zwar
+	// Leser neben einem Schreiber, aber immer nur einen Schreiber. Der Aufrufer sieht
+	// dann einen Fehler, wo ein paar Millisekunden Warten gereicht hätten (z.B. zwei
+	// Personen, die im selben Moment denselben Dienst übernehmen → HTTP 500 statt
+	// 204/409). Der busy-Counter bleibt aussagekräftig: er zählt weiterhin, wenn der
+	// Timeout wirklich ausläuft.
+	db, err := sql.Open(busyDriverName, path+"?_pragma=foreign_keys=on&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
