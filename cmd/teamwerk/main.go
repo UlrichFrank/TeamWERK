@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -463,14 +464,31 @@ func runCreateAdmin() {
 		fatal("create-admin: bcrypt failed", "error", err)
 	}
 
-	_, err = database.Exec(
-		`INSERT INTO users (email, name, password, role) VALUES (?, ?, ?, 'admin')`,
-		*email, *name, string(hash),
-	)
-	if err != nil {
+	if err := insertAdminUser(database, *email, *name, string(hash)); err != nil {
 		fatal("create-admin: insert user failed", "error", err)
 	}
 	fmt.Printf("Admin-Nutzer '%s' (%s) wurde angelegt.\n", *name, *email)
+}
+
+// splitName zerlegt den Anzeigenamen in first_name/last_name — die Tabelle `users`
+// führt seit Migration 019 keine einzelne `name`-Spalte mehr. Getrennt wird am
+// LETZTEN Leerzeichen, damit mehrteilige Vornamen ("Anna Lena Müller") beim
+// Vornamen landen; ohne Leerzeichen bleibt der Nachname leer.
+func splitName(name string) (first, last string) {
+	name = strings.TrimSpace(name)
+	if i := strings.LastIndex(name, " "); i >= 0 {
+		return strings.TrimSpace(name[:i]), strings.TrimSpace(name[i+1:])
+	}
+	return name, ""
+}
+
+func insertAdminUser(database *sql.DB, email, name, passwordHash string) error {
+	first, last := splitName(name)
+	_, err := database.Exec(
+		`INSERT INTO users (email, password, role, first_name, last_name) VALUES (?, ?, 'admin', ?, ?)`,
+		email, passwordHash, first, last,
+	)
+	return err
 }
 
 func runScheduler() {
