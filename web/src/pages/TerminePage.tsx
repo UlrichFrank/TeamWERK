@@ -220,8 +220,8 @@ export default function TerminePage() {
       else next.delete('past')
     }
     if ('focus' in patch) {
-      if (patch.focus === null) next.delete('focus')
-      else next.set('focus', `${patch.focus.kind}-${patch.focus.id}`)
+      if (patch.focus) next.set('focus', `${patch.focus.kind}-${patch.focus.id}`)
+      else next.delete('focus')
     }
     setSearchParams(next, { replace: true })
   }
