@@ -20,8 +20,8 @@
 
 ## 4. Kalender: Monat in der URL spiegeln
 
-- [ ] 4.1 In `KalenderPage.tsx` bei `prevMonth`/`nextMonth`/„Heute" (Zeilen ~364-369) zusätzlich `setSearchParams({date: <erster Tag des neuen Monats>}, {replace:true})` aufrufen.
-- [ ] 4.2 Neuen Test (`KalenderPage.dateSync.test.tsx` oder Erweiterung vorhandener Kalender-Tests) ergänzen: Monatswechsel aktualisiert `?date=`; erneutes Mounten mit dieser URL zeigt denselben Monat.
+- [x] 4.1 In `KalenderPage.tsx` bei `prevMonth`/`nextMonth`/„Heute" (Zeilen ~364-369) zusätzlich `setSearchParams({date: <erster Tag des neuen Monats>}, {replace:true})` aufrufen.
+- [x] 4.2 Neuen Test (`KalenderPage.dateSync.test.tsx` oder Erweiterung vorhandener Kalender-Tests) ergänzen: Monatswechsel aktualisiert `?date=`; erneutes Mounten mit dieser URL zeigt denselben Monat.
 
 ## 5. Verifikation
 

@@ -143,7 +143,7 @@ export default function KalenderPage() {
   const canBulkRegenDuties = hasCapability('bulk_regen_duties')
   const canSeeTeamAbsences = canEdit
   const canManageTrainings = hasCapability('manage_trainings')
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const now = new Date()
   const initDate = () => {
     const param = searchParams.get('date')
@@ -361,12 +361,53 @@ export default function KalenderPage() {
     if (event === 'event-note') { loadGames(); loadTrainings() }
   })
 
-  const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)
-  const nextMonth = () => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)
+  const prevMonth = () => {
+    let newMonth = month
+    let newYear = year
+    if (month === 0) {
+      newMonth = 11
+      newYear = year - 1
+    } else {
+      newMonth = month - 1
+    }
+    setMonth(newMonth)
+    setYear(newYear)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('date', padDate(newYear, newMonth, 1))
+      return next
+    }, { replace: true })
+  }
+
+  const nextMonth = () => {
+    let newMonth = month
+    let newYear = year
+    if (month === 11) {
+      newMonth = 0
+      newYear = year + 1
+    } else {
+      newMonth = month + 1
+    }
+    setMonth(newMonth)
+    setYear(newYear)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('date', padDate(newYear, newMonth, 1))
+      return next
+    }, { replace: true })
+  }
+
   const goToToday = () => {
     const today = new Date()
-    setYear(today.getFullYear())
-    setMonth(today.getMonth())
+    const newYear = today.getFullYear()
+    const newMonth = today.getMonth()
+    setYear(newYear)
+    setMonth(newMonth)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('date', padDate(newYear, newMonth, 1))
+      return next
+    }, { replace: true })
   }
 
   const calendarRef = useRef<HTMLDivElement>(null)
