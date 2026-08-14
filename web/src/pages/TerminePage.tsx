@@ -204,7 +204,7 @@ export default function TerminePage() {
     ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
   ]
 
-  const updateFilter = (patch: { team?: number | null; types?: Set<string>; past?: boolean }) => {
+  const updateFilter = (patch: { team?: number | null; types?: Set<string>; past?: boolean; focus?: { kind: 'training' | 'game'; id: number } | null }) => {
     const next = new URLSearchParams(searchParams)
     if ('team' in patch) {
       if (patch.team === null) next.delete('team')
@@ -218,6 +218,10 @@ export default function TerminePage() {
     if ('past' in patch) {
       if (patch.past) next.set('past', '1')
       else next.delete('past')
+    }
+    if ('focus' in patch) {
+      if (patch.focus === null) next.delete('focus')
+      else next.set('focus', `${patch.focus.kind}-${patch.focus.id}`)
     }
     setSearchParams(next, { replace: true })
   }
@@ -471,7 +475,10 @@ export default function TerminePage() {
                 <div
                   id={`termin-training-${s.id}`}
                   key={key}
-                  onClick={() => navigate(`/termine/training/${s.id}`)}
+                  onClick={() => {
+                    updateFilter({ focus: { kind: 'training', id: s.id } })
+                    navigate(`/termine/training/${s.id}`)
+                  }}
                   className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${
                     s.status === 'cancelled'
                       ? 'bg-brand-surface-card border-brand-border opacity-60'
@@ -603,7 +610,10 @@ export default function TerminePage() {
               <div
                 id={`termin-game-${g.id}`}
                 key={key}
-                onClick={() => navigate(`/termine/${g.event_type === 'generisch' ? 'ereignis' : 'spiel'}/${g.id}`)}
+                onClick={() => {
+                  updateFilter({ focus: { kind: 'game', id: g.id } })
+                  navigate(`/termine/${g.event_type === 'generisch' ? 'ereignis' : 'spiel'}/${g.id}`)
+                }}
                 className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">

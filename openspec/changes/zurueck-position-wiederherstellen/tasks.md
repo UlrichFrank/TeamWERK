@@ -5,8 +5,8 @@
 
 ## 2. Termine: Fokus beim eigenen Karten-Klick setzen
 
-- [ ] 2.1 In `TerminePage.tsx` vor jedem `navigate(...)`-Aufruf beim Klick auf eine Trainings- oder Spielkarte zusätzlich `setSearchParams(next mit focus=<kind>-<id>, {replace:true})` auf der aktuellen `/termine`-URL setzen.
-- [ ] 2.2 Bestehenden Test in `TerminePage.test.tsx` um einen Fall ergänzen: Klick auf eine Karte setzt `focus` in der URL, bevor navigiert wird.
+- [x] 2.1 In `TerminePage.tsx` vor jedem `navigate(...)`-Aufruf beim Klick auf eine Trainings- oder Spielkarte zusätzlich `setSearchParams(next mit focus=<kind>-<id>, {replace:true})` auf der aktuellen `/termine`-URL setzen.
+- [x] 2.2 Bestehenden Test in `TerminePage.test.tsx` um einen Fall ergänzen: Klick auf eine Karte setzt `focus` in der URL, bevor navigiert wird.
 
 ## 3. Dienste: Fokus-Mechanismus neu bauen (analog Termine)
 

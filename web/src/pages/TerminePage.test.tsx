@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, createMemoryRouter, RouterProvider } from 'react-router-dom'
 import TerminePage from './TerminePage'
 
 // Minimal Session-Payload für /api/training-sessions
@@ -32,6 +33,7 @@ function trainingSession(overrides: Record<string, unknown>) {
 
 const mockGet = vi.fn()
 const authState = { is_parent: false }
+
 vi.mock('../lib/api', () => ({ api: { get: (...args: unknown[]) => mockGet(...args), post: vi.fn() } }))
 vi.mock('../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
 vi.mock('../contexts/AuthContext', () => ({
@@ -166,5 +168,53 @@ describe('TerminePage — Absence-Lock (my_rsvp_locked=true)', () => {
     const zusagen = screen.getByRole('button', { name: /Zusagen/ })
     expect((zusagen as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText(/Durch Abwesenheit gesperrt/)).toBeTruthy()
+  })
+})
+
+describe('TerminePage — Karte anklicken setzt Focus Parameter', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+  })
+
+  // Nutzt einen echten Data-Router (statt der einfachen MemoryRouter-Hülle von
+  // renderPage()), damit wir per router.subscribe() die tatsächliche History-
+  // Sequenz beobachten können: erst ein replace auf /termine (mit focus=…),
+  // danach ein push zur Detailseite. Ein reines useLocation()-Snapshot würde
+  // wegen React-18-Batching nur den finalen Zustand zeigen.
+  function renderWithHistoryTracking(initialPath: string) {
+    const router = createMemoryRouter(
+      [
+        { path: '/termine', element: <TerminePage /> },
+        { path: '/termine/training/:id', element: <div data-testid="detail-training" /> },
+        { path: '/termine/spiel/:id', element: <div data-testid="detail-spiel" /> },
+        { path: '/termine/ereignis/:id', element: <div data-testid="detail-ereignis" /> },
+      ],
+      { initialEntries: [initialPath] },
+    )
+    const locations: string[] = [router.state.location.pathname + router.state.location.search]
+    router.subscribe(state => {
+      locations.push(state.location.pathname + state.location.search)
+    })
+    render(<RouterProvider router={router} />)
+    return { locations }
+  }
+
+  test('Klick auf Training-Karte setzt focus=training-<id> auf /termine, bevor zur Detailseite navigiert wird', async () => {
+    const trainingId = 100
+    seedRoutes([trainingSession({ id: trainingId })])
+    const user = userEvent.setup()
+    const { locations } = renderWithHistoryTracking('/termine')
+
+    await waitFor(() => expect(document.getElementById(`termin-training-${trainingId}`)).toBeTruthy())
+    const card = document.getElementById(`termin-training-${trainingId}`)!
+    await user.click(card)
+
+    await waitFor(() => expect(screen.getByTestId('detail-training')).toBeTruthy())
+
+    const focusIdx = locations.findIndex(l => l.startsWith('/termine?') && l.includes(`focus=training-${trainingId}`))
+    const detailIdx = locations.findIndex(l => l === `/termine/training/${trainingId}`)
+    expect(focusIdx).toBeGreaterThanOrEqual(0)
+    expect(detailIdx).toBeGreaterThan(focusIdx)
   })
 })
