@@ -96,10 +96,25 @@ export function useWindowedList({
     measure()
 
     if (scroll === 'window') {
-      window.addEventListener('scroll', measure, { passive: true })
+      // Der echte Scroll-Container ist das <main>-Element in AppShell, nicht window.
+      // Fallback auf window, falls main nicht existiert.
+      const scrollContainer = document.querySelector('main') ?? window
+      const isWindowFallback = scrollContainer === window
+
+      if (isWindowFallback) {
+        scrollContainer.addEventListener('scroll', measure, { passive: true })
+      } else {
+        // main ist ein HTMLElement, addEventListener darauf.
+        ;(scrollContainer as HTMLElement).addEventListener('scroll', measure, { passive: true })
+      }
+
       window.addEventListener('resize', measure)
       return () => {
-        window.removeEventListener('scroll', measure)
+        if (isWindowFallback) {
+          scrollContainer.removeEventListener('scroll', measure)
+        } else {
+          ;(scrollContainer as HTMLElement).removeEventListener('scroll', measure)
+        }
         window.removeEventListener('resize', measure)
       }
     }
