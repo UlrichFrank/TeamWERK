@@ -44,9 +44,18 @@ interface DutySlotListProps {
   onEdit?: (slotId: number) => void
   proxyChildren?: ProxyChild[]
   hideClaimActions?: boolean
+  /**
+   * Wird vor der Navigation zur Anleitungsseite aufgerufen, damit der Aufrufer
+   * (DutyPage) den Fokus-Marker (`focus=slot-<id>`) auf der aktuellen /dienste-URL
+   * hinterlegen kann — Voraussetzung dafür, dass „Zurück" später zu dieser Zeile
+   * zurückscrollt (siehe openspec/changes/zurueck-position-wiederherstellen).
+   * Optional, weil DutySlotList auch außerhalb von /dienste eingebunden wird
+   * (SpieltagDetailModal) — dort bleibt das Verhalten unverändert (kein Fokus-Marker).
+   */
+  onFocusSlot?: (slotId: number) => void
 }
 
-export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit, proxyChildren = [], hideClaimActions = false }: DutySlotListProps) {
+export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit, proxyChildren = [], hideClaimActions = false, onFocusSlot }: DutySlotListProps) {
   const { user } = useAuth()
   // Windowing der Slot-Zeilen: bei sehr vielen Slots nur sichtbare im DOM.
   // Scroll-Quelle ist die Seite (Duty-Board scrollt als Ganzes).
@@ -142,7 +151,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
           colSpan={4}
           className="divide-y divide-brand-border-subtle"
           renderRow={s => (
-              <tr key={s.id}>
+              <tr key={s.id} id={`duty-slot-${s.id}`}>
                 <td className="px-4 py-2.5 font-medium text-brand-text">
                   <span className="inline-flex items-center gap-1.5">
                     {s.duty_type}
@@ -150,7 +159,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
                       <Link
                         to={`/dienste/anleitung/${s.duty_type_id}`}
                         aria-label="Anleitung ansehen"
-                        onClick={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); onFocusSlot?.(s.id) }}
                         className="text-brand-text-muted hover:text-brand-text"
                       >
                         <BookOpen className="w-4 h-4" />

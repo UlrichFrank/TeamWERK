@@ -37,6 +37,8 @@ describe('DutySlotList — Anleitung link', () => {
     )
     const link = screen.getByRole('link', { name: 'Anleitung ansehen' })
     expect(link.getAttribute('href')).toBe('/dienste/anleitung/42')
+    // Zeilen-id ist der Anker für den Fokus-Scroll (siehe DutyPage.focus.test.tsx).
+    expect(document.getElementById('duty-slot-100')).not.toBeNull()
   })
 
   test('renders a strikethrough icon button when has_instruction is false, click opens info modal', () => {
@@ -58,5 +60,43 @@ describe('DutySlotList — Anleitung link', () => {
     // Click opens an info modal.
     fireEvent.click(btn)
     expect(screen.getByText(/noch keine Anleitung/)).toBeTruthy()
+  })
+
+  // Teil von openspec/changes/zurueck-position-wiederherstellen: der Klick auf
+  // die Anleitung muss den Fokus-Marker VOR der Navigation setzen, damit der
+  // /dienste-History-Eintrag ihn schon trägt (relevant für „Zurück").
+  test('Klick auf Anleitung ruft onFocusSlot vor der Navigation auf', () => {
+    const onFocusSlot = vi.fn()
+    render(
+      <MemoryRouter>
+        <DutySlotList
+          slots={[baseSlot({ id: 777, has_instruction: true, duty_type_id: 42 })]}
+          isPast={false}
+          canEdit={false}
+          onReload={() => {}}
+          onFocusSlot={onFocusSlot}
+        />
+      </MemoryRouter>,
+    )
+    const link = screen.getByRole('link', { name: 'Anleitung ansehen' })
+    fireEvent.click(link)
+    expect(onFocusSlot).toHaveBeenCalledWith(777)
+    // Link-Ziel bleibt unverändert — onFocusSlot ergänzt die Navigation, ersetzt sie nicht.
+    expect(link.getAttribute('href')).toBe('/dienste/anleitung/42')
+  })
+
+  test('ohne onFocusSlot-Prop funktioniert der Link weiterhin unverändert (z. B. SpieltagDetailModal)', () => {
+    render(
+      <MemoryRouter>
+        <DutySlotList
+          slots={[baseSlot({ has_instruction: true })]}
+          isPast={false}
+          canEdit={false}
+          onReload={() => {}}
+        />
+      </MemoryRouter>,
+    )
+    const link = screen.getByRole('link', { name: 'Anleitung ansehen' })
+    expect(() => fireEvent.click(link)).not.toThrow()
   })
 })

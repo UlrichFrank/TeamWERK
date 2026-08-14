@@ -61,7 +61,10 @@ function parseFilters(sp: URLSearchParams) {
   const mine = sp.get('mine') === '1'
   const past = sp.get('past') === '1'
   const audienceAll = sp.get('audience') === 'all'
-  return { team, types, mine, past, audienceAll }
+  const focusRaw = sp.get('focus')
+  const focusMatch = focusRaw?.match(/^slot-(\d+)$/)
+  const focus = focusMatch ? parseInt(focusMatch[1]) : null
+  return { team, types, mine, past, audienceAll, focus }
 }
 
 export default function DutyPage() {
@@ -72,10 +75,11 @@ export default function DutyPage() {
   const canManageDuties = hasCapability('manage_duties')
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll } = parseFilters(searchParams)
+  const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll, focus } = parseFilters(searchParams)
   const showAudiencePill = AUDIENCE_FILTER_FUNCTIONS.some(f => user?.clubFunctions?.includes(f))
 
   const [groups, setGroups] = useState<BoardGroup[]>([])
+  const [loading, setLoading] = useState(true)
   const [teams, setTeams] = useState<Team[]>([])
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
   const [proxyChildren, setProxyChildren] = useState<ProxyChild[]>([])
@@ -86,7 +90,7 @@ export default function DutyPage() {
     ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
   ]
 
-  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean }) => {
+  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean; focus?: number | null }) => {
     const next = new URLSearchParams(searchParams)
     if ('team' in patch) {
       if (patch.team === null) next.delete('team')
@@ -109,6 +113,10 @@ export default function DutyPage() {
       if (patch.audienceAll) next.set('audience', 'all')
       else next.delete('audience')
     }
+    if ('focus' in patch) {
+      if (patch.focus !== null && patch.focus !== undefined) next.set('focus', `slot-${patch.focus}`)
+      else next.delete('focus')
+    }
     setSearchParams(next, { replace: true })
   }
 
@@ -118,7 +126,15 @@ export default function DutyPage() {
     updateFilter({ types: next })
   }
 
+  // Wird von DutySlotList vor der Navigation zur Anleitungsseite aufgerufen: hinterlegt
+  // den Fokus-Marker auf der aktuellen /dienste-URL, damit „Zurück" später zu dieser
+  // Zeile scrollt (siehe openspec/changes/zurueck-position-wiederherstellen).
+  const handleFocusSlot = (slotId: number) => {
+    updateFilter({ focus: slotId })
+  }
+
   const load = () => {
+    setLoading(true)
     const params = new URLSearchParams()
     if (viewMine) params.set('view', 'mine')
     if (audienceAll) params.set('audience', 'all')
@@ -130,7 +146,7 @@ export default function DutyPage() {
     }
     const qs = params.toString()
     const url = qs ? `/duty-board?${qs}` : '/duty-board'
-    api.get(url).then(r => setGroups(r.data ?? []))
+    api.get(url).then(r => setGroups(r.data ?? [])).finally(() => setLoading(false))
   }
 
   // load kapselt viewMine/audienceAll/showPast, soll nur bei deren Änderung neu laufen
@@ -148,6 +164,13 @@ export default function DutyPage() {
   }, [])
 
   const visibleGroups = groups.filter(g => {
+    // Der fokussierte Slot bleibt sichtbar, auch wenn seine Gruppe (Termin) sonst
+    // durch Typ-/Team-Filter herausfiele — analog zu TerminePage.tsx, das die
+    // fokussierte Karte ebenfalls unconditional durchlässt. Das serverseitige
+    // Datumsfenster (past) kann clientseitig nicht nachgeholt werden — ein
+    // fokussierter Slot außerhalb des geladenen Zeitraums bleibt entsprechend
+    // über `focusNotFound` sichtbar statt hier stillschweigend zu fehlen.
+    if (focus !== null && g.slots.some(s => s.id === focus)) return true
     if (!showPast && g.past) return false
     const eventType = g.event_type ?? 'generisch'
     if (!filterTypes.has(eventType)) return false
@@ -156,6 +179,32 @@ export default function DutyPage() {
   })
 
   const noTypesActive = filterTypes.size === 0
+
+  // Slot existiert nicht (mehr) in den geladenen Daten — z. B. gelöscht, oder
+  // außerhalb des serverseitig geladenen Zeitraums (past-Toggle aus). Anders als
+  // TerminePage.tsx gibt es hier bewusst KEINE automatische Filter-Erweiterung:
+  // der Fokus wird ausschließlich durch einen Klick auf eine bereits sichtbare
+  // Zeile gesetzt (kein Push-Notification-Deep-Link wie bei Termine), die
+  // Filter (inkl. past/mine/audience) sind beim Zurücknavigieren also unverändert
+  // dieselben, unter denen der Slot zuvor sichtbar war — ein Mismatch ist damit
+  // nur durch zwischenzeitliche Löschung/Live-Update zu erwarten, nicht durch
+  // die Filter selbst. Ein einfacher Hinweis genügt dafür.
+  const focusNotFound = !loading && focus !== null && !groups.some(g => g.slots.some(s => s.id === focus))
+
+  useEffect(() => {
+    if (focus === null || loading) return
+    const el = document.getElementById(`duty-slot-${focus}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('ring-2', 'ring-brand-yellow', 'transition-all')
+    const t = setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
+    return () => clearTimeout(t)
+    // focus als Primitive (slot-id) ist bereits die minimale Dependency; die
+    // Slot-Gesamtzahl steht stellvertretend dafür, dass neue Zeilen ins DOM kamen
+    // (z. B. nach dem initialen Laden), analog zu visibleTermine.length in
+    // TerminePage.tsx.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, loading, groups.reduce((acc, g) => acc + g.slots.length, 0)])
 
   return (
     <div>
@@ -225,6 +274,12 @@ export default function DutyPage() {
         </div>
       </div>
 
+      {focusNotFound && (
+        <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+          Dieser Dienst ist nicht verfügbar.
+        </div>
+      )}
+
       {visibleGroups.length === 0 && (
         <p className="text-brand-text-muted">
           {noTypesActive
@@ -277,6 +332,7 @@ export default function DutyPage() {
                 canEdit={canManageDuties}
                 onReload={load}
                 proxyChildren={proxyChildren}
+                onFocusSlot={handleFocusSlot}
               />
             </div>
           )

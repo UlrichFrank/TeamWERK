@@ -10,13 +10,13 @@
 
 ## 3. Dienste: Fokus-Mechanismus neu bauen (analog Termine)
 
-- [ ] 3.1 In `DutyPage.tsx` das bestehende `parseFilters`-Analogon (team/types/past/mine/audienceAll) um einen `focus=slot-<id>`-Parameter erweitern (Parsing + Setzen via `setSearchParams`).
-- [ ] 3.2 In `DutySlotList.tsx` jeder Zeile (`<tr key={s.id}>`) eine DOM-`id={`duty-slot-${s.id}`}` geben.
-- [ ] 3.3 In `DutySlotList.tsx` den `<BookOpen>`-Anleitungs-Link (Zeilen ~150-157) von reinem `<Link to=...>` auf einen `onClick`-Handler umstellen, der zuerst `focus=slot-<id>` auf der `/dienste`-URL setzt (`replace:true`) und danach navigiert.
-- [ ] 3.4 In `DutyPage.tsx` einen `useEffect` analog `TerminePage.tsx:322-332` ergänzen: bei vorhandenem `focus`-Param die passende Zeile per `scrollIntoView` in den Viewport holen und für ~2s per Ring-Klasse hervorheben.
-- [ ] 3.5 `focusNotFound`-Hinweis analog `TerminePage.tsx` ergänzen für den Fall, dass der fokussierte Slot nicht mehr existiert/sichtbar ist.
-- [ ] 3.6 Bestehenden Test `DutySlotList.instructionLink.test.tsx` um den Fall erweitern, dass der Anleitungs-Link vor der Navigation `focus=slot-<id>` in die `/dienste`-URL schreibt.
-- [ ] 3.7 Neuen Test für die Scroll-/Highlight-Logik in `DutyPage.tsx` ergänzen (neue Testdatei, z. B. `DutyPage.focus.test.tsx`).
+- [x] 3.1 In `DutyPage.tsx` das bestehende `parseFilters`-Analogon (team/types/past/mine/audienceAll) um einen `focus=slot-<id>`-Parameter erweitern (Parsing + Setzen via `setSearchParams`).
+- [x] 3.2 In `DutySlotList.tsx` jeder Zeile (`<tr key={s.id}>`) eine DOM-`id={`duty-slot-${s.id}`}` geben.
+- [x] 3.3 In `DutySlotList.tsx` den `<BookOpen>`-Anleitungs-Link (Zeilen ~150-157) von reinem `<Link to=...>` auf einen `onClick`-Handler umstellen, der zuerst `focus=slot-<id>` auf der `/dienste`-URL setzt (`replace:true`) und danach navigiert.
+- [x] 3.4 In `DutyPage.tsx` einen `useEffect` analog `TerminePage.tsx:322-332` ergänzen: bei vorhandenem `focus`-Param die passende Zeile per `scrollIntoView` in den Viewport holen und für ~2s per Ring-Klasse hervorheben.
+- [x] 3.5 `focusNotFound`-Hinweis analog `TerminePage.tsx` ergänzen für den Fall, dass der fokussierte Slot nicht mehr existiert/sichtbar ist.
+- [x] 3.6 Bestehenden Test `DutySlotList.instructionLink.test.tsx` um den Fall erweitern, dass der Anleitungs-Link vor der Navigation `focus=slot-<id>` in die `/dienste`-URL schreibt.
+- [x] 3.7 Neuen Test für die Scroll-/Highlight-Logik in `DutyPage.tsx` ergänzen (neue Testdatei, z. B. `DutyPage.focus.test.tsx`).
 
 ## 4. Kalender: Monat in der URL spiegeln
 
