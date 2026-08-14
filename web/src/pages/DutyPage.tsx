@@ -62,8 +62,8 @@ function parseFilters(sp: URLSearchParams) {
   const past = sp.get('past') === '1'
   const audienceAll = sp.get('audience') === 'all'
   const focusRaw = sp.get('focus')
-  const focusMatch = focusRaw?.match(/^slot-(\d+)$/)
-  const focus = focusMatch ? parseInt(focusMatch[1]) : null
+  const focusMatch = focusRaw?.match(/^(slot|game)-(\d+)$/)
+  const focus = focusMatch ? { kind: focusMatch[1] as 'slot' | 'game', id: parseInt(focusMatch[2]) } : null
   return { team, types, mine, past, audienceAll, focus }
 }
 
@@ -90,7 +90,7 @@ export default function DutyPage() {
     ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
   ]
 
-  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean; focus?: number | null }) => {
+  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean; focus?: { kind: 'slot' | 'game'; id: number } | null }) => {
     const next = new URLSearchParams(searchParams)
     if ('team' in patch) {
       if (patch.team === null) next.delete('team')
@@ -114,7 +114,7 @@ export default function DutyPage() {
       else next.delete('audience')
     }
     if ('focus' in patch) {
-      if (patch.focus !== null && patch.focus !== undefined) next.set('focus', `slot-${patch.focus}`)
+      if (patch.focus) next.set('focus', `${patch.focus.kind}-${patch.focus.id}`)
       else next.delete('focus')
     }
     setSearchParams(next, { replace: true })
@@ -130,7 +130,7 @@ export default function DutyPage() {
   // den Fokus-Marker auf der aktuellen /dienste-URL, damit „Zurück" später zu dieser
   // Zeile scrollt (siehe openspec/changes/zurueck-position-wiederherstellen).
   const handleFocusSlot = (slotId: number) => {
-    updateFilter({ focus: slotId })
+    updateFilter({ focus: { kind: 'slot', id: slotId } })
   }
 
   const load = () => {
@@ -163,14 +163,22 @@ export default function DutyPage() {
       .catch(() => setProxyChildren([]))
   }, [])
 
+  // focus kann entweder einen einzelnen Slot (Anleitungs-Link) oder eine ganze
+  // Spiel-Gruppe (z. B. „In Diensten öffnen" aus dem Kalender-Modal) markieren.
+  const groupMatchesFocus = (g: BoardGroup) => {
+    if (!focus) return false
+    if (focus.kind === 'slot') return g.slots.some(s => s.id === focus.id)
+    return g.game_id === focus.id
+  }
+
   const visibleGroups = groups.filter(g => {
-    // Der fokussierte Slot bleibt sichtbar, auch wenn seine Gruppe (Termin) sonst
-    // durch Typ-/Team-Filter herausfiele — analog zu TerminePage.tsx, das die
-    // fokussierte Karte ebenfalls unconditional durchlässt. Das serverseitige
-    // Datumsfenster (past) kann clientseitig nicht nachgeholt werden — ein
-    // fokussierter Slot außerhalb des geladenen Zeitraums bleibt entsprechend
-    // über `focusNotFound` sichtbar statt hier stillschweigend zu fehlen.
-    if (focus !== null && g.slots.some(s => s.id === focus)) return true
+    // Die fokussierte Gruppe bleibt sichtbar, auch wenn sie sonst durch Typ-/
+    // Team-Filter herausfiele — analog zu TerminePage.tsx, das die fokussierte
+    // Karte ebenfalls unconditional durchlässt. Das serverseitige Datumsfenster
+    // (past) kann clientseitig nicht nachgeholt werden — eine fokussierte Gruppe
+    // außerhalb des geladenen Zeitraums bleibt entsprechend über `focusNotFound`
+    // sichtbar statt hier stillschweigend zu fehlen.
+    if (groupMatchesFocus(g)) return true
     if (!showPast && g.past) return false
     const eventType = g.event_type ?? 'generisch'
     if (!filterTypes.has(eventType)) return false
@@ -180,31 +188,33 @@ export default function DutyPage() {
 
   const noTypesActive = filterTypes.size === 0
 
-  // Slot existiert nicht (mehr) in den geladenen Daten — z. B. gelöscht, oder
+  // Ziel existiert nicht (mehr) in den geladenen Daten — z. B. gelöscht, oder
   // außerhalb des serverseitig geladenen Zeitraums (past-Toggle aus). Anders als
   // TerminePage.tsx gibt es hier bewusst KEINE automatische Filter-Erweiterung:
   // der Fokus wird ausschließlich durch einen Klick auf eine bereits sichtbare
-  // Zeile gesetzt (kein Push-Notification-Deep-Link wie bei Termine), die
-  // Filter (inkl. past/mine/audience) sind beim Zurücknavigieren also unverändert
-  // dieselben, unter denen der Slot zuvor sichtbar war — ein Mismatch ist damit
-  // nur durch zwischenzeitliche Löschung/Live-Update zu erwarten, nicht durch
-  // die Filter selbst. Ein einfacher Hinweis genügt dafür.
-  const focusNotFound = !loading && focus !== null && !groups.some(g => g.slots.some(s => s.id === focus))
+  // Zeile/ein bereits sichtbares Spiel gesetzt (kein Push-Notification-Deep-Link
+  // wie bei Termine), die Filter (inkl. past/mine/audience) sind beim
+  // Zurücknavigieren also unverändert dieselben, unter denen das Ziel zuvor
+  // sichtbar war — ein Mismatch ist damit nur durch zwischenzeitliche
+  // Löschung/Live-Update zu erwarten, nicht durch die Filter selbst. Ein
+  // einfacher Hinweis genügt dafür.
+  const focusNotFound = !loading && focus !== null && !groups.some(groupMatchesFocus)
 
   useEffect(() => {
-    if (focus === null || loading) return
-    const el = document.getElementById(`duty-slot-${focus}`)
+    if (!focus || loading) return
+    const elId = focus.kind === 'slot' ? `duty-slot-${focus.id}` : `duty-game-${focus.id}`
+    const el = document.getElementById(elId)
     if (!el) return
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     el.classList.add('ring-2', 'ring-brand-yellow', 'transition-all')
     const t = setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
     return () => clearTimeout(t)
-    // focus als Primitive (slot-id) ist bereits die minimale Dependency; die
-    // Slot-Gesamtzahl steht stellvertretend dafür, dass neue Zeilen ins DOM kamen
-    // (z. B. nach dem initialen Laden), analog zu visibleTermine.length in
-    // TerminePage.tsx.
+    // focus.kind/id als Primitives sind die minimale Dependency (focus selbst ist
+    // ein bei jedem Render neu erzeugtes Objekt); die Slot-Gesamtzahl steht
+    // stellvertretend dafür, dass neue Zeilen ins DOM kamen (z. B. nach dem
+    // initialen Laden), analog zu visibleTermine.length in TerminePage.tsx.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focus, loading, groups.reduce((acc, g) => acc + g.slots.length, 0)])
+  }, [focus?.kind, focus?.id, loading, groups.reduce((acc, g) => acc + g.slots.length, 0)])
 
   return (
     <div>
@@ -302,6 +312,7 @@ export default function DutyPage() {
           return (
             <div
               key={i}
+              id={g.game_id ? `duty-game-${g.game_id}` : undefined}
               className={`rounded-xl shadow border-t-4 overflow-hidden ${cardClass}`}
             >
               <div className="px-4 py-3 border-b border-brand-border-subtle flex items-center justify-between">

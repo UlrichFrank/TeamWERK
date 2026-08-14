@@ -114,4 +114,33 @@ describe('DutyPage — Fokus-Scroll (?focus=slot-<id>)', () => {
     const row = document.getElementById('duty-slot-555') as HTMLElement
     expect(row.classList.contains('ring-2')).toBe(false)
   })
+
+  // Regression: "In Diensten öffnen" im Kalender-Modal navigierte bisher zu
+  // /dienste ohne jeden Marker — focus=game-<id> muss die ganze Spiel-Gruppe
+  // hervorheben, nicht nur einen Einzel-Slot.
+  test('scrollt zur fokussierten Spiel-Gruppe (focus=game-<id>) und hebt sie hervor', async () => {
+    seedRoutes([boardGroup({ game_id: 1 })])
+    renderPage('/dienste?focus=game-1')
+
+    await waitFor(() => expect(screen.getByText('Kasse')).toBeTruthy())
+
+    const group = await waitFor(() => {
+      const el = document.getElementById('duty-game-1')
+      expect(el).not.toBeNull()
+      return el as HTMLElement
+    })
+
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled())
+    expect(group.classList.contains('ring-2')).toBe(true)
+    expect(group.classList.contains('ring-brand-yellow')).toBe(true)
+    expect(screen.queryByText('Dieser Dienst ist nicht verfügbar.')).toBeNull()
+  })
+
+  test('zeigt "nicht verfügbar"-Hinweis, wenn die fokussierte Spiel-Gruppe nicht existiert', async () => {
+    seedRoutes([boardGroup({ game_id: 1 })])
+    renderPage('/dienste?focus=game-999')
+
+    await waitFor(() => expect(screen.getByText('Kasse')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Dieser Dienst ist nicht verfügbar.')).toBeTruthy())
+  })
 })

@@ -26,6 +26,21 @@ Wenn ein Nutzer auf `/dienste` die Anleitung eines Dienst-Slots öffnet (`/diens
 - **THEN** landet der Nutzer wieder auf `/dienste`
 - **AND** die Zeile des Slots, von dem aus die Anleitung geöffnet wurde, ist sichtbar in den Viewport gescrollt und optisch hervorgehoben
 
+### Requirement: Kalender-Verweis „In Diensten öffnen" fokussiert das zugehörige Spiel
+
+Wenn ein Nutzer im Kalender-Event-Info-Modal eines Spiels auf „In Diensten öffnen" klickt, SHALL das Frontend zu `/dienste` mit einem Fokus-Marker auf das Spiel navigieren, statt zu einer ungefilterten `/dienste`-Ansicht. `/dienste` SHALL bei vorhandenem Spiel-Fokus zur Dienst-Gruppe dieses Spiels scrollen und sie optisch hervorheben, auch wenn sie durch aktive Typ-/Team-/Zeitraum-Filter sonst ausgeblendet wäre.
+
+#### Scenario: Von „In Diensten öffnen" zur richtigen Spiel-Gruppe
+
+- **WHEN** ein Nutzer im Kalender-Modal eines Spiels mit Dienst-Slots auf „In Diensten öffnen" klickt
+- **THEN** landet der Nutzer auf `/dienste`
+- **AND** die Dienst-Gruppe dieses Spiels ist sichtbar in den Viewport gescrollt und optisch hervorgehoben
+
+#### Scenario: Button ist deaktiviert ohne Dienst-Slots
+
+- **WHEN** das Spiel im Kalender-Modal keine Dienst-Slots hat
+- **THEN** ist der „In Diensten öffnen"-Button deaktiviert
+
 ### Requirement: Zurück-Navigation zu Kalender erhält den zuletzt betrachteten Monat
 
 `/kalender` SHALL den aktuell angezeigten Monat als Teil seiner URL führen und diese bei jedem Monatswechsel (vor, zurück, „Heute") aktualisieren. Verlässt ein Nutzer `/kalender`, nachdem er zu einem anderen Monat als dem aktuellen navigiert hat, und kehrt über den globalen Zurück-Button zurück, SHALL `/kalender` wieder den zuletzt betrachteten Monat anzeigen statt des aktuellen Monats.
