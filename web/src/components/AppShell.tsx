@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { useChatEvents } from '../hooks/useChatEvents'
+import { useScrollRestoration } from '../hooks/useScrollRestoration'
 import { useVersion } from '../contexts/VersionContext'
 import { reloadWithSwActivation } from '../lib/reload'
 import { api, setMaintenanceHandler } from '../lib/api'
@@ -109,6 +110,10 @@ export default function AppShell() {
   // zurück gehen, als wir bei Session-Start standen — sonst landet der erste
   // Klick nach Login auf /login (führt zum Ausloggen).
   const [initialHistoryIdx] = useState<number>(() => (window.history.state?.idx ?? 0))
+  // Scroll-Container der App ist dieses <main> (overflow-auto), nicht das Dokument.
+  // Die iOS-Homescreen-PWA stellt dessen Position beim Zurück nicht selbst wieder her.
+  const mainRef = useRef<HTMLElement>(null)
+  useScrollRestoration(mainRef)
   const [canGoBack, setCanGoBack] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
@@ -439,7 +444,7 @@ export default function AppShell() {
         )}
 
         {/* Main content */}
-        <main className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow">
+        <main ref={mainRef} className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow">
           {canGoBack && (
             <div className="hidden sm:block -mt-2 mb-3">
               <button

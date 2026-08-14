@@ -41,6 +41,20 @@ Wenn ein Nutzer im Kalender-Event-Info-Modal eines Spiels auf „In Diensten öf
 - **WHEN** das Spiel im Kalender-Modal keine Dienst-Slots hat
 - **THEN** ist der „In Diensten öffnen"-Button deaktiviert
 
+### Requirement: Zurück-Navigation stellt die Scroll-Position wieder her
+
+Die App SHALL die Scroll-Position ihres Inhaltsbereichs pro History-Eintrag sichern und bei einer Zurück-/Vorwärts-Navigation (POP) wieder herstellen, unabhängig davon, ob die Zielseite einen Fokus-Marker in der URL trägt. Weil der Inhalt der Zielseite erst per API nachgeladen wird, SHALL die Wiederherstellung nachfassen, bis die Seite hoch genug ist, und bei einer Nutzereingabe (Scrollen, Tastatur) abbrechen. Trägt die Ziel-URL einen `focus`-Parameter, SHALL der Fokus-Mechanismus Vorrang haben. Eine Navigation auf einen anderen Pfad (PUSH/REPLACE) SHALL oben beginnen; eine reine Query-Änderung auf derselben Seite (Filter) SHALL die Position unverändert lassen.
+
+#### Scenario: Zurück nach reinem Scrollen
+
+- **WHEN** ein Nutzer eine lange Liste (z. B. `/termine`, `/dienste`) scrollt, ohne eine Karte anzuklicken, danach auf eine andere Seite wechselt und den Zurück-Button betätigt
+- **THEN** zeigt die Liste wieder den zuvor betrachteten Ausschnitt, auch wenn ihr Inhalt erst nach der Navigation geladen ist
+
+#### Scenario: Nutzer scrollt während der Wiederherstellung selbst
+
+- **WHEN** der Nutzer nach dem Zurück selbst scrollt, bevor die Zielposition erreicht ist
+- **THEN** bricht die Wiederherstellung ab und die vom Nutzer gewählte Position bleibt stehen
+
 ### Requirement: Zurück-Navigation zu Kalender erhält den zuletzt betrachteten Monat
 
 `/kalender` SHALL den aktuell angezeigten Monat als Teil seiner URL führen und diese bei jedem Monatswechsel (vor, zurück, „Heute") aktualisieren. Verlässt ein Nutzer `/kalender`, nachdem er zu einem anderen Monat als dem aktuellen navigiert hat, und kehrt über den globalen Zurück-Button zurück, SHALL `/kalender` wieder den zuletzt betrachteten Monat anzeigen statt des aktuellen Monats.
