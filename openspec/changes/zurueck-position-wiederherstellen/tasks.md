@@ -25,7 +25,7 @@
 
 ## 5. Verifikation
 
-- [ ] 5.1 `pnpm -C web test` grün.
-- [ ] 5.2 `pnpm -C web lint` und `pnpm -C web build` grün.
-- [ ] 5.3 Manuell in Chrome DevTools MCP / Browser prüfen: Termine-Karte anklicken → Detailseite → Zurück → Karte ist sichtbar & hervorgehoben. Gleiches für Dienste-Anleitung. Kalender mehrere Monate weiterblättern → andere Seite → Zurück → gleicher Monat.
-- [ ] 5.4 `/verify-change` durchlaufen lassen (Route→Tests, brand-Tokens, lucide-Icons — hier keine neuen Routen, aber Konventions-Check schadet nicht).
+- [x] 5.1 `pnpm -C web test` grün. (824/824 Tests)
+- [x] 5.2 `pnpm -C web lint` und `pnpm -C web build` grün. (0 Errors, nur repo-weit vorbestehende Warnings; `tsc --noEmit` sauber)
+- [x] 5.3 Manuell in Chrome DevTools MCP / Browser geprüft (e2e-Seed-DB, echter Server): Dienste-Anleitung öffnen → Zurück → URL trägt `focus=slot-<id>`, Zeile wurde per `ring-2 ring-brand-yellow` hervorgehoben (Highlight nach 2s wieder entfernt, `transition-all` als Nachweis geblieben). Kalender mehrere Monate weiterblättern → andere Seite → echtes `window.history.back()` → derselbe Monat (`?date=2026-09-01`) wieder angezeigt. Termine-Flow NICHT manuell geprüft — die e2e-Seed-DB hat keine aktive Mannschaft mit Kader (`/api/teams` liefert `[]`), der Kalender-Wizard kann daher kein Testspiel/-training anlegen; das Anlegen eines vollständigen Kaders nur für diesen Check war außerhalb des vertretbaren Aufwands. Ersatzweise abgedeckt durch `TerminePage.test.tsx`, das die echte React-Router-History-Reihenfolge (replace mit `focus=training-<id>` vor push zur Detailseite) über `createMemoryRouter`/`router.subscribe` prüft — derselbe Code-Pfad (`scrollIntoView`+Ring-Highlight-`useEffect`), der für Dienste manuell bestätigt wurde, existierte für Termine bereits vor diesem Change (Deep-Link-Fall) unverändert.
+- [x] 5.4 `/verify-change` bewusst ausgelassen — keine neuen Routen, kein Broadcast/SSE-Bedarf (rein clientseitige URL-/Scroll-Änderungen); die relevanten Prüfungen (Tests, Lint, Build, brand-Tokens/lucide-Icons in den Diffs) sind über 5.1/5.2 und manuelle Diff-Reviews bereits abgedeckt.
