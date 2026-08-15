@@ -1173,8 +1173,14 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.broadcastGame(r.Context(), int(gameID), "games")
+	// Anlage-Meldung: derselbe Zeitpunkt-Baustein wie bei Änderung und Absage.
+	// Vorher stand hier das rohe ISO-Datum aus dem Request ("am 2026-09-14"),
+	// ohne Uhrzeit und ohne Aktor.
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(req.TeamIDs),
-		"games", "Neues Spiel", eventName+" am "+req.Date, fmt.Sprintf("/termine?focus=game-%d", gameID))
+		"games", creationTitle(req.EventType),
+		notify.CreationBody(eventName, notify.EventWhen(req.Date, req.Time),
+			notify.ActorName(h.db, claims.UserID)),
+		fmt.Sprintf("/termine?focus=game-%d", gameID))
 	h.dispatchRegenNotifications(summary)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -1280,12 +1286,14 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Capture pre-update state so the regen window can include the old date if it changes.
-	var oldDate string
+	// Capture pre-update state so the regen window can include the old date if it
+	// changes — and so the change notification can tell a reschedule from an edit
+	// and name the old moment.
+	var oldDate, oldTime string
 	var oldSeasonID int
 	if err := tx.QueryRowContext(r.Context(),
-		`SELECT date, season_id FROM games WHERE id=?`, id).
-		Scan(&oldDate, &oldSeasonID); err != nil {
+		`SELECT date, time, season_id FROM games WHERE id=?`, id).
+		Scan(&oldDate, &oldTime, &oldSeasonID); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
@@ -1405,13 +1413,21 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	if len(removedTeamIDs) > 0 {
 		h.broadcastGameTeams(r.Context(), removedTeamIDs, "games")
 	}
+	// Änderungs-Meldung: Terminname, neuer Zeitpunkt, Aktor — und bei einer
+	// Verschiebung zusätzlich der alte Zeitpunkt. Ohne ihn suchte der Empfänger
+	// im Kalender nach einem Termin, den es unter der alten Zeit nicht mehr gibt.
+	changeTitle := changeTitleFor(req.EventType, storedEventType)
+	changeBody := notify.ChangeBody(eventNameOrFallback(req.Opponent),
+		notify.EventWhen(req.Date, req.Time),
+		notify.PreviousMoment(oldDate, oldTime, req.Date, req.Time),
+		notify.ActorName(h.db, claims.UserID))
 	notify.Send(h.db, h.cfg,
 		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)),
-		"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
+		"games", changeTitle, changeBody, fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
 	if len(removedTeamIDs) > 0 {
 		notify.Send(h.db, h.cfg,
 			h.teamMembersAndParents(removedTeamIDs),
-			"games", "Spielinfo geändert", req.Opponent+" — Details aktualisiert", fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
+			"games", changeTitle, changeBody, fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
 	}
 	h.dispatchRegenNotifications(summary)
 	w.Header().Set("Content-Type", "application/json")
@@ -1550,10 +1566,7 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	// Sessions den gelöschten Termin weiter an.
 	if !silent {
 		actor := notify.ActorName(h.db, claims.UserID)
-		eventName := opponent
-		if eventName == "" {
-			eventName = "Termin" // generische Events ohne Gegnerfeld
-		}
+		eventName := eventNameOrFallback(opponent) // generische Events ohne Gegnerfeld
 		eventDay := formatDateDMY(eventDate)
 
 		// Targeted notification to duty assignees in their "duties" category.
@@ -1593,6 +1606,44 @@ func cancellationTitle(eventType string) string {
 		return "Termin abgesagt"
 	}
 	return "Spiel abgesagt"
+}
+
+// changeTitleFor wählt die Überschrift der Änderungs-Meldung nach derselben
+// Regel wie cancellationTitle. `requested` ist das optionale event_type aus dem
+// Request, `stored` der Wert aus der DB: der PUT darf den Typ umschalten, und
+// dann gilt der Ziel-Typ. Ein leeres oder unbekanntes `requested` bedeutet
+// „unverändert" (so behandelt es auch der UPDATE weiter oben).
+func changeTitleFor(requested, stored string) string {
+	effective := stored
+	switch requested {
+	case "heim", "auswärts", "generisch":
+		effective = requested
+	}
+	if effective == "generisch" {
+		return "Termin geändert"
+	}
+	return "Spielinfo geändert"
+}
+
+// creationTitle wählt die Überschrift der Anlage-Meldung nach derselben Regel
+// wie cancellationTitle und changeTitleFor. Anders als dort gibt es keinen
+// gespeicherten Typ zum Vergleichen: POST /api/games validiert req.EventType
+// bereits vorher gegen dieselben drei Werte.
+func creationTitle(eventType string) string {
+	if eventType == "generisch" {
+		return "Neuer Termin"
+	}
+	return "Neues Spiel"
+}
+
+// eventNameOrFallback liefert den Terminnamen für Benachrichtigungen. Bei
+// generischen Events trägt `opponent` den Event-Namen; ist das Feld leer, muss
+// trotzdem ein Substantiv im Satz stehen.
+func eventNameOrFallback(opponent string) string {
+	if s := strings.TrimSpace(opponent); s != "" {
+		return s
+	}
+	return "Termin"
 }
 
 // dutyAssigneesForGame returns the user IDs of all duty_assignments for slots
