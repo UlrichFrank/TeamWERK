@@ -143,13 +143,14 @@ func CanManageDocuments(p *Principal) bool {
 }
 
 // CanBroadcast returns true if the caller may send broadcast messages.
+// CanBroadcast returns true if the caller may send club-wide announcements.
+//
+// Trainer sind bewusst nicht dabei: der Empfängerkreis eines Teams ist über die
+// Team-Standardgruppen des Chats erreichbar — mit Rückkanal und ohne zweiten Weg
+// zum selben Publikum. Es gibt keine engere zweite Stufe mehr (früher
+// CanBroadcastAll): alle drei Personas dürfen dieselben vier Zielgruppen.
 func CanBroadcast(p *Principal) bool {
-	return p.Role == "admin" || p.hasAnyFunction("vorstand", "trainer", "sportliche_leitung")
-}
-
-// CanBroadcastAll returns true if the caller may broadcast org-wide (admin-level broadcast features).
-func CanBroadcastAll(p *Principal) bool {
-	return IsVorstandLike(p)
+	return p.Role == "admin" || p.hasAnyFunction("vorstand", "sportliche_leitung")
 }
 
 // CanModerateChat returns true if the caller may delete other users' chat messages.
@@ -225,7 +226,6 @@ const (
 	CapManageDocuments  = "manage_documents"
 	CapCreateRootFolder = "create_root_folder"
 	CapBroadcast        = "broadcast_messages"
-	CapBroadcastAll     = "broadcast_all"
 	CapModerateChat     = "moderate_chat"
 
 	CapSuppressEventNotification = "suppress_event_notification"
@@ -263,9 +263,6 @@ func Capabilities(p *Principal) []string {
 	// Messaging.
 	if CanBroadcast(p) {
 		caps = append(caps, CapBroadcast)
-	}
-	if CanBroadcastAll(p) {
-		caps = append(caps, CapBroadcastAll)
 	}
 	if CanCreateRootFolder(p) {
 		caps = append(caps, CapCreateRootFolder)
