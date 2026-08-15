@@ -11,6 +11,10 @@ import { buildTeamShortNames } from '../lib/teamName'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
+import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
+import EventSearchInput from '../components/EventSearchInput'
+import FilterEmptyState from '../components/FilterEmptyState'
+import { parseQuery, matchesQuery } from '../lib/eventFilter'
 
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -39,6 +43,9 @@ interface VenueRef {
 
 interface Session {
   id: number
+  // /api/training-sessions liefert den Titel bereits (KalenderPage nutzt ihn);
+  // /termine hat ihn bisher nur nicht deklariert. Der Textfilter braucht ihn.
+  title?: string
   date: string
   start_time: string
   end_time: string
@@ -124,6 +131,26 @@ function parseFilters(sp: URLSearchParams) {
   return { team, types, past, focus }
 }
 
+// Adapter für den Textfilter: durchsuchte Felder je Termin-Art. Trainings und
+// Spiele tragen unterschiedliche Felder — es gibt bewusst kein gemeinsames
+// Modell (openspec/changes/termin-textfilter/design.md §6).
+function terminFilterFields(t: Termin): (string | null | undefined)[] {
+  if (t.kind === 'training') {
+    const s = t.data
+    return [s.title, s.venue?.name, s.venue?.city, s.team_name, s.note]
+  }
+  const g = t.data
+  return [
+    g.opponent,
+    g.venue?.name,
+    g.venue?.city,
+    g.team_names,
+    g.team_display_short_csv,
+    g.team_display_long_csv,
+    g.note,
+  ]
+}
+
 function sortKey(t: Termin): string {
   if (t.kind === 'training') return t.data.date + 'T' + t.data.start_time
   return t.data.date + 'T' + t.data.time
@@ -189,6 +216,10 @@ export default function TerminePage() {
   // Override für RSVP-Cutoff: admin/vorstand/trainer/sportliche_leitung dürfen
   // jederzeit pflegen. `manage_games` deckt genau diese vier ab.
   const canOverrideRsvpCutoff = hasCapability('manage_games')
+
+  // Getrennt von parseFilters: filtert sofort, schreibt die URL verzögert.
+  const [query, setQuery] = useDebouncedQueryParam('q')
+  const queryTokens = useMemo(() => parseQuery(query), [query])
 
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, past: showPast, focus } = parseFilters(searchParams)
@@ -298,8 +329,22 @@ export default function TerminePage() {
       if (!filterTypes.has(t.data.event_type)) return false
       if (filterTeamId !== null && !t.data.team_ids?.includes(filterTeamId)) return false
     }
+    // Textfilter zuletzt — teuerstes Prädikat, und der Fokus-Durchlass oben
+    // muss ihn überleben (design.md §8).
+    if (!matchesQuery(queryTokens, terminFilterFields(t), [t.data.date])) return false
     return true
   })
+
+  // Siehe design.md §7: ohne diesen Zähler ist eine leere Liste bei aktivem
+  // Team-/Typ-Filter korrektes, aber stumm irreführendes Verhalten. `showPast`
+  // zählt nicht mit — die Vergangenheit ist ohne Toggle gar nicht geladen.
+  const otherFiltersActive = filterTeamId !== null || filterTypes.size !== ALL_TYPES.size
+  const hiddenByOtherFilters =
+    visibleTermine.length === 0 && queryTokens.length > 0 && otherFiltersActive
+      ? termine.filter(t => matchesQuery(queryTokens, terminFilterFields(t), [t.data.date])).length
+      : 0
+
+  const resetFilters = () => updateFilter({ team: null, types: new Set(ALL_TYPES) })
 
   // Index des ersten nicht-vergangenen Termins (date >= today). Die „heute"-Trennlinie
   // wird nur davor gerendert, wenn mind. ein vergangener Termin darüber steht (> 0) —
@@ -458,6 +503,13 @@ export default function TerminePage() {
             compact={compact}
             ariaLabel="Termin-Typ-Filter"
           />
+          <EventSearchInput
+            value={query}
+            onChange={setQuery}
+            compact={compact}
+            placeholder="Gegner, Ort, Notiz…"
+            ariaLabel="Termine filtern"
+          />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
@@ -484,10 +536,16 @@ export default function TerminePage() {
       {loading ? (
         <p className="text-brand-text-muted text-sm">Laden…</p>
       ) : visibleTermine.length === 0 ? (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
-          <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
-          <p className="text-brand-text-muted">Keine Termine vorhanden.</p>
-        </div>
+        hiddenByOtherFilters > 0 ? (
+          <FilterEmptyState hiddenByOtherFilters={hiddenByOtherFilters} onResetFilters={resetFilters} />
+        ) : (
+          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
+            <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
+            <p className="text-brand-text-muted">
+              {query !== '' ? 'Keine Termine passen zum Filter.' : 'Keine Termine vorhanden.'}
+            </p>
+          </div>
+        )
       ) : (
         <div className="space-y-3">
           {(() => {

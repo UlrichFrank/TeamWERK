@@ -4,6 +4,10 @@ import { Home, Plane, Calendar, UserCheck, History, Filter } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
+import EventSearchInput from '../components/EventSearchInput'
+import FilterEmptyState from '../components/FilterEmptyState'
+import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
+import { parseQuery, matchesQuery } from '../lib/eventFilter'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 import { getEventColors } from '../lib/eventColors'
@@ -18,6 +22,7 @@ interface BoardGroup {
   event_time: string | null
   opponent: string | null
   event_type: string | null
+  venue?: string
   label: string | null
   past: boolean
   slots: BoardSlot[]
@@ -40,6 +45,19 @@ export interface ProxyChild {
 }
 
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
+
+// Adapter für den Textfilter: welche Felder einer Board-Gruppe durchsucht
+// werden. Diensttyp und zugewiesene Person sind die beiden Felder, die es nur
+// hier gibt — deshalb keine gemeinsame Feldmenge über die drei Seiten
+// (openspec/changes/termin-textfilter/design.md §6).
+function groupFilterFields(g: BoardGroup): (string | null | undefined)[] {
+  const fields: (string | null | undefined)[] = [g.opponent, g.venue, g.label, ...g.team_names]
+  for (const s of g.slots) {
+    fields.push(s.duty_type, s.role_desc)
+    for (const a of s.assignees ?? []) fields.push(a.name)
+  }
+  return fields
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso.slice(0, 10) + 'T12:00:00')
@@ -77,6 +95,11 @@ export default function DutyPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll, focus } = parseFilters(searchParams)
   const showAudiencePill = AUDIENCE_FILTER_FUNCTIONS.some(f => user?.clubFunctions?.includes(f))
+
+  // q lebt getrennt von parseFilters: die Filterung wirkt sofort, die URL zieht
+  // verzögert nach (design.md §9).
+  const [query, setQuery] = useDebouncedQueryParam('q')
+  const queryTokens = useMemo(() => parseQuery(query), [query])
 
   const [groups, setGroups] = useState<BoardGroup[]>([])
   const [loading, setLoading] = useState(true)
@@ -183,8 +206,25 @@ export default function DutyPage() {
     const eventType = g.event_type ?? 'generisch'
     if (!filterTypes.has(eventType)) return false
     if (filterTeamId !== null && !g.team_ids.includes(filterTeamId)) return false
+    // Textfilter zuletzt: er ist das teuerste Prädikat (String-Normalisierung
+    // über mehrere Felder), die billigen Set-Lookups schneiden vorher weg.
+    if (!matchesQuery(queryTokens, groupFilterFields(g), [g.date])) return false
     return true
   })
+
+  // Wie viele Gruppen der Textfilter treffen würde, wenn kein anderer Filter
+  // aktiv wäre. Nur nötig, wenn nichts sichtbar ist — sonst gar nicht gerechnet.
+  // `showPast` zählt bewusst nicht als „anderer Filter": ohne den Toggle lädt
+  // der Server die Vergangenheit gar nicht erst, ein Treffer dort wäre auch in
+  // diesem zweiten Durchlauf nicht auffindbar.
+  const otherFiltersActive =
+    filterTeamId !== null || filterTypes.size !== ALL_TYPES.size || viewMine
+  const hiddenByOtherFilters =
+    visibleGroups.length === 0 && queryTokens.length > 0 && otherFiltersActive
+      ? groups.filter(g => matchesQuery(queryTokens, groupFilterFields(g), [g.date])).length
+      : 0
+
+  const resetFilters = () => updateFilter({ team: null, types: new Set(ALL_TYPES), mine: false })
 
   const noTypesActive = filterTypes.size === 0
 
@@ -240,6 +280,13 @@ export default function DutyPage() {
             compact={compact}
             ariaLabel="Dienst-Typ-Filter"
           />
+          <EventSearchInput
+            value={query}
+            onChange={setQuery}
+            compact={compact}
+            placeholder="Gegner, Ort, Dienst, Person…"
+            ariaLabel="Dienste filtern"
+          />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
@@ -291,15 +338,21 @@ export default function DutyPage() {
       )}
 
       {visibleGroups.length === 0 && (
-        <p className="text-brand-text-muted">
-          {noTypesActive
-            ? 'Kein Event-Typ ausgewählt — bitte mindestens eine Pill aktivieren.'
-            : groups.length === 0
-              ? 'Keine Dienste für deine Mannschaften.'
-              : viewMine
-                ? 'Du hast keine Dienste übernommen.'
-                : 'Keine Dienste passen zum aktuellen Filter.'}
-        </p>
+        hiddenByOtherFilters > 0 ? (
+          <FilterEmptyState hiddenByOtherFilters={hiddenByOtherFilters} onResetFilters={resetFilters} />
+        ) : (
+          <p className="text-brand-text-muted">
+            {noTypesActive
+              ? 'Kein Event-Typ ausgewählt — bitte mindestens eine Pill aktivieren.'
+              : groups.length === 0
+                ? 'Keine Dienste für deine Mannschaften.'
+                : query !== ''
+                  ? 'Keine Dienste passen zum Filter.'
+                  : viewMine
+                    ? 'Du hast keine Dienste übernommen.'
+                    : 'Keine Dienste passen zum aktuellen Filter.'}
+          </p>
+        )
       )}
 
       <div className="space-y-4">
