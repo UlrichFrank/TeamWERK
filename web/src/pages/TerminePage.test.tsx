@@ -275,3 +275,120 @@ describe('TerminePage — Ladefenster reicht bis zum Saisonende', () => {
     expect(to! > today).toBe(true)
   })
 })
+
+// Teil von openspec/changes/termin-textfilter: Textfilter als zusätzliches
+// Prädikat — er komponiert mit den bestehenden Filtern, überlebt den Fokus
+// nicht (der Fokus überlebt ihn) und ist bei leerem Wert ein No-Op.
+describe('TerminePage — Textfilter (?q=)', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+    // jsdom kennt scrollIntoView nicht; der Fokus-Test unten löst es aus.
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  function gameEntry(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 200,
+      date: '2026-09-14',
+      time: '15:00',
+      opponent: 'Ludwigsburg',
+      event_type: 'heim',
+      is_home: true,
+      season_id: 7,
+      team_names: 'Team A',
+      team_ids: [1],
+      confirmed_count: 0,
+      declined_count: 0,
+      maybe_count: 0,
+      my_rsvp: null,
+      am_i_participant: true,
+      rsvp_default_players: 'none',
+      rsvp_default_extended: 'none',
+      rsvp_require_reason: 1,
+      venue: { id: 1, name: 'Scharnhauser Park Halle', street: '', city: 'Ostfildern', postal_code: '', note: '' },
+      ...overrides,
+    }
+  }
+
+  function renderAt(route: string) {
+    return render(
+      <MemoryRouter initialEntries={[route]}>
+        <TerminePage />
+      </MemoryRouter>,
+    )
+  }
+
+  const GAMES = [
+    gameEntry(),
+    gameEntry({
+      id: 201,
+      date: '2026-10-05',
+      opponent: 'Göppingen',
+      team_ids: [2],
+      team_names: 'Team B',
+      venue: { id: 2, name: 'Sporthalle Ost', street: '', city: 'Göppingen', postal_code: '', note: '' },
+    }),
+  ]
+
+  test('ohne q sind alle Termine sichtbar', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1')
+    await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
+    expect(screen.getByText(/Göppingen/)).toBeTruthy()
+  })
+
+  test('?q= aus der URL greift beim ersten Render', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1&q=ludwigsburg')
+    await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
+    expect(screen.queryByText(/Göppingen/)).toBeNull()
+  })
+
+  test('filtert über den Ort', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1&q=scharnhauser')
+    await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
+    expect(screen.queryByText(/Göppingen/)).toBeNull()
+  })
+
+  test('filtert über ein jahresloses Datum', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1&q=14.09.')
+    await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
+    expect(screen.queryByText(/Göppingen/)).toBeNull()
+  })
+
+  // Invariante 9
+  test('leeres q ist ein No-Op', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1&q=%20%20')
+    await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
+    expect(screen.getByText(/Göppingen/)).toBeTruthy()
+  })
+
+  // Invariante 8: sonst zerreißt der Zurück-Sprung, sobald ein q in der URL steht.
+  test('fokussierter Termin überlebt ein nicht passendes q', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1&q=gibtesnicht&focus=game-200')
+    await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
+    expect(screen.queryByText(/Göppingen/)).toBeNull()
+  })
+
+  // Invariante 7
+  test('weist von anderen Filtern verdeckte Treffer aus', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1&types=training&q=ludwigsburg')
+    await waitFor(() =>
+      expect(screen.getByText(/1 Termin passt, wird aber von aktiven Filtern ausgeblendet/)).toBeTruthy(),
+    )
+    expect(screen.getByText('Filter zurücksetzen')).toBeTruthy()
+  })
+
+  test('ohne weiteren aktiven Filter erscheint kein Ausgeblendet-Hinweis', async () => {
+    seedRoutes([], GAMES)
+    renderAt('/termine?past=1&q=gibtesnicht')
+    await waitFor(() => expect(screen.getByText('Keine Termine passen zum Filter.')).toBeTruthy())
+    expect(screen.queryByText('Filter zurücksetzen')).toBeNull()
+  })
+})
