@@ -13,14 +13,14 @@ import { PERSONAS } from '../../test/personas'
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
 vi.mock('../../hooks/useChatEvents', () => ({ useChatEvents: vi.fn() }))
 
-// canBroadcast = admin || vorstand || vorstand_elternteil || trainer || trainer_elternteil
+// canBroadcast = admin || vorstand || vorstand_elternteil
 //              || sportliche_leitung || sportliche_leitung_elternteil
+// Trainer sind bewusst NICHT dabei: der Empfängerkreis eines Teams ist über die
+// Team-Standardgruppen des Chats erreichbar — mit Rückkanal.
 const CAN_BROADCAST_IDS = [
   'admin',
   'vorstand',
   'vorstand_elternteil',
-  'trainer',
-  'trainer_elternteil',
   'sportliche_leitung',
   'sportliche_leitung_elternteil',
 ]
@@ -52,29 +52,22 @@ describe('ChatPage — canBroadcast-Gate: "Mitteilung senden"-Button', () => {
   })
 })
 
-describe('BroadcastModal — Team-Dropdown sichtbar für Trainer', () => {
-  test('Trainer ohne broadcast_all sieht Team-Auswahl direkt nach Modal-Öffnung', async () => {
-    renderAsPersona(<ChatPage />, 'trainer', {
-      mocks: [{ url: '/teams', data: [
-        { id: 7, name: 'mA1', age_class: 'mA', gender: 'm', team_number: 1, group_count: 1 },
-      ] }],
-    })
+describe('BroadcastModal — Zielgruppen', () => {
+  test('Reiner Trainer sieht den Button „Mitteilung senden" nicht', async () => {
+    renderAsPersona(<ChatPage />, 'trainer')
     await flushAsync()
 
     fireEvent.click(screen.getByText('Mitteilungen'))
     await flushAsync()
-    fireEvent.click(screen.getByText('Mitteilung senden'))
-    await flushAsync()
 
-    // Modal ist offen; das zweite <select> mit „Team wählen…" muss vorhanden sein.
     expect(
-      screen.queryByRole('option', { name: 'Team wählen…' }),
-      'Trainer-Modal: Team-Dropdown fehlt — vermutlich falscher targetType-Default',
-    ).not.toBeNull()
+      screen.queryByText('Mitteilung senden'),
+      'Trainer haben das Mitteilungsrecht verloren — Team-Ansagen laufen über die Team-Standardgruppen im Chat',
+    ).toBeNull()
   })
 
-  test('Admin sieht „Alle Mitglieder" als Default-Zielgruppe (kein Team-Dropdown)', async () => {
-    renderAsPersona(<ChatPage />, 'admin')
+  test('Sportliche Leitung sieht alle vier Zielgruppen', async () => {
+    renderAsPersona(<ChatPage />, 'sportliche_leitung')
     await flushAsync()
 
     fireEvent.click(screen.getByText('Mitteilungen'))
@@ -82,7 +75,18 @@ describe('BroadcastModal — Team-Dropdown sichtbar für Trainer', () => {
     fireEvent.click(screen.getByText('Mitteilung senden'))
     await flushAsync()
 
+    for (const label of [
+      'Alle Nutzer',
+      'Alle Mitglieder',
+      'Alle Spieler',
+      'Alle Eltern',
+    ]) {
+      expect(
+        screen.queryByRole('option', { name: label }),
+        `Zielgruppe "${label}" fehlt im Composer`,
+      ).not.toBeNull()
+    }
+    // Die Alt-Zielgruppe ist ersatzlos entfallen.
     expect(screen.queryByRole('option', { name: 'Team wählen…' })).toBeNull()
-    expect(screen.queryByRole('option', { name: 'Alle Mitglieder' })).not.toBeNull()
   })
 })

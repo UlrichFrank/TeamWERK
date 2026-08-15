@@ -46,10 +46,12 @@ function personaCapabilities(p: Persona): string[] {
   // Kassierer-like (kassierer + vorstand + admin): Verein-Stammdaten + Beitragswesen.
   if (isKassiererLike) caps.push('manage_club', 'manage_fees')
   if (isTrainerLike) caps.push('manage_trainings', 'fulfill_duties')
-  if (isVorstandLike || cf.includes('trainer') || cf.includes('sportliche_leitung')) caps.push('broadcast_messages')
+  // Mitteilungen: Trainer sind bewusst NICHT dabei — Team-Ansagen laufen über die
+  // Team-Standardgruppen des Chats (policy.CanBroadcast).
+  if (isVorstandLike || cf.includes('sportliche_leitung')) caps.push('broadcast_messages')
   // Stummes Löschen ist enger als das Löschrecht: Trainer und sportliche Leitung
   // dürfen löschen, aber nicht ohne Benachrichtigung (policy.CanSuppressEventNotification).
-  if (isVorstandLike) caps.push('broadcast_all', 'create_root_folder', 'suppress_event_notification')
+  if (isVorstandLike) caps.push('create_root_folder', 'suppress_event_notification')
   if (isAdmin) caps.push('impersonate', 'manage_documents', 'moderate_chat')
   return caps
 }
