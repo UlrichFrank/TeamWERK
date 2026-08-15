@@ -1,70 +1,5 @@
 ## MODIFIED Requirements
 
-### Requirement: Bedarfsermittlung und Greedy-Zuteilung mit Cap
-
-Das System SHALL den Kuchenbedarf eines Spieltags als `aufgerundet(Anzahl Heimspiele × Verhältnis)` berechnen. Eine Deckelung auf die Anzahl der Heimspiele findet NICHT statt — ein Verhältnis größer eins erhöht den Bedarf entsprechend.
-
-Der Bedarf SHALL greedy in Warteschlangen-Reihenfolge auf Mannschaften verteilt werden: jede Mannschaft erhält `min(bewirtung_max_per_team, verbleibender Bedarf)` Kuchen, bis der Bedarf gedeckt oder die Warteschlange erschöpft ist.
-
-Für jede Mannschaft mit mindestens einem zugeteilten Kuchen SHALL **genau ein** Slot entstehen — an ihrem chronologisch ersten Heimspiel des Tages, also an demselben Spiel, das ihre Position in der Warteschlange bestimmt hat. Der Slot SHALL `slots_total` gleich der Anzahl der zugeteilten Kuchen und `team_id` gleich dieser Mannschaft tragen. Heimspiele, deren Mannschaft keinen Kuchen zugeteilt bekommt, erhalten für dieses Item keinen Slot. `game_template_items.slots_count` SHALL für rotations-aktive Items ignoriert werden.
-
-Ist die Warteschlange erschöpft, bevor der Bedarf gedeckt ist, SHALL der Restbedarf verfallen: es entsteht kein zusätzlicher Slot, keine Mannschaft überschreitet den Cap, und es wird KEIN Slot ohne Team-Zuordnung angelegt. Die Lücke SHALL im `regen_summary` mit Datum, Duty-Type und Anzahl der nicht zugeteilten Kuchen ausgewiesen werden.
-
-Der Cap SHALL einmal pro Regen-Lauf aus `system_settings` gelesen werden und für **alle** rotations-aktiven Items desselben Laufs gelten — unabhängig davon, aus welcher Vorlage ein Item stammt.
-
-#### Scenario: Fünf Spiele, vier Teams, Cap zwei
-
-- **WHEN** ein Spieltag fünf Heimspiele hat, das Verhältnis `1` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C, D]` lautet
-- **THEN** entstehen genau drei Rotations-Slots: `A` mit `slots_total=2`, `B` mit `slots_total=2`, `C` mit `slots_total=1`
-- **AND** für `D` entsteht kein Slot
-- **AND** jeder Slot hängt am chronologisch ersten Heimspiel seiner Mannschaft
-
-#### Scenario: Verhältnis kleiner eins reduziert den Bedarf
-
-- **WHEN** ein Spieltag vier Heimspiele hat, das Verhältnis `0.5` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C, D]` lautet
-- **THEN** ist der Bedarf zwei Kuchen
-- **AND** es entsteht genau ein Slot für `A` mit `slots_total=2`
-- **AND** für `B`, `C` und `D` entsteht kein Slot
-
-#### Scenario: Verhältnis größer eins erhöht den Bedarf
-
-- **WHEN** ein Spieltag drei Heimspiele hat, das Verhältnis `2` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C]` lautet
-- **THEN** ist der Bedarf sechs Kuchen
-- **AND** es entstehen drei Slots mit je `slots_total=2` für `A`, `B` und `C`
-
-#### Scenario: Slot hängt am eigenen Termin der Mannschaft
-
-- **WHEN** an einem Spieltag `A` um 10:00 und `B` um 11:30 ein Heimspiel hat und beide einen Kuchen zugeteilt bekommen
-- **THEN** ist der Slot von `A` dem 10:00-Spiel zugeordnet (`game_id`) und seine `event_time` aus `anchor`/`offset_minutes` relativ zu diesem Spiel berechnet
-- **AND** der Slot von `B` ist dem 11:30-Spiel zugeordnet
-
-#### Scenario: Mannschaft mit zwei Heimspielen bekommt einen Slot am früheren
-
-- **WHEN** `A` an einem Spieltag um 9:00 und um 13:00 ein Heimspiel hat und Kuchen zugeteilt bekommt
-- **THEN** entsteht genau ein Slot, zugeordnet zum 9:00-Spiel
-
-#### Scenario: Restbedarf verfällt, wenn die Warteschlange erschöpft ist
-
-- **WHEN** ein Spieltag fünf Heimspiele hat, das Verhältnis `1` ist, `bewirtung_max_per_team` `2` ist und nur zwei Mannschaften `[A, B]` in der Warteschlange stehen
-- **THEN** entstehen genau zwei Slots mit je `slots_total=2` für `A` und `B`
-- **AND** es entsteht kein Slot mit `team_id = NULL`
-- **AND** weder `A` noch `B` erhält mehr als zwei Kuchen
-
-#### Scenario: Nicht zugeteilte Kuchen sind im Regen-Summary sichtbar
-
-- **WHEN** ein Regen-Lauf den Bedarf eines Tages nicht vollständig zuteilen kann
-- **THEN** enthält `regen_summary` eine `unassigned`-Liste mit Datum, Duty-Type und der Anzahl der nicht zugeteilten Kuchen
-
-#### Scenario: slots_count der Vorlage bleibt ohne Wirkung
-
-- **WHEN** ein rotations-aktives Item `slots_count=3` trägt, der Cap `2` ist und einer Mannschaft zwei Kuchen zugeteilt werden
-- **THEN** entsteht ein Slot mit `slots_total=2`
-
-#### Scenario: Ein geänderter Cap wirkt sofort für alle Vorlagen
-
-- **WHEN** zwei verschiedene Vorlagen rotations-aktive Items desselben Duty-Types tragen und `bewirtung_max_per_team` auf `3` gesetzt wird
-- **THEN** gilt beim nächsten Regen für beide Vorlagen der Cap `3` (keine vorlagenabhängige Abweichung)
-
 ### Requirement: Rotations-Schalter pro Vorlagen-Item
 
 Das System SHALL ein Feld `rotation_enabled` (INTEGER NOT NULL DEFAULT 0) auf
@@ -130,6 +65,71 @@ Rotations-Slots aus der Zuteilung stammt.
 
 ## ADDED Requirements
 
+### Requirement: Bedarfsermittlung und Kuchen-Zuteilung pro Mannschaft
+
+Das System SHALL den Kuchenbedarf eines Spieltags als `aufgerundet(Anzahl Heimspiele × Verhältnis)` berechnen. Eine Deckelung auf die Anzahl der Heimspiele findet NICHT statt — ein Verhältnis größer eins erhöht den Bedarf entsprechend.
+
+Der Bedarf SHALL greedy in Warteschlangen-Reihenfolge auf Mannschaften verteilt werden: jede Mannschaft erhält `min(bewirtung_max_per_team, verbleibender Bedarf)` Kuchen, bis der Bedarf gedeckt oder die Warteschlange erschöpft ist.
+
+Für jede Mannschaft mit mindestens einem zugeteilten Kuchen SHALL **genau ein** Slot entstehen — an ihrem chronologisch ersten Heimspiel des Tages, also an demselben Spiel, das ihre Position in der Warteschlange bestimmt hat. Der Slot SHALL `slots_total` gleich der Anzahl der zugeteilten Kuchen und `team_id` gleich dieser Mannschaft tragen. Heimspiele, deren Mannschaft keinen Kuchen zugeteilt bekommt, erhalten für dieses Item keinen Slot. `game_template_items.slots_count` SHALL für rotations-aktive Items ignoriert werden.
+
+Ist die Warteschlange erschöpft, bevor der Bedarf gedeckt ist, SHALL der Restbedarf verfallen: es entsteht kein zusätzlicher Slot, keine Mannschaft überschreitet den Cap, und es wird KEIN Slot ohne Team-Zuordnung angelegt. Die Lücke SHALL im `regen_summary` mit Datum, Duty-Type und Anzahl der nicht zugeteilten Kuchen ausgewiesen werden.
+
+Der Cap SHALL einmal pro Regen-Lauf aus `system_settings` gelesen werden und für **alle** rotations-aktiven Items desselben Laufs gelten — unabhängig davon, aus welcher Vorlage ein Item stammt.
+
+#### Scenario: Fünf Spiele, vier Teams, Cap zwei
+
+- **WHEN** ein Spieltag fünf Heimspiele hat, das Verhältnis `1` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C, D]` lautet
+- **THEN** entstehen genau drei Rotations-Slots: `A` mit `slots_total=2`, `B` mit `slots_total=2`, `C` mit `slots_total=1`
+- **AND** für `D` entsteht kein Slot
+- **AND** jeder Slot hängt am chronologisch ersten Heimspiel seiner Mannschaft
+
+#### Scenario: Verhältnis kleiner eins reduziert den Bedarf
+
+- **WHEN** ein Spieltag vier Heimspiele hat, das Verhältnis `0.5` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C, D]` lautet
+- **THEN** ist der Bedarf zwei Kuchen
+- **AND** es entsteht genau ein Slot für `A` mit `slots_total=2`
+- **AND** für `B`, `C` und `D` entsteht kein Slot
+
+#### Scenario: Verhältnis größer eins erhöht den Bedarf
+
+- **WHEN** ein Spieltag drei Heimspiele hat, das Verhältnis `2` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C]` lautet
+- **THEN** ist der Bedarf sechs Kuchen
+- **AND** es entstehen drei Slots mit je `slots_total=2` für `A`, `B` und `C`
+
+#### Scenario: Slot hängt am eigenen Termin der Mannschaft
+
+- **WHEN** an einem Spieltag `A` um 10:00 und `B` um 11:30 ein Heimspiel hat und beide einen Kuchen zugeteilt bekommen
+- **THEN** ist der Slot von `A` dem 10:00-Spiel zugeordnet (`game_id`) und seine `event_time` aus `anchor`/`offset_minutes` relativ zu diesem Spiel berechnet
+- **AND** der Slot von `B` ist dem 11:30-Spiel zugeordnet
+
+#### Scenario: Mannschaft mit zwei Heimspielen bekommt einen Slot am früheren
+
+- **WHEN** `A` an einem Spieltag um 9:00 und um 13:00 ein Heimspiel hat und Kuchen zugeteilt bekommt
+- **THEN** entsteht genau ein Slot, zugeordnet zum 9:00-Spiel
+
+#### Scenario: Restbedarf verfällt, wenn die Warteschlange erschöpft ist
+
+- **WHEN** ein Spieltag fünf Heimspiele hat, das Verhältnis `1` ist, `bewirtung_max_per_team` `2` ist und nur zwei Mannschaften `[A, B]` in der Warteschlange stehen
+- **THEN** entstehen genau zwei Slots mit je `slots_total=2` für `A` und `B`
+- **AND** es entsteht kein Slot mit `team_id = NULL`
+- **AND** weder `A` noch `B` erhält mehr als zwei Kuchen
+
+#### Scenario: Nicht zugeteilte Kuchen sind im Regen-Summary sichtbar
+
+- **WHEN** ein Regen-Lauf den Bedarf eines Tages nicht vollständig zuteilen kann
+- **THEN** enthält `regen_summary` eine `unassigned`-Liste mit Datum, Duty-Type und der Anzahl der nicht zugeteilten Kuchen
+
+#### Scenario: slots_count der Vorlage bleibt ohne Wirkung
+
+- **WHEN** ein rotations-aktives Item `slots_count=3` trägt, der Cap `2` ist und einer Mannschaft zwei Kuchen zugeteilt werden
+- **THEN** entsteht ein Slot mit `slots_total=2`
+
+#### Scenario: Ein geänderter Cap wirkt sofort für alle Vorlagen
+
+- **WHEN** zwei verschiedene Vorlagen rotations-aktive Items desselben Duty-Types tragen und `bewirtung_max_per_team` auf `3` gesetzt wird
+- **THEN** gilt beim nächsten Regen für beide Vorlagen der Cap `3` (keine vorlagenabhängige Abweichung)
+
 ### Requirement: Restore-Matching ist für alle Items einheitlich
 
 Bei einem erneuten Regen SHALL die Wiederherstellung bestehender `duty_assignments` für
@@ -160,6 +160,21 @@ hinausgehende Zusagen SHALL regulär als „entfernt" benachrichtigt werden.
 - **AND** eine bestehende Zusage wird als „entfernt" benachrichtigt
 
 ## REMOVED Requirements
+
+### Requirement: Bedarfsermittlung und Greedy-Zuteilung mit Cap
+
+**Reason**: Das Zuteilungsmodell hat gewechselt. Zugeteilt werden jetzt **Kuchen statt Slots**:
+der Tagesbedarf wird auf möglichst wenige Mannschaften gebündelt, jede herangezogene Mannschaft
+bekommt genau einen Slot mit `slots_total` gleich ihrer Kuchenzahl — an ihrem eigenen Termin
+statt am i-ten Spiel des Tages. Damit entfallen zwei Festlegungen dieser Requirement
+ersatzlos: die Deckelung des Bedarfs auf die Anzahl der Heimspiele (ein Verhältnis > 1 ist
+jetzt ausdrückbar) und der Auffang-Slot ohne Team-Zuordnung (`team_id = NULL`) bei erschöpfter
+Warteschlange — der Restbedarf verfällt stattdessen und wird im `regen_summary` ausgewiesen.
+
+**Migration**: Ersetzt durch die Requirement „Bedarfsermittlung und Kuchen-Zuteilung pro Mannschaft". Kein Datenumbau nötig — die
+Rotations-Slots werden bei jedem Regen-Lauf neu aufgebaut, das neue Modell greift also ab dem
+nächsten Lauf. Bestehende Zusagen an Rotations-Slots werden vom Restore-Matching übernommen,
+soweit `slots_total` sie noch trägt.
 
 ### Requirement: Restore-Matching für Rotations-Items ignoriert die Team-Zuordnung
 

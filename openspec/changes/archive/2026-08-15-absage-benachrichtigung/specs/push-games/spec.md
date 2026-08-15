@@ -57,3 +57,24 @@ benennt dort das falsche Ereignis.
 #### Scenario: Nutzer mit deaktiviertem Push erhält keine Notification
 - **WHEN** ein Spiel-Ereignis eintritt und ein Nutzer hat `push_enabled=0` für Kategorie `games` in `notification_preferences`
 - **THEN** erhält dieser Nutzer keine Push Notification für dieses Ereignis
+
+#### Scenario: Neuer generischer Termin erstellt
+- **WHEN** ein Termin mit `event_type='generisch'` über `POST /api/games` angelegt wird
+- **THEN** lautet der Titel der Push Notification „Neuer Termin" und NICHT „Neues Spiel"
+
+#### Scenario: Spiel geändert ohne Verschiebung
+- **WHEN** ein Admin oder Trainer ein Spiel über `PUT /api/games/{id}` aktualisiert, ohne Datum oder Uhrzeit zu ändern
+- **THEN** enthält der Body **keine** Vorher-Angabe
+
+#### Scenario: Spiel verschoben
+- **WHEN** ein Admin oder Trainer über `PUT /api/games/{id}` das Datum oder die Uhrzeit ändert
+- **THEN** enthält der Body den **neuen** Zeitpunkt und zusätzlich den **alten** Zeitpunkt als Vorher-Angabe
+
+#### Scenario: Generisches Event geändert
+- **WHEN** ein Event mit `event_type='generisch'` über `PUT /api/games/{id}` geändert wird
+- **THEN** lautet der Titel der Push Notification „Termin geändert" und NICHT „Spielinfo geändert"
+
+#### Scenario: Änderung ohne hinterlegten Namen
+- **WHEN** ein Nutzer ohne Vor- und Nachnamen ein Spiel über `PUT /api/games/{id}` ändert
+- **THEN** enthält der Body eine generische Aktor-Formulierung und NICHT die E-Mail-Adresse des Nutzers
+

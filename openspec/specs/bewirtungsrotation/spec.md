@@ -7,7 +7,6 @@ spielenden Mannschaften verteilt. Die Capability umfasst die beiden vereinsweite
 Stellschrauben (Bedarf je Spiel, Obergrenze je Mannschaft) samt Einstellungen-UI, den
 Rotations-Schalter am Vorlagen-Eintrag und die tagesweite Zuteilung im Auto-Regen.
 ## Requirements
-
 ### Requirement: Vereinsweites Spiele-zu-Kuchen-Verhältnis
 
 Das System SHALL ein vereinsweites, konfigurierbares Verhältnis „Spiele zu Kuchen" als Dezimalzahl in `system_settings` (Key `bewirtung_verhaeltnis`) vorhalten. Bei der Migration MUSS eine Default-Row mit Wert `1` idempotent angelegt werden. Der Wert ist über `GET /api/settings/bewirtung` lesbar und über `PUT /api/settings/bewirtung` (Vorstand/Admin) änderbar; eine erfolgreiche Änderung SHALL `h.hub.Broadcast("settings-changed")` auslösen.
@@ -49,84 +48,49 @@ Für jeden Regen-Lauf eines Tages SHALL das System für jede Gruppe rotations-ak
 - **WHEN** zwei aufeinanderfolgende Spieltage jeweils dieselbe Team-Konstellation haben
 - **THEN** beginnt die Zuteilung an beiden Tagen unabhängig voneinander wieder bei Position 1 der jeweiligen Tages-Warteschlange
 
-### Requirement: Bedarfsermittlung und Greedy-Zuteilung mit Cap
-
-Das System SHALL den Kuchenbedarf eines Spieltags als `min(Anzahl Heimspiele, aufgerundet(Anzahl Heimspiele × Verhältnis))` berechnen. Die chronologisch ersten `Bedarf` Heimspiele des Tages SHALL je einen Rotations-Slot erhalten; weitere Heimspiele erhalten für dieses Item keinen Slot. Die Team-Zuteilung SHALL greedy in Warteschlangen-Reihenfolge erfolgen: die ersten `bewirtung_max_per_team` Slots gehen an Mannschaft 1, die nächsten an Mannschaft 2, usw. Der Cap SHALL einmal pro Regen-Lauf aus `system_settings` gelesen werden und für **alle** rotations-aktiven Items desselben Laufs gelten — unabhängig davon, aus welcher Vorlage ein Item stammt. Ist die Warteschlange erschöpft, bevor der Bedarf gedeckt ist, SHALL der verbleibende Slot ohne Team-Zuordnung (`team_id = NULL`) entstehen, statt den Cap zu überschreiten oder eine andere Mannschaft erneut heranzuziehen.
-
-#### Scenario: Fünf Spiele, drei Teams, Cap zwei
-
-- **WHEN** ein Spieltag fünf Heimspiele hat, das Verhältnis `1` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C]` lautet
-- **THEN** entstehen fünf Rotations-Slots mit Team-Zuordnung `A, A, B, B, C`
-
-#### Scenario: Verhältnis kleiner eins reduziert den Bedarf
-
-- **WHEN** ein Spieltag vier Heimspiele hat und das Verhältnis `0.5` ist
-- **THEN** entstehen für die chronologisch ersten zwei Heimspiele je ein Rotations-Slot
-- **AND** für die übrigen zwei Heimspiele entsteht kein Rotations-Slot für dieses Item
-
-#### Scenario: Verhältnis größer eins wirkt nur bis zur Spieleanzahl
-
-- **WHEN** ein Spieltag drei Heimspiele hat und das Verhältnis `2` ist
-- **THEN** entstehen höchstens drei Rotations-Slots (einer pro Spiel), nicht sechs
-
-#### Scenario: Cap-Überlauf lässt Slots unzugeordnet statt den Cap zu verletzen
-
-- **WHEN** ein Spieltag fünf Heimspiele hat, `bewirtung_max_per_team` `2` ist und nur zwei Teams `[A, B]` in der Warteschlange stehen
-- **THEN** entstehen die Slots mit Team-Zuordnung `A, A, B, B` und ein fünfter Slot mit `team_id = NULL`
-- **AND** weder `A` noch `B` erhält mehr als zwei zugeordnete Slots
-
-#### Scenario: Ein geänderter Cap wirkt sofort für alle Vorlagen
-
-- **WHEN** zwei verschiedene Vorlagen rotations-aktive Items desselben Duty-Types tragen und `bewirtung_max_per_team` auf `3` gesetzt wird
-- **THEN** gilt beim nächsten Regen für beide Vorlagen der Cap `3` (keine vorlagenabhängige Abweichung)
-
-#### Scenario: Unzugeordnete Slots sind im Regen-Summary sichtbar
-
-- **WHEN** ein Regen-Lauf mindestens einen unzugeordneten Rotations-Slot erzeugt
-- **THEN** enthält `regen_summary` eine `unassigned`-Liste mit Datum, Duty-Type und Spiel-ID für jeden dieser Slots
-
-### Requirement: Restore-Matching für Rotations-Items ignoriert die Team-Zuordnung
-
-Bei einem erneuten Regen SHALL die Wiederherstellung bestehender `duty_assignments` für Slots rotations-aktivierter Items (`rotation_enabled=1`) ausschließlich über `(duty_type_id, event_time)` matchen, ohne `team_id` einzubeziehen. Für Items ohne aktivierte Rotation SHALL der bestehende Drei-Feld-Match `(duty_type_id, event_time, team_id)` unverändert gelten.
-
-#### Scenario: Zusage überlebt eine team-verschiebende Spielplanänderung
-
-- **WHEN** eine Person für den Rotations-Slot eines Spiels um 10:30 zugesagt hat, dessen Team laut Warteschlange `A` war
-- **AND** vor dem Spiel ein neues, früheres Heimspiel eingefügt wird, wodurch der Slot beim nächsten Regen Team `B` zugeteilt bekommt
-- **THEN** bleibt die Zusage der Person auf dem Slot um 10:30 erhalten (kein Verlust, keine Benachrichtigung als „entfernt")
-
-#### Scenario: Nicht-Rotations-Item behält das bestehende Matching
-
-- **WHEN** ein Item mit `rotation_enabled=0` regeneriert wird und sich die Spielplanreihenfolge des Tages ändert
-- **THEN** matcht das Restore weiterhin über `(duty_type_id, event_time, team_id)`
-
 ### Requirement: Einstellungen-UI Tab „Bewirtung"
 
-Das System SHALL unter `/einstellungen` einen Tab „Bewirtung" anzeigen, sichtbar für Nutzer
-mit Vereinsfunktion `vorstand` oder System-Rolle `admin` (gleiches Capability-Gate-Muster wie
-die übrigen Tabs). Der Tab SHALL **beide** vereinsweiten Bewirtungswerte anzeigen und
-editierbar machen: das Spiele-zu-Kuchen-Verhältnis („Kuchen je Spiel") und die Obergrenze
-(„Max. Kuchen pro Mannschaft").
+Das System SHALL unter `/einstellungen` einen Tab **„Heimspieltage"** anzeigen, sichtbar für
+Nutzer mit Vereinsfunktion `vorstand` oder System-Rolle `admin` (gleiches Capability-Gate-Muster
+wie die übrigen Tabs). Der Tab SHALL in zwei Kacheln gegliedert sein:
 
-Der Tab SHALL sichtbar ausweisen, dass beide Werte die **automatische Dienst-Generierung bei
-Heimspielen** steuern — die Zahlen wirken nirgends sonst und sind ohne diesen Bezug nicht
+- **Kachel „Bewirtung"** mit **beiden** vereinsweiten Bewirtungswerten: dem Spiele-zu-Kuchen-Verhältnis
+  („Kuchen je Spiel") und der Obergrenze („Max. Kuchen pro Mannschaft").
+- **Kachel „Ausrichter"** mit der editierbaren Ausrichter-Liste inklusive Default-Markierung.
+
+Der Tab SHALL sichtbar ausweisen, dass die Werte die **automatische Dienst-Generierung bei
+Heimspielen** steuern — sie wirken nirgends sonst und sind ohne diesen Bezug nicht
 selbsterklärend.
+
+Ein bestehender Aufruf mit dem alten Tab-Parameter (`?tab=bewirtung`) SHALL weiterhin auf diesem
+Tab landen, damit vorhandene Links und Lesezeichen nicht ins Leere laufen.
 
 #### Scenario: Vorstand sieht und bearbeitet beide Werte
 
-- **WHEN** ein Vorstand `/einstellungen?tab=bewirtung` öffnet
-- **THEN** werden das aktuelle Verhältnis und der aktuelle Cap angezeigt
+- **WHEN** ein Vorstand den Tab „Heimspieltage" öffnet
+- **THEN** werden in der Kachel „Bewirtung" das aktuelle Verhältnis und der aktuelle Cap angezeigt
 - **AND** eine Änderung wird nach Speichern über `PUT /api/settings/bewirtung` übernommen
+
+#### Scenario: Ausrichter-Kachel ist im selben Tab erreichbar
+
+- **WHEN** ein Vorstand den Tab „Heimspieltage" öffnet
+- **THEN** wird die Ausrichter-Liste mit Markierung des Default-Eintrags angezeigt
+- **AND** Einträge lassen sich anlegen, umbenennen, deaktivieren und löschen
 
 #### Scenario: Tab benennt den Wirkungsbereich
 
-- **WHEN** ein Vorstand `/einstellungen?tab=bewirtung` öffnet
-- **THEN** enthält der Tab einen Hinweis, dass die Werte für die Dienst-Generierung bei Heimspielen gelten
+- **WHEN** ein Vorstand den Tab „Heimspieltage" öffnet
+- **THEN** enthält der Tab einen Hinweis, dass die Einstellungen für die Dienst-Generierung bei Heimspielen gelten
+
+#### Scenario: Alter Tab-Link bleibt gültig
+
+- **WHEN** ein Vorstand `/einstellungen?tab=bewirtung` aufruft
+- **THEN** wird der Tab „Heimspieltage" angezeigt
 
 #### Scenario: Kassierer ohne Vorstand-Funktion sieht den Tab nicht
 
 - **WHEN** ein Nutzer mit Vereinsfunktion `kassierer` (ohne `vorstand`) `/einstellungen` öffnet
-- **THEN** ist der Tab „Bewirtung" nicht in der Tab-Leiste sichtbar
+- **THEN** ist der Tab „Heimspieltage" nicht in der Tab-Leiste sichtbar
 
 ### Requirement: Vereinsweiter Cap „Max. Kuchen pro Mannschaft"
 
@@ -174,9 +138,10 @@ der beiden Felder persistiert wird.
 
 Das System SHALL ein Feld `rotation_enabled` (INTEGER NOT NULL DEFAULT 0) auf
 `game_template_items` vorhalten. `0` (Default) SHALL das bestehende Verhalten unverändert
-lassen (ein Slot pro Team des jeweiligen Spiels). `1` SHALL den Rotations-Modus für dieses
-Item aktivieren; die Obergrenze pro Mannschaft stammt dann aus der vereinsweiten Einstellung
-`bewirtung_max_per_team` und **nicht** mehr aus dem Item.
+lassen (ein Slot pro Team des jeweiligen Spiels, mit `slots_total = slots_count`). `1` SHALL
+den Rotations-Modus für dieses Item aktivieren; die Obergrenze pro Mannschaft stammt dann aus
+der vereinsweiten Einstellung `bewirtung_max_per_team` und **nicht** mehr aus dem Item, und
+`slots_count` SHALL ohne Wirkung bleiben (die Personenzahl ergibt sich aus der Zuteilung).
 
 `PUT /api/admin/duty-templates/{id}` SHALL ein Item mit `rotation_enabled=true` UND einem
 referenzierten `duty_types`-Eintrag, dessen `same_day_behavior` oder
@@ -198,7 +163,7 @@ ablehnen.
 #### Scenario: Bestehende Items ohne Rotation bleiben unverändert
 
 - **WHEN** ein Regen für ein Item mit `rotation_enabled=0` läuft
-- **THEN** entsteht wie bisher ein Slot pro Team des jeweiligen Spiels (`game_teams`), ohne Bezug zu einer Warteschlange
+- **THEN** entsteht wie bisher ein Slot pro Team des jeweiligen Spiels (`game_teams`) mit `slots_total = slots_count`, ohne Bezug zu einer Warteschlange
 
 #### Scenario: Migration überführt bestehende Caps in den Schalter
 
@@ -212,6 +177,10 @@ Beide Vorlagen-Editoren (Modal auf `/dienstplan-vorlagen` und Detailseite
 `rotation_enabled` schaltet. Ein Zahlenfeld für den Cap SHALL dort NICHT mehr existieren.
 Die Checkbox SHALL für den Cap auf die Einstellungen verweisen.
 
+Ist die Checkbox für ein Item gesetzt, SHALL das Feld „Anzahl" (`slots_count`) dieses Items
+deaktiviert und als wirkungslos gekennzeichnet werden, weil die Personenzahl eines
+Rotations-Slots aus der Zuteilung stammt.
+
 #### Scenario: Checkbox aktiviert die Rotation
 
 - **WHEN** ein Vorstand im Vorlagen-Editor die Checkbox „Bewirtungsrotation" eines Items setzt und speichert
@@ -221,3 +190,121 @@ Die Checkbox SHALL für den Cap auf die Einstellungen verweisen.
 
 - **WHEN** ein Vorstand einen Vorlagen-Editor mit gesetzter Checkbox öffnet
 - **THEN** wird ein Hinweis angezeigt, dass die maximale Anzahl pro Mannschaft in den Einstellungen unter „Bewirtung" gepflegt wird
+
+#### Scenario: Anzahl-Feld ist bei aktiver Rotation deaktiviert
+
+- **WHEN** ein Vorstand die Checkbox „Bewirtungsrotation" eines Items setzt
+- **THEN** ist das Feld „Anzahl" dieses Items deaktiviert
+- **AND** ein Hinweis nennt die Zuteilung als Quelle der Personenzahl
+
+### Requirement: Bedarfsermittlung und Kuchen-Zuteilung pro Mannschaft
+
+Das System SHALL den Kuchenbedarf eines Spieltags als `aufgerundet(Anzahl Heimspiele × Verhältnis)` berechnen. Eine Deckelung auf die Anzahl der Heimspiele findet NICHT statt — ein Verhältnis größer eins erhöht den Bedarf entsprechend.
+
+Der Bedarf SHALL greedy in Warteschlangen-Reihenfolge auf Mannschaften verteilt werden: jede Mannschaft erhält `min(bewirtung_max_per_team, verbleibender Bedarf)` Kuchen, bis der Bedarf gedeckt oder die Warteschlange erschöpft ist.
+
+Für jede Mannschaft mit mindestens einem zugeteilten Kuchen SHALL **genau ein** Slot entstehen — an ihrem chronologisch ersten Heimspiel des Tages, also an demselben Spiel, das ihre Position in der Warteschlange bestimmt hat. Der Slot SHALL `slots_total` gleich der Anzahl der zugeteilten Kuchen und `team_id` gleich dieser Mannschaft tragen. Heimspiele, deren Mannschaft keinen Kuchen zugeteilt bekommt, erhalten für dieses Item keinen Slot. `game_template_items.slots_count` SHALL für rotations-aktive Items ignoriert werden.
+
+Ist die Warteschlange erschöpft, bevor der Bedarf gedeckt ist, SHALL der Restbedarf verfallen: es entsteht kein zusätzlicher Slot, keine Mannschaft überschreitet den Cap, und es wird KEIN Slot ohne Team-Zuordnung angelegt. Die Lücke SHALL im `regen_summary` mit Datum, Duty-Type und Anzahl der nicht zugeteilten Kuchen ausgewiesen werden.
+
+Der Cap SHALL einmal pro Regen-Lauf aus `system_settings` gelesen werden und für **alle** rotations-aktiven Items desselben Laufs gelten — unabhängig davon, aus welcher Vorlage ein Item stammt.
+
+In die Bedarfsrechnung SHALL ein Heimspiel nur eingehen, wenn das rotations-aktive Item das
+**Ausrichter-Gate** des Tages passiert (`ausrichter_id IS NULL` oder gleich dem aufgelösten
+Tages-Ausrichter). Das Gate SHALL damit **vor** Warteschlange und Bedarfsrechnung wirken, nicht
+erst beim Einfügen der Slots — andernfalls verbrauchte die Team-Warteschlange Positionen für
+Slots, die anschließend verworfen werden, und der ausgewiesene Bedarf wäre falsch.
+
+#### Scenario: Fünf Spiele, vier Teams, Cap zwei
+
+- **WHEN** ein Spieltag fünf Heimspiele hat, das Verhältnis `1` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C, D]` lautet
+- **THEN** entstehen genau drei Rotations-Slots: `A` mit `slots_total=2`, `B` mit `slots_total=2`, `C` mit `slots_total=1`
+- **AND** für `D` entsteht kein Slot
+- **AND** jeder Slot hängt am chronologisch ersten Heimspiel seiner Mannschaft
+
+#### Scenario: Verhältnis kleiner eins reduziert den Bedarf
+
+- **WHEN** ein Spieltag vier Heimspiele hat, das Verhältnis `0.5` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C, D]` lautet
+- **THEN** ist der Bedarf zwei Kuchen
+- **AND** es entsteht genau ein Slot für `A` mit `slots_total=2`
+- **AND** für `B`, `C` und `D` entsteht kein Slot
+
+#### Scenario: Verhältnis größer eins erhöht den Bedarf
+
+- **WHEN** ein Spieltag drei Heimspiele hat, das Verhältnis `2` ist, `bewirtung_max_per_team` `2` ist und die Warteschlange `[A, B, C]` lautet
+- **THEN** ist der Bedarf sechs Kuchen
+- **AND** es entstehen drei Slots mit je `slots_total=2` für `A`, `B` und `C`
+
+#### Scenario: Slot hängt am eigenen Termin der Mannschaft
+
+- **WHEN** an einem Spieltag `A` um 10:00 und `B` um 11:30 ein Heimspiel hat und beide einen Kuchen zugeteilt bekommen
+- **THEN** ist der Slot von `A` dem 10:00-Spiel zugeordnet (`game_id`) und seine `event_time` aus `anchor`/`offset_minutes` relativ zu diesem Spiel berechnet
+- **AND** der Slot von `B` ist dem 11:30-Spiel zugeordnet
+
+#### Scenario: Mannschaft mit zwei Heimspielen bekommt einen Slot am früheren
+
+- **WHEN** `A` an einem Spieltag um 9:00 und um 13:00 ein Heimspiel hat und Kuchen zugeteilt bekommt
+- **THEN** entsteht genau ein Slot, zugeordnet zum 9:00-Spiel
+
+#### Scenario: Restbedarf verfällt, wenn die Warteschlange erschöpft ist
+
+- **WHEN** ein Spieltag fünf Heimspiele hat, das Verhältnis `1` ist, `bewirtung_max_per_team` `2` ist und nur zwei Mannschaften `[A, B]` in der Warteschlange stehen
+- **THEN** entstehen genau zwei Slots mit je `slots_total=2` für `A` und `B`
+- **AND** es entsteht kein Slot mit `team_id = NULL`
+- **AND** weder `A` noch `B` erhält mehr als zwei Kuchen
+
+#### Scenario: Nicht zugeteilte Kuchen sind im Regen-Summary sichtbar
+
+- **WHEN** ein Regen-Lauf den Bedarf eines Tages nicht vollständig zuteilen kann
+- **THEN** enthält `regen_summary` eine `unassigned`-Liste mit Datum, Duty-Type und der Anzahl der nicht zugeteilten Kuchen
+
+#### Scenario: slots_count der Vorlage bleibt ohne Wirkung
+
+- **WHEN** ein rotations-aktives Item `slots_count=3` trägt, der Cap `2` ist und einer Mannschaft zwei Kuchen zugeteilt werden
+- **THEN** entsteht ein Slot mit `slots_total=2`
+
+#### Scenario: Ein geänderter Cap wirkt sofort für alle Vorlagen
+
+- **WHEN** zwei verschiedene Vorlagen rotations-aktive Items desselben Duty-Types tragen und `bewirtung_max_per_team` auf `3` gesetzt wird
+- **THEN** gilt beim nächsten Regen für beide Vorlagen der Cap `3` (keine vorlagenabhängige Abweichung)
+
+#### Scenario: Ausgegatetes Rotations-Item erzeugt keinen Bedarf
+
+- **WHEN** das rotations-aktive Item an Ausrichter `A` gebunden ist und der Spieltag `B` auflöst
+- **THEN** ist der Kuchenbedarf des Tages `0`
+- **AND** es entsteht kein Rotations-Slot, auch keiner mit `team_id = NULL`
+
+#### Scenario: Teilweise gegatete Vorlagen zählen nur die passenden Spiele
+
+- **WHEN** ein Spieltag vier Heimspiele hat, das Verhältnis `1` ist, und nur zwei davon eine Vorlage tragen, deren rotations-aktives Item das Ausrichter-Gate passiert
+- **THEN** beträgt der Bedarf `2` und nicht `4`
+
+### Requirement: Restore-Matching ist für alle Items einheitlich
+
+Bei einem erneuten Regen SHALL die Wiederherstellung bestehender `duty_assignments` für
+**alle** Vorlagen-Items — mit und ohne aktivierte Bewirtungsrotation — über
+`(duty_type_id, event_time, team_id)` matchen. Für rotations-aktive Items gibt es keine
+Sonderbehandlung mehr, weil die Team-Zuordnung eines Rotations-Slots die Mannschaft des
+Spiels ist, an dem der Slot hängt, und damit ein stabiles Merkmal des Slots.
+
+Sinkt die zugeteilte Kuchenzahl einer Mannschaft, SHALL das Restore die Zusagen in
+aufsteigender Reihenfolge ihrer Entstehung bis `slots_total` zurückschreiben; darüber
+hinausgehende Zusagen SHALL regulär als „entfernt" benachrichtigt werden.
+
+#### Scenario: Zusage überlebt einen Regen bei gleichbleibender Zuteilung
+
+- **WHEN** eine Person für den Rotations-Slot ihrer Mannschaft zugesagt hat und ein erneuter Regen dieselbe Zuteilung ergibt
+- **THEN** bleibt die Zusage erhalten und es wird keine Benachrichtigung ausgelöst
+
+#### Scenario: Gesunkene Kuchenzahl verliert die jüngste Zusage
+
+- **WHEN** ein Slot mit `slots_total=2` zwei Zusagen trägt und ein erneuter Regen der Mannschaft nur noch einen Kuchen zuteilt
+- **THEN** bleibt die ältere Zusage erhalten
+- **AND** die jüngere Zusage wird als „entfernt" benachrichtigt
+
+#### Scenario: Nicht mehr herangezogene Mannschaft verliert ihre Zusage
+
+- **WHEN** eine Mannschaft nach einer Spielplanänderung keinen Kuchen mehr zugeteilt bekommt
+- **THEN** entsteht für sie kein Slot mehr
+- **AND** eine bestehende Zusage wird als „entfernt" benachrichtigt
+
