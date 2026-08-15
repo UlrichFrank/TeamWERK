@@ -65,6 +65,7 @@ Betroffene Endpoint-Gruppen (Auswahl, vollständige Liste im Matrix-Test):
 - **Dokumente:** `GET /api/folders`, `POST /api/folders`, `GET /api/folders/{id}/contents`, … (Pro-Folder-Permission filtert auf Inhaltsebene)
 - **Games-Read + RSVP:** `GET /api/games`, `/games/{id}`, `/games/my`, `POST /api/games/{id}/respond`, `GET /api/games/{id}/responses|participants`, `POST /api/games/{id}/lineup`
 - **Trainings-Read + RSVP:** `GET /api/training-sessions`, `/training-sessions/{id}`, `POST /api/training-sessions/{id}/respond`, `GET /api/training-sessions/{id}/attendances`
+- **Saisonfenster:** `GET /api/seasons/active` (nur `id`/`name`/`start_date`/`end_date` der laufenden Saison — /termine lädt darüber bis zum Saisonende; die vollständige Saisonliste `GET /api/seasons` bleibt gegated)
 - **Teams:** `GET /api/teams`, `/teams/names`, `/teams/my`, `/teams/{id}/roster`
 - **Chat:** alle `/api/chat/*`-Konversation- und Broadcast-Endpoints (außer `POST /api/chat/broadcasts`, siehe Broadcast-Requirement)
 - **Absences:** alle `/api/absences*`-Endpoints (Ownership-Check im Handler)

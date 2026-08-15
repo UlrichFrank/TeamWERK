@@ -360,6 +360,11 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/members/{id}/training-diary", h.TrainingDiary.GetMemberDiary)
 		r.Get("/api/teams/{id}/training-diary-stats", h.TrainingDiary.GetTeamStats)
 
+		// Fenster der laufenden Saison — /termine und /dienste laden ihre Listen
+		// darüber vollständig bis zum Saisonende. Die vollständige Saisonliste
+		// (/api/seasons) bleibt Vorstand/Trainer/sL/Kassierer vorbehalten.
+		r.Get("/api/seasons/active", h.Config.GetActiveSeason)
+
 		// Trainings (read + RSVP — all authenticated)
 		r.Get("/api/training-sessions", h.Training.ListSessions)
 		r.Get("/api/training-sessions/{id}", h.Training.GetSession)

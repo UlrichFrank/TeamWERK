@@ -51,9 +51,13 @@ function renderPage() {
   )
 }
 
+// Saisonfenster, das die Seite vor dem Laden der Termine holt.
+const SEASON = { id: 7, name: '2026/27', start_date: '2026-05-01', end_date: '2027-06-30' }
+
 // mockGet wird für mehrere Routen aufgerufen; wir routen nach URL.
 function seedRoutes(sessions: unknown[], games: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
+    if (url.startsWith('/seasons/active')) return Promise.resolve({ data: SEASON })
     if (url.startsWith('/training-sessions')) return Promise.resolve({ data: sessions })
     if (url.startsWith('/games/my')) return Promise.resolve({ data: games })
     if (url.startsWith('/teams')) return Promise.resolve({ data: [] })
@@ -216,5 +220,58 @@ describe('TerminePage — Karte anklicken setzt Focus Parameter', () => {
     const detailIdx = locations.findIndex(l => l === `/termine/training/${trainingId}`)
     expect(focusIdx).toBeGreaterThanOrEqual(0)
     expect(detailIdx).toBeGreaterThan(focusIdx)
+  })
+})
+
+describe('TerminePage — Ladefenster reicht bis zum Saisonende', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+  })
+
+  function requestedWindow(prefix: string) {
+    const call = mockGet.mock.calls.map(c => String(c[0])).find(u => u.startsWith(prefix))
+    expect(call).toBeTruthy()
+    const params = new URLSearchParams(call!.slice(call!.indexOf('?') + 1))
+    return { from: params.get('from'), to: params.get('to') }
+  }
+
+  test('lädt bis end_date der aktiven Saison statt eines rollierenden Fensters', async () => {
+    seedRoutes([])
+    renderPage()
+
+    await waitFor(() => expect(mockGet.mock.calls.some(c => String(c[0]).startsWith('/games/my'))).toBe(true))
+    expect(requestedWindow('/games/my').to).toBe(SEASON.end_date)
+    expect(requestedWindow('/training-sessions').to).toBe(SEASON.end_date)
+  })
+
+  test('lädt keine Termine, bevor das Saisonfenster bekannt ist', async () => {
+    let resolveSeason: (v: unknown) => void = () => {}
+    const seasonPromise = new Promise(res => { resolveSeason = res })
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/seasons/active')) return seasonPromise
+      return Promise.resolve({ data: [] })
+    })
+    renderPage()
+
+    await waitFor(() => expect(mockGet.mock.calls.some(c => String(c[0]).startsWith('/teams'))).toBe(true))
+    expect(mockGet.mock.calls.some(c => String(c[0]).startsWith('/games/my'))).toBe(false)
+
+    resolveSeason({ data: SEASON })
+    await waitFor(() => expect(mockGet.mock.calls.some(c => String(c[0]).startsWith('/games/my'))).toBe(true))
+  })
+
+  test('ohne aktive Saison (404) greift ein rollierendes Fenster, die Seite bleibt nutzbar', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/seasons/active')) return Promise.reject(new Error('404'))
+      return Promise.resolve({ data: [] })
+    })
+    renderPage()
+
+    await waitFor(() => expect(mockGet.mock.calls.some(c => String(c[0]).startsWith('/games/my'))).toBe(true))
+    const today = new Date().toISOString().slice(0, 10)
+    const { from, to } = requestedWindow('/games/my')
+    expect(from).toBe(today)
+    expect(to! > today).toBe(true)
   })
 })

@@ -153,6 +153,46 @@ func (h *Handler) ListSeasons(w http.ResponseWriter, r *http.Request) {
 	httpcache.ServeJSON(w, r, "private, no-cache", result)
 }
 
+// GET /api/seasons/active — Fenster der laufenden Saison, für alle Eingeloggten.
+//
+// Bewusst getrennt von ListSeasons (Vorstand/Trainer/sportliche Leitung/Kassierer):
+// /termine und /dienste brauchen nur Start und Ende der aktuellen Saison, um ihre
+// Listen vollständig bis zum Saisonende zu laden — dafür muss niemand die komplette
+// Saisonhistorie lesen dürfen.
+func (h *Handler) GetActiveSeason(w http.ResponseWriter, r *http.Request) {
+	var s struct {
+		ID        int    `json:"id"`
+		Name      string `json:"name"`
+		StartDate string `json:"start_date"`
+		EndDate   string `json:"end_date"`
+	}
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT id, name, start_date, end_date FROM seasons WHERE is_active = 1 LIMIT 1`).
+		Scan(&s.ID, &s.Name, &s.StartDate, &s.EndDate)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "no active season", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	// SQLite gibt DATE-Spalten je nach Schreibweg als ISO-Timestamp zurück
+	// ("2026-05-01T00:00:00Z"); die Konsumenten vergleichen als reines
+	// "2006-01-02" und reichen die Werte als from/to-Query weiter.
+	s.StartDate = truncDate(s.StartDate)
+	s.EndDate = truncDate(s.EndDate)
+	httpcache.ServeJSON(w, r, "private, no-cache", s)
+}
+
+// truncDate schneidet einen evtl. mitgelieferten Zeitanteil ab.
+func truncDate(v string) string {
+	if len(v) > 10 {
+		return v[:10]
+	}
+	return v
+}
+
 // boolToInt bildet ein bool auf 0/1 für INTEGER-Spalten ab.
 func boolToInt(b bool) int {
 	if b {

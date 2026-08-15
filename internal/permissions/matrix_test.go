@@ -462,6 +462,11 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/members/{id}/training-diary", expected: exDiaryReadACL},
 	{method: "GET", path: "/api/teams/{id}/training-diary-stats", expected: exDiaryReadACL},
 
+	// Fenster der laufenden Saison — bewusst offener als GET /api/seasons
+	// (Vorstand/Trainer/sL/Kassierer): /termine braucht nur start/end, um bis
+	// zum Saisonende zu laden.
+	{method: "GET", path: "/api/seasons/active", expected: exAuth},
+
 	// Trainings (read + RSVP)
 	{method: "GET", path: "/api/training-sessions", expected: exAuth},
 	{method: "GET", path: "/api/training-sessions/{id}", expected: exAuth},

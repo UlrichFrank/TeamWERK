@@ -129,6 +129,13 @@ function sortKey(t: Termin): string {
   return t.data.date + 'T' + t.data.time
 }
 
+// Fenster der laufenden Saison (GET /api/seasons/active), reine "YYYY-MM-DD".
+type SeasonWindow = { start_date: string; end_date: string }
+
+function isoDaysFromNow(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
 function fmtClockTime(iso?: string): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -189,6 +196,7 @@ export default function TerminePage() {
   const scrollToTodayRef = useRef(false)
 
   const [termine, setTermine] = useState<Termin[]>([])
+  const [season, setSeason] = useState<SeasonWindow | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
   const [loading, setLoading] = useState(true)
@@ -233,10 +241,16 @@ export default function TerminePage() {
   }
 
   const today = new Date().toISOString().slice(0, 10)
+  // Obere Fenstergrenze ist das Ende der laufenden Saison — vorher war es ein
+  // rollierendes 180-Tage-Fenster, das die letzten Spieltage einer langen Saison
+  // abgeschnitten hat. Nach unten bleibt es beim bisherigen Jahresrückblick, damit
+  // Deep-Links auf Termine der Vorsaison weiter auflösbar bleiben (der Saisonstart
+  // liegt bei einer frisch aktivierten Saison hinter diesen 365 Tagen).
+  const pastFloor = isoDaysFromNow(-365)
   const from = showPast
-    ? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    ? (season && season.start_date < pastFloor ? season.start_date : pastFloor)
     : today
-  const to = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const to = season?.end_date ?? ''
 
   const load = () => {
     setLoading(true)
@@ -257,12 +271,22 @@ export default function TerminePage() {
       .finally(() => setLoading(false))
   }
 
+  // Saisonfenster zuerst holen — die Terminliste wird erst danach geladen, damit sie
+  // von Anfang an bis zum Saisonende reicht (statt zweimal zu laden). Ohne aktive
+  // Saison (HTTP 404) greift ein rollierendes Fenster, damit die Seite nicht leer ist.
   useEffect(() => {
-    load()
+    api.get('/seasons/active')
+      .then(r => setSeason({ start_date: r.data.start_date, end_date: r.data.end_date }))
+      .catch(() => setSeason({ start_date: isoDaysFromNow(-365), end_date: isoDaysFromNow(365) }))
     api.get('/teams').then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? []))).catch(() => {})
-    // load kapselt from/to (aus showPast), soll nur bei showPast-Wechsel neu laufen
+  }, [])
+
+  useEffect(() => {
+    if (!season) return
+    load()
+    // load kapselt from/to (aus showPast + season), soll nur bei deren Wechsel neu laufen
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPast])
+  }, [showPast, season])
   useLiveUpdates((event) => { if (event === 'trainings' || event === 'games' || event === 'event-note') load() })
 
   const visibleTermine = termine.filter(t => {
