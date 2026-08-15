@@ -10,6 +10,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
+import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
+import EventSearchInput from '../components/EventSearchInput'
+import { parseQuery, matchesQuery } from '../lib/eventFilter'
 
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
@@ -87,6 +90,22 @@ interface Game {
   note?: string
 }
 
+// Adapter für den Textfilter (openspec/changes/termin-textfilter/design.md §6).
+// Die drei Termin-Arten des Kalenders tragen verschiedene Felder.
+function gameFilterFields(g: Game): (string | null | undefined)[] {
+  return [g.opponent, g.venue?.name, g.venue?.city, g.note, ...g.teams.flatMap(t => [t.name, t.display_short, t.display_long])]
+}
+
+function trainingFilterFields(t: Training): (string | null | undefined)[] {
+  return [t.title, t.venue?.name, t.venue?.city, t.team_name, t.note]
+}
+
+const ABSENCE_TYPE_LABELS: Record<string, string> = { vacation: 'Urlaub', injury: 'Verletzung' }
+
+function absenceFilterFields(a: Absence): (string | null | undefined)[] {
+  return [a.member_name, a.note, ABSENCE_TYPE_LABELS[a.type]]
+}
+
 interface Absence {
   id: number
   member_id: number
@@ -161,6 +180,16 @@ export default function KalenderPage() {
   const [absences, setAbsences] = useState<Absence[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [allTeamNames, setAllTeamNames] = useState<TeamForName[]>([])
+  // q lebt — anders als die übrigen Kalender-Filter — in der URL, damit ein
+  // gefilterter Kalender teilbar ist. Die bestehende Inkonsistenz der anderen
+  // Filter (lokaler State) wird hier bewusst nicht mitrepariert.
+  //
+  // Bewusst OHNE den Ausgeblendet-Zähler der Listenseiten (design.md §7): das
+  // Monatsgitter hat keine Leermeldung, in die er passte, und ein leeres Gitter
+  // ist die normale Anzeige eines Monats ohne Termine — kein Signal, das eine
+  // Erklärung bräuchte. Das ist eine Auslassung, kein Vergessen.
+  const [query, setQuery] = useDebouncedQueryParam('q')
+  const queryTokens = useMemo(() => parseQuery(query), [query])
   const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
   const [showTeamAbsences, setShowTeamAbsences] = useState<boolean>(
@@ -493,6 +522,7 @@ export default function KalenderPage() {
     if (start > monthEnd || effectiveEnd < monthStart) return false
     if (!filterTypes.has(g.event_type)) return false
     if (filterTeamId !== null && !g.teams.some(t => t.id === filterTeamId)) return false
+    if (!matchesQuery(queryTokens, gameFilterFields(g), [g.date])) return false
     return true
   })
 
@@ -515,6 +545,7 @@ export default function KalenderPage() {
   const filteredTrainings = trainings.filter(t => {
     if (!filterTypes.has('training')) return false
     if (filterTeamId !== null && t.team_id !== filterTeamId) return false
+    if (!matchesQuery(queryTokens, trainingFilterFields(t), [t.date])) return false
     return true
   })
 
@@ -533,6 +564,11 @@ export default function KalenderPage() {
   const absencesForDay = (dateStr: string): Array<{ absence: Absence; isFirst: boolean; isLast: boolean }> => {
     return absences
       .filter(a => a.start_date <= dateStr && a.end_date >= dateStr)
+      // Abwesenheiten werden bisher clientseitig gar nicht gefiltert (Team-Filter
+      // läuft serverseitig). Ohne diese Zeile blieben bei aktivem q die
+      // Abwesenheits-Balken in Zellen stehen, deren Termine weggefiltert sind —
+      // das Gitter sähe schlicht kaputt aus.
+      .filter(a => matchesQuery(queryTokens, absenceFilterFields(a), [a.start_date, a.end_date]))
       .map(a => {
         const d = new Date(dateStr + 'T12:00:00')
         const isMonday = d.getDay() === 1
@@ -925,6 +961,13 @@ export default function KalenderPage() {
               {!compact && <span>{label}</span>}
             </button>
           ))}
+          <EventSearchInput
+            value={query}
+            onChange={setQuery}
+            compact={compact}
+            placeholder="Gegner, Ort, Notiz…"
+            ariaLabel="Kalender filtern"
+          />
         </div>
         {canSeeTeamAbsences && (
           <button
