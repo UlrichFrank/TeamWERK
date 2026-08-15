@@ -71,7 +71,7 @@ func TestSendMessage_GroupFansOutToAllNonSenders(t *testing.T) {
 	}
 }
 
-// TestSendBroadcast_FansOutToNonSenderRecipients — ein 'all'-Broadcast pusht an
+// TestSendBroadcast_FansOutToNonSenderRecipients — ein 'users'-Broadcast pusht an
 // alle Nutzer außer dem Sender.
 func TestSendBroadcast_FansOutToNonSenderRecipients(t *testing.T) {
 	db := testutil.NewDB(t)
@@ -90,7 +90,7 @@ func TestSendBroadcast_FansOutToNonSenderRecipients(t *testing.T) {
 
 	token := testutil.Token(t, admin, "admin", nil)
 	res := testutil.Post(t, srv, "/api/chat/broadcasts", token,
-		map[string]any{"body": "Ansage", "targetType": "all"})
+		map[string]any{"body": "Ansage", "targetType": "users"})
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("status %d, want 201", res.StatusCode)
 	}
