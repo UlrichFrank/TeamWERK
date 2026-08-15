@@ -48,6 +48,6 @@
 
 - [x] 6.1 `openspec validate mitteilung-zielgruppen --strict`.
 - [x] 6.2 `/verify-change` — Build/Test/Lint plus Projekt-Invarianten (Route→Tests, Mutation→`Broadcast`, brand-Tokens, lucide-Icons, Migrationsnummer).
-- [ ] 6.3 Auf Prod prüfen, wie viel Bestand betroffen ist: `SELECT target_type, COUNT(*) FROM broadcasts GROUP BY target_type;`. Zeilen mit `target_type='role'` sind nie zugestellt worden — falls vorhanden, die Absender informieren, dass diese Mitteilungen niemanden erreicht haben.
+- [x] 6.3 Auf Prod prüfen, wie viel Bestand betroffen ist: `SELECT target_type, COUNT(*) FROM broadcasts GROUP BY target_type;`. Zeilen mit `target_type='role'` sind nie zugestellt worden — falls vorhanden, die Absender informieren, dass diese Mitteilungen niemanden erreicht haben. **Ergebnis (15.08.2026):** `all`=10, `team`=8, `role`=1. Der eine `role`-Broadcast ist ID 19 (13.08.2026, Absender Ulrich Frank, Zielgruppe `trainer`) und hat **genau eine** `broadcast_reads`-Zeile — die des Absenders. Kein Trainer hat ihn erhalten; der Inhalt („Im Profil jedes Spielers …") ist nachzuholen.
 - [ ] 6.4 **Trainer vorab informieren.** Das Mitteilungsrecht verschwindet für sie mit dem Deploy. Ersatz benennen: die Team-Standardgruppe „Spieler" bzw. „Eltern" im Chat erreicht denselben Kreis, zusätzlich mit Rückkanal. Ohne diese Ankündigung ist der Button eines Tages einfach weg (design.md §2).
-- [ ] 6.5 Ein Commit pro Task-Gruppe, Conventional Commits mit Scope `chat` (Migration mit Scope `db`, Capability-Änderung mit Scope `auth`).
+- [x] 6.5 Ein Commit pro Task-Gruppe, Conventional Commits mit Scope `chat` (Migration mit Scope `db`, Capability-Änderung mit Scope `auth`).
