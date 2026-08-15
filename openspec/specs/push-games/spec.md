@@ -23,57 +23,20 @@ fokussiert die App, ohne zu navigieren.
 Die Benachrichtigung über ein gelöschtes Spiel SHALL Gegner, Datum und den Namen des
 auslösenden Nutzers enthalten sowie — falls angegeben — den Löschgrund.
 
-Die Benachrichtigung über ein **neu angelegtes** Spiel SHALL Gegner bzw.
-Terminname, den Zeitpunkt (Datum **und** Uhrzeit) und den Namen des anlegenden
-Nutzers enthalten. Das Datum SHALL im Format `TT.MM.JJJJ` erscheinen — die frühere
-Ausgabe des rohen ISO-Datums aus dem Request SHALL NICHT mehr gelten.
-
-Die Benachrichtigung über ein **geändertes** Spiel SHALL Gegner bzw. Terminname, den
-Zeitpunkt des Termins (Datum **und** Uhrzeit) und den Namen des auslösenden Nutzers
-enthalten. Verschiebt die Änderung den Termin (Datum oder Uhrzeit weichen vom gespeicherten
-Wert ab), SHALL die Meldung zusätzlich den **alten** Zeitpunkt nennen; bleibt der Zeitpunkt
-gleich, SHALL keine Vorher-Angabe erscheinen. Ist kein Name des auslösenden Nutzers
-hinterlegt, SHALL eine generische Formulierung stehen — die E-Mail-Adresse SHALL NIEMALS im
-Text erscheinen.
-
 Der **Titel** der Absage-Meldung SHALL dem `games.event_type` folgen: `heim` und `auswärts`
 ergeben „Spiel abgesagt", `generisch` ergibt „Termin abgesagt". Die Route trägt auch Termine,
 die keine Spiele sind (Turnier, Vereinsfest, Zusatztermin) — ein pauschales „Spiel abgesagt"
-benennt dort das falsche Ereignis. Für die **Änderungs**- und die **Anlage**-Meldung
-gilt dieselbe Unterscheidung: `generisch` ergibt „Termin geändert" bzw. „Neuer
-Termin", sonst „Spielinfo geändert" bzw. „Neues Spiel".
+benennt dort das falsche Ereignis.
 
 #### Scenario: Neues Spiel erstellt
 - **WHEN** ein Admin oder Trainer ein neues Spiel über `POST /api/games` anlegt
 - **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams + deren Elternteile eine Push Notification mit Titel „Neues Spiel" und der Gegnerinfo
-- **THEN** enthält der Body Datum im Format `TT.MM.JJJJ`, die Uhrzeit und den Namen des anlegenden Nutzers
 - **THEN** zeigt der Klick-Link auf `/termine?focus=game-<id>` des neu erstellten Spiels
-
-#### Scenario: Neuer generischer Termin erstellt
-- **WHEN** ein Termin mit `event_type='generisch'` über `POST /api/games` angelegt wird
-- **THEN** lautet der Titel der Push Notification „Neuer Termin" und NICHT „Neues Spiel"
 
 #### Scenario: Spiel verschoben oder geändert
 - **WHEN** ein Admin oder Trainer ein Spiel über `PUT /api/games/{id}` aktualisiert (Datum, Zeit oder Ort geändert)
 - **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams + deren Elternteile eine Push Notification „Spielinfo geändert"
-- **THEN** enthält der Body Gegner, Datum im Format `TT.MM.JJJJ`, die Uhrzeit und den Namen des auslösenden Nutzers
 - **THEN** zeigt der Klick-Link auf `/termine?focus=game-<id>`
-
-#### Scenario: Spiel geändert ohne Verschiebung
-- **WHEN** ein Admin oder Trainer ein Spiel über `PUT /api/games/{id}` aktualisiert, ohne Datum oder Uhrzeit zu ändern
-- **THEN** enthält der Body **keine** Vorher-Angabe
-
-#### Scenario: Spiel verschoben
-- **WHEN** ein Admin oder Trainer über `PUT /api/games/{id}` das Datum oder die Uhrzeit ändert
-- **THEN** enthält der Body den **neuen** Zeitpunkt und zusätzlich den **alten** Zeitpunkt als Vorher-Angabe
-
-#### Scenario: Generisches Event geändert
-- **WHEN** ein Event mit `event_type='generisch'` über `PUT /api/games/{id}` geändert wird
-- **THEN** lautet der Titel der Push Notification „Termin geändert" und NICHT „Spielinfo geändert"
-
-#### Scenario: Änderung ohne hinterlegten Namen
-- **WHEN** ein Nutzer ohne Vor- und Nachnamen ein Spiel über `PUT /api/games/{id}` ändert
-- **THEN** enthält der Body eine generische Aktor-Formulierung und NICHT die E-Mail-Adresse des Nutzers
 
 #### Scenario: Spiel abgesagt (gelöscht)
 - **WHEN** ein Admin oder Trainer ein Spiel (`event_type` `heim` oder `auswärts`) über `DELETE /api/games/{id}` löscht
@@ -98,4 +61,24 @@ Termin", sonst „Spielinfo geändert" bzw. „Neues Spiel".
 #### Scenario: Nutzer mit deaktiviertem Push erhält keine Notification
 - **WHEN** ein Spiel-Ereignis eintritt und ein Nutzer hat `push_enabled=0` für Kategorie `games` in `notification_preferences`
 - **THEN** erhält dieser Nutzer keine Push Notification für dieses Ereignis
+
+#### Scenario: Neuer generischer Termin erstellt
+- **WHEN** ein Termin mit `event_type='generisch'` über `POST /api/games` angelegt wird
+- **THEN** lautet der Titel der Push Notification „Neuer Termin" und NICHT „Neues Spiel"
+
+#### Scenario: Spiel geändert ohne Verschiebung
+- **WHEN** ein Admin oder Trainer ein Spiel über `PUT /api/games/{id}` aktualisiert, ohne Datum oder Uhrzeit zu ändern
+- **THEN** enthält der Body **keine** Vorher-Angabe
+
+#### Scenario: Spiel verschoben
+- **WHEN** ein Admin oder Trainer über `PUT /api/games/{id}` das Datum oder die Uhrzeit ändert
+- **THEN** enthält der Body den **neuen** Zeitpunkt und zusätzlich den **alten** Zeitpunkt als Vorher-Angabe
+
+#### Scenario: Generisches Event geändert
+- **WHEN** ein Event mit `event_type='generisch'` über `PUT /api/games/{id}` geändert wird
+- **THEN** lautet der Titel der Push Notification „Termin geändert" und NICHT „Spielinfo geändert"
+
+#### Scenario: Änderung ohne hinterlegten Namen
+- **WHEN** ein Nutzer ohne Vor- und Nachnamen ein Spiel über `PUT /api/games/{id}` ändert
+- **THEN** enthält der Body eine generische Aktor-Formulierung und NICHT die E-Mail-Adresse des Nutzers
 

@@ -40,12 +40,6 @@ er zurück auf `active`, SHALL weiterhin „Training geändert" gesendet werden.
 - **WHEN** eine Einheit von `status='cancelled'` auf `status='active'` gesetzt wird
 - **THEN** wird die Notification „Training geändert" gesendet
 
-#### Scenario: Einzelne Session gelöscht
-- **WHEN** ein Trainer eine einzelne Trainingseinheit über `DELETE /api/training-sessions/{id}` löscht
-- **THEN** erhalten alle Mitglieder des Kaders + deren Elternteile eine Push Notification „Training abgesagt"
-- **THEN** enthält der Body Titel, Datum im Format `TT.MM.JJJJ` und den Namen des auslösenden Nutzers
-- **THEN** ist die `url` der leere String
-
 #### Scenario: Session verschoben
 - **WHEN** ein Trainer eine Einheit über `PUT /api/training-sessions/{id}` aktualisiert (Zeit oder Ort geändert, Status unverändert `active`)
 - **THEN** erhalten alle Mitglieder des Kaders + deren Elternteile eine Push Notification „Training geändert"
@@ -65,3 +59,27 @@ er zurück auf `active`, SHALL weiterhin „Training geändert" gesendet werden.
 #### Scenario: Nutzer mit deaktiviertem Push
 - **WHEN** ein Trainings-Ereignis eintritt und der Nutzer hat `push_enabled=0` für `trainings`
 - **THEN** erhält dieser Nutzer keine Push Notification
+
+#### Scenario: Einzelne Session abgesagt
+- **WHEN** ein Trainer eine einzelne Trainingseinheit über `DELETE /api/training-sessions/{id}` löscht
+- **THEN** erhalten alle Mitglieder des Kaders + deren Elternteile eine Push Notification „Training abgesagt"
+- **THEN** enthält der Body Titel, Datum im Format `TT.MM.JJJJ` und den Namen des auslösenden Nutzers
+- **THEN** ist die `url` der leere String
+
+#### Scenario: Session geändert ohne Verschiebung
+- **WHEN** ein Trainer eine Einheit über `PUT /api/training-sessions/{id}` aktualisiert, ohne Datum oder Startzeit zu ändern (Status unverändert `active`)
+- **THEN** erhalten alle Mitglieder des Kaders + deren Elternteile eine Push Notification „Training geändert"
+- **THEN** enthält der Body den Titel der Einheit, Datum im Format `TT.MM.JJJJ`, die Startzeit und den Namen des auslösenden Nutzers
+- **THEN** enthält der Body **keine** Vorher-Angabe
+- **THEN** zeigt der Klick-Link auf `/termine?focus=training-<id>` der geänderten Einheit
+
+#### Scenario: Serie geändert
+- **WHEN** ein Trainer eine Trainingsserie über `PUT /api/training-series/{id}` ändert
+- **THEN** erhalten alle Mitglieder des Kaders + deren Elternteile eine Push Notification „Trainingsserie geändert"
+- **THEN** enthält der Body den Seriennamen, den betroffenen Zeitraum und den Namen des auslösenden Nutzers
+- **THEN** zeigt der Klick-Link auf `/termine`
+
+#### Scenario: Serien-Rhythmus verschoben
+- **WHEN** ein `PUT /api/training-series/{id}` den Wochentag oder die Startzeit der Serie ändert
+- **THEN** enthält der Body zusätzlich den alten Rhythmus als Vorher-Angabe
+
