@@ -428,11 +428,13 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var teamID, seasonID, curReqReason int
-	var curDefPlayers, curDefExtended string
+	// prevDayOfWeek/prevStart tragen den alten Rhythmus für die
+	// Änderungs-Benachrichtigung — nur bei echter Verschiebung wird er genannt.
+	var teamID, seasonID, curReqReason, prevDayOfWeek int
+	var curDefPlayers, curDefExtended, prevStart string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason FROM training_series WHERE id = ?`, seriesID).
-		Scan(&teamID, &seasonID, &curDefPlayers, &curDefExtended, &curReqReason)
+		`SELECT team_id, season_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason, day_of_week, start_time FROM training_series WHERE id = ?`, seriesID).
+		Scan(&teamID, &seasonID, &curDefPlayers, &curDefExtended, &curReqReason, &prevDayOfWeek, &prevStart)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -528,8 +530,58 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
+	// Ein PUT auf die Serie löscht und erzeugt alle Einheiten ab genFrom neu —
+	// das verschiebt potenziell Dutzende Termine im Kalender des Teams. Der Link
+	// ist /termine ohne focus: eine Serie ist kein einzelner Termin.
+	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+		"trainings", "Trainingsserie geändert",
+		notify.ChangeBody(seriesSubject(req.Name),
+			seriesPeriod(genFrom.Format("2006-01-02"), req.ValidUntil),
+			previousRhythm(prevDayOfWeek, prevStart, req.DayOfWeek, req.StartTime),
+			notify.ActorName(h.db, claims.UserID)),
+		"/termine")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"sessions_created": len(dates)})
+}
+
+// seriesSubject ist der Name einer Serie im Benachrichtigungstext — das
+// Gegenstück zu sessionSubject für den Fall eines leeren Namensfeldes.
+func seriesSubject(name string) string {
+	if s := strings.TrimSpace(name); s != "" {
+		return s
+	}
+	return "Trainingsserie"
+}
+
+// previousRhythm liefert den alten Rhythmus ("montags 18:00 Uhr") für die
+// "(vorher …)"-Klammer — aber nur, wenn Wochentag oder Startzeit sich geändert
+// haben. Eine Serie hat keinen einzelnen Zeitpunkt, deshalb tritt der Rhythmus
+// hier an die Stelle von notify.PreviousMoment.
+func previousRhythm(prevDay int, prevStart string, newDay int, newStart string) string {
+	if prevDay == newDay && notify.FormatTimeHM(prevStart) == notify.FormatTimeHM(newStart) {
+		return ""
+	}
+	adverb := weekdayAdverb(prevDay)
+	clock := notify.FormatTimeHM(prevStart)
+	switch {
+	case adverb != "" && clock != "":
+		return adverb + " " + clock + " Uhr"
+	case adverb != "":
+		return adverb
+	case clock != "":
+		return clock + " Uhr"
+	}
+	return ""
+}
+
+// weekdayAdverb übersetzt training_series.day_of_week in das deutsche Adverb.
+// Das Schema ist 0=Montag (siehe generateSessionDates), nicht Go's Sunday=0.
+func weekdayAdverb(dayOfWeek int) string {
+	names := [...]string{"montags", "dienstags", "mittwochs", "donnerstags", "freitags", "samstags", "sonntags"}
+	if dayOfWeek < 0 || dayOfWeek >= len(names) {
+		return ""
+	}
+	return names[dayOfWeek]
 }
 
 // cancellationRequest liest den optionalen {reason,silent}-Body einer Absage.
@@ -865,11 +917,13 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	// prevStatus wird vor dem UPDATE gelesen: nur der Wechsel nach 'cancelled'
 	// ist eine Absage. Ohne diesen Vergleich schickte jede spätere Korrektur an
 	// einer bereits abgesagten Einheit erneut "Training abgesagt" ans Team.
+	// prevDate/prevStart tragen dieselbe Rolle für die Änderungs-Meldung: nur
+	// eine echte Verschiebung nennt den alten Zeitpunkt.
 	var teamID int
-	var prevStatus string
+	var prevStatus, prevDate, prevStart string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, status FROM training_sessions WHERE id = ?`,
-		sessionID).Scan(&teamID, &prevStatus)
+		`SELECT team_id, status, date(date), start_time FROM training_sessions WHERE id = ?`,
+		sessionID).Scan(&teamID, &prevStatus, &prevDate, &prevStart)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -963,11 +1017,15 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	h.broadcastSession(r.Context(), sessionID, "trainings")
 	// Der Link bleibt auch bei der Absage bestehen: die Einheit existiert weiter
 	// und zeigt auf /termine ihren Absagegrund an.
-	notifyTitle, notifyBody := "Training geändert", "Eine Trainingseinheit wurde aktualisiert"
+	actor := notify.ActorName(h.db, claims.UserID)
+	notifyTitle := "Training geändert"
+	notifyBody := notify.ChangeBody(sessionSubject(req.Title),
+		notify.EventWhen(req.Date, req.StartTime),
+		notify.PreviousMoment(prevDate, prevStart, req.Date, req.StartTime), actor)
 	if prevStatus != status && status == "cancelled" {
 		notifyTitle = "Training abgesagt"
 		notifyBody = notify.CancellationBody(sessionSubject(req.Title), cancellationWhen(req.Date),
-			notify.ActorName(h.db, claims.UserID), req.CancelReason)
+			actor, req.CancelReason)
 	}
 	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
 		"trainings", notifyTitle, notifyBody, fmt.Sprintf("/termine?focus=training-%d", sessionID))
