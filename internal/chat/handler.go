@@ -1144,7 +1144,10 @@ func (h *Handler) EditBroadcast(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 
-	if !claims.HasFunction("vorstand") && !claims.IsTrainerLike() && claims.Role != "admin" {
+	// Trainer sind bewusst nicht mehr dabei: Team-Ansagen laufen über die
+	// Team-Standardgruppen des Chats, die denselben Kreis mit Rückkanal
+	// erreichen (design.md §2 zu mitteilung-zielgruppen).
+	if !claims.HasFunction("vorstand") && !claims.HasFunction("sportliche_leitung") && claims.Role != "admin" {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -1152,8 +1155,6 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Body       string `json:"body"`
 		TargetType string `json:"targetType"`
-		TargetID   int    `json:"targetId"`
-		TargetRole string `json:"targetRole"`
 		MediaID    *int   `json:"mediaId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -1166,8 +1167,8 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "body or mediaId required", http.StatusBadRequest)
 		return
 	}
-	if body.TargetType != "all" && body.TargetType != "team" && body.TargetType != "role" {
-		http.Error(w, "targetType must be all, team or role", http.StatusBadRequest)
+	if !ValidTarget(body.TargetType) {
+		http.Error(w, "targetType must be users, members, spieler or eltern", http.StatusBadRequest)
 		return
 	}
 
@@ -1183,44 +1184,16 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 		mediaID = sql.NullInt64{Int64: int64(*body.MediaID), Valid: true}
 	}
 
-	// Trainer may only send to their own team
-	if claims.IsTrainerLike() && !claims.HasFunction("vorstand") && claims.Role != "admin" {
-		if body.TargetType != "team" {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		var count int
-		h.db.QueryRowContext(r.Context(), `
-			SELECT COUNT(*) FROM kader_trainers kt
-			JOIN kader k ON k.id = kt.kader_id
-			JOIN members m ON m.id = kt.member_id
-			WHERE m.user_id = ? AND k.team_id = ?`,
-			claims.UserID, body.TargetID).Scan(&count)
-		if count == 0 {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-	}
-
-	var targetID sql.NullInt64
-	if body.TargetType == "team" && body.TargetID > 0 {
-		targetID = sql.NullInt64{Int64: int64(body.TargetID), Valid: true}
-	}
-	var targetRole sql.NullString
-	if body.TargetType == "role" && body.TargetRole != "" {
-		targetRole = sql.NullString{String: body.TargetRole, Valid: true}
-	}
-
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO broadcasts (sender_id, target_type, target_id, target_role, body, media_id) VALUES (?, ?, ?, ?, ?, ?)`,
-		claims.UserID, body.TargetType, targetID, targetRole, body.Body, mediaID)
+		`INSERT INTO broadcasts (sender_id, target_type, body, media_id) VALUES (?, ?, ?, ?)`,
+		claims.UserID, body.TargetType, body.Body, mediaID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	broadcastID, _ := res.LastInsertId()
 
-	recipientIDs := h.resolveBroadcastRecipients(r, body.TargetType, body.TargetID, body.TargetRole)
+	recipientIDs := h.resolveBroadcastRecipients(r, body.TargetType)
 
 	// Mark as read for sender immediately, unread for others
 	senderIncluded := false
@@ -1269,7 +1242,15 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat?tab=broadcasts", badge)
 	}
 
+	// Der Empfängerzähler macht den Fan-out sichtbar. Ohne ihn sieht eine
+	// Mitteilung, die niemanden erreicht, für den Absender exakt aus wie eine
+	// zugestellte — genau der stille Fehler, der diesen Change ausgelöst hat.
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]int{
+		"id":         int(broadcastID),
+		"recipients": len(pushIDs),
+	})
 }
 
 // POST /api/chat/broadcasts/{id}/read
@@ -1742,30 +1723,11 @@ func (h *Handler) activeMembers(r *http.Request, convID, excludeUserID int) []in
 	return ids
 }
 
-func (h *Handler) resolveBroadcastRecipients(r *http.Request, targetType string, targetID int, targetRole string) []int {
-	var rows *sql.Rows
-	var err error
-	switch targetType {
-	case "all":
-		rows, err = h.db.QueryContext(r.Context(), `SELECT id FROM users`)
-	case "team":
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT user_id FROM user_accessible_teams WHERE team_id = ?`, targetID)
-	case "role":
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT id FROM users WHERE role = ?`, targetRole)
-	default:
-		return nil
-	}
+func (h *Handler) resolveBroadcastRecipients(r *http.Request, targetType string) []int {
+	ids, err := resolveAudience(r.Context(), h.db, targetType)
 	if err != nil {
+		slog.Error("broadcast audience resolve failed", "target", targetType, "error", err)
 		return nil
-	}
-	defer rows.Close()
-	ids := []int{}
-	for rows.Next() {
-		var id int
-		rows.Scan(&id)
-		ids = append(ids, id)
 	}
 	return ids
 }

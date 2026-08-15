@@ -29,7 +29,6 @@ import {
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
 import AuthImage from "../components/AuthImage";
-import { buildTeamShortNames } from "../lib/teamName";
 import {
   conversationTimeLabel,
   daySeparatorLabel,
@@ -236,6 +235,10 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  // Empfängerzahl der zuletzt gesendeten Mitteilung. Macht den Fan-out sichtbar —
+  // ohne sie sieht eine Mitteilung, die niemanden erreicht, genauso aus wie eine
+  // zugestellte.
+  const [sendResult, setSendResult] = useState<number | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showCreatorExit, setShowCreatorExit] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -1841,11 +1844,18 @@ export default function ChatPage() {
       {showBroadcastModal && (
         <BroadcastModal
           onClose={() => setShowBroadcastModal(false)}
-          onSent={() => {
+          onSent={(recipients) => {
             setShowBroadcastModal(false);
+            setSendResult(recipients);
             loadBroadcasts();
           }}
-          isAdmin={hasCapability("broadcast_all")}
+        />
+      )}
+
+      {sendResult !== null && (
+        <SendResultToast
+          recipients={sendResult}
+          onClose={() => setSendResult(null)}
         />
       )}
 
@@ -2582,46 +2592,70 @@ function NewConversationModal({
   );
 }
 
+// --- Send Result Toast ---
+
+// Meldet nach dem Senden, wie viele Empfänger die Mitteilung erreicht hat. Bei 0
+// bleibt es ein Hinweis, kein Fehler — eine leere Zielgruppe (Verein ohne
+// erfasste Eltern) ist legitim, sie darf nur nicht unbemerkt bleiben.
+function SendResultToast({
+  recipients,
+  onClose,
+}: {
+  recipients: number;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const timer = window.setTimeout(onClose, 5000);
+    return () => window.clearTimeout(timer);
+  }, [onClose]);
+
+  const empty = recipients === 0;
+  return (
+    <div
+      role="status"
+      className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg border text-sm shadow-lg ${
+        empty
+          ? "bg-brand-info/10 border-brand-info/30 text-brand-text"
+          : "bg-white border-brand-border text-brand-text"
+      }`}
+    >
+      {empty
+        ? "Gesendet — die Zielgruppe enthält aktuell niemanden."
+        : `An ${recipients} ${recipients === 1 ? "Empfänger" : "Empfänger"} gesendet.`}
+    </div>
+  );
+}
+
 // --- Broadcast Modal ---
+
+/** Die vier vereinsweiten Zielgruppen einer Mitteilung. */
+type BroadcastTarget = "users" | "members" | "spieler" | "eltern";
+
+// Team-Ansagen fehlen hier bewusst: dafür gibt es die Team-Standardgruppen im
+// Chat, die denselben Kreis mit Rückkanal erreichen. Wer den Composer öffnen
+// darf, darf alle vier — es gibt keine engere zweite Stufe mehr.
+const BROADCAST_TARGETS: { value: BroadcastTarget; label: string }[] = [
+  { value: "users", label: "Alle Nutzer" },
+  { value: "members", label: "Alle Mitglieder" },
+  { value: "spieler", label: "Alle Spieler" },
+  { value: "eltern", label: "Alle Eltern" },
+];
+
 function BroadcastModal({
   onClose,
   onSent,
-  isAdmin,
 }: {
   onClose: () => void;
-  onSent: () => void;
-  isAdmin: boolean;
+  onSent: (recipients: number) => void;
 }) {
   const [body, setBody] = useState("");
-  const [targetType, setTargetType] = useState<"all" | "team" | "role">(
-    isAdmin ? "all" : "team",
-  );
-  const [teams, setTeams] = useState<
-    {
-      id: number;
-      name: string;
-      age_class: string;
-      gender: string;
-      team_number: number;
-      group_count: number;
-    }[]
-  >([]);
-  const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams]);
-  const [targetId, setTargetId] = useState(0);
-  const [targetRole, setTargetRole] = useState("spieler");
+  const [targetType, setTargetType] = useState<BroadcastTarget>("spieler");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [image, setImage] = useState<{ file: File; previewUrl: string } | null>(
     null,
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    api
-      .get("/teams")
-      .then((r) => setTeams(r.data ?? []))
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -2651,14 +2685,12 @@ function BroadcastModal({
         mediaId = r.data?.mediaId ?? null;
         if (mediaId === null) throw new Error("upload failed");
       }
-      await api.post("/chat/broadcasts", {
+      const r = await api.post("/chat/broadcasts", {
         body: body.trim(),
         targetType,
-        targetId,
-        targetRole,
         mediaId,
       });
-      onSent();
+      onSent(r.data?.recipients ?? 0);
     } catch (e) {
       setError(errorMessage(e, "Fehler beim Senden"));
     } finally {
@@ -2678,47 +2710,24 @@ function BroadcastModal({
           </button>
         </div>
 
-        <label className="block text-sm font-medium text-brand-text mb-1">
+        <label
+          htmlFor="broadcast-target"
+          className="block text-sm font-medium text-brand-text mb-1"
+        >
           Zielgruppe
         </label>
         <select
+          id="broadcast-target"
           value={targetType}
-          onChange={(e) =>
-            setTargetType(e.target.value as "all" | "team" | "role")
-          }
+          onChange={(e) => setTargetType(e.target.value as BroadcastTarget)}
           className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
         >
-          {isAdmin && <option value="all">Alle Mitglieder</option>}
-          <option value="team">Team</option>
-          {isAdmin && <option value="role">Rolle</option>}
+          {BROADCAST_TARGETS.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
         </select>
-
-        {targetType === "team" && (
-          <select
-            value={targetId}
-            onChange={(e) => setTargetId(Number(e.target.value))}
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
-          >
-            <option value={0}>Team wählen…</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {teamShortNames.get(t.id) ?? t.name}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {targetType === "role" && (
-          <select
-            value={targetRole}
-            onChange={(e) => setTargetRole(e.target.value)}
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
-          >
-            <option value="spieler">Spieler</option>
-            <option value="elternteil">Elternteile</option>
-            <option value="trainer">Trainer</option>
-          </select>
-        )}
 
         <label className="block text-sm font-medium text-brand-text mb-1">
           Nachricht
@@ -2778,11 +2787,7 @@ function BroadcastModal({
 
         <button
           onClick={submit}
-          disabled={
-            loading ||
-            (!body.trim() && !image) ||
-            (targetType === "team" && !targetId)
-          }
+          disabled={loading || (!body.trim() && !image)}
           className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {loading ? "Sende…" : "Mitteilung senden"}

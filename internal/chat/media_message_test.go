@@ -218,7 +218,7 @@ func TestSendBroadcast_ImageOnly(t *testing.T) {
 	tok := testutil.Token(t, admin, "admin", nil)
 
 	res := testutil.Post(t, srv, "/api/chat/broadcasts", tok,
-		map[string]any{"body": "", "mediaId": mediaID, "targetType": "all"})
+		map[string]any{"body": "", "mediaId": mediaID, "targetType": "users"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", res.StatusCode)
@@ -243,7 +243,7 @@ func TestSendBroadcast_EmptyNoMedia(t *testing.T) {
 	tok := testutil.Token(t, admin, "admin", nil)
 
 	res := testutil.Post(t, srv, "/api/chat/broadcasts", tok,
-		map[string]any{"body": "", "targetType": "all"})
+		map[string]any{"body": "", "targetType": "users"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", res.StatusCode)

@@ -265,7 +265,8 @@ func hasCap(caps []string, want string) bool {
 }
 
 func TestCapabilities_TrainerLike(t *testing.T) {
-	// Trainer and sportliche_leitung get training/fulfill/broadcast, but NOT broadcast_all or manage_members.
+	// Trainer and sportliche_leitung get training/fulfill, but NOT manage_members.
+	// Beim Mitteilungsrecht gehen die beiden auseinander — siehe unten.
 	for _, p := range []*policy.Principal{trainerP(), slP()} {
 		caps := policy.Capabilities(p)
 		if !hasCap(caps, policy.CapManageTrainings) {
@@ -273,12 +274,6 @@ func TestCapabilities_TrainerLike(t *testing.T) {
 		}
 		if !hasCap(caps, policy.CapFulfillDuties) {
 			t.Errorf("trainer-like %v should have fulfill_duties", p.ClubFunctions)
-		}
-		if !hasCap(caps, policy.CapBroadcast) {
-			t.Errorf("trainer-like %v should have broadcast_messages", p.ClubFunctions)
-		}
-		if hasCap(caps, policy.CapBroadcastAll) {
-			t.Errorf("trainer-like %v should NOT have broadcast_all", p.ClubFunctions)
 		}
 		if hasCap(caps, policy.CapManageMembers) {
 			t.Errorf("trainer-like %v should NOT have manage_members", p.ClubFunctions)
@@ -294,14 +289,23 @@ func TestCapabilities_TrainerLike(t *testing.T) {
 	}
 }
 
+// TC: Beim Mitteilungsrecht trennen sich Trainer und sportliche Leitung. Der reine
+// Trainer verliert es — Team-Ansagen laufen über die Team-Standardgruppen des Chats,
+// die denselben Kreis mit Rückkanal erreichen.
+func TestCapabilities_BroadcastNurVorstandLikeUndSportlicheLeitung(t *testing.T) {
+	if hasCap(policy.Capabilities(trainerP()), policy.CapBroadcast) {
+		t.Error("reiner trainer should NOT have broadcast_messages")
+	}
+	if !hasCap(policy.Capabilities(slP()), policy.CapBroadcast) {
+		t.Error("sportliche_leitung should have broadcast_messages")
+	}
+}
+
 func TestCapabilities_Vorstand(t *testing.T) {
 	caps := policy.Capabilities(vorstandP())
-	// Pure vorstand may broadcast (incl. broadcast_all) but is not trainer-like.
+	// Pure vorstand may broadcast but is not trainer-like.
 	if !hasCap(caps, policy.CapBroadcast) {
 		t.Error("vorstand should have broadcast_messages")
-	}
-	if !hasCap(caps, policy.CapBroadcastAll) {
-		t.Error("vorstand should have broadcast_all")
 	}
 	if hasCap(caps, policy.CapManageTrainings) {
 		t.Error("pure vorstand should NOT have manage_trainings (trainer + sportliche_leitung only)")
@@ -340,7 +344,7 @@ func TestCapabilities_Kassierer(t *testing.T) {
 	// Aber keine Vollverwaltung von Mitgliedern, Saisons oder Nutzern.
 	for _, c := range []string{
 		policy.CapManageMembers, policy.CapManageSeasons, policy.CapManageUsers,
-		policy.CapManageTrainings, policy.CapBroadcast, policy.CapBroadcastAll,
+		policy.CapManageTrainings, policy.CapBroadcast,
 	} {
 		if hasCap(caps, c) {
 			t.Errorf("kassierer should NOT have %q", c)
@@ -363,7 +367,7 @@ func TestCapabilities_VorstandAdminGetFeesAndClub(t *testing.T) {
 
 func TestCapabilities_AdminOnly(t *testing.T) {
 	caps := policy.Capabilities(adminP())
-	for _, c := range []string{policy.CapManageDocuments, policy.CapModerateChat, policy.CapBroadcastAll, policy.CapManageTrainings} {
+	for _, c := range []string{policy.CapManageDocuments, policy.CapModerateChat, policy.CapBroadcast, policy.CapManageTrainings} {
 		if !hasCap(caps, c) {
 			t.Errorf("admin should have %q", c)
 		}
@@ -374,7 +378,7 @@ func TestCapabilities_Spieler(t *testing.T) {
 	caps := policy.Capabilities(spielerP())
 	for _, c := range []string{
 		policy.CapManageTrainings, policy.CapFulfillDuties, policy.CapBroadcast,
-		policy.CapBroadcastAll, policy.CapManageDocuments, policy.CapModerateChat,
+		policy.CapManageDocuments, policy.CapModerateChat,
 		policy.CapCreateRootFolder,
 	} {
 		if hasCap(caps, c) {

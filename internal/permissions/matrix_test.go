@@ -121,11 +121,13 @@ var exAdmin = map[string]int{
 // Strafenwart ist bewusst KEINE Vereinsfunktion, sondern ein per-Kader-Appointment).
 var exTeamInternalGate = exAdmin
 
-// Handler-Level-Gate: chat.SendBroadcast — admin || vorstand || trainer || sportliche_leitung
+// Handler-Level-Gate: chat.SendBroadcast — admin || vorstand || sportliche_leitung.
+// Trainer sind bewusst NICHT mehr dabei: eine Mitteilung an ein Team ist derselbe
+// Empfängerkreis wie die Team-Standardgruppe im Chat, nur ohne Rückkanal.
 var exBroadcastSend = map[string]int{
 	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
-	"trainer": httpAllowed, "trainer_elternteil": httpAllowed,
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
+	"trainer": 403, "trainer_elternteil": 403,
 	"vorstand_beisitzer": 403, "kassierer": 403, "spieler": 403, "elternteil": 403,
 }
 
@@ -274,7 +276,7 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/chat/conversations", expected: exAuth},
 	{method: "POST", path: "/api/chat/conversations", expected: exAuth},
 	{method: "GET", path: "/api/chat/broadcasts", expected: exAuth},
-	// Broadcasts senden: Handler-Level-Gate (admin || vorstand || trainer || sportliche_leitung)
+	// Broadcasts senden: Handler-Level-Gate (admin || vorstand || sportliche_leitung)
 	{method: "POST", path: "/api/chat/broadcasts", expected: exBroadcastSend},
 
 	// Konversations-spezifische Routen: isMember-Check → 403 für alle wenn Konversation 1 nicht existiert.
