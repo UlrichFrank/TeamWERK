@@ -762,6 +762,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(g.opponent, ''),
 		    COALESCE(g.event_type, ''),
 		    COALESCE(g.time, ''),
+		    COALESCE(v.name, ''),
 		    COALESCE(ds.team_id, 0),
 		    COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''),
 		    CASE WHEN ds.event_date < date('now') THEN 1 ELSE 0 END,
@@ -773,6 +774,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
 		 LEFT JOIN games g ON g.id = ds.game_id
+		 LEFT JOIN venues v ON v.id = g.venue_id
 		 LEFT JOIN teams t ON t.id = ds.team_id
 		 `+whereParts+`
 		 ORDER BY ds.event_date, COALESCE(ds.event_time, ''), ds.id`, args...)
@@ -807,16 +809,19 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		Can            policy.DutyCanFlags `json:"can"`
 	}
 	type boardGroup struct {
-		GameID    *int        `json:"game_id"`
-		TeamIDs   []int       `json:"team_ids"`
-		TeamNames []string    `json:"team_names"`
-		Date      string      `json:"date,omitempty"`
-		EventTime string      `json:"event_time,omitempty"`
-		Opponent  string      `json:"opponent,omitempty"`
-		EventType string      `json:"event_type,omitempty"`
-		Label     string      `json:"label,omitempty"`
-		Past      bool        `json:"past"`
-		Slots     []boardSlot `json:"slots"`
+		GameID    *int     `json:"game_id"`
+		TeamIDs   []int    `json:"team_ids"`
+		TeamNames []string `json:"team_names"`
+		Date      string   `json:"date,omitempty"`
+		EventTime string   `json:"event_time,omitempty"`
+		Opponent  string   `json:"opponent,omitempty"`
+		EventType string   `json:"event_type,omitempty"`
+		// Nur der Hallenname (nicht Straße/Stadt/PLZ) — er dient dem Textfilter
+		// auf /dienste. Leer bei game-losen Gruppen und bei Spielen ohne venue_id.
+		Venue string      `json:"venue,omitempty"`
+		Label string      `json:"label,omitempty"`
+		Past  bool        `json:"past"`
+		Slots []boardSlot `json:"slots"`
 	}
 
 	groupOrder := []string{}
@@ -824,11 +829,11 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt, dutyTypeID, hasInstrInt int
-		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, teamName, eventName string
+		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, venue, teamName, eventName string
 		var gameID sql.NullInt64
 		var audiences sql.NullString
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
-			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime,
+			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime, &venue,
 			&teamID, &teamName, &isPastInt, &audiences, &eventName, &dutyTypeID, &hasInstrInt)
 
 		var key string
@@ -853,6 +858,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 				g.EventTime = gameTime
 				g.Opponent = opponent
 				g.EventType = eventType
+				g.Venue = venue
 			} else {
 				g.Date = eventDate
 				g.EventType = "generisch"
