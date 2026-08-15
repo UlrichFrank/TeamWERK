@@ -13,8 +13,11 @@ Die `GET /api/duty-board`-Response gruppiert Slots pro Spiel bzw. pro game-losem
 - `team_id` (Integer oder null) — für den Frontend-Team-Filter
 - `date`, `event_time`
 - `opponent`, `event_type` — bei Spielen aus der `games`-Tabelle; bei game-losen Gruppen ist `opponent` leer und `event_type` SHALL `"generisch"` sein
+- `venue` — der Name des Spielorts (`venues.name`) über `games.venue_id`. Bei game-losen Gruppen und bei Spielen ohne gesetztes `venue_id` SHALL das Feld leer sein bzw. entfallen (`omitempty`). Es SHALL nur der **Name** übertragen werden, nicht Straße, Stadt oder PLZ.
 - `team_name`, `label`, `past`
 - `slots[]` — Liste der Slot-Objekte mit den bisherigen Feldern
+
+Das `venue`-Feld SHALL **keine** eigene Sichtbarkeitsregel einführen: wer eine Gruppe sieht, sieht ihren Ort. Die nachfolgenden Sichtbarkeits- und Audience-Regeln bleiben davon unberührt.
 
 Die Sichtbarkeit der Gruppen wird wie folgt gefiltert:
 
@@ -31,6 +34,22 @@ Die Audience-Filterung auf Slot-Ebene (`audiences`-JSON-Array mit `eltern`/Verei
 Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden Elemente enthält:
 - eine der Vereinsfunktionen des Nutzers (`mcf.function`)
 - den Wert `'eltern'`, falls der Nutzer mindestens ein verknüpftes Kind (`family_links`) hat, das **im Team des Slots** spielt (`player_memberships.team_id = ds.team_id`); bei game-losen Slots reicht es, wenn das Kind in einem der teilnehmenden Teams des Spiels spielt.
+
+#### Scenario: Gruppe trägt den Spielort
+- **WHEN** ein berechtigter Nutzer `GET /api/duty-board` aufruft und die Gruppe gehört zu einem Spiel mit gesetztem `venue_id`
+- **THEN** enthält das Gruppen-Objekt `venue` mit dem Wert von `venues.name`
+
+#### Scenario: Spiel ohne Spielort
+- **WHEN** die Gruppe zu einem Spiel ohne gesetztes `venue_id` gehört
+- **THEN** ist `venue` leer bzw. nicht enthalten, und die Antwort ist im Übrigen unverändert
+
+#### Scenario: Game-lose Gruppe hat keinen Spielort
+- **WHEN** ein Dienst-Slot ohne `game_id` (z. B. Vereinsfest) existiert
+- **THEN** ist `venue` der zugehörigen Gruppe leer bzw. nicht enthalten
+
+#### Scenario: Der Spielort ändert keine Sichtbarkeit
+- **WHEN** derselbe Nutzer `GET /api/duty-board` vor und nach Einführung des `venue`-Feldes aufruft
+- **THEN** ist die Menge der zurückgegebenen Gruppen- und Slot-IDs identisch
 
 #### Scenario: View open duties
 - **WHEN** any authenticated user opens the duty board

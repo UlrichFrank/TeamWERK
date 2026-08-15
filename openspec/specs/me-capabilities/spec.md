@@ -3,9 +3,7 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `me-capabilities`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-
 ## Requirements
-
 ### Requirement: GET /api/me liefert Capabilities und Nav-Items
 
 Das System SHALL `GET /api/me` um die Felder `capabilities` und `nav` erweitern.
@@ -73,25 +71,43 @@ ausschließlich daraus (bzw. aus per-Item `can.*`) ableiten.
 | `manage_users`, `manage_seasons`, `manage_club`, `manage_duty_types` | `vorstand` |
 | `manage_trainings` | `trainer`, `sportliche_leitung` |
 | `fulfill_duties` | `trainer`, `sportliche_leitung` |
-| `broadcast_messages` | `vorstand`, `trainer`, `sportliche_leitung` |
-| `broadcast_all` | `vorstand` |
+| `broadcast_messages` | `vorstand`, `sportliche_leitung` |
 | `manage_documents` | — (nur `admin`) |
 | `moderate_chat` | — (nur `admin`) |
 | `impersonate` | — (nur `admin`) |
+
+`broadcast_messages` SHALL das **einzige** Mitteilungs-Recht sein. Eine zweite, engere Stufe
+(früher `broadcast_all`) SHALL es nicht geben und SHALL in keiner `GET /api/me`-Antwort mehr
+vorkommen: da `admin`, `vorstand` und `sportliche_leitung` dieselben Zielgruppen wählen
+dürfen, trennte sie keine zwei Mengen mehr.
+
+`trainer` SHALL `broadcast_messages` **nicht** erhalten. Der Empfängerkreis eines Teams ist
+über die Team-Standardgruppen des Chats (`GET /api/chat/team-groups`) erreichbar — mit
+Rückkanal und ohne zweiten Weg zum selben Publikum.
 
 Relationship-Marker (`is_parent`) und eigene Vereinsfunktionen für eigene Profil-Features
 (z.B. `spieler` für Dienst-Erinnerungen) bleiben über die JWT-Claims abbildbar und sind KEINE
 Capabilities.
 
 #### Scenario: Trainer erhält manage_trainings, aber nicht broadcast_all
-- **WHEN** ein User mit Vereinsfunktion `trainer` `GET /api/me` aufruft
-- **THEN** enthält `capabilities` den Wert `"manage_trainings"` und NICHT `"broadcast_all"`
+- **WHEN** ein User mit Vereinsfunktion `trainer` (ohne `vorstand`/`sportliche_leitung`) `GET /api/me` aufruft
+- **THEN** enthält `capabilities` den Wert `"manage_trainings"`
+- **AND** enthält NICHT `"broadcast_all"` (die Capability existiert nicht mehr)
+- **AND** enthält NICHT `"broadcast_messages"`
 
 #### Scenario: Reiner Vorstand erhält broadcast_all, aber nicht manage_trainings
 - **WHEN** ein User mit Vereinsfunktion `vorstand` (ohne `trainer`/`sportliche_leitung`) `GET /api/me` aufruft
-- **THEN** enthält `capabilities` den Wert `"broadcast_all"` und NICHT `"manage_trainings"`
+- **THEN** enthält `capabilities` den Wert `"broadcast_messages"`
+- **AND** enthält NICHT `"manage_trainings"`
+- **AND** enthält NICHT `"broadcast_all"` (die Capability existiert nicht mehr)
 
----
+#### Scenario: Sportliche Leitung erhält broadcast_messages
+- **WHEN** ein User mit Vereinsfunktion `sportliche_leitung` `GET /api/me` aufruft
+- **THEN** enthält `capabilities` den Wert `"broadcast_messages"`
+
+#### Scenario: broadcast_all existiert für keine Persona
+- **WHEN** ein User beliebiger Rolle und Vereinsfunktion `GET /api/me` aufruft
+- **THEN** enthält `capabilities` NICHT den Wert `"broadcast_all"`
 
 ### Requirement: Capabilities werden bei jedem /api/me-Call neu berechnet
 
@@ -102,3 +118,4 @@ ohne dass ein neues Login erforderlich ist.
 #### Scenario: Rollenänderung spiegelt sich nach Token-Refresh wider
 - **WHEN** einem User eine neue Vereinsfunktion zugewiesen wird und er einen Token-Refresh durchführt
 - **THEN** enthält der nächste `/api/me`-Aufruf die aktualisierte Capability-Liste
+
