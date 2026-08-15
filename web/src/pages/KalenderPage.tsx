@@ -930,10 +930,12 @@ export default function KalenderPage() {
       )}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
+        {/* `hidden sm:block`: siehe TerminePage — auf Mobile fehlt neben Typ-Filter
+            und Suchfeld der Platz. */}
         <select
           value={filterTeamId ?? ''}
           onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
-          className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow shrink-0 max-w-[6rem]"
+          className="hidden sm:block border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow shrink-0 max-w-[6rem]"
         >
           <option value="">Alle</option>
           {teams.filter(t => t.is_active).map(t => (

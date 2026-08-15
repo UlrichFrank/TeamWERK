@@ -486,10 +486,14 @@ export default function TerminePage() {
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Termine</h1>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+          {/* Auf Mobile ausgeblendet: neben Typ-Filter und Suchfeld bleibt in der
+              Leiste kein Platz, das Suchfeld schob sich über die Auswahl. Ein per
+              URL gesetzter Team-Filter wirkt dort weiter — der Reset-Weg bleibt
+              über FilterEmptyState (resetFilters) erreichbar. */}
           <select
             value={filterTeamId ?? ''}
             onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+            className="hidden sm:block border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
           >
             <option value="">Teams</option>
             {teams.map(t => (

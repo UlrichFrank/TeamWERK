@@ -261,11 +261,13 @@ export default function DutyPage() {
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Dienste</h1>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+          {/* `hidden sm:block`: siehe TerminePage — auf Mobile fehlt neben Typ-Filter
+              und Suchfeld der Platz. */}
           {teams.length > 1 && (
             <select
               value={filterTeamId ?? ''}
               onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+              className="hidden sm:block border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
             >
               <option value="">Teams</option>
               {teams.map(t => (
