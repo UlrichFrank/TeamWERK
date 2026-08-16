@@ -33,7 +33,7 @@ func captureSentNotifications(t *testing.T) chan sentNotification {
 	t.Helper()
 	ch := make(chan sentNotification, 16)
 	orig := notify.Send
-	notify.Send = func(_ *sql.DB, _ *appconfig.Config, userIDs []int, category, title, body, url string) {
+	notify.Send = func(_ *sql.DB, _ *appconfig.Config, userIDs []int, category, title, body, url string, _ ...notify.Option) {
 		ch <- sentNotification{userIDs: userIDs, category: category, title: title, body: body, url: url}
 	}
 	t.Cleanup(func() { notify.Send = orig })

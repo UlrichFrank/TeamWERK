@@ -663,3 +663,83 @@ func TestMigration048_RestrictVerhindertLoeschenGebundenerVorlage(t *testing.T) 
 		t.Errorf("erwartet Vorlagen-Zeile unverändert vorhanden, bekam count=%d", itemStillThere)
 	}
 }
+
+// TestMigration050_LegtEventLogAn prüft die Grundstruktur der event-log-Migration.
+func TestMigration050_LegtEventLogAn(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(50); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 50: %v", err)
+	}
+
+	if !tableExists(t, sqlDB, "user_events") {
+		t.Fatal("erwartet Tabelle user_events nach 050 up")
+	}
+	for _, col := range []string{"user_id", "category", "title", "body", "url", "created_at", "seen_at"} {
+		if !hasColumn(t, sqlDB, "user_events", col) {
+			t.Errorf("erwartet Spalte user_events.%s nach 050 up", col)
+		}
+	}
+}
+
+// TestMigration050_CategoryCheckSchliesstChatAus ist die eigentliche Aussage der
+// Migration: der Chat-Ausschluss steht als CHECK im Schema, nicht als Kommentar.
+// Wer Chat in den Log holen will, braucht eine Migration — genau die richtige
+// Reibung für eine Scope-Entscheidung (design.md Decision 8). Der CHECK fängt
+// nebenbei Tippfehler in `category` ab, die sonst nur still dazu führten, dass
+// FilterByPushPref niemanden matcht.
+func TestMigration050_CategoryCheckSchliesstChatAus(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(50); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 50: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO users (id, email, password) VALUES (9001, 'e@x.test', 'x')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	// Sanity: eine erlaubte Kategorie muss durchgehen — sonst prüft der
+	// Negativfall unten nichts.
+	if _, err := sqlDB.Exec(
+		`INSERT INTO user_events (user_id, category, title) VALUES (9001, 'duties', 't')`); err != nil {
+		t.Fatalf("erwartet 'duties' als erlaubte Kategorie, bekam: %v", err)
+	}
+
+	for _, cat := range []string{"chat", "tippfehler"} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO user_events (user_id, category, title) VALUES (9001, ?, 't')`, cat,
+		); err == nil {
+			t.Errorf("erwartet CHECK-Verletzung für category=%q, bekam keinen Fehler", cat)
+		}
+	}
+}
+
+// TestMigration050_UserLoeschungRaeumtLogAuf prüft ON DELETE CASCADE — ein
+// gelöschter Nutzer nimmt seinen Log mit.
+func TestMigration050_UserLoeschungRaeumtLogAuf(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(50); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 50: %v", err)
+	}
+	if _, err := sqlDB.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatalf("enable foreign keys: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO users (id, email, password) VALUES (9002, 'f@x.test', 'x')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO user_events (user_id, category, title) VALUES (9002, 'games', 't')`); err != nil {
+		t.Fatalf("seed event: %v", err)
+	}
+	if _, err := sqlDB.Exec(`DELETE FROM users WHERE id = 9002`); err != nil {
+		t.Fatalf("delete user: %v", err)
+	}
+
+	var count int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM user_events WHERE user_id = 9002`).Scan(&count); err != nil {
+		t.Fatalf("count events: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("erwartet 0 Log-Zeilen nach Nutzer-Löschung, bekam %d", count)
+	}
+}

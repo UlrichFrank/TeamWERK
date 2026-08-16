@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/notify"
-	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
 // renditions beschreibt die erzeugten HLS-Varianten. Die Verzeichnisnamen
@@ -86,10 +85,10 @@ type broadcaster interface {
 type workerConfig interface {
 	storageDir() string
 	reservedBytes() uint64
-	// pushSend erhält die bereits push-gefilterten UserIDs und versendet Push.
-	pushSend(userIDs []int, title, body, url string)
-	// emailSend erhält die bereits email-gefilterten UserIDs und versendet E-Mails.
-	emailSend(userIDs []int, title, body, url string)
+	// notifySend leitet an die notify-Fassade weiter (Event-Log-Fan-out +
+	// Push/Email je nach Präferenz). Ersetzt die früheren pushSend/emailSend-
+	// Methoden — die Vorfilterung entfällt, notify.Send übernimmt sie.
+	notifySend(userIDs []int, category, title, body, url string)
 }
 
 // NewWorker baut einen Produktions-Worker mit echtem ffmpeg und den Defaults für
@@ -112,13 +111,8 @@ type handlerWorkerConfig struct{ h *Handler }
 
 func (c handlerWorkerConfig) storageDir() string    { return c.h.cfg.VideoStorageDir }
 func (c handlerWorkerConfig) reservedBytes() uint64 { return c.h.cfg.VideoReservedBytes }
-func (c handlerWorkerConfig) pushSend(userIDs []int, title, body, url string) {
-	push.SendToUsers(c.h.db, c.h.cfg, userIDs, title, body, url)
-}
-func (c handlerWorkerConfig) emailSend(userIDs []int, title, body, url string) {
-	for _, uid := range userIDs {
-		go notify.SendEmail(c.h.db, c.h.cfg, uid, title, body, url)
-	}
+func (c handlerWorkerConfig) notifySend(userIDs []int, category, title, body, url string) {
+	notify.Send(c.h.db, c.h.cfg, userIDs, category, title, body, url)
 }
 
 // ctxSleep schläft d lang oder kehrt früher zurück, wenn ctx endet.
@@ -299,14 +293,9 @@ func (wk *Worker) notifyReady(id int) {
 	}
 	body := fmt.Sprintf("Neues Video: %s — %s", teamName, title)
 	url := "/videos/" + strconv.Itoa(id)
-	pushUids := push.FilterByPushPref(wk.db, allUids, "sonstiges")
-	if len(pushUids) > 0 {
-		go wk.cfg.pushSend(pushUids, "Neues Video", body, url)
-	}
-	emailUids := notify.FilterByEmailPref(wk.db, allUids, "sonstiges")
-	if len(emailUids) > 0 {
-		go wk.cfg.emailSend(emailUids, "Neues Video", body, url)
-	}
+	// Vorfilterung entfällt — notify.Send übernimmt Log-Fan-out sowie Push-/
+	// Email-Präferenz (Kategorie "sonstiges").
+	go wk.cfg.notifySend(allUids, "sonstiges", "Neues Video", body, url)
 }
 
 // pushRecipients liefert die distinkten User-IDs für die Ready-Push (4.8):

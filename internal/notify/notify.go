@@ -10,11 +10,47 @@ import (
 	"strings"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/eventlog"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
 
+// options steuert die Zustellzweige. Der Event-Log ist bewusst nicht
+// abschaltbar — er ist per Definition vollständig.
+type options struct {
+	noEmail      bool
+	skipPushPref bool
+}
+
+// Option konfiguriert einen einzelnen Send-Aufruf. Variadisch, damit die
+// bestehenden Aufrufstellen unverändert gültig bleiben.
+type Option func(*options)
+
+// NoEmail unterdrückt den Email-Zweig vollständig.
+//
+// Für Meldungen, die bewusst push-only sind (Mitfahr-Paarungen,
+// Spielbericht-Freigabe), und für Aufrufer, die eine eigene, fachlich
+// abweichende Mail bauen (der Dienst-Reminder verschickt eine strukturierte
+// Liste aller offenen Slots, keine Ein-Zeilen-Meldung).
+func NoEmail() Option { return func(o *options) { o.noEmail = true } }
+
+// SkipPushPref sendet Push unabhängig von notification_preferences.
+//
+// Ausschließlich für Meldungen, deren Nichtzustellung Datenverlust bedeutet —
+// derzeit nur die Video-Löschwarnung. Der Email-Zweig bleibt
+// präferenzgesteuert: wer keine Mails will, bekommt trotzdem keine.
+func SkipPushPref() Option { return func(o *options) { o.skipPushPref = true } }
+
 // Send fans out a notification for the given category to the given users.
+//
+// Reihenfolge ist das Wesentliche: der Event-Log wird aus der UNGEFILTERTEN
+// Empfängerliste geschrieben, bevor irgendeine Präferenz ausgewertet wird.
+// `userIDs` beantwortet "wen betrifft das?", notification_preferences
+// beantwortet "auf welchem Weg erfährt er es?" — zwei Fragen, die vor dem
+// event-log-Change unbeabsichtigt gekoppelt waren. Stünde der Log hinter dem
+// Filter, wäre er für genau die Nutzer leer, für die er am wertvollsten ist:
+// die mit abgeschalteten Pushes.
+//
 // Push goes to users with push_enabled=1 (default true).
 // Email goes to users with email_enabled=1 (default false).
 // Both default values match notification_preferences semantics.
@@ -25,19 +61,30 @@ import (
 // Send is a package var (not a plain func) so tests can capture which category
 // and recipients a domain handler dispatches, without standing up the full
 // push/email path. Production callers use notify.Send(...) unchanged.
-var Send = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, title, body, url string) {
+var Send = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, title, body, url string, opts ...Option) {
 	if len(userIDs) == 0 {
 		return
 	}
 
-	pushUIDs := push.FilterByPushPref(db, userIDs, category)
-	emailUIDs := filterByEmailPref(db, userIDs, category)
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 
+	eventlog.Record(db, userIDs, category, title, body, url)
+
+	pushUIDs := userIDs
+	if !o.skipPushPref {
+		pushUIDs = push.FilterByPushPref(db, userIDs, category)
+	}
 	if len(pushUIDs) > 0 {
 		push.SendToUsers(db, cfg, pushUIDs, title, body, url)
 	}
 
-	for _, uid := range emailUIDs {
+	if o.noEmail {
+		return
+	}
+	for _, uid := range filterByEmailPref(db, userIDs, category) {
 		go sendCategoryEmail(db, cfg, uid, title, body, url)
 	}
 }

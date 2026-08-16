@@ -24,7 +24,7 @@ func TestRequestMembership_NotifiesWithMembershipCategory(t *testing.T) {
 	}
 	ch := make(chan capture, 4)
 	orig := notify.Send
-	notify.Send = func(_ *sql.DB, _ *appconfig.Config, userIDs []int, category, _, _, _ string) {
+	notify.Send = func(_ *sql.DB, _ *appconfig.Config, userIDs []int, category, _, _, _ string, _ ...notify.Option) {
 		ch <- capture{category, userIDs}
 	}
 	t.Cleanup(func() { notify.Send = orig })

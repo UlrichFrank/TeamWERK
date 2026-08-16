@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"slices"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
+	"github.com/teamstuttgart/teamwerk/internal/eventlog"
 )
 
 type Handler struct{ db *sql.DB }
@@ -95,12 +97,26 @@ type CarpoolingOpenGroup struct {
 	Requests []CarpoolingOpenRequest `json:"requests"`
 }
 
+// Event is a user_events row as seen from the "Ereignisse" dashboard section.
+// Mirrors eventlog.Event but with a dashboard-local, explicitly camelCase
+// json tag set (kept independent from the foundation type on purpose, so a
+// future eventlog.Event field doesn't silently leak into the API response).
+type Event struct {
+	ID        int    `json:"id"`
+	Category  string `json:"category"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	URL       string `json:"url"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type Response struct {
 	CurrentSeason        *Season               `json:"currentSeason"`
 	MeineTermine         []NextEvent           `json:"meineTermine"`
 	MeineDienste         *MeineDienste         `json:"meineDienste"`
 	CarpoolingConfirmed  []CarpoolingConfirmed `json:"carpoolingConfirmed"`
 	CarpoolingOpenGroups []CarpoolingOpenGroup `json:"carpoolingOpenGroups"`
+	Events               []Event               `json:"events"`
 }
 
 // GET /api/dashboard
@@ -114,6 +130,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		MeineTermine:         []NextEvent{},
 		CarpoolingConfirmed:  []CarpoolingConfirmed{},
 		CarpoolingOpenGroups: []CarpoolingOpenGroup{},
+		Events:               h.queryEvents(ctx, userID),
 	}
 
 	var season Season
@@ -139,6 +156,55 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// queryEvents loads the user's event-log rows and stamps seen_at on exactly
+// the delivered ones, in one transaction (design.md Decision 4). Read and
+// stamp must not race apart: a concurrent second request must never stamp
+// rows that this response didn't actually deliver, and the delivered set here
+// must match what MarkSeen marks.
+//
+// The log is nachrangig gegenüber der Anzeige: a failure while stamping is
+// logged but never prevents the response — a user must not lose the
+// dashboard because the retention clock couldn't be started.
+func (h *Handler) queryEvents(ctx context.Context, userID int) []Event {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		slog.Error("dashboard queryEvents: begin tx failed", "user", userID, "error", err)
+		return []Event{}
+	}
+
+	logEvents, err := eventlog.ListForUser(ctx, tx, userID, eventlog.DefaultLimit())
+	if err != nil {
+		slog.Error("dashboard queryEvents: list failed", "user", userID, "error", err)
+		tx.Rollback()
+		return []Event{}
+	}
+
+	events := make([]Event, len(logEvents))
+	ids := make([]int, len(logEvents))
+	for i, e := range logEvents {
+		events[i] = Event{
+			ID:        e.ID,
+			Category:  e.Category,
+			Title:     e.Title,
+			Body:      e.Body,
+			URL:       e.URL,
+			CreatedAt: e.CreatedAt,
+		}
+		ids[i] = e.ID
+	}
+
+	if err := eventlog.MarkSeen(ctx, tx, ids); err != nil {
+		slog.Error("dashboard queryEvents: mark seen failed", "user", userID, "error", err)
+		tx.Rollback()
+		return events
+	}
+	if err := tx.Commit(); err != nil {
+		slog.Error("dashboard queryEvents: commit failed", "user", userID, "error", err)
+	}
+
+	return events
 }
 
 // teamQueryForUser returns a subquery returning team_ids for the user.

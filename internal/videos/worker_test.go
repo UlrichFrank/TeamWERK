@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/push"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
@@ -35,10 +36,18 @@ func (f *fakeBroadcaster) count(event string) int {
 }
 
 // fakeConfig erfüllt workerConfig: liefert ein Temp-Storage-Root, einen kleinen
-// Reserved-Wert und sammelt Push-Empfänger.
+// Reserved-Wert und emuliert notifySend. In Produktion delegiert
+// handlerWorkerConfig.notifySend an die echte notify.Send-Fassade, die Push-
+// Präferenzen selbst filtert (push.FilterByPushPref) und den Event-Log
+// unabhängig davon schreibt. Der Fake ruft notify.Send NICHT real auf (kein
+// Mail-/Event-Log-Pfad in diesen Worker-Tests — der wird in internal/notify
+// getestet), spiegelt aber die Push-Filterung, damit die Opt-out-Tests in
+// push_bypass_test.go weiterhin aussagekräftig sind: nur wer push_enabled für
+// die Kategorie hat, landet in den aufgezeichneten pushUIDs.
 type fakeConfig struct {
 	root     string
 	reserved uint64
+	db       *sql.DB
 
 	mu       sync.Mutex
 	pushUIDs [][]int
@@ -47,13 +56,16 @@ type fakeConfig struct {
 
 func (c *fakeConfig) storageDir() string    { return c.root }
 func (c *fakeConfig) reservedBytes() uint64 { return c.reserved }
-func (c *fakeConfig) pushSend(userIDs []int, _, body, _ string) {
+func (c *fakeConfig) notifySend(userIDs []int, category, _, body, _ string) {
+	pushUIDs := push.FilterByPushPref(c.db, userIDs, category)
+	if len(pushUIDs) == 0 {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.pushUIDs = append(c.pushUIDs, userIDs)
+	c.pushUIDs = append(c.pushUIDs, pushUIDs)
 	c.pushBody = append(c.pushBody, body)
 }
-func (c *fakeConfig) emailSend(_ []int, _, _, _ string) {}
 
 func (c *fakeConfig) lastPush() ([]int, string, bool) {
 	c.mu.Lock()
@@ -68,7 +80,7 @@ func (c *fakeConfig) lastPush() ([]int, string, bool) {
 func newTestWorker(t *testing.T, db *sql.DB, transcode transcodeFunc) (*Worker, *fakeBroadcaster, *fakeConfig) {
 	t.Helper()
 	bc := newFakeBroadcaster()
-	cfg := &fakeConfig{root: t.TempDir(), reserved: 0}
+	cfg := &fakeConfig{root: t.TempDir(), reserved: 0, db: db}
 	// raw/-Verzeichnis anlegen, damit succeed() os.Remove ohne Verzeichnisfehler läuft.
 	if err := os.MkdirAll(filepath.Join(cfg.root, "raw"), 0o755); err != nil {
 		t.Fatal(err)

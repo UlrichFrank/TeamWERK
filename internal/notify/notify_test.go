@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"database/sql"
 	"sort"
 	"strings"
@@ -10,7 +11,9 @@ import (
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
+	"github.com/teamstuttgart/teamwerk/internal/eventlog"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
+	"github.com/teamstuttgart/teamwerk/internal/push"
 	_ "modernc.org/sqlite"
 )
 
@@ -40,6 +43,59 @@ func stubMail(t *testing.T) func() []capturedMail {
 		copy(out, got)
 		return out
 	}
+}
+
+// capturedPush is one call intercepted via the push.SendToUsers seam.
+type capturedPush struct {
+	userIDs []int
+	title   string
+}
+
+// stubPush replaces push.SendToUsers with a thread-safe capture and restores
+// the original on cleanup. Returns a func yielding the captured calls.
+func stubPush(t *testing.T) func() []capturedPush {
+	t.Helper()
+	var mu sync.Mutex
+	var got []capturedPush
+	orig := push.SendToUsers
+	push.SendToUsers = func(_ *sql.DB, _ *appconfig.Config, userIDs []int, title, _, _ string) {
+		mu.Lock()
+		ids := make([]int, len(userIDs))
+		copy(ids, userIDs)
+		got = append(got, capturedPush{ids, title})
+		mu.Unlock()
+	}
+	t.Cleanup(func() { push.SendToUsers = orig })
+	return func() []capturedPush {
+		mu.Lock()
+		defer mu.Unlock()
+		out := make([]capturedPush, len(got))
+		copy(out, got)
+		return out
+	}
+}
+
+func setPushPref(t *testing.T, db *sql.DB, uid int, category string, enabled bool) {
+	t.Helper()
+	p := 0
+	if enabled {
+		p = 1
+	}
+	if _, err := db.Exec(
+		`INSERT INTO notification_preferences (user_id, category, push_enabled, email_enabled)
+		 VALUES (?, ?, ?, 0)`, uid, category, p); err != nil {
+		t.Fatalf("setPushPref: %v", err)
+	}
+}
+
+// eventRowsFor returns the user_events rows for a user, for assertions.
+func eventRowsFor(t *testing.T, db *sql.DB, userID int) []eventlog.Event {
+	t.Helper()
+	events, err := eventlog.ListForUser(context.Background(), db, userID, 100)
+	if err != nil {
+		t.Fatalf("ListForUser: %v", err)
+	}
+	return events
 }
 
 func setEmailPref(t *testing.T, db *sql.DB, uid int, category string, email bool) {
@@ -132,6 +188,154 @@ func TestSend_EmptyList_NoSend(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if got := mails(); len(got) != 0 {
 		t.Fatalf("got %d mails, want 0", len(got))
+	}
+}
+
+// TestSend_SchreibtLogFuerAlleEmpfaenger verifies the fan-out happens over
+// the UNFILTERED userIDs — one user_events row per recipient, regardless of
+// any preference.
+func TestSend_SchreibtLogFuerAlleEmpfaenger(t *testing.T) {
+	db := newTestDB(t)
+	u1 := insertUser(t, db, "u1@test.local")
+	u2 := insertUser(t, db, "u2@test.local")
+	u3 := insertUser(t, db, "u3@test.local")
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"} // VAPID leer ⇒ Push no-op
+	stubMail(t)
+
+	Send(db, cfg, []int{u1, u2, u3}, "duties", "Titel", "Text", "/x")
+
+	for _, uid := range []int{u1, u2, u3} {
+		rows := eventRowsFor(t, db, uid)
+		if len(rows) != 1 {
+			t.Fatalf("user %d: got %d user_events rows, want 1", uid, len(rows))
+		}
+		if rows[0].Category != "duties" || rows[0].Title != "Titel" || rows[0].Body != "Text" || rows[0].URL != "/x" {
+			t.Errorf("user %d: unexpected row %+v", uid, rows[0])
+		}
+	}
+}
+
+// TestSend_LogUnabhaengigVonPushPraeferenz verifies that a user with
+// push_enabled=0 gets no push, but still gets a user_events row.
+func TestSend_LogUnabhaengigVonPushPraeferenz(t *testing.T) {
+	db := newTestDB(t)
+	uid := insertUser(t, db, "u@test.local")
+	setPushPref(t, db, uid, "duties", false)
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"}
+	stubMail(t)
+	pushes := stubPush(t)
+
+	Send(db, cfg, []int{uid}, "duties", "Titel", "Text", "/x")
+
+	for _, call := range pushes() {
+		for _, id := range call.userIDs {
+			if id == uid {
+				t.Fatalf("user %d received push despite push_enabled=0", uid)
+			}
+		}
+	}
+	if rows := eventRowsFor(t, db, uid); len(rows) != 1 {
+		t.Fatalf("got %d user_events rows, want 1 despite disabled push", len(rows))
+	}
+}
+
+// TestSend_LogUnabhaengigVonPushSubscription verifies that a user without any
+// row in push_subscriptions still gets a user_events row (Send doesn't gate
+// the log write on subscription existence — that's push.SendToUsers's own
+// concern, orthogonal to the log).
+func TestSend_LogUnabhaengigVonPushSubscription(t *testing.T) {
+	db := newTestDB(t)
+	uid := insertUser(t, db, "u@test.local") // no push_subscriptions row
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"}
+	stubMail(t)
+
+	Send(db, cfg, []int{uid}, "duties", "Titel", "Text", "/x")
+
+	if rows := eventRowsFor(t, db, uid); len(rows) != 1 {
+		t.Fatalf("got %d user_events rows, want 1 despite missing subscription", len(rows))
+	}
+}
+
+// TestSend_NoEmailUnterdruecktNurEmail verifies that NoEmail() suppresses
+// only the email branch — push and the event log fire unchanged.
+func TestSend_NoEmailUnterdruecktNurEmail(t *testing.T) {
+	db := newTestDB(t)
+	uid := insertUser(t, db, "u@test.local")
+	setEmailPref(t, db, uid, "duties", true) // would normally receive email
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"}
+	mails := stubMail(t)
+	pushes := stubPush(t)
+
+	Send(db, cfg, []int{uid}, "duties", "Titel", "Text", "/x", NoEmail())
+
+	time.Sleep(50 * time.Millisecond)
+	if got := mails(); len(got) != 0 {
+		t.Fatalf("got %d mails, want 0 (NoEmail)", len(got))
+	}
+
+	found := false
+	for _, call := range pushes() {
+		for _, id := range call.userIDs {
+			if id == uid {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected push to still fire for user %d despite NoEmail()", uid)
+	}
+
+	if rows := eventRowsFor(t, db, uid); len(rows) != 1 {
+		t.Fatalf("got %d user_events rows, want 1 (NoEmail must not affect the log)", len(rows))
+	}
+}
+
+// TestSend_SkipPushPrefIgnoriertPraeferenz verifies that SkipPushPref() sends
+// push regardless of push_enabled=0, while email stays preference-gated.
+func TestSend_SkipPushPrefIgnoriertPraeferenz(t *testing.T) {
+	db := newTestDB(t)
+	uid := insertUser(t, db, "u@test.local")
+	setPushPref(t, db, uid, "sonstiges", false) // push disabled
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"}
+	mails := stubMail(t)
+	pushes := stubPush(t)
+
+	Send(db, cfg, []int{uid}, "sonstiges", "Titel", "Text", "/x", SkipPushPref())
+
+	found := false
+	for _, call := range pushes() {
+		for _, id := range call.userIDs {
+			if id == uid {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected push to fire for user %d despite push_enabled=0 (SkipPushPref)", uid)
+	}
+
+	// Email bleibt präferenzgesteuert: kein email_enabled=1 gesetzt ⇒ keine Mail.
+	time.Sleep(50 * time.Millisecond)
+	if got := mails(); len(got) != 0 {
+		t.Fatalf("got %d mails, want 0 (email stays preference-gated under SkipPushPref)", len(got))
+	}
+}
+
+// TestSend_LeereEmpfaengerlisteSchreibtNichts verifies an empty recipient
+// list writes no user_events row and does not error.
+func TestSend_LeereEmpfaengerlisteSchreibtNichts(t *testing.T) {
+	db := newTestDB(t)
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"}
+	stubMail(t)
+
+	Send(db, cfg, nil, "duties", "Titel", "Text", "/x")
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM user_events`).Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("got %d user_events rows, want 0", count)
 	}
 }
 

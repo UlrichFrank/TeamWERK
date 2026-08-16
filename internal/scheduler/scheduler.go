@@ -63,6 +63,7 @@ func (s *Scheduler) Run() {
 	s.runTrainingDiaryRetention()
 	s.sendAttendanceReminders()
 	s.sendMatchReportReviewReminders()
+	s.purgeEventLog()
 	s.recordHeartbeat()
 }
 
@@ -338,12 +339,10 @@ func (s *Scheduler) sendVideoRetentionWarnings() {
 				continue
 			}
 			if n, _ := res.RowsAffected(); n == 1 {
-				// Push: Datenverlust-Warnung → Präferenz bewusst umgangen.
-				go push.SendToUsers(s.db, s.cfg, []int{uid}, title, body, fmt.Sprintf("/videos/%d", w.id))
-				// Email: nur wenn explizit gewünscht.
-				if emailUIDs := notify.FilterByEmailPref(s.db, []int{uid}, "sonstiges"); len(emailUIDs) > 0 {
-					go notify.SendEmail(s.db, s.cfg, uid, title, body, fmt.Sprintf("/videos/%d", w.id))
-				}
+				// Push: Datenverlust-Warnung → Präferenz bewusst umgangen
+				// (notify.SkipPushPref()). Email bleibt präferenzgesteuert —
+				// die Fassade übernimmt beides, der manuelle Email-Zweig entfällt.
+				notify.Send(s.db, s.cfg, []int{uid}, "sonstiges", title, body, fmt.Sprintf("/videos/%d", w.id), notify.SkipPushPref())
 				sent++
 			}
 		}
@@ -540,18 +539,17 @@ func (s *Scheduler) sendDutyReminders() {
 			}
 		}
 
-		// Push reminder (opt-in via notification_preferences, default: enabled)
-		pushUsers := push.FilterByPushPref(s.db, []int{uid}, "duty_reminders")
-		if len(pushUsers) == 0 {
-			continue
-		}
-		// Idempotency via notification_log: INSERT first, then check RowsAffected.
-		// This prevents double-send when two cron instances run concurrently.
+		// Push reminder (opt-in via notification_preferences, default: enabled).
+		// Der manuelle FilterByPushPref-Vorfilter entfällt — notify.Send prüft
+		// die Präferenz selbst, schreibt den Event-Log aber IMMER, auch für
+		// Nutzer mit deaktiviertem Push. Idempotency via notification_log:
+		// INSERT first, then check RowsAffected. This prevents double-send
+		// when two cron instances run concurrently.
 		res, _ := s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
 			uid, "duty_reminder", hashDate(targetDate))
 		if n, _ := res.RowsAffected(); n == 1 {
-			go push.SendToUsers(s.db, s.cfg, []int{uid},
-				"Offene Dienste", "Am "+formatDate(targetDate)+" gibt es noch offene Dienste", "/dienste")
+			notify.Send(s.db, s.cfg, []int{uid}, "duty_reminders",
+				"Offene Dienste", "Am "+formatDate(targetDate)+" gibt es noch offene Dienste", "/dienste", notify.NoEmail())
 			pushSent++
 		}
 	}

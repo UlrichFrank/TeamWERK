@@ -30,6 +30,7 @@
 - **Status-Felder** sind CHECK-Constraints (z.B. `members.status`: `aktiv|verletzt|pausiert|ausgetreten`) — gültige Werte in der jeweiligen Migration nachsehen.
 - **`venues.hall_number`** (BWHV-Hallennummer) und **`games.external_id`** (BWHV-Spielnummer) sind die Fremdschlüssel des H4A-Imports (Migration `042`). Beide nullable: `hall_number` mit **Partial-Unique-Index** (`WHERE hall_number IS NOT NULL` — nicht zuordenbare Nicht-BWHV-Orte bleiben NULL), `external_id` **ohne** UNIQUE (manuell angelegte Spiele koexistieren; die Eindeutigkeit prüft der Import fachlich).
 - **`members.join_date`/`exit_date`** steuern die Beitrags-Halbierung (Migration `014`): `join_date` ist App-Pflichtfeld (DB nullbar), `exit_date` Pflicht bei `status='ausgetreten'`. **`seasons.is_inaugural`** (INTEGER 0/1) markiert das erste Abrechnungsjahr (alle zahlen halb). Details siehe Gotcha „SEPA-Beitragslauf".
+- **`user_events`** (Migration `050`, Event-Log) trägt **keinen** Fremdschlüssel auf ein Domänen-Objekt — kein `ref_type`/`ref_id`, nur ein Sprungziel `url`, das ins Leere zeigen darf. Die Zeile ist zum Sendezeitpunkt eingefroren, weil das referenzierte Objekt (gelöschter Termin, entfernter Dienst-Slot) danach oft nicht mehr existiert. `category` hat einen `CHECK` über acht Werte **ohne** `chat` — Chat läuft über einen eigenen Kanal (`push.SendToUserWithBadge`) und schreibt bewusst nicht hierher; eine neunte Kategorie braucht eine Migration, keinen Code-Pfad. Details siehe Gotcha „Event-Log".
 
 ## Paginierung
 

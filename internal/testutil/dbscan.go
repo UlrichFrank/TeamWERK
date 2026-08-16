@@ -18,6 +18,21 @@ import (
 // sonst dauerhaft „nicht gefunden".
 func FindStringInDB(t *testing.T, db *sql.DB, needle string) (string, string) {
 	t.Helper()
+	return findStringInDB(t, db, needle, "")
+}
+
+// FindStringInDBExcept ist wie FindStringInDB, überspringt aber die Tabelle
+// except. Für Zusagen, in denen eine Tabelle die erwartete, dokumentierte
+// Fundstelle ist (z. B. `user_events`) und alle anderen weiterhin verboten
+// bleiben — sonst würde die erwartete Fundstelle selbst jede Prüfung auf
+// „sonst nirgends" verdecken.
+func FindStringInDBExcept(t *testing.T, db *sql.DB, needle, except string) (string, string) {
+	t.Helper()
+	return findStringInDB(t, db, needle, except)
+}
+
+func findStringInDB(t *testing.T, db *sql.DB, needle, except string) (string, string) {
+	t.Helper()
 	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
 	if err != nil {
 		t.Fatalf("FindStringInDB Tabellenliste: %v", err)
@@ -32,6 +47,9 @@ func FindStringInDB(t *testing.T, db *sql.DB, needle string) (string, string) {
 	rows.Close()
 
 	for _, tbl := range tables {
+		if tbl == except {
+			continue
+		}
 		r, err := db.Query(`SELECT * FROM "` + tbl + `"`)
 		if err != nil {
 			continue

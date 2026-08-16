@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   Calendar, BarChart2, Users, Car, ArrowRight,
   Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check, Search, Info,
-  MessageSquare, MessageCircle, Megaphone
+  MessageSquare, MessageCircle, Megaphone, Activity
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -11,6 +11,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useChatEvents } from '../hooks/useChatEvents'
 import EventNoteIndicator from '../components/EventNoteIndicator'
+import { relativeTime } from '../lib/relativeTime'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,12 +81,23 @@ interface CarpoolingOpenGroup {
   requests: CarpoolingOpenRequest[]
 }
 
+// Event-Log — Go-Typ in internal/eventlog/eventlog.go, JSON-Tags dort maßgeblich.
+interface EventItem {
+  id: number
+  category: string
+  title: string
+  body: string
+  url: string
+  createdAt: string
+}
+
 interface DashboardData {
   currentSeason: Season | null
   meineTermine: NextEvent[]
   meineDienste: MeineDienste | null
   carpoolingConfirmed: CarpoolingConfirmed[]
   carpoolingOpenGroups: CarpoolingOpenGroup[]
+  events: EventItem[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -146,27 +158,31 @@ function Accordion({
 }
 
 function DashboardRow({
-  to, dateISO, icon, title, subtitle, badge,
+  to, dateISO, timeLabel, icon, title, subtitle, badge,
 }: {
-  to: string
-  dateISO: string
+  to?: string
+  dateISO?: string
+  timeLabel?: string
   icon: React.ReactNode
   title: string
   subtitle?: string | React.ReactNode
   badge?: React.ReactNode
 }) {
-  const d = new Date(dateISO.slice(0, 10) + 'T12:00:00')
-  const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '')
-  const dayMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
-  return (
-    <Link
-      to={to}
-      className="flex items-center gap-3 py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
-    >
+  const dateBlock = dateISO ? (() => {
+    const d = new Date(dateISO.slice(0, 10) + 'T12:00:00')
+    const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '')
+    const dayMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+    return (
       <div className="flex-shrink-0 w-10 text-center">
         <p className="text-xs font-semibold text-brand-text-muted leading-tight">{weekday}</p>
         <p className="text-xs text-brand-text-subtle leading-tight">{dayMonth}</p>
       </div>
+    )
+  })() : null
+
+  const inner = (
+    <>
+      {dateBlock}
       <span className="flex-shrink-0 text-brand-text-muted">{icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -175,7 +191,22 @@ function DashboardRow({
         </div>
         {subtitle && <p className="text-xs text-brand-text-muted truncate">{subtitle}</p>}
       </div>
-      <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
+      {timeLabel && (
+        <span className="flex-shrink-0 text-xs text-brand-text-subtle whitespace-nowrap">{timeLabel}</span>
+      )}
+      {to && <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />}
+    </>
+  )
+
+  const rowClass = 'flex items-center gap-3 py-1.5 rounded px-2 -mx-2 transition-colors'
+
+  if (!to) {
+    return <div className={rowClass}>{inner}</div>
+  }
+
+  return (
+    <Link to={to} className={`${rowClass} hover:bg-brand-border-subtle`}>
+      {inner}
     </Link>
   )
 }
@@ -524,6 +555,35 @@ function MeineNachrichtenSection() {
   )
 }
 
+// ── Geschehen ─────────────────────────────────────────────────────────────────
+//
+// Bewusst getrennt von „Nachrichten": „Nachrichten" = jemand spricht mich an
+// (ungelesen-basiert, Chat), „Geschehen" = die Terminlage bewegt sich (Event-
+// Log, 3-Tage-Retention nach erster Ansicht). Zahlt nicht in den App-Badge ein
+// (der bleibt Chat-only) — hier bewusst keine Änderung an AppShell/sw.ts.
+
+function GeschehenSection({ events }: { events: EventItem[] }) {
+  if (events.length === 0) {
+    return <p className="text-sm text-brand-text-muted py-1">Keine Ereignisse.</p>
+  }
+
+  return (
+    <ul className="space-y-1 mt-1">
+      {events.map(e => (
+        <li key={e.id}>
+          <DashboardRow
+            to={e.url || undefined}
+            timeLabel={relativeTime(e.createdAt)}
+            icon={<Activity className="w-4 h-4" />}
+            title={e.title}
+            subtitle={e.body || undefined}
+          />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -537,7 +597,7 @@ export default function DashboardPage() {
 
   const [openSection, setOpenSection] = useState<string>('termine')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    termine: true, nachrichten: true, dienste: true, team: true, fahrt: true,
+    termine: true, nachrichten: true, geschehen: true, dienste: true, team: true, fahrt: true,
   })
 
   const isOpen = (id: string) => isMobile ? openSection === id : openSections[id]
@@ -616,6 +676,11 @@ export default function DashboardPage() {
         <Accordion id="team" title="Mein Team" icon={Users} isOpen={isOpen('team')} onToggle={() => toggle('team')}>
           <MeinTeamSection />
         </Accordion>
+
+        <Accordion id="ereignisse" title="Ereignisse" icon={Activity} isOpen={isOpen('ereignisse')} onToggle={() => toggle('ereignisse')}>
+          <GeschehenSection events={data.events ?? []} />
+        </Accordion>
+
       </div>
     </div>
   )

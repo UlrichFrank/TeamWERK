@@ -47,7 +47,7 @@ func recordNotifications(t *testing.T) *notifyRecorder {
 	t.Helper()
 	rec := &notifyRecorder{}
 	orig := notify.Send
-	notify.Send = func(_ *sql.DB, _ *appconfig.Config, userIDs []int, category, title, body, url string) {
+	notify.Send = func(_ *sql.DB, _ *appconfig.Config, userIDs []int, category, title, body, url string, _ ...notify.Option) {
 		rec.mu.Lock()
 		defer rec.mu.Unlock()
 		rec.sent = append(rec.sent, sentNotification{userIDs, category, title, body, url})
@@ -102,9 +102,11 @@ type cancelFixture struct {
 	rec      *notifyRecorder
 }
 
-// newCancelFixture baut Saison, Team und ein Heimspiel gegen "HSG Ostfildern"
-// am 14.09.2026 — die Werte aus den Spec-Szenarien.
-func newCancelFixture(t *testing.T) *cancelFixture {
+// newCancelFixtureBase baut Saison, Team und ein Heimspiel gegen
+// "HSG Ostfildern" am 14.09.2026 — die Werte aus den Spec-Szenarien. Gemeinsame
+// Basis für newCancelFixture (mit notify-Recorder) und newCancelFixtureRealNotify
+// (mit dem echten notify.Send).
+func newCancelFixtureBase(t *testing.T) *cancelFixture {
 	t.Helper()
 	db := testutil.NewDB(t)
 	season := testutil.CreateSeason(t, db, "2026/27")
@@ -115,13 +117,33 @@ func newCancelFixture(t *testing.T) *cancelFixture {
 	setUserName(t, db, vorstand, "Tim", "Meier")
 	helper := testutil.CreateUser(t, db, "standard")
 
-	rec := recordNotifications(t)
 	srv, sharedHub := prodserver.NewWithHub(t, db)
 	return &cancelFixture{
 		db: db, season: season, team: team, game: game,
 		vorstand: vorstand, helper: helper,
-		srv: srv, hub: sharedHub, rec: rec,
+		srv: srv, hub: sharedHub,
 	}
+}
+
+// newCancelFixture baut die Basis-Fixture und ersetzt notify.Send durch einen
+// Recorder — für Tests, die nur prüfen, WAS versendet würde (Titel/Body/URL),
+// ohne den echten Fan-out (Push/Email/Event-Log) auszulösen.
+func newCancelFixture(t *testing.T) *cancelFixture {
+	t.Helper()
+	f := newCancelFixtureBase(t)
+	f.rec = recordNotifications(t)
+	return f
+}
+
+// newCancelFixtureRealNotify ist wie newCancelFixture, lässt notify.Send aber
+// unangetastet. Nötig für TestDeleteGame_GrundStehtImEventLog: der Recorder
+// ersetzt notify.Send vollständig und würde damit auch eventlog.Record nie
+// laufen lassen. Push/Email sind dank leerer VAPID-/SMTP-Config in
+// testutil.TestConfig() ein No-op, eventlog.Record läuft synchron im
+// Request-Handler mit — kein Warten nötig.
+func newCancelFixtureRealNotify(t *testing.T) *cancelFixture {
+	t.Helper()
+	return newCancelFixtureBase(t)
 }
 
 func (f *cancelFixture) vorstandToken(t *testing.T) string {
@@ -455,7 +477,7 @@ func TestDeleteGame_UnbekannteIDKeineBenachrichtigung(t *testing.T) {
 	}
 }
 
-// ── Nichtpersistenz des Grundes ──────────────────────────────────────────────
+// ── Der Grund im Event-Log ───────────────────────────────────────────────────
 
 // syncBuf ist ein threadsicherer Log-Puffer — notify-Goroutinen können nach dem
 // Response noch schreiben, und der Race-Detector liest mit.
@@ -476,13 +498,21 @@ func (s *syncBuf) String() string {
 	return s.b.String()
 }
 
-// Der Löschgrund hat bewusst keine Heimat (design.md §2): er existiert nur in
-// der zugestellten Nachricht. Diese Zusage wird hier mechanisch geprüft — voller
-// Scan aller Tabellen und Spalten plus Log-Puffer, inklusive Poison-Sanity für
-// den Scanner selbst.
-func TestDeleteGame_GrundWirdNichtPersistiert(t *testing.T) {
-	const marker = "MARKER-8f3a-Loeschgrund-Nichtpersistenz"
-	f := newCancelFixture(t)
+// Seit dem event-log-Change hat der Löschgrund eine Heimat: er lebt als Teil
+// des Meldungstexts in user_events.body (design.md Decision 10, ersetzt die
+// frühere Festlegung "wird nirgends persistiert"). Diese Zusage wird hier
+// mechanisch geprüft — voller Scan aller Tabellen und Spalten AUSSER
+// user_events, plus Response und Log-Puffer, inklusive Poison-Sanity für den
+// Scanner selbst. user_events ist die einzig erlaubte Fundstelle; jede andere
+// Tabelle bleibt verboten (Games/Duty-Slots referenzieren den Grund nach wie
+// vor nicht — es gibt kein games.status='cancelled').
+//
+// Der Recorder aus newCancelFixture würde notify.Send vollständig ersetzen und
+// damit auch eventlog.Record nie ausführen — deshalb hier bewusst
+// newCancelFixtureRealNotify statt newCancelFixture.
+func TestDeleteGame_GrundStehtImEventLog(t *testing.T) {
+	const marker = "MARKER-8f3a-Loeschgrund-EventLog"
+	f := newCancelFixtureRealNotify(t)
 	f.withDuty(t)
 
 	var logBuf syncBuf
@@ -497,24 +527,74 @@ func TestDeleteGame_GrundWirdNichtPersistiert(t *testing.T) {
 	}
 	body := make([]byte, 1<<16)
 	n, _ := res.Body.Read(body)
-
-	// Der Grund muss in der Meldung stehen — sonst prüfte der Rest nichts.
-	if got := f.rec.one(t, "Spiel abgesagt"); !strings.Contains(got.body, marker) {
-		t.Fatalf("Grund fehlt in der Meldung, Assertion wäre wertlos: %q", got.body)
-	}
 	if strings.Contains(string(body[:n]), marker) {
 		t.Error("Grund wird in der Response zurückgespiegelt")
 	}
 	if strings.Contains(logBuf.String(), marker) {
-		t.Error("Grund landet im Log")
+		t.Error("Grund landet im Server-Log")
 	}
-	if table, col := testutil.FindStringInDB(t, f.db, marker); table != "" {
-		t.Errorf("Grund in der DB persistiert: %s.%s", table, col)
+
+	// Erwartete Fundstelle: die Dienst-Absage in user_events (Kategorie
+	// "duties", Link bleibt "/dienste" — die Dienstbörse existiert nach der
+	// Löschung weiter). Die Team-Meldung ginge nur an tatsächliche
+	// Kader-Mitglieder der aktiven Saison, die diese schlanke Fixture bewusst
+	// nicht anlegt — der Dienst-Zugeteilte (f.helper) genügt als Nachweis, dass
+	// der Grund im Log landet.
+	var count int
+	var url string
+	if err := f.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(MAX(url), '') FROM user_events
+		  WHERE category = 'duties' AND body LIKE ?`,
+		"%"+marker+"%",
+	).Scan(&count, &url); err != nil {
+		t.Fatalf("user_events-Query: %v", err)
+	}
+	if count == 0 {
+		t.Fatal("Grund muss als user_events-Zeile stehen — sonst prüfte der Rest nichts")
+	}
+	if url != "/dienste" {
+		t.Errorf("url = %q, want /dienste", url)
+	}
+
+	// Verbotene Fundstellen: jede Tabelle außer user_events.
+	if table, col := testutil.FindStringInDBExcept(t, f.db, marker, "user_events"); table != "" {
+		t.Errorf("Grund zusätzlich außerhalb des Event-Logs persistiert: %s.%s", table, col)
 	}
 
 	// Poison-Sanity: ein kaputter Scanner meldet immer „nicht gefunden".
 	createNamedGame(t, f.db, f.season, f.team, "2026-10-01", marker)
-	if table, col := testutil.FindStringInDB(t, f.db, marker); table != "games" || col != "opponent" {
+	if table, col := testutil.FindStringInDBExcept(t, f.db, marker, "user_events"); table != "games" || col != "opponent" {
 		t.Fatalf("DB-Scanner findet den absichtlich gesetzten Marker nicht (got %s.%s) — Assertion oben wäre wertlos", table, col)
+	}
+}
+
+// Retention macht den Grund flüchtig, nicht der Versand selbst: solange
+// silent NICHT gesetzt ist, bleibt der Grund für die Dauer der Event-Log-
+// Retention (3 Tage nach Ansicht) nachlesbar — geprüft oben. Bei silent
+// entsteht (Spec „Stumme Löschung schreibt keinen Log") gar keine Zeile, siehe
+// TestDeleteGame_SilentSchreibtKeineEventLogZeile weiter unten.
+
+// ── silent unterdrückt auch den Event-Log ────────────────────────────────────
+
+// Spec „Absagegründe leben im Log statt nur im Zustellkanal", Szenario „Stumme
+// Löschung schreibt keinen Log": silent unterdrückt notify.Send vollständig
+// (Handler-Code, nicht die Fassade) — und damit bleibt auch eventlog.Record
+// ungerufen. Braucht wie oben den echten notify.Send statt des Recorders.
+func TestDeleteGame_SilentSchreibtKeineEventLogZeile(t *testing.T) {
+	f := newCancelFixtureRealNotify(t)
+	f.withDuty(t)
+
+	res := f.delete(t, f.vorstandToken(t), map[string]any{"silent": true, "reason": "Import-Dublette"})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, got %d", res.StatusCode)
+	}
+
+	var count int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM user_events`).Scan(&count); err != nil {
+		t.Fatalf("user_events-Query: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("silent muss auch den Event-Log unterdrücken, got %d Zeile(n)", count)
 	}
 }

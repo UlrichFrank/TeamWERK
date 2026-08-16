@@ -32,7 +32,7 @@ func captureTrainingNotifications(t *testing.T) chan sentTraining {
 	t.Helper()
 	ch := make(chan sentTraining, 16)
 	orig := notify.Send
-	notify.Send = func(_ *sql.DB, _ *appconfig.Config, _ []int, category, title, body, url string) {
+	notify.Send = func(_ *sql.DB, _ *appconfig.Config, _ []int, category, title, body, url string, _ ...notify.Option) {
 		ch <- sentTraining{category: category, title: title, body: body, url: url}
 	}
 	t.Cleanup(func() { notify.Send = orig })

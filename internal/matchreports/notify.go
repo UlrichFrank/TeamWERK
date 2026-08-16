@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
-	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 )
 
 // reviewerUserIDs sammelt die aktuellen Freigeber (Vereinsfunktion 'medien' ODER
@@ -38,16 +38,13 @@ func reviewerUserIDs(db *sql.DB) ([]int, error) {
 
 // notifyReviewers sendet Push an alle aktuellen Freigeber. Läuft als Goroutine
 // (blocking wäre für einen HTTP-Response verheerend). Bei Query-Fehlern nur
-// loggen — Notification-Fehler dürfen keinen Submit killen.
+// loggen — Notification-Fehler dürfen keinen Submit killen. Bewusst push-only
+// (notify.NoEmail()) — die Fassade übernimmt Log-Fan-out + Push-Präferenz.
 func notifyReviewers(db *sql.DB, cfg *appconfig.Config, title, body, url string) {
 	ids, err := reviewerUserIDs(db)
 	if err != nil {
 		slog.Error("matchreports.notifyReviewers query", "err", err)
 		return
 	}
-	ids = push.FilterByPushPref(db, ids, "operativ")
-	if len(ids) == 0 {
-		return
-	}
-	push.SendToUsers(db, cfg, ids, title, body, url)
+	notify.Send(db, cfg, ids, "operativ", title, body, url, notify.NoEmail())
 }

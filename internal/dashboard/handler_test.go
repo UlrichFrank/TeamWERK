@@ -1,7 +1,9 @@
 package dashboard_test
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -619,5 +621,167 @@ func TestDashboard_Doppelheimspiel_ListsBothTeams(t *testing.T) {
 	teamName, _ := gameEvent["teamName"].(string)
 	if teamName != "mB1, mB2" {
 		t.Errorf("expected teamName 'mB1, mB2' (both teams short-form, sorted), got %q", teamName)
+	}
+}
+
+// seedUserEvent inserts a user_events row with an explicit created_at
+// timestamp (minutesAgo in the past) so ordering assertions don't depend on
+// same-second CURRENT_TIMESTAMP collisions. Returns the inserted row id.
+func seedUserEvent(t *testing.T, database *sql.DB, userID, minutesAgo int) int {
+	t.Helper()
+	createdAt := time.Now().Add(-time.Duration(minutesAgo) * time.Minute).Format("2006-01-02 15:04:05")
+	res, err := database.Exec(
+		`INSERT INTO user_events (user_id, category, title, body, url, created_at)
+		 VALUES (?, 'games', ?, 'Text', '/ziel', ?)`,
+		userID, fmt.Sprintf("Titel %d", minutesAgo), createdAt)
+	if err != nil {
+		t.Fatalf("seedUserEvent: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// decodeEvents fetches the dashboard for userID and returns the events array.
+func decodeEvents(t *testing.T, srv *httptest.Server, userID int) []map[string]any {
+	t.Helper()
+	token := testutil.Token(t, userID, "standard", nil)
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	var events []map[string]any
+	json.Unmarshal(body["events"], &events)
+	return events
+}
+
+// TestDashboard_LiefertEventsNeuesteZuerst verifies events come back
+// descending by createdAt.
+func TestDashboard_LiefertEventsNeuesteZuerst(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+
+	oldID := seedUserEvent(t, db, userID, 60)
+	newID := seedUserEvent(t, db, userID, 1)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	events := decodeEvents(t, srv, userID)
+
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	firstID, _ := events[0]["id"].(float64)
+	secondID, _ := events[1]["id"].(float64)
+	if int(firstID) != newID || int(secondID) != oldID {
+		t.Errorf("expected newest first (id %d, %d), got (%v, %v)", newID, oldID, firstID, secondID)
+	}
+}
+
+// TestDashboard_StempeltSeenAtNurAufGelieferten verifies rows beyond the
+// 30-row cap keep seen_at IS NULL — an unread row must never be stamped just
+// because a caller's dashboard response was capped.
+func TestDashboard_StempeltSeenAtNurAufGelieferten(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+
+	// 35 rows, oldest first (minutesAgo descending so index 0 is oldest).
+	ids := make([]int, 35)
+	for i := 0; i < 35; i++ {
+		ids[i] = seedUserEvent(t, db, userID, 35-i)
+	}
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	events := decodeEvents(t, srv, userID)
+
+	if len(events) != 30 {
+		t.Fatalf("expected 30 events (cap), got %d", len(events))
+	}
+
+	// The 5 oldest (ids[0:5]) must remain unseen.
+	for _, id := range ids[:5] {
+		var seenAt sql.NullString
+		if err := db.QueryRow(`SELECT seen_at FROM user_events WHERE id = ?`, id).Scan(&seenAt); err != nil {
+			t.Fatalf("query seen_at for id %d: %v", id, err)
+		}
+		if seenAt.Valid {
+			t.Errorf("id %d (beyond cap) got stamped: seen_at=%q", id, seenAt.String)
+		}
+	}
+
+	// The 30 newest (ids[5:35]) must be stamped.
+	for _, id := range ids[5:] {
+		var seenAt sql.NullString
+		if err := db.QueryRow(`SELECT seen_at FROM user_events WHERE id = ?`, id).Scan(&seenAt); err != nil {
+			t.Fatalf("query seen_at for id %d: %v", id, err)
+		}
+		if !seenAt.Valid {
+			t.Errorf("id %d (delivered) not stamped", id)
+		}
+	}
+}
+
+// TestDashboard_SeenAtWirdNichtUeberschrieben verifies a second dashboard
+// fetch does not move the retention clock forward on an already-stamped row.
+func TestDashboard_SeenAtWirdNichtUeberschrieben(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	id := seedUserEvent(t, db, userID, 1)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+
+	// First fetch stamps seen_at.
+	decodeEvents(t, srv, userID)
+	var firstStamp string
+	if err := db.QueryRow(`SELECT seen_at FROM user_events WHERE id = ?`, id).Scan(&firstStamp); err != nil {
+		t.Fatalf("query seen_at after first fetch: %v", err)
+	}
+	if firstStamp == "" {
+		t.Fatal("expected seen_at to be set after first fetch")
+	}
+
+	// Backdate to prove a second fetch would visibly change it if it re-stamped.
+	if _, err := db.Exec(`UPDATE user_events SET seen_at = datetime(seen_at, '-1 day') WHERE id = ?`, id); err != nil {
+		t.Fatalf("backdate seen_at: %v", err)
+	}
+	var backdated string
+	db.QueryRow(`SELECT seen_at FROM user_events WHERE id = ?`, id).Scan(&backdated)
+
+	// Second fetch must not move the clock.
+	decodeEvents(t, srv, userID)
+	var secondStamp string
+	db.QueryRow(`SELECT seen_at FROM user_events WHERE id = ?`, id).Scan(&secondStamp)
+
+	if secondStamp != backdated {
+		t.Errorf("second fetch overwrote seen_at: was %q, now %q", backdated, secondStamp)
+	}
+}
+
+// TestDashboard_FremdeEventsUnsichtbar verifies events belonging to another
+// user never show up in the response.
+func TestDashboard_FremdeEventsUnsichtbar(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	otherID := testutil.CreateUser(t, db, "standard")
+	seedUserEvent(t, db, otherID, 1)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	events := decodeEvents(t, srv, userID)
+
+	if len(events) != 0 {
+		t.Fatalf("expected 0 events (foreign user's event must stay invisible), got %d", len(events))
+	}
+}
+
+// TestDashboard_OhneAuth401 verifies GET /api/dashboard requires
+// authentication.
+func TestDashboard_OhneAuth401(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := testServer(t, dashboard.NewHandler(db))
+
+	res := testutil.Get(t, srv, "/api/dashboard", "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", res.StatusCode)
 	}
 }
