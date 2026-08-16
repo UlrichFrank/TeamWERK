@@ -32,7 +32,7 @@ concurrency:
 env:
   GO_VERSION: '1.26.0'
   NODE_VERSION: '22'
-  PNPM_VERSION: '9'
+  PNPM_VERSION: '11.17.0'
 
 jobs:
   # Validiert das Tag genau einmal und stellt es allen Folgejobs als
@@ -82,19 +82,33 @@ jobs:
 
       - run: pnpm -C web install --frozen-lockfile
 
+      # libxml2-utils (xmllint) fürs SEPA-XSD-Gate — identisch zu ci.yml. Fehlt
+      # es, skippt sepaXml.xsd.test.ts still, und ausgerechnet vor dem Prod-Deploy
+      # liefe der Generator ungeprüft durch (siehe docs/agent/08-verification.md).
+      - run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
       # Frontend zuerst bauen: vite schreibt nach cmd/teamwerk/web/dist/
       # (gitignored). //go:embed all:web/dist braucht das Verzeichnis, sonst
       # schlagen go vet/test mit "pattern all:web/dist: no matching files" fehl.
       - run: pnpm -C web build
 
       - run: go vet ./...
-      - run: go test -race ./...
+
+      # Ohne -race, konsistent mit ci.yml und .githooks/pre-push (siehe
+      # docs/agent/08-verification.md: Race-Detector läuft separat über
+      # `make test-race`). Der Detector kostete hier ~40 min und war der Grund,
+      # warum manuelle Deploys abgebrochen statt zu Ende geführt wurden; der
+      # Tag-Commit ist zu diesem Zeitpunkt ohnehin schon durch ci.yml gelaufen.
+      - run: go test ./...
 
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
 
       - run: pnpm -C web test
+        env:
+          TEAMWERK_REQUIRE_XSD: '1'
+
       - run: pnpm -C web lint
 
   backup:

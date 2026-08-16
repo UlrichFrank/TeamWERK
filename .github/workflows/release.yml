@@ -8,6 +8,14 @@
 # bestätigter Schritt sein, kein Nebeneffekt jedes main-Pushs. Wer taggen UND
 # in einem Zug deployen will, löst das manuell per workflow_dispatch mit
 # `deploy: true` aus (ruft deploy.yml als reusable Workflow auf).
+#
+# Push- und Dispatch-Trigger unterscheiden sich in genau einem Punkt: fällt kein
+# release-relevanter Commit an, überspringt der Push-Lauf das Tag (Rauschen
+# vermeiden), während der manuelle Lauf trotzdem eins erzeugt (Mindest-Bump aus
+# `bump`, Default patch). Sonst wäre „manuell taggen + deployen" genau dann
+# blockiert, wenn man es braucht — etwa nach einem Squash-Merge, dessen Titel
+# der Branch-Name ist („Feat/event log (#193)") und den die Conventional-
+# Commits-Analyse folgerichtig nicht als feat erkennt.
 name: release
 
 on:
@@ -15,8 +23,14 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      bump:
+        description: 'Mindest-Bump, wenn die Commits keinen größeren hergeben'
+        required: false
+        type: choice
+        options: [patch, minor, major]
+        default: patch
       force_version:
-        description: 'Tag manuell setzen (z. B. v1.2.3). Leer = automatisch aus Commits.'
+        description: 'Tag hart setzen (z. B. v1.2.3). Leer = aus Commits ableiten.'
         required: false
         default: ''
       deploy:
@@ -48,6 +62,8 @@ jobs:
         id: next
         env:
           FORCE: ${{ inputs.force_version }}
+          MIN_BUMP: ${{ inputs.bump }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
           chmod +x scripts/next-version.sh
@@ -58,15 +74,28 @@ jobs:
               exit 1
             fi
             NEXT="$FORCE"
+          elif [ "$MANUAL" = "true" ]; then
+            # Manueller Lauf: immer ein Tag. Die Commit-Analyse entscheidet über
+            # die Höhe des Bumps, `bump` ist nur die Untergrenze — ein `feat:`
+            # ergibt also minor, auch wenn hier patch steht.
+            NEXT=$(scripts/next-version.sh --min "${MIN_BUMP:-patch}")
           else
             NEXT=$(scripts/next-version.sh)
           fi
           echo "Letztes Tag : ${LAST:-<keins>}"
           echo "Nächstes Tag: $NEXT"
-          if [ -n "$LAST" ] && [ "$NEXT" = "$LAST" ]; then
+          # Nur ohne force_version ist "NEXT == LAST" der Leerlauf-Fall; mit
+          # force_version ist es ein Tippfehler und läuft unten in den Fehler.
+          if [ -z "$FORCE" ] && [ -n "$LAST" ] && [ "$NEXT" = "$LAST" ]; then
             echo "Keine release-relevanten Commits (feat/fix/perf/!:) seit $LAST — übersprungen."
             echo "created=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          # force_version könnte auf ein schon vergebenes Tag zeigen; `git tag -a`
+          # liefe darauf in einen nichtssagenden Fehler mitten im Lauf.
+          if git rev-parse -q --verify "refs/tags/$NEXT" >/dev/null; then
+            echo "::error::Tag $NEXT existiert bereits (zeigt auf $(git rev-list -n1 "$NEXT"))"
+            exit 1
           fi
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "last=$LAST" >> "$GITHUB_OUTPUT"

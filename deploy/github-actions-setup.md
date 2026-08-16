@@ -10,9 +10,30 @@ Zwei Workflows, eine Kette:
    `resolve` → `gate` → `backup` → `deploy`. `concurrency: deploy-prod`
    verhindert parallele Prod-Deploys.
 
-Manueller Override:
-- `release.yml` → `workflow_dispatch` mit `force_version=v1.2.3`.
-- `deploy.yml`  → `workflow_dispatch` mit `tag=v1.2.3` (z. B. Rollback).
+## Taggen + Deployen in einem Zug (der normale manuelle Weg)
+
+Actions → **release** → *Run workflow* auf `main`, `deploy` auf **true**. Der Lauf
+legt das nächste Tag an, erstellt das GitHub-Release und ruft `deploy.yml` als
+reusable Workflow mit genau diesem Tag auf — `resolve` → `gate` → `backup` →
+`deploy` läuft also vollständig durch, ohne dass irgendwo ein Tag von Hand
+eingetippt wird.
+
+| Input | Default | Bedeutung |
+|---|---|---|
+| `bump` | `patch` | **Untergrenze**, kein Zwang: die Conventional Commits entscheiden weiter über die Höhe. Ein `feat:` seit dem letzten Tag ergibt minor, ein `!:`/`BREAKING CHANGE:` major — auch bei `bump=patch`. Umgekehrt greift die Untergrenze, wenn die Analyse gar nichts hergibt. |
+| `force_version` | (leer) | Tag hart setzen (`v1.2.3`), überspringt die Analyse. Ein bereits vergebenes Tag bricht den Lauf mit klarer Meldung ab. |
+| `deploy` | `false` | Nach dem Taggen sofort auf Prod deployen. |
+
+Der Unterschied zum Push-Trigger liegt nur im Leerlauf-Fall: findet der
+**automatische** Lauf keinen release-relevanten Commit, überspringt er das Tag
+(kein Rauschen). Der **manuelle** Lauf erzeugt trotzdem eins — sonst wäre
+„manuell taggen + deployen" ausgerechnet dann blockiert, wenn man es braucht,
+etwa nach einem Squash-Merge, dessen Titel der Branch-Name ist
+(„Feat/event log (#193)") und der damit nicht als `feat:` durchgeht.
+
+Weitere manuelle Wege:
+- `deploy.yml` → `workflow_dispatch` mit `tag=v1.2.3` — deployt ein **bestehendes**
+  Tag erneut, ohne ein neues anzulegen (Rollback auf eine ältere Version).
 
 ## Erforderliche Secrets (Repo → Settings → Secrets and variables → Actions → Secrets)
 
@@ -68,6 +89,11 @@ Danach übernimmt der `release`-Workflow automatisch.
 `scripts/next-version.sh` lokal ausführen:
 
 ```bash
-scripts/next-version.sh          # gibt nächste Version aus
-scripts/next-version.sh --check  # Exit 0 wenn Bump anfällt, sonst 1
+scripts/next-version.sh              # gibt nächste Version aus
+scripts/next-version.sh --check      # Exit 0 wenn Bump anfällt, sonst 1
+scripts/next-version.sh --min patch  # wie der manuelle release-Lauf: nie „kein Bump"
 ```
+
+Gibt `scripts/next-version.sh` ohne Flags das **bestehende** Tag zurück, würde
+ein Push-Lauf nichts taggen — dann ist `--min` (bzw. der manuelle Trigger) der
+Weg zum Release.

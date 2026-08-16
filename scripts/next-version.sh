@@ -11,7 +11,13 @@
 # Tag falls kein Bump anfällt.
 #
 # Flags:
-#   --check   Exit 0 wenn ein Bump anfällt, sonst Exit 1 (keine stdout-Ausgabe).
+#   --check       Exit 0 wenn ein Bump anfällt, sonst Exit 1 (keine stdout-Ausgabe).
+#   --min LEVEL   Untergrenze für den Bump (patch|minor|major). Ergibt die
+#                 Commit-Analyse weniger (inkl. „kein Bump"), wird LEVEL benutzt;
+#                 ergibt sie mehr, gewinnt die Analyse. Damit erzeugt ein
+#                 manueller Release-Lauf auch dann ein Tag, wenn die Commits seit
+#                 dem letzten Tag nicht conventional formatiert sind (typisch bei
+#                 Squash-Merges mit Branch-Namen als Titel).
 #
 # Ohne vorheriges Tag startet die Versionierung bei v0.1.0 (sofern überhaupt
 # Commits in den Range fallen).
@@ -19,11 +25,31 @@
 set -euo pipefail
 
 CHECK_ONLY=0
-case "${1:-}" in
-  --check) CHECK_ONLY=1 ;;
-  "" ) ;;
-  *) echo "usage: $0 [--check]" >&2; exit 2 ;;
-esac
+MIN_BUMP=none
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check) CHECK_ONLY=1; shift ;;
+    --min)
+      MIN_BUMP="${2:-}"
+      case "$MIN_BUMP" in
+        patch|minor|major) ;;
+        *) echo "usage: $0 [--check] [--min patch|minor|major]" >&2; exit 2 ;;
+      esac
+      shift 2
+      ;;
+    *) echo "usage: $0 [--check] [--min patch|minor|major]" >&2; exit 2 ;;
+  esac
+done
+
+# Rangfolge für den Vergleich „Analyse vs. --min".
+bump_rank() {
+  case "$1" in
+    major) echo 3 ;;
+    minor) echo 2 ;;
+    patch) echo 1 ;;
+    *)     echo 0 ;;
+  esac
+}
 
 LAST_TAG="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
 
@@ -49,6 +75,12 @@ elif printf '%s\n' "$SUBJECTS" | grep -qE '^feat(\([^)]+\))?:'; then
   BUMP=minor
 elif printf '%s\n' "$SUBJECTS" | grep -qE '^(fix|perf)(\([^)]+\))?:'; then
   BUMP=patch
+fi
+
+# --min hebt einen zu schwachen Analyse-Bump an, senkt einen stärkeren aber nie
+# ab: ein `feat!:` bleibt major, auch wenn nur `--min patch` verlangt wurde.
+if [ "$(bump_rank "$MIN_BUMP")" -gt "$(bump_rank "$BUMP")" ]; then
+  BUMP="$MIN_BUMP"
 fi
 
 if [ "$BUMP" = "none" ]; then
