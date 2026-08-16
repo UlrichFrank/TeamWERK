@@ -97,7 +97,7 @@ type CarpoolingOpenGroup struct {
 	Requests []CarpoolingOpenRequest `json:"requests"`
 }
 
-// Event is a user_events row as seen from the "Geschehen" dashboard section.
+// Event is a user_events row as seen from the "Ereignisse" dashboard section.
 // Mirrors eventlog.Event but with a dashboard-local, explicitly camelCase
 // json tag set (kept independent from the foundation type on purpose, so a
 // future eventlog.Event field doesn't silently leak into the API response).

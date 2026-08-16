@@ -667,10 +667,6 @@ export default function DashboardPage() {
           <MeineNachrichtenSection />
         </Accordion>
 
-        <Accordion id="geschehen" title="Geschehen" icon={Activity} isOpen={isOpen('geschehen')} onToggle={() => toggle('geschehen')}>
-          <GeschehenSection events={data.events ?? []} />
-        </Accordion>
-
         {showFahrt && (
           <Accordion id="fahrt" title="Fahrgemeinschaften" icon={Car} isOpen={isOpen('fahrt')} onToggle={() => toggle('fahrt')}>
             <FahrgemeinschaftenSection confirmed={data.carpoolingConfirmed} openGroups={data.carpoolingOpenGroups} />
@@ -680,6 +676,11 @@ export default function DashboardPage() {
         <Accordion id="team" title="Mein Team" icon={Users} isOpen={isOpen('team')} onToggle={() => toggle('team')}>
           <MeinTeamSection />
         </Accordion>
+
+        <Accordion id="ereignisse" title="Ereignisse" icon={Activity} isOpen={isOpen('ereignisse')} onToggle={() => toggle('ereignisse')}>
+          <GeschehenSection events={data.events ?? []} />
+        </Accordion>
+
       </div>
     </div>
   )

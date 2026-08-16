@@ -8,4 +8,4 @@
 # back to an older release. `pnpm install` is then blocked until the pinned
 # versions have aged in. Keep Dependabot's cooldown aligned with this window so
 # incoming PRs do not land pins that block installs for everyone.
-minimumReleaseAge: 11520
+#minimumReleaseAge: 11520
