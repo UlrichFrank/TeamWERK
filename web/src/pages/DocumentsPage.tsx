@@ -6,6 +6,7 @@ import {
   MoreVertical, ChevronRight, Lock, X, Check, AlertTriangle, Link2,
 } from 'lucide-react'
 import { api } from '../lib/api'
+import PersonChip from '../components/PersonChip'
 import { useAuth } from '../contexts/AuthContext'
 import { CLUB_FUNCTION_OPTIONS } from '../lib/constants'
 import { errorMessage, errorStatus } from '../lib/errors'
@@ -32,6 +33,7 @@ interface FileItem {
   size: number
   mime_type: string
   uploaded_by_name: string
+  uploaded_by_user_id?: number
   created_at: string
 }
 
@@ -880,7 +882,9 @@ export default function DocumentsPage() {
                           </td>
                           <td className="px-4 py-3 text-sm text-brand-text-muted">{formatBytes(file.size)}</td>
                           <td className="px-4 py-3 text-sm text-brand-text-muted">{formatDate(file.created_at)}</td>
-                          <td className="px-4 py-3 text-sm text-brand-text-muted">{file.uploaded_by_name}</td>
+                          <td className="px-4 py-3 text-sm text-brand-text-muted">
+                            <PersonChip userId={file.uploaded_by_user_id || undefined} name={file.uploaded_by_name} />
+                          </td>
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                             <ActionMenu items={[
                               { label: 'Herunterladen', icon: <Download className="w-4 h-4" />, onClick: () => openFile(file) },

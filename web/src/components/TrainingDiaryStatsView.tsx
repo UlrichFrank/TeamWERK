@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, ImageOff, Info } from 'lucide-react'
 import { api } from '../lib/api'
+import PersonChip from './PersonChip'
 import TrainingDiaryProofView from './TrainingDiaryProofView'
 import {
   fmtDate,
@@ -148,11 +149,13 @@ export default function TrainingDiaryStatsView({ teamId }: { teamId: number }) {
             const open = expanded === item.member_id
             return (
               <div key={item.member_id} className="border-b border-brand-border-subtle last:border-0">
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   aria-expanded={open}
                   onClick={() => setExpanded(open ? null : item.member_id)}
-                  className="w-full px-4 py-3 text-left hover:bg-brand-table-select transition-colors"
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setExpanded(open ? null : item.member_id) }}
+                  className="w-full px-4 py-3 text-left hover:bg-brand-table-select transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-2">
                     {open ? (
@@ -160,7 +163,9 @@ export default function TrainingDiaryStatsView({ teamId }: { teamId: number }) {
                     ) : (
                       <ChevronRight className="w-4 h-4 shrink-0 text-brand-text-muted" />
                     )}
-                    <span className="flex-1 text-sm font-medium text-brand-text">{item.member_name}</span>
+                    <span className="flex-1 text-sm font-medium text-brand-text">
+                      <PersonChip userId={item.user_id || undefined} name={item.member_name} />
+                    </span>
                     <span className="text-sm text-brand-text-muted whitespace-nowrap">
                       {item.entries} Einh. · {item.minutes} min
                       {item.entries > 0 && ` · RPE-Schnitt ${item.avg_rpe.toFixed(1)}`}
@@ -169,7 +174,7 @@ export default function TrainingDiaryStatsView({ teamId }: { teamId: number }) {
                   <div className="mt-2 pl-6">
                     <MinutesBar minutes={item.minutes} max={maxMinutes} />
                   </div>
-                </button>
+                </div>
                 {open && <MemberDetail memberId={item.member_id} seasonId={stats.season_id} />}
               </div>
             )

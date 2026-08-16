@@ -37,6 +37,7 @@ export interface DiaryEntry {
 export interface DiaryMemberSummary {
   member_id: number
   member_name: string
+  user_id?: number
   entries: number
   minutes: number
   avg_rpe: number

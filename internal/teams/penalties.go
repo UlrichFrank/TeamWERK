@@ -31,6 +31,7 @@ type Penalty struct {
 	ID         int    `json:"id"`
 	MemberID   int    `json:"memberId"`
 	MemberName string `json:"memberName"`
+	UserID     int    `json:"userId,omitempty"`
 	AmountCent int    `json:"amountCent"`
 	Reason     string `json:"reason"`
 	CreatedAt  string `json:"createdAt"`
@@ -40,6 +41,7 @@ type Penalty struct {
 type PenaltyTotal struct {
 	MemberID   int    `json:"memberId"`
 	MemberName string `json:"memberName"`
+	UserID     int    `json:"userId,omitempty"`
 	TotalCent  int    `json:"totalCent"`
 }
 
@@ -158,7 +160,7 @@ func (h *Handler) ListPenalties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT tp.id, tp.member_id, m.first_name || ' ' || m.last_name,
+		SELECT tp.id, tp.member_id, m.first_name || ' ' || m.last_name, COALESCE(m.user_id, 0),
 		       tp.amount_cent, tp.reason, tp.created_at
 		FROM team_penalties tp
 		JOIN members m ON m.id = tp.member_id
@@ -176,7 +178,7 @@ func (h *Handler) ListPenalties(w http.ResponseWriter, r *http.Request) {
 	totalIndex := map[int]int{}
 	for rows.Next() {
 		var p Penalty
-		if err := rows.Scan(&p.ID, &p.MemberID, &p.MemberName, &p.AmountCent, &p.Reason, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.MemberID, &p.MemberName, &p.UserID, &p.AmountCent, &p.Reason, &p.CreatedAt); err != nil {
 			continue
 		}
 		resp.Penalties = append(resp.Penalties, p)
@@ -187,6 +189,7 @@ func (h *Handler) ListPenalties(w http.ResponseWriter, r *http.Request) {
 			resp.Totals = append(resp.Totals, PenaltyTotal{
 				MemberID:   p.MemberID,
 				MemberName: p.MemberName,
+				UserID:     p.UserID,
 				TotalCent:  p.AmountCent,
 			})
 		}

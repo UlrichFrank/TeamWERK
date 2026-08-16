@@ -6,6 +6,11 @@ vi.mock('../../lib/api', () => ({
   api: { get: (...args: unknown[]) => get(...args) },
 }))
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
+// PersonChip hängt am PersonContactProvider (und damit am AuthContext) — für
+// diesen Test reicht der Name, siehe MeinTeamPage.onDemand.test.tsx.
+vi.mock('../PersonChip', () => ({
+  default: ({ name }: { name: string }) => <span>{name}</span>,
+}))
 
 const TrainingDiaryStatsView = (await import('../TrainingDiaryStatsView')).default
 
@@ -71,7 +76,10 @@ describe('TrainingDiaryStatsView', () => {
     // Vor dem Klick wurde nur die Team-Übersicht geholt.
     expect(get.mock.calls.filter(c => String(c[0]).includes('/members/'))).toHaveLength(0)
 
-    fireEvent.click(screen.getByRole('button', { name: /Anna Muster/ }))
+    // Name ist jetzt ein PersonChip (eigener <button>) — Klick auf die Kennzahlen
+    // im selben Toggle-Container, statt per Name-Rolle (der Name matcht sonst
+    // zwei Buttons: den Zeilen-Toggle und den PersonChip).
+    fireEvent.click(screen.getByText(/12 Einh\..*540 min.*RPE-Schnitt 6\.2/))
 
     await waitFor(() => {
       expect(get).toHaveBeenCalledWith('/members/5/training-diary?season=3')

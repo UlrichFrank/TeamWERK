@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { AlertTriangle, Ban, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
+import PersonChip from '../components/PersonChip'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
@@ -45,6 +46,7 @@ interface RSVPEntry {
 interface ParticipantItem {
   member_id: number
   member_name: string
+  user_id?: number
   is_extended: boolean
   is_trainer?: boolean
   rsvp_status: string | null
@@ -145,6 +147,7 @@ interface UnavailableInfo {
 interface AttendanceItem {
   member_id: number
   member_name: string
+  user_id?: number
   is_extended?: boolean
   is_trainer?: boolean
   rsvp_status: string | null
@@ -157,6 +160,7 @@ interface AttendanceItem {
 interface TableRow {
   member_id: number
   member_name: string
+  user_id?: number
   rsvp_status: string | null
   rsvp_is_default?: boolean
   reason: string | null
@@ -401,6 +405,7 @@ export default function TermineDetailPage() {
     const tableRows: TableRow[] = attendances.map(a => ({
       member_id: a.member_id,
       member_name: a.member_name,
+      user_id: a.user_id,
       is_extended: a.is_extended,
       is_trainer: a.is_trainer,
       rsvp_status: a.rsvp_status,
@@ -506,6 +511,7 @@ export default function TermineDetailPage() {
   const toRow = (p: ParticipantItem): TableRow => ({
     member_id: p.member_id,
     member_name: p.member_name,
+    user_id: p.user_id,
     rsvp_status: p.rsvp_status,
     rsvp_is_default: p.rsvp_is_default,
     reason: p.reason ?? null,
@@ -657,7 +663,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
     <Fragment>
       <tr className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors">
         <td className="px-2 sm:px-4 py-3 text-sm text-brand-text font-medium">
-          <span>{row.member_name}</span>
+          <PersonChip userId={row.user_id || undefined} name={row.member_name} />
           {row.unavailable && (
             <span
               title={row.unavailable.reason || undefined}

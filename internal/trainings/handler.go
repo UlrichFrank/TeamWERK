@@ -1658,6 +1658,7 @@ func writeRSVPLocked(w http.ResponseWriter, message string, locksAt time.Time) {
 type attendanceItem struct {
 	MemberID      int     `json:"member_id"`
 	MemberName    string  `json:"member_name"`
+	UserID        int     `json:"user_id,omitempty"`
 	IsExtended    bool    `json:"is_extended"`
 	IsTrainer     bool    `json:"is_trainer"`
 	RSVPStatus    *string `json:"rsvp_status"`
@@ -1731,10 +1732,11 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, reason, present
+		SELECT member_id, member_name, user_id, is_extended, is_trainer, rsvp_status, reason, present
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
+			       COALESCE(m.user_id, 0) AS user_id,
 			       0 AS is_extended,
 			       1 AS is_trainer,
 			       tr.status AS rsvp_status,
@@ -1749,6 +1751,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
+			       COALESCE(m.user_id, 0) AS user_id,
 			       0 AS is_extended,
 			       0 AS is_trainer,
 			       tr.status AS rsvp_status,
@@ -1768,6 +1771,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
+			       COALESCE(m.user_id, 0) AS user_id,
 			       1 AS is_extended,
 			       0 AS is_trainer,
 			       tr.status AS rsvp_status,
@@ -1812,7 +1816,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		var isExtended, isTrainer int
 		var rsvp, reason sql.NullString
 		var present sql.NullInt64
-		rows.Scan(&item.MemberID, &item.MemberName, &isExtended, &isTrainer, &rsvp, &reason, &present)
+		rows.Scan(&item.MemberID, &item.MemberName, &item.UserID, &isExtended, &isTrainer, &rsvp, &reason, &present)
 		item.IsExtended = isExtended == 1
 		item.IsTrainer = isTrainer == 1
 		if rsvp.Valid {

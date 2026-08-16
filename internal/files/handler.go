@@ -527,13 +527,14 @@ type fileResponse struct {
 	Size           int64  `json:"size"`
 	MimeType       string `json:"mime_type"`
 	UploadedByName string `json:"uploaded_by_name"`
+	UploadedByID   int    `json:"uploaded_by_user_id"`
 	CreatedAt      string `json:"created_at"`
 }
 
 func (h *Handler) listFiles(r *http.Request, folderID int) ([]fileResponse, error) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT f.id, f.original_name, f.size, f.mime_type, f.created_at,
-		        COALESCE(u.first_name||' '||u.last_name, u.email)
+		        COALESCE(u.first_name||' '||u.last_name, u.email), u.id
 		   FROM files f
 		   JOIN users u ON u.id = f.uploaded_by
 		  WHERE f.folder_id = ?
@@ -546,7 +547,7 @@ func (h *Handler) listFiles(r *http.Request, folderID int) ([]fileResponse, erro
 	result := []fileResponse{}
 	for rows.Next() {
 		var f fileResponse
-		if err := rows.Scan(&f.ID, &f.Name, &f.Size, &f.MimeType, &f.CreatedAt, &f.UploadedByName); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.Size, &f.MimeType, &f.CreatedAt, &f.UploadedByName, &f.UploadedByID); err != nil {
 			continue
 		}
 		result = append(result, f)

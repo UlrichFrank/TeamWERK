@@ -116,7 +116,7 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
                 <img
                   src={state.photo_url}
                   alt={state.name}
-                  className="w-10 h-10 rounded-full object-cover mb-2"
+                  className="w-20 h-20 rounded-full object-cover mb-2"
                 />
               )}
               <p className="font-semibold text-brand-text mb-1.5">{state.name}</p>

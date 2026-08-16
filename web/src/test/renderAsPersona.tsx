@@ -2,6 +2,7 @@ import { act, render, type RenderResult } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { AuthContext, type AuthCtx, type User } from '../contexts/AuthContext'
+import { PersonContactProvider } from '../contexts/PersonContactContext'
 import { type Persona, personaById } from './personas'
 import { setupApiMock, type MockEntry } from './apiMock'
 
@@ -112,9 +113,11 @@ export function renderAsPersona(
 
   return render(
     <AuthContext.Provider value={ctx}>
-      <MemoryRouter initialEntries={initialEntries ?? [route]}>
-        {ui}
-      </MemoryRouter>
+      <PersonContactProvider>
+        <MemoryRouter initialEntries={initialEntries ?? [route]}>
+          {ui}
+        </MemoryRouter>
+      </PersonContactProvider>
     </AuthContext.Provider>,
   )
 }
@@ -130,7 +133,9 @@ export function renderAsPersonaNoRouter(
 
   return render(
     <AuthContext.Provider value={ctx}>
-      {ui}
+      <PersonContactProvider>
+        {ui}
+      </PersonContactProvider>
     </AuthContext.Provider>,
   )
 }

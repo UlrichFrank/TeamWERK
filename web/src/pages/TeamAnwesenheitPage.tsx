@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AlertTriangle, Check, MinusCircle, X, ChevronRight, EyeOff, Eye } from 'lucide-react'
 import { api } from '../lib/api'
+import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { buildTeamShortNames } from '../lib/teamName'
 
 interface MemberCounts {
   member_id: number
   member_name: string
+  user_id?: number
   training_present: number
   training_missed: number
   training_excused: number
@@ -111,7 +113,9 @@ function StatTable({ title, members, averages, onMember }: {
               onClick={() => onMember(m.member_id)}
               className="border-b border-brand-border-subtle last:border-0 hover:bg-brand-table-select transition-colors cursor-pointer"
             >
-              <td className="px-4 py-3 text-sm font-medium text-brand-text">{m.member_name}</td>
+              <td className="px-4 py-3 text-sm font-medium text-brand-text">
+                <PersonChip userId={m.user_id || undefined} name={m.member_name} />
+              </td>
               <td className="px-4 py-3"><PillarCell present={m.training_present} excused={m.training_excused} missed={m.training_missed} /></td>
               <td className="px-4 py-3"><PillarCell present={m.game_present} excused={m.game_excused} missed={m.game_missed} /></td>
             </tr>
@@ -127,20 +131,25 @@ function StatTable({ title, members, averages, onMember }: {
       {/* Mobile-Cards */}
       <div className="sm:hidden divide-y divide-brand-border-subtle">
         {members.map(m => (
-          <button
+          <div
             key={m.member_id}
+            role="button"
+            tabIndex={0}
             onClick={() => onMember(m.member_id)}
-            className="w-full text-left px-4 py-3 flex items-start justify-between gap-2 hover:bg-brand-table-select transition-colors"
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onMember(m.member_id) }}
+            className="w-full text-left px-4 py-3 flex items-start justify-between gap-2 hover:bg-brand-table-select transition-colors cursor-pointer"
           >
             <div className="min-w-0">
-              <div className="font-medium text-brand-text mb-1">{m.member_name}</div>
+              <div className="font-medium text-brand-text mb-1">
+                <PersonChip userId={m.user_id || undefined} name={m.member_name} />
+              </div>
               <div className="text-xs text-brand-text-muted mb-0.5">Trainings</div>
               <PillarCell present={m.training_present} excused={m.training_excused} missed={m.training_missed} />
               <div className="text-xs text-brand-text-muted mt-1 mb-0.5">Spiele</div>
               <PillarCell present={m.game_present} excused={m.game_excused} missed={m.game_missed} />
             </div>
             <ChevronRight className="w-5 h-5 text-brand-text-subtle shrink-0 mt-1" />
-          </button>
+          </div>
         ))}
         <div className="px-4 py-3 bg-brand-surface-card">
           <div className="font-semibold text-brand-text-muted uppercase text-xs tracking-wide mb-1">Ø Team — Trainings</div>

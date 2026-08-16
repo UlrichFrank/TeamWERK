@@ -2761,6 +2761,7 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 type participantItem struct {
 	MemberID         int     `json:"member_id"`
 	MemberName       string  `json:"member_name"`
+	UserID           int     `json:"user_id,omitempty"`
 	IsExtended       bool    `json:"is_extended"`
 	IsTrainer        bool    `json:"is_trainer"`
 	RsvpStatus       *string `json:"rsvp_status"`
@@ -2872,10 +2873,11 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		Scan(&defPlayers, &defExtended)
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT member_id, member_name, is_extended, is_trainer, rsvp_status, reason, in_lineup, team_id, cross_team_visible
+		SELECT member_id, member_name, user_id, is_extended, is_trainer, rsvp_status, reason, in_lineup, team_id, cross_team_visible
 		FROM (
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
+			       COALESCE(m.user_id, 0) AS user_id,
 			       0 AS is_extended,
 			       1 AS is_trainer,
 			       gr.status AS rsvp_status,
@@ -2894,6 +2896,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
+			       COALESCE(m.user_id, 0) AS user_id,
 			       0 AS is_extended,
 			       0 AS is_trainer,
 			       gr.status AS rsvp_status,
@@ -2912,6 +2915,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 
 			SELECT DISTINCT m.id AS member_id,
 			       m.first_name || ' ' || m.last_name AS member_name,
+			       COALESCE(m.user_id, 0) AS user_id,
 			       1 AS is_extended,
 			       0 AS is_trainer,
 			       gr.status AS rsvp_status,
@@ -2944,7 +2948,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		var p participantItem
 		var status, reason sql.NullString
 		var isExtended, isTrainer, inLineup, ctv int
-		rows.Scan(&p.MemberID, &p.MemberName, &isExtended, &isTrainer, &status, &reason, &inLineup, &p.TeamID, &ctv)
+		rows.Scan(&p.MemberID, &p.MemberName, &p.UserID, &isExtended, &isTrainer, &status, &reason, &inLineup, &p.TeamID, &ctv)
 		p.IsExtended = isExtended == 1
 		p.IsTrainer = isTrainer == 1
 		p.InLineup = inLineup == 1

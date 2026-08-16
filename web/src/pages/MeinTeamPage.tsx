@@ -31,8 +31,8 @@ interface TeamRoster {
 interface MyTeam { id: number; name: string }
 
 // Strafen-Datenmodell (Beträge in Cent)
-interface Penalty { id: number; memberId: number; memberName: string; amountCent: number; reason: string; createdAt: string }
-interface PenaltyTotal { memberId: number; memberName: string; totalCent: number }
+interface Penalty { id: number; memberId: number; memberName: string; userId?: number; amountCent: number; reason: string; createdAt: string }
+interface PenaltyTotal { memberId: number; memberName: string; userId?: number; totalCent: number }
 interface PenaltiesData { penalties: Penalty[]; totals: PenaltyTotal[]; canLevy: boolean; myMemberIds: number[] }
 
 // Verwaltungs-Kataloge
@@ -643,7 +643,9 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
               const renderEntry = (t: PenaltyTotal, first = false) => (
                 <div key={t.memberId} className={first ? '' : 'border-t border-brand-border-subtle pt-3'}>
                   <div className="flex items-center justify-between">
-                    <span className={`text-sm text-brand-text ${mySet.has(t.memberId) ? 'font-semibold' : 'font-medium'}`}>{t.memberName}</span>
+                    <span className={`text-sm ${mySet.has(t.memberId) ? 'font-semibold' : 'font-medium'}`}>
+                      <PersonChip userId={t.userId || undefined} name={t.memberName} />
+                    </span>
                     <div className="flex items-center gap-2">
                       <span className={`text-sm text-brand-text-muted ${mySet.has(t.memberId) ? 'font-semibold' : ''}`}>{fmtPenaltyAmount(t.totalCent, penaltyUnit)}</span>
                       {penalties.canLevy && (

@@ -30,6 +30,7 @@ func NewHandler(db *sql.DB, h *hub.EventHub) *Handler {
 type memberCounts struct {
 	MemberID        int    `json:"member_id"`
 	MemberName      string `json:"member_name"`
+	UserID          int    `json:"user_id,omitempty"`
 	TrainingPresent int    `json:"training_present"`
 	TrainingMissed  int    `json:"training_missed"`
 	TrainingExcused int    `json:"training_excused"`
@@ -133,7 +134,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 
 	// Trainings-Zähler
 	trainingSQL := `
-		SELECT m.id, m.first_name || ' ' || m.last_name,
+		SELECT m.id, m.first_name || ' ' || m.last_name, COALESCE(m.user_id, 0),
 		       COALESCE(SUM(CASE WHEN ta.present = 1 AND msu.id IS NULL THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ta.present = 0 AND msu.id IS NULL THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ta.present IS NULL
@@ -173,7 +174,7 @@ func (h *Handler) loadCounts(ctx context.Context, teamID, seasonID int, startDat
 	order := []int{}
 	for rows.Next() {
 		var c memberCounts
-		if err := rows.Scan(&c.MemberID, &c.MemberName,
+		if err := rows.Scan(&c.MemberID, &c.MemberName, &c.UserID,
 			&c.TrainingPresent, &c.TrainingMissed, &c.TrainingExcused); err != nil {
 			return nil, err
 		}

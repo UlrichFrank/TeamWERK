@@ -13,6 +13,7 @@ import (
 type memberSummary struct {
 	MemberID   int     `json:"member_id"`
 	MemberName string  `json:"member_name"`
+	UserID     int     `json:"user_id,omitempty"`
 	Entries    int     `json:"entries"`
 	Minutes    int     `json:"minutes"`
 	AvgRPE     float64 `json:"avg_rpe"`
@@ -70,6 +71,7 @@ func (h *Handler) GetTeamStats(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT m.id,
 		       m.first_name || ' ' || m.last_name,
+		       COALESCE(m.user_id, 0),
 		       COUNT(e.id),
 		       COALESCE(SUM(e.duration_min), 0),
 		       COALESCE(AVG(e.rpe), 0)
@@ -100,7 +102,7 @@ func (h *Handler) GetTeamStats(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var s memberSummary
 		var avg float64
-		if err := rows.Scan(&s.MemberID, &s.MemberName, &s.Entries, &s.Minutes, &avg); err != nil {
+		if err := rows.Scan(&s.MemberID, &s.MemberName, &s.UserID, &s.Entries, &s.Minutes, &avg); err != nil {
 			http.Error(w, "db error", http.StatusInternalServerError)
 			return
 		}

@@ -12,6 +12,7 @@ import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 import MockAdapter from 'axios-mock-adapter'
 import { api } from '../../lib/api'
 import { AuthContext, type AuthCtx, type User } from '../../contexts/AuthContext'
+import { PersonContactProvider } from '../../contexts/PersonContactContext'
 import DocumentsPage from '../DocumentsPage'
 
 const ADMIN_USER: User = {
@@ -89,12 +90,14 @@ describe('DocumentsPage.openFile', () => {
 
     render(
       <AuthContext.Provider value={ADMIN_CTX}>
+      <PersonContactProvider>
         <MemoryRouter initialEntries={['/dokumente/9']}>
           <Routes>
             <Route path="/dokumente/:folderId" element={<DocumentsPage />} />
             <Route path="/dokumente/anzeigen/:fileId" element={<LocationProbe />} />
           </Routes>
         </MemoryRouter>
+      </PersonContactProvider>
       </AuthContext.Provider>,
     )
 
@@ -133,11 +136,13 @@ describe('DocumentsPage.openFile', () => {
 
     render(
       <AuthContext.Provider value={ADMIN_CTX}>
+      <PersonContactProvider>
         <MemoryRouter initialEntries={['/dokumente/9']}>
           <Routes>
             <Route path="/dokumente/:folderId" element={<DocumentsPage />} />
           </Routes>
         </MemoryRouter>
+      </PersonContactProvider>
       </AuthContext.Provider>,
     )
 
@@ -180,12 +185,14 @@ describe('DocumentsPage.openFile', () => {
 
     render(
       <AuthContext.Provider value={ADMIN_CTX}>
+      <PersonContactProvider>
         <MemoryRouter initialEntries={['/dokumente/9']}>
           <Routes>
             <Route path="/dokumente/:folderId" element={<DocumentsPage />} />
             <Route path="/dokumente/anzeigen/:fileId" element={<LocationProbe />} />
           </Routes>
         </MemoryRouter>
+      </PersonContactProvider>
       </AuthContext.Provider>,
     )
 
