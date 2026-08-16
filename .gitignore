@@ -18,7 +18,10 @@ backup.*/
 storage/
 *.db-shm
 *.db-wal
-*.db.bak
+# Alles mit Suffix hinter der Endung: .db.bak, .db.pre-medien-backup, …
+# `*.db` allein greift dafür nicht — so ist teamwerk.db.pre-medien-backup
+# (1,4 MB echte Mitgliederdaten) in 124ed257 versehentlich mitgewandert.
+*.db.*
 
 # SQL-Dumps (PII)
 /*.sql
