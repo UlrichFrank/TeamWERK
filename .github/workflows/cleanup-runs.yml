@@ -114,6 +114,11 @@ jobs:
               OK=$((OK + 1))
               continue
             fi
+            # GitHub verlangt für schreibende Requests mindestens eine Sekunde
+            # Abstand, sonst greift das Secondary Rate Limit und ein Gutteil der
+            # DELETEs kommt als 403 zurück. Bei MAX_DELETE=400 sind das ~7 min
+            # Laufzeit — für einen nächtlichen Aufräumlauf belanglos.
+            sleep 1
             if gh api -X DELETE "/repos/$REPO/actions/runs/$id" --silent 2>/dev/null; then
               OK=$((OK + 1))
             else
