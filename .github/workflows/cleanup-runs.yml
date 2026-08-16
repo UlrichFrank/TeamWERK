@@ -1,0 +1,140 @@
+# Löscht abgeschlossene Workflow-Runs, die älter als N Tage sind (Default 3).
+#
+# Zweck ist Aufräumen, nicht Archivierung: was hier verschwindet, sind Logs und
+# Artefakt-Metadaten der Runs. Die Historie, auf die es fachlich ankommt, hängt
+# nicht daran — Tags und GitHub-Releases (release.yml) bleiben unberührt, ebenso
+# die Prod-DB-Backups auf dem VPS (`pre-deploy-<tag>-<stamp>.db`, siehe
+# deploy.yml). Wer nachvollziehen will, welche Version wann live ging, liest das
+# dort ab, nicht aus einem 4 Tage alten Run-Log.
+#
+# Nur `status=completed` wird angefasst: laufende oder wartende Runs (etwa ein
+# Deploy, der vor dem `production`-Environment auf Freigabe wartet) bleiben
+# stehen, unabhängig vom Alter. Der eigene Run fällt dadurch ebenfalls heraus.
+name: cleanup-runs
+
+on:
+  schedule:
+    # Täglich 03:17 UTC. Krumme Minute bewusst — zur vollen Stunde ist die
+    # GitHub-Scheduler-Queue am vollsten und Läufe verzögern sich messbar.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Runs älter als N Tage löschen'
+        required: false
+        default: '3'
+      dry_run:
+        description: 'Nur auflisten, nichts löschen'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: cleanup-runs
+  cancel-in-progress: false
+
+permissions:
+  actions: write      # Runs löschen
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alte Runs ermitteln und löschen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DAYS: ${{ inputs.days || '3' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          # Workflow-Dateien, deren Runs nie gelöscht werden (leer = keine
+          # Ausnahme). Kandidat wäre `.github/workflows/deploy.yml`, wenn die
+          # Prod-Deploy-Logs länger nachvollziehbar bleiben sollen.
+          PROTECTED: ''
+          # Obergrenze pro Lauf, damit ein erster Durchgang über Jahre alter
+          # Runs nicht ins API-Ratelimit rennt. Wird sie erreicht, sagt der Lauf
+          # das explizit — der nächste Durchgang holt den Rest.
+          MAX_DELETE: '400'
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "$DAYS" | grep -qE '^[0-9]+$'; then
+            echo "::error::days='$DAYS' ist keine Zahl"
+            exit 1
+          fi
+          CUTOFF=$(date -u -d "$DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Repo   : $REPO"
+          echo "Cutoff : $CUTOFF (älter als $DAYS Tage)"
+
+          # Erst vollständig sammeln, dann löschen. Andersherum verschieben sich
+          # die Seiten unter der Paginierung weg und der Lauf überspringt Runs.
+          #
+          # Das Alter wird ZWEIMAL geprüft: `created=<…` als Server-Filter (holt
+          # gar nicht erst alles) und `.created_at < "$CUTOFF"` im jq. Der jq-Teil
+          # ist der eigentliche Schutz — ignorierte GitHub den Query-Parameter
+          # still, käme die volle Run-Liste zurück und der Lauf würde ohne die
+          # zweite Prüfung auch die Runs von heute löschen. ISO-8601-UTC-Strings
+          # sind lexikografisch vergleichbar, der String-Vergleich genügt.
+          gh api --paginate -X GET "/repos/$REPO/actions/runs" \
+            -f per_page=100 -f "created=<$CUTOFF" \
+            --jq ".workflow_runs[]
+                  | select(.status == \"completed\")
+                  | select(.created_at < \"$CUTOFF\")
+                  | [.id, .path, .created_at, .name] | @tsv" > all.tsv
+
+          : > candidates.tsv
+          while IFS=$'\t' read -r id path created name; do
+            [ -n "${id:-}" ] || continue
+            if [ -n "$PROTECTED" ] && printf '%s' "$PROTECTED" | tr ',' '\n' | grep -qxF "$path"; then
+              continue
+            fi
+            printf '%s\t%s\t%s\t%s\n' "$id" "$path" "$created" "$name" >> candidates.tsv
+          done < all.tsv
+
+          TOTAL=$(wc -l < candidates.tsv | tr -d ' ')
+          echo "Kandidaten: $TOTAL"
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "Nichts zu löschen." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          CAPPED=0
+          if [ "$TOTAL" -gt "$MAX_DELETE" ]; then
+            CAPPED=$((TOTAL - MAX_DELETE))
+            head -n "$MAX_DELETE" candidates.tsv > batch.tsv
+            echo "::warning::$TOTAL Kandidaten, Obergrenze $MAX_DELETE — $CAPPED bleiben für den nächsten Lauf."
+          else
+            cp candidates.tsv batch.tsv
+          fi
+
+          OK=0; FAIL=0
+          while IFS=$'\t' read -r id path created name; do
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[dry-run] $id  $created  $name ($path)"
+              OK=$((OK + 1))
+              continue
+            fi
+            if gh api -X DELETE "/repos/$REPO/actions/runs/$id" --silent 2>/dev/null; then
+              OK=$((OK + 1))
+            else
+              # Einzelne Fehlschläge sind erwartbar (Run wurde parallel gelöscht,
+              # oder er hängt an einer Branch-Protection-Regel). Sie dürfen den
+              # Lauf nicht abbrechen, sonst bleibt der Rest liegen.
+              echo "::warning::Konnte Run $id ($name, $created) nicht löschen"
+              FAIL=$((FAIL + 1))
+            fi
+          done < batch.tsv
+
+          {
+            echo "### cleanup-runs"
+            echo
+            echo "- Cutoff: \`$CUTOFF\` (älter als $DAYS Tage)"
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "- **Dry-Run** — $OK Runs wären gelöscht worden"
+            else
+              echo "- Gelöscht: **$OK**"
+              [ "$FAIL" -gt 0 ] && echo "- Fehlgeschlagen: $FAIL"
+            fi
+            [ "$CAPPED" -gt 0 ] && echo "- Zurückgestellt (Obergrenze $MAX_DELETE): $CAPPED"
+            true
+          } >> "$GITHUB_STEP_SUMMARY"

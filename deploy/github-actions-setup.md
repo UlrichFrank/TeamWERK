@@ -10,6 +10,16 @@ Zwei Workflows, eine Kette:
    `resolve` → `gate` → `backup` → `deploy`. `concurrency: deploy-prod`
    verhindert parallele Prod-Deploys.
 
+Daneben räumt `.github/workflows/cleanup-runs.yml` täglich um 03:17 UTC
+abgeschlossene Workflow-Runs weg, die älter als 3 Tage sind (`workflow_dispatch`
+mit `days` und `dry_run` zum Nachjustieren). Angefasst wird nur
+`status=completed` — ein Deploy, der vor dem `production`-Environment auf
+Freigabe wartet, bleibt also stehen. Was dabei verschwindet, sind Run-Logs;
+Tags, GitHub-Releases und die VPS-seitigen `pre-deploy-*.db`-Backups bleiben.
+Sollen die Prod-Deploy-Logs länger nachvollziehbar bleiben, trägt man
+`.github/workflows/deploy.yml` in die `PROTECTED`-Variable des Workflows ein
+(Default: leer, also keine Ausnahme).
+
 ## Taggen + Deployen in einem Zug (der normale manuelle Weg)
 
 Actions → **release** → *Run workflow* auf `main`, `deploy` auf **true**. Der Lauf
