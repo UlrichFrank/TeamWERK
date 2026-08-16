@@ -25,7 +25,7 @@ function hoursAgo(h: number): string {
   return new Date(Date.now() - h * 60 * 60 * 1000).toISOString()
 }
 
-describe('DashboardPage — Geschehen-Section (Event-Log)', () => {
+describe('DashboardPage — Ereignisse-Section (Event-Log)', () => {
   test('zeigt Eintrag mit Titel, Text und relativer Zeit; Eintrag mit url ist anklickbar', async () => {
     const createdAt = hoursAgo(2)
     renderAsPersona(<DashboardPage />, 'spieler', {
@@ -50,7 +50,7 @@ describe('DashboardPage — Geschehen-Section (Event-Log)', () => {
     })
     await flushAsync()
 
-    expect(screen.getByText('Geschehen')).toBeInTheDocument()
+    expect(screen.getByText('Ereignisse')).toBeInTheDocument()
     const title = screen.getByText('Spiel gegen Ludwigsburg abgesagt')
     expect(screen.getByText('Halle gesperrt')).toBeInTheDocument()
     expect(screen.getByText(relativeTime(createdAt))).toBeInTheDocument()
@@ -96,7 +96,7 @@ describe('DashboardPage — Geschehen-Section (Event-Log)', () => {
     })
     await flushAsync()
 
-    expect(screen.getByText('Geschehen')).toBeInTheDocument()
+    expect(screen.getByText('Ereignisse')).toBeInTheDocument()
     expect(screen.getByText('Keine Ereignisse.')).toBeInTheDocument()
   })
 })

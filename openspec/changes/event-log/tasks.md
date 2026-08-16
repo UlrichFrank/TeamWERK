@@ -57,12 +57,12 @@
 ## 8. Frontend
 
 - [x] 8.1 `web/src/pages/DashboardPage.tsx`: Typ `EventItem` + `events` in `DashboardData`.
-- [x] 8.2 `GeschehenSection`-Component nach dem Muster der bestehenden Sections; `DashboardRow` wiederverwenden. Einträge mit leerer `url` sind nicht anklickbar.
-- [x] 8.3 `Accordion id="ereignisse" title="Ereignisse"` einhängen — **nicht** „Benachrichtigungen" (Spec: Abgrenzung zur Section „Nachrichten"). Icon aus `lucide-react` (`Activity`), keine Unicode-Zeichen. In den `openSections`-Default aufnehmen.
+- [x] 8.2 `EreignisseSection`-Component nach dem Muster der bestehenden Sections; `DashboardRow` wiederverwenden. Einträge mit leerer `url` sind nicht anklickbar.
+- [x] 8.3 `Accordion id="ereignisse" title="Ereignisse"` einhängen — **nicht** „Benachrichtigungen" (Spec: Abgrenzung zur Section „Nachrichten"). Titel und `id` folgen dem Spec-Wortlaut; eine abweichende `id` fiele zusätzlich aus dem `openSections`-Default heraus und die Section startete auf Desktop zugeklappt. Icon aus `lucide-react` (`Activity`), keine Unicode-Zeichen. In den `openSections`-Default aufnehmen.
 - [x] 8.4 Relative Zeitangabe („vor 2 Std.") — prüfen, ob im Repo bereits ein Helfer existiert, bevor ein neuer entsteht. Gefunden: lokale `relativeTime` in `AdminUsersPage.tsx` — nach `web/src/lib/relativeTime.ts` extrahiert und in beiden Stellen wiederverwendet (statt Duplikat).
 - [x] 8.5 Kein Eingriff in `useLiveUpdates` nötig, sofern die bestehende Bedingung (`games`/`trainings`/`duties`/`mitfahrgelegenheiten`/`absences`/`event-note`) unverändert bleibt — verifizieren, dass sie `load(true)` auslöst. Verifiziert, unverändert gelassen.
 - [x] 8.6 Der App-Icon-Badge bleibt unberührt: keine Änderung an `AppShell.tsx`/`sw.ts`.
-- [x] 8.7 Tests: Rendering mit/ohne Einträge, Leerzustand, Eintrag ohne `url` ist kein Link. Datei `web/src/pages/__tests__/DashboardPage.geschehen.test.tsx` (Verzeichnis/Namensschema der bereits existierenden `DashboardPage.nachrichten.test.tsx` gefolgt statt `DashboardPage.test.tsx`).
+- [x] 8.7 Tests: Rendering mit/ohne Einträge, Leerzustand, Eintrag ohne `url` ist kein Link. Datei `web/src/pages/__tests__/DashboardPage.ereignisse.test.tsx` (Verzeichnis/Namensschema der bereits existierenden `DashboardPage.nachrichten.test.tsx` gefolgt statt `DashboardPage.test.tsx`).
 - [x] 8.8 Nur `brand-*`-Tokens, verbindliche Klassen-Strings aus `docs/agent/05-frontend.md`.
 
 ## 9. Absagegrund-Umkehr

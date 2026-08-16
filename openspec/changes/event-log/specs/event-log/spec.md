@@ -111,11 +111,11 @@ Die Bereinigung SHALL im bestehenden Scheduler laufen und ohne Idempotenzschutz 
 - **WHEN** eine Zeile 91 Tage alt ist und `seen_at IS NULL` trägt
 - **THEN** löscht der Retention-Lauf sie
 
-### Requirement: Dashboard-Section „Geschehen"
+### Requirement: Dashboard-Section „Ereignisse"
 
-Das Dashboard SHALL eine Section „Geschehen" als kollabierbares `Accordion` in derselben Card-Optik wie die bestehenden Sections anzeigen (`bg-brand-surface-card`, `border-t-4 border-brand-yellow`). Sie listet die Log-Einträge des Nutzers, neueste zuerst, mit Titel, Text, relativer Zeitangabe und — sofern `url` gesetzt ist — Sprung ins Ziel.
+Das Dashboard SHALL eine Section „Ereignisse" als kollabierbares `Accordion` in derselben Card-Optik wie die bestehenden Sections anzeigen (`bg-brand-surface-card`, `border-t-4 border-brand-yellow`). Sie listet die Log-Einträge des Nutzers, neueste zuerst, mit Titel, Text, relativer Zeitangabe und — sofern `url` gesetzt ist — Sprung ins Ziel.
 
-Die Section SHALL **nicht** „Benachrichtigungen" heißen. Sie steht neben der bestehenden Section „Nachrichten" (Chat, ungelesen-basiert) und muss von ihr unterscheidbar bleiben: „Nachrichten" = jemand spricht mich an, „Geschehen" = die Terminlage bewegt sich.
+Die Section SHALL **nicht** „Benachrichtigungen" heißen. Sie steht neben der bestehenden Section „Nachrichten" (Chat, ungelesen-basiert) und muss von ihr unterscheidbar bleiben: „Nachrichten" = jemand spricht mich an, „Ereignisse" = die Terminlage bewegt sich.
 
 Der Event-Log SHALL **nicht** in den App-Icon-Badge (`navigator.setAppBadge`) einzahlen; dieser bleibt Chat-only.
 
@@ -124,7 +124,7 @@ Die Section SHALL sich über die bestehende `useLiveUpdates`-Verdrahtung der Das
 #### Scenario: Einträge vorhanden
 
 - **WHEN** ein Nutzer mit Log-Einträgen das Dashboard öffnet
-- **THEN** zeigt die Section „Geschehen" die Einträge, neueste zuerst
+- **THEN** zeigt die Section „Ereignisse" die Einträge, neueste zuerst
 - **THEN** führt ein Klick auf einen Eintrag mit gesetzter `url` an das dort genannte Ziel
 
 #### Scenario: Eintrag ohne Sprungziel

@@ -555,14 +555,14 @@ function MeineNachrichtenSection() {
   )
 }
 
-// ── Geschehen ─────────────────────────────────────────────────────────────────
+// ── Ereignisse ────────────────────────────────────────────────────────────────
 //
 // Bewusst getrennt von „Nachrichten": „Nachrichten" = jemand spricht mich an
-// (ungelesen-basiert, Chat), „Geschehen" = die Terminlage bewegt sich (Event-
+// (ungelesen-basiert, Chat), „Ereignisse" = die Terminlage bewegt sich (Event-
 // Log, 3-Tage-Retention nach erster Ansicht). Zahlt nicht in den App-Badge ein
 // (der bleibt Chat-only) — hier bewusst keine Änderung an AppShell/sw.ts.
 
-function GeschehenSection({ events }: { events: EventItem[] }) {
+function EreignisseSection({ events }: { events: EventItem[] }) {
   if (events.length === 0) {
     return <p className="text-sm text-brand-text-muted py-1">Keine Ereignisse.</p>
   }
@@ -597,7 +597,7 @@ export default function DashboardPage() {
 
   const [openSection, setOpenSection] = useState<string>('termine')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    termine: true, nachrichten: true, geschehen: true, dienste: true, team: true, fahrt: true,
+    termine: true, nachrichten: true, ereignisse: true, dienste: true, team: true, fahrt: true,
   })
 
   const isOpen = (id: string) => isMobile ? openSection === id : openSections[id]
@@ -678,7 +678,7 @@ export default function DashboardPage() {
         </Accordion>
 
         <Accordion id="ereignisse" title="Ereignisse" icon={Activity} isOpen={isOpen('ereignisse')} onToggle={() => toggle('ereignisse')}>
-          <GeschehenSection events={data.events ?? []} />
+          <EreignisseSection events={data.events ?? []} />
         </Accordion>
 
       </div>

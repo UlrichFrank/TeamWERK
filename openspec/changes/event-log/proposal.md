@@ -120,11 +120,11 @@ Allowlist-Eintrag im Architektur-Test dokumentiert.
 Der App-Badge (`navigator.setAppBadge`) bleibt unverändert Chat-only — der Event-Log zahlt
 nicht ein.
 
-### Dashboard-Section „Geschehen"
+### Dashboard-Section „Ereignisse"
 
 Neue `Accordion`-Section, gleiche Optik wie die bestehenden. Bewusst **nicht**
 „Benachrichtigungen" genannt: „Nachrichten" (jemand spricht mich an, ungelesen-basiert) und
-„Geschehen" (die Terminlage bewegt sich, 3-Tage-Retention) müssen unterscheidbar bleiben.
+„Ereignisse" (die Terminlage bewegt sich, 3-Tage-Retention) müssen unterscheidbar bleiben.
 
 Live-Aktualisierung entsteht ohne neue Hub-Verdrahtung: die Dashboard-Seite lädt bereits
 bei `games`/`trainings`/`duties`/`mitfahrgelegenheiten` neu, und das Broadcast-Gate
