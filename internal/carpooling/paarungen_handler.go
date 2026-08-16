@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
-	"github.com/teamstuttgart/teamwerk/internal/push"
+	"github.com/teamstuttgart/teamwerk/internal/notify"
 )
 
 // POST /api/mitfahrt-paarungen
@@ -206,19 +206,21 @@ func (h *Handler) RequestPairing(w http.ResponseWriter, r *http.Request) {
 	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
-	go func() {
-		opponent, date := h.gameInfo(gameID)
-		var msg string
-		if initiertVon == "suche" {
-			msg = fmt.Sprintf("%s möchte mitfahren — %s, %s", actorName, opponent, date)
-		} else {
-			msg = fmt.Sprintf("%s bietet dir einen Platz an — %s, %s", actorName, opponent, date)
-		}
-		// Präferenz respektieren — konsistent mit ConfirmPairing/RejectPairing.
-		if recips := push.FilterByPushPref(h.db, []int{oppositeUserID}, "carpooling"); len(recips) > 0 {
-			push.SendToUsers(h.db, h.cfg, recips, "Mitfahranfrage", msg, "/mitfahrgelegenheiten")
-		}
-	}()
+	// Synchron (kein go func) — konsistent mit den übrigen notify.Send-Aufrufstellen
+	// im Repo (games/duties/trainings/auth rufen ebenfalls synchron nach dem
+	// Response-Write). notify.Send schreibt den Event-Log per DB-Write; asynchron
+	// entkoppelt vom Request-Lebenszyklus lief das gegen Test-Teardown (TempDir-
+	// Cleanup schließt die DB, während die Goroutine noch schreibt).
+	opponent, date := h.gameInfo(gameID)
+	var msg string
+	if initiertVon == "suche" {
+		msg = fmt.Sprintf("%s möchte mitfahren — %s, %s", actorName, opponent, date)
+	} else {
+		msg = fmt.Sprintf("%s bietet dir einen Platz an — %s, %s", actorName, opponent, date)
+	}
+	// Präferenz respektieren — konsistent mit ConfirmPairing/RejectPairing.
+	// notify.NoEmail(): bewusst push-only, die Fassade übernimmt Log-Fan-out + Präferenz.
+	notify.Send(h.db, h.cfg, []int{oppositeUserID}, "carpooling", "Mitfahranfrage", msg, "/mitfahrgelegenheiten", notify.NoEmail())
 }
 
 // getOrCreateSuche liefert die ID eines Suche-Eintrags für (gameID, userID) ohne
@@ -367,12 +369,10 @@ func (h *Handler) ConfirmPairing(w http.ResponseWriter, r *http.Request) {
 	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
-	go func() {
-		opponent, date := h.gameInfo(gameID)
-		msg := fmt.Sprintf("%s hat die Mitfahrt bestätigt — %s, %s", actorName, opponent, date)
-		uids := push.FilterByPushPref(h.db, []int{initiatorUserID}, "carpooling")
-		push.SendToUsers(h.db, h.cfg, uids, "Mitfahrt bestätigt", msg, "/mitfahrgelegenheiten")
-	}()
+	// Synchron — Begründung siehe RequestPairing.
+	opponent, date := h.gameInfo(gameID)
+	msg := fmt.Sprintf("%s hat die Mitfahrt bestätigt — %s, %s", actorName, opponent, date)
+	notify.Send(h.db, h.cfg, []int{initiatorUserID}, "carpooling", "Mitfahrt bestätigt", msg, "/mitfahrgelegenheiten", notify.NoEmail())
 }
 
 // POST /api/mitfahrt-paarungen/{id}/reject
@@ -443,17 +443,15 @@ func (h *Handler) RejectPairing(w http.ResponseWriter, r *http.Request) {
 	h.hub.Broadcast("mitfahrgelegenheiten")
 	w.WriteHeader(http.StatusNoContent)
 
-	go func() {
-		opponent, date := h.gameInfo(gameID)
-		var title, msg string
-		if status == "confirmed" {
-			title = "Mitfahrt storniert"
-			msg = fmt.Sprintf("%s hat die bestätigte Mitfahrt storniert — %s, %s", actorName, opponent, date)
-		} else {
-			title = "Mitfahranfrage abgelehnt"
-			msg = fmt.Sprintf("%s hat die Mitfahranfrage abgelehnt — %s, %s", actorName, opponent, date)
-		}
-		uids := push.FilterByPushPref(h.db, []int{oppositeUserID}, "carpooling")
-		push.SendToUsers(h.db, h.cfg, uids, title, msg, "/mitfahrgelegenheiten")
-	}()
+	// Synchron — Begründung siehe RequestPairing.
+	opponent, date := h.gameInfo(gameID)
+	var title, msg string
+	if status == "confirmed" {
+		title = "Mitfahrt storniert"
+		msg = fmt.Sprintf("%s hat die bestätigte Mitfahrt storniert — %s, %s", actorName, opponent, date)
+	} else {
+		title = "Mitfahranfrage abgelehnt"
+		msg = fmt.Sprintf("%s hat die Mitfahranfrage abgelehnt — %s, %s", actorName, opponent, date)
+	}
+	notify.Send(h.db, h.cfg, []int{oppositeUserID}, "carpooling", title, msg, "/mitfahrgelegenheiten", notify.NoEmail())
 }
