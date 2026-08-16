@@ -141,7 +141,16 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
   return (
     <>
       <div ref={slotContainerRef}>
-      <table className="w-full text-sm">
+      <table className="w-full text-sm table-fixed">
+        <colgroup>
+          {/* Mobile enger (nur Uhrzeit-Ziffern), Desktop etwas großzügiger. */}
+          <col className="w-16 sm:w-[4.5rem]" />
+          <col />
+          <col style={{ width: '35%' }} />
+          {/* Mobile zeigt nur das Punkte-Menü (schmal) statt der Desktop-Buttons —
+              schmalere Spalte hier zieht Spalte 3 (rechtsbündig) direkt ans Menü heran. */}
+          <col className="w-11 sm:w-[9.5rem]" />
+        </colgroup>
         <WindowedTableBody
           items={slots}
           start={slotStart}
@@ -152,7 +161,8 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
           className="divide-y divide-brand-border-subtle"
           renderRow={s => (
               <tr key={s.id} id={`duty-slot-${s.id}`}>
-                <td className="px-4 py-2.5 font-medium text-brand-text">
+                <td className="pl-4 pr-1 sm:px-4 py-2.5 text-brand-text-muted whitespace-nowrap">{s.event_time || '—'}</td>
+                <td className="pl-2 pr-4 sm:px-4 py-2.5 font-medium text-brand-text">
                   <span className="inline-flex items-center gap-1.5">
                     {s.duty_type}
                     {s.has_instruction ? (
@@ -181,7 +191,6 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
                   </span>
                   {s.role_desc ? <span className="text-brand-text-subtle font-normal"> · {s.role_desc}</span> : null}
                 </td>
-                <td className="px-4 py-2.5 text-brand-text-muted w-20">{s.event_time || '—'}</td>
                 <td className="px-4 py-2.5 text-brand-text-muted text-right">
                   <div className="flex flex-col items-end gap-1.5">
                     {s.vacancies > 0 && <div><span className="text-xs">{s.vacancies} frei</span></div>}
