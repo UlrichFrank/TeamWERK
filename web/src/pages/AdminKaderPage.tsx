@@ -5,6 +5,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import KaderMemberSearch from '../components/KaderMemberSearch'
 import KaderExtendedSearch from '../components/KaderExtendedSearch'
 import KaderTrainerSearch from '../components/KaderTrainerSearch'
+import PersonChip from '../components/PersonChip'
 import PositionStatus from '../components/PositionStatus'
 import CopyKaderModal from '../components/CopyKaderModal'
 import AutoAssignModal from '../components/AutoAssignModal'
@@ -22,6 +23,7 @@ interface Season {
 interface Member {
   id: number
   name: string
+  user_id?: number
   birth_year: number
   gender: string
   status?: string
@@ -608,7 +610,7 @@ export default function AdminKaderPage() {
                       {(k.members ?? []).map(m => (
                         <li key={m.id} className="flex items-center justify-between py-2 gap-2">
                           <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
-                            {m.name}{' '}
+                            <PersonChip userId={m.user_id} name={m.name} />
                             <span className="text-brand-text-muted text-xs">
                               ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
                             </span>
@@ -649,7 +651,7 @@ export default function AdminKaderPage() {
                       {(k.extended_members ?? []).map(m => (
                         <li key={m.id} className="flex items-center justify-between py-2 gap-2">
                           <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
-                            {m.name}{' '}
+                            <PersonChip userId={m.user_id} name={m.name} />
                             <span className="text-brand-text-muted text-xs">
                               ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
                             </span>

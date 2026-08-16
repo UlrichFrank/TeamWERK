@@ -139,6 +139,7 @@ type kaderRow struct {
 type memberRow struct {
 	ID        int     `json:"id"`
 	Name      string  `json:"name"`
+	UserID    *int    `json:"user_id,omitempty"`
 	BirthYear int     `json:"birth_year"`
 	Gender    string  `json:"gender"`
 	Positions *string `json:"positions"`
@@ -909,6 +910,7 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT m.id,
 		        m.first_name || ' ' || m.last_name,
+		        m.user_id,
 		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
 		        m.gender,
 		        m.position,
@@ -925,7 +927,12 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 	result := []memberRow{}
 	for rows.Next() {
 		var m memberRow
-		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
+		var userID sql.NullInt64
+		rows.Scan(&m.ID, &m.Name, &userID, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
+		if userID.Valid {
+			n := int(userID.Int64)
+			m.UserID = &n
+		}
 		result = append(result, m)
 	}
 	return result, nil
@@ -935,6 +942,7 @@ func (h *Handler) loadExtendedMembers(ctx context.Context, kaderID int) ([]membe
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT m.id,
 		        m.first_name || ' ' || m.last_name,
+		        m.user_id,
 		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
 		        m.gender,
 		        m.position,
@@ -951,7 +959,12 @@ func (h *Handler) loadExtendedMembers(ctx context.Context, kaderID int) ([]membe
 	result := []memberRow{}
 	for rows.Next() {
 		var m memberRow
-		rows.Scan(&m.ID, &m.Name, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
+		var userID sql.NullInt64
+		rows.Scan(&m.ID, &m.Name, &userID, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
+		if userID.Valid {
+			n := int(userID.Int64)
+			m.UserID = &n
+		}
 		result = append(result, m)
 	}
 	return result, nil
