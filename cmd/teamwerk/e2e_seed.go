@@ -135,10 +135,21 @@ func seedTextConversation(database *sql.DB, title string, memberIDs []int, sende
 
 // seedDienstboerse legt eine aktive (zukünftig endende) Saison, ein Team, einen Duty-Type
 // und einen offenen, in der Zukunft liegenden Dienst-Slot an. Gibt die duty_slot-ID zurück.
+//
+// Anders als seedLongThread (feste Basiszeit, siehe dort) werden Saison- und Slot-Datum
+// hier RELATIV zu time.Now() gebildet: die Dienstbörse fragt `duty-board?from=<heute>` ab,
+// die zu erfüllende Invariante ist also „liegt in der Zukunft", kein fester Wert. Ein
+// hartkodiertes Datum ist eine Zeitbombe — es lief am Tag danach still ins Leere (leeres
+// Board, kein „Eintragen"-Button) und riss duty-golden-path und scroll-restore mit.
 func seedDienstboerse(database *sql.DB) int {
+	today := time.Now()
+	seasonStart := today.AddDate(0, 0, -30).Format("2006-01-02")
+	seasonEnd := today.AddDate(1, 0, 0).Format("2006-01-02")
+	slotDate := today.AddDate(0, 0, 14).Format("2006-01-02")
+
 	seasonRes, err := database.Exec(
 		`INSERT INTO seasons (name, start_date, end_date, is_active) VALUES (?, ?, ?, 1)`,
-		"2025/26", "2025-09-01", "2027-06-30")
+		"E2E Saison", seasonStart, seasonEnd)
 	if err != nil {
 		fatal("e2e-seed: insert season failed", "error", err)
 	}
@@ -163,7 +174,7 @@ func seedDienstboerse(database *sql.DB) int {
 		`INSERT INTO duty_slots
 		    (event_name, event_date, event_time, duty_type_id, slots_total, slots_filled, team_id, season_id, game_id)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-		"E2E Dienst", "2026-08-15", "10:00", dutyTypeID, 2, 0, teamID, seasonID)
+		"E2E Dienst", slotDate, "10:00", dutyTypeID, 2, 0, teamID, seasonID)
 	if err != nil {
 		fatal("e2e-seed: insert duty_slot failed", "error", err)
 	}
