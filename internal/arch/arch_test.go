@@ -35,7 +35,7 @@ var foundation = map[string]bool{
 	"notify": true, "notifications": true, "push": true, "policy": true,
 	"sepa": true, "upload": true, "files": true, "scheduler": true, "permissions": true,
 	"health": true, "metrics": true, "crypto": true, "timez": true, "httpcache": true,
-	"settings": true, "h4aimport": true,
+	"settings": true, "h4aimport": true, "eventlog": true,
 }
 
 // domain = one HTTP handler package per business domain. May import FOUNDATION only.

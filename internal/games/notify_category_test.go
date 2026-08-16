@@ -16,7 +16,7 @@ func captureNotifyCategory(t *testing.T) chan string {
 	t.Helper()
 	ch := make(chan string, 16)
 	orig := notify.Send
-	notify.Send = func(_ *sql.DB, _ *appconfig.Config, _ []int, category, _, _, _ string) {
+	notify.Send = func(_ *sql.DB, _ *appconfig.Config, _ []int, category, _, _, _ string, _ ...notify.Option) {
 		ch <- category
 	}
 	t.Cleanup(func() { notify.Send = orig })
