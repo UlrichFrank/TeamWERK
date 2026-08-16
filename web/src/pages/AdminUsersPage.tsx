@@ -15,6 +15,7 @@ import ActionMenu from '../components/ActionMenu'
 import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorMessage } from '../lib/errors'
+import { relativeTime } from '../lib/relativeTime'
 
 interface User {
   id: number
@@ -43,20 +44,6 @@ const ROLE_LABELS: Record<string, string> = { admin: 'Admin', presseteam: 'Press
 const ALL_ROLES = ['admin', 'presseteam', 'standard'] as const
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 2) return 'gerade eben'
-  if (m < 60) return `vor ${m} Min.`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `vor ${h} Std.`
-  const d = Math.floor(h / 24)
-  if (d === 1) return 'gestern'
-  if (d < 30) return `vor ${d} Tagen`
-  const mo = Math.floor(d / 30)
-  return mo === 1 ? 'vor 1 Monat' : `vor ${mo} Monaten`
-}
 
 export default function AdminUsersPage() {
   const { user: self, startImpersonation } = useAuth()
