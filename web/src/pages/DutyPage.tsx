@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, UserCheck, History, Filter } from 'lucide-react'
+import { Home, Plane, Calendar, UserCheck, History, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
@@ -326,7 +326,7 @@ export default function DutyPage() {
                   : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
               }`}
             >
-              <Filter className="w-3.5 h-3.5" />
+              <Users className="w-3.5 h-3.5" />
               {!compact && <span>Nur Audience</span>}
             </button>
           )}
