@@ -34,6 +34,7 @@ import {
   daySeparatorLabel,
   shouldRenderSeparator,
 } from "../lib/chatDateFormat";
+import { chatUnreadCounts } from "../lib/chatUnread";
 import { errorMessage } from "../lib/errors";
 import { DaySeparator } from "../components/DaySeparator";
 import WindowedRows from "../components/WindowedRows";
@@ -1174,9 +1175,10 @@ export default function ChatPage() {
     return others.map((m) => m.name).join(", ") || "Konversation";
   };
 
-  const totalUnread =
-    conversations.reduce((s, c) => s + c.unreadCount, 0) +
-    broadcasts.filter((b) => !b.isRead && !b.isSent).length;
+  // Die beiden Tab-Badges partitionieren die Zahl an der <h1>: Chats zeigt den
+  // Konversations-Anteil, Mitteilungen seinen eigenen. Die Gesamtsumme gehört
+  // ausschließlich an die Überschrift.
+  const unread = chatUnreadCounts(conversations, broadcasts);
 
   const canDelete = (msg: Message) =>
     msg.senderId === user?.id || hasCapability("moderate_chat");
@@ -1186,9 +1188,9 @@ export default function ChatPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-brand-text flex items-center gap-2">
           Nachrichten
-          {totalUnread > 0 && (
+          {unread.total > 0 && (
             <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-2 py-0.5">
-              {totalUnread}
+              {unread.total}
             </span>
           )}
         </h1>
@@ -1207,6 +1209,11 @@ export default function ChatPage() {
             >
               <MessageSquare className="w-4 h-4" />
               Chats
+              {unread.conversations > 0 && (
+                <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5">
+                  {unread.conversations}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setTab("broadcasts")}
@@ -1214,9 +1221,9 @@ export default function ChatPage() {
             >
               <Megaphone className="w-4 h-4" />
               Mitteilungen
-              {broadcasts.filter((b) => !b.isRead && !b.isSent).length > 0 && (
+              {unread.broadcasts > 0 && (
                 <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5">
-                  {broadcasts.filter((b) => !b.isRead && !b.isSent).length}
+                  {unread.broadcasts}
                 </span>
               )}
             </button>
