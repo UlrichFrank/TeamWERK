@@ -13,6 +13,7 @@ import { useScrollRestoration } from '../hooks/useScrollRestoration'
 import { useVersion } from '../contexts/VersionContext'
 import { reloadWithSwActivation } from '../lib/reload'
 import { api, setMaintenanceHandler } from '../lib/api'
+import { chatUnreadCounts } from '../lib/chatUnread'
 import {
   setChannelDimension,
   setTeamSlugDimension,
@@ -149,9 +150,7 @@ export default function AppShell() {
         api.get('/chat/conversations'),
         api.get('/chat/broadcasts'),
       ])
-      const convUnread = (convs.data ?? []).reduce((s: number, c: { unreadCount?: number }) => s + (c.unreadCount ?? 0), 0)
-      const bcUnread = (bcs.data ?? []).filter((b: { isRead?: boolean; isSent?: boolean }) => !b.isRead && !b.isSent).length
-      setChatUnread(convUnread + bcUnread)
+      setChatUnread(chatUnreadCounts(convs.data, bcs.data).total)
     } catch {}
   }, [user])
 
@@ -260,6 +259,38 @@ export default function AppShell() {
 
   const closeSidebar = () => setSidebarOpen(false)
 
+  // Badge-Werte pro Route. Heute ein Eintrag — die Map ist die Naht, an der
+  // weitere Zähler andocken, ohne dass Nav-Item und Modul-Header erneut je
+  // einen Sonderfall bekommen.
+  const navBadges: Record<string, number> = { '/chat': chatUnread }
+
+  // Sichtbare Module samt Badge-Summe, bewusst VOR dem Render berechnet:
+  // ein eingeklapptes Modul rendert seine Items gar nicht, und der Hamburger
+  // im mobilen Header steht außerhalb der Sidebar, braucht die Summen aber
+  // ebenfalls. Die Summe läuft über die bereits gegen `navRoutes` gefilterten
+  // Items — dadurch erbt der Header die Sichtbarkeitsprüfung ohne zweiten Check.
+  const visibleModules = navModules
+    .map(mod => {
+      const visibleItems = mod.items.filter(item => {
+        if (!user) return false
+        // While /api/me is loading, fall back to showing all items to avoid flash
+        if (navRoutes.size === 0) return true
+        return navRoutes.has(item.to)
+      })
+      return {
+        mod,
+        visibleItems,
+        badge: visibleItems.reduce((s, item) => s + (navBadges[item.to] ?? 0), 0),
+      }
+    })
+    .filter(m => m.visibleItems.length > 0)
+
+  // Der Hamburger steht für das gesamte Menü, nicht für eine einzelne Route —
+  // deshalb nur ein Punkt, keine Zahl (die wäre mit einem zweiten navBadges-
+  // Eintrag nicht mehr sinnvoll summierbar). `navBadges` roh auszuwerten würde
+  // die navRoutes-Filterung umgehen, daher der Weg über die Modul-Summen.
+  const navBadgeTotal = visibleModules.reduce((s, m) => s + m.badge, 0)
+
   const sidebar = (
     <aside className="w-56 bg-brand-gray text-brand-black flex flex-col overflow-y-auto">
       <div className="px-4 py-5 border-b border-brand-black/10 flex items-center justify-between">
@@ -274,14 +305,7 @@ export default function AppShell() {
         )}
       </div>
       <nav className="flex-1 py-4">
-        {navModules.map(mod => {
-          const visibleItems = mod.items.filter(item => {
-            if (!user) return false
-            // While /api/me is loading, fall back to showing all items to avoid flash
-            if (navRoutes.size === 0) return true
-            return navRoutes.has(item.to)
-          })
-          if (visibleItems.length === 0) return null
+        {visibleModules.map(({ mod, visibleItems, badge }) => {
           const isModuleActive = visibleItems.some(item => location.pathname.startsWith(item.to))
           const isOpen = openModule === mod.label
           return (
@@ -291,10 +315,17 @@ export default function AppShell() {
                 className={`px-4 py-2 w-full text-left flex items-center justify-between text-xs font-semibold uppercase tracking-wider ${isModuleActive ? 'text-brand-black' : 'text-brand-black/40'}`}
               >
                 {mod.label}
-                {isOpen
-                  ? <ChevronDown className="w-4 h-4" />
-                  : <ChevronRight className="w-4 h-4" />
-                }
+                <span className="flex items-center gap-2">
+                  {badge > 0 && (
+                    <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                      {badge}
+                    </span>
+                  )}
+                  {isOpen
+                    ? <ChevronDown className="w-4 h-4" />
+                    : <ChevronRight className="w-4 h-4" />
+                  }
+                </span>
               </button>
               {isOpen && visibleItems.map(item => (
                 <NavLink
@@ -307,9 +338,9 @@ export default function AppShell() {
                   }
                 >
                   <span>{item.label}</span>
-                  {item.to === '/chat' && chatUnread > 0 && (
+                  {(navBadges[item.to] ?? 0) > 0 && (
                     <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
-                      {chatUnread}
+                      {navBadges[item.to]}
                     </span>
                   )}
                 </NavLink>
@@ -388,10 +419,21 @@ export default function AppShell() {
         <header className="sm:hidden bg-brand-white border-b border-brand-black/10 px-4 py-4 flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Menü öffnen"
-            className="text-brand-black/60 hover:text-brand-black transition-colors"
+            aria-label={navBadgeTotal > 0
+              ? `Menü öffnen, ${navBadgeTotal} ungelesene ${navBadgeTotal === 1 ? 'Nachricht' : 'Nachrichten'}`
+              : 'Menü öffnen'}
+            className="relative text-brand-black/60 hover:text-brand-black transition-colors"
           >
             <Menu className="w-6 h-6" />
+            {/* Punkt statt Zahl: der Button steht für das ganze Menü. Nicht
+                brand-yellow — der Header ist weiß, dort wäre Gelb unsichtbar.
+                Die Zahl selbst trägt das aria-label. */}
+            {navBadgeTotal > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-brand-danger"
+              />
+            )}
           </button>
           {canGoBack && (
             <button
