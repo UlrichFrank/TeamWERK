@@ -42,4 +42,4 @@ kurzzeitig ohne Datenquelle.
 - [ ] 5.2 Sichtprüfung im Browser, mobil (DevTools ≤ 639px) und Desktop, jeweils mit ungelesener Nachricht: (a) Dashboard eingeklappt → Badge am Section-Header; (b) mobil auf `/kalender`, Sidebar **geschlossen** → Punkt am Hamburger sichtbar; danach Sidebar öffnen → Badge am Modul „Verein", obwohl „Spielbetrieb" das offene Modul ist; (c) `/chat` → beide Tab-Badges summieren sich zur Zahl an der `<h1>`; (d) Konversation lesen → alle vier Badges fallen live, ohne Reload.
 - [ ] 5.3 Gegenprobe mit einem Nutzer **ohne** `/chat` in `navRoutes`: weder Badge am Modul-Header noch Punkt am Hamburger. Zusätzlich Kontrast des `brand-danger`-Punkts auf dem weißen Header am echten Gerät prüfen (nicht nur im DevTools-Emulator).
 - [x] 5.4 `/verify-change` (brand-Tokens statt Raw-Tailwind, keine Unicode-Icons, `openspec validate`).
-- [ ] 5.5 Ein Commit pro Task-Gruppe, Conventional Commits mit Scope `chat` (bzw. `pwa` für den AppShell-Teil).
+- [x] 5.5 Ein Commit pro Task-Gruppe, Conventional Commits mit Scope `chat` (bzw. `pwa` für den AppShell-Teil).
