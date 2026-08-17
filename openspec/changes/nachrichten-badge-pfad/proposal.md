@@ -118,9 +118,10 @@ müsste sie entweder über semantisch Unverwandtes summieren oder still falsch w
 Punkt („da drin ist etwas") skaliert mit der Map, ohne eine Aussage zu treffen, die er nicht
 belegen kann.
 
-**Farbe ist nicht `brand-yellow`.** Der mobile Header ist `bg-brand-white` — der Gelbton der
-übrigen Badges funktioniert nur auf dem `bg-brand-gray` der Sidebar und wäre hier praktisch
-unsichtbar. Der Punkt nutzt `brand-danger`.
+**Farbe bleibt `brand-yellow`.** Der mobile Header ist `bg-brand-white`, auf dem der Gelbton
+der übrigen Badges allein zerfließt — das löst aber ein dünner `brand-black`-Ring, nicht ein
+Farbwechsel auf `brand-danger`. Rot ist im System das Fehler-/Gefahren-Signal; eine ungelesene
+Nachricht ist keins von beidem.
 
 **Das `aria-label` wächst mit.** Ein rein visueller Punkt trägt für Screenreader keine
 Information; `"Menü öffnen"` wird bei Ungelesenem zu `"Menü öffnen, 3 ungelesene Nachrichten"`.

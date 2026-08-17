@@ -104,12 +104,14 @@ Wichtig ist dabei, **worüber** summiert wird. Die naheliegende Formulierung
 geöffneten Menü nirgends findet. Der Punkt hängt deshalb an denselben, bereits gefilterten
 Modul-Summen — kein zweiter Zustand, keine zweite Filterlogik.
 
-**`brand-danger` statt `brand-yellow`.** Alle anderen Badges sind gelb — sie sitzen aber auf
-`bg-brand-gray` (Sidebar) bzw. `bg-brand-surface-card` (Dashboard). Der mobile Header ist
-`bg-brand-white`; `#FDE400` auf Weiß ist als 6px-Punkt faktisch unsichtbar. Der Bruch mit der
-Badge-Farbe ist hier die Bedingung dafür, dass das Element seine Funktion erfüllt. Die
-Alternative — schwarzer Punkt mit gelbem Ring — wäre farblich konsistenter, aber auf dieser
-Größe matschig.
+**`brand-yellow` mit Ring, nicht `brand-danger`.** Der erste Entwurf nahm `brand-danger`, weil
+alle anderen Badges auf `bg-brand-gray` (Sidebar) bzw. `bg-brand-surface-card` (Dashboard)
+sitzen, der mobile Header aber `bg-brand-white` ist und `#FDE400` dort als 2.5-Einheiten-Punkt
+zerfließt. Das löst zwar das Sichtbarkeitsproblem, verschiebt aber die Bedeutungsebene: Rot ist
+im übrigen System das Fehler-/Gefahren-Signal (`brand-danger` in Alerts, destruktiven Buttons),
+und eine ungelesene Nachricht ist beides nicht. Der Punkt bleibt deshalb gelb wie alle anderen
+Badges und bekommt einen dünnen `ring-1 ring-brand-black/30`, der ihn gegen Weiß abgrenzt —
+farblich konsistent, ohne die Sichtbarkeit zu opfern.
 
 **`aria-label` wächst mit.** Ein rein visueller Punkt ist für Screenreader nicht existent. Das
 statische `aria-label="Menü öffnen"` wird bei `total > 0` zu

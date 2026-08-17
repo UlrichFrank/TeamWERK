@@ -425,13 +425,14 @@ export default function AppShell() {
             className="relative text-brand-black/60 hover:text-brand-black transition-colors"
           >
             <Menu className="w-6 h-6" />
-            {/* Punkt statt Zahl: der Button steht für das ganze Menü. Nicht
-                brand-yellow — der Header ist weiß, dort wäre Gelb unsichtbar.
-                Die Zahl selbst trägt das aria-label. */}
+            {/* Punkt statt Zahl: der Button steht für das ganze Menü, die Zahl
+                selbst trägt das aria-label. brand-yellow wie alle übrigen
+                Badges; der dünne brand-black-Ring hält ihn auf dem weißen
+                Header abgegrenzt, wo Gelb allein zerfließen würde. */}
             {navBadgeTotal > 0 && (
               <span
                 aria-hidden="true"
-                className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-brand-danger"
+                className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-brand-yellow ring-1 ring-brand-black/30"
               />
             )}
           </button>

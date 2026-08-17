@@ -101,7 +101,7 @@ async function renderShellWithoutChat(conversations: unknown[]) {
 // deshalb Regex statt exaktem String.
 const vereinHeader = () => screen.getByRole('button', { name: /^Verein/ })
 const hamburger = () => screen.getByRole('button', { name: /^Menü öffnen/ })
-const dot = () => hamburger().querySelector('.bg-brand-danger')
+const dot = () => hamburger().querySelector('.bg-brand-yellow')
 
 describe('AppShell — Badge am Modul-Header', () => {
   test('eingeklapptes Modul „Verein" zeigt die Zahl, obwohl der Eintrag nicht gerendert ist', async () => {
