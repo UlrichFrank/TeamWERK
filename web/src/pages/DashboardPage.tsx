@@ -6,6 +6,7 @@ import {
   MessageSquare, MessageCircle, Megaphone, Activity
 } from 'lucide-react'
 import { api } from '../lib/api'
+import { chatUnreadCounts } from '../lib/chatUnread'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -127,10 +128,10 @@ function ExtendedBadge() {
 }
 
 function Accordion({
-  id, title, icon: Icon, isOpen, onToggle, children,
+  id, title, icon: Icon, isOpen, onToggle, badge, children,
 }: {
   id: string; title: string; icon: React.ElementType; isOpen: boolean
-  onToggle: () => void; children: React.ReactNode
+  onToggle: () => void; badge?: number; children: React.ReactNode
 }) {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
@@ -143,6 +144,11 @@ function Accordion({
         <span className="flex items-center gap-2 font-semibold text-brand-text">
           <Icon className="w-5 h-5 text-brand-yellow" />
           {title}
+          {(badge ?? 0) > 0 && (
+            <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+              {badge}
+            </span>
+          )}
         </span>
         {isOpen
           ? <ChevronDown className="w-4 h-4 text-brand-text-muted" />
@@ -480,27 +486,38 @@ function convTitle(c: ConversationLite, myId: number | undefined): string {
   return other?.name ?? 'Direktnachricht'
 }
 
-function MeineNachrichtenSection() {
-  const { user } = useAuth()
+// Abruf und Event-Abo liegen bewusst NICHT in der Section, sondern eine Ebene
+// höher: `Accordion` rendert `{isOpen && children}` — die Section mountet
+// nicht, solange sie eingeklappt ist (auf Mobil der Default, dort ist
+// 'termine' offen). Ein Fetch in der Section liefe dort nie, und der
+// Header-Badge bliebe dauerhaft leer.
+function useNachrichten(myId: number | undefined) {
   const [rows, setRows] = useState<NachrichtRow[]>([])
+  const [unreadTotal, setUnreadTotal] = useState(0)
 
   const load = useCallback(() => {
     Promise.all([
       api.get('/chat/conversations'),
       api.get('/chat/broadcasts'),
     ]).then(([convs, bcs]) => {
-      const convRows: NachrichtRow[] = (convs.data ?? [])
-        .filter((c: ConversationLite) => c.unreadCount > 0 && c.lastMessage)
-        .map((c: ConversationLite) => ({
+      const conversations: ConversationLite[] = convs.data ?? []
+      const broadcasts: BroadcastLite[] = bcs.data ?? []
+      // Über die UNGEFILTERTEN Listen: `rows` bündelt eine Konversation mit n
+      // ungelesenen Nachrichten zu einer Zeile und ist zusätzlich auf 5
+      // gedeckelt — `rows.length` wäre als Zähler doppelt falsch.
+      setUnreadTotal(chatUnreadCounts(conversations, broadcasts).total)
+      const convRows: NachrichtRow[] = conversations
+        .filter(c => c.unreadCount > 0 && c.lastMessage)
+        .map(c => ({
           kind: 'conv' as const,
           id: c.id,
           date: c.lastMessage!.sentAt,
-          title: convTitle(c, user?.id),
+          title: convTitle(c, myId),
           subtitle: c.lastMessage!.body,
         }))
-      const bcRows: NachrichtRow[] = (bcs.data ?? [])
-        .filter((b: BroadcastLite) => !b.isRead && !b.isSent)
-        .map((b: BroadcastLite) => ({
+      const bcRows: NachrichtRow[] = broadcasts
+        .filter(b => !b.isRead && !b.isSent)
+        .map(b => ({
           kind: 'bc' as const,
           id: b.id,
           date: b.sentAt,
@@ -511,7 +528,7 @@ function MeineNachrichtenSection() {
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 5))
     }).catch(() => {})
-  }, [user?.id])
+  }, [myId])
 
   useEffect(() => { load() }, [load])
 
@@ -519,6 +536,10 @@ function MeineNachrichtenSection() {
     if (event.startsWith('chat:new-message') || event === 'chat:new-broadcast' || event === 'chat:conversation-read') load()
   })
 
+  return { rows, unreadTotal }
+}
+
+function MeineNachrichtenSection({ rows }: { rows: NachrichtRow[] }) {
   if (rows.length === 0) {
     return (
       <div>
@@ -536,7 +557,13 @@ function MeineNachrichtenSection() {
         {rows.map(row => (
           <li key={`${row.kind}-${row.id}`}>
             <DashboardRow
-              to={row.kind === 'conv' ? '/chat' : '/chat?tab=broadcasts'}
+              // Konversations-Zeile deeplinkt auf `?conv=<id>` (denselben
+              // Parameter, den der Chat-Push nutzt) statt auf die nackte Liste:
+              // sonst landet der Nutzer zwar im Chat, die Konversation bleibt
+              // aber ungeöffnet — nichts wird als gelesen markiert und alle
+              // Badges (Section-Header, Nav-Modul, Hamburger) bleiben stehen,
+              // obwohl der Nutzer die Nachricht gerade angeklickt hat.
+              to={row.kind === 'conv' ? `/chat?conv=${row.id}` : '/chat?tab=broadcasts'}
               dateISO={row.date}
               icon={row.kind === 'conv'
                 ? <MessageCircle className="w-4 h-4" />
@@ -606,6 +633,10 @@ export default function DashboardPage() {
     else setOpenSections(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
+  // Muss vor den Early-Returns für loading/error stehen und außerhalb des
+  // Accordions leben — siehe Kommentar an useNachrichten.
+  const nachrichten = useNachrichten(user?.id)
+
   const load = useCallback((silent = false) => {
     if (!silent) setLoadState('loading')
     api.get('/dashboard')
@@ -663,8 +694,8 @@ export default function DashboardPage() {
           </Accordion>
         )}
 
-        <Accordion id="nachrichten" title="Nachrichten" icon={MessageSquare} isOpen={isOpen('nachrichten')} onToggle={() => toggle('nachrichten')}>
-          <MeineNachrichtenSection />
+        <Accordion id="nachrichten" title="Nachrichten" icon={MessageSquare} isOpen={isOpen('nachrichten')} onToggle={() => toggle('nachrichten')} badge={nachrichten.unreadTotal}>
+          <MeineNachrichtenSection rows={nachrichten.rows} />
         </Accordion>
 
         {showFahrt && (

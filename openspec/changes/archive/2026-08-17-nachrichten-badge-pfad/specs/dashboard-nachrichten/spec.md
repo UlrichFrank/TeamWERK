@@ -1,8 +1,5 @@
-# dashboard-nachrichten Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change dashboard-nachrichten-section. Update Purpose after archive.
-## Requirements
 ### Requirement: Dashboard-Section „Nachrichten"
 
 Das Dashboard SHALL eine Section „Nachrichten" anzeigen, die als kollabierbares `Accordion` mit derselben Card-Optik wie die bestehenden Sections (`bg-brand-surface-card`, `border-t-4 border-brand-yellow`) gerendert wird. Die Section listet die ungelesenen Chat-Konversationen und Mitteilungen des Nutzers (neueste zuerst, gedeckelt auf max. 5 Einträge) und enthält einen Fußzeilen-Link „Zum Chat". Die Daten stammen aus `GET /api/chat/conversations` und `GET /api/chat/broadcasts`; es wird kein neuer Endpunkt eingeführt.
