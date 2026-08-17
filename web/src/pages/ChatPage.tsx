@@ -1175,9 +1175,11 @@ export default function ChatPage() {
     return others.map((m) => m.name).join(", ") || "Konversation";
   };
 
-  // Die beiden Tab-Badges partitionieren die Zahl an der <h1>: Chats zeigt den
-  // Konversations-Anteil, Mitteilungen seinen eigenen. Die Gesamtsumme gehört
-  // ausschließlich an die Überschrift.
+  // Chats zeigt den Konversations-Anteil, Mitteilungen seinen eigenen. Die
+  // <h1> trägt bewusst KEINEN Gesamt-Badge: auf dieser Seite steht die Zahl
+  // schon an den beiden Tabs, und dort ist sie zusätzlich aufgeschlüsselt.
+  // Die Gesamtsumme bleibt den Stellen vorbehalten, die von hier wegführen
+  // (Nav-Modul, Hamburger, Dashboard-Section).
   const unread = chatUnreadCounts(conversations, broadcasts);
 
   const canDelete = (msg: Message) =>
@@ -1188,11 +1190,6 @@ export default function ChatPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-brand-text flex items-center gap-2">
           Nachrichten
-          {unread.total > 0 && (
-            <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-2 py-0.5">
-              {unread.total}
-            </span>
-          )}
         </h1>
       </div>
 

@@ -68,12 +68,14 @@ describe('ChatPage — Ungelesen-Badges an den Tabs', () => {
       [broadcast(10, false, false), broadcast(11, false, false)],
     )
 
-    // Die beiden Tab-Badges partitionieren die Zahl an der Überschrift:
-    // 3 (Konversationen) + 2 (Mitteilungen) = 5. Zeigte der Chats-Tab
-    // `total`, stünde dort fälschlich 5 und die Summe wäre 7.
-    expect(heading()).toHaveTextContent('5')
+    // Die beiden Tab-Badges tragen je ihren eigenen Anteil: 3 (Konversationen)
+    // und 2 (Mitteilungen). Zeigte der Chats-Tab `total`, stünde dort
+    // fälschlich 5.
     expect(chatsTab()).toHaveTextContent('3')
     expect(mitteilungenTab()).toHaveTextContent('2')
+    // Die <h1> bleibt zahlenfrei — auf dieser Seite steht die Information
+    // bereits an den Tabs, und dort zusätzlich aufgeschlüsselt.
+    expect(heading().textContent?.trim()).toBe('Nachrichten')
   })
 
   test('ohne ungelesene Konversationen trägt der Chats-Tab keinen Badge', async () => {
@@ -89,7 +91,7 @@ describe('ChatPage — Ungelesen-Badges an den Tabs', () => {
 
     expect(chatsTab()).toHaveTextContent('4')
     expect(mitteilungenTab().textContent?.trim()).toBe('Mitteilungen')
-    expect(heading()).toHaveTextContent('4')
+    expect(heading().textContent?.trim()).toBe('Nachrichten')
   })
 
   test('ganz ohne Ungelesenes trägt keine der drei Stellen eine Zahl', async () => {

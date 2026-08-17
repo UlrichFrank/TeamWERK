@@ -75,8 +75,11 @@ mindestens ein **Modul-Header-Badge** größer als 0 ist — also über dieselbe
 Der Punkt SHALL **keine Zahl** tragen: der Button steht für das gesamte Menü, nicht für eine
 einzelne Route, und muss über weitere `navBadges`-Einträge hinweg gültig bleiben.
 
-Der Punkt SHALL in `brand-danger` gerendert werden, nicht in `brand-yellow` — der mobile Header
-ist `bg-brand-white`, auf dem der Gelbton der übrigen Badges nicht wahrnehmbar ist.
+Der Punkt SHALL in `brand-yellow` gerendert werden — dieselbe Farbe wie alle übrigen Badges;
+ein Hinweis auf ungelesene Nachrichten ist kein Fehler- oder Gefahrensignal, `brand-danger`
+wäre an dieser Stelle die falsche Bedeutungsebene. Da der mobile Header `bg-brand-white` ist,
+auf dem Gelb allein zerfließt, SHALL der Punkt zusätzlich einen dünnen `brand-black`-Ring
+tragen, der ihn abgrenzt.
 
 Das `aria-label` des Buttons SHALL bei vorhandenem Unread die konkrete Zahl nennen, damit die
 Information für Screenreader nicht ausschließlich visuell existiert. Ohne Unread SHALL es auf
@@ -113,13 +116,19 @@ Die Tab-Leiste auf `/chat` SHALL am Tab „Chats" den Anteil `conversations` aus
 `chatUnreadCounts` anzeigen, sofern er größer als 0 ist — analog zum bestehenden Badge am Tab
 „Mitteilungen", der dessen Anteil zeigt.
 
-Der Tab „Chats" SHALL NICHT die Gesamtsumme anzeigen: die beiden Tab-Badges SHALL die Zahl an
-der Seitenüberschrift `<h1>` partitionieren, sich also zu ihr aufsummieren.
+Der Tab „Chats" SHALL NICHT die Gesamtsumme anzeigen: jeder der beiden Tab-Badges trägt genau
+seinen eigenen Anteil.
+
+Die Seitenüberschrift `<h1>` auf `/chat` SHALL **keinen** Badge tragen. Die Gesamtsumme gehört
+ausschließlich an die Stellen, die von der Seite wegführen (Nav-Modul-Header,
+Hamburger-Hinweis, Dashboard-Section) — auf `/chat` selbst steht die Information bereits an den
+Tabs, und zwar aufgeschlüsselt. Eine dritte Zahl an der Überschrift wäre Redundanz.
 
 #### Scenario: Beide Tabs tragen einen Anteil
 
 - **WHEN** der Nutzer 3 ungelesene Nachrichten in Konversationen und 2 ungelesene Mitteilungen hat
-- **THEN** zeigt die Überschrift `5`, der Tab „Chats" `3` und der Tab „Mitteilungen" `2`
+- **THEN** zeigt der Tab „Chats" `3` und der Tab „Mitteilungen" `2`
+- **THEN** trägt die Überschrift `<h1>` keine Zahl, sondern nur den Text „Nachrichten"
 
 #### Scenario: Nur Mitteilungen ungelesen
 
