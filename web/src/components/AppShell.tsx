@@ -122,6 +122,10 @@ export default function AppShell() {
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
   const navRoutes = new Set(navRouteList)
   const [chatUnread, setChatUnread] = useState(0)
+  // Getrennt von `chatUnread`, weil 0 zwei verschiedene Dinge heißen kann:
+  // „nichts ungelesen" und „noch nicht geladen". Nur die erste Bedeutung darf
+  // das App-Icon-Badge löschen (siehe Badge-Effekt unten).
+  const [chatUnreadLoaded, setChatUnreadLoaded] = useState(false)
   // Kurzer Overlay-Hinweis, wenn ein Mutations-Request durch die
   // Maintenance-Middleware mit 503 abgewiesen wurde. Der Banner (persistent
   // oben) bleibt getrennt sichtbar — dieser Toast reagiert auf den konkreten
@@ -151,7 +155,12 @@ export default function AppShell() {
         api.get('/chat/broadcasts'),
       ])
       setChatUnread(chatUnreadCounts(convs.data, bcs.data).total)
-    } catch {}
+      setChatUnreadLoaded(true)
+    } catch {
+      // Bewusst kein setChatUnreadLoaded(true): ein gescheiterter Ladeversuch
+      // lässt die Zahl UNBEKANNT, nicht null. Der Unterschied ist am App-Icon-
+      // Badge sichtbar — siehe Kommentar am Badge-Effekt unten.
+    }
   }, [user])
 
   useEffect(() => {
@@ -162,7 +171,10 @@ export default function AppShell() {
         .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
       setNavChildren(kids)
     }).catch(() => {})
+    // Bei Identitätswechsel (Login, Impersonate) gilt die alte Zahl nicht mehr —
+    // bis die neue da ist, ist sie wieder unbekannt statt 0.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
+    setChatUnreadLoaded(false)
     loadChatUnread()
     // Effekt soll nur bei Wechsel der Nutzer-Identität laufen (user?.id), nicht bei jeder user-Objektreferenz
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,7 +222,14 @@ export default function AppShell() {
     setCanGoBack((window.history.state?.idx ?? 0) > initialHistoryIdx)
   }, [location, initialHistoryIdx])
 
+  // App-Icon-Badge nachziehen. Der Service Worker (`sw.ts`) schreibt beim Push
+  // auf dieselbe, geräteweite Zahl — ein Löschen von hier überschreibt also
+  // stillschweigend eine korrekt gesetzte Zahl, und zurück kommt sie erst mit
+  // der nächsten Push. Deshalb erst handeln, wenn die Zählung wirklich vorliegt:
+  // sonst löschte jeder App-Start die Zahl (Initialwert 0) und jeder
+  // gescheiterte Ladeversuch (Funkloch beim Start) ließe sie gelöscht.
   useEffect(() => {
+    if (!chatUnreadLoaded) return
     const nav = navigator as Navigator & {
       setAppBadge?: (n?: number) => Promise<void>
       clearAppBadge?: () => Promise<void>
@@ -221,7 +240,7 @@ export default function AppShell() {
     } else {
       nav.clearAppBadge?.().catch(() => {})
     }
-  }, [chatUnread])
+  }, [chatUnread, chatUnreadLoaded])
 
   useEffect(() => {
     if (user) return
