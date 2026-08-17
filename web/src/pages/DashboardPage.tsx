@@ -557,7 +557,13 @@ function MeineNachrichtenSection({ rows }: { rows: NachrichtRow[] }) {
         {rows.map(row => (
           <li key={`${row.kind}-${row.id}`}>
             <DashboardRow
-              to={row.kind === 'conv' ? '/chat' : '/chat?tab=broadcasts'}
+              // Konversations-Zeile deeplinkt auf `?conv=<id>` (denselben
+              // Parameter, den der Chat-Push nutzt) statt auf die nackte Liste:
+              // sonst landet der Nutzer zwar im Chat, die Konversation bleibt
+              // aber ungeöffnet — nichts wird als gelesen markiert und alle
+              // Badges (Section-Header, Nav-Modul, Hamburger) bleiben stehen,
+              // obwohl der Nutzer die Nachricht gerade angeklickt hat.
+              to={row.kind === 'conv' ? `/chat?conv=${row.id}` : '/chat?tab=broadcasts'}
               dateISO={row.date}
               icon={row.kind === 'conv'
                 ? <MessageCircle className="w-4 h-4" />

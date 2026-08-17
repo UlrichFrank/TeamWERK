@@ -61,6 +61,24 @@ describe('DashboardPage — Nachrichten-Section', () => {
     expect(screen.getAllByText('Zum Chat').length).toBeGreaterThan(0)
   })
 
+  test('Konversations-Zeile deeplinkt auf die Konversation, Mitteilung auf den Tab', async () => {
+    // Regression: die Zeile führte auf das nackte `/chat`. Der Nutzer landete
+    // in der Liste, ohne dass die angeklickte Konversation geöffnet und damit
+    // als gelesen markiert wurde — alle Badges (Section, Nav-Modul, Hamburger)
+    // blieben nach dem Klick unverändert stehen.
+    renderAsPersona(<DashboardPage />, 'spieler', {
+      mocks: [
+        { url: '/dashboard', data: DASHBOARD },
+        { url: '/chat/conversations', data: CONV_UNREAD },
+        { url: '/chat/broadcasts', data: BC_UNREAD },
+      ],
+    })
+    await flushAsync()
+
+    expect(screen.getByText('Anna Trainer').closest('a')).toHaveAttribute('href', '/chat?conv=1')
+    expect(screen.getByText('Bob Vorstand').closest('a')).toHaveAttribute('href', '/chat?tab=broadcasts')
+  })
+
   test('leerer Zustand ohne Ungelesenes', async () => {
     renderAsPersona(<DashboardPage />, 'spieler', {
       mocks: [
