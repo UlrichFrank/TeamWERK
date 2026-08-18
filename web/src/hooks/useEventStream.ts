@@ -19,6 +19,13 @@ import { useEffect, useRef } from 'react'
 const BASE_MS = 1000
 const MAX_MS = 30000
 
+// readyState-Wert für „endgültig geschlossen". Bewusst als lokale Konstante und
+// nicht als `EventSource.CLOSED` gelesen: der Wert ist in der HTML-Spezifikation
+// fixiert, während `globalThis.EventSource` in jsdom fehlt und in Tests durch
+// Stubs ersetzt wird — ein Stub ohne diese statische Property ließe den
+// Vergleich still gegen `undefined` laufen und den Reconnect nie greifen.
+const READY_STATE_CLOSED = 2
+
 /**
  * Wartezeit vor dem n-ten Wiederverbindungsversuch: 1s → 2s → 4s → 8s → 16s → 30s,
  * danach konstant. Bewusst ohne Jitter — bei dreistelligen Nutzerzahlen ist ein
@@ -76,7 +83,7 @@ export function useEventStream(
       es.onerror = () => {
         // Nur der endgültige Zustand ist unser Fall — sonst läuft der
         // browsereigene Reconnect bereits.
-        if (!es || es.readyState !== EventSource.CLOSED) return
+        if (!es || es.readyState !== READY_STATE_CLOSED) return
         es.close()
         scheduleReconnect()
       }
@@ -97,7 +104,7 @@ export function useEventStream(
     // abwarten. Eine noch lebende Verbindung bleibt unangetastet.
     const reconnectNow = () => {
       if (disposed) return
-      if (es && es.readyState !== EventSource.CLOSED) return
+      if (es && es.readyState !== READY_STATE_CLOSED) return
       attempt = 0
       clearTimer()
       connect()

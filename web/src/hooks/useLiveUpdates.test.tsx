@@ -17,20 +17,29 @@ vi.mock('../lib/api', () => ({
 // onmessage-Frames einspielen kann.
 class FakeEventSource {
   static last: FakeEventSource | null = null
+  static count = 0
   onmessage: ((e: { data: string }) => void) | null = null
   onerror: (() => void) | null = null
+  onopen: (() => void) | null = null
   readyState = 0
   url: string
   closed = false
   constructor(url: string) {
     this.url = url
     FakeEventSource.last = this
+    FakeEventSource.count += 1
   }
   emit(data: string) {
     this.onmessage?.({ data })
   }
+  /** Fataler Fehler — der Browser gibt auf, der Hook muss übernehmen. */
+  failFatally() {
+    this.readyState = 2
+    this.onerror?.()
+  }
   close() {
     this.closed = true
+    this.readyState = 2
   }
 }
 
@@ -39,6 +48,7 @@ describe('useLiveUpdates — Coalescing', () => {
     vi.useFakeTimers()
     invalidate.mockReset()
     FakeEventSource.last = null
+    FakeEventSource.count = 0
     vi.stubGlobal('EventSource', FakeEventSource as unknown as typeof EventSource)
   })
   afterEach(() => {
@@ -93,6 +103,25 @@ describe('useLiveUpdates — Coalescing', () => {
 
     expect(cb).not.toHaveBeenCalled()
     expect(invalidate).not.toHaveBeenCalled()
+  })
+
+  test('nach Verbindungsabbruch werden wieder Events verarbeitet', () => {
+    const cb = vi.fn()
+    renderHook(() => useLiveUpdates(cb))
+
+    act(() => { FakeEventSource.last!.failFatally() })
+    act(() => { vi.advanceTimersByTime(1000) })
+    expect(FakeEventSource.count).toBe(2)
+
+    // Der neue Kanal bedient denselben Callback, inkl. Coalescing.
+    act(() => {
+      FakeEventSource.last!.emit('games')
+      FakeEventSource.last!.emit('games')
+    })
+    act(() => { vi.advanceTimersByTime(300) })
+
+    expect(cb).toHaveBeenCalledTimes(1)
+    expect(cb).toHaveBeenCalledWith('games')
   })
 
   test('Aufräumen schließt die EventSource und stoppt den Timer', () => {

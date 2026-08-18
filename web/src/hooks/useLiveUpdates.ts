@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { invalidateReferenceCache } from '../lib/api'
+import { useEventStream } from './useEventStream'
 
 // Coalescing-Fenster: ein Burst gleichartiger SSE-Events (z. B. mehrere
 // Broadcast-Aufrufe in einem Handler) löst genau EINEN Callback je eindeutigem
@@ -15,41 +16,32 @@ export function useLiveUpdates(onEvent: (eventType: string) => void) {
 
   const { user } = useAuth()
 
-  // Reconnects whenever `user` changes (login/logout/impersonation).
-  // SSE authenticates via the HttpOnly refresh-token cookie — no token in URL.
-  useEffect(() => {
-    if (!user) return
+  // Gesammelte, deduplizierte Event-Typen im aktuellen Fenster + Timer.
+  // Als Refs, damit sie den Reconnect überleben: die Verbindung liegt in
+  // useEventStream, das Coalescing gehört hierher.
+  const pending = useRef(new Set<string>())
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const es = new EventSource('/api/events')
+  useEffect(() => () => {
+    if (timer.current !== null) clearTimeout(timer.current)
+  }, [])
 
-    // Gesammelte, deduplizierte Event-Typen im aktuellen Fenster + Timer.
-    const pending = new Set<string>()
-    let timer: ReturnType<typeof setTimeout> | null = null
-
-    const flush = () => {
-      timer = null
-      const types = Array.from(pending)
-      pending.clear()
-      for (const type of types) onEventRef.current(type)
+  // Verbindung, Reconnect und Bindung an die Identität: useEventStream.
+  // SSE authentifiziert über das HttpOnly-Refresh-Cookie — kein Token in der URL.
+  useEventStream('/api/events', (data: string) => {
+    if (data.startsWith('__version:')) return
+    // Referenz-Cache sofort verwerfen (nicht debouncen) — sonst bedient
+    // getReference bis zum TTL-Ablauf veraltete Daten.
+    invalidateReferenceCache(data)
+    // Reload-Callback gebündelt: gleicher Typ im Fenster → ein Aufruf.
+    pending.current.add(data)
+    if (timer.current === null) {
+      timer.current = setTimeout(() => {
+        timer.current = null
+        const types = Array.from(pending.current)
+        pending.current.clear()
+        for (const type of types) onEventRef.current(type)
+      }, COALESCE_MS)
     }
-
-    es.onmessage = (e) => {
-      if (!e.data || e.data.startsWith('__version:')) return
-      // Referenz-Cache sofort verwerfen (nicht debouncen) — sonst bedient
-      // getReference bis zum TTL-Ablauf veraltete Daten.
-      invalidateReferenceCache(e.data)
-      // Reload-Callback gebündelt: gleicher Typ im Fenster → ein Aufruf.
-      pending.add(e.data)
-      if (timer === null) timer = setTimeout(flush, COALESCE_MS)
-    }
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) es.close()
-    }
-
-    return () => {
-      if (timer !== null) clearTimeout(timer)
-      es.close()
-    }
-  }, [user])
+  }, user?.id ?? null)
 }

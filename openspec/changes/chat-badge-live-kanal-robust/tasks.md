@@ -12,8 +12,8 @@
 
 ## 3. Globalen Kanal auf die Basis umstellen
 
-- [ ] 3.1 `useLiveUpdates` auf `useEventStream` umstellen; Coalescing (300 ms je Event-Typ) und `invalidateReferenceCache` unverändert erhalten.
-- [ ] 3.2 Test: Coalescing-Verhalten bleibt unverändert; nach einem Verbindungsabbruch werden erneut Events verarbeitet.
+- [x] 3.1 `useLiveUpdates` auf `useEventStream` umstellen; Coalescing (300 ms je Event-Typ) und `invalidateReferenceCache` unverändert erhalten.
+- [x] 3.2 Test: Coalescing-Verhalten bleibt unverändert; nach einem Verbindungsabbruch werden erneut Events verarbeitet.
 
 ## 4. Zähler-Aktualität in AppShell
 
