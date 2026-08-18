@@ -3,9 +3,7 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `sse-live-updates`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-
 ## Requirements
-
 ### Requirement: SSE-Endpoint sendet typisierte Refresh-Signale
 
 Der Server SHALL einen SSE-Endpoint `GET /api/events` bereitstellen. Der Endpoint SHALL authentifizierte Verbindungen offen halten und typisierte Event-Strings senden (`data: <event-typ>\n\n`), wenn eine Mutation in einem der folgenden Bereiche stattfindet: `mitfahrgelegenheiten`, `members`, `duties`, `games`, `settings`, `trainings`, `venues`, `absences`, `kader`.
@@ -71,7 +69,15 @@ Der Server SHALL einen SSE-Endpoint `GET /api/events` bereitstellen. Der Endpoin
 
 ### Requirement: Auth via Cookie am SSE-Endpoint
 
-Da `EventSource` keine Custom-Header unterstützt, SHALL der SSE-Endpunkt `GET /api/events` über das HttpOnly-Refresh-Token-Cookie authentifiziert werden. Die Nutzung eines `?token=<jwt>`-Query-Parameters MUST entfernt werden, da Access Tokens in URL-Query-Parametern in Server-Logs, Browser-Verlauf und Proxy-Logs erscheinen. Das Backend MUST den Cookie-basierten Auth-Pfad in der Middleware für den SSE-Endpunkt unterstützen.
+Da `EventSource` keine Custom-Header unterstützt, SHALL **jeder** SSE-Endpunkt des Systems
+über das HttpOnly-Refresh-Token-Cookie authentifiziert werden — heute `GET /api/events`
+(globale Live-Updates) und `GET /api/chat/events` (Chat-Kanal). Die Nutzung eines
+`?token=<jwt>`-Query-Parameters MUST entfernt werden, da Access Tokens in
+URL-Query-Parametern in Server-Logs, Browser-Verlauf und Proxy-Logs erscheinen. Das Backend
+MUST den Cookie-basierten Auth-Pfad in der Middleware für SSE-Endpunkte unterstützen.
+
+Ein Client MUST an keinem SSE-Endpunkt einen Access Token in der URL mitschicken, auch nicht
+zusätzlich zum Cookie: ein Parameter, den der Server ignoriert, wird trotzdem protokolliert.
 
 #### Scenario: Verbindungsaufbau mit gültigem Cookie
 
@@ -87,6 +93,12 @@ Da `EventSource` keine Custom-Header unterstützt, SHALL der SSE-Endpunkt `GET /
 
 - **WHEN** ein Client `GET /api/events?token=<jwt>` aufruft (altes Verhalten)
 - **THEN** wird der `?token`-Query-Parameter NICHT als Authentifizierungsmittel akzeptiert
+
+#### Scenario: Auch der Chat-Kanal trägt keinen Token in der URL
+
+- **WHEN** das Frontend den Chat-Ereigniskanal öffnet
+- **THEN** lautet die aufgerufene URL exakt `/api/chat/events` ohne Query-Parameter
+- **THEN** wird die Verbindung allein über das HttpOnly-Refresh-Token-Cookie authentifiziert
 
 ### Requirement: Frontend ersetzt manuellen Reload durch EventSource
 
@@ -169,3 +181,45 @@ Der SSE-Handler SHALL beim Aufbau jeder neuen Verbindung als erstes Event `data:
 - **WHEN** eine Seite `useLiveUpdates` nutzt und ein `__version:`-Event empfängt
 - **THEN** wird das Event NICHT an den `onEvent`-Callback weitergeleitet
 - **THEN** verarbeitet `useLiveUpdates` nur Events ohne `__version:`-Prefix
+
+### Requirement: Lebenszyklus einer SSE-Verbindung im Frontend
+
+Ein SSE-Kanal im Frontend SHALL an die **Nutzer-Identität** gebunden sein: er wird
+aufgebaut, sobald ein angemeldeter Nutzer feststeht, und bei jedem Identitätswechsel
+(Login, Logout, Start und Ende einer Impersonation) geschlossen und neu aufgebaut. Ein
+Kanal, der einmalig beim Mounten der Komponente aufgebaut wird, erfüllt diese Anforderung
+NICHT — er überlebt den Identitätswechsel und liefert danach die Ereignisse des vorherigen
+Nutzers.
+
+Bricht die Verbindung ab, SHALL der Kanal mit begrenztem Backoff erneut verbunden werden.
+Ein endgültiges Aufgeben für die Lebensdauer der Seite ist NICHT zulässig: SSE-Verbindungen
+brechen im Normalbetrieb regelmäßig ab (Bildschirm aus, Wechsel zwischen WLAN und
+Mobilfunk, Suspendieren einer Homescreen-PWA, Timeout im Reverse Proxy), und ohne Kanal
+verliert jede daran hängende Anzeige still ihre Aktualität.
+
+Beim Verlassen der Komponente SHALL die Verbindung geschlossen und ein laufender
+Reconnect-Timer abgeräumt werden.
+
+#### Scenario: Verbindung wird nach Abbruch wiederhergestellt
+
+- **WHEN** eine bestehende SSE-Verbindung abbricht (Netzwechsel, Standby, Proxy-Timeout)
+- **THEN** baut das Frontend die Verbindung nach einer Wartezeit erneut auf
+- **THEN** werden nach erfolgreichem Neuaufbau wieder Ereignisse verarbeitet
+
+#### Scenario: Wiederholt scheiternde Verbindung eskaliert die Wartezeit
+
+- **WHEN** mehrere Verbindungsversuche hintereinander scheitern
+- **THEN** wächst die Wartezeit zwischen den Versuchen bis zu einer Obergrenze
+- **THEN** entsteht keine ununterbrochene Folge von Verbindungsversuchen
+
+#### Scenario: Identitätswechsel baut den Kanal neu auf
+
+- **WHEN** ein Administrator eine Impersonation startet oder beendet
+- **THEN** wird die bestehende SSE-Verbindung geschlossen
+- **THEN** wird eine neue Verbindung für die nun geltende Identität aufgebaut
+
+#### Scenario: Abmelden schließt den Kanal
+
+- **WHEN** der Nutzer sich abmeldet
+- **THEN** wird die SSE-Verbindung geschlossen und kein Reconnect mehr versucht
+
