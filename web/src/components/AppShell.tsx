@@ -122,6 +122,11 @@ export default function AppShell() {
   const [navChildren, setNavChildren] = useState<ChildEntry[]>([])
   const navRoutes = new Set(navRouteList)
   const [chatUnread, setChatUnread] = useState(0)
+  // „Noch nie geladen" ist etwas anderes als „nichts ungelesen" — beides wäre
+  // sonst die 0. Vor dem ersten Erfolg zeigt keine Anzeigestelle einen Badge,
+  // und ein gescheiterter Ladeversuch lässt den zuletzt bekannten Wert stehen,
+  // statt ihn auf 0 zurückzusetzen.
+  const [chatUnreadLoaded, setChatUnreadLoaded] = useState(false)
   // Kurzer Overlay-Hinweis, wenn ein Mutations-Request durch die
   // Maintenance-Middleware mit 503 abgewiesen wurde. Der Banner (persistent
   // oben) bleibt getrennt sichtbar — dieser Toast reagiert auf den konkreten
@@ -151,7 +156,15 @@ export default function AppShell() {
         api.get('/chat/broadcasts'),
       ])
       setChatUnread(chatUnreadCounts(convs.data, bcs.data).total)
-    } catch {}
+      setChatUnreadLoaded(true)
+    } catch {
+      // Bewusst still für die Anzeige: kein Dialog, kein Sprung auf 0 — der
+      // zuletzt bekannte Wert bleibt stehen. Für den Zustand ist der Fehlschlag
+      // aber nicht folgenlos: `chatUnreadLoaded` bleibt false, und der nächste
+      // Auslöser (Sichtbarwerden, `online`, Live-Ereignis) holt den Versuch
+      // nach. Ein Kaltstart ohne Netz darf den Zähler nicht dauerhaft auf 0
+      // festschreiben.
+    }
   }, [user])
 
   useEffect(() => {
@@ -162,7 +175,9 @@ export default function AppShell() {
         .sort((a: ChildEntry, b: ChildEntry) => a.first_name.localeCompare(b.first_name, 'de'))
       setNavChildren(kids)
     }).catch(() => {})
+    // Identitätswechsel: die Zahl des Vorgängers darf nicht kurz stehen bleiben.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
+    setChatUnreadLoaded(false)
     loadChatUnread()
     // Effekt soll nur bei Wechsel der Nutzer-Identität laufen (user?.id), nicht bei jeder user-Objektreferenz
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,6 +188,26 @@ export default function AppShell() {
       loadChatUnread()
     }
   })
+
+  // Zweiter Weg zur Wahrheit, unabhängig vom Live-Kanal. Eine Homescreen-PWA
+  // wird beim Wechsel in den Hintergrund eingefroren und später FORTGESETZT,
+  // nicht neu geladen — ohne diesen Effekt gäbe es dort keinen Auslöser mehr,
+  // sobald der SSE-Kanal einmal weg war. Der Refetch hängt bewusst nicht am
+  // Reconnect-Erfolg: er ist der Sicherheitsgurt für genau den Fall, dass mit
+  // dem Kanal etwas nicht stimmt.
+  useEffect(() => {
+    if (!user) return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadChatUnread()
+    }
+    const onOnline = () => loadChatUnread()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', onOnline)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [user, loadChatUnread])
 
   useEffect(() => {
     if (!user) {
@@ -262,7 +297,7 @@ export default function AppShell() {
   // Badge-Werte pro Route. Heute ein Eintrag — die Map ist die Naht, an der
   // weitere Zähler andocken, ohne dass Nav-Item und Modul-Header erneut je
   // einen Sonderfall bekommen.
-  const navBadges: Record<string, number> = { '/chat': chatUnread }
+  const navBadges: Record<string, number> = { '/chat': chatUnreadLoaded ? chatUnread : 0 }
 
   // Sichtbare Module samt Badge-Summe, bewusst VOR dem Render berechnet:
   // ein eingeklapptes Modul rendert seine Items gar nicht, und der Hamburger

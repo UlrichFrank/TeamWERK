@@ -17,10 +17,10 @@
 
 ## 4. Zähler-Aktualität in AppShell
 
-- [ ] 4.1 `chatUnread` um den Zustand „schon einmal erfolgreich geladen" ergänzen; Anzeigestellen zeigen vor dem ersten Erfolg keinen Badge. Der App-Icon-Badge-Effekt bleibt unberührt.
-- [ ] 4.2 `loadChatUnread`: fehlgeschlagener Versuch lässt den zuletzt bekannten Wert stehen und wird beim nächsten Auslöser nachgeholt (kein Sprung auf `0`, kein Fehlerdialog).
-- [ ] 4.3 Refetch bei `visibilitychange` (sichtbar) und `online` registrieren, beim Unmount abmelden.
-- [ ] 4.4 Tests in `web/src/components/__tests__/AppShell.unreadRefresh.test.tsx`: Refetch beim Sichtbarwerden; Refetch bei `online`; gescheiterter Start-Load zeigt keinen Badge und wird nachgeholt; erfolgreiche `0` zeigt keinen Badge; Listener werden beim Unmount entfernt.
+- [x] 4.1 `chatUnread` um den Zustand „schon einmal erfolgreich geladen" ergänzen; Anzeigestellen zeigen vor dem ersten Erfolg keinen Badge. Der App-Icon-Badge-Effekt bleibt unberührt.
+- [x] 4.2 `loadChatUnread`: fehlgeschlagener Versuch lässt den zuletzt bekannten Wert stehen und wird beim nächsten Auslöser nachgeholt (kein Sprung auf `0`, kein Fehlerdialog).
+- [x] 4.3 Refetch bei `visibilitychange` (sichtbar) und `online` registrieren, beim Unmount abmelden.
+- [x] 4.4 Tests in `web/src/components/__tests__/AppShell.unreadRefresh.test.tsx`: Refetch beim Sichtbarwerden; Refetch bei `online`; gescheiterter Start-Load zeigt keinen Badge und wird nachgeholt; erfolgreiche `0` zeigt keinen Badge; Listener werden beim Unmount entfernt.
 
 ## 5. Verifikation
 
