@@ -7,8 +7,8 @@
 
 ## 2. Chat-Kanal auf die Basis umstellen
 
-- [ ] 2.1 `useChatEvents` auf `useEventStream` umstellen: URL exakt `/api/chat/events` **ohne** `?token=`, Bindung an `user` statt `[]`.
-- [ ] 2.2 Test: Der Hook öffnet keine URL mit Query-Parameter (Regressionsschutz gegen den Token im Log) und baut bei Identitätswechsel neu auf.
+- [x] 2.1 `useChatEvents` auf `useEventStream` umstellen: URL exakt `/api/chat/events` **ohne** `?token=`, Bindung an `user` statt `[]`.
+- [x] 2.2 Test: Der Hook öffnet keine URL mit Query-Parameter (Regressionsschutz gegen den Token im Log) und baut bei Identitätswechsel neu auf.
 
 ## 3. Globalen Kanal auf die Basis umstellen
 
