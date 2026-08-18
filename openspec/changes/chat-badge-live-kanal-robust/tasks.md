@@ -24,6 +24,6 @@
 
 ## 5. Verifikation
 
-- [ ] 5.1 `pnpm -C web test` und `pnpm -C web lint` grün; bestehende `AppShell.navBadges`-Tests unverändert grün.
-- [ ] 5.2 `openspec validate chat-badge-live-kanal-robust --strict` grün.
+- [x] 5.1 `pnpm -C web test` und `pnpm -C web lint` grün; bestehende `AppShell.navBadges`-Tests unverändert grün.
+- [x] 5.2 `openspec validate chat-badge-live-kanal-robust --strict` grün.
 - [ ] 5.3 Manuelle Gegenprobe laut `design.md` — Migration Plan (PWA in den Hintergrund, Nachricht senden, zurückholen).
