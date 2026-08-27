@@ -200,5 +200,9 @@ serverseitig den Typ-Wert eingesetzt (siehe Spec, `POST /api/duty-slots`).
   als bisher. Der Massenlauf (`/api/duty-slots/bulk-regen`) bleibt der Weg zurück — sein
   `purge`-Zustand löscht auch `is_custom=1`-Slots.
 - **Kein Schutz gegen `hours_value <= 0` im Bestand.** Die Validierung greift nur an den
-  Schreibrouten. Eine per SQL gesetzte 0 zeigt `8:00–8:00`. Kein CHECK-Constraint, weil er
-  bei einem `ALTER TABLE ADD COLUMN` in SQLite einen Tabellen-Rebuild erzwänge.
+  Schreibrouten. Eine per SQL gesetzte 0 zeigt `8:00–8:00`.
+  **Korrektur zur ersten Fassung dieses Absatzes:** die Begründung „ein CHECK ginge bei
+  `ALTER TABLE ADD COLUMN` nicht" war falsch — SQLite erlaubt CHECK-Constraints auf
+  hinzugefügten Spalten und setzt sie durch (nachgeprüft). Ein `CHECK(hours_value > 0)`
+  wäre also möglich und ist beim nächsten Anfassen der Spalte nachzurüsten; unterlassen
+  wurde er hier aus Unkenntnis, nicht aus einem Trade-off.

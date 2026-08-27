@@ -46,16 +46,49 @@ function mockGame() {
   mock.onPost('/duty-slots').reply(201)
 }
 
-async function openAddModal() {
+async function openAddModal(gameId = 50) {
   render(
     <MemoryRouter>
-      <SpieltagDetailModal gameId={50} onClose={() => {}} />
+      <SpieltagDetailModal gameId={gameId} onClose={() => {}} />
     </MemoryRouter>,
   )
   const user = userEvent.setup()
   await screen.findByText('+ Dienst hinzufügen')
   await user.click(screen.getByText('+ Dienst hinzufügen'))
   return user
+}
+
+// openspec/changes/dienst-dauer-dynamisch, Aufgabe 8: ein Diensttyp im Modus
+// 'dynamisch' rechnet die Dauer gegen den konkreten Termin aus (Start-Anker +
+// Versatz und End-Anker + Versatz gegen game.time bzw. game.end_time), statt
+// die gepflegte hours_value zu übernehmen. Der so entstandene Slot bleibt
+// trotzdem is_custom=1/absolut — kein Modus-Umschalter im Modal.
+const DUTY_TYPES_DYNAMIC = [
+  {
+    id: 11, name: 'Zeitnehmer', hours_value: 1, default_anchor: 'start', default_offset_minutes: -30,
+    duration_mode: 'dynamisch', end_anchor: 'end', end_offset_minutes: 15, audiences: [],
+  },
+]
+
+function mockDynamicGame() {
+  mock.onGet('/games/51').reply(200, {
+    game: {
+      id: 51,
+      date: '2026-09-13',
+      time: '10:00',
+      end_time: '11:30',
+      opponent: 'Vereinsfest',
+      event_type: 'generisch',
+      team_id: 1,
+      teams: [{ id: 1, name: 'A-Jugend' }],
+      season_id: 2,
+      can: { edit: true, delete: true, manage_lineup: false },
+    },
+    slots: [],
+  })
+  mock.onGet(/\/duty-board/).reply(200, [])
+  mock.onGet('/duty-types').reply(200, DUTY_TYPES_DYNAMIC)
+  mock.onPost('/duty-slots').reply(201)
 }
 
 beforeEach(() => {

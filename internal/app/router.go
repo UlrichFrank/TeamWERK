@@ -489,6 +489,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/duty-slots", h.Duties.CreateSlot)
 			r.Put("/api/duty-slots/{id}", h.Duties.UpdateSlot)
 			r.Delete("/api/duty-slots/{id}", h.Duties.DeleteSlot)
+			r.Get("/api/duty-slots/export", h.Duties.ExportSlots)
 			r.Post("/api/games/{id}/regenerate", h.Games.RegenerateSlots)
 			r.Post("/api/games/regenerate-day", h.Games.RegenerateDaySlots)
 			// Tages-Ausrichter ändern — beide Wege derselbe Codepfad, preview

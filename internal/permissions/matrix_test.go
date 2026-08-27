@@ -564,6 +564,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/duty-slots", expected: exVorstandTrainer},
 	{method: "PUT", path: "/api/duty-slots/{id}", expected: exVorstandTrainer},
 	{method: "DELETE", path: "/api/duty-slots/{id}", expected: exVorstandTrainer},
+	{method: "GET", path: "/api/duty-slots/export", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/games/{id}/regenerate", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/games/regenerate-day", expected: exVorstandTrainer},
 	// Tages-Ausrichter ändern (Capability manage_games); Lesen ist exAuth (oben).

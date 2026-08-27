@@ -30,7 +30,8 @@ export function parseHoursInput(s: string): number {
   return isNaN(n) ? 1 : n
 }
 
-function minutesFromTime(time: string): number | null {
+/** "HH:MM" -> Minuten seit Mitternacht, oder null bei unparsbarem Wert. */
+export function minutesFromTime(time: string): number | null {
   const m = time.match(/^(\d{1,2}):(\d{2})/)
   if (!m) return null
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10)
@@ -76,4 +77,36 @@ export function formatTimeSpan(eventTime: string | null | undefined, hours: numb
   if (!Number.isFinite(hours) || hours <= 0) return formatClock(start)
   const end = wrapMinutes(start + Math.round(hours * 60))
   return `${formatClock(start)}–${formatClock(end)}`
+}
+
+/**
+ * Löst einen Anker ("start"|"end") + Versatz gegen eine konkrete (oder
+ * Beispiel-)Anpfiff-/Spielende-Uhrzeit auf. Frontend-Spiegel von
+ * `resolveAnchorTime` in `internal/games/regen.go` — bewusst ohne dessen
+ * Fallunterscheidung "gepflegte `games.end_time` vs. Anpfiff + Spieldauer":
+ * der Aufrufer entscheidet, was er als `endTime` übergibt (echte Endzeit,
+ * Beispielwert, oder als Fallback dieselbe Startzeit).
+ * (openspec/changes/dienst-dauer-dynamisch)
+ */
+export function resolveAnchorClock(
+  anchor: 'start' | 'end',
+  offsetMinutes: number,
+  startTime: string,
+  endTime: string,
+): string {
+  const base = anchor === 'end' ? endTime : startTime
+  return addMinutesToTime(base, offsetMinutes)
+}
+
+/**
+ * Differenz zweier "HH:MM"-Uhrzeiten in Minuten (Ende minus Start). Kann
+ * negativ sein — das ist der Signalwert für "Ende liegt vor dem Start", auf
+ * den `duration_mode='dynamisch'` mit dem Rückfall auf `hours_value` reagiert.
+ * Kein Mitternachtsüberlauf (Tagesraster, wie die Server-Auflösung).
+ */
+export function clockDiffMinutes(start: string, end: string): number | null {
+  const s = minutesFromTime(start)
+  const e = minutesFromTime(end)
+  if (s === null || e === null) return null
+  return e - s
 }

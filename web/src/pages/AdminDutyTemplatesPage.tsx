@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
@@ -10,7 +9,9 @@ import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { TeamScopeField, RotationEnabledField, AusrichterField, SlotsCountField } from '../components/DutyTemplateItemFields'
 import HoursInput from '../components/HoursInput'
-import { toggleTeamID } from '../lib/dutyTemplateItems'
+import { errorData } from '../lib/errors'
+import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItems'
+import { ChevronDown, RefreshCw } from 'lucide-react'
 
 interface DutyType {
   id: number
@@ -19,6 +20,10 @@ interface DutyType {
   default_offset_minutes: number
   /** Dauer in Stunden — Vorbelegung der Vorlagen-Zeile (dienst-dauer). */
   hours_value: number
+  /** Dauer-Modus des Diensttyps (dienst-dauer-dynamisch) — Vorbelegung beim Copy-on-pick. */
+  duration_mode?: 'absolut' | 'dynamisch'
+  end_anchor?: 'start' | 'end'
+  end_offset_minutes?: number
   audiences?: string[] | null
 }
 
@@ -35,8 +40,14 @@ interface TemplateItem {
   anchor: 'start' | 'end'
   offset_minutes: number
   slots_count: number
-  /** Dauer des Dienstes in Stunden (dienst-dauer). Copy-on-pick vom Diensttyp. */
+  /** Dauer des Dienstes in Stunden (dienst-dauer). Copy-on-pick vom Diensttyp. Im
+   * Modus 'dynamisch' bleibt sie der Rückfall, falls die Auflösung nicht positiv wird. */
   hours_value: number
+  /** Dauer-Modus (dienst-dauer-dynamisch): 'absolut' = hours_value gilt fest,
+   * 'dynamisch' = Ende folgt end_anchor/end_offset_minutes gegen den Termin. */
+  duration_mode: 'absolut' | 'dynamisch'
+  end_anchor: 'start' | 'end'
+  end_offset_minutes: number
   audiences: string[]
   /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
   team_ids?: number[] | null
@@ -86,7 +97,11 @@ function newTemplate(): TemplateFormState {
 }
 
 function newItem(): TemplateItem {
-  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, hours_value: 1, audiences: [], team_ids: [] }
+  return {
+    duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, hours_value: 1,
+    duration_mode: 'absolut', end_anchor: 'end', end_offset_minutes: 0,
+    audiences: [], team_ids: [],
+  }
 }
 
 function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
@@ -100,6 +115,8 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
   // die Regeneration ignoriert team_ids dort — die Auswahl wird deshalb gar
   // nicht erst angeboten. Gespeicherte Werte bleiben unangetastet.
   const scopeTeams = template.template_type === 'generisch' ? [] : teams
+  const [showItemMenu, setShowItemMenu] = useState(false)
+  const [refreshNote, setRefreshNote] = useState('')
   // Ausrichter-Auswahl nur für Heim-Vorlagen; für andere template_type wird nichts angeboten.
   const ausrichterOptions = template.template_type === 'heim' ? ausrichter : []
   const teamShortNames = buildTeamShortNames(teams)
@@ -111,6 +128,20 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
   }
 
   const addItem = () => onChange({ ...template, items: [...template.items, newItem()] })
+
+  // Auffrischen aus den Diensttypen: ändert nur den Formularzustand, persistiert
+  // wird wie sonst auch erst beim Speichern — deshalb kein Bestätigungsdialog,
+  // der Speichern-Knopf ist bereits das Tor. Die Meldung sagt, was passiert ist.
+  const refreshFromDutyTypes = () => {
+    setShowItemMenu(false)
+    const { items, changed } = refreshItemsFromDutyTypes(template.items, dutyTypes)
+    setRefreshNote(
+      changed === 0
+        ? 'Alle Einträge stimmen bereits mit ihrem Diensttyp überein.'
+        : `${changed} ${changed === 1 ? 'Eintrag' : 'Einträge'} aus den Diensttypen aufgefrischt — zum Übernehmen speichern.`,
+    )
+    if (changed > 0) onChange({ ...template, items })
+  }
   const removeItem = (index: number) => onChange({ ...template, items: template.items.filter((_, idx) => idx !== index) })
 
   return (
@@ -155,14 +186,52 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
       <div className="bg-brand-surface-card rounded-xl border border-brand-border-subtle p-4">
         <div className="flex items-center justify-between mb-4 gap-3">
           <h3 className="font-semibold text-brand-text">Dienst-Einträge</h3>
-          <button
-            type="button"
-            onClick={addItem}
-            className="bg-brand-yellow text-brand-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
-          >
-            + Eintrag hinzufügen
-          </button>
+          <div className="relative shrink-0">
+            <div className="flex">
+              <button
+                type="button"
+                onClick={addItem}
+                className="bg-brand-yellow text-brand-black rounded-l-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+              >
+                + Eintrag hinzufügen
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowItemMenu(v => !v)}
+                aria-label="Weitere Aktionen"
+                aria-expanded={showItemMenu}
+                aria-haspopup="menu"
+                className="flex items-center bg-brand-yellow text-brand-black rounded-r-md border-l border-l-brand-black/20 px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {showItemMenu && (
+              <div role="menu" className="absolute right-0 mt-1 w-72 bg-brand-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={refreshFromDutyTypes}
+                  className="w-full flex items-start gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Aus Diensttypen auffrischen
+                    <span className="block text-xs text-brand-text-muted">
+                      Holt Dauer, Anker, Versatz und Zielgruppe zurück in alle Einträge.
+                    </span>
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+
+        {refreshNote && (
+          <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+            {refreshNote}
+          </div>
+        )}
 
         {template.items.length === 0 ? (
           <p className="text-sm text-brand-text-subtle italic">Keine Einträge — klicke auf „+ Eintrag hinzufügen“.</p>
@@ -194,6 +263,9 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                             anchor: dutyType?.default_anchor ?? item.anchor,
                             offset_minutes: dutyType?.default_offset_minutes ?? item.offset_minutes,
                             hours_value: dutyType?.hours_value ?? item.hours_value,
+                            duration_mode: dutyType?.duration_mode ?? item.duration_mode,
+                            end_anchor: dutyType?.end_anchor ?? item.end_anchor,
+                            end_offset_minutes: dutyType?.end_offset_minutes ?? item.end_offset_minutes,
                             audiences: dutyType?.audiences ?? [],
                           })
                         }}
@@ -286,6 +358,56 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                       />
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-xs text-brand-text-muted mb-1">Dauer-Modus</label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`duration-mode-${index}`}
+                          checked={item.duration_mode === 'absolut'}
+                          onChange={() => updateItem(index, { duration_mode: 'absolut' })}
+                          className="accent-brand-yellow"
+                        />
+                        Absolut
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`duration-mode-${index}`}
+                          checked={item.duration_mode === 'dynamisch'}
+                          onChange={() => updateItem(index, { duration_mode: 'dynamisch' })}
+                          className="accent-brand-yellow"
+                        />
+                        Dynamisch (folgt dem Spiel)
+                      </label>
+                    </div>
+                  </div>
+
+                  {item.duration_mode === 'dynamisch' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-brand-text-muted mb-1">End-Anker</label>
+                        <select
+                          value={item.end_anchor}
+                          onChange={e => updateItem(index, { end_anchor: e.target.value as TemplateItem['end_anchor'] })}
+                          className={INPUT_SM}
+                        >
+                          <option value="start">Anpfiff</option>
+                          <option value="end">Spielende</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-brand-text-muted mb-1">End-Versatz</label>
+                        <OffsetInput
+                          value={item.end_offset_minutes}
+                          onChange={v => updateItem(index, { end_offset_minutes: v })}
+                          className={INPUT_SM}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -347,7 +469,18 @@ export default function AdminDutyTemplatesPage() {
         name: r.data.name,
         template_type: r.data.template_type,
         duration_minutes: r.data.duration_minutes,
-        items: (r.data.items ?? []).map((it: Omit<TemplateItem, 'audiences'> & { audiences?: string[] | null }) => ({ ...it, audiences: it.audiences ?? [] })),
+        items: (r.data.items ?? []).map((it: Omit<TemplateItem, 'audiences' | 'duration_mode' | 'end_anchor' | 'end_offset_minutes'> & {
+          audiences?: string[] | null
+          duration_mode?: 'absolut' | 'dynamisch'
+          end_anchor?: 'start' | 'end'
+          end_offset_minutes?: number
+        }) => ({
+          ...it,
+          audiences: it.audiences ?? [],
+          duration_mode: it.duration_mode ?? 'absolut',
+          end_anchor: it.end_anchor ?? 'end',
+          end_offset_minutes: it.end_offset_minutes ?? 0,
+        })),
       })
     } catch {
       setModalError('Vorlage konnte nicht geladen werden.')
@@ -411,8 +544,24 @@ export default function AdminDutyTemplatesPage() {
       }
       await loadTemplates()
       closeModal()
-    } catch {
-      setModalError(editingTemplateId == null ? 'Erstellen fehlgeschlagen.' : 'Speichern fehlgeschlagen.')
+    } catch (e) {
+      // Die Backend-Fehlercodes von PUT /duty-templates in lesbare Sätze
+      // übersetzen. Ohne diese Zuordnung sagt das Modal bei einer abgelehnten
+      // Rotations- oder Ausrichter-Kombination nur "Speichern fehlgeschlagen"
+      // und der Vorstand rät, welche Zeile gemeint ist.
+      const code = errorData<{ error?: string }>(e)?.error
+      const fallback = editingTemplateId == null ? 'Erstellen fehlgeschlagen.' : 'Speichern fehlgeschlagen.'
+      setModalError(
+        code === 'rotation_requires_normal_behavior'
+          ? 'Bewirtungsrotation erfordert „Normal (immer)" bei „Mehrere Spiele am gleichen Tag" und „Spiele am Vortag / Folgetag" des zugehörigen Diensttyps.'
+          : code === 'ausrichter_requires_heim_template'
+            ? 'Ausrichter-Auswahl ist nur bei Heim-Vorlagen erlaubt.'
+            : code === 'invalid_hours_value'
+              ? 'Die Dauer eines Eintrags muss größer als 0 sein.'
+              : code === 'invalid_team'
+                ? 'Ein ausgewähltes Team existiert nicht mehr.'
+                : fallback,
+      )
     } finally {
       setModalSaving(false)
     }
@@ -455,12 +604,13 @@ export default function AdminDutyTemplatesPage() {
                 {templates.map(t => (
                   <tr key={t.id} className="hover:bg-brand-table-select transition-colors">
                     <td className="px-4 py-3">
-                      <Link
-                        to={`/dienstplan-vorlagen/${t.id}`}
-                        className="font-medium text-brand-text hover:text-brand-blue hover:underline"
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(t.id)}
+                        className="font-medium text-brand-text hover:text-brand-blue hover:underline text-left"
                       >
                         {t.name}
-                      </Link>
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeBadge[t.template_type] ?? ''}`}>

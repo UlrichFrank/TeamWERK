@@ -6,9 +6,10 @@ import { formatOffset, parseOffset } from '../lib/time'
 import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 import DutyInstructionEditorModal from '../components/DutyInstructionEditorModal'
+import OffsetInput from '../components/OffsetInput'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
-import { hoursToDisplay, parseHoursInput } from '../lib/duration'
+import { hoursToDisplay, parseHoursInput, resolveAnchorClock, clockDiffMinutes, addMinutesToTime } from '../lib/duration'
 
 interface DutyType {
   id: number
@@ -16,6 +17,9 @@ interface DutyType {
   hours_value: number
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
+  duration_mode: 'absolut' | 'dynamisch'
+  end_anchor: 'start' | 'end'
+  end_offset_minutes: number
   same_day_behavior?: string
   same_day_variant_id?: number | null
   adjacent_day_behavior?: string
@@ -31,6 +35,9 @@ interface EditState {
   hours: string
   anchor: 'start' | 'end'
   offset: string
+  duration_mode: 'absolut' | 'dynamisch'
+  end_anchor: 'start' | 'end'
+  end_offset: string
   same_day_behavior: string
   same_day_variant_id: string
   adjacent_day_behavior: string
@@ -44,6 +51,9 @@ function toEditState(t: DutyType): EditState {
     hours: hoursToDisplay(t.hours_value),
     anchor: t.default_anchor,
     offset: formatOffset(t.default_offset_minutes),
+    duration_mode: t.duration_mode ?? 'absolut',
+    end_anchor: t.end_anchor ?? 'end',
+    end_offset: formatOffset(t.end_offset_minutes ?? 0),
     same_day_behavior: t.same_day_behavior || 'normal',
     same_day_variant_id: t.same_day_variant_id ? t.same_day_variant_id.toString() : '',
     adjacent_day_behavior: t.adjacent_day_behavior || 'normal',
@@ -54,10 +64,25 @@ function toEditState(t: DutyType): EditState {
 
 const emptyCreate = (): EditState => ({
   name: '', hours: '1h', anchor: 'start', offset: '0',
+  duration_mode: 'absolut', end_anchor: 'end', end_offset: '0',
   same_day_behavior: 'normal', same_day_variant_id: '',
   adjacent_day_behavior: 'normal', adjacent_day_variant_id: '',
   audiences: [],
 })
+
+// Feste Beispielwerte für die Vorschau im dynamischen Modus (5.3): eine
+// beliebige, aber plausible Anstoßzeit + Spieldauer, gegen die Anker und
+// Versätze gerechnet werden — nur damit ein negativer Versatz beim Pflegen
+// sofort als Spanne sichtbar wird, nicht erst am nächsten Regen-Lauf.
+const EXAMPLE_KICKOFF = '10:00'
+const EXAMPLE_GAME_DURATION_MIN = 60
+
+function exampleSpan(state: EditState): { start: string; end: string; durationMinutes: number | null } {
+  const exampleGameEnd = addMinutesToTime(EXAMPLE_KICKOFF, EXAMPLE_GAME_DURATION_MIN)
+  const start = resolveAnchorClock(state.anchor, parseOffset(state.offset), EXAMPLE_KICKOFF, exampleGameEnd)
+  const end = resolveAnchorClock(state.end_anchor, parseOffset(state.end_offset), EXAMPLE_KICKOFF, exampleGameEnd)
+  return { start, end, durationMinutes: clockDiffMinutes(start, end) }
+}
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
@@ -76,9 +101,37 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
         <input value={state.name} onChange={e => onChange({ ...state, name: e.target.value })}
           placeholder="z.B. Kassierer" required className={INPUT} />
       </div>
+      <div>
+        <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer-Modus</label>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="duration-mode"
+              checked={state.duration_mode === 'absolut'}
+              onChange={() => onChange({ ...state, duration_mode: 'absolut' })}
+              className="accent-brand-yellow"
+            />
+            Absolut
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="duration-mode"
+              checked={state.duration_mode === 'dynamisch'}
+              onChange={() => onChange({ ...state, duration_mode: 'dynamisch' })}
+              className="accent-brand-yellow"
+            />
+            Dynamisch (folgt dem Spiel)
+          </label>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">
+            {state.duration_mode === 'dynamisch' ? 'Dauer (Rückfall)' : 'Dauer'}
+          </label>
           <input
             list="hours-presets"
             value={state.hours}
@@ -100,12 +153,53 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
           </select>
         </div>
       </div>
+      {state.duration_mode === 'dynamisch' && (
+        <p className="text-xs text-brand-text-subtle -mt-2">
+          Wird verwendet, wenn die dynamische Berechnung keine positive Dauer ergibt (Ende vor Start).
+        </p>
+      )}
       <div>
         <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz</label>
         <input value={state.offset} onChange={e => onChange({ ...state, offset: e.target.value })}
           placeholder="z.B. -1h 30min" className={INPUT} />
       </div>
       <p className="text-xs text-brand-text-subtle">Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
+
+      {state.duration_mode === 'dynamisch' && (
+        <div className="border-t border-brand-border-subtle pt-3 mt-1">
+          <p className="text-xs font-semibold text-brand-text-muted mb-2">Ende (dynamisch)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">End-Anker</label>
+              <select value={state.end_anchor} onChange={e => onChange({ ...state, end_anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
+                <option value="start">Anpfiff/Beginn</option>
+                <option value="end">Abpfiff/Ende</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">End-Versatz</label>
+              <OffsetInput
+                value={parseOffset(state.end_offset)}
+                onChange={v => onChange({ ...state, end_offset: formatOffset(v) })}
+                className={INPUT}
+              />
+            </div>
+          </div>
+          {(() => {
+            const example = exampleSpan(state)
+            return (
+              <p className="text-xs text-brand-text-subtle mt-2">
+                Beispiel bei {EXAMPLE_KICKOFF} Anpfiff, {EXAMPLE_GAME_DURATION_MIN} min Spieldauer: {example.start}–{example.end}
+                {example.durationMinutes !== null && example.durationMinutes <= 0 && (
+                  <span className="block text-brand-danger mt-1">
+                    Ende liegt vor (oder auf) dem Start — der Dienst fällt in diesem Beispiel auf die absolute Dauer zurück.
+                  </span>
+                )}
+              </p>
+            )
+          })()}
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe</label>
@@ -192,6 +286,9 @@ export default function AdminDutyTypesPage() {
       hours_value: parseHoursInput(create.hours),
       default_anchor: create.anchor,
       default_offset_minutes: parseOffset(create.offset),
+      duration_mode: create.duration_mode,
+      end_anchor: create.end_anchor,
+      end_offset_minutes: parseOffset(create.end_offset),
       same_day_behavior: create.same_day_behavior,
       same_day_variant_id: create.same_day_variant_id ? parseInt(create.same_day_variant_id) : null,
       adjacent_day_behavior: create.adjacent_day_behavior,
@@ -215,6 +312,9 @@ export default function AdminDutyTypesPage() {
       hours_value: parseHoursInput(edit.hours),
       default_anchor: edit.anchor,
       default_offset_minutes: parseOffset(edit.offset),
+      duration_mode: edit.duration_mode,
+      end_anchor: edit.end_anchor,
+      end_offset_minutes: parseOffset(edit.end_offset),
       same_day_behavior: edit.same_day_behavior,
       same_day_variant_id: edit.same_day_variant_id ? parseInt(edit.same_day_variant_id) : null,
       adjacent_day_behavior: edit.adjacent_day_behavior,
