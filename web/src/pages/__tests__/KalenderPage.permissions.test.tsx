@@ -95,9 +95,15 @@ describe('KalenderPage — canCreateAbsence-Gate: "Abwesenheit"-Button', () => {
 })
 
 // canImportGames = import_games (nur Vorstand/Admin, enger als manage_games).
+// Gleiches Tier: canBulkRegenDuties = bulk_regen_duties.
 const CAN_IMPORT_IDS = ['admin', 'vorstand', 'vorstand_elternteil']
 
-describe('KalenderPage — import_games-Gate: H4A-Import im Aktionsmenü', () => {
+// canExportDuties = manage_duties (Vorstand- UND Trainer-Personas). Das Menü
+// selbst hängt an der Vereinigung aller drei Capabilities — es erscheint deshalb
+// auch für Trainer/sportliche Leitung, die nur den CSV-Export sehen.
+const CAN_EXPORT_DUTIES_IDS = CAN_EDIT_IDS
+
+describe('KalenderPage — Aktionsmenü: Sichtbarkeit und Einträge je Capability', () => {
   test.each(PERSONAS)('Persona $id', async (persona) => {
     renderAsPersona(<KalenderPage />, persona.id, {
       mocks: [
@@ -109,27 +115,48 @@ describe('KalenderPage — import_games-Gate: H4A-Import im Aktionsmenü', () =>
     })
     await flushAsync()
 
+    const canImport = CAN_IMPORT_IDS.includes(persona.id)
+    const canExport = CAN_EXPORT_DUTIES_IDS.includes(persona.id)
+
     const menuBtn = screen.queryByRole('button', { name: /Weitere Aktionen/i })
-    if (!CAN_IMPORT_IDS.includes(persona.id)) {
+    if (!canImport && !canExport) {
       expect(
         menuBtn,
-        `Persona ${persona.id}: ohne import_games kein Aktionsmenü erwartet`,
+        `Persona ${persona.id}: ohne import_games/bulk_regen_duties/manage_duties kein Aktionsmenü erwartet`,
       ).toBeNull()
       return
     }
 
     expect(
       menuBtn,
-      `Persona ${persona.id} (import_games): Aktionsmenü muss vorhanden sein`,
+      `Persona ${persona.id}: Aktionsmenü muss vorhanden sein`,
     ).not.toBeNull()
 
-    // Der Import liegt hinter dem Dropdown — erst nach Klick sichtbar. Genau das
-    // ist der Regressionsschutz: vorher war es ein eigener Button.
+    // Die Einträge liegen hinter dem Dropdown — erst nach Klick sichtbar. Genau
+    // das ist der Regressionsschutz: vorher war der Import ein eigener Button.
     expect(screen.queryByRole('menuitem', { name: /Handball4All/i })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /Dienste als CSV/i })).toBeNull()
     await userEvent.click(menuBtn!)
-    expect(
-      screen.queryByRole('menuitem', { name: /Handball4All/i }),
-      `Persona ${persona.id}: H4A-Import muss im geöffneten Menü stehen`,
-    ).not.toBeNull()
+
+    if (canImport) {
+      expect(
+        screen.queryByRole('menuitem', { name: /Handball4All/i }),
+        `Persona ${persona.id}: H4A-Import muss im geöffneten Menü stehen`,
+      ).not.toBeNull()
+    } else {
+      expect(
+        screen.queryByRole('menuitem', { name: /Handball4All/i }),
+        `Persona ${persona.id}: H4A-Import nur mit import_games`,
+      ).toBeNull()
+    }
+
+    if (canExport) {
+      expect(
+        screen.queryByRole('menuitem', { name: /Dienste als CSV/i }),
+        `Persona ${persona.id}: Dienst-Export muss im geöffneten Menü stehen`,
+      ).not.toBeNull()
+    } else {
+      expect(screen.queryByRole('menuitem', { name: /Dienste als CSV/i })).toBeNull()
+    }
   })
 })

@@ -124,6 +124,7 @@ Betroffene Endpoints (write):
 
 Betroffene Endpoints (read-only):
 - `GET /api/duty-types`, `GET /api/duty-templates(/{id})`, `GET /api/duty-templates/{id}/preview`
+- `GET /api/duty-slots/export` (Dienst-CSV; liest nur, ohne Belegung und ohne Namen)
 - `GET /api/seasons`
 - `GET /api/kader`, `POST /api/kader`, `GET/PUT/DELETE /api/kader/{id}`
 - `GET /api/kader/{id}/member-suggestions`, `GET /api/kader/{id}/extended-member-suggestions`

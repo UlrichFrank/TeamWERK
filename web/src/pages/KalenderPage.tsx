@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle, Download, UserX } from 'lucide-react'
+import { Home, Plane, Calendar, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Plus, Dumbbell, RefreshCw, Check, X, AlertTriangle, Download, FileSpreadsheet, UserX } from 'lucide-react'
 import { api } from '../lib/api'
 import { buildPreviewUrl } from '../lib/dutyPreview'
 import { getEventColors } from '../lib/eventColors'
@@ -24,6 +24,7 @@ import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaults
 import RegenSummaryCard, { RegenSummary } from '../components/RegenSummaryCard'
 import H4AImportModal from '../components/H4AImportModal'
 import DutyBulkRegenModal, { BulkRegenResult } from '../components/DutyBulkRegenModal'
+import DutyExportModal from '../components/DutyExportModal'
 import {
   GameDayHostSelect,
   GameDayHostPreviewDialog,
@@ -171,6 +172,10 @@ export default function KalenderPage() {
   // Ebenfalls enger als canEdit: ein Massenlauf kann hunderte Dienst-Slots
   // löschen/neu anlegen — bleibt deshalb wie der H4A-Import beim Vorstand.
   const canBulkRegenDuties = hasCapability('bulk_regen_duties')
+  // Der Dienst-CSV-Export liegt im Tier der Dienst-Slot-Pflege (manage_duties,
+  // also auch Trainer/sportliche Leitung) — er liest nur und trägt weder
+  // Belegung noch Namen.
+  const canExportDuties = hasCapability('manage_duties')
   const canSeeTeamAbsences = canEdit
   const canManageTrainings = hasCapability('manage_trainings')
   const [searchParams, setSearchParams] = useSearchParams()
@@ -211,6 +216,7 @@ export default function KalenderPage() {
   const [regenSummary, setRegenSummary] = useState<RegenSummary | null>(null)
   const [showH4AImport, setShowH4AImport] = useState(false)
   const [showBulkRegen, setShowBulkRegen] = useState(false)
+  const [showDutyExport, setShowDutyExport] = useState(false)
   const [showEventMenu, setShowEventMenu] = useState(false)
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; skipped: number } | null>(null)
   const [bulkRegenResult, setBulkRegenResult] = useState<BulkRegenResult | null>(null)
@@ -989,7 +995,7 @@ export default function KalenderPage() {
             {!compact && <span>Abwesenheit</span>}
           </button>
         )}
-        {(canEdit || canCreateAbsence || canImportGames || canBulkRegenDuties) && (
+        {(canEdit || canCreateAbsence || canImportGames || canBulkRegenDuties || canExportDuties) && (
           <div ref={eventMenuRef} className="relative shrink-0">
             <div className="flex">
               {(canEdit || canCreateAbsence) && (
@@ -1009,7 +1015,7 @@ export default function KalenderPage() {
                   {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
                 </button>
               )}
-              {(canImportGames || canBulkRegenDuties) && (
+              {(canImportGames || canBulkRegenDuties || canExportDuties) && (
                 <button
                   onClick={() => setShowEventMenu(v => !v)}
                   aria-label="Weitere Aktionen"
@@ -1023,7 +1029,7 @@ export default function KalenderPage() {
                 </button>
               )}
             </div>
-            {showEventMenu && (canImportGames || canBulkRegenDuties) && (
+            {showEventMenu && (canImportGames || canBulkRegenDuties || canExportDuties) && (
               <div role="menu" className="absolute right-0 mt-1 w-60 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
                 {canImportGames && (
                   <button
@@ -1043,6 +1049,16 @@ export default function KalenderPage() {
                   >
                     <RefreshCw className="w-4 h-4 shrink-0" />
                     Dienste aktualisieren
+                  </button>
+                )}
+                {canExportDuties && (
+                  <button
+                    role="menuitem"
+                    onClick={() => { setShowEventMenu(false); setShowDutyExport(true) }}
+                    className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                    Dienste als CSV
                   </button>
                 )}
               </div>
@@ -1885,6 +1901,14 @@ export default function KalenderPage() {
           setBulkRegenResult(result)
           loadGames()
         }}
+      />
+      )}
+      {showDutyExport && (
+      <DutyExportModal
+        isOpen
+        monthStart={monthStart}
+        monthEnd={monthEnd}
+        onClose={() => setShowDutyExport(false)}
       />
       )}
     </div>
