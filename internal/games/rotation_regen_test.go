@@ -82,27 +82,32 @@ type rotSlot struct {
 	cakes int
 }
 
-// rotationSlotsAt liest die Rotations-Slots eines Spiels, aufsteigend nach team_id
-// (team 0 = team_id IS NULL — darf es seit bewirtung-kuchen-statt-slots gar nicht mehr
-// geben, wird aber weiter mitgelesen, damit ein Rückfall auffällt).
+// rotationSlotsAt liest die Rotations-Slots eines Spiels. Die Mannschaft steht seit
+// dienst-slot-team-id-ausbauen NICHT mehr in duty_slots.team_id, sondern ergibt sich aus
+// dem Anker-Spiel, an dem der Slot hängt (game_teams) — genau das ist die Zusage, die
+// diese Tests prüfen sollen: „die Kuchen von Team A hängen an Team As Termin". Der Helfer
+// löst deshalb über game_teams auf; die Erwartungen der Tests bleiben unverändert.
+// Ein Spiel mit mehreren Teams liefert deren kleinste ID — solche Termine kommen in
+// diesen Tests nicht vor (TestRotation_ZweiTeamsAmSelbenSpiel prüft den Fall gesondert).
 func rotationSlotsAt(t *testing.T, db *sql.DB, gameID, dutyTypeID int) []rotSlot {
 	t.Helper()
 	rows, err := db.Query(
-		`SELECT team_id, slots_total FROM duty_slots
-		 WHERE game_id=? AND duty_type_id=? AND is_custom=0
-		 ORDER BY team_id`, gameID, dutyTypeID)
+		`SELECT COALESCE((SELECT MIN(gt.team_id) FROM game_teams gt WHERE gt.game_id = ds.game_id), 0),
+		        ds.slots_total
+		 FROM duty_slots ds
+		 WHERE ds.game_id=? AND ds.duty_type_id=? AND ds.is_custom=0
+		 ORDER BY ds.id`, gameID, dutyTypeID)
 	if err != nil {
 		t.Fatalf("rotationSlotsAt: %v", err)
 	}
 	defer rows.Close()
 	var out []rotSlot
 	for rows.Next() {
-		var team sql.NullInt64
-		var total int
+		var team, total int
 		if err := rows.Scan(&team, &total); err != nil {
 			t.Fatalf("rotationSlotsAt scan: %v", err)
 		}
-		out = append(out, rotSlot{team: int(team.Int64), cakes: total})
+		out = append(out, rotSlot{team: team, cakes: total})
 	}
 	return out
 }
@@ -130,12 +135,15 @@ func assertRotation(t *testing.T, db *sql.DB, dutyTypeID int, gameIDs []int, wan
 	}
 }
 
-// assertKeinSlotOhneTeam sichert die Kernaussage von Decision 4: der Restbedarf verfällt,
-// er wird NICHT zu einem team-losen Auffang-Slot.
-func assertKeinSlotOhneTeam(t *testing.T, db *sql.DB, dutyTypeID int) {
+// assertKeinAuffangSlot sichert die Kernaussage von Decision 4: der Restbedarf verfällt,
+// er wird NICHT zu einem zusätzlichen Auffang-Slot. Früher war „ohne Team" das Merkmal
+// eines solchen Slots; seit spielgebundene Slots grundsätzlich kein Team tragen, ist es
+// die Anzahl — ein Auffang-Slot wäre ein Slot mehr, als Mannschaften herangezogen wurden.
+func assertKeinAuffangSlot(t *testing.T, db *sql.DB, dutyTypeID, erwarteteSlots int) {
 	t.Helper()
-	if got := countRowsI(t, db, "duty_slots", "duty_type_id=? AND is_custom=0 AND team_id IS NULL", dutyTypeID); got != 0 {
-		t.Errorf("erwartet keinen Rotations-Slot ohne Team, bekam %d", got)
+	if got := countRowsI(t, db, "duty_slots", "duty_type_id=? AND is_custom=0", dutyTypeID); got != erwarteteSlots {
+		t.Errorf("erwartet genau %d Rotations-Slots (kein Auffang-Slot für den Restbedarf), bekam %d",
+			erwarteteSlots, got)
 	}
 }
 
@@ -276,14 +284,11 @@ func TestRotation_SlotHaengtAmEigenenTermin(t *testing.T) {
 			t.Errorf("Spiel %d: erwartet event_time %s (aus dem eigenen Anpfiff), bekam %s",
 				tc.gameID, tc.wantTime, eventTime)
 		}
-		var team int
-		if err := db.QueryRow(
-			`SELECT team_id FROM duty_slots WHERE game_id=? AND duty_type_id=? AND is_custom=0`,
-			tc.gameID, kuchen).Scan(&team); err != nil {
-			t.Fatalf("team_id lesen: %v", err)
-		}
-		if team != tc.teamID {
-			t.Errorf("Spiel %d: erwartet Team %d am eigenen Termin, bekam %d", tc.gameID, tc.teamID, team)
+		// Welche Mannschaft den Slot trägt, sagt seit dienst-slot-team-id-ausbauen
+		// nicht mehr die Spalte, sondern der Termin, an dem er hängt.
+		if got := rotationSlotsAt(t, db, tc.gameID, kuchen); len(got) != 1 || got[0].team != tc.teamID {
+			t.Errorf("Spiel %d: erwartet genau einen Slot am Termin von Team %d, bekam %+v",
+				tc.gameID, tc.teamID, got)
 		}
 	}
 }
@@ -409,7 +414,7 @@ func TestRotation_RestbedarfVerfaellt(t *testing.T) {
 	assertRotation(t, db, kuchen, games, [][]rotSlot{
 		{{teamA, 2}}, {{teamB, 2}}, nil, nil, nil,
 	})
-	assertKeinSlotOhneTeam(t, db, kuchen)
+	assertKeinAuffangSlot(t, db, kuchen, 2)
 
 	if len(summary.Unassigned) != 1 {
 		t.Fatalf("erwartet genau einen unassigned-Eintrag, bekam %+v", summary.Unassigned)
@@ -597,12 +602,16 @@ func TestRotation_MannschaftFaelltRausVerliertZusage(t *testing.T) {
 	}
 }
 
-// TestRotation_ZweiTeamsAmSelbenSpielBehaltenEigeneZusagen: zwei Mannschaften an einem
-// Heimspiel treten unabhängig in die Warteschlange ein und bekommen JE einen eigenen Slot
-// zur selben event_time. Vor bewirtung-kuchen-statt-slots ließ makeCustomKey team_id für
-// Rotations-Typen fallen — beide Slots hätten denselben Schlüssel getragen und ihre
-// Zusagen im Restore vertauscht.
-func TestRotation_ZweiTeamsAmSelbenSpielBehaltenEigeneZusagen(t *testing.T) {
+// TestRotation_ZweiTeamsAmSelbenSpielWerdenZusammengefasst (design.md Decision 4):
+// Tragen zwei Mannschaften dasselbe Heimspiel, treten beide an derselben Ankerposition in
+// die Warteschlange ein. Ihre Zuteilungen werden zu EINEM Slot mit summierten Kuchen
+// verschmolzen — nicht zu je einem pro Mannschaft. Ohne team_id wären zwei Slots am selben
+// Termin und derselben Uhrzeit im Restore ohnehin nicht mehr unterscheidbar; die
+// Verschmelzung macht daraus eine bewusste Zusage statt eines stillen Datenverlusts.
+//
+// Der Preis steht im Change: die Pro-Mannschaft-Auskunft entfällt in genau diesem Fall.
+// Er kommt im Bestand nicht vor (ein Heimspiel ist das Spiel EINER Mannschaft).
+func TestRotation_ZweiTeamsAmSelbenSpielWerdenZusammengefasst(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
@@ -611,7 +620,6 @@ func TestRotation_ZweiTeamsAmSelbenSpielBehaltenEigeneZusagen(t *testing.T) {
 	seedAgeClassRuleI(t, db, teamB)
 	h := newRegenTestHandler(t, db)
 	userA := testutil.CreateUser(t, db, "standard")
-	userB := testutil.CreateUser(t, db, "standard")
 
 	kuchen := insertDutyTypeI(t, db, "Kuchen", "", 0, "", 0)
 	tpl := insertRotationTemplateI(t, db, kuchen, 0, 1, 1)
@@ -625,42 +633,47 @@ func TestRotation_ZweiTeamsAmSelbenSpielBehaltenEigeneZusagen(t *testing.T) {
 	regenDate(t, h, db, "2026-06-13", seasonID, nil)
 
 	// Bedarf 2, Warteschlange [A,B] — beide über Spiel 1 eingetreten, Cap 1.
-	// Also zwei Slots am SELBEN Spiel, und keiner an Spiel 2.
-	assertRotation(t, db, kuchen, []int{game1, game2}, [][]rotSlot{
-		{{teamA, 1}, {teamB, 1}}, nil,
-	})
-
-	slotOf := func(teamID int) int {
-		t.Helper()
-		var id int
-		if err := db.QueryRow(
-			`SELECT id FROM duty_slots WHERE game_id=? AND duty_type_id=? AND team_id=? AND is_custom=0`,
-			game1, kuchen, teamID).Scan(&id); err != nil {
-			t.Fatalf("Slot von Team %d: %v", teamID, err)
-		}
-		return id
+	// Ein Slot an Spiel 1 mit slots_total=2, keiner an Spiel 2.
+	if got := countRowsI(t, db, "duty_slots", "duty_type_id=? AND is_custom=0", kuchen); got != 1 {
+		t.Fatalf("erwartet genau einen zusammengefassten Slot, bekam %d", got)
 	}
-	assignI(t, db, slotOf(teamA), userA, "assigned", nil, nil)
-	assignI(t, db, slotOf(teamB), userB, "assigned", nil, nil)
+	var slotID, slotsTotal int
+	if err := db.QueryRow(
+		`SELECT id, slots_total FROM duty_slots WHERE game_id=? AND duty_type_id=? AND is_custom=0`,
+		game1, kuchen).Scan(&slotID, &slotsTotal); err != nil {
+		t.Fatalf("Slot an Spiel 1: %v", err)
+	}
+	if slotsTotal != 2 {
+		t.Errorf("erwartet slots_total=2 (Kuchen von A und B summiert), bekam %d", slotsTotal)
+	}
+	if got := countRowsI(t, db, "duty_slots", "game_id=? AND duty_type_id=? AND is_custom=0", game2, kuchen); got != 0 {
+		t.Errorf("an Spiel 2 soll kein Rotations-Slot entstehen, bekam %d", got)
+	}
 
+	// Zusage überlebt einen zweiten Lauf am unveränderten Slot.
+	assignI(t, db, slotID, userA, "assigned", nil, nil)
 	regenDate(t, h, db, "2026-06-13", seasonID, nil)
 
-	if _, _, _, ok := assignmentByUser(t, db, slotOf(teamA), userA); !ok {
-		t.Errorf("Zusage von Nutzer %d blieb nicht am Slot von Team A", userA)
+	var neuerSlot int
+	if err := db.QueryRow(
+		`SELECT id FROM duty_slots WHERE game_id=? AND duty_type_id=? AND is_custom=0`,
+		game1, kuchen).Scan(&neuerSlot); err != nil {
+		t.Fatalf("Slot nach zweitem Lauf: %v", err)
 	}
-	if _, _, _, ok := assignmentByUser(t, db, slotOf(teamB), userB); !ok {
-		t.Errorf("Zusage von Nutzer %d blieb nicht am Slot von Team B", userB)
-	}
-	if _, _, _, ok := assignmentByUser(t, db, slotOf(teamA), userB); ok {
-		t.Errorf("Zusage von Nutzer %d ist auf den Slot der anderen Mannschaft gewandert", userB)
+	if _, _, _, ok := assignmentByUser(t, db, neuerSlot, userA); !ok {
+		t.Errorf("Zusage von Nutzer %d hat den zweiten Regen-Lauf nicht überlebt", userA)
 	}
 }
 
-// TestRotation_NichtRotationsItemBehaeltTeamImMatchKey (spec: „Bestehende Items ohne
-// Rotation bleiben unverändert", Regressionstest): ohne rotation_enabled bleibt team_id
-// Teil des Dreier-Keys — wechselt das Team des Spiels, ist die Zusage verloren und der
-// Nutzer wird benachrichtigt. Zusätzlich entsteht weiterhin ein Slot pro Team des Spiels.
-func TestRotation_NichtRotationsItemBehaeltTeamImMatchKey(t *testing.T) {
+// TestRegen_EinSlotProTerminNichtProTeam (dienst-slot-team-id-ausbauen): ein Vorlagen-Item
+// erzeugt je Termin EINEN Slot, auch wenn mehrere Mannschaften daran hängen — die
+// Team-Allowlist entscheidet, OB das Item gilt, nicht für wie viele Mannschaften.
+//
+// Ersetzt TestRotation_NichtRotationsItemBehaeltTeamImMatchKey: dessen Zusage („team_id
+// bleibt Teil des Match-Keys, ein Mannschaftswechsel kostet die Zusage") ist mit dem
+// Wegfall von team_id aus dem Schlüssel bewusst entfallen. Die neue Zusage ist die
+// freundlichere: der Slot überlebt einen Kaderwechsel am Termin, samt Zusage.
+func TestRegen_EinSlotProTerminNichtProTeam(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
@@ -674,46 +687,45 @@ func TestRotation_NichtRotationsItemBehaeltTeamImMatchKey(t *testing.T) {
 	tpl := insertTemplateI(t, db, kasse, 0, 1) // rotation_enabled bleibt 0
 	gameID := insertGameI(t, db, seasonID, teamA, "2026-06-13", "10:00", tpl)
 
-	// Zweites Team am selben Spiel → weiterhin ein Slot pro Team.
+	// Zweites Team am selben Spiel → trotzdem nur EIN Slot.
 	if _, err := db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, teamB); err != nil {
 		t.Fatalf("add second team: %v", err)
 	}
 
 	regenDate(t, h, db, "2026-06-13", seasonID, nil)
-	if got := countRowsI(t, db, "duty_slots", "game_id=? AND is_custom=0", gameID); got != 2 {
-		t.Fatalf("expected one slot per team (2) for a non-rotation item, got %d", got)
+	if got := countRowsI(t, db, "duty_slots", "game_id=? AND is_custom=0", gameID); got != 1 {
+		t.Fatalf("erwartet genau einen Slot für den Termin (nicht einen pro Team), bekam %d", got)
 	}
 
-	var slotA int
+	var slotID int
 	if err := db.QueryRow(
-		`SELECT id FROM duty_slots WHERE game_id=? AND team_id=? AND is_custom=0`, gameID, teamA).Scan(&slotA); err != nil {
-		t.Fatalf("find team A slot: %v", err)
+		`SELECT id FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID).Scan(&slotID); err != nil {
+		t.Fatalf("find slot: %v", err)
 	}
-	assignI(t, db, slotA, userID, "assigned", nil, nil)
+	if got := countRowsI(t, db, "duty_slots", "id=? AND team_id IS NULL", slotID); got != 1 {
+		t.Errorf("spielgebundener Slot soll team_id=NULL tragen")
+	}
+	assignI(t, db, slotID, userID, "assigned", nil, nil)
 
-	// Team A verlässt das Spiel → der (duty_type_id, event_time, team_id)-Key trifft
-	// nicht mehr, die Zusage geht verloren (unverändertes Bestandsverhalten).
+	// Team A verlässt das Spiel. Der Slot gehört dem Termin, nicht der Mannschaft —
+	// er bleibt bestehen und die Zusage mit ihm.
 	if _, err := db.Exec(`DELETE FROM game_teams WHERE game_id=? AND team_id=?`, gameID, teamA); err != nil {
 		t.Fatalf("remove team A: %v", err)
 	}
 	summary := regenDate(t, h, db, "2026-06-13", seasonID, nil)
 
-	var slotB int
+	var neuerSlot int
 	if err := db.QueryRow(
-		`SELECT id FROM duty_slots WHERE game_id=? AND team_id=? AND is_custom=0`, gameID, teamB).Scan(&slotB); err != nil {
-		t.Fatalf("find team B slot: %v", err)
+		`SELECT id FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID).Scan(&neuerSlot); err != nil {
+		t.Fatalf("Slot nach Kaderwechsel: %v", err)
 	}
-	if _, _, _, found := assignmentByUser(t, db, slotB, userID); found {
-		t.Errorf("expected assignment NOT to move onto the other team's slot (team stays part of the match key)")
+	if _, _, _, found := assignmentByUser(t, db, neuerSlot, userID); !found {
+		t.Errorf("Zusage soll den Mannschaftswechsel am Termin überleben")
 	}
-	notified := false
 	for _, uid := range summary.NotifiedUsers {
 		if uid == userID {
-			notified = true
+			t.Errorf("erwartet keine 'entfernt'-Meldung für die erhaltene Zusage, bekam %v", summary.NotifiedUsers)
 		}
-	}
-	if !notified {
-		t.Errorf("expected user %d to be notified about the lost assignment, got NotifiedUsers=%v", userID, summary.NotifiedUsers)
 	}
 }
 

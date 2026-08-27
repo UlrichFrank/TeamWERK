@@ -3,6 +3,7 @@ package games_test
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -224,23 +225,34 @@ func TestUpdateTemplate_StandardNutzerVerboten(t *testing.T) {
 	}
 }
 
-// TestRegen_TeamEingeschraenktesItemNurFuerGelisteteTeams: bei einem Spiel mit
-// zwei Teams erzeugt ein auf Team A eingeschränktes Item ausschließlich für A
-// einen Slot — B bekommt keinen, obwohl es am selben Spiel hängt. Ein zweites,
-// uneingeschränktes Item derselben Vorlage bleibt davon unberührt.
-func TestRegen_TeamEingeschraenktesItemNurFuerGelisteteTeams(t *testing.T) {
+// TestRegen_TeamEingeschraenktesItemGiltWennEinBeteiligtesTeamGelistetIst: die
+// Team-Allowlist eines Vorlagen-Items entscheidet, OB das Item für einen Termin gilt —
+// nicht mehr, für wie viele Mannschaften ein Slot entsteht
+// (dienst-slot-team-id-ausbauen). Ein auf Team A eingeschränktes Item erzeugt an einem
+// Termin mit A und B genau EINEN Slot; ein auf ein unbeteiligtes Team eingeschränktes
+// Item erzeugt keinen. Ein uneingeschränktes Item derselben Vorlage bleibt unberührt.
+func TestRegen_TeamEingeschraenktesItemGiltWennEinBeteiligtesTeamGelistetIst(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA, teamB := seedTwoTeamsSameAgeClass(t, db)
 
+	fremdesTeam := testutil.CreateTeam(t, db, "Unbeteiligtes Team")
 	kameraID := insertDutyType(t, db, "Kamera", 2.0)
 	kasseID := insertDutyType(t, db, "Kasse", 2.0)
+	bandeID := insertDutyType(t, db, "Bande", 2.0)
 	templateID := seedTeamScopeTemplate(t, db, "Heim", kameraID, []int{teamA})
 	// Zweites Item ohne Einschränkung in derselben Vorlage.
 	if _, err := db.Exec(`
 		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order)
 		VALUES (?, ?, 'start', -30, 1, 1)`, templateID, kasseID); err != nil {
 		t.Fatalf("seed second item: %v", err)
+	}
+	// Drittes Item, eingeschränkt auf ein Team, das gar nicht am Termin hängt.
+	if _, err := db.Exec(`
+		INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, team_ids)
+		VALUES (?, ?, 'start', -30, 1, 2, ?)`, templateID, bandeID,
+		fmt.Sprintf("[%d]", fremdesTeam)); err != nil {
+		t.Fatalf("seed third item: %v", err)
 	}
 
 	adminUserID := testutil.CreateUser(t, db, "admin")
@@ -257,35 +269,31 @@ func TestRegen_TeamEingeschraenktesItemNurFuerGelisteteTeams(t *testing.T) {
 		t.Fatalf("create game: expected 201, got %d", res.StatusCode)
 	}
 
-	teamsForDutyType := func(dutyTypeID int) []int {
-		rows, err := db.Query(
-			`SELECT team_id FROM duty_slots WHERE duty_type_id=? AND is_custom=0 ORDER BY team_id`, dutyTypeID)
-		if err != nil {
+	slotsFor := func(dutyTypeID int) int {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM duty_slots WHERE duty_type_id=? AND is_custom=0`, dutyTypeID).Scan(&n); err != nil {
 			t.Fatalf("query slots: %v", err)
 		}
-		defer rows.Close()
-		var ids []int
-		for rows.Next() {
-			var id sql.NullInt64
-			rows.Scan(&id)
-			ids = append(ids, int(id.Int64))
-		}
-		return ids
+		return n
 	}
 
-	kamera := teamsForDutyType(kameraID)
-	if len(kamera) != 1 || kamera[0] != teamA {
-		t.Errorf("expected Kamera-Slot nur für Team A (%d), got team_ids %v", teamA, kamera)
+	if got := slotsFor(kameraID); got != 1 {
+		t.Errorf("Kamera ist auf Team A eingeschränkt, das am Termin hängt → genau 1 Slot erwartet, bekam %d", got)
 	}
-	kasse := teamsForDutyType(kasseID)
-	if len(kasse) != 2 {
-		t.Errorf("expected Kasse-Slots für beide Teams, got team_ids %v", kasse)
+	if got := slotsFor(kasseID); got != 1 {
+		t.Errorf("Kasse ist uneingeschränkt → genau 1 Slot je Termin erwartet, bekam %d", got)
+	}
+	if got := slotsFor(bandeID); got != 0 {
+		t.Errorf("Bande ist auf ein unbeteiligtes Team eingeschränkt → kein Slot erwartet, bekam %d", got)
 	}
 }
 
-// TestRegen_ItemOhneTeamIdsGiltFuerAlleTeams: Rückwärtskompatibilität — ohne
-// team_ids entsteht der Slot weiterhin für jedes Team des Spiels.
-func TestRegen_ItemOhneTeamIdsGiltFuerAlleTeams(t *testing.T) {
+// TestRegen_ItemOhneTeamIdsGiltFuerDenTermin: ohne team_ids gilt das Item für jeden
+// Termin — und erzeugt dort genau einen Slot, unabhängig von der Zahl der beteiligten
+// Mannschaften (dienst-slot-team-id-ausbauen).
+func TestRegen_ItemOhneTeamIdsGiltFuerDenTermin(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA, teamB := seedTwoTeamsSameAgeClass(t, db)
@@ -309,8 +317,8 @@ func TestRegen_ItemOhneTeamIdsGiltFuerAlleTeams(t *testing.T) {
 
 	var count int
 	db.QueryRow(`SELECT COUNT(*) FROM duty_slots WHERE duty_type_id=? AND is_custom=0`, dutyTypeID).Scan(&count)
-	if count != 2 {
-		t.Errorf("expected 2 Slots (ein Team je Slot), got %d", count)
+	if count != 1 {
+		t.Errorf("expected 1 Slot (einer je Termin, nicht je Team), got %d", count)
 	}
 }
 

@@ -255,8 +255,9 @@ func TestAusrichterGate_ItemOhneBindungUnveraendert(t *testing.T) {
 			t.Errorf("game %d: unexpected slot (duty_type=%d event_time=%q slots_total=%d), want (%d, \"17:00\", 2)",
 				gameID, dutyTypeID, eventTime, slotsTotal, kasse)
 		}
-		if !teamID.Valid || int(teamID.Int64) != teamA {
-			t.Errorf("game %d: expected team %d, got valid=%v value=%d", gameID, teamA, teamID.Valid, teamID.Int64)
+		// Der Slot trägt kein Team mehr — die Mannschaft steht am Termin (game_teams).
+		if teamID.Valid {
+			t.Errorf("game %d: spielgebundener Slot soll team_id=NULL tragen, hat %d", gameID, teamID.Int64)
 		}
 	}
 }
