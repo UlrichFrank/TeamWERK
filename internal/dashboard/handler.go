@@ -329,8 +329,8 @@ const audienceMatchClauseSQL = `(
 				JOIN seasons sa ON sa.id = pm_a.season_id AND sa.is_active = 1
 				WHERE fl_a.parent_user_id = ?
 				AND (
-					pm_a.team_id = ds.team_id
-					OR (ds.team_id IS NULL AND ds.game_id IS NOT NULL AND pm_a.team_id IN (
+					(ds.game_id IS NULL AND pm_a.team_id = ds.team_id)
+					OR (ds.game_id IS NOT NULL AND pm_a.team_id IN (
 						SELECT gt_a.team_id FROM game_teams gt_a WHERE gt_a.game_id = ds.game_id
 					))
 				)

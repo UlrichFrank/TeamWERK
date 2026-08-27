@@ -156,3 +156,38 @@ func TestEligibleUsers_SlotOhneTeamUndOhneSpielBleibtVereinsweit(t *testing.T) {
 		t.Errorf("vereinsweiter Slot muss Spieler %d erreichen, got %+v", playerA, users)
 	}
 }
+
+// Bestandszeile aus der Zeit vor der Migration: game_id gesetzt UND team_id gesetzt.
+// game_id gewinnt — die Erinnerung folgt den Teams des Termins, nicht der eingefrorenen
+// Spalte. Das ist die Zusage, die die Migration zu reiner Hygiene macht.
+func TestEligibleUsers_BestandsSlotMitTeamIdFolgtDemSpiel(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "A-Jugend")
+	teamB := testutil.CreateTeam(t, db, "B-Jugend")
+
+	playerA := addPlayerToTeam(t, db, seasonID, teamA)
+	playerB := addPlayerToTeam(t, db, seasonID, teamB)
+
+	gameID := testutil.CreateGame(t, db, seasonID, teamA, "2026-07-01")
+	if _, err := db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, teamB); err != nil {
+		t.Fatalf("link second team: %v", err)
+	}
+
+	dutyTypeID := createDutyTypeWithTarget(t, db, "Hallendienst", "spieler")
+	slotID := testutil.CreateDutySlot(t, db, dutyTypeID, seasonID, teamA, gameID, "2026-07-01")
+
+	s := New(db, testutil.TestConfig(), nil)
+	users, err := s.eligibleUsers(openSlot{
+		id:         slotID,
+		targetRole: "spieler",
+		teamID:     sql.NullInt64{Int64: int64(teamA), Valid: true}, // Bestandswert
+		gameID:     sql.NullInt64{Int64: int64(gameID), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("eligibleUsers: %v", err)
+	}
+	if !containsUserID(users, playerA) || !containsUserID(users, playerB) {
+		t.Errorf("erwartet Spieler beider Teams des Termins (A=%d, B=%d), got %+v", playerA, playerB, users)
+	}
+}

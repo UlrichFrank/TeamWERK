@@ -144,18 +144,20 @@ func (a *Audience) collectMemberParents(ctx context.Context, set *idSet, memberI
 	scanIDs(rows, set)
 }
 
-// TeamIDsForDutySlot returns the team IDs a duty slot belongs to: its own
-// team_id if set, otherwise the teams of its linked game (game_teams). This
-// mirrors the /api/duty-board team filter (slot's team, or its game's teams).
+// TeamIDsForDutySlot returns the team IDs a duty slot belongs to: the teams of its
+// linked game (game_teams) if it has one, otherwise its own team_id. This mirrors
+// the /api/duty-board team filter. game_id wins — a game-bound slot addresses its
+// event's teams even if a legacy team_id is still stored on the row.
 // Empty result → slot has neither a team nor a game (fall back to global).
 func (a *Audience) TeamIDsForDutySlot(ctx context.Context, slotID any) []int {
 	return a.teamIDs(ctx, `
-		SELECT team_id FROM duty_slots WHERE id = ? AND team_id IS NOT NULL
+		SELECT team_id FROM duty_slots
+		 WHERE id = ? AND team_id IS NOT NULL AND game_id IS NULL
 		UNION
 		SELECT gt.team_id
 		FROM duty_slots ds
 		JOIN game_teams gt ON gt.game_id = ds.game_id
-		WHERE ds.id = ? AND ds.team_id IS NULL`, slotID, slotID)
+		WHERE ds.id = ?`, slotID, slotID)
 }
 
 // TeamIDsForKader returns the team ID of a kader (may be empty if the kader has
