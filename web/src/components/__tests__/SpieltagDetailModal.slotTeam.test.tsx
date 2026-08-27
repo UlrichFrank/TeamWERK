@@ -14,11 +14,10 @@ vi.mock('../../contexts/AuthContext', () => ({
   }),
 }))
 
-// `duty_slots.team_id` ist das Sichtbarkeits-Feld: ein gesetztes Team schränkt die
-// Dienstbörse auf genau dieses Team ein. Vorher schickte das Modal hart
-// `game.teams[0].id` — bei einem Termin mit mehreren Kadern sahen die übrigen Teams
-// (und deren Eltern) den Dienst nie. Team-los + `game_id` lässt den Server über
-// `game_teams` auflösen.
+// `duty_slots.team_id` bestimmt bei spielgebundenen Slots nichts mehr — der Client
+// bestimmt die Team-Zuordnung gar nicht mehr, sie löst der Server ausschließlich über
+// `game_id` -> `game_teams` auf. Das Modal schickt `team_id` deshalb überhaupt nicht mehr
+// mit (weder gesetzt noch `null`), unabhängig davon, wie viele Teams der Termin trägt.
 
 let mock: MockAdapter
 
@@ -67,20 +66,21 @@ afterEach(() => {
 })
 
 describe('SpieltagDetailModal — team_id eines neuen Dienst-Slots', () => {
-  test('Termin mit mehreren Teams: Slot bleibt team-los', async () => {
+  test('Termin mit mehreren Teams: kein team_id im Request-Body', async () => {
     mockGame([
       { id: 13, name: 'A-Jugend männlich' },
       { id: 15, name: 'B-Jugend männlich' },
       { id: 20, name: 'B-Jugend männlich 2' },
     ])
     const body = await addSlot()
-    expect(body.team_id).toBeNull()
+    expect(body).not.toHaveProperty('team_id')
     expect(body.game_id).toBe(234)
   })
 
-  test('Termin mit genau einem Team: Slot trägt dessen team_id', async () => {
+  test('Termin mit genau einem Team: kein team_id im Request-Body', async () => {
     mockGame([{ id: 13, name: 'A-Jugend männlich' }])
     const body = await addSlot()
-    expect(body.team_id).toBe(13)
+    expect(body).not.toHaveProperty('team_id')
+    expect(body.game_id).toBe(234)
   })
 })

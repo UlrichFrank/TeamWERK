@@ -24,18 +24,6 @@ interface GameDetail {
   can?: { edit: boolean; delete: boolean; manage_lineup: boolean }
 }
 
-// duty_slots.team_id ist das Sichtbarkeits-Feld, keine Zuordnungs-Notiz: ein gesetztes
-// Team schränkt die Dienstbörse auf genau dieses Team ein (`ds.team_id IN (...)`). An
-// einem Termin mit mehreren Kadern muss ein neuer Slot deshalb team-los bleiben — die
-// Sichtbarkeit löst der Server dann über `game_id` -> `game_teams` auf und erreicht alle
-// beteiligten Teams samt deren Eltern. Exportiert, damit die Regel testbar ist, ohne den
-// Slot-Dialog zu rendern.
-export function slotTeamIdForGame(game: Pick<GameDetail, 'team_id' | 'teams'>): number | null {
-  const teams = game.teams ?? []
-  if (teams.length > 1) return null
-  return teams[0]?.id ?? game.team_id ?? null
-}
-
 interface SlotDetail {
   id: number
   duty_type_name: string
@@ -158,7 +146,6 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         event_time: addEventTime || null,
         duty_type_id: addDutyTypeId,
         slots_total: addSlotsTotal,
-        team_id: slotTeamIdForGame(game),
         season_id: game.season_id,
         game_id: game.id,
         audiences: addAudiences.length > 0 ? addAudiences : null,
