@@ -32,3 +32,34 @@ Dauer-Modus musste sonst in zwei Masken doppelt gepflegt werden.
 
 - **WHEN** ein anderer Nutzer einen Eintrag anlegt, ändert oder löscht
 - **THEN** lädt die Seite des beobachtenden Nutzers die Daten neu ohne sichtbaren Ladespinner
+
+#### Scenario: EventSource wird beim Verlassen der Seite aufgeräumt
+
+- **WHEN** der Nutzer eine Seite mit `useLiveUpdates` verlässt
+- **THEN** wird die SSE-Verbindung geschlossen (`es.close()`)
+
+#### Scenario: Page ignoriert nicht relevante Events
+
+- **WHEN** ein `members`-Event eintrifft und die aktuelle Seite nur auf `duties`-Events abonniert ist
+- **THEN** lädt die Seite NICHT neu
+
+#### Scenario: EventSource wird nach Token-Refresh neu aufgebaut
+
+- **WHEN** der Access Token durch den 401-Interceptor erneuert wurde
+- **THEN** baut `useLiveUpdates` eine neue EventSource-Verbindung auf
+- **THEN** gibt es keine Reconnect-Schleife mit dem abgelaufenen Token
+
+#### Scenario: Dashboard aktualisiert sich nach Spielplan-Änderung
+
+- **WHEN** ein Trainer ein Spiel anlegt oder bearbeitet
+- **THEN** lädt das Dashboard des eingeloggten Nutzers die Daten still neu
+
+#### Scenario: AdminTrainingsPage aktualisiert sich
+
+- **WHEN** eine Trainings-Serie oder -Session erstellt, bearbeitet oder gelöscht wird
+- **THEN** lädt die AdminTrainingsPage still neu
+
+#### Scenario: MemberDetailPage aktualisiert sich
+
+- **WHEN** ein Admin ein Mitglied bearbeitet
+- **THEN** lädt die geöffnete MemberDetailPage still neu

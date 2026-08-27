@@ -116,13 +116,17 @@ Alle relevanten Pages SHALL eine `useLiveUpdates`-Verbindung zum SSE-Endpoint au
 | MembershipRequestsPage | `members` |
 | AdminDutyTypesPage | `duties` |
 | AdminDutyTemplatesPage | `duties` |
-| AdminDutyTemplateDetailPage | `duties` |
 | (bereits vorhanden) KalenderPage | `games`, `trainings`, `absences` |
 | (bereits vorhanden) TerminePage | `trainings`, `games` |
 | (bereits vorhanden) DutyPage | `duties` |
 | (bereits vorhanden) MembersPage | `members` |
 | (bereits vorhanden) MitfahrgelegenheitenPage | `mitfahrgelegenheiten` |
 | (bereits vorhanden) AdminVenuesPage | `venues` |
+
+Eine eigene Vorlagen-Detailseite steht bewusst nicht in der Tabelle: es gibt sie nicht
+mehr (Route `/admin/dienstplan-vorlagen/{id}` entfernt). Der Item-Editor sitzt im Modal
+der Listenseite `AdminDutyTemplatesPage`, die `duties` schon abonniert — zwei Masken für
+dieselben Item-Felder hätten jedes neue Feld doppelt gebraucht.
 
 #### Scenario: Seite aktualisiert sich bei fremder Änderung
 
