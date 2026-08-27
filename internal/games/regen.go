@@ -351,42 +351,38 @@ func buildNotificationIntents(slotsByID map[int]*deletedSlot, outcomeByOriginalT
 	return notifiedUsers, notifications
 }
 
-// customKey identifies an is_custom=1 slot for conflict detection. TeamID/HasTeam
-// distinguish team-scoped slots from team-agnostic ones.
+// customKey identifies a slot of ONE game for conflict detection and restore matching.
+// Kein team_id: alle vier Aufrufer sind auf ein einzelnes game_id eingeschränkt, und alle
+// Slots eines Termins betreffen dieselben Mannschaften — das Feld könnte hier also nie
+// zwei Slots unterscheiden. Es wegzulassen macht die Zusage strukturell, statt sie von
+// der Disziplin der Aufrufer abhängig zu machen.
 type customKey struct {
 	DutyTypeID int
 	EventTime  string
-	TeamID     int64
-	HasTeam    bool
 }
 
 // makeCustomKey baut den Match-/Konflikt-Schlüssel eines Slots: (duty_type_id,
-// event_time, team_id) für alle Items, mit und ohne Bewirtungsrotation.
+// event_time) für alle Items, mit und ohne Bewirtungsrotation.
 //
-// Der frühere Sonderfall — rotations-aktive Duty-Types matchten OHNE team_id
-// (kuchendienst-rotation design.md Decision 5) — ist mit bewirtung-kuchen-statt-slots
-// entfallen: ein Rotations-Slot hängt jetzt am eigenen Termin seiner Mannschaft, team_id
-// ist damit ein stabiles Merkmal und keine aus der Tagesreihenfolge abgeleitete Größe
-// mehr. Die Ausnahme wäre inzwischen sogar schädlich — zwei Mannschaften mit
-// gleichzeitigem Heimspiel bekämen denselben Schlüssel und würden im Restore vertauscht.
+// team_id war früher Teil des Schlüssels, weil ein Termin einen Slot je beteiligter
+// Mannschaft tragen konnte. Seit spielgebundene Slots grundsätzlich kein Team mehr
+// tragen (dienst-slot-team-id-ausbauen), gibt es diese Aufteilung nicht mehr — und der
+// Wegfall ist zugleich die Übergangszusage der Migration: ein Bestands-Slot mit
+// team_id=A und der an seiner Stelle neu entstehende Slot mit team_id=NULL fallen auf
+// denselben Schlüssel, die Zusage überlebt den Umstieg.
 //
 // Einzige Stelle, die diesen Schlüssel baut — snapshotCustomSlots, loadNewAutoSlotsKeyed,
 // restoreAssignments und die Konfliktprüfung in regenGameItems müssen deckungsgleich
 // bleiben.
-func makeCustomKey(dutyTypeID int, eventTime string, teamID sql.NullInt64) customKey {
-	k := customKey{DutyTypeID: dutyTypeID, EventTime: eventTime}
-	if teamID.Valid {
-		k.TeamID = teamID.Int64
-		k.HasTeam = true
-	}
-	return k
+func makeCustomKey(dutyTypeID int, eventTime string) customKey {
+	return customKey{DutyTypeID: dutyTypeID, EventTime: eventTime}
 }
 
 // snapshotCustomSlots reads the is_custom=1 slots of a game into a set keyed by customKey,
 // so the regen can skip inserting a template slot that would collide with a manual one.
 func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[customKey]bool, error) {
 	customRows, err := tx.QueryContext(ctx, `
-		SELECT duty_type_id, event_time, team_id
+		SELECT duty_type_id, event_time
 		FROM duty_slots WHERE game_id=? AND is_custom=1`, gameID)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot custom: %w", err)
@@ -395,12 +391,11 @@ func (h *Handler) snapshotCustomSlots(ctx context.Context, tx *sql.Tx, gameID in
 	for customRows.Next() {
 		var dutyTypeID int
 		var et sql.NullString
-		var tid sql.NullInt64
-		if err := customRows.Scan(&dutyTypeID, &et, &tid); err != nil {
+		if err := customRows.Scan(&dutyTypeID, &et); err != nil {
 			customRows.Close()
 			return nil, err
 		}
-		customSlots[makeCustomKey(dutyTypeID, et.String, tid)] = true
+		customSlots[makeCustomKey(dutyTypeID, et.String)] = true
 	}
 	customRows.Close()
 	return customSlots, nil
@@ -426,7 +421,6 @@ type deletedAssignment struct {
 type deletedSlot struct {
 	DutyTypeID  int
 	EventTime   string
-	TeamID      sql.NullInt64
 	SlotsTotal  int
 	Assignments []deletedAssignment
 }
@@ -436,7 +430,7 @@ type deletedSlot struct {
 // oldest-first without an extra sort.
 func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID int) (map[int]*deletedSlot, error) {
 	snapRows, err := tx.QueryContext(ctx, `
-		SELECT ds.id, ds.duty_type_id, ds.event_time, ds.team_id, ds.slots_total,
+		SELECT ds.id, ds.duty_type_id, ds.event_time, ds.slots_total,
 		       da.id, da.user_id, da.status, da.cash_amount, da.fulfilled_at
 		FROM duty_slots ds
 		LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id
@@ -454,7 +448,7 @@ func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID i
 		var status sql.NullString
 		var cashAmount sql.NullFloat64
 		var fulfilledAt sql.NullString
-		if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.TeamID, &s.SlotsTotal,
+		if err := snapRows.Scan(&slotID, &s.DutyTypeID, &et, &s.SlotsTotal,
 			&aid, &uid, &status, &cashAmount, &fulfilledAt); err != nil {
 			snapRows.Close()
 			return nil, err
@@ -464,7 +458,7 @@ func (h *Handler) snapshotDeletedSlots(ctx context.Context, tx *sql.Tx, gameID i
 		}
 		existing, ok := slotsByID[slotID]
 		if !ok {
-			existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, TeamID: s.TeamID, SlotsTotal: s.SlotsTotal}
+			existing = &deletedSlot{DutyTypeID: s.DutyTypeID, EventTime: s.EventTime, SlotsTotal: s.SlotsTotal}
 			slotsByID[slotID] = existing
 		}
 		if aid.Valid {
@@ -517,7 +511,7 @@ func (h *Handler) restoreAssignments(ctx context.Context, tx *sql.Tx, gameID int
 
 	for _, oldID := range oldSlotIDs {
 		ds := slotsByID[oldID]
-		target := newSlots[makeCustomKey(ds.DutyTypeID, ds.EventTime, ds.TeamID)]
+		target := newSlots[makeCustomKey(ds.DutyTypeID, ds.EventTime)]
 		for i := range ds.Assignments {
 			a := &ds.Assignments[i]
 			if target == nil || target.filled >= target.SlotsTotal {
@@ -560,7 +554,7 @@ type restoreTarget struct {
 // deliberately identical (design.md §4: "derselbe Dreier").
 func (h *Handler) loadNewAutoSlotsKeyed(ctx context.Context, tx *sql.Tx, gameID int) (map[customKey]*restoreTarget, error) {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, duty_type_id, event_time, team_id, slots_total
+		SELECT id, duty_type_id, event_time, slots_total
 		FROM duty_slots WHERE game_id=? AND is_custom=0`, gameID)
 	if err != nil {
 		return nil, fmt.Errorf("load new auto slots: %w", err)
@@ -570,11 +564,10 @@ func (h *Handler) loadNewAutoSlotsKeyed(ctx context.Context, tx *sql.Tx, gameID 
 	for rows.Next() {
 		var id, slotsTotal, dutyTypeID int
 		var et sql.NullString
-		var tid sql.NullInt64
-		if err := rows.Scan(&id, &dutyTypeID, &et, &tid, &slotsTotal); err != nil {
+		if err := rows.Scan(&id, &dutyTypeID, &et, &slotsTotal); err != nil {
 			return nil, err
 		}
-		k := makeCustomKey(dutyTypeID, et.String, tid)
+		k := makeCustomKey(dutyTypeID, et.String)
 		byKey[k] = &restoreTarget{newAutoSlot: newAutoSlot{ID: id, SlotsTotal: slotsTotal}}
 	}
 	return byKey, nil
@@ -833,17 +826,15 @@ func (h *Handler) buildRotationPlan(ctx context.Context, tx *sql.Tx, dayGames []
 	return plan, shortfalls, nil
 }
 
-// itemAppliesToTeam entscheidet, ob aus einem Vorlagen-Item für ein bestimmtes Team
-// ein Slot entsteht. Leere Allowlist = gilt für alle Teams. Einzige Quelle dieser
-// Bedingung — die Vorschau (PreviewSlots) muss dieselbe benutzen, sonst zeigt sie
-// Einträge, die real nie entstehen (oder verschweigt welche, die entstehen).
-func itemAppliesToTeam(allowlist []int, teamID int) bool {
-	return len(allowlist) == 0 || slices.Contains(allowlist, teamID)
-}
-
-// itemAppliesToAnyTeam ist die Vorschau-Variante: erzeugt das Item für mindestens
-// eines der übergebenen Teams einen Slot? Bei leerer Teamliste (Aufrufer kennt die
-// Teams nicht) bleibt das Item sichtbar — nicht filtern ist ehrlicher als raten.
+// itemAppliesToAnyTeam entscheidet, ob ein Vorlagen-Item für einen Termin gilt: greift
+// die Team-Allowlist bei mindestens einer der beteiligten Mannschaften? Leere Allowlist =
+// gilt immer. Bei leerer Teamliste (Aufrufer kennt die Teams nicht, oder generisches
+// Event) bleibt das Item gültig — nicht filtern ist ehrlicher als raten.
+//
+// Einzige Quelle dieser Bedingung: Erzeugung (regenGameItems) und Vorschau (PreviewSlots)
+// benutzen sie gemeinsam, sonst zeigt die Vorschau Einträge, die real nie entstehen. Die
+// frühere Pro-Team-Variante itemAppliesToTeam ist entfallen, seit ein Item je Termin
+// höchstens einen Slot erzeugt (dienst-slot-team-id-ausbauen).
 func itemAppliesToAnyTeam(allowlist []int, teamIDs []int) bool {
 	if len(allowlist) == 0 || len(teamIDs) == 0 {
 		return true
@@ -930,8 +921,11 @@ func (h *Handler) regenGameItems(
 		// slotsTotal ist für gewöhnliche Items die Anzahl aus der Vorlage; für
 		// rotations-aktive Items überschreibt der Aufrufer sie mit der zugeteilten
 		// Kuchenzahl (bewirtung-kuchen-statt-slots: slots_count bleibt dort wirkungslos).
-		insertOne := func(teamID sql.NullInt64, slotsTotal int) (bool, error) {
-			k := makeCustomKey(resultDutyTypeID, eventTime, teamID)
+		// team_id wird bewusst nicht gesetzt: der Slot hängt an g.ID, seine
+		// Mannschaften stehen in game_teams. Eine Kopie hier wäre eine zweite,
+		// einfrierende Quelle für dieselbe Tatsache.
+		insertOne := func(slotsTotal int) (bool, error) {
+			k := makeCustomKey(resultDutyTypeID, eventTime)
 			if customSlots[k] {
 				summary.Conflicts = append(summary.Conflicts, ConflictEntry{
 					Date: date, DutyTypeID: resultDutyTypeID,
@@ -939,58 +933,55 @@ func (h *Handler) regenGameItems(
 				})
 				return false, nil
 			}
-			var teamVal any
-			if teamID.Valid {
-				teamVal = teamID.Int64
-			}
 			_, err := tx.ExecContext(ctx, `
 				INSERT INTO duty_slots
 				  (event_name, event_date, event_time, duty_type_id, role_desc,
 				   slots_total, team_id, season_id, game_id, audiences, is_custom)
-				VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
+				VALUES (?,?,?,?,?,?,NULL,?,?,?,0)`,
 				eventName, date, eventTime, resultDutyTypeID, "",
-				slotsTotal, teamVal, seasonID, g.ID, slotAudiences)
+				slotsTotal, seasonID, g.ID, slotAudiences)
 			if err != nil {
 				return false, err
 			}
 			return true, nil
 		}
 
-		// createdCount = Kapazität (Summe der slots_total), die dieses Item an diesem
-		// Spiel erzeugt hat. Ohne Team-Allowlist ist das ein Slot je Team des Spiels,
-		// mit Allowlist nur deren Schnittmenge; bei Rotation die zugeteilte Kuchenzahl.
+		// createdCount = Kapazität (slots_total), die dieses Item an diesem Spiel
+		// erzeugt hat — je Item höchstens ein Slot. Bei Rotation ist es die Summe der
+		// Kuchen, die buildRotationPlan diesem Spiel zugeteilt hat.
 		// Die Zählung in der Zusammenfassung darf nicht mehr melden, als entstanden ist.
 		createdCount := 0
 		switch {
 		case it.RotationEnabled:
-			// Rotations-Item: kein Team-Loop über die Teams DIESES Spiels. Welche
-			// Mannschaft hier einen Slot bekommt und über wie viele Kuchen, hat
-			// buildRotationPlan tagesweit entschieden — Einträge stehen nur unter dem
-			// Anker-Spiel der jeweiligen Mannschaft. Kein Eintrag (Bedarf gedeckt, oder
-			// dieses Spiel ist für niemanden Anker) → wie ein Allowlist-Miss: kein Slot,
-			// kein Skipped-Eintrag.
+			// Rotations-Item: welche Mannschaft hier zum Zug kommt und über wie viele
+			// Kuchen, hat buildRotationPlan tagesweit entschieden — Einträge stehen nur
+			// unter dem Anker-Spiel der jeweiligen Mannschaft. Kein Eintrag (Bedarf
+			// gedeckt, oder dieses Spiel ist für niemanden Anker) → wie ein
+			// Allowlist-Miss: kein Slot, kein Skipped-Eintrag.
+			//
+			// Trägt ein Heimspiel ausnahmsweise mehrere Mannschaften, treten sie an
+			// derselben Ankerposition ein; ihre Zuteilungen werden hier zu EINEM Slot
+			// mit summierten Kuchen verschmolzen, statt zu je einem pro Mannschaft
+			// (design.md Decision 4). Ohne team_id wären zwei Slots am selben Termin
+			// und derselben Uhrzeit im Restore ohnehin nicht mehr unterscheidbar.
 			for _, a := range rotation[it.DutyTypeID][g.ID] {
-				teamID := sql.NullInt64{Int64: int64(a.TeamID), Valid: true}
-				if _, err := insertOne(teamID, a.Cakes); err != nil {
-					return RegenSummary{}, nil, err
-				}
 				createdCount += a.Cakes
 			}
-		case g.EventType == "generisch":
-			// generisch never reaches here (skipped above), but kept defensive.
-			// Die Team-Allowlist greift hier bewusst nicht: generische Slots
-			// tragen gar keine team_id.
-			if _, err := insertOne(sql.NullInt64{}, n); err != nil {
-				return RegenSummary{}, nil, err
-			}
-			createdCount = n
-		default:
-			for _, tid := range teamIDs {
-				if !itemAppliesToTeam(it.TeamIDs, tid) {
-					continue // Team nicht in der Item-Allowlist — kein Slot dafür
+			if createdCount > 0 {
+				if _, err := insertOne(createdCount); err != nil {
+					return RegenSummary{}, nil, err
 				}
-				createdCount += n
-				if _, err := insertOne(sql.NullInt64{Int64: int64(tid), Valid: true}, n); err != nil {
+			}
+		default:
+			// Ein Slot je Item, nicht je Mannschaft: die Team-Allowlist entscheidet, OB
+			// das Item für diesen Termin gilt, nicht für wie viele Mannschaften
+			// (dienst-slot-team-id-ausbauen). itemAppliesToAnyTeam ist dieselbe
+			// Bedingung, die die Vorschau schon benutzt — Vorschau und Erzeugung fallen
+			// damit auf eine Regel zusammen. Generische Events erreichen diesen Zweig
+			// defensiv mit leerer Teamliste, für die die Bedingung ebenfalls hält.
+			if itemAppliesToAnyTeam(it.TeamIDs, teamIDs) {
+				createdCount = n
+				if _, err := insertOne(n); err != nil {
 					return RegenSummary{}, nil, err
 				}
 			}

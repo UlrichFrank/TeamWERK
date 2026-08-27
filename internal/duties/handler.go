@@ -63,17 +63,16 @@ func placeholders(n int) string {
 }
 
 // slotTeamScope resolves which teams a duty slot addresses — the same resolution the
-// duty board uses for visibility (duty_slots.team_id, else the teams of the linked game
-// via game_teams). Keeping notification and visibility on one rule is the point: a slot
-// at a multi-team event carries no team_id, and deriving recipients from team_id alone
-// would fan the push out to the whole club instead of the event's teams.
+// duty board uses for visibility. game_id gewinnt: ein spielgebundener Slot adressiert
+// die Teams seines Termins (game_teams), unabhängig davon, ob noch ein Bestandswert in
+// team_id steht. team_id zählt nur für Slots ohne Spiel (Vereinsfest o. ä.).
 // An empty result means "no team context at all" (no team, no game) — club-wide.
 func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int {
-	if teamID != nil {
-		return []int{*teamID}
-	}
 	if gameID != nil {
 		return hub.NewAudience(h.db).TeamIDsForGame(ctx, *gameID)
+	}
+	if teamID != nil {
+		return []int{*teamID}
 	}
 	return nil
 }
@@ -572,6 +571,13 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 	if req.EventTime != "" {
 		eventTime = req.EventTime
 	}
+	// Ein spielgebundener Slot trägt kein Team: sein Geltungsbereich sind die
+	// Mannschaften des Termins (game_teams). Ein trotzdem mitgeschicktes team_id wird
+	// verworfen statt mit 400 quittiert — die Anlage ist erlaubt, nur die Team-Angabe
+	// hat dort keine Bedeutung. Ohne game_id bleibt team_id der Geltungsbereich.
+	if req.GameID != nil {
+		req.TeamID = nil
+	}
 	h.db.ExecContext(r.Context(),
 		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences, is_custom)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,1)`,
@@ -686,8 +692,14 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Team source = teams the user plays in (or a family member plays in)
 		// OR teams the user trains in (via trainer_memberships).
+		// Ein Slot mit game_id löst seinen Geltungsbereich AUSSCHLIESSLICH über
+		// game_teams auf — ds.team_id wird dort nicht mehr gelesen, auch wenn noch
+		// ein Bestandswert darin steht (design.md Decision 1). Dadurch sind
+		// migrierte und nicht migrierte Zeilen identisch sichtbar, und die
+		// Migration ist keine Voraussetzung für den Deploy. ds.team_id gilt nur
+		// noch für Slots ohne Spiel (Vereinsfest o. ä.).
 		whereParts = `WHERE (
-		     ds.team_id IN (
+		     (ds.game_id IS NULL AND ds.team_id IN (
 		         SELECT DISTINCT tm.team_id
 		         FROM player_memberships tm
 		         JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
@@ -701,8 +713,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		         FROM trainer_memberships trm
 		         JOIN seasons strn ON strn.id = trm.season_id AND strn.is_active = 1
 		         WHERE trm.member_id IN (SELECT id FROM members WHERE user_id = ?)
-		     )
-		     OR (ds.team_id IS NULL AND ds.game_id IN (
+		     ))
+		     OR (ds.game_id IN (
 		         SELECT gt.game_id FROM game_teams gt
 		         WHERE gt.team_id IN (
 		             SELECT DISTINCT tm2.team_id
@@ -743,8 +755,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		                 JOIN seasons sa ON sa.id = pm_a.season_id AND sa.is_active = 1
 		                 WHERE fl_a.parent_user_id = ?
 		                 AND (
-		                     pm_a.team_id = ds.team_id
-		                     OR (ds.team_id IS NULL AND ds.game_id IS NOT NULL AND pm_a.team_id IN (
+		                     (ds.game_id IS NULL AND pm_a.team_id = ds.team_id)
+		                     OR (ds.game_id IS NOT NULL AND pm_a.team_id IN (
 		                         SELECT gt_a.team_id FROM game_teams gt_a WHERE gt_a.game_id = ds.game_id
 		                     ))
 		                 )

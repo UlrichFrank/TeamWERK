@@ -743,3 +743,70 @@ func TestMigration050_UserLoeschungRaeumtLogAuf(t *testing.T) {
 		t.Errorf("erwartet 0 Log-Zeilen nach Nutzer-Löschung, bekam %d", count)
 	}
 }
+
+// TestMigration051_LeertTeamIdNurBeiSpielgebundenenSlots: die Migration räumt die
+// redundante Kopie in duty_slots.team_id ab — aber nur dort, wo game_teams die Wahrheit
+// führt. Ein Slot ohne Spiel (Vereinsfest) behält sein Team, denn dort ist team_id der
+// einzige Geltungsbereich.
+func TestMigration051_LeertTeamIdNurBeiSpielgebundenenSlots(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(50); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 50: %v", err)
+	}
+
+	seed := [][]any{
+		{1, "2025/26", "2025-08-01", "2026-07-31", 1},
+	}
+	for _, s := range seed {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO seasons (id, name, start_date, end_date, is_active) VALUES (?,?,?,?,?)`, s...); err != nil {
+			t.Fatalf("seed season: %v", err)
+		}
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO teams (id, name, age_class, gender) VALUES (7, 'A-Jugend', 'A', 'm')`); err != nil {
+		t.Fatalf("seed team: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO games (id, season_id, opponent, date, time, is_home, event_type)
+		 VALUES (3, 1, 'X', '2026-06-13', '10:00', 1, 'heim')`); err != nil {
+		t.Fatalf("seed game: %v", err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO duty_types (id, name, hours_value) VALUES (2, 'Kasse', 1.0)`); err != nil {
+		t.Fatalf("seed duty_type: %v", err)
+	}
+	// Slot MIT Spiel (Bestandszeile mit Team) und Slot OHNE Spiel (Vereinsfest).
+	if _, err := sqlDB.Exec(`
+		INSERT INTO duty_slots (id, event_name, event_date, duty_type_id, slots_total, slots_filled, team_id, season_id, game_id)
+		VALUES (10, 'Heimspiel', '2026-06-13', 2, 1, 0, 7, 1, 3),
+		       (11, 'Vereinsfest', '2026-06-20', 2, 1, 0, 7, 1, NULL)`); err != nil {
+		t.Fatalf("seed duty_slots: %v", err)
+	}
+
+	if err := m.Migrate(51); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 51: %v", err)
+	}
+
+	var mitSpiel sql.NullInt64
+	if err := sqlDB.QueryRow(`SELECT team_id FROM duty_slots WHERE id=10`).Scan(&mitSpiel); err != nil {
+		t.Fatalf("read slot 10: %v", err)
+	}
+	if mitSpiel.Valid {
+		t.Errorf("spielgebundener Slot soll nach 051 team_id=NULL tragen, hat %d", mitSpiel.Int64)
+	}
+
+	var ohneSpiel sql.NullInt64
+	if err := sqlDB.QueryRow(`SELECT team_id FROM duty_slots WHERE id=11`).Scan(&ohneSpiel); err != nil {
+		t.Fatalf("read slot 11: %v", err)
+	}
+	if !ohneSpiel.Valid || ohneSpiel.Int64 != 7 {
+		t.Errorf("Slot ohne Spiel soll sein Team behalten, hat valid=%v value=%d", ohneSpiel.Valid, ohneSpiel.Int64)
+	}
+
+	// down ist bewusst ein No-op (der alte Wert ist nicht rekonstruierbar und wird nicht
+	// gebraucht) — es muss aber sauber durchlaufen, sonst blockiert es jeden Rollback
+	// auf eine frühere Version.
+	if err := m.Migrate(50); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate down to 50: %v", err)
+	}
+}

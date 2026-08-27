@@ -816,16 +816,15 @@ func (s *Scheduler) teamMembersAndParents(teamID int) []int {
 }
 
 // slotTeamScope resolves which teams an open duty slot addresses — the same rule the duty
-// board uses for visibility: the slot's own team if set, otherwise the teams of its linked
-// game (game_teams). A slot at a multi-team event carries no team_id on purpose; without
-// the game_teams step the reminder would fan out to the whole club instead of the teams
-// that actually see the slot. An empty result means "no team context at all" (no team, no
-// game) — club-wide, unchanged.
+// board uses for visibility. game_id gewinnt: ein spielgebundener Slot adressiert die Teams
+// seines Termins (game_teams), auch wenn noch ein Bestandswert in team_id steht. team_id
+// zählt nur für Slots ohne Spiel. An empty result means "no team context at all" (no team,
+// no game) — club-wide, unchanged.
 func (s *Scheduler) slotTeamScope(sl openSlot) ([]int, error) {
-	if sl.teamID.Valid {
-		return []int{int(sl.teamID.Int64)}, nil
-	}
 	if !sl.gameID.Valid {
+		if sl.teamID.Valid {
+			return []int{int(sl.teamID.Int64)}, nil
+		}
 		return nil, nil
 	}
 	rows, err := s.db.Query(`SELECT team_id FROM game_teams WHERE game_id=?`, sl.gameID.Int64)
