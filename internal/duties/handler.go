@@ -521,7 +521,7 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT ds.id, ds.event_name, ds.event_date, ds.slots_total, ds.slots_filled,
-		        dt.name, COALESCE(ds.role_desc,'')
+		        dt.name, COALESCE(ds.role_desc,''), ds.hours_value
 		 FROM duty_slots ds JOIN duty_types dt ON dt.id = ds.duty_type_id`+where+`
 		 ORDER BY ds.event_date DESC, ds.id LIMIT ? OFFSET ?`,
 		append(args, limit, offset)...)
@@ -538,13 +538,14 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 		SlotsFilled int                 `json:"slots_filled"`
 		DutyType    string              `json:"duty_type"`
 		RoleDesc    string              `json:"role_desc,omitempty"`
+		HoursValue  float64             `json:"hours_value"`
 		Can         policy.DutyCanFlags `json:"can"`
 	}
 	dutyCan := policy.DutyCan(p)
 	result := []slot{}
 	for rows.Next() {
 		var s slot
-		rows.Scan(&s.ID, &s.EventName, &s.EventDate, &s.SlotsTotal, &s.SlotsFilled, &s.DutyType, &s.RoleDesc)
+		rows.Scan(&s.ID, &s.EventName, &s.EventDate, &s.SlotsTotal, &s.SlotsFilled, &s.DutyType, &s.RoleDesc, &s.HoursValue)
 		s.Can = dutyCan
 		result = append(result, s)
 	}
@@ -565,8 +566,28 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		SeasonID   int      `json:"season_id"`
 		GameID     *int     `json:"game_id"`
 		Audiences  []string `json:"audiences"`
+		// Pointer, damit "Feld fehlt" (Alt-Client, Dauer vom Diensttyp übernehmen)
+		// von "Feld ist 0" (ungültig, 400) unterscheidbar bleibt.
+		HoursValue *float64 `json:"hours_value"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+
+	hoursValue := 0.0
+	if req.HoursValue != nil {
+		hoursValue = *req.HoursValue
+	} else {
+		// Alt-Client ohne hours_value: Dauer des Diensttyps übernehmen statt 0 zu speichern.
+		if err := h.db.QueryRowContext(r.Context(),
+			`SELECT hours_value FROM duty_types WHERE id = ?`, req.DutyTypeID).Scan(&hoursValue); err != nil {
+			http.Error(w, "invalid duty_type_id", http.StatusBadRequest)
+			return
+		}
+	}
+	if hoursValue <= 0 {
+		http.Error(w, "hours_value must be > 0", http.StatusBadRequest)
+		return
+	}
+
 	var eventTime any = nil
 	if req.EventTime != "" {
 		eventTime = req.EventTime
@@ -579,9 +600,9 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		req.TeamID = nil
 	}
 	h.db.ExecContext(r.Context(),
-		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences, is_custom)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,1)`,
-		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences))
+		`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, audiences, is_custom, hours_value)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,1,?)`,
+		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences), hoursValue)
 	// Team-Audience aus dem angegebenen Team bzw. den Teams des verknüpften
 	// Spiels ableiten; ohne beides bewusst global (Slot ohne Team-Kontext).
 	// Live-Update und Benachrichtigung teilen sich denselben Scope.
@@ -606,15 +627,20 @@ func (h *Handler) UpdateSlot(w http.ResponseWriter, r *http.Request) {
 		RoleDesc   string   `json:"role_desc"`
 		SlotsTotal int      `json:"slots_total"`
 		Audiences  []string `json:"audiences"`
+		HoursValue float64  `json:"hours_value"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
+	if req.HoursValue <= 0 {
+		http.Error(w, "hours_value must be > 0", http.StatusBadRequest)
+		return
+	}
 	var eventTime any = nil
 	if req.EventTime != "" {
 		eventTime = req.EventTime
 	}
 	h.db.ExecContext(r.Context(),
-		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=?, audiences=?, is_custom=1 WHERE id=?`,
-		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, audiencesToDB(req.Audiences), id)
+		`UPDATE duty_slots SET event_name=?, event_date=?, event_time=?, role_desc=?, slots_total=?, audiences=?, hours_value=?, is_custom=1 WHERE id=?`,
+		req.EventName, req.EventDate, eventTime, req.RoleDesc, req.SlotsTotal, audiencesToDB(req.Audiences), req.HoursValue, id)
 	h.broadcastDutySlot(r.Context(), id)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -813,7 +839,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(ds.audiences, dt.audiences),
 		    COALESCE(ds.event_name, ''),
 		    dt.id AS duty_type_id,
-		    CASE WHEN COALESCE(dt.instruction_md, '') != '' THEN 1 ELSE 0 END AS has_instruction
+		    CASE WHEN COALESCE(dt.instruction_md, '') != '' THEN 1 ELSE 0 END AS has_instruction,
+		    ds.hours_value
 		 FROM duty_slots ds
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
@@ -851,6 +878,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		Audiences      []string            `json:"audiences,omitempty"`
 		Assignees      []publicAssignee    `json:"assignees"`
 		Can            policy.DutyCanFlags `json:"can"`
+		HoursValue     float64             `json:"hours_value"`
 	}
 	type boardGroup struct {
 		GameID    *int     `json:"game_id"`
@@ -876,9 +904,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, venue, teamName, eventName string
 		var gameID sql.NullInt64
 		var audiences sql.NullString
+		var hoursValue float64
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
 			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime, &venue,
-			&teamID, &teamName, &isPastInt, &audiences, &eventName, &dutyTypeID, &hasInstrInt)
+			&teamID, &teamName, &isPastInt, &audiences, &eventName, &dutyTypeID, &hasInstrInt, &hoursValue)
 
 		var key string
 		if gameID.Valid {
@@ -932,6 +961,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			Audiences:      audiencesFromDB(audiences),
 			Assignees:      []publicAssignee{},
 			Can:            boardDutyCan,
+			HoursValue:     hoursValue,
 		})
 	}
 

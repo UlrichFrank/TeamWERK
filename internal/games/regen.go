@@ -904,11 +904,21 @@ func (h *Handler) regenGameItems(
 		}
 
 		resultTypeName := it.DutyTypeName
+		// Die Dauer stammt normalerweise aus der Vorlagen-Zeile — sie ist dort
+		// per Copy-on-pick eingefroren. Greift die Varianten-Logik (reduced),
+		// entsteht der Slot aber unter einem ANDEREN Diensttyp, und dann gewinnt
+		// dessen Dauer (dienst-dauer, Decision 3): eine Variante ist kein Rabatt,
+		// sondern eine andere Arbeit. Die Vorlage bestimmt wann (Anchor/Offset)
+		// und wie viele (SlotsCount), der Diensttyp bestimmt welche Arbeit — und
+		// die Dauer gehört zur Arbeit. Schlägt der Lookup fehl, bleibt es beim
+		// Vorlagen-Wert; das ist derselbe fail-soft-Pfad wie beim Namen.
+		resultHours := it.HoursValue
 		isReduce := resultDutyTypeID != it.DutyTypeID
 		if isReduce {
-			name, lerr := h.lookupDutyTypeNameTx(ctx, tx, resultDutyTypeID)
+			name, hours, lerr := h.lookupDutyTypeTx(ctx, tx, resultDutyTypeID)
 			if lerr == nil {
 				resultTypeName = name
+				resultHours = hours
 			}
 		}
 
@@ -936,10 +946,11 @@ func (h *Handler) regenGameItems(
 			_, err := tx.ExecContext(ctx, `
 				INSERT INTO duty_slots
 				  (event_name, event_date, event_time, duty_type_id, role_desc,
-				   slots_total, team_id, season_id, game_id, audiences, is_custom)
-				VALUES (?,?,?,?,?,?,NULL,?,?,?,0)`,
+				   slots_total, team_id, season_id, game_id, audiences, is_custom,
+				   hours_value)
+				VALUES (?,?,?,?,?,?,NULL,?,?,?,0,?)`,
 				eventName, date, eventTime, resultDutyTypeID, "",
-				slotsTotal, seasonID, g.ID, slotAudiences)
+				slotsTotal, seasonID, g.ID, slotAudiences, resultHours)
 			if err != nil {
 				return false, err
 			}
@@ -1167,6 +1178,7 @@ func (h *Handler) effectiveEventDurationTx(ctx context.Context, tx *sql.Tx, even
 func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateID int) ([]templateItemRow, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
+		        gti.hours_value,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
 		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
@@ -1180,7 +1192,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 		var it templateItemRow
 		var teamIDs sql.NullString
 		if err := rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
-			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
+			&it.SlotsCount, &it.HoursValue, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
 			&it.RotationEnabled, &it.AusrichterID); err != nil {
 			return nil, err
@@ -1191,10 +1203,16 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 	return result, nil
 }
 
-func (h *Handler) lookupDutyTypeNameTx(ctx context.Context, tx *sql.Tx, id int) (string, error) {
+// lookupDutyTypeTx liefert Name und Dauer eines Diensttyps. Beides wird nur im
+// Reduce-Fall gebraucht (der Slot entsteht dann unter einem anderen Typ als dem
+// der Vorlagen-Zeile) und deshalb bewusst in einem Query geholt — kein zweiter
+// Roundtrip pro Item.
+func (h *Handler) lookupDutyTypeTx(ctx context.Context, tx *sql.Tx, id int) (string, float64, error) {
 	var name string
-	err := tx.QueryRowContext(ctx, `SELECT name FROM duty_types WHERE id=?`, id).Scan(&name)
-	return name, err
+	var hours float64
+	err := tx.QueryRowContext(ctx,
+		`SELECT name, hours_value FROM duty_types WHERE id=?`, id).Scan(&name, &hours)
+	return name, hours, err
 }
 
 // dispatchRegenNotifications fans out one notify.Send per intent. Must be called

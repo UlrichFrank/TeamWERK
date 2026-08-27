@@ -443,11 +443,18 @@ func classifySlotPosition(slotTime string, gameTime string, allGameTimes []strin
 }
 
 type templateItemRow struct {
-	DutyTypeID           int
-	DutyTypeName         string
-	Anchor               string
-	OffsetMinutes        int
-	SlotsCount           int
+	DutyTypeID    int
+	DutyTypeName  string
+	Anchor        string
+	OffsetMinutes int
+	SlotsCount    int
+	// HoursValue ist die Dauer des Dienstes in Stunden — dieselbe Zahl, die als
+	// Zeitspanne angezeigt und dem Dienstkonto gutgeschrieben wird (dienst-dauer).
+	// Copy-on-pick: der Vorlagen-Editor kopiert sie beim Auswählen des Diensttyps
+	// hierher, danach ist die Zeile eigenständig — kein NULL-erbt-Mechanismus,
+	// genau wie bei Anchor/OffsetMinutes daneben. Ausnahme ist die reduzierte
+	// Variante, siehe resolveItemHours in regen.go.
+	HoursValue           float64
 	SameDayBehavior      string
 	SameDayVariantID     sql.NullInt64
 	AdjacentDayBehavior  string
@@ -471,6 +478,7 @@ type templateItemRow struct {
 func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]templateItemRow, error) {
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
+		        gti.hours_value,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
 		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
@@ -484,7 +492,7 @@ func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]temp
 		var it templateItemRow
 		var teamIDs sql.NullString
 		rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
-			&it.SlotsCount, &it.SameDayBehavior, &it.SameDayVariantID,
+			&it.SlotsCount, &it.HoursValue, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
 			&it.RotationEnabled, &it.AusrichterID)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
@@ -1530,10 +1538,14 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	for _, uid := range fulfilledUIDs {
 		if _, err = tx.ExecContext(r.Context(), `
 			UPDATE duty_accounts SET ist = (
-				SELECT COALESCE(SUM(dt.hours_value), 0)
+				-- Quelle ist der Slot, nicht der Diensttyp (dienst-dauer,
+				-- Decision 4): seit ein Slot seine Dauer überschreiben darf und
+				-- die Dauer die Gutschrift IST, ignorierte eine Aggregation über
+				-- dt.hours_value genau die Korrektur des Vorstands. Der
+				-- Slot-Wert trägt zugleich die Varianten-Auflösung schon in sich.
+				SELECT COALESCE(SUM(ds.hours_value), 0)
 				FROM duty_assignments da
 				JOIN duty_slots ds ON ds.id = da.duty_slot_id
-				JOIN duty_types dt ON dt.id = ds.duty_type_id
 				WHERE da.user_id = ? AND ds.season_id = ? AND da.status = 'fulfilled'
 			)
 			WHERE user_id = ? AND season_id = ?`,
@@ -1764,13 +1776,17 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 // ── Duty Templates ───────────────────────────────────────────────────────────
 
 type templateItem struct {
-	ID            int      `json:"id,omitempty"`
-	DutyTypeID    int      `json:"duty_type_id"`
-	DutyTypeName  string   `json:"duty_type_name,omitempty"`
-	Anchor        string   `json:"anchor"`
-	OffsetMinutes int      `json:"offset_minutes"`
-	SlotsCount    int      `json:"slots_count"`
-	Audiences     []string `json:"audiences,omitempty"`
+	ID            int    `json:"id,omitempty"`
+	DutyTypeID    int    `json:"duty_type_id"`
+	DutyTypeName  string `json:"duty_type_name,omitempty"`
+	Anchor        string `json:"anchor"`
+	OffsetMinutes int    `json:"offset_minutes"`
+	SlotsCount    int    `json:"slots_count"`
+	// HoursValue ist die Dauer dieses Dienstes in Stunden (dienst-dauer). Pointer,
+	// damit „Feld fehlt" (Alt-Client) von „Feld ist 0" (ungültig) unterscheidbar
+	// bleibt: fehlt es, setzt UpdateTemplate die Dauer des Diensttyps ein.
+	HoursValue *float64 `json:"hours_value,omitempty"`
+	Audiences  []string `json:"audiences,omitempty"`
 	// TeamIDs schränkt ein, für welche Teams eines Spiels aus diesem Item ein
 	// Slot entsteht. Leer/NULL = alle Teams (umgekehrte Leer-Semantik zu Audiences).
 	TeamIDs []int `json:"team_ids,omitempty"`
@@ -1789,7 +1805,7 @@ type templateItem struct {
 
 func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templateItem {
 	rows, _ := h.db.QueryContext(ctx,
-		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
+		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.hours_value, gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	items := []templateItem{}
@@ -1800,8 +1816,10 @@ func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templ
 	for rows.Next() {
 		var it templateItem
 		var audiences, teamIDs sql.NullString
+		var hoursValue float64
 		var ausrichterID sql.NullInt64
-		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &audiences, &teamIDs, &it.RotationEnabled, &ausrichterID)
+		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &hoursValue, &audiences, &teamIDs, &it.RotationEnabled, &ausrichterID)
+		it.HoursValue = &hoursValue
 		it.Audiences = audiencesFromDB(audiences)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
 		if ausrichterID.Valid {
@@ -1933,14 +1951,20 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	if req.DurationMinutes <= 0 {
 		req.DurationMinutes = 90
 	}
-	for _, it := range req.Items {
+	// Index-Schleife statt Wertkopie: fehlt hours_value im Request, wird es unten
+	// aus dem Diensttyp nachgetragen — das muss in req.Items landen.
+	for i := range req.Items {
+		it := &req.Items[i]
 		// same_day_behavior/adjacent_day_behavior werden zusammen mit der
 		// Existenzprüfung geladen — für die Rotations-Validierung unten
-		// gebraucht (design.md kuchendienst-rotation, Decision 4).
+		// gebraucht (design.md kuchendienst-rotation, Decision 4). hours_value
+		// kommt aus derselben Zeile, weil es beim fehlenden Feld als Default
+		// einspringt (dienst-dauer).
 		var sameDayBehavior, adjacentDayBehavior string
+		var typeHours float64
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT same_day_behavior, adjacent_day_behavior FROM duty_types WHERE id=?`, it.DutyTypeID,
-		).Scan(&sameDayBehavior, &adjacentDayBehavior)
+			`SELECT same_day_behavior, adjacent_day_behavior, hours_value FROM duty_types WHERE id=?`, it.DutyTypeID,
+		).Scan(&sameDayBehavior, &adjacentDayBehavior, &typeHours)
 		if err == sql.ErrNoRows {
 			http.Error(w, "invalid duty_type_id", http.StatusBadRequest)
 			return
@@ -1955,6 +1979,17 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		// design.md). Nichts wird persistiert, wenn diese Prüfung fehlschlägt.
 		if it.RotationEnabled && (sameDayBehavior != "normal" || adjacentDayBehavior != "normal") {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rotation_requires_normal_behavior"})
+			return
+		}
+		// Dauer (dienst-dauer): fehlendes Feld erbt einmalig vom Diensttyp
+		// (Copy-on-pick, deckt Alt-Clients ab), eine mitgeschickte 0 oder ein
+		// negativer Wert ist ungültig — er ergäbe eine Spanne wie „8:00–8:00"
+		// und zugleich eine Nullgutschrift. Wie die Prüfungen ringsum läuft das
+		// VOR tx.BeginTx, damit ein 400 keine Teil-Persistenz hinterlässt.
+		if it.HoursValue == nil {
+			it.HoursValue = &typeHours
+		} else if *it.HoursValue <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_hours_value"})
 			return
 		}
 		// team_ids wird nur gegen die Existenz in teams geprüft, bewusst NICHT
@@ -2017,10 +2052,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			ausrichterID = *it.AusrichterID
 		}
 		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled, ausrichter_id)
-			 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled, ausrichter_id, hours_value)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 			id, it.DutyTypeID, it.Anchor, it.OffsetMinutes, it.SlotsCount, i,
-			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled, ausrichterID)
+			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled, ausrichterID,
+			*it.HoursValue)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

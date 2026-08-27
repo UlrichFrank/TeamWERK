@@ -16,7 +16,7 @@ import { getApiMock } from '../../test/apiMock'
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
 
 const DUTY_TYPES = [
-  { id: 11, name: 'Kuchendienst', default_anchor: 'start', default_offset_minutes: -60, audiences: [] },
+  { id: 11, name: 'Kuchendienst', hours_value: 1, default_anchor: 'start', default_offset_minutes: -60, audiences: [] },
 ]
 
 /**
@@ -41,7 +41,7 @@ function renderEditor(rotationEnabled: boolean, putReply?: [number, unknown]) {
     template_type: 'heim',
     duration_minutes: 75,
     items: [{
-      duty_type_id: 11, anchor: 'start', offset_minutes: -60, slots_count: 1,
+      duty_type_id: 11, anchor: 'start', offset_minutes: -60, hours_value: 1, slots_count: 1,
       audiences: [], team_ids: [], rotation_enabled: rotationEnabled,
     }],
   })

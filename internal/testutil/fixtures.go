@@ -256,9 +256,11 @@ func CreateDutySlot(t *testing.T, database *sql.DB, dutyTypeID, seasonID, teamID
 		gameArg = gameID
 	}
 	res, err := database.Exec(
-		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, slots_filled, team_id, season_id, game_id)
-		 VALUES (?, ?, ?, 2, 0, ?, ?, ?)`,
-		"Testdienst", date, dutyTypeID, teamID, seasonID, gameArg)
+		// hours_value erbt vom Diensttyp — wie in den echten Schreibpfaden
+		// (Regen materialisiert, CreateSlot setzt den Typ-Wert ein).
+		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, slots_filled, team_id, season_id, game_id, hours_value)
+		 VALUES (?, ?, ?, 2, 0, ?, ?, ?, (SELECT hours_value FROM duty_types WHERE id = ?))`,
+		"Testdienst", date, dutyTypeID, teamID, seasonID, gameArg, dutyTypeID)
 	if err != nil {
 		t.Fatalf("CreateDutySlot: %v", err)
 	}

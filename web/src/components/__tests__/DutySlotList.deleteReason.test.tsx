@@ -19,6 +19,7 @@ const BESETZT: BoardSlot = {
   duty_type_id: 1,
   has_instruction: false,
   event_time: '18:00',
+  hours_value: 1,
   slots_total: 2,
   vacancies: 0, // slots_filled = 2 → Bestätigungsdialog
   claimed_by_me: false,

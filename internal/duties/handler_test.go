@@ -1273,6 +1273,7 @@ func TestUpdateSlot_IsCustom(t *testing.T) {
 		"event_name":  "Aufbau (geändert)",
 		"event_date":  "2026-06-14",
 		"slots_total": 3,
+		"hours_value": 2.0,
 	}
 	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-slots/"+itoa(slotID), token, body)
 	res.Body.Close()
@@ -1288,6 +1289,187 @@ func TestUpdateSlot_IsCustom(t *testing.T) {
 	if isCustomAfter != 1 {
 		t.Errorf("expected is_custom=1 after update, got %d", isCustomAfter)
 	}
+}
+
+// TestCreateSlot_UebernimmtHoursValue verifies that a hours_value sent in the
+// request body is stored verbatim on the created slot, alongside is_custom=1.
+func TestCreateSlot_UebernimmtHoursValue(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminID, "admin", nil)
+	body := map[string]any{
+		"event_name":   "Aufbau Heimspiel",
+		"event_date":   "2026-06-14",
+		"duty_type_id": dtID,
+		"slots_total":  2,
+		"team_id":      teamID,
+		"season_id":    seasonID,
+		"hours_value":  2.5,
+	}
+	res := testutil.Post(t, srv, "/api/duty-slots", token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	var hoursValue float64
+	var isCustom int
+	if err := db.QueryRow(`SELECT hours_value, is_custom FROM duty_slots WHERE team_id=? AND season_id=?`,
+		teamID, seasonID).Scan(&hoursValue, &isCustom); err != nil {
+		t.Fatalf("read slot: %v", err)
+	}
+	if hoursValue != 2.5 {
+		t.Errorf("expected hours_value=2.5, got %v", hoursValue)
+	}
+	if isCustom != 1 {
+		t.Errorf("expected is_custom=1, got %d", isCustom)
+	}
+}
+
+// TestCreateSlot_OhneHoursValueErbtVomTyp verifies that an Alt-Client, which
+// omits hours_value entirely, gets the duty type's duration materialized on
+// the slot instead of a silently stored 0.
+func TestCreateSlot_OhneHoursValueErbtVomTyp(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Kasse", 1.75)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminID, "admin", nil)
+	body := map[string]any{
+		"event_name":   "Kassendienst",
+		"event_date":   "2026-06-14",
+		"duty_type_id": dtID,
+		"slots_total":  1,
+		"team_id":      teamID,
+		"season_id":    seasonID,
+		// hours_value bewusst weggelassen — Alt-Client.
+	}
+	res := testutil.Post(t, srv, "/api/duty-slots", token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	var hoursValue float64
+	if err := db.QueryRow(`SELECT hours_value FROM duty_slots WHERE team_id=? AND season_id=?`,
+		teamID, seasonID).Scan(&hoursValue); err != nil {
+		t.Fatalf("read slot: %v", err)
+	}
+	if hoursValue != 1.75 {
+		t.Errorf("expected hours_value=1.75 (vom Diensttyp übernommen), got %v", hoursValue)
+	}
+}
+
+// TestUpdateSlot_AendertHoursValue verifies that PUT overwrites the
+// materialized duration of an existing slot.
+func TestUpdateSlot_AendertHoursValue(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Aufbau", 1.0)
+	slotID := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, adminID, "admin", nil)
+	body := map[string]any{
+		"event_name":  "Aufbau (geändert)",
+		"event_date":  "2026-06-14",
+		"slots_total": 3,
+		"hours_value": 3.0,
+	}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-slots/"+itoa(slotID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	var hoursValue float64
+	var isCustom int
+	if err := db.QueryRow(`SELECT hours_value, is_custom FROM duty_slots WHERE id=?`, slotID).Scan(&hoursValue, &isCustom); err != nil {
+		t.Fatalf("read slot: %v", err)
+	}
+	if hoursValue != 3.0 {
+		t.Errorf("expected hours_value=3.0, got %v", hoursValue)
+	}
+	if isCustom != 1 {
+		t.Errorf("expected is_custom=1, got %d", isCustom)
+	}
+}
+
+// TestUpdateSlot_HoursValueNullOderNegativ_400 verifies that both write routes
+// reject a non-positive hours_value with HTTP 400 before writing anything —
+// a slot with hours_value=0 would render "8:00–8:00" on the duty board.
+func TestUpdateSlot_HoursValueNullOderNegativ_400(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Aufbau", 2.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	t.Run("CreateSlot lehnt 0 ab", func(t *testing.T) {
+		body := map[string]any{
+			"event_name":   "Aufbau Heimspiel",
+			"event_date":   "2026-06-14",
+			"duty_type_id": dtID,
+			"slots_total":  2,
+			"team_id":      teamID,
+			"season_id":    seasonID,
+			"hours_value":  0,
+		}
+		res := testutil.Post(t, srv, "/api/duty-slots", token, body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", res.StatusCode)
+		}
+		if got := countRows(t, db, "duty_slots", "event_date=?", "2026-06-14"); got != 0 {
+			t.Errorf("expected no slot written, got %d", got)
+		}
+	})
+
+	t.Run("UpdateSlot lehnt negativen Wert ab", func(t *testing.T) {
+		slotID := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-15")
+		body := map[string]any{
+			"event_name":  "Aufbau (geändert)",
+			"event_date":  "2026-06-15",
+			"slots_total": 3,
+			"hours_value": -1.0,
+		}
+		res := testutil.Do(t, srv, http.MethodPut, "/api/duty-slots/"+itoa(slotID), token, body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", res.StatusCode)
+		}
+		var hoursValue float64
+		var eventName string
+		if err := db.QueryRow(`SELECT hours_value, event_name FROM duty_slots WHERE id=?`, slotID).Scan(&hoursValue, &eventName); err != nil {
+			t.Fatalf("read slot: %v", err)
+		}
+		if hoursValue != 1.0 {
+			t.Errorf("expected hours_value unchanged at 1.0, got %v", hoursValue)
+		}
+		if eventName != "Testdienst" {
+			t.Errorf("expected slot unverändert (keine Teil-Persistenz), got event_name=%q", eventName)
+		}
+	})
 }
 
 // ── TC-D18 ────────────────────────────────────────────────────────────────────
@@ -2060,6 +2242,50 @@ func TestBoard_ExposesHasInstruction(t *testing.T) {
 	}
 	if id, _ := swo["duty_type_id"].(float64); int(id) != dtWithout {
 		t.Errorf("expected duty_type_id=%d, got %v", dtWithout, id)
+	}
+}
+
+// TestBoard_LiefertHoursValueJeSlot verifies that each slot in the board
+// response carries its own hours_value (duty_slots), not the duty type's —
+// the two are set to different values here specifically to prove the source.
+func TestBoard_LiefertHoursValueJeSlot(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	dtID := createDutyType(t, db, "Kasse", 2.0)
+	slotID := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	if _, err := db.Exec(`UPDATE duty_slots SET hours_value=1.5 WHERE id=?`, slotID); err != nil {
+		t.Fatalf("set hours_value: %v", err)
+	}
+
+	userID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, userID, "admin", nil)
+	res := testutil.Get(t, srv, "/api/duty-board", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var groups []map[string]any
+	json.NewDecoder(res.Body).Decode(&groups)
+
+	var found map[string]any
+	for _, g := range groups {
+		slots, _ := g["slots"].([]any)
+		for _, s := range slots {
+			m, _ := s.(map[string]any)
+			if idF, _ := m["id"].(float64); int(idF) == slotID {
+				found = m
+			}
+		}
+	}
+	if found == nil {
+		t.Fatalf("slot not returned")
+	}
+	if hv, _ := found["hours_value"].(float64); hv != 1.5 {
+		t.Errorf("expected hours_value=1.5 (aus duty_slots, nicht duty_types=2.0), got %v", hv)
 	}
 }
 

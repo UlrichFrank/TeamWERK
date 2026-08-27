@@ -31,6 +31,7 @@ const DUTY_BOARD_FIXTURE = [
         id: 1,
         duty_type: 'Einlass',
         event_time: '10:00',
+        hours_value: 1,
         slots_total: 2,
         vacancies: 2,
         claimed_by_me: false,

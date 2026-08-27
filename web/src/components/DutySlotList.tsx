@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Trash2, BookOpen } from 'lucide-react'
 import { api } from '../lib/api'
+import { formatTimeSpan } from '../lib/duration'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useWindowedList } from '../hooks/useWindowedList'
@@ -26,6 +27,7 @@ export interface BoardSlot {
   duty_type_id: number
   has_instruction: boolean
   event_time: string
+  hours_value: number
   slots_total: number
   vacancies: number
   claimed_by_me: boolean
@@ -144,7 +146,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
       <table className="w-full text-sm table-fixed">
         <colgroup>
           {/* Mobile enger (nur Uhrzeit-Ziffern), Desktop etwas großzügiger. */}
-          <col className="w-16 sm:w-[4.5rem]" />
+          <col className="w-22 sm:w-[6rem]" />
           <col />
           <col style={{ width: '35%' }} />
           {/* Mobile zeigt nur das Punkte-Menü (schmal) statt der Desktop-Buttons —
@@ -161,8 +163,8 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
           className="divide-y divide-brand-border-subtle"
           renderRow={s => (
               <tr key={s.id} id={`duty-slot-${s.id}`}>
-                <td className="pl-4 pr-1 sm:px-4 py-2.5 text-brand-text-muted whitespace-nowrap">{s.event_time || '—'}</td>
-                <td className="pl-2 pr-4 sm:px-4 py-2.5 font-medium text-brand-text">
+                <td className="pl-4 pr-1 sm:px-4 py-2.5 text-brand-text-muted whitespace-nowrap">{formatTimeSpan(s.event_time, s.hours_value)}</td>
+                <td className="pl-4 pr-4 sm:px-4 py-2.5 font-medium text-brand-text">
                   <span className="inline-flex items-center gap-1.5">
                     {s.duty_type}
                     {s.has_instruction ? (

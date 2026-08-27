@@ -21,7 +21,7 @@ vi.mock('../../contexts/AuthContext', () => ({
 
 let mock: MockAdapter
 
-const DUTY_TYPES = [{ id: 7, name: 'Hallendienst', audiences: [] }]
+const DUTY_TYPES = [{ id: 7, name: 'Hallendienst', hours_value: 1, default_anchor: 'start', default_offset_minutes: 0, audiences: [] }]
 
 function mockGame(teams: Array<{ id: number; name: string }>) {
   mock.onGet('/games/234').reply(200, {
@@ -52,7 +52,9 @@ async function addSlot() {
   )
   await screen.findByText('+ Dienst hinzufügen')
   await user.click(screen.getByText('+ Dienst hinzufügen'))
-  await user.selectOptions(screen.getByRole('combobox'), '7')
+  // getAllByRole, weil das Dauer-Feld (datalist-gestützt) seit dienst-dauer ebenfalls
+  // die implizite ARIA-Rolle "combobox" trägt — der Diensttyp-Select steht im DOM zuerst.
+  await user.selectOptions(screen.getAllByRole('combobox')[0], '7')
   await user.click(screen.getByRole('button', { name: 'Hinzufügen' }))
   await waitFor(() => expect(mock.history.post.length).toBe(1))
   return JSON.parse(mock.history.post[0].data)

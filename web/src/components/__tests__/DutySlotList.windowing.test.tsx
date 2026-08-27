@@ -35,6 +35,7 @@ function makeSlots(n: number): BoardSlot[] {
     duty_type_id: i,
     has_instruction: false,
     event_time: '10:00',
+    hours_value: 1,
     slots_total: 1,
     vacancies: 0,
     claimed_by_me: false,

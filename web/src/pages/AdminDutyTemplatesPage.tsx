@@ -9,6 +9,7 @@ import DurationInput from '../components/DurationInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { TeamScopeField, RotationEnabledField, AusrichterField, SlotsCountField } from '../components/DutyTemplateItemFields'
+import HoursInput from '../components/HoursInput'
 import { toggleTeamID } from '../lib/dutyTemplateItems'
 
 interface DutyType {
@@ -16,6 +17,8 @@ interface DutyType {
   name: string
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
+  /** Dauer in Stunden — Vorbelegung der Vorlagen-Zeile (dienst-dauer). */
+  hours_value: number
   audiences?: string[] | null
 }
 
@@ -32,6 +35,8 @@ interface TemplateItem {
   anchor: 'start' | 'end'
   offset_minutes: number
   slots_count: number
+  /** Dauer des Dienstes in Stunden (dienst-dauer). Copy-on-pick vom Diensttyp. */
+  hours_value: number
   audiences: string[]
   /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
   team_ids?: number[] | null
@@ -81,7 +86,7 @@ function newTemplate(): TemplateFormState {
 }
 
 function newItem(): TemplateItem {
-  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [], team_ids: [] }
+  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, hours_value: 1, audiences: [], team_ids: [] }
 }
 
 function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
@@ -188,6 +193,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                             duty_type_id: dutyTypeId,
                             anchor: dutyType?.default_anchor ?? item.anchor,
                             offset_minutes: dutyType?.default_offset_minutes ?? item.offset_minutes,
+                            hours_value: dutyType?.hours_value ?? item.hours_value,
                             audiences: dutyType?.audiences ?? [],
                           })
                         }}
@@ -198,6 +204,14 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                           <option key={dt.id} value={dt.id}>{dt.name}</option>
                         ))}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-brand-text-muted mb-1">Dauer</label>
+                      <HoursInput
+                        value={item.hours_value}
+                        onChange={v => updateItem(index, { hours_value: v })}
+                        className={INPUT_SM}
+                      />
                     </div>
                     <SlotsCountField
                       id={`slots-count-${index}`}

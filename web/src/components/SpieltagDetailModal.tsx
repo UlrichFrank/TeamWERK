@@ -7,6 +7,8 @@ import { errorStatus } from '../lib/errors'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from './DutySlotList'
 import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
+import HoursInput from './HoursInput'
+import { addMinutesToTime } from '../lib/duration'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 
 interface GameDetail {
@@ -28,6 +30,7 @@ interface SlotDetail {
   id: number
   duty_type_name: string
   event_time: string
+  hours_value: number
   role_description: string
   slots_total: number
   slots_filled: number
@@ -37,6 +40,9 @@ interface SlotDetail {
 interface DutyType {
   id: number
   name: string
+  hours_value: number
+  default_anchor: 'start' | 'end'
+  default_offset_minutes: number
   audiences?: string[] | null
 }
 
@@ -62,12 +68,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
   const [showAddSlot, setShowAddSlot] = useState(false)
   const [addDutyTypeId, setAddDutyTypeId] = useState<number | ''>('')
   const [addEventTime, setAddEventTime] = useState('')
+  const [addHours, setAddHours] = useState(1)
   const [addSlotsTotal, setAddSlotsTotal] = useState(1)
   const [addAudiences, setAddAudiences] = useState<string[]>([])
   const [addSaving, setAddSaving] = useState(false)
 
   const [editSlot, setEditSlot] = useState<SlotDetail | null>(null)
   const [editEventTime, setEditEventTime] = useState('')
+  const [editHours, setEditHours] = useState(1)
   const [editSlotsTotal, setEditSlotsTotal] = useState(1)
   const [editAudiences, setEditAudiences] = useState<string[]>([])
   const [editSaving, setEditSaving] = useState(false)
@@ -145,6 +153,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         event_date: game.date.slice(0, 10),
         event_time: addEventTime || null,
         duty_type_id: addDutyTypeId,
+        hours_value: addHours,
         slots_total: addSlotsTotal,
         season_id: game.season_id,
         game_id: game.id,
@@ -154,6 +163,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
       setShowAddSlot(false)
       setAddDutyTypeId('')
       setAddEventTime('')
+      setAddHours(1)
       setAddSlotsTotal(1)
       setAddAudiences([])
     } finally {
@@ -164,6 +174,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
   const openEditSlot = (s: SlotDetail) => {
     setEditSlot(s)
     setEditEventTime(s.event_time)
+    setEditHours(s.hours_value)
     setEditSlotsTotal(s.slots_total)
     setEditAudiences(s.audiences ?? [])
   }
@@ -178,6 +189,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
           : `${game?.event_type === 'heim' ? 'Heimspiel' : 'Auswärtsspiel'} Team vs ${game?.opponent || ''}`.trim(),
         event_date: game?.date.slice(0, 10),
         event_time: editEventTime || null,
+        hours_value: editHours,
         slots_total: editSlotsTotal,
         audiences: editAudiences.length > 0 ? editAudiences : null,
       })
@@ -290,6 +302,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                     setAddDutyTypeId(dtId)
                     const dt = dutyTypes.find(d => d.id === dtId)
                     setAddAudiences(dt?.audiences ?? [])
+                    // Dauer und Uhrzeit aus dem Diensttyp vorbelegen (default_anchor +
+                    // default_offset_minutes gegen die Zeit des Termins) — beide Felder
+                    // bleiben danach frei editierbar (openspec/changes/dienst-dauer).
+                    if (dt && game) {
+                      setAddHours(dt.hours_value)
+                      const anchorBase = dt.default_anchor === 'end' && game.end_time ? game.end_time : game.time
+                      setAddEventTime(addMinutesToTime(anchorBase, dt.default_offset_minutes))
+                    }
                   }} className={INPUT_WIZ}>
                     <option value="">Auswählen…</option>
                     {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
@@ -298,6 +318,10 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 <div>
                   <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
                   <input type="time" value={addEventTime} onChange={e => setAddEventTime(e.target.value)} className={INPUT_WIZ} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+                  <HoursInput value={addHours} onChange={setAddHours} className={INPUT_WIZ} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-brand-text-muted mb-1">Personen</label>
@@ -343,6 +367,10 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 <div>
                   <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
                   <input type="time" value={editEventTime} onChange={e => setEditEventTime(e.target.value)} className={INPUT_WIZ} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+                  <HoursInput value={editHours} onChange={setEditHours} className={INPUT_WIZ} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-brand-text-muted mb-1">Personen</label>

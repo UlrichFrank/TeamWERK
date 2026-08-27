@@ -20,7 +20,7 @@ const TEAMS = [
 ]
 
 const DUTY_TYPES = [
-  { id: 3, name: 'Kamera', default_anchor: 'start', default_offset_minutes: -60, audiences: [] },
+  { id: 3, name: 'Kamera', hours_value: 1, default_anchor: 'start', default_offset_minutes: -60, audiences: [] },
 ]
 
 /** teamIDs = bereits gespeicherte team_ids des einen Vorlagen-Items. */
@@ -40,7 +40,7 @@ function renderEditor(teamIDs: number[] | null) {
     template_type: 'heim',
     duration_minutes: 75,
     items: [{
-      duty_type_id: 3, anchor: 'start', offset_minutes: -60, slots_count: 1,
+      duty_type_id: 3, anchor: 'start', offset_minutes: -60, hours_value: 1, slots_count: 1,
       audiences: [], ...(teamIDs ? { team_ids: teamIDs } : {}),
     }],
   })
@@ -135,7 +135,7 @@ describe('AdminDutyTemplateDetailPage — generische Vorlagen', () => {
     mock.reset()
     mock.onGet('/duty-templates/9').reply(200, {
       id: 9, name: 'Turnier', template_type: 'generisch', duration_minutes: 120,
-      items: [{ duty_type_id: 3, anchor: 'start', offset_minutes: -60, slots_count: 1, audiences: [] }],
+      items: [{ duty_type_id: 3, anchor: 'start', offset_minutes: -60, hours_value: 1, slots_count: 1, audiences: [] }],
     })
     mock.onGet('/duty-types').reply(200, DUTY_TYPES)
     mock.onGet('/teams/names').reply(200, TEAMS)

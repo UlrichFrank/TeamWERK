@@ -15,6 +15,7 @@ function baseSlot(overrides: Partial<BoardSlot> = {}): BoardSlot {
     duty_type_id: 42,
     has_instruction: false,
     event_time: '10:00',
+    hours_value: 1,
     slots_total: 2,
     vacancies: 1,
     claimed_by_me: false,

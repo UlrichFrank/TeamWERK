@@ -25,6 +25,7 @@ const SAVED_ITEM_WITH_AUSRICHTER = {
   duty_type_id: 8,
   anchor: 'start',
   offset_minutes: -60,
+  hours_value: 1,
   slots_count: 1,
   audiences: [],
   ausrichter_id: 1,
@@ -34,6 +35,7 @@ const SAVED_ITEM_WITHOUT_AUSRICHTER = {
   duty_type_id: 8,
   anchor: 'start',
   offset_minutes: -60,
+  hours_value: 1,
   slots_count: 1,
   audiences: [],
 }
@@ -58,7 +60,7 @@ function mockApi(templateType = 'heim', itemWithAusrichter = true) {
     }
     if (url === '/duty-types') {
       return Promise.resolve({
-        data: [{ id: 8, name: 'Kasse', default_anchor: 'start', default_offset_minutes: -60, audiences: [] }],
+        data: [{ id: 8, name: 'Kasse', hours_value: 1, default_anchor: 'start', default_offset_minutes: -60, audiences: [] }],
       })
     }
     if (url === '/teams/names') return Promise.resolve({ data: [] })

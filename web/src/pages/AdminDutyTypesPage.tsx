@@ -8,6 +8,7 @@ import EditModal from '../components/EditModal'
 import DutyInstructionEditorModal from '../components/DutyInstructionEditorModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
+import { hoursToDisplay, parseHoursInput } from '../lib/duration'
 
 interface DutyType {
   id: number
@@ -35,22 +36,6 @@ interface EditState {
   adjacent_day_behavior: string
   adjacent_day_variant_id: string
   audiences: string[]
-}
-
-function hoursToDisplay(h: number): string {
-  const totalMins = Math.round(h * 60)
-  const hrs = Math.floor(totalMins / 60)
-  const mins = totalMins % 60
-  if (hrs === 0) return `${mins}min`
-  if (mins === 0) return `${hrs}h`
-  return `${hrs}h ${mins}min`
-}
-
-function parseHoursInput(s: string): number {
-  const m = s.trim().match(/^(?:(\d+)h\s*)?(?:(\d+)min)?$/)
-  if (m && (m[1] || m[2])) return (parseInt(m[1] || '0')) + parseInt(m[2] || '0') / 60
-  const n = parseFloat(s)
-  return isNaN(n) ? 1 : n
 }
 
 function toEditState(t: DutyType): EditState {

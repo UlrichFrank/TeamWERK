@@ -45,7 +45,7 @@ function mockApi(templateType = 'heim') {
     }
     if (url === '/duty-types') {
       return Promise.resolve({
-        data: [{ id: 8, name: 'Kasse', default_anchor: 'start', default_offset_minutes: -60, audiences: [] }],
+        data: [{ id: 8, name: 'Kasse', default_anchor: 'start', default_offset_minutes: -60, hours_value: 1, audiences: [] }],
       })
     }
     if (url === '/teams/names') return Promise.resolve({ data: TEAMS })

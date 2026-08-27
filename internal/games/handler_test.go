@@ -390,9 +390,12 @@ func insertDutyType(t *testing.T, db *sql.DB, name string, hours float64) int {
 func insertDutySlot(t *testing.T, db *sql.DB, dutyTypeID, seasonID, teamID, gameID int, date string) int {
 	t.Helper()
 	res, err := db.Exec(
-		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, team_id, season_id, game_id)
-		 VALUES (?, ?, ?, 1, ?, ?, ?)`,
-		"Testdienst", date, dutyTypeID, teamID, seasonID, gameID)
+		// hours_value erbt vom Diensttyp — so wie es die echten Schreibpfade tun
+		// (Regen materialisiert, CreateSlot setzt den Typ-Wert ein). Ohne das
+		// stünden Test-Slots auf dem Spalten-Default statt auf ihrem Typ-Wert.
+		`INSERT INTO duty_slots (event_name, event_date, duty_type_id, slots_total, team_id, season_id, game_id, hours_value)
+		 VALUES (?, ?, ?, 1, ?, ?, ?, (SELECT hours_value FROM duty_types WHERE id = ?))`,
+		"Testdienst", date, dutyTypeID, teamID, seasonID, gameID, dutyTypeID)
 	if err != nil {
 		t.Fatalf("insertDutySlot: %v", err)
 	}
@@ -2628,5 +2631,63 @@ func TestRegen_SameDayBehaviorReduced(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected Reduced entry {from:Aufbau, to:Aufbau-Licht}, got %+v", summary.Reduced)
+	}
+}
+
+// TestDeleteGame_IstNutztSlotDauer (dienst-dauer, tasks 4.2): die Neuberechnung
+// von duty_accounts.ist zieht die Dauer aus dem SLOT, nicht mehr aus dem
+// Diensttyp. Ein Slot, dessen Dauer der Vorstand überschrieben hat, muss mit
+// genau diesem Wert aus dem Konto verschwinden — sonst ignorierte die Korrektur
+// sich selbst.
+func TestDeleteGame_IstNutztSlotDauer(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-14")
+	otherGameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-06-21")
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	helperID := testutil.CreateUser(t, db, "standard")
+
+	// Der Typ sagt 2h — beide Slots weichen davon ab.
+	dutyType := insertDutyType(t, db, "Aufbau", 2.0)
+
+	slotDeleted := insertDutySlot(t, db, dutyType, seasonID, teamID, gameID, "2026-06-14")
+	slotKept := insertDutySlot(t, db, dutyType, seasonID, teamID, otherGameID, "2026-06-21")
+	if _, err := db.Exec(`UPDATE duty_slots SET hours_value=3.5 WHERE id=?`, slotDeleted); err != nil {
+		t.Fatalf("override hours on deleted slot: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE duty_slots SET hours_value=0.5 WHERE id=?`, slotKept); err != nil {
+		t.Fatalf("override hours on kept slot: %v", err)
+	}
+
+	insertDutyAssignment(t, db, slotDeleted, helperID, "fulfilled")
+	insertDutyAssignment(t, db, slotKept, helperID, "fulfilled")
+
+	// Ausgangsstand entspricht der Realität: 3.5h + 0.5h.
+	if _, err := db.Exec(
+		`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 10, 4.0)`,
+		helperID, seasonID); err != nil {
+		t.Fatalf("seed duty_accounts: %v", err)
+	}
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminID, "admin", []string{"vorstand"})
+	res := testutil.Do(t, srv, http.MethodDelete, fmt.Sprintf("/api/games/%d", gameID), token, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	var ist float64
+	if err := db.QueryRow(
+		`SELECT ist FROM duty_accounts WHERE user_id=? AND season_id=?`,
+		helperID, seasonID).Scan(&ist); err != nil {
+		t.Fatalf("read duty_accounts.ist: %v", err)
+	}
+	// Übrig bleibt der Slot mit 0.5h. Käme die Dauer weiterhin aus duty_types,
+	// stünde hier 2.0 — der Wert des Typs, den niemand mehr verwendet.
+	if ist != 0.5 {
+		t.Errorf("ist soll die Slot-Dauer des verbliebenen Dienstes sein (0.5), got %v", ist)
 	}
 }

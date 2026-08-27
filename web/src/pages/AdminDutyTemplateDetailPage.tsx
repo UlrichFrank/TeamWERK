@@ -6,6 +6,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import ActionMenu from '../components/ActionMenu'
 import OffsetInput from '../components/OffsetInput'
 import DurationInput from '../components/DurationInput'
+import HoursInput from '../components/HoursInput'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { TeamScopeField, RotationEnabledField, AusrichterField, SlotsCountField } from '../components/DutyTemplateItemFields'
@@ -15,6 +16,7 @@ import { errorData } from '../lib/errors'
 interface DutyType {
   id: number
   name: string
+  hours_value: number
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
   audiences?: string[] | null
@@ -32,6 +34,7 @@ interface TemplateItem {
   duty_type_id: number
   anchor: 'start' | 'end'
   offset_minutes: number
+  hours_value: number
   slots_count: number
   audiences?: string[] | null
   /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
@@ -58,7 +61,7 @@ interface Template {
 }
 
 function newItem(): TemplateItem {
-  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, audiences: [], team_ids: [] }
+  return { duty_type_id: 0, anchor: 'start', offset_minutes: 0, hours_value: 1, slots_count: 1, audiences: [], team_ids: [] }
 }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -244,7 +247,7 @@ export default function AdminDutyTemplateDetailPage() {
                           onChange={e => {
                             const dtId = Number(e.target.value)
                             const dt = dutyTypes.find(d => d.id === dtId)
-                            updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes, audiences: dt.audiences ?? [] } : {}) })
+                            updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes, hours_value: dt.hours_value, audiences: dt.audiences ?? [] } : {}) })
                           }}
                           className={INPUT_SM}
                         >
@@ -269,6 +272,14 @@ export default function AdminDutyTemplateDetailPage() {
                           <OffsetInput
                             value={item.offset_minutes}
                             onChange={v => updateItem(i, { offset_minutes: v })}
+                            className={INPUT_SM}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-brand-text-muted mb-1">Dauer</label>
+                          <HoursInput
+                            value={item.hours_value}
+                            onChange={v => updateItem(i, { hours_value: v })}
                             className={INPUT_SM}
                           />
                         </div>
@@ -329,7 +340,7 @@ export default function AdminDutyTemplateDetailPage() {
             <div className="hidden sm:block divide-y divide-brand-border-subtle">
               {template.items.map((item, i) => (
                 <div key={i} className="p-4">
-                <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 items-center">
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] gap-3 items-center">
                   <div>
                     <label className="block text-xs text-brand-text-muted mb-1">Diensttyp</label>
                     <select
@@ -337,7 +348,7 @@ export default function AdminDutyTemplateDetailPage() {
                       onChange={e => {
                         const dtId = Number(e.target.value)
                         const dt = dutyTypes.find(d => d.id === dtId)
-                        updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes, audiences: dt.audiences ?? [] } : {}) })
+                        updateItem(i, { duty_type_id: dtId, ...(dt ? { anchor: dt.default_anchor, offset_minutes: dt.default_offset_minutes, hours_value: dt.hours_value, audiences: dt.audiences ?? [] } : {}) })
                       }}
                       className="w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     >
@@ -361,6 +372,14 @@ export default function AdminDutyTemplateDetailPage() {
                     <OffsetInput
                       value={item.offset_minutes}
                       onChange={v => updateItem(i, { offset_minutes: v })}
+                      className="w-28 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-brand-text-muted mb-1">Dauer</label>
+                    <HoursInput
+                      value={item.hours_value}
+                      onChange={v => updateItem(i, { hours_value: v })}
                       className="w-28 border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                     />
                   </div>
