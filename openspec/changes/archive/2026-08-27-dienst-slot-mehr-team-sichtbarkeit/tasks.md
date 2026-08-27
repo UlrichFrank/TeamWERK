@@ -18,4 +18,4 @@
 ## 4. Verifikation
 
 - [x] 4.1 `make test`, `pnpm -C web test`, `openspec validate --strict`
-- [ ] 4.2 Datenkorrektur für Bestands-Slots vorbereiten (SQL, nach Bestätigung auf Prod)
+- [x] 4.2 Datenkorrektur für Bestands-Slots vorbereiten (SQL, nach Bestätigung auf Prod)
