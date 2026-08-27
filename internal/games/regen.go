@@ -880,16 +880,7 @@ func (h *Handler) regenGameItems(
 			continue
 		}
 
-		var eventTime string
-		if it.Anchor == "end" && g.EndTime.Valid {
-			eventTime = addMinutes(g.EndTime.String, it.OffsetMinutes)
-		} else {
-			offset := it.OffsetMinutes
-			if it.Anchor == "end" {
-				offset += durationMins
-			}
-			eventTime = addMinutes(g.Time, offset)
-		}
+		eventTime := resolveAnchorTime(it.Anchor, it.OffsetMinutes, g, durationMins)
 
 		isBefore, isAfter, isBetween := classifySlotPosition(eventTime, g.Time, allGameTimes)
 		resultDutyTypeID := applyBehavior(it, g.Time, eventTime, allGameTimes,
@@ -912,15 +903,35 @@ func (h *Handler) regenGameItems(
 		// und wie viele (SlotsCount), der Diensttyp bestimmt welche Arbeit — und
 		// die Dauer gehört zur Arbeit. Schlägt der Lookup fehl, bleibt es beim
 		// Vorlagen-Wert; das ist derselbe fail-soft-Pfad wie beim Namen.
+		// Die Dauer-Definition stammt normalerweise aus der Vorlagen-Zeile. Greift die
+		// Varianten-Logik, entsteht der Slot unter einem ANDEREN Diensttyp — dann gilt
+		// dessen komplette Dauer-Definition, nicht nur seine Stundenzahl
+		// (dienst-dauer Decision 3, hier auf den Modus fortgeschrieben): eine Variante
+		// ist eine andere Arbeit, und wie lang die dauert, sagt der Diensttyp.
+		// Position (Anchor/Offset) und Personenzahl bleiben Sache der Vorlagen-Zeile.
 		resultHours := it.HoursValue
+		resultMode := it.DurationMode
+		resultEndAnchor := it.EndAnchor
+		resultEndOffset := it.EndOffsetMinutes
 		isReduce := resultDutyTypeID != it.DutyTypeID
 		if isReduce {
-			name, hours, lerr := h.lookupDutyTypeTx(ctx, tx, resultDutyTypeID)
+			variant, lerr := h.lookupDutyTypeTx(ctx, tx, resultDutyTypeID)
 			if lerr == nil {
-				resultTypeName = name
-				resultHours = hours
+				resultTypeName = variant.Name
+				resultHours = variant.HoursValue
+				resultMode = variant.DurationMode
+				resultEndAnchor = variant.EndAnchor
+				resultEndOffset = variant.EndOffsetMinutes
 			}
 		}
+
+		// Im dynamischen Modus folgt die Dauer der tatsächlichen Spieldauer; sonst ist
+		// sie die gepflegte Zahl. resolveSlotHours fällt auf resultHours zurück, wenn
+		// die Versätze das Ende vor den Start legen würden.
+		slotHours := resolveSlotHours(
+			resultMode, resultHours,
+			eventTime, resolveAnchorTime(resultEndAnchor, resultEndOffset, g, durationMins),
+		)
 
 		n := it.SlotsCount
 		if n <= 0 {
@@ -950,7 +961,7 @@ func (h *Handler) regenGameItems(
 				   hours_value)
 				VALUES (?,?,?,?,?,?,NULL,?,?,?,0,?)`,
 				eventName, date, eventTime, resultDutyTypeID, "",
-				slotsTotal, seasonID, g.ID, slotAudiences, resultHours)
+				slotsTotal, seasonID, g.ID, slotAudiences, slotHours)
 			if err != nil {
 				return false, err
 			}
@@ -1178,7 +1189,7 @@ func (h *Handler) effectiveEventDurationTx(ctx context.Context, tx *sql.Tx, even
 func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateID int) ([]templateItemRow, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
-		        gti.hours_value,
+		        gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
 		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
@@ -1192,7 +1203,8 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 		var it templateItemRow
 		var teamIDs sql.NullString
 		if err := rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
-			&it.SlotsCount, &it.HoursValue, &it.SameDayBehavior, &it.SameDayVariantID,
+			&it.SlotsCount, &it.HoursValue, &it.DurationMode, &it.EndAnchor, &it.EndOffsetMinutes,
+			&it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
 			&it.RotationEnabled, &it.AusrichterID); err != nil {
 			return nil, err
@@ -1207,12 +1219,69 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 // Reduce-Fall gebraucht (der Slot entsteht dann unter einem anderen Typ als dem
 // der Vorlagen-Zeile) und deshalb bewusst in einem Query geholt — kein zweiter
 // Roundtrip pro Item.
-func (h *Handler) lookupDutyTypeTx(ctx context.Context, tx *sql.Tx, id int) (string, float64, error) {
-	var name string
-	var hours float64
+// dutyTypeDuration bündelt alles, was ein Diensttyp über die Länge seiner Arbeit sagt.
+type dutyTypeDuration struct {
+	Name             string
+	HoursValue       float64
+	DurationMode     string
+	EndAnchor        string
+	EndOffsetMinutes int
+}
+
+func (h *Handler) lookupDutyTypeTx(ctx context.Context, tx *sql.Tx, id int) (dutyTypeDuration, error) {
+	var d dutyTypeDuration
 	err := tx.QueryRowContext(ctx,
-		`SELECT name, hours_value FROM duty_types WHERE id=?`, id).Scan(&name, &hours)
-	return name, hours, err
+		`SELECT name, hours_value, duration_mode, end_anchor, end_offset_minutes
+		 FROM duty_types WHERE id=?`, id).
+		Scan(&d.Name, &d.HoursValue, &d.DurationMode, &d.EndAnchor, &d.EndOffsetMinutes)
+	return d, err
+}
+
+// resolveAnchorTime bestimmt eine Uhrzeit relativ zum Termin: `start` rechnet gegen
+// den Anpfiff, `end` gegen das Spielende. Für `end` gilt die gepflegte Endzeit des
+// Termins, und nur wenn es keine gibt, Anpfiff + ermittelte Spieldauer.
+//
+// Bewusst EIN Helfer für beide Enden eines Dienstes (dienst-dauer-dynamisch,
+// Decision 2): Start und Ende teilen sich exakt diese Fallunterscheidung. Zweimal
+// geschrieben liefe sie irgendwann auseinander — und zwar still, weil beide Zweige
+// plausible Uhrzeiten ergeben.
+func resolveAnchorTime(anchor string, offsetMinutes int, g dayGame, durationMins int) string {
+	if anchor == "end" {
+		if g.EndTime.Valid {
+			return addMinutes(g.EndTime.String, offsetMinutes)
+		}
+		return addMinutes(g.Time, offsetMinutes+durationMins)
+	}
+	return addMinutes(g.Time, offsetMinutes)
+}
+
+// resolveSlotHours liefert die Dauer eines Slots in Stunden.
+//
+// Im Modus "absolut" ist das die gepflegte Zahl. Im Modus "dynamisch" ergibt sie sich
+// als Differenz zwischen aufgelöster End- und Startzeit — dadurch folgt ein Dienst der
+// tatsächlichen Spieldauer, die je Altersklasse und Vorlage schwankt.
+//
+// Ergibt die Differenz keine positive Dauer (die Versätze lassen das Ende vor dem Start
+// liegen), fällt die Rechnung auf die absolute Dauer zurück statt den Slot ausfallen zu
+// lassen (Decision 3): ein fehlender Zeitnehmer fällt erst am Spieltag auf, eine zu lange
+// Spanne schon beim Eintragen. Der Preis ist, dass die Fehldefinition unsichtbar bleibt.
+func resolveSlotHours(mode string, absoluteHours float64, startTime, endTime string) float64 {
+	if mode != "dynamisch" {
+		return absoluteHours
+	}
+	mins := minutesBetween(startTime, endTime)
+	if mins <= 0 {
+		return absoluteHours
+	}
+	return float64(mins) / 60.0
+}
+
+// minutesBetween liefert die Minuten von t1 bis t2 im selben Tagesraster.
+// Negativ, wenn t2 vor t1 liegt — der Aufrufer entscheidet, was das bedeutet.
+func minutesBetween(t1, t2 string) int {
+	h1, m1 := timeComponents(t1)
+	h2, m2 := timeComponents(t2)
+	return (h2*60 + m2) - (h1*60 + m1)
 }
 
 // dispatchRegenNotifications fans out one notify.Send per intent. Must be called

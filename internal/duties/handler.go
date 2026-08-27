@@ -153,6 +153,7 @@ func (h *Handler) assignedUsers(slotID string) []int {
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
+		        duration_mode, end_anchor, end_offset_minutes,
 		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences,
 		        instruction_md <> '', instruction_updated_at, instruction_updated_by
 		 FROM duty_types ORDER BY name`)
@@ -169,6 +170,9 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		CashSubstitute       *float64 `json:"cash_substitute,omitempty"`
 		DefaultAnchor        string   `json:"default_anchor"`
 		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		DurationMode         string   `json:"duration_mode"`
+		EndAnchor            string   `json:"end_anchor"`
+		EndOffsetMinutes     int      `json:"end_offset_minutes"`
 		SameDayBehavior      string   `json:"same_day_behavior"`
 		SameDayVariantID     *int     `json:"same_day_variant_id,omitempty"`
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
@@ -188,6 +192,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		var instrUpdatedAt sql.NullString
 		var instrUpdatedBy sql.NullInt64
 		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes,
+			&d.DurationMode, &d.EndAnchor, &d.EndOffsetMinutes,
 			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi, &audiences,
 			&d.HasInstruction, &instrUpdatedAt, &instrUpdatedBy)
 		if cs.Valid {
@@ -263,6 +268,9 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 		CashSubstitute       *float64 `json:"cash_substitute"`
 		DefaultAnchor        string   `json:"default_anchor"`
 		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		DurationMode         string   `json:"duration_mode"`
+		EndAnchor            string   `json:"end_anchor"`
+		EndOffsetMinutes     int      `json:"end_offset_minutes"`
 		SameDayBehavior      string   `json:"same_day_behavior"`
 		SameDayVariantID     *int     `json:"same_day_variant_id"`
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
@@ -273,11 +281,28 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	if req.DefaultAnchor == "" {
 		req.DefaultAnchor = "start"
 	}
+	// Fehlende Felder ergeben dieselben Defaults wie die DB-Spalten
+	// ('absolut'/'end'/0) — Migration 053. Kein DB-Roundtrip nötig, die
+	// Werte sind hier hartkodiert dieselben wie in .up.sql.
+	if req.DurationMode == "" {
+		req.DurationMode = "absolut"
+	}
+	if req.EndAnchor == "" {
+		req.EndAnchor = "end"
+	}
 	if req.SameDayBehavior == "" {
 		req.SameDayBehavior = "normal"
 	}
 	if req.AdjacentDayBehavior == "" {
 		req.AdjacentDayBehavior = "normal"
+	}
+	if req.DurationMode != "absolut" && req.DurationMode != "dynamisch" {
+		http.Error(w, "duration_mode must be 'absolut' or 'dynamisch'", http.StatusBadRequest)
+		return
+	}
+	if req.EndAnchor != "start" && req.EndAnchor != "end" {
+		http.Error(w, "end_anchor must be 'start' or 'end'", http.StatusBadRequest)
+		return
 	}
 	if req.SameDayBehavior == "reduced" && req.SameDayVariantID == nil {
 		http.Error(w, "same_day_behavior 'reduced' requires same_day_variant_id", http.StatusBadRequest)
@@ -289,9 +314,11 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
+		                          duration_mode, end_anchor, end_offset_minutes,
 		                          same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences)
-		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
+		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes,
 		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, audiencesToDB(req.Audiences))
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusCreated)
@@ -306,6 +333,9 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 		CashSubstitute       *float64 `json:"cash_substitute"`
 		DefaultAnchor        string   `json:"default_anchor"`
 		DefaultOffsetMinutes int      `json:"default_offset_minutes"`
+		DurationMode         string   `json:"duration_mode"`
+		EndAnchor            string   `json:"end_anchor"`
+		EndOffsetMinutes     int      `json:"end_offset_minutes"`
 		SameDayBehavior      string   `json:"same_day_behavior"`
 		SameDayVariantID     *int     `json:"same_day_variant_id"`
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
@@ -316,11 +346,29 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	if req.DefaultAnchor == "" {
 		req.DefaultAnchor = "start"
 	}
+	// UpdateType ist ein voller Replace (kein Bestand-Read vor dem Schreiben,
+	// siehe DefaultAnchor/SameDayBehavior/AdjacentDayBehavior oben): ein
+	// fehlendes Feld fällt hier konsequent auf denselben Default wie bei den
+	// bestehenden Feldern zurück, statt den Bestand zu lesen und zu erhalten.
+	if req.DurationMode == "" {
+		req.DurationMode = "absolut"
+	}
+	if req.EndAnchor == "" {
+		req.EndAnchor = "end"
+	}
 	if req.SameDayBehavior == "" {
 		req.SameDayBehavior = "normal"
 	}
 	if req.AdjacentDayBehavior == "" {
 		req.AdjacentDayBehavior = "normal"
+	}
+	if req.DurationMode != "absolut" && req.DurationMode != "dynamisch" {
+		http.Error(w, "duration_mode must be 'absolut' or 'dynamisch'", http.StatusBadRequest)
+		return
+	}
+	if req.EndAnchor != "start" && req.EndAnchor != "end" {
+		http.Error(w, "end_anchor must be 'start' or 'end'", http.StatusBadRequest)
+		return
 	}
 	if req.SameDayBehavior == "reduced" && req.SameDayVariantID == nil {
 		http.Error(w, "same_day_behavior 'reduced' requires same_day_variant_id", http.StatusBadRequest)
@@ -332,10 +380,12 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=?,
+		                       duration_mode=?, end_anchor=?, end_offset_minutes=?,
 		                       same_day_behavior=?, same_day_variant_id=?, adjacent_day_behavior=?, adjacent_day_variant_id=?,
 		                       audiences=?
 		 WHERE id=?`,
 		req.Name, req.HoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
+		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes,
 		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID,
 		audiencesToDB(req.Audiences), id)
 	h.hub.Broadcast("duties")

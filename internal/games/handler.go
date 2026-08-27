@@ -455,6 +455,13 @@ type templateItemRow struct {
 	// genau wie bei Anchor/OffsetMinutes daneben. Ausnahme ist die reduzierte
 	// Variante, siehe resolveItemHours in regen.go.
 	HoursValue           float64
+	// DurationMode/EndAnchor/EndOffsetMinutes (dienst-dauer-dynamisch): im Modus
+	// "dynamisch" ergibt sich die Dauer aus der Differenz zweier aufgelöster Anker
+	// statt aus HoursValue. HoursValue bleibt dabei gepflegt und ist der Rückfall,
+	// falls das Ende vor dem Start läge.
+	DurationMode         string
+	EndAnchor            string
+	EndOffsetMinutes     int
 	SameDayBehavior      string
 	SameDayVariantID     sql.NullInt64
 	AdjacentDayBehavior  string
@@ -478,7 +485,7 @@ type templateItemRow struct {
 func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]templateItemRow, error) {
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
-		        gti.hours_value,
+		        gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
 		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
@@ -492,7 +499,8 @@ func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]temp
 		var it templateItemRow
 		var teamIDs sql.NullString
 		rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
-			&it.SlotsCount, &it.HoursValue, &it.SameDayBehavior, &it.SameDayVariantID,
+			&it.SlotsCount, &it.HoursValue, &it.DurationMode, &it.EndAnchor, &it.EndOffsetMinutes,
+			&it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
 			&it.RotationEnabled, &it.AusrichterID)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
@@ -1786,7 +1794,12 @@ type templateItem struct {
 	// damit „Feld fehlt" (Alt-Client) von „Feld ist 0" (ungültig) unterscheidbar
 	// bleibt: fehlt es, setzt UpdateTemplate die Dauer des Diensttyps ein.
 	HoursValue *float64 `json:"hours_value,omitempty"`
-	Audiences  []string `json:"audiences,omitempty"`
+	// Dauer-Modus (dienst-dauer-dynamisch). Wie HoursValue Pointer bzw. leerer String:
+	// fehlt das Feld, erbt die Zeile den Wert ihres Diensttyps.
+	DurationMode     string   `json:"duration_mode,omitempty"`
+	EndAnchor        string   `json:"end_anchor,omitempty"`
+	EndOffsetMinutes *int     `json:"end_offset_minutes,omitempty"`
+	Audiences        []string `json:"audiences,omitempty"`
 	// TeamIDs schränkt ein, für welche Teams eines Spiels aus diesem Item ein
 	// Slot entsteht. Leer/NULL = alle Teams (umgekehrte Leer-Semantik zu Audiences).
 	TeamIDs []int `json:"team_ids,omitempty"`
@@ -1805,7 +1818,7 @@ type templateItem struct {
 
 func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templateItem {
 	rows, _ := h.db.QueryContext(ctx,
-		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.hours_value, gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
+		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes, gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	items := []templateItem{}
@@ -1817,9 +1830,12 @@ func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templ
 		var it templateItem
 		var audiences, teamIDs sql.NullString
 		var hoursValue float64
+		var endOffset int
 		var ausrichterID sql.NullInt64
-		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &hoursValue, &audiences, &teamIDs, &it.RotationEnabled, &ausrichterID)
+		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &hoursValue,
+			&it.DurationMode, &it.EndAnchor, &endOffset, &audiences, &teamIDs, &it.RotationEnabled, &ausrichterID)
 		it.HoursValue = &hoursValue
+		it.EndOffsetMinutes = &endOffset
 		it.Audiences = audiencesFromDB(audiences)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
 		if ausrichterID.Valid {
@@ -1962,9 +1978,12 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		// einspringt (dienst-dauer).
 		var sameDayBehavior, adjacentDayBehavior string
 		var typeHours float64
+		var typeMode, typeEndAnchor string
+		var typeEndOffset int
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT same_day_behavior, adjacent_day_behavior, hours_value FROM duty_types WHERE id=?`, it.DutyTypeID,
-		).Scan(&sameDayBehavior, &adjacentDayBehavior, &typeHours)
+			`SELECT same_day_behavior, adjacent_day_behavior, hours_value, duration_mode, end_anchor, end_offset_minutes
+			 FROM duty_types WHERE id=?`, it.DutyTypeID,
+		).Scan(&sameDayBehavior, &adjacentDayBehavior, &typeHours, &typeMode, &typeEndAnchor, &typeEndOffset)
 		if err == sql.ErrNoRows {
 			http.Error(w, "invalid duty_type_id", http.StatusBadRequest)
 			return
@@ -1991,6 +2010,24 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		} else if *it.HoursValue <= 0 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_hours_value"})
 			return
+		}
+		// Dauer-Modus (dienst-dauer-dynamisch): fehlende Felder erben vom Diensttyp,
+		// gesetzte werden gegen dieselbe Werteliste geprüft wie der CHECK in der DB —
+		// ebenfalls VOR tx.BeginTx, damit ein 400 keine Teil-Persistenz hinterlässt.
+		if it.DurationMode == "" {
+			it.DurationMode = typeMode
+		} else if it.DurationMode != "absolut" && it.DurationMode != "dynamisch" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_duration_mode"})
+			return
+		}
+		if it.EndAnchor == "" {
+			it.EndAnchor = typeEndAnchor
+		} else if it.EndAnchor != "start" && it.EndAnchor != "end" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_end_anchor"})
+			return
+		}
+		if it.EndOffsetMinutes == nil {
+			it.EndOffsetMinutes = &typeEndOffset
 		}
 		// team_ids wird nur gegen die Existenz in teams geprüft, bewusst NICHT
 		// gegen die aktive Saison: eine Vorlage überlebt Saisonwechsel, und
@@ -2052,11 +2089,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			ausrichterID = *it.AusrichterID
 		}
 		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled, ausrichter_id, hours_value)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled, ausrichter_id, hours_value, duration_mode, end_anchor, end_offset_minutes)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			id, it.DutyTypeID, it.Anchor, it.OffsetMinutes, it.SlotsCount, i,
 			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled, ausrichterID,
-			*it.HoursValue)
+			*it.HoursValue, it.DurationMode, it.EndAnchor, *it.EndOffsetMinutes)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

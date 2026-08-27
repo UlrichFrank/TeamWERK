@@ -122,6 +122,7 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))
+			r.Put("/api/duty-types/{id}", h.UpdateType)
 			r.Put("/api/duty-types/{id}/instruction", h.SetInstruction)
 			r.Delete("/api/duty-types/{id}", h.DeleteType)
 		})
@@ -1642,6 +1643,111 @@ func TestDeleteType_ForceOnUnusedType_StillDeletes(t *testing.T) {
 	}
 	if got := countRows(t, db, "duty_types", "id=?", dtID); got != 0 {
 		t.Errorf("duty type not deleted: got %d rows", got)
+	}
+}
+
+// TestUpdateType_SpeichertDauerModus verifies that duration_mode, end_anchor
+// and end_offset_minutes are persisted by UpdateType and come back unchanged
+// from ListTypes (Migration 053, dienst-dauer-dynamisch Task 3.1/3.2/3.4).
+func TestUpdateType_SpeichertDauerModus(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Zeitnehmer", 1.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	body := map[string]any{
+		"name":                  "Zeitnehmer",
+		"hours_value":           1.0,
+		"default_anchor":        "start",
+		"duration_mode":         "dynamisch",
+		"end_anchor":            "start",
+		"end_offset_minutes":    40,
+		"same_day_behavior":     "normal",
+		"adjacent_day_behavior": "normal",
+	}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	res = testutil.Get(t, srv, "/api/duty-types", token)
+	defer res.Body.Close()
+	var list []struct {
+		ID               int    `json:"id"`
+		DurationMode     string `json:"duration_mode"`
+		EndAnchor        string `json:"end_anchor"`
+		EndOffsetMinutes int    `json:"end_offset_minutes"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&list); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	var found bool
+	for _, dt := range list {
+		if dt.ID != dtID {
+			continue
+		}
+		found = true
+		if dt.DurationMode != "dynamisch" {
+			t.Errorf("expected duration_mode=dynamisch, got %q", dt.DurationMode)
+		}
+		if dt.EndAnchor != "start" {
+			t.Errorf("expected end_anchor=start, got %q", dt.EndAnchor)
+		}
+		if dt.EndOffsetMinutes != 40 {
+			t.Errorf("expected end_offset_minutes=40, got %d", dt.EndOffsetMinutes)
+		}
+	}
+	if !found {
+		t.Fatalf("duty type %d not found in ListTypes response", dtID)
+	}
+}
+
+// TestUpdateType_UngueltigerDauerModus_400 verifies that an invalid
+// duration_mode or end_anchor is rejected with 400 before anything is
+// written — checked by re-reading the row and asserting it still carries the
+// Migration-053-Defaults (absolut/end), unchanged (Task 3.3/3.5).
+func TestUpdateType_UngueltigerDauerModus_400(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Zeitnehmer", 1.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	body := map[string]any{
+		"name":                  "Zeitnehmer",
+		"hours_value":           1.0,
+		"default_anchor":        "start",
+		"duration_mode":         "irgendwas",
+		"end_anchor":            "end",
+		"same_day_behavior":     "normal",
+		"adjacent_day_behavior": "normal",
+	}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid duration_mode, got %d", res.StatusCode)
+	}
+
+	body["duration_mode"] = "dynamisch"
+	body["end_anchor"] = "mittendrin"
+	res = testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid end_anchor, got %d", res.StatusCode)
+	}
+
+	var mode, anchor string
+	if err := db.QueryRow(`SELECT duration_mode, end_anchor FROM duty_types WHERE id=?`, dtID).Scan(&mode, &anchor); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if mode != "absolut" || anchor != "end" {
+		t.Errorf("expected unchanged Migration-053-Defaults (absolut/end), got mode=%q anchor=%q", mode, anchor)
 	}
 }
 
