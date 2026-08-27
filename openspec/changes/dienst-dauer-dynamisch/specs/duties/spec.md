@@ -60,6 +60,31 @@ wie Anker und Versätze gesetzt sind.
 - **AND** trägt er die gepflegte absolute Dauer
 - **AND** fällt kein Dienst aus dem Plan
 
+### Requirement: Die Dauer eines Diensttyps ist positiv
+
+`POST /api/duty-types` und `PUT /api/duty-types/{id}` SHALL eine explizit gesendete
+`hours_value` ≤ 0 mit HTTP 400 abweisen, **vor** jedem Schreibvorgang. Fehlt das Feld,
+SHALL derselbe Default wie in der DB-Spalte gelten (1.0) — dieselbe Regel, die beide
+Routen für `default_anchor`, `duration_mode` und die Verhaltensfelder schon anwenden.
+
+Begründung: Die Zusage „ein Slot trägt nach jedem Regen-Lauf eine Dauer > 0" war über den
+Diensttyp umgehbar. Slot- und Vorlagen-Routen prüfen jeweils nur ihre **eigene** Eingabe;
+eine per Copy-on-pick geerbte Dauer sendet niemand explizit, sie wandert stumm vom Typ in
+die Vorlagen-Zeile und von dort in den Slot. Der Diensttyp war die letzte Schreibstelle
+ohne diese Prüfung.
+
+#### Scenario: Dauer null wird abgewiesen
+
+- **WHEN** ein Vorstand einen Diensttyp mit `hours_value: 0` anlegt oder speichert
+- **THEN** antwortet der Server mit HTTP 400
+- **AND** ist nichts persistiert — bei `PUT` bleibt auch der mitgesendete Name unverändert
+
+#### Scenario: Fehlendes Feld ergibt den Spalten-Default
+
+- **WHEN** ein Vorstand einen Diensttyp ohne `hours_value` anlegt
+- **THEN** trägt der Diensttyp die Dauer 1,0 Stunden
+- **AND** nicht die Null aus dem leeren Request
+
 ### Requirement: Manuell angelegte Dienste bleiben absolut
 
 Ein per `POST /api/duty-slots` angelegter Dienst SHALL eine absolute Dauer tragen. Der

@@ -39,12 +39,28 @@ ihn relativ zum Anpfiff oder zum Spielende. Nur das Ende hat diese Möglichkeit 
   nie an, „folgt dem Spiel" könnte dort nichts bewirken. Das Modal „+ Dienst hinzufügen"
   darf die Dauer aus einer dynamischen Typ-Definition aber **ausrechnen** und vorbelegen.
 
+- **Die Vorlagen-Detailseite entfällt.** `AdminDutyTemplateDetailPage` und ihre Route
+  `/admin/dienstplan-vorlagen/{id}` sind gelöscht, der Item-Editor sitzt im Modal der
+  Listenseite (`AdminDutyTemplatesPage`). Das war keine geplante Aufräumarbeit, sondern
+  fiel bei Aufgabe 6 an: Detailseite und Listen-Modal pflegten dieselben Item-Felder in
+  zwei Masken, die Modus-Maske hätte es doppelt gebraucht. Die Tests der Detailseite
+  (Dauer, Rotations-Schalter, Team-Scope) sind auf den Modal-Editor portiert.
+- **Die Dauer eines Diensttyps wird validiert.** `POST`/`PUT /api/duty-types` weisen eine
+  explizit gesendete `hours_value` ≤ 0 mit HTTP 400 ab; ein fehlendes Feld ergibt den
+  Spalten-Default 1.0 statt der stillen Null des leeren Requests. Ohne das ist die
+  garantierte Invariante („ein Slot trägt nach jedem Regen-Lauf eine Dauer > 0") über den
+  Diensttyp umgehbar — Slot- und Vorlagen-Route prüfen nur ihre eigene Eingabe, eine per
+  Copy-on-pick geerbte Dauer sendet niemand explizit.
+
 ## Capabilities
 
 ### Modified Capabilities
 
 - `duties`: Die Dauer eines Dienstes kann relativ zum Spiel definiert werden statt als
-  feste Zahl; der Regen löst sie je Termin auf.
+  feste Zahl; der Regen löst sie je Termin auf. Die Dauer eines Diensttyps muss positiv
+  sein.
+- `sse-live-updates`: Die Zeile `AdminDutyTemplateDetailPage` in der Seiten-Tabelle
+  entfällt (Seite gelöscht).
 
 ## Test-Anforderungen
 
@@ -58,6 +74,9 @@ ihn relativ zum Anpfiff oder zum Spielende. Nur das Ende hat diese Möglichkeit 
 | `PUT /api/duty-types/{id}` | `TestUpdateType_SpeichertDauerModus` | Modus, End-Anker und End-Versatz werden gespeichert und zurückgeliefert. |
 | `PUT /api/duty-types/{id}` | `TestUpdateType_UngueltigerDauerModus_400` | `duration_mode` außerhalb `absolut\|dynamisch` → 400, nichts persistiert. |
 | `PUT /api/duty-templates/{id}` | `TestUpdateTemplate_SpeichertDauerModusJeItem` | Die Vorlagen-Zeile trägt ihren eigenen Modus, unabhängig vom aktuellen Typ-Wert. |
+| `POST /api/duty-types` | `TestCreateType_DauerNullWirdAbgewiesen` | `hours_value: 0` → 400, kein Diensttyp angelegt. |
+| `POST /api/duty-types` | `TestCreateType_OhneDauerNutztDBDefault` | Fehlendes Feld ergibt 1,0 — nicht die Null des leeren Requests. |
+| `PUT /api/duty-types/{id}` | `TestUpdateType_DauerNullWirdAbgewiesen` | `hours_value: 0` → 400, Bestand (inkl. Name) unverändert. |
 
 **Garantierte Invariante:** Ein Slot trägt nach jedem Regen-Lauf eine Dauer > 0 — unabhängig
 davon, wie Anker und Versätze gesetzt sind.
