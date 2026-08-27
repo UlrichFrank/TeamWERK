@@ -466,6 +466,7 @@ type openSlot struct {
 	roleDesc   string
 	slotsOpen  int
 	teamID     sql.NullInt64
+	gameID     sql.NullInt64
 	targetRole string
 }
 
@@ -481,7 +482,7 @@ func (s *Scheduler) sendDutyReminders() {
 	rows, err := s.db.Query(`
 		SELECT ds.id, ds.event_name, ds.event_date, COALESCE(ds.event_time,''),
 		       dt.name, COALESCE(ds.role_desc,''),
-		       ds.slots_total - ds.slots_filled, ds.team_id, dt.target_role
+		       ds.slots_total - ds.slots_filled, ds.team_id, ds.game_id, dt.target_role
 		FROM duty_slots ds
 		JOIN duty_types dt ON dt.id = ds.duty_type_id
 		WHERE ds.event_date = ?
@@ -497,7 +498,7 @@ func (s *Scheduler) sendDutyReminders() {
 	for rows.Next() {
 		var sl openSlot
 		rows.Scan(&sl.id, &sl.eventName, &sl.eventDate, &sl.eventTime,
-			&sl.dutyType, &sl.roleDesc, &sl.slotsOpen, &sl.teamID, &sl.targetRole)
+			&sl.dutyType, &sl.roleDesc, &sl.slotsOpen, &sl.teamID, &sl.gameID, &sl.targetRole)
 		slots = append(slots, sl)
 	}
 	if len(slots) == 0 {
@@ -814,11 +815,61 @@ func (s *Scheduler) teamMembersAndParents(teamID int) []int {
 	return ids
 }
 
+// slotTeamScope resolves which teams an open duty slot addresses — the same rule the duty
+// board uses for visibility: the slot's own team if set, otherwise the teams of its linked
+// game (game_teams). A slot at a multi-team event carries no team_id on purpose; without
+// the game_teams step the reminder would fan out to the whole club instead of the teams
+// that actually see the slot. An empty result means "no team context at all" (no team, no
+// game) — club-wide, unchanged.
+func (s *Scheduler) slotTeamScope(sl openSlot) ([]int, error) {
+	if sl.teamID.Valid {
+		return []int{int(sl.teamID.Int64)}, nil
+	}
+	if !sl.gameID.Valid {
+		return nil, nil
+	}
+	rows, err := s.db.Query(`SELECT team_id FROM game_teams WHERE game_id=?`, sl.gameID.Int64)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var teams []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		teams = append(teams, id)
+	}
+	return teams, rows.Err()
+}
+
+// placeholders returns "?,?,...,?" with n placeholders for an IN clause.
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
 func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 	notAssigned := `NOT EXISTS (
 		SELECT 1 FROM duty_assignments da
 		WHERE da.duty_slot_id = ? AND da.user_id = u.id
 	)`
+
+	teams, err := s.slotTeamScope(sl)
+	if err != nil {
+		return nil, err
+	}
+	teamIn := placeholders(len(teams))
+	teamArgs := func() []any {
+		a := make([]any, 0, len(teams)+1)
+		for _, t := range teams {
+			a = append(a, t)
+		}
+		return a
+	}
 
 	var (
 		query string
@@ -827,7 +878,7 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 
 	switch sl.targetRole {
 	case "spieler":
-		if sl.teamID.Valid {
+		if len(teams) > 0 {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
@@ -835,9 +886,9 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'spieler'
 				JOIN player_memberships tm ON tm.member_id = m.id
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
-				WHERE tm.team_id = ?
+				WHERE tm.team_id IN (` + teamIn + `)
 				  AND ` + notAssigned
-			args = []any{sl.teamID.Int64, sl.id}
+			args = append(teamArgs(), sl.id)
 		} else {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
@@ -849,7 +900,7 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 		}
 
 	case "elternteil":
-		if sl.teamID.Valid {
+		if len(teams) > 0 {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
@@ -858,9 +909,9 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'spieler'
 				JOIN player_memberships tm ON tm.member_id = m.id
 				JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
-				WHERE tm.team_id = ?
+				WHERE tm.team_id IN (` + teamIn + `)
 				  AND ` + notAssigned
-			args = []any{sl.teamID.Int64, sl.id}
+			args = append(teamArgs(), sl.id)
 		} else {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
@@ -873,7 +924,7 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 		}
 
 	case "trainer":
-		if sl.teamID.Valid {
+		if len(teams) > 0 {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
 				FROM users u
@@ -881,9 +932,9 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 				JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function = 'trainer'
 				JOIN kader_trainers kt ON kt.member_id = m.id
 				JOIN kader k ON k.id = kt.kader_id
-				WHERE k.team_id = ?
+				WHERE k.team_id IN (` + teamIn + `)
 				  AND ` + notAssigned
-			args = []any{sl.teamID.Int64, sl.id}
+			args = append(teamArgs(), sl.id)
 		} else {
 			query = `
 				SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
