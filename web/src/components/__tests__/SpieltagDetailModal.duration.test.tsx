@@ -135,3 +135,46 @@ describe('SpieltagDetailModal — Dauer und Uhrzeit aus dem Diensttyp vorbelegen
     expect(body.hours_value).toBe(2)
   })
 })
+
+describe('SpieltagDetailModal — dynamischer Diensttyp wird gegen den Termin ausgerechnet', () => {
+  beforeEach(() => {
+    mockDynamicGame()
+  })
+
+  // Zeitnehmer: Start = Anpfiff 10:00 − 30 min = 09:30, Ende = Spielende 11:30
+  // + 15 min = 11:45 → 135 min = 2h 15min. Entscheidend ist, dass NICHT die
+  // gepflegte hours_value (1 h) übernommen wird: genau darin unterscheidet sich
+  // der dynamische Modus.
+  test('Dauer folgt Anker und Versatz statt der gepflegten hours_value', async () => {
+    const user = await openAddModal(51)
+    await user.selectOptions(screen.getAllByRole('combobox')[0], '11')
+
+    const timeInput = document.querySelector('input[type="time"]') as HTMLInputElement
+    expect(timeInput.value).toBe('09:30')
+
+    const hoursInput = screen.getByPlaceholderText('z.B. 1h 30min') as HTMLInputElement
+    expect(hoursInput.value).toBe('2h 15min')
+  })
+
+  // Der so entstandene Slot ist is_custom=1 und trägt eine feste Zahl (spec.md,
+  // „Manuell angelegte Dienste bleiben absolut"): die ausgerechnete Dauer ist
+  // eine Vorbelegung, kein gebundener Wert.
+  test('die ausgerechnete Dauer bleibt frei editierbar und geht so in den Request', async () => {
+    const user = await openAddModal(51)
+    await user.selectOptions(screen.getAllByRole('combobox')[0], '11')
+
+    const hoursInput = screen.getByPlaceholderText('z.B. 1h 30min') as HTMLInputElement
+    await user.clear(hoursInput)
+    await user.type(hoursInput, '45min')
+    await user.tab()
+    expect(hoursInput.value).toBe('45min')
+
+    await user.click(screen.getByRole('button', { name: 'Hinzufügen' }))
+    await waitFor(() => expect(mock.history.post.length).toBe(1))
+    const body = JSON.parse(mock.history.post[0].data)
+    expect(body.hours_value).toBeCloseTo(0.75)
+    // Kein Modus-Feld im Payload — der Modus ist eine Eigenschaft des Diensttyps
+    // und der Vorlage, nicht des Slots.
+    expect(body.duration_mode).toBeUndefined()
+  })
+})
