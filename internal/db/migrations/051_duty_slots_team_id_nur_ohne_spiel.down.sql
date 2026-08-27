@@ -1,0 +1,5 @@
+-- Kein Rückweg: der alte team_id-Wert ist nicht rekonstruierbar und wird
+-- auch nicht gebraucht. team_id IS NULL bei gesetztem game_id ist bereits
+-- unter dem alten Code ein vollständig unterstützter Zustand (dessen
+-- Sichtbarkeitsabfrage hat den team_id IS NULL AND game_id-Zweig schon).
+-- Ein Binary-Rollback braucht also keinen Datenrückweg.
