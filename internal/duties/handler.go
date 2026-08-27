@@ -54,16 +54,48 @@ func (h *Handler) broadcastDutyTeams(ctx context.Context, teamIDs []int, extraUs
 	h.hub.BroadcastToUsers(ids, "duties")
 }
 
+// placeholders returns "?,?,...,?" with n placeholders for an IN clause.
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+// slotTeamScope resolves which teams a duty slot addresses — the same resolution the
+// duty board uses for visibility (duty_slots.team_id, else the teams of the linked game
+// via game_teams). Keeping notification and visibility on one rule is the point: a slot
+// at a multi-team event carries no team_id, and deriving recipients from team_id alone
+// would fan the push out to the whole club instead of the event's teams.
+// An empty result means "no team context at all" (no team, no game) — club-wide.
+func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int {
+	if teamID != nil {
+		return []int{*teamID}
+	}
+	if gameID != nil {
+		return hub.NewAudience(h.db).TeamIDsForGame(ctx, *gameID)
+	}
+	return nil
+}
+
 // eligibleDutyUsers returns user IDs that could be relevant recipients for a duty slot notification:
 // members with club function spieler or trainer, plus parents of members with the spieler function.
-// Optionally filtered to a specific team (player/trainer/parent must be connected to that team's
-// active-season kader).
-func (h *Handler) eligibleDutyUsers(teamID *int) []int {
+// Optionally filtered to a set of teams (player/trainer/parent must be connected to one of those
+// teams' active-season kader). An empty set means club-wide — reserved for slots without any team
+// context at all; see slotTeamScope for how the set is derived.
+func (h *Handler) eligibleDutyUsers(teamIDs []int) []int {
 	var (
 		rows *sql.Rows
 		err  error
 	)
-	if teamID != nil {
+	if len(teamIDs) > 0 {
+		ph := placeholders(len(teamIDs))
+		args := make([]any, 0, len(teamIDs)*2)
+		for range 2 {
+			for _, id := range teamIDs {
+				args = append(args, id)
+			}
+		}
 		rows, err = h.db.Query(
 			`SELECT DISTINCT u.id FROM users u
 			 LEFT JOIN members m ON m.user_id = u.id
@@ -74,7 +106,7 @@ func (h *Handler) eligibleDutyUsers(teamID *int) []int {
 			 LEFT JOIN member_club_functions cmcf ON cmcf.member_id = cm.id AND cmcf.function = 'spieler'
 			 LEFT JOIN player_memberships cpm ON cpm.member_id = cm.id
 			 WHERE (mcf.member_id IS NOT NULL OR cmcf.member_id IS NOT NULL)
-			   AND (pm.team_id = ? OR cpm.team_id = ?)`, *teamID, *teamID)
+			   AND (pm.team_id IN (`+ph+`) OR cpm.team_id IN (`+ph+`))`, args...)
 	} else {
 		rows, err = h.db.Query(
 			`SELECT DISTINCT u.id FROM users u
@@ -546,14 +578,14 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 		req.EventName, req.EventDate, eventTime, req.DutyTypeID, req.RoleDesc, req.SlotsTotal, req.TeamID, req.SeasonID, req.GameID, audiencesToDB(req.Audiences))
 	// Team-Audience aus dem angegebenen Team bzw. den Teams des verknüpften
 	// Spiels ableiten; ohne beides bewusst global (Slot ohne Team-Kontext).
-	if req.TeamID != nil {
-		h.broadcastDutyTeams(r.Context(), []int{*req.TeamID})
-	} else if req.GameID != nil {
-		h.broadcastDutyTeams(r.Context(), hub.NewAudience(h.db).TeamIDsForGame(r.Context(), *req.GameID))
+	// Live-Update und Benachrichtigung teilen sich denselben Scope.
+	scope := h.slotTeamScope(r.Context(), req.TeamID, req.GameID)
+	if req.TeamID != nil || req.GameID != nil {
+		h.broadcastDutyTeams(r.Context(), scope)
 	} else {
 		h.hub.Broadcast("duties")
 	}
-	notify.Send(h.db, h.cfg, h.eligibleDutyUsers(req.TeamID),
+	notify.Send(h.db, h.cfg, h.eligibleDutyUsers(scope),
 		"duties", "Neuer Dienst verfügbar", req.EventName+" — jetzt eintragen", "/dienste")
 	w.WriteHeader(http.StatusCreated)
 }
