@@ -4,6 +4,11 @@ export interface RegenSummary {
   created: Array<{ date: string; duty_type: string; count: number }>
   reduced: Array<{ date: string; from: string; to: string; count: number }>
   skipped: Array<{ date: string; duty_type: string }>
+  /** Dienste, die gar nicht entstanden sind, weil ihre dynamische Dauer gegen diesen
+   * Termin keine positive Spanne ergab (dienst-zeitmodus-strikt). Bewusst getrennt von
+   * `skipped`: das ist eine gewollte Auslassung der Varianten-Logik, dies ein
+   * Definitionsfehler — deshalb rot statt neutral. */
+  invalid_span?: Array<{ date: string; duty_type: string }>
   notified_users: number[]
   conflicts: Array<{ date: string; duty_type_id: number; event_time: string; game_ids?: number[] }>
 }
@@ -15,7 +20,8 @@ interface Props {
 
 function isEmpty(s: RegenSummary): boolean {
   return (s.created ?? []).length === 0 && (s.reduced ?? []).length === 0 &&
-    (s.skipped ?? []).length === 0 && (s.notified_users ?? []).length === 0 && (s.conflicts ?? []).length === 0
+    (s.skipped ?? []).length === 0 && (s.notified_users ?? []).length === 0 &&
+    (s.conflicts ?? []).length === 0 && (s.invalid_span ?? []).length === 0
 }
 
 function formatDate(iso: string): string {
@@ -49,6 +55,12 @@ export default function RegenSummaryCard({ summary, onDismiss }: Props) {
         {(summary.skipped ?? []).map((s, i) => (
           <li key={`s-${i}`}>
             <span className="text-brand-text-muted">{formatDate(s.date)}:</span> „{s.duty_type}" übersprungen
+          </li>
+        ))}
+        {(summary.invalid_span ?? []).map((s, i) => (
+          <li key={`i-${i}`} className="text-brand-danger">
+            <span className="text-brand-text-muted">{formatDate(s.date)}:</span> „{s.duty_type}" nicht angelegt — die
+            Endzeit läge vor der Startzeit. Bitte Anker und Versätze prüfen.
           </li>
         ))}
         {(summary.notified_users ?? []).length > 0 && (

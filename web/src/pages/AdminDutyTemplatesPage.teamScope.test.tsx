@@ -21,17 +21,19 @@ const TEAMS = [
 ]
 
 /** Ein gespeicherter Eintrag mit bereits gesetzter Team-Einschränkung. */
-const SAVED_ITEM = {
-  duty_type_id: 8,
-  anchor: 'start',
-  offset_minutes: -60,
-  slots_count: 1,
-  audiences: [],
-  team_ids: [15],
-  rotation_enabled: true,
+function savedItem(teamIds: number[]) {
+  return {
+    duty_type_id: 8,
+    anchor: 'start',
+    offset_minutes: -60,
+    slots_count: 1,
+    audiences: [],
+    team_ids: teamIds,
+    rotation_enabled: true,
+  }
 }
 
-function mockApi(templateType = 'heim') {
+function mockApi(templateType = 'heim', teamIds: number[] = [15]) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/duty-templates') {
       return Promise.resolve({
@@ -40,7 +42,7 @@ function mockApi(templateType = 'heim') {
     }
     if (url === '/duty-templates/1') {
       return Promise.resolve({
-        data: { id: 1, name: 'Heimspiel', template_type: templateType, duration_minutes: 90, items: [SAVED_ITEM] },
+        data: { id: 1, name: 'Heimspiel', template_type: templateType, duration_minutes: 90, items: [savedItem(teamIds)] },
       })
     }
     if (url === '/duty-types') {
@@ -118,5 +120,43 @@ describe('AdminDutyTemplatesPage — Teamauswahl im Bearbeiten-Modal', () => {
     mockApi('generisch')
     await openEditModal()
     expect(screen.queryByText(/Kaderteams/)).toBeNull()
+  })
+
+  // Portiert vom entfernten Detailseiten-Editor (AdminDutyTemplateDetailPage.teamScope.test.tsx):
+  // die umgekehrte Leer-Semantik zur Zielgruppe daneben war dort abgedeckt, hier bislang nicht.
+  test('Hinweis nennt die umgekehrte Leer-Semantik gegenüber der Zielgruppe', async () => {
+    mockApi()
+    await openEditModal()
+    expect(screen.getAllByText(/leer =/).some(el => /alle/.test(el.textContent ?? ''))).toBe(true)
+    expect(screen.getAllByText(/leer = keine/).length).toBeGreaterThan(0)
+  })
+
+  test('Abhaken entfernt nur das eine Team aus team_ids', async () => {
+    mockApi('heim', [15, 13])
+    await openEditModal()
+    const mB = screen.getByText('mB').closest('label') as HTMLElement
+    expect(within(mB).getByRole('checkbox')).toBeChecked()
+    fireEvent.click(within(mB).getByRole('checkbox'))
+    fireEvent.click(screen.getByText('Speichern'))
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalled())
+    const body = mockPut.mock.calls[0][1]
+    expect(body.items[0].team_ids).toEqual([13])
+  })
+
+  test('ein gespeichertes Team ohne aktuellen Kader-Eintrag überlebt das Speichern', async () => {
+    // 99 steht in keiner /teams/names-Antwort (kein Kader in der aktiven Saison)
+    // und hat deshalb keine Checkbox — darf beim Togglen anderer Teams aber nicht
+    // aus dem Array fallen.
+    mockApi('heim', [99])
+    await openEditModal()
+    expect(screen.queryByText('99')).toBeNull()
+    const mA = screen.getByText('mA').closest('label') as HTMLElement
+    fireEvent.click(within(mA).getByRole('checkbox'))
+    fireEvent.click(screen.getByText('Speichern'))
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalled())
+    const body = mockPut.mock.calls[0][1]
+    expect(body.items[0].team_ids).toEqual([99, 13])
   })
 })

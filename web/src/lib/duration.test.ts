@@ -1,5 +1,5 @@
 import { describe, test, it, expect } from 'vitest'
-import { formatTimeSpan, hoursToDisplay } from './duration'
+import { formatTimeSpan, hoursToDisplay, dynamicSpanImpossible } from './duration'
 
 describe('formatTimeSpan', () => {
   test('Normalfall: Startzeit + volle Stunde ergibt eine Spanne mit Halbgeviertstrich', () => {
@@ -44,5 +44,33 @@ describe('hoursToDisplay — fehlender Wert', () => {
   it('liefert einen leeren String statt NaN', () => {
     expect(hoursToDisplay(undefined as unknown as number)).toBe('')
     expect(hoursToDisplay(NaN)).toBe('')
+  })
+})
+
+// openspec/changes/dienst-zeitmodus-strikt: die Regel entscheidet, was gar nicht erst
+// gespeichert werden darf. Sie ist bewusst NOTWENDIG, nicht hinreichend — bei
+// verschiedenen Ankern hängt die Dauer an der Spieldauer des Termins und ist hier nicht
+// entscheidbar. Genau diese Grenze halten die Fälle unten fest.
+describe('dynamicSpanImpossible', () => {
+  it('erkennt den gleichen Anker mit nicht dahinter liegendem End-Versatz', () => {
+    expect(dynamicSpanImpossible('dynamisch', 'start', 40, 'start', 25)).toBe(true)
+    expect(dynamicSpanImpossible('dynamisch', 'start', 40, 'start', 40)).toBe(true)
+    expect(dynamicSpanImpossible('dynamisch', 'end', 0, 'end', -30)).toBe(true)
+  })
+
+  it('lässt den gleichen Anker mit dahinter liegendem End-Versatz zu', () => {
+    expect(dynamicSpanImpossible('dynamisch', 'start', 25, 'start', 40)).toBe(false)
+    expect(dynamicSpanImpossible('dynamisch', 'start', -30, 'start', 20)).toBe(false)
+  })
+
+  it('prüft verschiedene Anker nicht — die Spieldauer entscheidet dort', () => {
+    // "Start bei Anpfiff, Ende 15 min vor Spielende": bei jedem Spiel > 15 min gültig.
+    expect(dynamicSpanImpossible('dynamisch', 'start', 0, 'end', -15)).toBe(false)
+    // Auch die knappe Gegenrichtung bleibt erlaubt; sie scheitert ggf. erst am Termin.
+    expect(dynamicSpanImpossible('dynamisch', 'end', 0, 'start', 30)).toBe(false)
+  })
+
+  it('greift im Modus absolut nie — die End-Felder sind dort bedeutungslos', () => {
+    expect(dynamicSpanImpossible('absolut', 'start', 40, 'start', 25)).toBe(false)
   })
 })

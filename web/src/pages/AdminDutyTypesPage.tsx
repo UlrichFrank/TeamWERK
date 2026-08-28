@@ -6,9 +6,10 @@ import { formatOffset, parseOffset } from '../lib/time'
 import ActionMenu from '../components/ActionMenu'
 import EditModal from '../components/EditModal'
 import DutyInstructionEditorModal from '../components/DutyInstructionEditorModal'
+import OffsetInput from '../components/OffsetInput'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
-import { hoursToDisplay, parseHoursInput } from '../lib/duration'
+import { hoursToDisplay, parseHoursInput, resolveAnchorClock, addMinutesToTime, dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 
 interface DutyType {
   id: number
@@ -16,6 +17,9 @@ interface DutyType {
   hours_value: number
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
+  duration_mode: 'absolut' | 'dynamisch'
+  end_anchor: 'start' | 'end'
+  end_offset_minutes: number
   same_day_behavior?: string
   same_day_variant_id?: number | null
   adjacent_day_behavior?: string
@@ -31,6 +35,9 @@ interface EditState {
   hours: string
   anchor: 'start' | 'end'
   offset: string
+  duration_mode: 'absolut' | 'dynamisch'
+  end_anchor: 'start' | 'end'
+  end_offset: string
   same_day_behavior: string
   same_day_variant_id: string
   adjacent_day_behavior: string
@@ -44,6 +51,9 @@ function toEditState(t: DutyType): EditState {
     hours: hoursToDisplay(t.hours_value),
     anchor: t.default_anchor,
     offset: formatOffset(t.default_offset_minutes),
+    duration_mode: t.duration_mode ?? 'absolut',
+    end_anchor: t.end_anchor ?? 'end',
+    end_offset: formatOffset(t.end_offset_minutes ?? 0),
     same_day_behavior: t.same_day_behavior || 'normal',
     same_day_variant_id: t.same_day_variant_id ? t.same_day_variant_id.toString() : '',
     adjacent_day_behavior: t.adjacent_day_behavior || 'normal',
@@ -54,10 +64,38 @@ function toEditState(t: DutyType): EditState {
 
 const emptyCreate = (): EditState => ({
   name: '', hours: '1h', anchor: 'start', offset: '0',
+  duration_mode: 'absolut', end_anchor: 'end', end_offset: '0',
   same_day_behavior: 'normal', same_day_variant_id: '',
   adjacent_day_behavior: 'normal', adjacent_day_variant_id: '',
   audiences: [],
 })
+
+// Feste Beispielwerte für die Vorschau im dynamischen Modus (5.3): eine
+// beliebige, aber plausible Anstoßzeit + Spieldauer, gegen die Anker und
+// Versätze gerechnet werden — nur damit ein negativer Versatz beim Pflegen
+// sofort als Spanne sichtbar wird, nicht erst am nächsten Regen-Lauf.
+const EXAMPLE_KICKOFF = '10:00'
+const EXAMPLE_GAME_DURATION_MIN = 60
+
+function exampleSpan(state: EditState): { start: string; end: string } {
+  const exampleGameEnd = addMinutesToTime(EXAMPLE_KICKOFF, EXAMPLE_GAME_DURATION_MIN)
+  return {
+    start: resolveAnchorClock(state.anchor, parseOffset(state.offset), EXAMPLE_KICKOFF, exampleGameEnd),
+    end: resolveAnchorClock(state.end_anchor, parseOffset(state.end_offset), EXAMPLE_KICKOFF, exampleGameEnd),
+  }
+}
+
+/**
+ * Unmögliche Spanne im aktuellen Formularzustand — dieselbe Regel, die der Server
+ * anwendet (dienst-zeitmodus-strikt). Das Formular blockiert damit vor dem Request,
+ * statt den 400 abzuwarten: die Meldung steht dort, wo der Fehler entsteht.
+ */
+function editStateSpanImpossible(state: EditState): boolean {
+  return dynamicSpanImpossible(
+    state.duration_mode, state.anchor, parseOffset(state.offset),
+    state.end_anchor, parseOffset(state.end_offset),
+  )
+}
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
@@ -69,6 +107,8 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
   excludeId?: number
 }) {
   const variantOptions = types.filter(t => t.id !== excludeId)
+  const example = exampleSpan(state)
+  const spanError = editStateSpanImpossible(state)
   return (
     <div className="space-y-3">
       <div>
@@ -76,7 +116,51 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
         <input value={state.name} onChange={e => onChange({ ...state, name: e.target.value })}
           placeholder="z.B. Kassierer" required className={INPUT} />
       </div>
+      <div>
+        <label className="block text-sm font-medium text-brand-text-muted mb-1">Zeit-Modus</label>
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="duration-mode"
+              checked={state.duration_mode === 'absolut'}
+              onChange={() => onChange({ ...state, duration_mode: 'absolut' })}
+              className="accent-brand-yellow"
+            />
+            Startzeit + Dauer
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="duration-mode"
+              checked={state.duration_mode === 'dynamisch'}
+              onChange={() => onChange({ ...state, duration_mode: 'dynamisch' })}
+              className="accent-brand-yellow"
+            />
+            Startzeit + Endzeit
+          </label>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Start-Anker</label>
+          <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
+            <option value="start">Anpfiff/Beginn</option>
+            <option value="end">Abpfiff/Ende</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Start-Versatz</label>
+          <OffsetInput
+            value={parseOffset(state.offset)}
+            onChange={v => onChange({ ...state, offset: formatOffset(v) })}
+            className={INPUT}
+          />
+        </div>
+      </div>
+
+      {state.duration_mode === 'absolut' ? (
         <div>
           <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
           <input
@@ -92,20 +176,37 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
             ))}
           </datalist>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Standard-Anker</label>
-          <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
-            <option value="start">Anpfiff/Beginn</option>
-            <option value="end">Abpfiff/Ende</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz</label>
-        <input value={state.offset} onChange={e => onChange({ ...state, offset: e.target.value })}
-          placeholder="z.B. -1h 30min" className={INPUT} />
-      </div>
-      <p className="text-xs text-brand-text-subtle">Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">End-Anker</label>
+              <select value={state.end_anchor} onChange={e => onChange({ ...state, end_anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
+                <option value="start">Anpfiff/Beginn</option>
+                <option value="end">Abpfiff/Ende</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-brand-text-muted mb-1">End-Versatz</label>
+              <OffsetInput
+                value={parseOffset(state.end_offset)}
+                onChange={v => onChange({ ...state, end_offset: formatOffset(v) })}
+                className={INPUT}
+              />
+            </div>
+          </div>
+          {spanError ? (
+            <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+              {IMPOSSIBLE_SPAN_MESSAGE}
+            </p>
+          ) : (
+            <p className="text-xs text-brand-text-subtle">
+              Beispiel bei {EXAMPLE_KICKOFF} Anpfiff, {EXAMPLE_GAME_DURATION_MIN} min Spieldauer: {example.start}–{example.end}
+            </p>
+          )}
+        </>
+      )}
+      <p className="text-xs text-brand-text-subtle">Versatz-Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
 
       <div>
         <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe</label>
@@ -187,11 +288,17 @@ export default function AdminDutyTypesPage() {
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault()
+    // Letzter Riegel vor dem Request: der Anlege-Knopf ist bei unmöglicher Spanne
+    // ohnehin deaktiviert, aber ein Submit per Enter im Namensfeld läuft daran vorbei.
+    if (editStateSpanImpossible(create)) return
     await api.post('/duty-types', {
       name: create.name,
       hours_value: parseHoursInput(create.hours),
       default_anchor: create.anchor,
       default_offset_minutes: parseOffset(create.offset),
+      duration_mode: create.duration_mode,
+      end_anchor: create.end_anchor,
+      end_offset_minutes: parseOffset(create.end_offset),
       same_day_behavior: create.same_day_behavior,
       same_day_variant_id: create.same_day_variant_id ? parseInt(create.same_day_variant_id) : null,
       adjacent_day_behavior: create.adjacent_day_behavior,
@@ -209,12 +316,15 @@ export default function AdminDutyTypesPage() {
   const cancelEdit = () => { setEdit(null); setModalId(null) }
 
   const saveEdit = async (id: number) => {
-    if (!edit) return
+    if (!edit || editStateSpanImpossible(edit)) return
     await api.put(`/duty-types/${id}`, {
       name: edit.name,
       hours_value: parseHoursInput(edit.hours),
       default_anchor: edit.anchor,
       default_offset_minutes: parseOffset(edit.offset),
+      duration_mode: edit.duration_mode,
+      end_anchor: edit.end_anchor,
+      end_offset_minutes: parseOffset(edit.end_offset),
       same_day_behavior: edit.same_day_behavior,
       same_day_variant_id: edit.same_day_variant_id ? parseInt(edit.same_day_variant_id) : null,
       adjacent_day_behavior: edit.adjacent_day_behavior,
@@ -284,7 +394,8 @@ export default function AdminDutyTypesPage() {
               <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle shrink-0">
                 <button
                   type="submit"
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  disabled={editStateSpanImpossible(create)}
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Anlegen
                 </button>
@@ -366,6 +477,7 @@ export default function AdminDutyTypesPage() {
           title={`Bearbeiten: ${edit.name}`}
           onClose={cancelEdit}
           onSave={() => modalId && saveEdit(modalId)}
+          saveDisabled={editStateSpanImpossible(edit)}
         >
           <DutyTypeForm state={edit} onChange={setEdit} types={types} excludeId={modalId ?? undefined} />
         </EditModal>

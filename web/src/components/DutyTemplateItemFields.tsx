@@ -1,12 +1,14 @@
 import type { TeamForName } from '../lib/teamName'
 
 /**
- * Die beiden Zusatzfelder eines Dienstplan-Vorlagen-Eintrags, die es in ZWEI
- * Editoren gibt: der Modal-Editor auf `/dienstplan-vorlagen` (Liste, „Bearbeiten")
- * und die Detailseite `/dienstplan-vorlagen/:id`. Sie liegen bewusst hier statt
- * doppelt in den Seiten — die erste Fassung der Teamauswahl war nur in der
- * Detailseite gelandet und im Modal unsichtbar, obwohl beide dieselbe
- * PUT-Route mit demselben `items`-Array bedienen.
+ * Die Zusatzfelder eines Dienstplan-Vorlagen-Eintrags.
+ *
+ * Sie lagen ursprünglich doppelt in zwei Editoren — dem Modal auf
+ * `/dienstplan-vorlagen` und einer eigenen Detailseite `/dienstplan-vorlagen/:id`,
+ * wobei die erste Fassung der Teamauswahl nur in der Detailseite landete und im
+ * Modal unsichtbar blieb, obwohl beide dieselbe PUT-Route mit demselben
+ * `items`-Array bedienen. Die Detailseite ist deshalb entfallen; die Felder
+ * bleiben hier, damit sie auch weiterhin an genau einer Stelle definiert sind.
  */
 
 /**

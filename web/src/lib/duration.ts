@@ -30,7 +30,8 @@ export function parseHoursInput(s: string): number {
   return isNaN(n) ? 1 : n
 }
 
-function minutesFromTime(time: string): number | null {
+/** "HH:MM" -> Minuten seit Mitternacht, oder null bei unparsbarem Wert. */
+export function minutesFromTime(time: string): number | null {
   const m = time.match(/^(\d{1,2}):(\d{2})/)
   if (!m) return null
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10)
@@ -77,3 +78,65 @@ export function formatTimeSpan(eventTime: string | null | undefined, hours: numb
   const end = wrapMinutes(start + Math.round(hours * 60))
   return `${formatClock(start)}–${formatClock(end)}`
 }
+
+/**
+ * Löst einen Anker ("start"|"end") + Versatz gegen eine konkrete (oder
+ * Beispiel-)Anpfiff-/Spielende-Uhrzeit auf. Frontend-Spiegel von
+ * `resolveAnchorTime` in `internal/games/regen.go` — bewusst ohne dessen
+ * Fallunterscheidung "gepflegte `games.end_time` vs. Anpfiff + Spieldauer":
+ * der Aufrufer entscheidet, was er als `endTime` übergibt (echte Endzeit,
+ * Beispielwert, oder als Fallback dieselbe Startzeit).
+ * (openspec/changes/dienst-dauer-dynamisch)
+ */
+export function resolveAnchorClock(
+  anchor: 'start' | 'end',
+  offsetMinutes: number,
+  startTime: string,
+  endTime: string,
+): string {
+  const base = anchor === 'end' ? endTime : startTime
+  return addMinutesToTime(base, offsetMinutes)
+}
+
+/**
+ * Differenz zweier "HH:MM"-Uhrzeiten in Minuten (Ende minus Start). Kann
+ * negativ sein — das ist der Signalwert für "Ende liegt vor dem Start". Der
+ * Server erzeugt in diesem Fall keinen Slot mehr (dienst-zeitmodus-strikt, der
+ * Rückfall auf `hours_value` ist entfallen); im Frontend nutzt das nur noch die
+ * Dauer-Vorbelegung im Termin-Dialog, deren Ergebnis der Nutzer sieht und
+ * ändern kann. Kein Mitternachtsüberlauf (Tagesraster, wie die Server-Auflösung).
+ */
+export function clockDiffMinutes(start: string, end: string): number | null {
+  const s = minutesFromTime(start)
+  const e = minutesFromTime(end)
+  if (s === null || e === null) return null
+  return e - s
+}
+
+/**
+ * Meldet eine Anker-/Versatz-Kombination, deren Ende an KEINEM Termin nach dem
+ * Start liegen kann. Frontend-Spiegel von `dynamicSpanImpossible` in
+ * `internal/duties/handler.go` bzw. `internal/games/handler.go`.
+ *
+ * Hängen Start und Ende am selben Anker, ist die Dauer exakt die
+ * Versatz-Differenz — unabhängig von der Spieldauer, also schon in der Maske
+ * entscheidbar. Bei verschiedenen Ankern hängt sie an der Spieldauer des
+ * konkreten Termins und wird bewusst NICHT geprüft: „Start bei Anpfiff, Ende
+ * 15 min vor Spielende" ist gültig und ergibt bei jedem hinreichend langen
+ * Spiel eine positive Dauer.
+ * (openspec/changes/dienst-zeitmodus-strikt)
+ */
+export function dynamicSpanImpossible(
+  mode: 'absolut' | 'dynamisch',
+  anchor: 'start' | 'end',
+  offsetMinutes: number,
+  endAnchor: 'start' | 'end',
+  endOffsetMinutes: number,
+): boolean {
+  if (mode !== 'dynamisch') return false
+  return anchor === endAnchor && endOffsetMinutes <= offsetMinutes
+}
+
+/** Meldungstext für eine unmögliche Spanne — in beiden Masken derselbe Satz. */
+export const IMPOSSIBLE_SPAN_MESSAGE =
+  'Bei gleichem Start- und End-Anker muss der End-Versatz hinter dem Start-Versatz liegen — sonst endet der Dienst vor seinem Beginn.'

@@ -8,7 +8,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from './DutySlotList'
 import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import HoursInput from './HoursInput'
-import { addMinutesToTime } from '../lib/duration'
+import { resolveAnchorClock, clockDiffMinutes } from '../lib/duration'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 
 interface GameDetail {
@@ -43,6 +43,12 @@ interface DutyType {
   hours_value: number
   default_anchor: 'start' | 'end'
   default_offset_minutes: number
+  /** Dauer-Modus (dienst-dauer-dynamisch) — nur zur Vorbelegung im Anlege-Modal
+   * genutzt: der hier angelegte Slot ist immer is_custom=1 und bleibt absolut
+   * (spec.md, Requirement "Manuell angelegte Dienste bleiben absolut"). */
+  duration_mode?: 'absolut' | 'dynamisch'
+  end_anchor?: 'start' | 'end'
+  end_offset_minutes?: number
   audiences?: string[] | null
 }
 
@@ -305,10 +311,21 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                     // Dauer und Uhrzeit aus dem Diensttyp vorbelegen (default_anchor +
                     // default_offset_minutes gegen die Zeit des Termins) — beide Felder
                     // bleiben danach frei editierbar (openspec/changes/dienst-dauer).
+                    // Ist der Typ 'dynamisch', wird die Dauer zusätzlich gegen den
+                    // konkreten Termin ausgerechnet (game.time/game.end_time) statt
+                    // die gepflegte hours_value zu übernehmen — der hier angelegte
+                    // Slot bleibt danach trotzdem eine feste Zahl (is_custom=1, kein
+                    // Modus-Umschalter im Modal, openspec/changes/dienst-dauer-dynamisch).
                     if (dt && game) {
+                      const gameEndBase = game.end_time ?? game.time
+                      const startTime = resolveAnchorClock(dt.default_anchor, dt.default_offset_minutes, game.time, gameEndBase)
+                      setAddEventTime(startTime)
                       setAddHours(dt.hours_value)
-                      const anchorBase = dt.default_anchor === 'end' && game.end_time ? game.end_time : game.time
-                      setAddEventTime(addMinutesToTime(anchorBase, dt.default_offset_minutes))
+                      if (dt.duration_mode === 'dynamisch') {
+                        const endTime = resolveAnchorClock(dt.end_anchor ?? 'end', dt.end_offset_minutes ?? 0, game.time, gameEndBase)
+                        const diffMinutes = clockDiffMinutes(startTime, endTime)
+                        if (diffMinutes !== null && diffMinutes > 0) setAddHours(diffMinutes / 60)
+                      }
                     }
                   }} className={INPUT_WIZ}>
                     <option value="">Auswählen…</option>
@@ -345,6 +362,11 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                     ))}
                   </div>
                 </div>
+                <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                  Hier angelegte Dienste gelten als manuell gepflegt und werden von der
+                  automatischen Regeneration nicht angefasst — Startzeit und Dauer bleiben
+                  auch dann stehen, wenn sich der Termin oder die Vorlage ändert.
+                </p>
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setShowAddSlot(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button onClick={handleAddSlot} disabled={!addDutyTypeId || addSaving}
@@ -394,6 +416,11 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                     ))}
                   </div>
                 </div>
+                <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                  Nach dem Speichern gilt dieser Dienst als manuell gepflegt: Die automatische
+                  Regeneration lässt ihn ab dann unangetastet und führt Startzeit und Dauer bei
+                  Termin- oder Vorlagen-Änderungen nicht mehr nach.
+                </p>
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setEditSlot(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button onClick={handleEditSlot} disabled={editSaving}

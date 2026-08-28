@@ -122,6 +122,8 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))
+			r.Post("/api/duty-types", h.CreateType)
+			r.Put("/api/duty-types/{id}", h.UpdateType)
 			r.Put("/api/duty-types/{id}/instruction", h.SetInstruction)
 			r.Delete("/api/duty-types/{id}", h.DeleteType)
 		})
@@ -1642,6 +1644,215 @@ func TestDeleteType_ForceOnUnusedType_StillDeletes(t *testing.T) {
 	}
 	if got := countRows(t, db, "duty_types", "id=?", dtID); got != 0 {
 		t.Errorf("duty type not deleted: got %d rows", got)
+	}
+}
+
+// TestUpdateType_SpeichertDauerModus verifies that duration_mode, end_anchor
+// and end_offset_minutes are persisted by UpdateType and come back unchanged
+// from ListTypes (Migration 053, dienst-dauer-dynamisch Task 3.1/3.2/3.4).
+func TestUpdateType_SpeichertDauerModus(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Zeitnehmer", 1.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	body := map[string]any{
+		"name":                  "Zeitnehmer",
+		"hours_value":           1.0,
+		"default_anchor":        "start",
+		"duration_mode":         "dynamisch",
+		"end_anchor":            "start",
+		"end_offset_minutes":    40,
+		"same_day_behavior":     "normal",
+		"adjacent_day_behavior": "normal",
+	}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+
+	res = testutil.Get(t, srv, "/api/duty-types", token)
+	defer res.Body.Close()
+	var list []struct {
+		ID               int    `json:"id"`
+		DurationMode     string `json:"duration_mode"`
+		EndAnchor        string `json:"end_anchor"`
+		EndOffsetMinutes int    `json:"end_offset_minutes"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&list); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	var found bool
+	for _, dt := range list {
+		if dt.ID != dtID {
+			continue
+		}
+		found = true
+		if dt.DurationMode != "dynamisch" {
+			t.Errorf("expected duration_mode=dynamisch, got %q", dt.DurationMode)
+		}
+		if dt.EndAnchor != "start" {
+			t.Errorf("expected end_anchor=start, got %q", dt.EndAnchor)
+		}
+		if dt.EndOffsetMinutes != 40 {
+			t.Errorf("expected end_offset_minutes=40, got %d", dt.EndOffsetMinutes)
+		}
+	}
+	if !found {
+		t.Fatalf("duty type %d not found in ListTypes response", dtID)
+	}
+}
+
+// TestUpdateType_UngueltigerDauerModus_400 verifies that an invalid
+// duration_mode or end_anchor is rejected with 400 before anything is
+// written — checked by re-reading the row and asserting it still carries the
+// Migration-053-Defaults (absolut/end), unchanged (Task 3.3/3.5).
+func TestUpdateType_UngueltigerDauerModus_400(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Zeitnehmer", 1.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	body := map[string]any{
+		"name":                  "Zeitnehmer",
+		"hours_value":           1.0,
+		"default_anchor":        "start",
+		"duration_mode":         "irgendwas",
+		"end_anchor":            "end",
+		"same_day_behavior":     "normal",
+		"adjacent_day_behavior": "normal",
+	}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid duration_mode, got %d", res.StatusCode)
+	}
+
+	body["duration_mode"] = "dynamisch"
+	body["end_anchor"] = "mittendrin"
+	res = testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid end_anchor, got %d", res.StatusCode)
+	}
+
+	var mode, anchor string
+	if err := db.QueryRow(`SELECT duration_mode, end_anchor FROM duty_types WHERE id=?`, dtID).Scan(&mode, &anchor); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if mode != "absolut" || anchor != "end" {
+		t.Errorf("expected unchanged Migration-053-Defaults (absolut/end), got mode=%q anchor=%q", mode, anchor)
+	}
+}
+
+// TestCreateType_UnmoeglicheSpanneWirdAbgewiesen (dienst-zeitmodus-strikt, Aufgabe 1.3):
+// Start und Ende am selben Anker, End-Versatz nicht dahinter — diese Definition kann an
+// KEINEM Termin eine positive Dauer ergeben, unabhängig von jeder Spieldauer. Sie ist
+// deshalb schon beim Anlegen ein Fehler, nicht erst beim Regen; seit der Rückfall auf
+// hours_value entfallen ist, wäre sie sonst eine Vorlage für lauter ausfallende Dienste.
+func TestCreateType_UnmoeglicheSpanneWirdAbgewiesen(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	body := map[string]any{
+		"name":                   "Halbzeit",
+		"hours_value":            1.0,
+		"default_anchor":         "start",
+		"default_offset_minutes": 40,
+		"duration_mode":          "dynamisch",
+		"end_anchor":             "start",
+		"end_offset_minutes":     25,
+		"same_day_behavior":      "normal",
+		"adjacent_day_behavior":  "normal",
+	}
+	res := testutil.Do(t, srv, http.MethodPost, "/api/duty-types", token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for impossible span, got %d", res.StatusCode)
+	}
+	if got := countRows(t, db, "duty_types", "name=?", "Halbzeit"); got != 0 {
+		t.Errorf("nothing may be persisted, got %d rows", got)
+	}
+}
+
+// TestCreateType_UnmoeglicheSpanneNurImDynamischenModus (dienst-zeitmodus-strikt,
+// Aufgabe 1.3): dieselben Anker und Versätze im Modus 'absolut' sind kein Fehler — die
+// Endfelder sind dort bedeutungslos, und eine Prüfung auf bedeutungslosen Feldern würde
+// nur bestehende Diensttypen unspeicherbar machen.
+func TestCreateType_UnmoeglicheSpanneNurImDynamischenModus(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	body := map[string]any{
+		"name":                   "Kuchen",
+		"hours_value":            1.0,
+		"default_anchor":         "start",
+		"default_offset_minutes": 40,
+		"duration_mode":          "absolut",
+		"end_anchor":             "start",
+		"end_offset_minutes":     25,
+		"same_day_behavior":      "normal",
+		"adjacent_day_behavior":  "normal",
+	}
+	res := testutil.Do(t, srv, http.MethodPost, "/api/duty-types", token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 in absolute mode, got %d", res.StatusCode)
+	}
+	if got := countRows(t, db, "duty_types", "name=?", "Kuchen"); got != 1 {
+		t.Errorf("expected the duty type to be created, got %d rows", got)
+	}
+}
+
+// TestUpdateType_UnmoeglicheSpanneWirdAbgewiesen (dienst-zeitmodus-strikt, Aufgabe 1.3):
+// wie oben auf dem Update-Pfad — und der Bestand bleibt vollständig unangetastet,
+// inklusive des im selben Request mitgesendeten Namens. UpdateType schreibt in einem
+// einzigen UPDATE, die Prüfung muss also davor liegen.
+func TestUpdateType_UnmoeglicheSpanneWirdAbgewiesen(t *testing.T) {
+	db := testutil.NewDB(t)
+	dtID := createDutyType(t, db, "Zeitnehmer", 1.0)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminID, "admin", nil)
+
+	body := map[string]any{
+		"name":                   "Umbenannt",
+		"hours_value":            1.0,
+		"default_anchor":         "end",
+		"default_offset_minutes": 0,
+		"duration_mode":          "dynamisch",
+		"end_anchor":             "end",
+		"end_offset_minutes":     0,
+		"same_day_behavior":      "normal",
+		"adjacent_day_behavior":  "normal",
+	}
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-types/"+itoa(dtID), token, body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for impossible span, got %d", res.StatusCode)
+	}
+
+	var name, mode string
+	if err := db.QueryRow(`SELECT name, duration_mode FROM duty_types WHERE id=?`, dtID).Scan(&name, &mode); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if name != "Zeitnehmer" || mode != "absolut" {
+		t.Errorf("expected the row untouched (Zeitnehmer/absolut), got name=%q mode=%q", name, mode)
 	}
 }
 

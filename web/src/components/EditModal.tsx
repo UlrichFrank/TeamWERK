@@ -8,11 +8,14 @@ interface EditModalProps {
   onClose: () => void
   onSave: () => void
   isSaving?: boolean
+  /** Sperrt „Speichern" bei ungültiger Eingabe. Der Dialog bleibt offen und
+   * schließbar — nur der Schreibvorgang ist blockiert. */
+  saveDisabled?: boolean
   maxWidthClass?: string
   children: ReactNode
 }
 
-export default function EditModal({ isOpen, title, onClose, onSave, isSaving = false, maxWidthClass = 'max-w-sm', children }: EditModalProps) {
+export default function EditModal({ isOpen, title, onClose, onSave, isSaving = false, saveDisabled = false, maxWidthClass = 'max-w-sm', children }: EditModalProps) {
   useEscapeKey(isOpen && !isSaving ? onClose : null)
   if (!isOpen) return null
 
@@ -39,7 +42,7 @@ export default function EditModal({ isOpen, title, onClose, onSave, isSaving = f
           </button>
           <button
             onClick={onSave}
-            disabled={isSaving}
+            disabled={isSaving || saveDisabled}
             className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isSaving ? 'Speichert…' : 'Speichern'}

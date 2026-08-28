@@ -26,7 +26,6 @@ import AdminUsersPage from './pages/AdminUsersPage'
 import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
 import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
-import AdminDutyTemplateDetailPage from './pages/AdminDutyTemplateDetailPage'
 import AdminKaderPage from './pages/AdminKaderPage'
 import MitfahrgelegenheitenPage from './pages/MitfahrgelegenheitenPage'
 import DocumentsPage from './pages/DocumentsPage'
@@ -143,7 +142,6 @@ export default function App() {
               <Route path="trainings" element={<Navigate to="/termine" replace />} />
               <Route path="trainings/:id" element={<Navigate to="/termine" replace />} />
               <Route path="dienstplan-vorlagen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplatesPage /></RoleRoute>} />
-              <Route path="dienstplan-vorlagen/:id" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTemplateDetailPage /></RoleRoute>} />
               <Route path="veranstaltungsorte" element={<RoleRoute roles={['admin','vorstand']}><AdminVenuesPage /></RoleRoute>} />
               <Route path="wartung" element={<RoleRoute roles={['admin']}><WartungsmodusPage /></RoleRoute>} />
             </Route>
