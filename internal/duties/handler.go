@@ -153,7 +153,7 @@ func (h *Handler) assignedUsers(slotID string) []int {
 func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
-		        duration_mode, end_anchor, end_offset_minutes,
+		        duration_mode, end_anchor, end_offset_minutes, end_at_next_duty,
 		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences,
 		        instruction_md <> '', instruction_updated_at, instruction_updated_by
 		 FROM duty_types ORDER BY name`)
@@ -173,6 +173,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		DurationMode         string   `json:"duration_mode"`
 		EndAnchor            string   `json:"end_anchor"`
 		EndOffsetMinutes     int      `json:"end_offset_minutes"`
+		EndAtNextDuty        bool     `json:"end_at_next_duty"`
 		SameDayBehavior      string   `json:"same_day_behavior"`
 		SameDayVariantID     *int     `json:"same_day_variant_id,omitempty"`
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
@@ -192,7 +193,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		var instrUpdatedAt sql.NullString
 		var instrUpdatedBy sql.NullInt64
 		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes,
-			&d.DurationMode, &d.EndAnchor, &d.EndOffsetMinutes,
+			&d.DurationMode, &d.EndAnchor, &d.EndOffsetMinutes, &d.EndAtNextDuty,
 			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi, &audiences,
 			&d.HasInstruction, &instrUpdatedAt, &instrUpdatedBy)
 		if cs.Valid {
@@ -271,6 +272,7 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 		DurationMode         string   `json:"duration_mode"`
 		EndAnchor            string   `json:"end_anchor"`
 		EndOffsetMinutes     int      `json:"end_offset_minutes"`
+		EndAtNextDuty        bool     `json:"end_at_next_duty"`
 		SameDayBehavior      string   `json:"same_day_behavior"`
 		SameDayVariantID     *int     `json:"same_day_variant_id"`
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
@@ -322,11 +324,11 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
-		                          duration_mode, end_anchor, end_offset_minutes,
+		                          duration_mode, end_anchor, end_offset_minutes, end_at_next_duty,
 		                          same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		req.Name, hoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
-		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes,
+		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes, req.EndAtNextDuty,
 		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, audiencesToDB(req.Audiences))
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusCreated)
@@ -392,6 +394,7 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 		DurationMode         string   `json:"duration_mode"`
 		EndAnchor            string   `json:"end_anchor"`
 		EndOffsetMinutes     int      `json:"end_offset_minutes"`
+		EndAtNextDuty        bool     `json:"end_at_next_duty"`
 		SameDayBehavior      string   `json:"same_day_behavior"`
 		SameDayVariantID     *int     `json:"same_day_variant_id"`
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
@@ -444,12 +447,12 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	}
 	h.db.ExecContext(r.Context(),
 		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=?,
-		                       duration_mode=?, end_anchor=?, end_offset_minutes=?,
+		                       duration_mode=?, end_anchor=?, end_offset_minutes=?, end_at_next_duty=?,
 		                       same_day_behavior=?, same_day_variant_id=?, adjacent_day_behavior=?, adjacent_day_variant_id=?,
 		                       audiences=?
 		 WHERE id=?`,
 		req.Name, hoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
-		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes,
+		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes, req.EndAtNextDuty,
 		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID,
 		audiencesToDB(req.Audiences), id)
 	h.hub.Broadcast("duties")
