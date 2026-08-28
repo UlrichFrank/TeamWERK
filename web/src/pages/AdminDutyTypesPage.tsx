@@ -20,6 +20,7 @@ interface DutyType {
   duration_mode: 'absolut' | 'dynamisch'
   end_anchor: 'start' | 'end'
   end_offset_minutes: number
+  end_at_next_duty?: boolean
   same_day_behavior?: string
   same_day_variant_id?: number | null
   adjacent_day_behavior?: string
@@ -38,6 +39,7 @@ interface EditState {
   duration_mode: 'absolut' | 'dynamisch'
   end_anchor: 'start' | 'end'
   end_offset: string
+  end_at_next_duty: boolean
   same_day_behavior: string
   same_day_variant_id: string
   adjacent_day_behavior: string
@@ -54,6 +56,7 @@ function toEditState(t: DutyType): EditState {
     duration_mode: t.duration_mode ?? 'absolut',
     end_anchor: t.end_anchor ?? 'end',
     end_offset: formatOffset(t.end_offset_minutes ?? 0),
+    end_at_next_duty: t.end_at_next_duty ?? false,
     same_day_behavior: t.same_day_behavior || 'normal',
     same_day_variant_id: t.same_day_variant_id ? t.same_day_variant_id.toString() : '',
     adjacent_day_behavior: t.adjacent_day_behavior || 'normal',
@@ -64,7 +67,7 @@ function toEditState(t: DutyType): EditState {
 
 const emptyCreate = (): EditState => ({
   name: '', hours: '1h', anchor: 'start', offset: '0',
-  duration_mode: 'absolut', end_anchor: 'end', end_offset: '0',
+  duration_mode: 'absolut', end_anchor: 'end', end_offset: '0', end_at_next_duty: false,
   same_day_behavior: 'normal', same_day_variant_id: '',
   adjacent_day_behavior: 'normal', adjacent_day_variant_id: '',
   audiences: [],
@@ -204,6 +207,24 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
               Beispiel bei {EXAMPLE_KICKOFF} Anpfiff, {EXAMPLE_GAME_DURATION_MIN} min Spieldauer: {example.start}–{example.end}
             </p>
           )}
+          {/* Ablösung (dienst-abloesung): bewusst KEIN dritter Zeit-Modus, sondern ein
+              Häkchen direkt unter dem Ende, das es deckelt — die Regel ist eine Kappung
+              des oben definierten Endes, kein eigenes Ende. */}
+          <label className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={state.end_at_next_duty}
+              onChange={e => onChange({ ...state, end_at_next_duty: e.target.checked })}
+              className="mt-0.5 accent-brand-yellow"
+            />
+            <span>
+              Endet spätestens bei Ablösung
+              <span className="block text-xs text-brand-text-subtle">
+                Der Dienst endet, sobald der nächste gleichartige Dienst am selben Tag beginnt —
+                spätestens zum oben gesetzten Ende.
+              </span>
+            </span>
+          </label>
         </>
       )}
       <p className="text-xs text-brand-text-subtle">Versatz-Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
@@ -299,6 +320,7 @@ export default function AdminDutyTypesPage() {
       duration_mode: create.duration_mode,
       end_anchor: create.end_anchor,
       end_offset_minutes: parseOffset(create.end_offset),
+      end_at_next_duty: create.end_at_next_duty,
       same_day_behavior: create.same_day_behavior,
       same_day_variant_id: create.same_day_variant_id ? parseInt(create.same_day_variant_id) : null,
       adjacent_day_behavior: create.adjacent_day_behavior,
@@ -325,6 +347,7 @@ export default function AdminDutyTypesPage() {
       duration_mode: edit.duration_mode,
       end_anchor: edit.end_anchor,
       end_offset_minutes: parseOffset(edit.end_offset),
+      end_at_next_duty: edit.end_at_next_duty,
       same_day_behavior: edit.same_day_behavior,
       same_day_variant_id: edit.same_day_variant_id ? parseInt(edit.same_day_variant_id) : null,
       adjacent_day_behavior: edit.adjacent_day_behavior,

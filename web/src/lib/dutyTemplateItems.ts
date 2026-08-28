@@ -27,6 +27,8 @@ export interface DutyTypeDefaults {
   duration_mode?: 'absolut' | 'dynamisch'
   end_anchor?: 'start' | 'end'
   end_offset_minutes?: number
+  /** Ablösungs-Kennzeichen (dienst-abloesung); optional aus demselben Grund. */
+  end_at_next_duty?: boolean
   audiences?: string[] | null
 }
 
@@ -38,12 +40,13 @@ interface RefreshableItem {
   duration_mode: 'absolut' | 'dynamisch'
   end_anchor: 'start' | 'end'
   end_offset_minutes: number
+  end_at_next_duty: boolean
   audiences: string[]
 }
 
 /**
  * Holt für jede Vorlagen-Zeile die aktuellen Werte ihres Diensttyps zurück in
- * die Zeile — dieselben vier Felder, die beim Auswählen des Diensttyps ohnehin
+ * die Zeile — dieselben Felder, die beim Auswählen des Diensttyps ohnehin
  * hineinkopiert werden (Copy-on-pick).
  *
  * Nötig, weil die Zeile nach dem Auswählen eigenständig ist: eine spätere
@@ -67,6 +70,7 @@ export function refreshItemsFromDutyTypes<T extends RefreshableItem>(
     const durationMode = dt.duration_mode ?? 'absolut'
     const endAnchor = dt.end_anchor ?? 'end'
     const endOffsetMinutes = dt.end_offset_minutes ?? 0
+    const endAtNextDuty = dt.end_at_next_duty ?? false
     const isSame =
       item.anchor === dt.default_anchor &&
       item.offset_minutes === dt.default_offset_minutes &&
@@ -74,6 +78,7 @@ export function refreshItemsFromDutyTypes<T extends RefreshableItem>(
       item.duration_mode === durationMode &&
       item.end_anchor === endAnchor &&
       item.end_offset_minutes === endOffsetMinutes &&
+      item.end_at_next_duty === endAtNextDuty &&
       item.audiences.length === audiences.length &&
       item.audiences.every(a => audiences.includes(a))
     if (isSame) return item
@@ -86,6 +91,7 @@ export function refreshItemsFromDutyTypes<T extends RefreshableItem>(
       duration_mode: durationMode,
       end_anchor: endAnchor,
       end_offset_minutes: endOffsetMinutes,
+      end_at_next_duty: endAtNextDuty,
       audiences,
     }
   })

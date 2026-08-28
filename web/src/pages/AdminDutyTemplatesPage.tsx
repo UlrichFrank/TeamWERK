@@ -25,6 +25,7 @@ interface DutyType {
   duration_mode?: 'absolut' | 'dynamisch'
   end_anchor?: 'start' | 'end'
   end_offset_minutes?: number
+  end_at_next_duty?: boolean
   audiences?: string[] | null
 }
 
@@ -52,6 +53,8 @@ interface TemplateItem {
   duration_mode: 'absolut' | 'dynamisch'
   end_anchor: 'start' | 'end'
   end_offset_minutes: number
+  /** Ablösung (dienst-abloesung): macht end_anchor/end_offset_minutes zum Deckel. */
+  end_at_next_duty: boolean
   audiences: string[]
   /** Leer/fehlend = Eintrag gilt für ALLE Kaderteams eines Spiels. */
   team_ids?: number[] | null
@@ -116,7 +119,7 @@ function itemSpanImpossible(item: TemplateItem): boolean {
 function newItem(): TemplateItem {
   return {
     duty_type_id: 0, anchor: 'start', offset_minutes: 0, slots_count: 1, hours_value: 1,
-    duration_mode: 'absolut', end_anchor: 'end', end_offset_minutes: 0,
+    duration_mode: 'absolut', end_anchor: 'end', end_offset_minutes: 0, end_at_next_duty: false,
     audiences: [], team_ids: [],
   }
 }
@@ -283,6 +286,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                             duration_mode: dutyType?.duration_mode ?? item.duration_mode,
                             end_anchor: dutyType?.end_anchor ?? item.end_anchor,
                             end_offset_minutes: dutyType?.end_offset_minutes ?? item.end_offset_minutes,
+    end_at_next_duty: dutyType?.end_at_next_duty ?? item.end_at_next_duty,
                             audiences: dutyType?.audiences ?? [],
                           })
                         }}
@@ -431,6 +435,22 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                           {IMPOSSIBLE_SPAN_MESSAGE}
                         </p>
                       )}
+                      {/* Ablösung (dienst-abloesung): kein dritter Modus, sondern eine
+                          Kappung des oben definierten Endes — deshalb direkt darunter. */}
+                      <label className="flex items-start gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={item.end_at_next_duty}
+                          onChange={e => updateItem(index, { end_at_next_duty: e.target.checked })}
+                          className="mt-0.5 accent-brand-yellow"
+                        />
+                        <span>
+                          Endet spätestens bei Ablösung
+                          <span className="block text-xs text-brand-text-subtle">
+                            Endet, sobald der nächste gleichartige Dienst am selben Tag beginnt.
+                          </span>
+                        </span>
+                      </label>
                     </>
                   )}
                 </div>
@@ -494,17 +514,19 @@ export default function AdminDutyTemplatesPage() {
         name: r.data.name,
         template_type: r.data.template_type,
         duration_minutes: r.data.duration_minutes,
-        items: (r.data.items ?? []).map((it: Omit<TemplateItem, 'audiences' | 'duration_mode' | 'end_anchor' | 'end_offset_minutes'> & {
+        items: (r.data.items ?? []).map((it: Omit<TemplateItem, 'audiences' | 'duration_mode' | 'end_anchor' | 'end_offset_minutes' | 'end_at_next_duty'> & {
           audiences?: string[] | null
           duration_mode?: 'absolut' | 'dynamisch'
           end_anchor?: 'start' | 'end'
           end_offset_minutes?: number
+          end_at_next_duty?: boolean
         }) => ({
           ...it,
           audiences: it.audiences ?? [],
           duration_mode: it.duration_mode ?? 'absolut',
           end_anchor: it.end_anchor ?? 'end',
           end_offset_minutes: it.end_offset_minutes ?? 0,
+          end_at_next_duty: it.end_at_next_duty ?? false,
         })),
       })
     } catch {

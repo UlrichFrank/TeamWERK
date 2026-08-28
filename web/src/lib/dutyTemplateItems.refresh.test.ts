@@ -5,11 +5,13 @@ const TYPES = [
   {
     id: 5, default_anchor: 'start' as const, default_offset_minutes: -30, hours_value: 1.5,
     duration_mode: 'dynamisch' as const, end_anchor: 'start' as const, end_offset_minutes: 40,
+    end_at_next_duty: true,
     audiences: ['eltern'],
   },
   {
     id: 8, default_anchor: 'end' as const, default_offset_minutes: 5, hours_value: 0.5,
     duration_mode: 'absolut' as const, end_anchor: 'end' as const, end_offset_minutes: 0,
+    end_at_next_duty: false,
     audiences: [],
   },
 ]
@@ -22,11 +24,13 @@ function item(over: Partial<{
   duration_mode: 'absolut' | 'dynamisch'
   end_anchor: 'start' | 'end'
   end_offset_minutes: number
+  end_at_next_duty: boolean
   audiences: string[]
 }> = {}) {
   return {
     duty_type_id: 5, anchor: 'start' as const, offset_minutes: -30, hours_value: 1.5,
     duration_mode: 'dynamisch' as const, end_anchor: 'start' as const, end_offset_minutes: 40,
+    end_at_next_duty: true,
     audiences: ['eltern'],
     ...over,
   }
@@ -89,5 +93,23 @@ describe('refreshItemsFromDutyTypes', () => {
     const { items, changed } = refreshItemsFromDutyTypes(before, typesNow)
     expect(changed).toBe(1)
     expect(items[0]).toMatchObject({ duration_mode: 'dynamisch', end_anchor: 'start', end_offset_minutes: 25 })
+  })
+
+  // dienst-abloesung: das Kennzeichen gehört zu den Feldern, die eine Zeile per
+  // Copy-on-pick vom Diensttyp übernimmt — sonst bliebe eine Vorlage nach dem
+  // Umstellen des Diensttyps stumm beim alten Verhalten.
+  test('frischt das Ablösungs-Kennzeichen auf', () => {
+    const { items, changed } = refreshItemsFromDutyTypes([item({ end_at_next_duty: false })], TYPES)
+    expect(changed).toBe(1)
+    expect(items[0].end_at_next_duty).toBe(true)
+  })
+
+  test('ein abweichendes Kennzeichen allein zählt schon als Änderung', () => {
+    const before = [item({ duty_type_id: 8, anchor: 'end', offset_minutes: 5, hours_value: 0.5,
+      duration_mode: 'absolut', end_anchor: 'end', end_offset_minutes: 0,
+      end_at_next_duty: true, audiences: [] })]
+    const { items, changed } = refreshItemsFromDutyTypes(before, TYPES)
+    expect(changed).toBe(1)
+    expect(items[0].end_at_next_duty).toBe(false)
   })
 })
