@@ -29,6 +29,13 @@ type RegenSummary struct {
 	// fell away — there is no catch-all slot anymore, so this list is the only trace.
 	Unassigned []UnassignedEntry `json:"unassigned"`
 
+	// InvalidSpan lists the items that produced NO slot because their dynamic duration
+	// did not resolve to a positive span against this game (dienst-zeitmodus-strikt).
+	// Deliberately its own list, not Skipped: Skipped means "the variant logic left this
+	// duty out on purpose" and reads as a rule, InvalidSpan means "the definition does
+	// not fit this game" and reads as an error the UI shows in red.
+	InvalidSpan []InvalidSpanEntry `json:"invalid_span"`
+
 	// PerGame carries one entry per regenerated game, for callers (the bulk-regen
 	// preview) that need to attribute deltas to individual games instead of just a
 	// day-level total. Deliberately NOT capped at summaryCap — the row list IS the
@@ -68,6 +75,15 @@ type ReducedEntry struct {
 }
 
 type SkippedEntry struct {
+	Date     string `json:"date"`
+	DutyType string `json:"duty_type"`
+}
+
+// InvalidSpanEntry reports one (day, duty type) whose dynamic duration did not resolve
+// to a positive span and therefore produced no slot. DutyType is the name the slot WOULD
+// have carried — for a reduced item that is the variant's name, because it is the
+// variant's duration definition that failed.
+type InvalidSpanEntry struct {
 	Date     string `json:"date"`
 	DutyType string `json:"duty_type"`
 }
@@ -264,6 +280,7 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		summary.Created = append(summary.Created, gameSummary.Created...)
 		summary.Reduced = append(summary.Reduced, gameSummary.Reduced...)
 		summary.Skipped = append(summary.Skipped, gameSummary.Skipped...)
+		summary.InvalidSpan = append(summary.InvalidSpan, gameSummary.InvalidSpan...)
 		summary.Conflicts = append(summary.Conflicts, gameSummary.Conflicts...)
 
 		// Step 5: restore duty_assignments whose slot reappeared with an identical
@@ -926,12 +943,23 @@ func (h *Handler) regenGameItems(
 		}
 
 		// Im dynamischen Modus folgt die Dauer der tatsächlichen Spieldauer; sonst ist
-		// sie die gepflegte Zahl. resolveSlotHours fällt auf resultHours zurück, wenn
-		// die Versätze das Ende vor den Start legen würden.
+		// sie die gepflegte Zahl. 0 heißt "gegen diesen Termin nicht auflösbar" — dann
+		// entsteht kein Slot (kein Rückfall mehr, dienst-zeitmodus-strikt).
 		slotHours := resolveSlotHours(
 			resultMode, resultHours,
 			eventTime, resolveAnchorTime(resultEndAnchor, resultEndOffset, g, durationMins),
 		)
+		if slotHours <= 0 {
+			// Wie der Ausrichter- und der Rotations-Miss: nacktes continue OHNE Eintrag
+			// in outcomeByOriginalType. buildNotificationIntents liest ein fehlendes
+			// Outcome als "removed" — für eine Zusage auf dem eben gelöschten
+			// Bestandsslot ist das genau die richtige Meldung, der Dienst ist ja
+			// tatsächlich entfallen. Sichtbar wird der Ausfall über InvalidSpan.
+			summary.InvalidSpan = append(summary.InvalidSpan, InvalidSpanEntry{
+				Date: date, DutyType: resultTypeName,
+			})
+			continue
+		}
 
 		n := it.SlotsCount
 		if n <= 0 {
@@ -1063,6 +1091,7 @@ func mergeSummary(dst *RegenSummary, src RegenSummary) {
 	dst.Skipped = append(dst.Skipped, src.Skipped...)
 	dst.Conflicts = append(dst.Conflicts, src.Conflicts...)
 	dst.Unassigned = append(dst.Unassigned, src.Unassigned...)
+	dst.InvalidSpan = append(dst.InvalidSpan, src.InvalidSpan...)
 	dst.NotifiedUsers = append(dst.NotifiedUsers, src.NotifiedUsers...)
 	dst.PerGame = append(dst.PerGame, src.PerGame...)
 	dst.Notifications = append(dst.Notifications, src.Notifications...)
@@ -1085,6 +1114,9 @@ func capSummary(s *RegenSummary) {
 	}
 	if len(s.Unassigned) > summaryCap {
 		s.Unassigned = s.Unassigned[:summaryCap]
+	}
+	if len(s.InvalidSpan) > summaryCap {
+		s.InvalidSpan = s.InvalidSpan[:summaryCap]
 	}
 	if len(s.NotifiedUsers) > summaryCap {
 		s.NotifiedUsers = s.NotifiedUsers[:summaryCap]
@@ -1255,23 +1287,26 @@ func resolveAnchorTime(anchor string, offsetMinutes int, g dayGame, durationMins
 	return addMinutes(g.Time, offsetMinutes)
 }
 
-// resolveSlotHours liefert die Dauer eines Slots in Stunden.
+// resolveSlotHours liefert die Dauer eines Slots in Stunden, oder 0, wenn die
+// dynamische Definition gegen diesen Termin keine positive Dauer ergibt.
 //
 // Im Modus "absolut" ist das die gepflegte Zahl. Im Modus "dynamisch" ergibt sie sich
 // als Differenz zwischen aufgelöster End- und Startzeit — dadurch folgt ein Dienst der
 // tatsächlichen Spieldauer, die je Altersklasse und Vorlage schwankt.
 //
-// Ergibt die Differenz keine positive Dauer (die Versätze lassen das Ende vor dem Start
-// liegen), fällt die Rechnung auf die absolute Dauer zurück statt den Slot ausfallen zu
-// lassen (Decision 3): ein fehlender Zeitnehmer fällt erst am Spieltag auf, eine zu lange
-// Spanne schon beim Eintragen. Der Preis ist, dass die Fehldefinition unsichtbar bleibt.
+// Die 0 ist ein Signalwert, kein Ergebnis: der Aufrufer erzeugt dann KEINEN Slot und
+// meldet den Ausfall (dienst-zeitmodus-strikt). Der frühere Rückfall auf die absolute
+// Dauer ist bewusst entfallen — er ließ den Slot mit einer plausiblen, aber falschen
+// Zahl entstehen, und niemand erfuhr je davon. Was gar nicht funktionieren kann, weisen
+// stattdessen die Schreibrouten ab (dynamicSpanImpossible); was erst gegen einen
+// konkreten Termin scheitert, landet sichtbar in RegenSummary.InvalidSpan.
 func resolveSlotHours(mode string, absoluteHours float64, startTime, endTime string) float64 {
 	if mode != "dynamisch" {
 		return absoluteHours
 	}
 	mins := minutesBetween(startTime, endTime)
 	if mins <= 0 {
-		return absoluteHours
+		return 0
 	}
 	return float64(mins) / 60.0
 }

@@ -25,6 +25,17 @@ func setItemDuration(t *testing.T, db *sql.DB, templateID int, mode, endAnchor s
 	}
 }
 
+// setItemAnchor stellt den START-Anker der (einzigen) Zeile ein. insertTemplateI legt
+// ihn immer auf "start" an; für die Fälle, in denen Start und Ende an verschiedenen
+// Ankern hängen müssen, wird er hier nachgezogen.
+func setItemAnchor(t *testing.T, db *sql.DB, templateID int, anchor string) {
+	t.Helper()
+	if _, err := db.Exec(`UPDATE game_template_items SET anchor=? WHERE template_id=?`,
+		anchor, templateID); err != nil {
+		t.Fatalf("setItemAnchor: %v", err)
+	}
+}
+
 // seedAgeClass gibt einem Team eine Altersklasse mit eigener Halbzeit-/Pausenregel.
 func seedAgeClass(t *testing.T, db *sql.DB, teamID int, ageClass string, half, brk int) {
 	t.Helper()
@@ -79,7 +90,7 @@ func TestRegen_DynamischeDauerFolgtSpieldauer(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	kurz := testutil.CreateTeam(t, db, "D-Jugend")
 	lang := testutil.CreateTeam(t, db, "A-Jugend")
-	seedAgeClass(t, db, kurz, "D-Jugend", 20, 5) // 45 min Spielzeit
+	seedAgeClass(t, db, kurz, "D-Jugend", 20, 5)  // 45 min Spielzeit
 	seedAgeClass(t, db, lang, "A-Jugend", 30, 15) // 75 min Spielzeit
 	h := newRegenTestHandler(t, db)
 
@@ -166,20 +177,29 @@ func TestRegen_DynamischeDauerAnkerStart(t *testing.T) {
 	}
 }
 
-// TestRegen_DynamischeDauerFaelltAufAbsoluteZurueck (tasks 2.9): läge das Ende vor dem
-// Start, entsteht der Slot trotzdem — mit der gepflegten absoluten Dauer.
-func TestRegen_DynamischeDauerFaelltAufAbsoluteZurueck(t *testing.T) {
+// TestRegen_UnaufloesbareDynamischeDauerErzeugtKeinenSlot (dienst-zeitmodus-strikt,
+// Aufgabe 2.3): löst die dynamische Definition gegen den konkreten Termin keine positive
+// Dauer auf, entsteht KEIN Slot — und insbesondere keiner mit der gepflegten absoluten
+// Dauer. Genau der Rückfall, der bis hierher galt, ist entfallen: er ließ einen Slot mit
+// einer plausiblen, aber falschen Zahl entstehen, ohne dass es je auffiel.
+//
+// Die Kombination hängt bewusst an VERSCHIEDENEN Ankern (Start am Spielende, Ende am
+// Anpfiff+30) — nur dieser Fall überlebt die Schreib-Validierung und kann den Regen
+// überhaupt erreichen. Bei gleichem Anker weisen die Routen die Definition ab
+// (dynamicSpanImpossible), lange bevor ein Termin im Spiel ist.
+func TestRegen_UnaufloesbareDynamischeDauerErzeugtKeinenSlot(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
-	seedAgeClassRuleI(t, db, teamID)
+	seedAgeClassRuleI(t, db, teamID) // 30+15+30 = 75 min Spieldauer
 	h := newRegenTestHandler(t, db)
 
 	dutyID := insertDutyTypeI(t, db, "Kuchen", "", 0, "", 0)
-	templateID := insertTemplateI(t, db, dutyID, -30, 1)
+	// Start am Spielende (+0), Ende bei Anpfiff+30 → 30 − 75 = −45 min.
+	templateID := insertTemplateI(t, db, dutyID, 0, 1)
+	setItemAnchor(t, db, templateID, "end")
 	setItemHours(t, db, templateID, 1.5)
-	// Start Anpfiff−30min, Ende Anpfiff−60min → negative Dauer.
-	setItemDuration(t, db, templateID, "dynamisch", "start", -60)
+	setItemDuration(t, db, templateID, "dynamisch", "start", 30)
 
 	gameID := insertGameI(t, db, seasonID, teamID, "2026-06-13", "12:00", templateID)
 	regenDate(t, h, db, "2026-06-13", seasonID, nil)
@@ -188,10 +208,45 @@ func TestRegen_DynamischeDauerFaelltAufAbsoluteZurueck(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM duty_slots WHERE game_id=?`, gameID).Scan(&count); err != nil {
 		t.Fatalf("count slots: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("der Slot soll trotz Fehldefinition entstehen, got %d", count)
+	if count != 0 {
+		var hours float64
+		db.QueryRow(`SELECT hours_value FROM duty_slots WHERE game_id=?`, gameID).Scan(&hours)
+		t.Fatalf("kein Slot erwartet, got %d (Dauer %v — Rückfall auf hours_value?)", count, hours)
 	}
-	if got := slotHours(t, db, gameID); got != 1.5 {
-		t.Errorf("Rückfall auf die absolute Dauer erwartet (1.5), got %v", got)
+}
+
+// TestRegen_UnaufloesbareDynamischeDauerStehtInDerZusammenfassung (dienst-zeitmodus-strikt,
+// Aufgabe 2.3): derselbe Ausfall muss sichtbar sein. Ein still fehlender Dienst wäre
+// nicht besser als die falsche Zahl davor — die Meldung ist die halbe Begründung des
+// Changes. Sie steht in ihrer EIGENEN Liste, nicht in Skipped: Skipped meint die gewollte
+// Auslassung der Varianten-Logik, invalid_span einen Definitionsfehler.
+func TestRegen_UnaufloesbareDynamischeDauerStehtInDerZusammenfassung(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	seedAgeClassRuleI(t, db, teamID)
+	h := newRegenTestHandler(t, db)
+
+	dutyID := insertDutyTypeI(t, db, "Kuchen", "", 0, "", 0)
+	templateID := insertTemplateI(t, db, dutyID, 0, 1)
+	setItemAnchor(t, db, templateID, "end")
+	setItemHours(t, db, templateID, 1.5)
+	setItemDuration(t, db, templateID, "dynamisch", "start", 30)
+
+	insertGameI(t, db, seasonID, teamID, "2026-06-13", "12:00", templateID)
+	summary := regenDate(t, h, db, "2026-06-13", seasonID, nil)
+
+	if len(summary.InvalidSpan) != 1 {
+		t.Fatalf("genau ein invalid_span-Eintrag erwartet, got %d (%+v)", len(summary.InvalidSpan), summary.InvalidSpan)
+	}
+	got := summary.InvalidSpan[0]
+	if got.Date != "2026-06-13" || got.DutyType != "Kuchen" {
+		t.Errorf("Eintrag soll Datum und Diensttyp tragen, got %+v", got)
+	}
+	if len(summary.Skipped) != 0 {
+		t.Errorf("der Ausfall gehört nicht in Skipped (gewollte Auslassung), got %+v", summary.Skipped)
+	}
+	if len(summary.Created) != 0 {
+		t.Errorf("kein angelegter Slot erwartet, got %+v", summary.Created)
 	}
 }
