@@ -564,6 +564,9 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/duty-slots", expected: exVorstandTrainer},
 	{method: "PUT", path: "/api/duty-slots/{id}", expected: exVorstandTrainer},
 	{method: "DELETE", path: "/api/duty-slots/{id}", expected: exVorstandTrainer},
+	// Dienst-CSV: liest nur, trägt weder Belegung noch Namen — deshalb im Tier der
+	// Slot-Pflege statt beim Vorstand allein (anders als der Massenlauf oben).
+	{method: "GET", path: "/api/duty-slots/export", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/games/{id}/regenerate", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/games/regenerate-day", expected: exVorstandTrainer},
 	// Tages-Ausrichter ändern (Capability manage_games); Lesen ist exAuth (oben).
