@@ -5,6 +5,10 @@
  *
  * Quelle: openspec/changes/dienst-dauer/specs/duties/spec.md — Requirement
  * "Vorlagen-Zeile trägt eine eigene Dauer (Copy-on-pick)".
+ *
+ * Seit dienst-zeitmodus-strikt gibt es das Dauer-Feld nur noch im Modus
+ * „Startzeit + Dauer" — die Copy-on-pick-Tests der Dauer arbeiten deshalb mit
+ * einem absoluten Diensttyp (id 4), die Modus-Tests mit dem dynamischen (id 3).
  */
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
@@ -43,11 +47,18 @@ function mockApi() {
     }
     if (url === '/duty-types') {
       return Promise.resolve({
-        data: [{
-          id: 3, name: 'Kamera', default_anchor: 'start', default_offset_minutes: -60, hours_value: 1.5,
-          duration_mode: 'dynamisch', end_anchor: 'start', end_offset_minutes: 20,
-          audiences: [],
-        }],
+        data: [
+          {
+            id: 3, name: 'Kamera', default_anchor: 'start', default_offset_minutes: -60, hours_value: 1.5,
+            duration_mode: 'dynamisch', end_anchor: 'start', end_offset_minutes: 20,
+            audiences: [],
+          },
+          {
+            id: 4, name: 'Kuchen', default_anchor: 'start', default_offset_minutes: -60, hours_value: 1.5,
+            duration_mode: 'absolut', end_anchor: 'end', end_offset_minutes: 0,
+            audiences: [],
+          },
+        ],
       })
     }
     if (url === '/teams/names') return Promise.resolve({ data: [] })
@@ -79,7 +90,7 @@ describe('AdminDutyTemplatesPage — Dauer je Zeile im Modal', () => {
     await openEditModal()
 
     const select = screen.getByDisplayValue('Auswählen…')
-    fireEvent.change(select, { target: { value: '3' } })
+    fireEvent.change(select, { target: { value: '4' } })
 
     expect(hoursInput().value).toBe('1h 30min')
   })
@@ -89,7 +100,7 @@ describe('AdminDutyTemplatesPage — Dauer je Zeile im Modal', () => {
     await openEditModal()
 
     const select = screen.getByDisplayValue('Auswählen…')
-    fireEvent.change(select, { target: { value: '3' } })
+    fireEvent.change(select, { target: { value: '4' } })
     expect(hoursInput().value).toBe('1h 30min')
 
     // Dauer manuell abweichend setzen.
@@ -127,5 +138,40 @@ describe('AdminDutyTemplatesPage — Dauer je Zeile im Modal', () => {
     await waitFor(() => expect(mockPut).toHaveBeenCalled())
     const body = mockPut.mock.calls[0][1]
     expect(body.items[0]).toMatchObject({ duration_mode: 'dynamisch', end_anchor: 'start', end_offset_minutes: 20 })
+  })
+
+  // dienst-zeitmodus-strikt, Aufgabe 5.3: im Modus „Startzeit + Endzeit" gibt es kein
+  // Dauer-Feld mehr — es wäre seit dem Wegfall des Rückfalls ein Feld ohne Wirkung.
+  test('kein Dauer-Feld im Modus „Startzeit + Endzeit"', async () => {
+    mockApi()
+    await openEditModal()
+
+    fireEvent.change(screen.getByDisplayValue('Auswählen…'), { target: { value: '4' } })
+    expect(screen.queryByPlaceholderText('z.B. 1h 30min')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))
+    expect(screen.queryByPlaceholderText('z.B. 1h 30min')).toBeNull()
+    expect(screen.getByText('End-Anker')).toBeTruthy()
+  })
+
+  // dienst-zeitmodus-strikt, Aufgabe 5.3: eine Spanne, die nie positiv werden kann,
+  // darf nicht in den Request laufen — der Server verwürfe die ganze Vorlage mit 400.
+  test('unmögliche Spanne blockiert das Speichern', async () => {
+    mockApi()
+    await openEditModal()
+
+    // Diensttyp 3 ist dynamisch mit Start-Anker start/−60 und End-Anker start/+20.
+    fireEvent.change(screen.getByDisplayValue('Auswählen…'), { target: { value: '3' } })
+
+    // End-Versatz vor den Start-Versatz ziehen → gleicher Anker, nie positiv.
+    const endOffset = screen.getByText('End-Versatz').closest('div')!.querySelector('input') as HTMLInputElement
+    fireEvent.change(endOffset, { target: { value: '-90min' } })
+    fireEvent.blur(endOffset)
+
+    expect(screen.getByText(/End-Versatz hinter dem Start-Versatz/)).toBeTruthy()
+
+    fireEvent.click(screen.getByText('Speichern'))
+    await waitFor(() => expect(screen.getByText(/^Eintrag 1:/)).toBeTruthy())
+    expect(mockPut).not.toHaveBeenCalled()
   })
 })

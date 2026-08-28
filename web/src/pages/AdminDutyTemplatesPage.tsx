@@ -11,6 +11,7 @@ import { TeamScopeField, RotationEnabledField, AusrichterField, SlotsCountField 
 import HoursInput from '../components/HoursInput'
 import { errorData } from '../lib/errors'
 import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItems'
+import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 import { ChevronDown, RefreshCw } from 'lucide-react'
 
 interface DutyType {
@@ -40,11 +41,14 @@ interface TemplateItem {
   anchor: 'start' | 'end'
   offset_minutes: number
   slots_count: number
-  /** Dauer des Dienstes in Stunden (dienst-dauer). Copy-on-pick vom Diensttyp. Im
-   * Modus 'dynamisch' bleibt sie der Rückfall, falls die Auflösung nicht positiv wird. */
+  /** Dauer des Dienstes in Stunden (dienst-dauer). Copy-on-pick vom Diensttyp. Gilt nur
+   * im Modus 'absolut'; im Modus 'dynamisch' wird sie nicht gelesen, aber weiter
+   * mitgeführt, damit ein Moduswechsel hin und zurück den Wert nicht verliert
+   * (dienst-zeitmodus-strikt). */
   hours_value: number
-  /** Dauer-Modus (dienst-dauer-dynamisch): 'absolut' = hours_value gilt fest,
-   * 'dynamisch' = Ende folgt end_anchor/end_offset_minutes gegen den Termin. */
+  /** Zeit-Modus: 'absolut' (Maske: „Startzeit + Dauer") = hours_value gilt fest,
+   * 'dynamisch' (Maske: „Startzeit + Endzeit") = das Ende folgt
+   * end_anchor/end_offset_minutes gegen den Termin. */
   duration_mode: 'absolut' | 'dynamisch'
   end_anchor: 'start' | 'end'
   end_offset_minutes: number
@@ -94,6 +98,19 @@ function newTemplate(): TemplateFormState {
     duration_minutes: 60,
     items: [],
   }
+}
+
+/**
+ * Unmögliche Zeitspanne einer Vorlagen-Zeile — dieselbe Regel wie im Server
+ * (`dynamicSpanImpossible` in internal/games/handler.go) und in der
+ * Diensttyp-Maske. Blockiert das Speichern, statt den 400 abzuwarten.
+ * (openspec/changes/dienst-zeitmodus-strikt)
+ */
+function itemSpanImpossible(item: TemplateItem): boolean {
+  return dynamicSpanImpossible(
+    item.duration_mode, item.anchor, item.offset_minutes,
+    item.end_anchor, item.end_offset_minutes,
+  )
 }
 
 function newItem(): TemplateItem {
@@ -250,7 +267,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-brand-text-muted mb-1">Diensttyp</label>
                       <select
@@ -276,14 +293,6 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                           <option key={dt.id} value={dt.id}>{dt.name}</option>
                         ))}
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">Dauer</label>
-                      <HoursInput
-                        value={item.hours_value}
-                        onChange={v => updateItem(index, { hours_value: v })}
-                        className={INPUT_SM}
-                      />
                     </div>
                     <SlotsCountField
                       id={`slots-count-${index}`}
@@ -337,9 +346,35 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                     />
                   )}
 
+                  <div>
+                    <label className="block text-xs text-brand-text-muted mb-1">Zeit-Modus</label>
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`duration-mode-${index}`}
+                          checked={item.duration_mode === 'absolut'}
+                          onChange={() => updateItem(index, { duration_mode: 'absolut' })}
+                          className="accent-brand-yellow"
+                        />
+                        Startzeit + Dauer
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`duration-mode-${index}`}
+                          checked={item.duration_mode === 'dynamisch'}
+                          onChange={() => updateItem(index, { duration_mode: 'dynamisch' })}
+                          className="accent-brand-yellow"
+                        />
+                        Startzeit + Endzeit
+                      </label>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">Anker</label>
+                      <label className="block text-xs text-brand-text-muted mb-1">Start-Anker</label>
                       <select
                         value={item.anchor}
                         onChange={e => updateItem(index, { anchor: e.target.value as TemplateItem['anchor'] })}
@@ -350,7 +385,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">Versatz</label>
+                      <label className="block text-xs text-brand-text-muted mb-1">Start-Versatz</label>
                       <OffsetInput
                         value={item.offset_minutes}
                         onChange={v => updateItem(index, { offset_minutes: v })}
@@ -359,54 +394,44 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs text-brand-text-muted mb-1">Dauer-Modus</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`duration-mode-${index}`}
-                          checked={item.duration_mode === 'absolut'}
-                          onChange={() => updateItem(index, { duration_mode: 'absolut' })}
-                          className="accent-brand-yellow"
-                        />
-                        Absolut
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`duration-mode-${index}`}
-                          checked={item.duration_mode === 'dynamisch'}
-                          onChange={() => updateItem(index, { duration_mode: 'dynamisch' })}
-                          className="accent-brand-yellow"
-                        />
-                        Dynamisch (folgt dem Spiel)
-                      </label>
+                  {item.duration_mode === 'absolut' ? (
+                    <div className="sm:w-1/2 sm:pr-1.5">
+                      <label className="block text-xs text-brand-text-muted mb-1">Dauer</label>
+                      <HoursInput
+                        value={item.hours_value}
+                        onChange={v => updateItem(index, { hours_value: v })}
+                        className={INPUT_SM}
+                      />
                     </div>
-                  </div>
-
-                  {item.duration_mode === 'dynamisch' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-brand-text-muted mb-1">End-Anker</label>
-                        <select
-                          value={item.end_anchor}
-                          onChange={e => updateItem(index, { end_anchor: e.target.value as TemplateItem['end_anchor'] })}
-                          className={INPUT_SM}
-                        >
-                          <option value="start">Anpfiff</option>
-                          <option value="end">Spielende</option>
-                        </select>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-brand-text-muted mb-1">End-Anker</label>
+                          <select
+                            value={item.end_anchor}
+                            onChange={e => updateItem(index, { end_anchor: e.target.value as TemplateItem['end_anchor'] })}
+                            className={INPUT_SM}
+                          >
+                            <option value="start">Anpfiff</option>
+                            <option value="end">Spielende</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-brand-text-muted mb-1">End-Versatz</label>
+                          <OffsetInput
+                            value={item.end_offset_minutes}
+                            onChange={v => updateItem(index, { end_offset_minutes: v })}
+                            className={INPUT_SM}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs text-brand-text-muted mb-1">End-Versatz</label>
-                        <OffsetInput
-                          value={item.end_offset_minutes}
-                          onChange={v => updateItem(index, { end_offset_minutes: v })}
-                          className={INPUT_SM}
-                        />
-                      </div>
-                    </div>
+                      {itemSpanImpossible(item) && (
+                        <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+                          {IMPOSSIBLE_SPAN_MESSAGE}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -514,6 +539,14 @@ export default function AdminDutyTemplatesPage() {
       setModalError('Bitte wähle für alle Einträge einen Diensttyp.')
       return
     }
+    // Unmögliche Spanne: der Server antwortet hier mit 400 und verwürfe die ganze
+    // Vorlage. Die Nummer im Text ist die Zeile, an der die Meldung schon steht —
+    // der Modal-Fehler oben soll nur sagen, wo man hinschauen muss.
+    const badSpan = modalTemplate.items.findIndex(itemSpanImpossible)
+    if (badSpan >= 0) {
+      setModalError(`Eintrag ${badSpan + 1}: ${IMPOSSIBLE_SPAN_MESSAGE}`)
+      return
+    }
 
     setModalError('')
     setModalSaving(true)
@@ -558,9 +591,11 @@ export default function AdminDutyTemplatesPage() {
             ? 'Ausrichter-Auswahl ist nur bei Heim-Vorlagen erlaubt.'
             : code === 'invalid_hours_value'
               ? 'Die Dauer eines Eintrags muss größer als 0 sein.'
-              : code === 'invalid_team'
-                ? 'Ein ausgewähltes Team existiert nicht mehr.'
-                : fallback,
+              : code === 'impossible_duration_span'
+                ? IMPOSSIBLE_SPAN_MESSAGE
+                : code === 'invalid_team'
+                  ? 'Ein ausgewähltes Team existiert nicht mehr.'
+                  : fallback,
       )
     } finally {
       setModalSaving(false)

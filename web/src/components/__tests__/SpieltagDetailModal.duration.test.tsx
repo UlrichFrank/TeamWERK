@@ -178,3 +178,48 @@ describe('SpieltagDetailModal — dynamischer Diensttyp wird gegen den Termin au
     expect(body.duration_mode).toBeUndefined()
   })
 })
+
+// dienst-zeitmodus-strikt, Aufgabe 6: Anlegen UND Bearbeiten im Termin-Dialog setzen
+// is_custom=1 — der Dienst verlässt damit die automatische Regeneration. Beim
+// Bearbeiten eines automatisch erzeugten Dienstes ist das eine Nebenwirkung des
+// Speicherns und war bisher nirgends sichtbar; wer nur die Uhrzeit korrigierte, nahm
+// den Dienst ungewollt dauerhaft aus dem Regen.
+describe('SpieltagDetailModal — Hinweis auf die Herausnahme aus der Regeneration', () => {
+  test('Anlege-Dialog nennt die manuelle Pflege', async () => {
+    await openAddModal()
+    expect(screen.getByText(/manuell gepflegt/)).toBeTruthy()
+    expect(screen.getByText(/automatischen Regeneration/)).toBeTruthy()
+  })
+
+  test('Bearbeiten-Dialog warnt vor der Nebenwirkung des Speicherns', async () => {
+    mock.onGet('/games/50').reply(200, {
+      game: {
+        id: 50, date: '2026-09-13', time: '10:00', opponent: 'Testgegner',
+        event_type: 'heim', team_id: 1, teams: [{ id: 1, name: 'A-Jugend' }],
+        season_id: 2, can: { edit: true, delete: true, manage_lineup: false },
+      },
+      slots: [{
+        id: 77, duty_type_name: 'Kasse', event_time: '09:30', hours_value: 1.5,
+        role_description: '', slots_total: 1, slots_filled: 0, audiences: [],
+      }],
+    })
+    mock.onGet(/\/duty-board/).reply(200, [{
+      slots: [{
+        id: 77, duty_type: 'Kasse', duty_type_id: 9, has_instruction: false,
+        event_time: '09:30', hours_value: 1.5, slots_total: 1, vacancies: 1,
+        claimed_by_me: false, audiences: [], assignees: [],
+      }],
+    }])
+
+    render(
+      <MemoryRouter>
+        <SpieltagDetailModal gameId={50} onClose={() => {}} />
+      </MemoryRouter>,
+    )
+    const user = userEvent.setup()
+    await user.click(await screen.findByText('Bearbeiten'))
+
+    await screen.findByText('Dienst bearbeiten')
+    expect(screen.getByText(/Nach dem Speichern gilt dieser Dienst als manuell gepflegt/)).toBeTruthy()
+  })
+})

@@ -454,11 +454,14 @@ type templateItemRow struct {
 	// hierher, danach ist die Zeile eigenständig — kein NULL-erbt-Mechanismus,
 	// genau wie bei Anchor/OffsetMinutes daneben. Ausnahme ist die reduzierte
 	// Variante, siehe resolveItemHours in regen.go.
-	HoursValue           float64
+	HoursValue float64
 	// DurationMode/EndAnchor/EndOffsetMinutes (dienst-dauer-dynamisch): im Modus
 	// "dynamisch" ergibt sich die Dauer aus der Differenz zweier aufgelöster Anker
-	// statt aus HoursValue. HoursValue bleibt dabei gepflegt und ist der Rückfall,
-	// falls das Ende vor dem Start läge.
+	// statt aus HoursValue — und AUSSCHLIESSLICH daraus. HoursValue bleibt dort
+	// zwar gespeichert (ein Moduswechsel hin und zurück soll den Wert nicht
+	// verlieren), wird aber nicht mehr gelesen: der frühere Rückfall auf die
+	// absolute Dauer ist entfallen (dienst-zeitmodus-strikt). Löst die Definition
+	// gegen einen Termin nicht positiv auf, entsteht kein Slot.
 	DurationMode         string
 	EndAnchor            string
 	EndOffsetMinutes     int
@@ -1942,6 +1945,24 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// dynamicSpanImpossible meldet eine Anker-/Versatz-Kombination einer
+// Vorlagen-Zeile, deren Ende an KEINEM Termin nach dem Start liegen kann:
+// gleicher Anker für Start und Ende, End-Versatz nicht dahinter. Bei
+// verschiedenen Ankern hängt die Dauer an der Spieldauer des konkreten Termins
+// und ist hier nicht entscheidbar — dieser Restfall fällt beim Regen an
+// (resolveSlotHours: kein Slot + invalid_span-Meldung).
+//
+// Bewusste Kopie des gleichnamigen Helfers in internal/duties/handler.go: die
+// Regel gilt für Diensttyp UND Vorlagen-Zeile, aber Domain-Packages importieren
+// sich nicht gegenseitig (internal/arch), und vier Zeilen rechtfertigen kein
+// Foundation-Package.
+func dynamicSpanImpossible(mode, anchor string, offset int, endAnchor string, endOffset int) bool {
+	if mode != "dynamisch" {
+		return false
+	}
+	return anchor == endAnchor && endOffset <= offset
+}
+
 // PUT /api/admin/duty-templates/{id}
 func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
@@ -2028,6 +2049,17 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 		if it.EndOffsetMinutes == nil {
 			it.EndOffsetMinutes = &typeEndOffset
+		}
+		// Unmögliche Zeitspanne (dienst-zeitmodus-strikt): hängen Start und Ende
+		// am selben Anker, ist die Dauer exakt die Versatz-Differenz — eine
+		// Kombination, die nie positiv wird, erzeugte früher stumm einen Slot mit
+		// der Rückfall-Dauer und heute gar keinen. Sie hier abzuweisen ist die
+		// einzige Stufe, die den Fehler VOR dem Spieltag sichtbar macht. Wie die
+		// Prüfungen ringsum vor tx.BeginTx, damit ein 400 keine Teil-Persistenz
+		// hinterlässt.
+		if dynamicSpanImpossible(it.DurationMode, it.Anchor, it.OffsetMinutes, it.EndAnchor, *it.EndOffsetMinutes) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "impossible_duration_span"})
+			return
 		}
 		// team_ids wird nur gegen die Existenz in teams geprüft, bewusst NICHT
 		// gegen die aktive Saison: eine Vorlage überlebt Saisonwechsel, und

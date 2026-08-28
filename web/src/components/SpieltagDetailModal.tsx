@@ -362,6 +362,11 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                     ))}
                   </div>
                 </div>
+                <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                  Hier angelegte Dienste gelten als manuell gepflegt und werden von der
+                  automatischen Regeneration nicht angefasst — Startzeit und Dauer bleiben
+                  auch dann stehen, wenn sich der Termin oder die Vorlage ändert.
+                </p>
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setShowAddSlot(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button onClick={handleAddSlot} disabled={!addDutyTypeId || addSaving}
@@ -411,6 +416,11 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                     ))}
                   </div>
                 </div>
+                <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                  Nach dem Speichern gilt dieser Dienst als manuell gepflegt: Die automatische
+                  Regeneration lässt ihn ab dann unangetastet und führt Startzeit und Dauer bei
+                  Termin- oder Vorlagen-Änderungen nicht mehr nach.
+                </p>
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setEditSlot(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button onClick={handleEditSlot} disabled={editSaving}

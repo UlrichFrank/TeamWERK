@@ -9,7 +9,7 @@ import DutyInstructionEditorModal from '../components/DutyInstructionEditorModal
 import OffsetInput from '../components/OffsetInput'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
-import { hoursToDisplay, parseHoursInput, resolveAnchorClock, clockDiffMinutes, addMinutesToTime } from '../lib/duration'
+import { hoursToDisplay, parseHoursInput, resolveAnchorClock, addMinutesToTime, dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 
 interface DutyType {
   id: number
@@ -77,11 +77,24 @@ const emptyCreate = (): EditState => ({
 const EXAMPLE_KICKOFF = '10:00'
 const EXAMPLE_GAME_DURATION_MIN = 60
 
-function exampleSpan(state: EditState): { start: string; end: string; durationMinutes: number | null } {
+function exampleSpan(state: EditState): { start: string; end: string } {
   const exampleGameEnd = addMinutesToTime(EXAMPLE_KICKOFF, EXAMPLE_GAME_DURATION_MIN)
-  const start = resolveAnchorClock(state.anchor, parseOffset(state.offset), EXAMPLE_KICKOFF, exampleGameEnd)
-  const end = resolveAnchorClock(state.end_anchor, parseOffset(state.end_offset), EXAMPLE_KICKOFF, exampleGameEnd)
-  return { start, end, durationMinutes: clockDiffMinutes(start, end) }
+  return {
+    start: resolveAnchorClock(state.anchor, parseOffset(state.offset), EXAMPLE_KICKOFF, exampleGameEnd),
+    end: resolveAnchorClock(state.end_anchor, parseOffset(state.end_offset), EXAMPLE_KICKOFF, exampleGameEnd),
+  }
+}
+
+/**
+ * Unmögliche Spanne im aktuellen Formularzustand — dieselbe Regel, die der Server
+ * anwendet (dienst-zeitmodus-strikt). Das Formular blockiert damit vor dem Request,
+ * statt den 400 abzuwarten: die Meldung steht dort, wo der Fehler entsteht.
+ */
+function editStateSpanImpossible(state: EditState): boolean {
+  return dynamicSpanImpossible(
+    state.duration_mode, state.anchor, parseOffset(state.offset),
+    state.end_anchor, parseOffset(state.end_offset),
+  )
 }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
@@ -94,6 +107,8 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
   excludeId?: number
 }) {
   const variantOptions = types.filter(t => t.id !== excludeId)
+  const example = exampleSpan(state)
+  const spanError = editStateSpanImpossible(state)
   return (
     <div className="space-y-3">
       <div>
@@ -102,8 +117,8 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
           placeholder="z.B. Kassierer" required className={INPUT} />
       </div>
       <div>
-        <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer-Modus</label>
-        <div className="flex gap-4">
+        <label className="block text-sm font-medium text-brand-text-muted mb-1">Zeit-Modus</label>
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input
               type="radio"
@@ -112,7 +127,7 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
               onChange={() => onChange({ ...state, duration_mode: 'absolut' })}
               className="accent-brand-yellow"
             />
-            Absolut
+            Startzeit + Dauer
           </label>
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input
@@ -122,16 +137,32 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
               onChange={() => onChange({ ...state, duration_mode: 'dynamisch' })}
               className="accent-brand-yellow"
             />
-            Dynamisch (folgt dem Spiel)
+            Startzeit + Endzeit
           </label>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">
-            {state.duration_mode === 'dynamisch' ? 'Dauer (Rückfall)' : 'Dauer'}
-          </label>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Start-Anker</label>
+          <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
+            <option value="start">Anpfiff/Beginn</option>
+            <option value="end">Abpfiff/Ende</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Start-Versatz</label>
+          <OffsetInput
+            value={parseOffset(state.offset)}
+            onChange={v => onChange({ ...state, offset: formatOffset(v) })}
+            className={INPUT}
+          />
+        </div>
+      </div>
+
+      {state.duration_mode === 'absolut' ? (
+        <div>
+          <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
           <input
             list="hours-presets"
             value={state.hours}
@@ -145,29 +176,8 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
             ))}
           </datalist>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Standard-Anker</label>
-          <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
-            <option value="start">Anpfiff/Beginn</option>
-            <option value="end">Abpfiff/Ende</option>
-          </select>
-        </div>
-      </div>
-      {state.duration_mode === 'dynamisch' && (
-        <p className="text-xs text-brand-text-subtle -mt-2">
-          Wird verwendet, wenn die dynamische Berechnung keine positive Dauer ergibt (Ende vor Start).
-        </p>
-      )}
-      <div>
-        <label className="block text-sm font-medium text-brand-text-muted mb-1">Versatz</label>
-        <input value={state.offset} onChange={e => onChange({ ...state, offset: e.target.value })}
-          placeholder="z.B. -1h 30min" className={INPUT} />
-      </div>
-      <p className="text-xs text-brand-text-subtle">Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
-
-      {state.duration_mode === 'dynamisch' && (
-        <div className="border-t border-brand-border-subtle pt-3 mt-1">
-          <p className="text-xs font-semibold text-brand-text-muted mb-2">Ende (dynamisch)</p>
+      ) : (
+        <>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-brand-text-muted mb-1">End-Anker</label>
@@ -185,21 +195,18 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
               />
             </div>
           </div>
-          {(() => {
-            const example = exampleSpan(state)
-            return (
-              <p className="text-xs text-brand-text-subtle mt-2">
-                Beispiel bei {EXAMPLE_KICKOFF} Anpfiff, {EXAMPLE_GAME_DURATION_MIN} min Spieldauer: {example.start}–{example.end}
-                {example.durationMinutes !== null && example.durationMinutes <= 0 && (
-                  <span className="block text-brand-danger mt-1">
-                    Ende liegt vor (oder auf) dem Start — der Dienst fällt in diesem Beispiel auf die absolute Dauer zurück.
-                  </span>
-                )}
-              </p>
-            )
-          })()}
-        </div>
+          {spanError ? (
+            <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+              {IMPOSSIBLE_SPAN_MESSAGE}
+            </p>
+          ) : (
+            <p className="text-xs text-brand-text-subtle">
+              Beispiel bei {EXAMPLE_KICKOFF} Anpfiff, {EXAMPLE_GAME_DURATION_MIN} min Spieldauer: {example.start}–{example.end}
+            </p>
+          )}
+        </>
       )}
+      <p className="text-xs text-brand-text-subtle">Versatz-Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
 
       <div>
         <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe</label>
@@ -281,6 +288,9 @@ export default function AdminDutyTypesPage() {
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault()
+    // Letzter Riegel vor dem Request: der Anlege-Knopf ist bei unmöglicher Spanne
+    // ohnehin deaktiviert, aber ein Submit per Enter im Namensfeld läuft daran vorbei.
+    if (editStateSpanImpossible(create)) return
     await api.post('/duty-types', {
       name: create.name,
       hours_value: parseHoursInput(create.hours),
@@ -306,7 +316,7 @@ export default function AdminDutyTypesPage() {
   const cancelEdit = () => { setEdit(null); setModalId(null) }
 
   const saveEdit = async (id: number) => {
-    if (!edit) return
+    if (!edit || editStateSpanImpossible(edit)) return
     await api.put(`/duty-types/${id}`, {
       name: edit.name,
       hours_value: parseHoursInput(edit.hours),
@@ -384,7 +394,8 @@ export default function AdminDutyTypesPage() {
               <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle shrink-0">
                 <button
                   type="submit"
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  disabled={editStateSpanImpossible(create)}
+                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Anlegen
                 </button>
@@ -466,6 +477,7 @@ export default function AdminDutyTypesPage() {
           title={`Bearbeiten: ${edit.name}`}
           onClose={cancelEdit}
           onSave={() => modalId && saveEdit(modalId)}
+          saveDisabled={editStateSpanImpossible(edit)}
         >
           <DutyTypeForm state={edit} onChange={setEdit} types={types} excludeId={modalId ?? undefined} />
         </EditModal>

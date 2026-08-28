@@ -1,9 +1,12 @@
 /**
- * Dauer-Modus-Maske im Diensttyp-Editor (openspec/changes/dienst-dauer-dynamisch,
- * Aufgabe 5). Deckt zwei Dinge ab, die beim ersten Bauen leicht auseinanderlaufen:
- * (1) die End-Felder erscheinen nur im Modus „dynamisch", (2) sowohl Anlegen als
- * auch Bearbeiten schicken alle drei neuen Felder mit — `saveEdit` hatte sie beim
- * ersten Durchgang schlicht vergessen, obwohl `handleCreate` sie schon trug.
+ * Zeit-Modus-Maske im Diensttyp-Editor (openspec/changes/dienst-dauer-dynamisch
+ * Aufgabe 5, erweitert um dienst-zeitmodus-strikt Aufgabe 4.4). Deckt ab:
+ * (1) die End-Felder erscheinen nur im Modus „Startzeit + Endzeit" — und das
+ * Dauer-Feld verschwindet dort, weil es dort nichts mehr bewirkt (der Rückfall
+ * auf `hours_value` ist entfallen); (2) sowohl Anlegen als auch Bearbeiten
+ * schicken alle drei Felder mit — `saveEdit` hatte sie beim ersten Durchgang
+ * schlicht vergessen, obwohl `handleCreate` sie schon trug; (3) eine Spanne, die
+ * nie positiv werden kann, blockiert das Speichern vor dem Request.
  */
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
@@ -44,27 +47,77 @@ function mockApi(types: unknown[] = []) {
   mockPut.mockResolvedValue({ data: {} })
 }
 
-describe('AdminDutyTypesPage — Dauer-Modus', () => {
+/** OffsetInput übernimmt seinen Wert erst beim Blur — beide Schritte in einem Helfer. */
+function setOffset(label: HTMLElement, value: string) {
+  const input = label.closest('div')!.querySelector('input') as HTMLInputElement
+  fireEvent.change(input, { target: { value } })
+  fireEvent.blur(input)
+}
+
+describe('AdminDutyTypesPage — Zeit-Modus', () => {
   beforeEach(() => {
     mockGet.mockReset()
     mockPost.mockReset()
     mockPut.mockReset()
   })
 
-  test('End-Felder erscheinen nur im dynamischen Modus', async () => {
+  test('End-Felder ersetzen im Modus „Startzeit + Endzeit" das Dauer-Feld', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
     fireEvent.click(await screen.findByText('+ Diensttyp'))
     await screen.findByPlaceholderText('z.B. Kassierer')
 
+    // Modus 1: Dauer, keine End-Felder.
+    expect(screen.getByText('Dauer')).toBeTruthy()
     expect(screen.queryByText('End-Anker')).toBeNull()
 
-    fireEvent.click(screen.getByRole('radio', { name: /Dynamisch/ }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))
     expect(screen.getByText('End-Anker')).toBeTruthy()
     expect(screen.getByText('End-Versatz')).toBeTruthy()
+    // Kein Rückfall mehr → kein Dauer-Feld, das die Endzeit stillschweigend ersetzt.
+    expect(screen.queryByText('Dauer')).toBeNull()
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Absolut' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Dauer' }))
     expect(screen.queryByText('End-Anker')).toBeNull()
+    expect(screen.getByText('Dauer')).toBeTruthy()
+  })
+
+  test('Start-Felder heißen Start-Anker und Start-Versatz', async () => {
+    mockApi([])
+    render(<AdminDutyTypesPage />)
+    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    await screen.findByPlaceholderText('z.B. Kassierer')
+
+    expect(screen.getByText('Start-Anker')).toBeTruthy()
+    expect(screen.getByText('Start-Versatz')).toBeTruthy()
+    expect(screen.queryByText('Standard-Anker')).toBeNull()
+  })
+
+  test('unmögliche Spanne blockiert das Speichern', async () => {
+    mockApi([])
+    render(<AdminDutyTypesPage />)
+    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.change(await screen.findByPlaceholderText('z.B. Kassierer'), { target: { value: 'Halbzeit' } })
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))
+    // Start und Ende am selben Anker, Ende NICHT dahinter → kann nie positiv werden.
+    // Bei verschiedenen Ankern (Default) hinge die Dauer an der Spieldauer und wäre
+    // hier gar nicht entscheidbar — deshalb muss der End-Anker mitgezogen werden.
+    const endAnchor = screen.getByText('End-Anker').closest('div')!.querySelector('select') as HTMLSelectElement
+    fireEvent.change(endAnchor, { target: { value: 'start' } })
+    setOffset(screen.getByText('Start-Versatz'), '40')
+    setOffset(screen.getByText('End-Versatz'), '25')
+
+    expect(screen.getByText(/End-Versatz hinter dem Start-Versatz/)).toBeTruthy()
+    const submit = screen.getByText('Anlegen') as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    fireEvent.click(submit)
+    expect(mockPost).not.toHaveBeenCalled()
+
+    // Ende hinter den Start geschoben → wieder speicherbar.
+    setOffset(screen.getByText('End-Versatz'), '55')
+    expect(screen.queryByText(/End-Versatz hinter dem Start-Versatz/)).toBeNull()
+    expect((screen.getByText('Anlegen') as HTMLButtonElement).disabled).toBe(false)
   })
 
   test('Anlegen schickt alle drei Felder', async () => {
@@ -73,12 +126,10 @@ describe('AdminDutyTypesPage — Dauer-Modus', () => {
     fireEvent.click(await screen.findByText('+ Diensttyp'))
     fireEvent.change(await screen.findByPlaceholderText('z.B. Kassierer'), { target: { value: 'Kamera' } })
 
-    fireEvent.click(screen.getByRole('radio', { name: /Dynamisch/ }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))
     const endAnchorSelect = screen.getByText('End-Anker').closest('div')!.querySelector('select') as HTMLSelectElement
     fireEvent.change(endAnchorSelect, { target: { value: 'start' } })
-    const endOffsetInput = screen.getByText('End-Versatz').closest('div')!.querySelector('input') as HTMLInputElement
-    fireEvent.change(endOffsetInput, { target: { value: '15' } })
-    fireEvent.blur(endOffsetInput)
+    setOffset(screen.getByText('End-Versatz'), '15')
 
     fireEvent.click(screen.getByText('Anlegen'))
 

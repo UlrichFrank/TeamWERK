@@ -304,6 +304,10 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "end_anchor must be 'start' or 'end'", http.StatusBadRequest)
 		return
 	}
+	if dynamicSpanImpossible(req.DurationMode, req.DefaultAnchor, req.DefaultOffsetMinutes, req.EndAnchor, req.EndOffsetMinutes) {
+		http.Error(w, "end offset must be after start offset when both anchors are equal", http.StatusBadRequest)
+		return
+	}
 	if req.SameDayBehavior == "reduced" && req.SameDayVariantID == nil {
 		http.Error(w, "same_day_behavior 'reduced' requires same_day_variant_id", http.StatusBadRequest)
 		return
@@ -329,6 +333,30 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/admin/duty-types/:id
+// dynamicSpanImpossible meldet eine Anker-/Versatz-Kombination, deren Ende an
+// KEINEM Termin nach dem Start liegen kann.
+//
+// Hängen Start und Ende am selben Anker, ist die Dauer exakt die
+// Versatz-Differenz — unabhängig von der Spieldauer, also schon beim Pflegen
+// entscheidbar. `endOffset <= offset` heißt dort „das ergibt nie einen Dienst"
+// und ist ein Eingabefehler.
+//
+// Bei VERSCHIEDENEN Ankern wird bewusst nicht geprüft: die Dauer hängt dann an
+// der Spieldauer des konkreten Termins (Altersklasse bzw. Vorlagen-Dauer), die
+// hier nicht feststeht. „Start bei Anpfiff, Ende 15 min vor Spielende" ist eine
+// gültige Definition — eine Prüfung, die für jede denkbare Spieldauer positiv
+// verlangt, würde sie verbieten. Der Restfall wird deshalb erst beim Regen
+// entschieden (`resolveSlotHours`: kein Slot + Meldung), nicht hier.
+//
+// Spiegel: `dynamicSpanImpossible` in internal/games/handler.go (Vorlagen-Zeilen)
+// und `dynamicSpanImpossible` in web/src/lib/duration.ts (beide Masken).
+func dynamicSpanImpossible(mode, anchor string, offset int, endAnchor string, endOffset int) bool {
+	if mode != "dynamisch" {
+		return false
+	}
+	return anchor == endAnchor && endOffset <= offset
+}
+
 // resolveTypeHours prüft die Dauer eines Diensttyps und liefert den zu
 // schreibenden Wert. Fehlt das Feld, gilt derselbe Default wie in der
 // DB-Spalte (1.0) — dieselbe Regel, die `default_anchor`, `duration_mode` und
@@ -396,6 +424,10 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.EndAnchor != "start" && req.EndAnchor != "end" {
 		http.Error(w, "end_anchor must be 'start' or 'end'", http.StatusBadRequest)
+		return
+	}
+	if dynamicSpanImpossible(req.DurationMode, req.DefaultAnchor, req.DefaultOffsetMinutes, req.EndAnchor, req.EndOffsetMinutes) {
+		http.Error(w, "end offset must be after start offset when both anchors are equal", http.StatusBadRequest)
 		return
 	}
 	if req.SameDayBehavior == "reduced" && req.SameDayVariantID == nil {

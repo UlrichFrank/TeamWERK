@@ -174,6 +174,49 @@ func TestUpdateTemplate_SpeichertDauerModusJeItem(t *testing.T) {
 	}
 }
 
+// TestUpdateTemplate_UnmoeglicheSpanneWirdAbgewiesen (dienst-zeitmodus-strikt,
+// Aufgabe 1.3): eine Vorlagen-Zeile, deren Ende am selben Anker hängt und nicht hinter
+// dem Start liegt, kann an keinem Termin eine positive Dauer ergeben. Die Prüfung läuft
+// wie die übrigen Item-Prüfungen VOR tx.BeginTx — UpdateTemplate löscht alle Items und
+// schreibt sie neu, ein 400 mitten im Lauf hätte die Vorlage geleert.
+func TestUpdateTemplate_UnmoeglicheSpanneWirdAbgewiesen(t *testing.T) {
+	db := testutil.NewDB(t)
+	dutyTypeID := insertDutyTypeWithBehavior(t, db, "Zeitnehmer", "normal", "normal")
+	templateID := seedTeamScopeTemplate(t, db, "Heim", dutyTypeID, nil)
+
+	var before int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM game_template_items WHERE template_id=?`, templateID).Scan(&before); err != nil {
+		t.Fatalf("count before: %v", err)
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, db)
+	token := testutil.Token(t, adminUserID, "admin", []string{"vorstand"})
+
+	res := testutil.Do(t, srv, http.MethodPut, "/api/duty-templates/"+strconv.Itoa(templateID), token, map[string]any{
+		"name": "Heim", "template_type": "heim", "duration_minutes": 75,
+		"items": []map[string]any{{
+			"duty_type_id": dutyTypeID, "anchor": "start",
+			"offset_minutes": 40, "slots_count": 1, "hours_value": 1.0,
+			"duration_mode": "dynamisch", "end_anchor": "start", "end_offset_minutes": 25,
+		}},
+	})
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("erwartet 400 für unmögliche Spanne, got %d", res.StatusCode)
+	}
+
+	var after int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM game_template_items WHERE template_id=?`, templateID).Scan(&after); err != nil {
+		t.Fatalf("count after: %v", err)
+	}
+	if after != before {
+		t.Errorf("400 darf keine Teil-Persistenz hinterlassen: %d Zeilen vorher, %d nachher", before, after)
+	}
+}
+
 // TestUpdateTemplate_OhneDauerModusErbtVomTyp: ein Client, der die Felder nicht kennt,
 // bekommt den Stand des Diensttyps eingesetzt — nicht den Spalten-Default.
 func TestUpdateTemplate_OhneDauerModusErbtVomTyp(t *testing.T) {
