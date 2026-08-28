@@ -462,9 +462,16 @@ type templateItemRow struct {
 	// verlieren), wird aber nicht mehr gelesen: der frühere Rückfall auf die
 	// absolute Dauer ist entfallen (dienst-zeitmodus-strikt). Löst die Definition
 	// gegen einen Termin nicht positiv auf, entsteht kein Slot.
-	DurationMode         string
-	EndAnchor            string
-	EndOffsetMinutes     int
+	DurationMode     string
+	EndAnchor        string
+	EndOffsetMinutes int
+	// EndAtNextDuty (dienst-abloesung): macht das aus EndAnchor/EndOffsetMinutes
+	// aufgelöste Ende zum DECKEL statt zum Ende — der Slot endet, sobald der nächste
+	// gleichartige Dienst desselben Spieltags beginnt, spätestens aber am Deckel.
+	// Ausgewertet wird das NICHT hier in der Pro-Spiel-Schleife, sondern in
+	// applyChainCaps nach allen Inserts des Tages: die Startzeit des Nachfolgers steht
+	// erst fest, wenn er existiert (regen.go, design.md §3).
+	EndAtNextDuty        bool
 	SameDayBehavior      string
 	SameDayVariantID     sql.NullInt64
 	AdjacentDayBehavior  string
@@ -488,7 +495,7 @@ type templateItemRow struct {
 func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]templateItemRow, error) {
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
-		        gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes,
+		        gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes, gti.end_at_next_duty,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
 		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
@@ -503,7 +510,7 @@ func (h *Handler) loadTemplateItems(ctx context.Context, templateID int) ([]temp
 		var teamIDs sql.NullString
 		rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.HoursValue, &it.DurationMode, &it.EndAnchor, &it.EndOffsetMinutes,
-			&it.SameDayBehavior, &it.SameDayVariantID,
+			&it.EndAtNextDuty, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
 			&it.RotationEnabled, &it.AusrichterID)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
@@ -1799,10 +1806,15 @@ type templateItem struct {
 	HoursValue *float64 `json:"hours_value,omitempty"`
 	// Dauer-Modus (dienst-dauer-dynamisch). Wie HoursValue Pointer bzw. leerer String:
 	// fehlt das Feld, erbt die Zeile den Wert ihres Diensttyps.
-	DurationMode     string   `json:"duration_mode,omitempty"`
-	EndAnchor        string   `json:"end_anchor,omitempty"`
-	EndOffsetMinutes *int     `json:"end_offset_minutes,omitempty"`
-	Audiences        []string `json:"audiences,omitempty"`
+	DurationMode     string `json:"duration_mode,omitempty"`
+	EndAnchor        string `json:"end_anchor,omitempty"`
+	EndOffsetMinutes *int   `json:"end_offset_minutes,omitempty"`
+	// EndAtNextDuty (dienst-abloesung): macht das aufgelöste Ende zum Deckel und
+	// beendet den Dienst, sobald der nächste gleichartige am selben Tag beginnt.
+	// Wie die Felder darüber Pointer — fehlt es, erbt die Zeile den Wert ihres
+	// Diensttyps.
+	EndAtNextDuty *bool    `json:"end_at_next_duty,omitempty"`
+	Audiences     []string `json:"audiences,omitempty"`
 	// TeamIDs schränkt ein, für welche Teams eines Spiels aus diesem Item ein
 	// Slot entsteht. Leer/NULL = alle Teams (umgekehrte Leer-Semantik zu Audiences).
 	TeamIDs []int `json:"team_ids,omitempty"`
@@ -1821,7 +1833,7 @@ type templateItem struct {
 
 func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templateItem {
 	rows, _ := h.db.QueryContext(ctx,
-		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes, gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
+		`SELECT gti.id, gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count, gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes, gti.end_at_next_duty, gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
 		 WHERE gti.template_id=? ORDER BY gti.sort_order, gti.id`, templateID)
 	items := []templateItem{}
@@ -1834,11 +1846,13 @@ func (h *Handler) scanTemplateItems(ctx context.Context, templateID int) []templ
 		var audiences, teamIDs sql.NullString
 		var hoursValue float64
 		var endOffset int
+		var endAtNextDuty bool
 		var ausrichterID sql.NullInt64
 		rows.Scan(&it.ID, &it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes, &it.SlotsCount, &hoursValue,
-			&it.DurationMode, &it.EndAnchor, &endOffset, &audiences, &teamIDs, &it.RotationEnabled, &ausrichterID)
+			&it.DurationMode, &it.EndAnchor, &endOffset, &endAtNextDuty, &audiences, &teamIDs, &it.RotationEnabled, &ausrichterID)
 		it.HoursValue = &hoursValue
 		it.EndOffsetMinutes = &endOffset
+		it.EndAtNextDuty = &endAtNextDuty
 		it.Audiences = audiencesFromDB(audiences)
 		it.TeamIDs = teamIDsFromDB(teamIDs)
 		if ausrichterID.Valid {
@@ -2001,10 +2015,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		var typeHours float64
 		var typeMode, typeEndAnchor string
 		var typeEndOffset int
+		var typeEndAtNextDuty bool
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT same_day_behavior, adjacent_day_behavior, hours_value, duration_mode, end_anchor, end_offset_minutes
+			`SELECT same_day_behavior, adjacent_day_behavior, hours_value, duration_mode, end_anchor, end_offset_minutes, end_at_next_duty
 			 FROM duty_types WHERE id=?`, it.DutyTypeID,
-		).Scan(&sameDayBehavior, &adjacentDayBehavior, &typeHours, &typeMode, &typeEndAnchor, &typeEndOffset)
+		).Scan(&sameDayBehavior, &adjacentDayBehavior, &typeHours, &typeMode, &typeEndAnchor, &typeEndOffset, &typeEndAtNextDuty)
 		if err == sql.ErrNoRows {
 			http.Error(w, "invalid duty_type_id", http.StatusBadRequest)
 			return
@@ -2049,6 +2064,14 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 		if it.EndOffsetMinutes == nil {
 			it.EndOffsetMinutes = &typeEndOffset
+		}
+		// Ablösung (dienst-abloesung): erbt wie die Felder darüber per Copy-on-pick,
+		// braucht aber KEINE Werteprüfung — ein bool kennt keinen ungültigen Wert, und
+		// das Kennzeichen kann eine Definition auch nicht unmöglich machen: es verkürzt
+		// eine Dauer nur und berücksichtigt nur Nachfolger nach dem eigenen Start
+		// (design.md §4). Deshalb steht es bewusst NICHT in dynamicSpanImpossible.
+		if it.EndAtNextDuty == nil {
+			it.EndAtNextDuty = &typeEndAtNextDuty
 		}
 		// Unmögliche Zeitspanne (dienst-zeitmodus-strikt): hängen Start und Ende
 		// am selben Anker, ist die Dauer exakt die Versatz-Differenz — eine
@@ -2121,11 +2144,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			ausrichterID = *it.AusrichterID
 		}
 		_, err = tx.ExecContext(r.Context(),
-			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled, ausrichter_id, hours_value, duration_mode, end_anchor, end_offset_minutes)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO game_template_items (template_id, duty_type_id, anchor, offset_minutes, slots_count, sort_order, audiences, team_ids, rotation_enabled, ausrichter_id, hours_value, duration_mode, end_anchor, end_offset_minutes, end_at_next_duty)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			id, it.DutyTypeID, it.Anchor, it.OffsetMinutes, it.SlotsCount, i,
 			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled, ausrichterID,
-			*it.HoursValue, it.DurationMode, it.EndAnchor, *it.EndOffsetMinutes)
+			*it.HoursValue, it.DurationMode, it.EndAnchor, *it.EndOffsetMinutes, *it.EndAtNextDuty)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
