@@ -12,10 +12,10 @@ Kategorie `duties` nicht deaktiviert ist und die Benachrichtigung nicht per `sil
 unterdrückt wurde.
 
 Die Empfängermenge bei einem neu angelegten Slot (`POST /api/duty-slots`) SHALL dem
-Team-Scope des Slots folgen: bei gesetztem `team_id` dessen Team, bei `team_id = null`
-mit gesetztem `game_id` **alle** Teams des Spiels (`game_teams`), und nur ohne beides
-vereinsweit. Damit deckt sich die Benachrichtigung mit der Sichtbarkeit in der
-Dienstbörse.
+Team-Scope des Slots folgen: bei gesetztem `game_id` **alle** Teams des Spiels
+(`game_teams`) — `team_id` bleibt dort unbeachtet —, bei einem Slot ohne Spiel dessen
+`team_id`, und ohne beides vereinsweit. Damit deckt sich die Benachrichtigung mit der
+Sichtbarkeit in der Dienstbörse.
 
 Die Benachrichtigung über einen gelöschten Slot SHALL die **Dienstart**, den
 **Event-Namen** und das **Event-Datum** enthalten sowie den Namen des auslösenden Nutzers
@@ -30,7 +30,7 @@ Löschung, und der Empfänger kann sich dort neu eintragen.
 - **THEN** erhalten alle berechtigten Nutzer (spieler, elternteil, trainer im Team) eine Push Notification „Neuer Dienst verfügbar"
 
 #### Scenario: Neuer Slot ohne team_id an einem Mehr-Team-Termin
-- **WHEN** ein Slot mit `team_id: null` und `game_id` eines Termins mit den Teams A und B angelegt wird
+- **WHEN** ein Slot mit `game_id` eines Termins mit den Teams A und B angelegt wird
 - **THEN** erhalten die berechtigten Nutzer aus Team A und Team B eine Push Notification
 - **AND** erhalten Nutzer eines unbeteiligten Teams C keine
 

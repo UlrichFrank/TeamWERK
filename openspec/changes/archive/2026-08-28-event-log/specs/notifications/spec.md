@@ -71,6 +71,8 @@ Die Signatur SHALL variadisch sein, damit bestehende Aufrufstellen unverändert 
 - **THEN** kehrt die Fassade ohne Fehler zurück
 - **THEN** entsteht keine `user_events`-Zeile
 
+## ADDED Requirements
+
 ### Requirement: Push-Fan-out ausschließlich über die Fassade
 
 Alle Pfade, die Push an Nutzergruppen versenden, SHALL `notify.Send` verwenden. Direkte Aufrufe von `push.SendToUsers` außerhalb von `internal/notify` und `internal/push` SIND NICHT ZULÄSSIG.
