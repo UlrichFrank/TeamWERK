@@ -207,6 +207,9 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 	}
 
 	var summary RegenSummary
+	// Slots, deren Dauer die Ablösung noch kappen kann. Gesammelt über alle Spiele des
+	// Tages, ausgewertet nach der Schleife (applyChainCaps).
+	var chainCandidates []chainCandidate
 	// Nicht zugeteilte Kuchen sind eine Eigenschaft des Tages, nicht eines Spiels — sie
 	// werden hier einmal übertragen, nicht in der Pro-Spiel-Schleife (design.md
 	// Decision 4). buildRotationPlan kennt das Datum nicht, deshalb erst hier.
@@ -270,13 +273,14 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		}
 
 		// Step 4: per template item, compute behavior and insert.
-		gameSummary, outcomeByOriginalType, err := h.regenGameItems(
+		gameSummary, outcomeByOriginalType, gameChainCandidates, err := h.regenGameItems(
 			ctx, tx, g, items, durationMins, allGameTimes,
 			hasPrevDay, hasNextDay, teamIDs, customSlots, eventName, date, seasonID, rotation,
 			dayAusrichterID)
 		if err != nil {
 			return RegenSummary{}, err
 		}
+		chainCandidates = append(chainCandidates, gameChainCandidates...)
 		summary.Created = append(summary.Created, gameSummary.Created...)
 		summary.Reduced = append(summary.Reduced, gameSummary.Reduced...)
 		summary.Skipped = append(summary.Skipped, gameSummary.Skipped...)
@@ -318,7 +322,96 @@ func (h *Handler) regenSingleDay(ctx context.Context, tx *sql.Tx, date string, s
 		})
 	}
 
+	// Step 7 (tagesweit): Ablösung. Muss NACH der Pro-Spiel-Schleife stehen, weil die
+	// Startzeit eines Nachfolgers erst feststeht, wenn er existiert.
+	if err := applyChainCaps(ctx, tx, date, seasonID, chainCandidates); err != nil {
+		return RegenSummary{}, fmt.Errorf("chain caps: %w", err)
+	}
+
 	return summary, nil
+}
+
+// applyChainCaps kürzt die Dauer jedes Kandidaten auf den Start des nächsten
+// gleichartigen Dienstes desselben Spieltags, falls dieser vor dem bisherigen Ende liegt
+// (dienst-abloesung). Bewirtung ist ein Dienst am Spieltag, nicht am Spiel: ohne diese
+// Kappung läuft jeder Bewirtungsdienst bis zum Ende SEINES Spiels weiter, obwohl die
+// nächste Mannschaft längst übernommen hat — und die Doppelbesetzung wird über
+// duty_slots.hours_value als geleistete Dienststunde gutgeschrieben.
+//
+// EIN Query über den ganzen Tag, ausgeführt nach allen INSERTs. Bewusst KEIN Prepass vor
+// der Pro-Spiel-Schleife (wie ihn buildRotationPlan für den Kuchenbedarf braucht): ein
+// Prepass müsste die Startzeiten der Nachfolger VORHERSAGEN und dafür sechs Gates
+// nachbauen — Ausrichter-Gate, Rotationsplan, Team-Allowlist, Varianten-Umschreibung,
+// is_custom-Konflikt und übersprungene Spiele ohne auflösbare Dauer. Rät er dabei falsch,
+// bekommt der Vorgänger einen Nachfolger, den es nicht gibt, und trägt eine zu kurze
+// Dauer, die völlig plausibel aussieht — exakt die Fehlerklasse, die
+// dienst-zeitmodus-strikt beseitigt hat. Über die realen Zeilen zu laufen kostet einen
+// Query und ist dafür per Konstruktion richtig (design.md §3).
+//
+// Drei Eigenschaften fallen dadurch ohne eigenes Zutun an:
+//   - is_custom=1-Slots lösen ab (ein von Hand angelegter gleichartiger Dienst ist ein
+//     realer Nachfolger), werden aber nie selbst gekappt — sie stehen nie in candidates.
+//   - Slots an Terminen, die ein Massenlauf ausgenommen hat, lösen ebenfalls ab: sie
+//     wurden nicht gelöscht und stehen damit in der Tabelle ("Ausnahme ≠ Kontext").
+//   - Von 'purge'/'none' entfernte Slots lösen folgerichtig nicht mehr ab.
+//
+// INVARIANTE: die Kappung kann NIE einen Slot entfallen lassen. Als Nachfolger zählt nur,
+// was echt NACH dem eigenen Start beginnt, und der Deckel lag schon beim Insert nach dem
+// Start (sonst wäre der Slot gar nicht entstanden) — das Minimum der beiden bleibt also
+// immer positiv. Deshalb ist das hier ein reines UPDATE: kein DELETE, kein neuer
+// invalid_span-Eintrag, keine Berührung mit restoreAssignments (matcht über
+// (duty_type_id, event_time), nicht über die Dauer) oder buildNotificationIntents
+// (es verschwindet nichts, also gibt es nichts zu melden). Ein rückwärts liegender Slot
+// löst bewusst NICHT ab: sonst löschte ein vertippter Versatz den Dienst, statt ihn auf
+// seinen Deckel zurückfallen zu lassen (design.md §4).
+func applyChainCaps(ctx context.Context, tx *sql.Tx, date string, seasonID int, candidates []chainCandidate) error {
+	if len(candidates) == 0 {
+		return nil
+	}
+	rows, err := tx.QueryContext(ctx,
+		`SELECT duty_type_id, event_time FROM duty_slots WHERE event_date=? AND season_id=?`,
+		date, seasonID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	startsByType := map[int][]string{}
+	for rows.Next() {
+		var dutyTypeID int
+		var eventTime string
+		if err := rows.Scan(&dutyTypeID, &eventTime); err != nil {
+			return err
+		}
+		startsByType[dutyTypeID] = append(startsByType[dutyTypeID], eventTime)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, c := range candidates {
+		successor := ""
+		for _, t := range startsByType[c.DutyTypeID] {
+			// Echt später als der eigene Start; von diesen der früheste. Gleichzeitige
+			// Slots lösen einander nicht ab.
+			if minutesBetween(c.StartTime, t) <= 0 {
+				continue
+			}
+			if successor == "" || minutesBetween(t, successor) > 0 {
+				successor = t
+			}
+		}
+		if successor == "" {
+			continue
+		}
+		capped := float64(minutesBetween(c.StartTime, successor)) / 60.0
+		// Nur kürzen: liegt die Ablösung hinter dem gepflegten Ende, bleibt der Deckel.
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE duty_slots SET hours_value=? WHERE id=? AND hours_value > ?`,
+			capped, c.SlotID, capped); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // buildNotificationIntents maps the users of the deleted (is_custom=0) slots to notification
@@ -864,6 +957,19 @@ func itemAppliesToAnyTeam(allowlist []int, teamIDs []int) bool {
 	return false
 }
 
+// chainCandidate ist ein frisch erzeugter Slot, dessen Dauer noch gekappt werden kann
+// (dienst-abloesung). Gesammelt wird während der Pro-Spiel-Schleife, gekappt erst danach
+// in applyChainCaps — die Startzeit des Nachfolgers steht erst fest, wenn er existiert.
+//
+// DutyTypeID ist der Typ, unter dem der Slot TATSÄCHLICH entstanden ist (also nach einer
+// eventuellen Varianten-Reduktion), nicht der der Vorlagen-Zeile: „gleichartig" meint,
+// was in der Dienstbörse steht.
+type chainCandidate struct {
+	SlotID     int64
+	DutyTypeID int
+	StartTime  string
+}
+
 // itemOutcome records what happened to one template item's duty type, keyed by the
 // item's original DutyTypeID, so notification intents can distinguish removed vs. variant-changed.
 type itemOutcome struct {
@@ -880,9 +986,10 @@ func (h *Handler) regenGameItems(
 	allGameTimes []string, hasPrevDay, hasNextDay bool, teamIDs []int,
 	customSlots map[customKey]bool, eventName, date string, seasonID int,
 	rotation rotationPlan, dayAusrichterID int,
-) (RegenSummary, map[int]itemOutcome, error) {
+) (RegenSummary, map[int]itemOutcome, []chainCandidate, error) {
 	var summary RegenSummary
 	outcomeByOriginalType := map[int]itemOutcome{}
+	var chainCandidates []chainCandidate
 
 	for _, it := range items {
 		// GATE #2 (heimspieltag-ausrichter design.md Decision 4): an einen anderen
@@ -930,6 +1037,7 @@ func (h *Handler) regenGameItems(
 		resultMode := it.DurationMode
 		resultEndAnchor := it.EndAnchor
 		resultEndOffset := it.EndOffsetMinutes
+		resultEndAtNext := it.EndAtNextDuty
 		isReduce := resultDutyTypeID != it.DutyTypeID
 		if isReduce {
 			variant, lerr := h.lookupDutyTypeTx(ctx, tx, resultDutyTypeID)
@@ -939,6 +1047,10 @@ func (h *Handler) regenGameItems(
 				resultMode = variant.DurationMode
 				resultEndAnchor = variant.EndAnchor
 				resultEndOffset = variant.EndOffsetMinutes
+				// Ob sich eine Arbeit ablösen lässt, gehört zur Arbeit — dieselbe
+				// Regel wie für Modus, End-Anker und End-Versatz darüber
+				// (dienst-abloesung design.md §5).
+				resultEndAtNext = variant.EndAtNextDuty
 			}
 		}
 
@@ -973,16 +1085,20 @@ func (h *Handler) regenGameItems(
 		// team_id wird bewusst nicht gesetzt: der Slot hängt an g.ID, seine
 		// Mannschaften stehen in game_teams. Eine Kopie hier wäre eine zweite,
 		// einfrierende Quelle für dieselbe Tatsache.
-		insertOne := func(slotsTotal int) (bool, error) {
+		// Rückgabe ist die neue Slot-ID, oder 0 wenn wegen eines is_custom=1-Konflikts
+		// nichts entstanden ist. Trägt das Item das Ablösungs-Kennzeichen, wird der
+		// frische Slot als Kandidat vorgemerkt: gekappt wird er erst in applyChainCaps,
+		// nach allen Inserts des Tages (dienst-abloesung design.md §3).
+		insertOne := func(slotsTotal int) (int64, error) {
 			k := makeCustomKey(resultDutyTypeID, eventTime)
 			if customSlots[k] {
 				summary.Conflicts = append(summary.Conflicts, ConflictEntry{
 					Date: date, DutyTypeID: resultDutyTypeID,
 					EventTime: eventTime, GameIDs: []int{g.ID},
 				})
-				return false, nil
+				return 0, nil
 			}
-			_, err := tx.ExecContext(ctx, `
+			res, err := tx.ExecContext(ctx, `
 				INSERT INTO duty_slots
 				  (event_name, event_date, event_time, duty_type_id, role_desc,
 				   slots_total, team_id, season_id, game_id, audiences, is_custom,
@@ -991,9 +1107,22 @@ func (h *Handler) regenGameItems(
 				eventName, date, eventTime, resultDutyTypeID, "",
 				slotsTotal, seasonID, g.ID, slotAudiences, slotHours)
 			if err != nil {
-				return false, err
+				return 0, err
 			}
-			return true, nil
+			slotID, err := res.LastInsertId()
+			if err != nil {
+				return 0, err
+			}
+			// Nur im dynamischen Modus: dort ist das aufgelöste Ende der Deckel, den
+			// die Ablösung nach vorn ziehen darf. Im Modus "absolut" ist das
+			// Kennzeichen bedeutungslos (wie End-Anker und End-Versatz auch) — der
+			// Slot trägt dann die gepflegte Stundenzahl, unangetastet.
+			if resultEndAtNext && resultMode == "dynamisch" {
+				chainCandidates = append(chainCandidates, chainCandidate{
+					SlotID: slotID, DutyTypeID: resultDutyTypeID, StartTime: eventTime,
+				})
+			}
+			return slotID, nil
 		}
 
 		// createdCount = Kapazität (slots_total), die dieses Item an diesem Spiel
@@ -1019,7 +1148,7 @@ func (h *Handler) regenGameItems(
 			}
 			if createdCount > 0 {
 				if _, err := insertOne(createdCount); err != nil {
-					return RegenSummary{}, nil, err
+					return RegenSummary{}, nil, nil, err
 				}
 			}
 		default:
@@ -1032,7 +1161,7 @@ func (h *Handler) regenGameItems(
 			if itemAppliesToAnyTeam(it.TeamIDs, teamIDs) {
 				createdCount = n
 				if _, err := insertOne(n); err != nil {
-					return RegenSummary{}, nil, err
+					return RegenSummary{}, nil, nil, err
 				}
 			}
 		}
@@ -1060,7 +1189,7 @@ func (h *Handler) regenGameItems(
 		}
 	}
 
-	return summary, outcomeByOriginalType, nil
+	return summary, outcomeByOriginalType, chainCandidates, nil
 }
 
 func composeEventName(eventType string, isHome bool, opponent string) string {
@@ -1221,7 +1350,7 @@ func (h *Handler) effectiveEventDurationTx(ctx context.Context, tx *sql.Tx, even
 func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateID int) ([]templateItemRow, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT gti.duty_type_id, dt.name, gti.anchor, gti.offset_minutes, gti.slots_count,
-		        gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes,
+		        gti.hours_value, gti.duration_mode, gti.end_anchor, gti.end_offset_minutes, gti.end_at_next_duty,
 		        dt.same_day_behavior, dt.same_day_variant_id, dt.adjacent_day_behavior, dt.adjacent_day_variant_id,
 		        gti.audiences, gti.team_ids, gti.rotation_enabled, gti.ausrichter_id
 		 FROM game_template_items gti JOIN duty_types dt ON dt.id = gti.duty_type_id
@@ -1236,7 +1365,7 @@ func (h *Handler) loadTemplateItemsTx(ctx context.Context, tx *sql.Tx, templateI
 		var teamIDs sql.NullString
 		if err := rows.Scan(&it.DutyTypeID, &it.DutyTypeName, &it.Anchor, &it.OffsetMinutes,
 			&it.SlotsCount, &it.HoursValue, &it.DurationMode, &it.EndAnchor, &it.EndOffsetMinutes,
-			&it.SameDayBehavior, &it.SameDayVariantID,
+			&it.EndAtNextDuty, &it.SameDayBehavior, &it.SameDayVariantID,
 			&it.AdjacentDayBehavior, &it.AdjacentDayVariantID, &it.Audiences, &teamIDs,
 			&it.RotationEnabled, &it.AusrichterID); err != nil {
 			return nil, err
@@ -1258,14 +1387,15 @@ type dutyTypeDuration struct {
 	DurationMode     string
 	EndAnchor        string
 	EndOffsetMinutes int
+	EndAtNextDuty    bool
 }
 
 func (h *Handler) lookupDutyTypeTx(ctx context.Context, tx *sql.Tx, id int) (dutyTypeDuration, error) {
 	var d dutyTypeDuration
 	err := tx.QueryRowContext(ctx,
-		`SELECT name, hours_value, duration_mode, end_anchor, end_offset_minutes
+		`SELECT name, hours_value, duration_mode, end_anchor, end_offset_minutes, end_at_next_duty
 		 FROM duty_types WHERE id=?`, id).
-		Scan(&d.Name, &d.HoursValue, &d.DurationMode, &d.EndAnchor, &d.EndOffsetMinutes)
+		Scan(&d.Name, &d.HoursValue, &d.DurationMode, &d.EndAnchor, &d.EndOffsetMinutes, &d.EndAtNextDuty)
 	return d, err
 }
 
