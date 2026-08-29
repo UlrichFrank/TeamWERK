@@ -18,7 +18,7 @@ import {
 
 /**
  * Die Zusage der Capability `component-standards` ist, dass alle Bedienelemente
- * einer Kopfzeile gleich hoch sind. Geprüft wird sie hier auf den Klassen, nicht
+ * einer Kopfzeile gleich hoch sind — untereinander, je Breakpoint. Geprüft wird sie hier auf den Klassen, nicht
  * an gerenderten Pixeln: jsdom rechnet kein Layout, `getBoundingClientRect()`
  * liefert dort überall 0. Die Pixel-Aussage hängt an Tailwind und gehört in die
  * Sichtprüfung bzw. den E2E-Lauf.

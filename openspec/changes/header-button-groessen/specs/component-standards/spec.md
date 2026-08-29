@@ -4,7 +4,7 @@
 Jeder Button in `web/src/` SHALL exakt einen der vier definierten Klassen-Strings verwenden. Abweichungen sind nicht erlaubt.
 
 **Header-Control (Aktion in der Seiten-Kopfzeile, Filter-Chip, Header-Select):**
-`inline-flex items-center justify-center gap-1 rounded-md border h-11 sm:h-[30px] px-3 text-xs font-medium transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed`
+`inline-flex items-center justify-center gap-1 rounded-md border h-8 sm:h-[30px] px-3 text-xs font-medium transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed`
 kombiniert mit einem Farbsatz:
 - primär: `border-brand-yellow bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black`
 - neutral / inaktiver Toggle: `bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text`
@@ -29,16 +29,17 @@ Split-Buttons ersetzen `rounded-md` durch `rounded-l-md` bzw. `rounded-r-md`.
 
 Header-Control und Primary sind zwei verschiedene Rollen und SHALL NOT gegeneinander ausgetauscht werden: Header-Control gilt für Bedienelemente in der Zeile der Seitenüberschrift, Primary für die Bestätigungs-Aktion eines Formulars oder Modals.
 
-Header-Controls SHALL ihre Höhe über eine feste Höhen-Utility festlegen, nicht über vertikales Padding. Grund ist die Regel aus `ios-input-zoom-prevention`: unterhalb von 640 px erzwingt `index.css` `font-size: 16px` für `input`, `select` und `textarea`, aber nicht für `button`. Aus derselben `py-*`-Klasse entstehen dort deshalb unterschiedliche Höhen, und eine Kopfzeile aus Suchfeld, Auswahl und Button läuft auseinander.
+Header-Controls SHALL innerhalb einer Kopfzeile dieselbe Höhe haben — 30 px ab 640 px, 32 px darunter — und diese über eine feste Höhen-Utility festlegen, nicht über vertikales Padding. Grund ist die Regel aus `ios-input-zoom-prevention`: unterhalb von 640 px erzwingt `index.css` `font-size: 16px` für `input`, `select` und `textarea`, aber nicht für `button`. Aus derselben `py-*`-Klasse entstehen dort deshalb unterschiedliche Höhen, und eine Kopfzeile aus Suchfeld, Auswahl und Button läuft auseinander.
 
 #### Scenario: Header-Controls einer Zeile sind gleich hoch
 - **WHEN** eine Seiten-Kopfzeile mit Überschrift, Suchfeld, Auswahlfeld und Aktions-Button gerendert wird
-- **THEN** haben Suchfeld, Auswahlfeld und Button dieselbe Höhe — auf Viewports ab 640 px 30 px, darunter 44 px
+- **THEN** haben Suchfeld, Auswahlfeld und Button dieselbe Höhe — 30 px ab 640 px, 32 px darunter
 - **AND** das gilt auch unterhalb von 640 px, wo `index.css` die Schriftgröße der Eingabefelder auf 16 px zwingt
 
-#### Scenario: Header-Control erfüllt das Touch-Target auf Mobile
+#### Scenario: Header-Controls sind vom 44-px-Touch-Target ausgenommen
 - **WHEN** ein Header-Control auf einem Viewport < 640 px gerendert wird
-- **THEN** ist es mindestens 44 px hoch
+- **THEN** ist es 32 px hoch und unterschreitet damit bewusst die 44-px-Regel aus `docs/agent/05-frontend.md`
+- **AND** für Buttons außerhalb der Kopfzeile gilt die Regel unverändert
 
 #### Scenario: Compact-Modus ändert die Höhe nicht
 - **WHEN** die Filterleiste in den Compact-Modus wechselt und die Chips nur noch ihr Icon ohne Beschriftung zeigen

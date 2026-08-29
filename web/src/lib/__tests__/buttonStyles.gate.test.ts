@@ -29,7 +29,12 @@ const SCAN_DIRS = ['pages', 'components']
  * Kopien lassen ihn oft weg, sollen aber trotzdem auffallen.
  */
 const METRICS: { constant: string; metric: string }[] = [
-  { constant: 'HEADER_H (und alles, was darauf aufbaut)', metric: 'h-11 sm:h-[30px]' },
+  {
+    constant: 'HEADER_CTRL (und die anderen Header-Basen)',
+    // Die volle Basis, nicht nur die Höhenklassen — die kämen überall im
+    // Code vor und würde das Gate zum Rauschgenerator machen.
+    metric: 'inline-flex items-center justify-center gap-1 border h-8 sm:h-[30px] text-xs font-medium transition-colors shrink-0',
+  },
   { constant: 'BTN_PRIMARY', metric: 'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium' },
   { constant: 'BTN_DANGER', metric: 'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium' },
   { constant: 'BTN_SECONDARY', metric: 'border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium' },

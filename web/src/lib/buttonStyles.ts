@@ -5,8 +5,8 @@
  * Zwei Rollen, die nicht gegeneinander austauschbar sind:
  *
  * - **Header-Control** (`HEADER_*`): alles, was in der Zeile der Seitenüberschrift
- *   steht — Aktions-Button, Filter-Chip, Suchfeld, Auswahlfeld. 30px auf Desktop,
- *   44px auf Mobile.
+ *   steht — Aktions-Button, Filter-Chip, Suchfeld, Auswahlfeld. 32px, auf jeder
+ *   Breite gleich.
  * - **Formular-Aktion** (`BTN_*`): die Bestätigungs-Aktion eines Formulars oder
  *   Modals. Größer (`text-sm`), weil sie am Ende eines Eingabeflusses steht und
  *   nicht neben einer Überschrift.
@@ -20,8 +20,7 @@
  * das für beide gleichzeitig, weil die Differenz aus der Schriftgröße kommt.
  * Bei fixer Höhe zentriert der Browser den Inhalt unabhängig von der Schriftgröße.
  *
- * `h-[30px]` ist die gewachsene Ist-Höhe der Filterleiste, `h-11` (44px) das
- * Touch-Target-Minimum aus `docs/agent/05-frontend.md`.
+ * Der Wert selbst steht bei `HEADER_H`.
  *
  * Verwendung: Basis + Farbsatz kombinieren, Layout-Klassen am Aufrufer anhängen.
  *
@@ -31,10 +30,19 @@
 
 /**
  * Die Höhe jedes Bedienelements in einer Kopfzeile. Auch für Elemente gedacht,
- * die sonst keinen der Strings hier verwenden können — etwa ein Suchfeld mit
+ * die sonst keinen der Strings hier verwenden können, etwa ein Suchfeld mit
  * Icon-Padding.
+ *
+ * Desktop 30px — die gewachsene Höhe der Filterleiste, unverändert. Mobile 32px,
+ * die Höhe des „Bild hochladen"-Buttons im Profil (`px-3 py-1.5 text-sm`).
+ *
+ * Die 32px unterschreiten bewusst das 44px-Touch-Target aus
+ * `docs/agent/05-frontend.md`: die Kopfzeile ist eine dichte Leiste aus
+ * Suchfeld, Filtern und einer Aktion, und ein Sprung auf 44px macht sie auf
+ * kleinen Geräten unverhältnismäßig hoch. Für Buttons außerhalb der Kopfzeile
+ * gilt die Regel unverändert.
  */
-export const HEADER_H = 'h-11 sm:h-[30px]'
+export const HEADER_H = 'h-8 sm:h-[30px]'
 
 /**
  * Gemeinsame Basis aller Header-Controls — ohne Rundung und ohne horizontales
