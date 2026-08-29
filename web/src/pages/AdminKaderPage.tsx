@@ -12,6 +12,7 @@ import AutoAssignModal from '../components/AutoAssignModal'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
+import { BTN_PRIMARY, HEADER_CTRL, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 interface Season {
   id: number
@@ -385,19 +386,19 @@ export default function AdminKaderPage() {
               <>
                 <button
                   onClick={() => { setCreateModal({ ageClass: '', gender: '', nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
-                  className="bg-brand-yellow text-brand-black px-4 py-1.5 rounded-md text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors whitespace-nowrap"
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY} whitespace-nowrap`}
                 >
                   + Mannschaft
                 </button>
                 <button
                   onClick={() => setShowCopyModal(true)}
-                  className="border border-brand-border text-brand-text-muted px-4 py-1.5 rounded-md text-xs font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
+                  className={`${HEADER_CTRL} ${HEADER_NEUTRAL} whitespace-nowrap`}
                 >
                   Aus vorheriger Saison kopieren
                 </button>
                 <button
                   onClick={() => setShowAutoAssignModal(true)}
-                  className="border border-brand-border text-brand-text-muted px-4 py-1.5 rounded-md text-xs font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors whitespace-nowrap"
+                  className={`${HEADER_CTRL} ${HEADER_NEUTRAL} whitespace-nowrap`}
                 >
                   Auto-Assign
                 </button>
@@ -441,7 +442,7 @@ export default function AdminKaderPage() {
             <button
               onClick={handleInitialize}
               disabled={initializing}
-              className="bg-brand-yellow text-brand-black px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+              className={BTN_PRIMARY}
             >
               {initializing ? 'Anlegen…' : 'Kader für Saison anlegen'}
             </button>

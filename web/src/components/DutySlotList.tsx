@@ -12,6 +12,7 @@ import ActionMenu from './ActionMenu'
 import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 // Bewusst schlank: Board liefert nur Namen inline; Avatar/Kontakt lädt
 // PersonChip on-demand über GET /api/users/{id}/contact (Sichtbarkeitsregeln
@@ -340,7 +341,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
               <button
                 disabled={claimDialog.selectedUserId === null || claimLoading}
                 onClick={() => claimDialog.selectedUserId !== null && claimForUser(claimDialog.slotId, claimDialog.selectedUserId)}
-                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`${BTN_PRIMARY} flex-1`}
               >
                 {claimLoading ? 'Eintragen…' : 'Eintragen'}
               </button>

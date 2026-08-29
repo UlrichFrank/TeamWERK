@@ -9,6 +9,7 @@ import PersonChip from '../components/PersonChip'
 import { getEventColors } from '../lib/eventColors'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
 interface CarpoolEntry {
@@ -390,7 +391,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
           <button
             type="submit"
             disabled={saving}
-            className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`${BTN_PRIMARY} w-full`}
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
@@ -481,7 +482,7 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
           <button
             type="submit"
             disabled={saving}
-            className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`${BTN_PRIMARY} w-full`}
           >
             {saving ? 'Senden…' : (isRide ? 'Mitfahrt anfragen' : 'Platz anbieten')}
           </button>
@@ -537,14 +538,14 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
             <div className="flex gap-2 flex-shrink-0">
               <button
                 onClick={() => onOpenForm(data.game.id, 'biete')}
-                className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0"
+                className={`${BTN_SMALL} min-h-[44px] sm:min-h-0`}
               >
                 <span className="hidden sm:inline">Ich biete Mitfahrt</span>
                 <Car className="w-4 h-4 sm:hidden" />
               </button>
               <button
                 onClick={() => onOpenForm(data.game.id, 'suche')}
-                className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0"
+                className={`${BTN_SMALL} min-h-[44px] sm:min-h-0`}
               >
                 <span className="hidden sm:inline">Ich suche Mitfahrt</span>
                 <Users className="w-4 h-4 sm:hidden" />
@@ -554,7 +555,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
           {hasOwn && (
             <button
               onClick={() => onOpenForm(data.game.id, hasOwnBiete ? 'suche' : 'biete')}
-              className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0"
+              className={`${BTN_SMALL} min-h-[44px] sm:min-h-0`}
             >
               <span className="hidden sm:inline">Eintrag hinzufügen</span>
               <span className="sm:hidden">+</span>
@@ -833,7 +834,7 @@ export default function MitfahrgelegenheitenPage() {
             <select
               value={filterTeamId ?? ''}
               onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+              className={`${HEADER_FIELD} w-24 shrink-0`}
             >
               <option value="">Teams</option>
               {allTeams.map(t => (
@@ -852,10 +853,8 @@ export default function MitfahrgelegenheitenPage() {
           <button
             onClick={() => updateFilter({ mine: !viewMine })}
             aria-label="Meine"
-            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
-              viewMine
-                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
+              viewMine ? HEADER_PRIMARY : HEADER_NEUTRAL
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" />

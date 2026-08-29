@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
+import { BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
 
 interface TrainerEntry { userId: number; memberId: number; name: string }
 interface Responsibility { id: number; label: string }
@@ -52,7 +53,6 @@ interface CashbookEntry { id: number; amountCent: number; note: string; enteredB
 interface CashbookData { entries: CashbookEntry[]; balanceCent: number; canManage: boolean }
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_SMALL = 'bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
 const fmtEur = (cent: number) =>
   (cent / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
@@ -826,7 +826,7 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
               <button onClick={() => setUnitPreview(null)} className="rounded-md px-4 py-2 text-sm font-medium text-brand-text-muted hover:text-brand-text transition-colors">
                 Abbrechen
               </button>
-              <button onClick={applyUnit} className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
+              <button onClick={applyUnit} className={BTN_PRIMARY}>
                 Umrechnen
               </button>
             </div>

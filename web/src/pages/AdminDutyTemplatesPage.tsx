@@ -12,6 +12,7 @@ import HoursInput from '../components/HoursInput'
 import { errorData } from '../lib/errors'
 import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItems'
 import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
+import { HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import { ChevronDown, RefreshCw } from 'lucide-react'
 
 interface DutyType {
@@ -633,7 +634,7 @@ export default function AdminDutyTemplatesPage() {
           <h1 className="text-2xl font-bold">Dienstplan-Vorlagen</h1>
           <button
             onClick={openCreateModal}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
           >
             + Vorlage
           </button>

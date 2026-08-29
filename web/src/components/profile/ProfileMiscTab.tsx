@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import Toggle from '../Toggle'
 import { useAuth, MapsProvider } from '../../contexts/AuthContext'
+import { BTN_PRIMARY } from '../../lib/buttonStyles'
 
 type Category = 'games' | 'trainings' | 'duties' | 'carpooling' | 'chat' | 'operativ' | 'sonstiges'
 
@@ -217,7 +218,7 @@ export default function ProfileMiscTab() {
         <button
           onClick={handleSave}
           disabled={!changed || saving}
-          className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={BTN_PRIMARY}
         >
           {saving ? 'Speichern…' : 'Speichern'}
         </button>

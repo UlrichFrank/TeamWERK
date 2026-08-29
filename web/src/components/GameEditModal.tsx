@@ -49,6 +49,7 @@ const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm te
 const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 
 import type { RegenSummary } from './RegenSummaryCard'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 interface Props {
   game: Game
@@ -314,7 +315,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`${BTN_PRIMARY} flex-1`}
             >
               {saving ? 'Speichern…' : 'Speichern'}
             </button>

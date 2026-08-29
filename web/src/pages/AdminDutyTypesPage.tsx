@@ -10,6 +10,7 @@ import OffsetInput from '../components/OffsetInput'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { hoursToDisplay, parseHoursInput, resolveAnchorClock, addMinutesToTime, dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
+import { BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 interface DutyType {
   id: number
@@ -389,7 +390,7 @@ export default function AdminDutyTypesPage() {
           <h1 className="text-2xl font-bold">Diensttypen</h1>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
           >
             + Diensttyp
           </button>
@@ -418,7 +419,7 @@ export default function AdminDutyTypesPage() {
                 <button
                   type="submit"
                   disabled={editStateSpanImpossible(create)}
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`${BTN_PRIMARY} flex-1`}
                 >
                   Anlegen
                 </button>

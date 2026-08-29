@@ -43,6 +43,7 @@ import { useChatEvents } from "../hooks/useChatEvents";
 import ConversationParticipantsModal from "../components/ConversationParticipantsModal";
 import MessageReadsModal from "../components/MessageReadsModal";
 import CreatorExitChoiceModal from "../components/CreatorExitChoiceModal";
+import { BTN_SMALL } from '../lib/buttonStyles'
 
 interface ConvMember {
   id: number;
@@ -1453,7 +1454,7 @@ export default function ChatPage() {
                         <button
                           onClick={loadOlderMessages}
                           disabled={loadingOlder}
-                          className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className={BTN_SMALL}
                         >
                           {loadingOlder ? "Lade…" : "Ältere Nachrichten laden"}
                         </button>

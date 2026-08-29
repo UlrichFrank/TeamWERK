@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { Member, Parent, ChangeDraft } from '../../pages/ProfilePage'
+import { BTN_DANGER, BTN_PRIMARY } from '../../lib/buttonStyles'
 
 interface MemberEditData {
   first_name: string
@@ -166,7 +167,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
                 <button
                   onClick={handleDirectSave}
                   disabled={saving}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   {saving ? 'Speichern…' : 'Speichern'}
                 </button>
@@ -246,7 +247,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
           </div>
           <button
             onClick={() => handleCancelDraft(profilDraft.id)}
-            className="bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors"
+            className={BTN_DANGER}
           >
             Zurückziehen
           </button>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { FileText, AlertTriangle, Image as ImageIcon } from 'lucide-react'
+import { BTN_SMALL } from '../lib/buttonStyles'
 
 type PendingItem = {
     id: number
@@ -13,9 +14,6 @@ type PendingItem = {
     author_name: string
     image_count: number
 }
-
-const btnSmall =
-    'bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors'
 
 // Deadline-Schwelle: nach 5 Tagen wird der Bericht rot markiert
 // (identisch zum Backend-Reminder-Job).
@@ -113,7 +111,7 @@ export default function MatchReportPendingListPage() {
                                             )}
                                             <button
                                                 type="button"
-                                                className={btnSmall}
+                                                className={BTN_SMALL}
                                                 onClick={e => {
                                                     e.stopPropagation()
                                                     navigate(`/spielberichte/${item.id}`)

@@ -4,11 +4,10 @@ import { api } from '../../lib/api'
 import { useVault } from '../../contexts/VaultContext'
 import { useLiveUpdates } from '../../hooks/useLiveUpdates'
 import { generateVaultSetup, rewrapPrivateKeyForRotation } from '../../lib/crypto'
+import { BTN_PRIMARY, BTN_SECONDARY } from '../../lib/buttonStyles'
 
 const INPUT =
   'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_PRIMARY =
-  'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6'
 const ALERT_ERR = 'p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger'
 const ALERT_INFO = 'p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text'
@@ -144,7 +143,7 @@ export default function TresorPage() {
                       setRotating(true)
                       setRotateMsg(null)
                     }}
-                    className="rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-brand-text border border-brand-border hover:bg-brand-table-select transition-colors"
+                    className={BTN_SECONDARY}
                   >
                     Passphrase ändern
                   </button>

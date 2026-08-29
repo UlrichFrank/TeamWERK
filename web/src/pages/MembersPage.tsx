@@ -11,6 +11,7 @@ import Pagination from '../components/Pagination'
 import WindowedTableBody from '../components/WindowedTableBody'
 import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
 import PersonChip from '../components/PersonChip'
 
 interface Member {
@@ -401,12 +402,12 @@ export default function MembersPage() {
               type="search"
               placeholder="Suchen…"
               onChange={e => setSearch(e.target.value)}
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+              className={`${HEADER_FIELD} w-full sm:w-auto`}
             />
             <select
               value={clubFunctionFilter}
               onChange={e => setClubFunctionFilter(e.target.value)}
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+              className={`${HEADER_FIELD} w-full sm:w-auto`}
             >
               <option value="">Alle Funktionen</option>
               {Object.entries(CLUB_FUNCTION_LABELS).map(([val, label]) => (
@@ -416,7 +417,7 @@ export default function MembersPage() {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto"
+              className={`${HEADER_FIELD} w-full sm:w-auto`}
             >
               <option value="">Alle Status</option>
               {Object.entries(STATUS_LABEL).map(([val, label]) => (
@@ -451,7 +452,7 @@ export default function MembersPage() {
                   {isAdmin && (
                     <button
                       onClick={() => setShowNew(true)}
-                      className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow rounded-l-md px-3 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+                      className={`${HEADER_SPLIT_MAIN} ${HEADER_PRIMARY}`}
                     >
                       + Neu
                     </button>
@@ -459,7 +460,7 @@ export default function MembersPage() {
                   <button
                     onClick={() => setShowActionsMenu(v => !v)}
                     aria-label="Weitere Aktionen"
-                    className={`text-xs bg-brand-yellow text-brand-black border border-brand-yellow px-2 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors ${isAdmin ? 'border-l-brand-black/20 border-l rounded-r-md' : 'rounded-md'}`}
+                    className={`${isAdmin ? HEADER_SPLIT_CARET : HEADER_CTRL_ICON} ${HEADER_PRIMARY}`}
                   >
                     <ChevronDown className="w-4 h-4" />
                   </button>
@@ -948,7 +949,7 @@ export default function MembersPage() {
                 <button
                   type="button"
                   onClick={() => sepaInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`${BTN_PRIMARY} inline-flex items-center gap-2`}
                   disabled={sepaImporting}
                 >
                   <FolderUp className="w-4 h-4" />
@@ -990,7 +991,7 @@ export default function MembersPage() {
                 <button
                   onClick={handleSepaSubmit}
                   disabled={sepaImporting || sepaFiles.length === 0}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   {sepaImporting ? 'Importiere…' : 'Hochladen & Importieren'}
                 </button>

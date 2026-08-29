@@ -20,7 +20,7 @@ Ein Gesuch (`mitfahrgelegenheiten.typ='suche'`) gilt als **offen**, solange dara
 - **WHEN** ein Fremdteam-Spiel denselben `date` und dasselbe `venue_id` (nicht NULL) wie ein Anker-Spiel des Nutzers hat und dort ein offenes Gesuch existiert
 - **THEN** erscheint dieses Gesuch in derselben (Tag, Venue)-Gruppe — mit Spiel-/Team-Kontext
 
-#### Scenario: Fremdteam-Gesuch bei abweichendem Ort/Tag
+#### Scenario: Gesuch eines fremden Teams wird nicht gezeigt
 
 - **WHEN** ein Fremdteam-Spiel einen anderen `date` oder ein anderes `venue_id` als alle Anker-Spiele hat
 - **THEN** erscheint dessen Gesuch NICHT in `carpoolingOpenGroups`

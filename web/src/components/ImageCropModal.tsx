@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X, ZoomIn } from 'lucide-react'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 const CANVAS_SIZE = 320
 const EXPORT_SIZE = 600
@@ -293,7 +294,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
           <button
             onClick={handleConfirm}
             disabled={!loaded}
-            className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`${BTN_PRIMARY} flex-1`}
           >
             Hochladen
           </button>

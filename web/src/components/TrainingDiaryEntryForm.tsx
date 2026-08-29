@@ -7,6 +7,7 @@ import {
   type DiaryKind,
 } from '../lib/trainingDiary'
 import { todayISO } from '../lib/trainingDiary'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 export interface DiarySubmitPayload {
   trained_on: string
@@ -201,7 +202,7 @@ export default function TrainingDiaryEntryForm({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={BTN_PRIMARY}
         >
           {initial ? 'Speichern' : 'Eintragen'}
         </button>

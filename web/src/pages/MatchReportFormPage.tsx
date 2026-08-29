@@ -6,6 +6,7 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import { AlertTriangle, ImageOff, Trash2, Upload, X, Eye, EyeOff, Send } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
 
 const MAX_IMAGES = 10
 
@@ -60,12 +61,6 @@ type MatchReport = {
     photo_consent_missing: ConsentMember[] | null
 }
 
-const btnPrimary =
-    'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-const btnDanger =
-    'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-const btnSmall =
-    'bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 const input =
     'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
@@ -345,23 +340,23 @@ export default function MatchReportFormPage() {
 
             {canEdit && (
                 <div className="flex flex-wrap gap-3 pt-4 border-t border-brand-border-subtle">
-                    <button className={btnPrimary} onClick={saveDraft} disabled={saving}>
+                    <button className={BTN_PRIMARY} onClick={saveDraft} disabled={saving}>
                         {saving ? 'Speichere…' : 'Entwurf speichern'}
                     </button>
                     {canSubmit && (
-                        <button className={btnPrimary} onClick={submitForReview} disabled={submitting}>
+                        <button className={BTN_PRIMARY} onClick={submitForReview} disabled={submitting}>
                             <Send className="inline-block w-4 h-4 mr-1" />
                             {submitting ? 'Sende…' : 'Zur Prüfung senden'}
                         </button>
                     )}
                     {canPublish && (
-                        <button className={btnPrimary} onClick={publish} disabled={publishing}>
+                        <button className={BTN_PRIMARY} onClick={publish} disabled={publishing}>
                             <Send className="inline-block w-4 h-4 mr-1" />
                             {publishing ? 'Veröffentliche…' : 'Veröffentlichen'}
                         </button>
                     )}
                     {isAuthor && report.state === 'draft' && (
-                        <button className={btnDanger} onClick={deleteDraft}>
+                        <button className={BTN_DANGER} onClick={deleteDraft}>
                             <Trash2 className="inline-block w-4 h-4 mr-1" />
                             Draft löschen
                         </button>
@@ -532,7 +527,7 @@ function ImagesSection(props: {
                 {!props.readOnly && remaining > 0 && (
                     <label
                         className={
-                            btnSmall +
+                            BTN_SMALL +
                             (uploading ? ' opacity-40 cursor-not-allowed' : ' cursor-pointer')
                         }
                     >

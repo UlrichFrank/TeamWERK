@@ -13,6 +13,7 @@ import { errorMessage, errorStatus } from '../lib/errors'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { openBlobNatively } from '../lib/openFileNatively'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ function NewFolderModal({ parentId, onCreated, onClose }: {
             <button
               type="submit"
               disabled={saving || !name.trim()}
-              className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={BTN_PRIMARY}
             >
               Erstellen
             </button>
@@ -195,7 +196,7 @@ function UploadModal({ folderId, onUploaded, onClose }: {
                 <button
                   onClick={upload}
                   disabled={!file}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   <Upload className="w-4 h-4 inline mr-1" />Hochladen
                 </button>
@@ -450,7 +451,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
             <button
               type="submit"
               disabled={saving || (!newRead && !newWrite) || (newType !== 'everyone' && !newRef)}
-              className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`${BTN_PRIMARY} w-full`}
             >
               Hinzufügen
             </button>
@@ -563,7 +564,7 @@ function RenameModal({ type, id, currentName, onRenamed, onClose }: {
             <button
               type="submit"
               disabled={saving || !name.trim()}
-              className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={BTN_PRIMARY}
             >
               Speichern
             </button>
@@ -754,7 +755,7 @@ export default function DocumentsPage() {
               {canCreateFolder && (
                 <button
                   onClick={() => setShowNewFolder(true)}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                 >
                   <FolderPlus className="w-4 h-4" />
                   <span className="hidden sm:inline">Neuer Ordner</span>
@@ -763,7 +764,7 @@ export default function DocumentsPage() {
               {currentFolderId && canWrite && (
                 <button
                   onClick={() => setShowUpload(true)}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                 >
                   <Upload className="w-4 h-4" />
                   <span className="hidden sm:inline">Hochladen</span>
@@ -956,7 +957,7 @@ export default function DocumentsPage() {
               <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
               <button
                 onClick={() => deleteItem(confirmDelete.type, confirmDelete.id)}
-                className="bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors"
+                className={BTN_DANGER}
               >
                 Löschen
               </button>

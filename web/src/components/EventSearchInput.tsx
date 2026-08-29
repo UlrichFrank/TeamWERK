@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react'
+import { HEADER_H } from '../lib/buttonStyles'
 
 interface Props {
   value: string
@@ -20,15 +21,16 @@ interface Props {
  * Der iOS-Auto-Zoom ist bereits global in index.css entschärft (input/textarea/
  * select bekommen unter 640px font-size: 16px), hier also nichts zu tun.
  *
- * Höhe: fixe Pixelhöhe statt Padding-getriebener Höhe, damit das Feld exakt so
- * hoch ist wie die Filter-Buttons daneben. Deren Höhe hängt am Modus (im Browser
- * nachgemessen): 30px normal (`py-1.5` + `text-xs`-Zeilenhöhe 1rem + Rahmen),
- * 28px im Compact-Modus, wo die Buttons nur noch das 14px-Icon ohne Label
- * enthalten. Eine Padding-Lösung würde zusätzlich auf Mobile auseinanderlaufen,
- * weil index.css die Schriftgröße dort auf 16px zwingt; bei fixer Höhe zentriert
- * der Browser den Text unabhängig davon. Das unterschreitet bewusst die
- * 44px-Touch-Target-Regel — die Filter-Buttons in derselben Leiste tun das schon,
- * und eine Leiste mit zwei Höhen sah kaputt aus.
+ * Höhe: `HEADER_H` aus `lib/buttonStyles.ts` — dieselbe fixe Höhe wie alle
+ * anderen Bedienelemente der Leiste (30px ab 640px, 44px darunter). Fix statt
+ * paddinggetrieben, weil index.css unter 640px nur `input`/`select`/`textarea`
+ * auf 16px zwingt, `button` aber nicht: aus derselben Padding-Klasse entstünden
+ * dort zwei verschiedene Höhen. Bei fixer Höhe zentriert der Browser den Text
+ * unabhängig von der Schriftgröße.
+ *
+ * Der Compact-Modus ändert nur noch die Breite, nicht die Höhe — er weicht
+ * horizontalem Platzmangel aus. (Früher war er 28px hoch, weil die Chips daneben
+ * ohne Label paddinggetrieben schrumpften; das entfällt mit der fixen Höhe.)
  *
  * `::-webkit-search-cancel-button` wird ausgeblendet: Chrome/Safari zeichnen bei
  * `type="search"` ein eigenes Lösch-Kreuz, das direkt neben unserem stand.
@@ -43,7 +45,7 @@ export default function EventSearchInput({ value, onChange, placeholder, compact
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className={`w-full ${compact ? 'h-7' : 'h-[30px]'} border border-brand-border rounded-md pl-9 pr-9 py-0 text-sm [&::-webkit-search-cancel-button]:appearance-none text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`}
+        className={`w-full ${HEADER_H} border border-brand-border rounded-md pl-9 pr-9 py-0 text-sm [&::-webkit-search-cancel-button]:appearance-none text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`}
       />
       {value !== '' && (
         <button

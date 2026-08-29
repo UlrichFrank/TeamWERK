@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, ChevronLeft, Download } from 'lucide-react'
 import { api } from '../lib/api'
 import { errorStatus } from '../lib/errors'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 const PdfRenderer = lazy(() => import('./PdfRenderer'))
 
@@ -186,7 +187,7 @@ function FileBody({ file, blobUrl }: { file: LoadedFile; blobUrl: string }) {
       <a
         href={blobUrl}
         download={file.filename}
-        className="inline-flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+        className={`${BTN_PRIMARY} inline-flex items-center gap-2`}
       >
         <Download className="w-4 h-4" />
         Herunterladen

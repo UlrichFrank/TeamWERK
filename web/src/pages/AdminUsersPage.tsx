@@ -16,6 +16,7 @@ import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorMessage } from '../lib/errors'
 import { relativeTime } from '../lib/relativeTime'
+import { BTN_PRIMARY, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
 
 interface User {
   id: number
@@ -411,7 +412,7 @@ export default function AdminUsersPage() {
               type="search"
               placeholder="Suchen…"
               onChange={e => { setFilterText(e.target.value); setSearch(e.target.value) }}
-              className="border border-brand-border rounded-md px-3 py-2.5 sm:py-1.5 text-xs text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-32 sm:w-auto"
+              className={`${HEADER_FIELD} w-32 sm:w-auto`}
             />
             <label className="flex items-center gap-1.5 text-xs text-brand-text cursor-pointer select-none">
               <input
@@ -426,14 +427,14 @@ export default function AdminUsersPage() {
               <div className="flex">
                 <button
                   onClick={() => setShowInviteModal(true)}
-                  className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow rounded-l-md px-3 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors whitespace-nowrap"
+                  className={`${HEADER_SPLIT_MAIN} ${HEADER_PRIMARY} whitespace-nowrap`}
                 >
                   + Neu
                 </button>
                 <button
                   onClick={() => setShowDropdown(v => !v)}
                   aria-label="Weitere Optionen"
-                  className="text-xs bg-brand-yellow text-brand-black border border-brand-yellow border-l-brand-black/20 rounded-r-md px-2 py-1.5 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors border-l"
+                  className={`${HEADER_SPLIT_CARET} ${HEADER_PRIMARY}`}
                 >
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
@@ -722,7 +723,7 @@ export default function AdminUsersPage() {
                 <button
                   type="submit"
                   disabled={activateLoading || !activateEmail}
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`${BTN_PRIMARY} flex-1`}
                 >
                   {activateLoading ? 'Aktivieren…' : 'Aktivieren'}
                 </button>
@@ -765,7 +766,7 @@ export default function AdminUsersPage() {
                 <button
                   type="submit"
                   disabled={recoveryLoading || !recoveryEmailInput}
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`${BTN_PRIMARY} flex-1`}
                 >
                   {recoveryLoading ? 'Speichern…' : 'Speichern'}
                 </button>

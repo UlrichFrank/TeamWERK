@@ -7,9 +7,8 @@ import { useLiveUpdates } from '../../hooks/useLiveUpdates'
 import { formatBetrag, isValidIBAN, normalizeIBAN } from '../../lib/sepa'
 import { decryptBankData, decryptClubSepa } from '../../lib/bankCrypto'
 import { buildPainXML, saisonStamp, type SepaItem } from '../../lib/sepaXml'
+import { BTN_PRIMARY, BTN_SECONDARY } from '../../lib/buttonStyles'
 
-const BTN_PRIMARY = 'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-const BTN_SECONDARY = 'border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-table-select transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
 interface Season { id: number; name: string; is_active: boolean }
 

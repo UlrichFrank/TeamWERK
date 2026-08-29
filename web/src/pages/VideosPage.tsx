@@ -9,6 +9,7 @@ import MobileCard from '../components/MobileCard'
 import VideoStatusPill from '../components/VideoStatusPill'
 import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 import { buildTeamShortNames } from '../lib/teamName'
+import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 interface VideoItem {
   id: number
@@ -179,7 +180,7 @@ export default function VideosPage() {
               value={teamFilter}
               onChange={e => setTeamFilter(e.target.value)}
               aria-label="Team filtern"
-              className="border border-brand-border rounded-md px-2 py-2.5 sm:py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-24 sm:shrink-0"
+              className={`${HEADER_FIELD} w-full sm:w-24 sm:shrink-0`}
             >
               <option value="">Teams</option>
               {activeTeams.map(t => (
@@ -190,7 +191,7 @@ export default function VideosPage() {
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
               aria-label="Status filtern"
-              className="border border-brand-border rounded-md px-2 py-2.5 sm:py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-full sm:w-auto sm:shrink-0"
+              className={`${HEADER_FIELD} w-full sm:w-auto sm:shrink-0`}
             >
               {STATUS_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -199,7 +200,7 @@ export default function VideosPage() {
             {canUpload && (
               <button
                 onClick={() => navigate('/videos/upload')}
-                className="inline-flex items-center justify-center gap-1 rounded-md px-3 py-2.5 sm:py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors sm:shrink-0"
+                className={`${HEADER_CTRL} ${HEADER_PRIMARY} w-full sm:w-auto`}
               >
                 <Upload className="w-3.5 h-3.5" />
                 Video hochladen
@@ -289,7 +290,7 @@ export default function VideosPage() {
           <button
             onClick={() => fetchPage(offset, false)}
             disabled={loading}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={BTN_PRIMARY}
           >
             {loading ? 'Lädt…' : 'Mehr laden'}
           </button>

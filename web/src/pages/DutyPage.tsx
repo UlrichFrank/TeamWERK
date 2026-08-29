@@ -12,6 +12,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames } from '../lib/teamName'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 
 interface BoardGroup {
@@ -267,7 +268,7 @@ export default function DutyPage() {
             <select
               value={filterTeamId ?? ''}
               onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-              className="hidden sm:block border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+              className={`${HEADER_FIELD} hidden sm:block w-24 shrink-0`}
             >
               <option value="">Teams</option>
               {teams.map(t => (
@@ -294,10 +295,8 @@ export default function DutyPage() {
           <button
             onClick={() => updateFilter({ mine: !viewMine })}
             aria-label="Meine"
-            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
-              viewMine
-                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
+              viewMine ? HEADER_PRIMARY : HEADER_NEUTRAL
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" />
@@ -306,10 +305,8 @@ export default function DutyPage() {
           <button
             onClick={() => updateFilter({ past: !showPast })}
             aria-label="Vergangene anzeigen"
-            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
-              showPast
-                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
+              showPast ? HEADER_PRIMARY : HEADER_NEUTRAL
             }`}
           >
             <History className="w-3.5 h-3.5" />
@@ -320,10 +317,8 @@ export default function DutyPage() {
               onClick={() => updateFilter({ audienceAll: !audienceAll })}
               aria-label="Nur meine Audience"
               title={audienceAll ? 'Alle Audiences sichtbar — klicken für Filter auf meine Audience' : 'Nur meine Audience — klicken für alle Audiences'}
-              className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors ${compact ? 'px-2' : 'px-3'} ${
-                !audienceAll
-                  ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                  : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+              className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
+                !audienceAll ? HEADER_PRIMARY : HEADER_NEUTRAL
               }`}
             >
               <Users className="w-3.5 h-3.5" />

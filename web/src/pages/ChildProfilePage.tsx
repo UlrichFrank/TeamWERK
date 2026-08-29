@@ -12,6 +12,7 @@ import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 import { Member, Parent, Phone } from './ProfilePage'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 export interface UserContact {
   first_name: string
@@ -164,7 +165,7 @@ export default function ChildProfilePage() {
                 )}
                 <button
                   type="submit" disabled={recoverySaving}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   Ändern
                 </button>

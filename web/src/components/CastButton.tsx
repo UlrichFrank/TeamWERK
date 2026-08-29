@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Cast } from 'lucide-react'
 import { isCastAvailable, loadCastSDK, startCastSession } from '../lib/cast'
+import { BTN_SMALL } from '../lib/buttonStyles'
 
 // CastButton bietet dem User eine Wurftaste zum Chromecast/Google-TV. Das
 // Cast-SDK wird erst **nach dem ersten Klick** geladen — bis dahin ist der
@@ -52,7 +53,7 @@ export function CastButton({ masterURL }: { masterURL: string }) {
         type="button"
         onClick={handleClick}
         aria-label="Auf Chromecast wiedergeben"
-        className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+        className={`${BTN_SMALL} inline-flex items-center gap-1.5`}
       >
         <Cast className="w-4 h-4" />
         Cast

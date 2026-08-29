@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import TrainingDiaryStatsView from '../components/TrainingDiaryStatsView'
 import { buildTeamShortNames } from '../lib/teamName'
+import { HEADER_FIELD } from '../lib/buttonStyles'
 
 interface TeamRef {
   id: number
@@ -46,7 +47,7 @@ export default function TeamTrainingstagebuchPage() {
           value={teamId ?? ''}
           onChange={e => navigate(`/team/${e.target.value}/trainingstagebuch`)}
           aria-label="Mannschaft wählen"
-          className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+          className={`${HEADER_FIELD} w-24 shrink-0`}
         >
           <option value="" disabled>
             Teams

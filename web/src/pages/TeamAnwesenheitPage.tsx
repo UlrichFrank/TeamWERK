@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { buildTeamShortNames } from '../lib/teamName'
+import { HEADER_FIELD } from '../lib/buttonStyles'
 
 interface MemberCounts {
   member_id: number
@@ -229,7 +230,7 @@ export default function TeamAnwesenheitPage() {
           <select
             value={teamId ?? ''}
             onChange={e => navigate(`/team/${e.target.value}/anwesenheit`)}
-            className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+            className={`${HEADER_FIELD} w-24 shrink-0`}
           >
             <option value="" disabled>Teams</option>
             {teams.filter(t => t.is_active).map(t => (

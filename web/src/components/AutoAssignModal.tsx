@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 interface Kader {
   id: number
@@ -121,7 +122,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
               <button
                 onClick={handleConfirm}
                 disabled={selectedIds.size === 0 || saving}
-                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={BTN_PRIMARY}
               >
                 {saving ? 'Auto-Assign läuft…' : 'Auto-Assign starten'}
               </button>

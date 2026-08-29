@@ -13,6 +13,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useChatEvents } from '../hooks/useChatEvents'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import { relativeTime } from '../lib/relativeTime'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -664,7 +665,7 @@ export default function DashboardPage() {
       <div className="text-center py-8">
         <p className="text-sm text-brand-text-muted mb-3">Dashboard konnte nicht geladen werden.</p>
         <p className="text-xs text-brand-text-subtle">{error}</p>
-        <button onClick={() => load()} className="mt-4 px-4 py-2 bg-brand-yellow hover:bg-brand-black hover:text-brand-yellow text-sm font-medium rounded transition-colors">
+        <button onClick={() => load()} className={`${BTN_PRIMARY} mt-4`}>
           Erneut versuchen
         </button>
       </div>

@@ -5,6 +5,7 @@ import * as tus from 'tus-js-client'
 import { Upload, X, AlertTriangle, Info } from 'lucide-react'
 import { api, getAccessToken, getPendingRefresh, refreshAccessToken, setAccessToken } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
+import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_GHOST } from '../lib/buttonStyles'
 
 const MAX_SIZE = 15 * 1024 * 1024 * 1024 // 15 GiB
 
@@ -409,7 +410,7 @@ export default function VideoUploadPage() {
           </p>
           <button
             onClick={() => navigate(`/videos/${done}`)}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className={BTN_PRIMARY}
           >
             Zum Video
           </button>
@@ -425,7 +426,7 @@ export default function VideoUploadPage() {
         <button
           onClick={() => navigate('/videos')}
           aria-label="Abbrechen"
-          className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 rounded-md text-brand-text-muted hover:bg-brand-table-select transition-colors"
+          className={`${HEADER_CTRL_ICON} ${HEADER_GHOST} w-11 sm:w-[30px]`}
         >
           <X className="w-5 h-5" />
         </button>
@@ -567,7 +568,7 @@ export default function VideoUploadPage() {
           <button
             type="submit"
             disabled={uploading}
-            className="inline-flex items-center justify-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`${BTN_PRIMARY} inline-flex items-center justify-center gap-2`}
           >
             <Upload className="w-4 h-4" />
             {uploading ? 'Lädt hoch…' : 'Hochladen'}
