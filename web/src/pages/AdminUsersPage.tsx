@@ -404,10 +404,10 @@ export default function AdminUsersPage() {
   return (
     <div>
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-brand-white pb-4 mb-4 sm:bg-transparent sm:pb-6 sm:mb-0 sm:static sm:z-auto">
+      <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
           <h1 className="text-2xl font-bold">Nutzerverwaltung</h1>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="search"
               placeholder="Suchen…"
@@ -421,9 +421,9 @@ export default function AdminUsersPage() {
                 onChange={e => setUnlinkedFilter(e.target.checked)}
                 className="rounded border-brand-border accent-brand-yellow"
               />
-              Ohne Mitgliedsverknüpfung
+              nicht verknüpft
             </label>
-            <div ref={dropdownRef} className="relative">
+            <div ref={dropdownRef} className="relative ml-auto">
               <div className="flex">
                 <button
                   onClick={() => setShowInviteModal(true)}
