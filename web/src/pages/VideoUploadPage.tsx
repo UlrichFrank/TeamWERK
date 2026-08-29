@@ -5,6 +5,7 @@ import * as tus from 'tus-js-client'
 import { Upload, X, AlertTriangle, Info } from 'lucide-react'
 import { api, getAccessToken, getPendingRefresh, refreshAccessToken, setAccessToken } from '../lib/api'
 import { buildTeamShortNames } from '../lib/teamName'
+import { HEADER_CTRL_ICON, HEADER_GHOST } from '../lib/buttonStyles'
 
 const MAX_SIZE = 15 * 1024 * 1024 * 1024 // 15 GiB
 
@@ -425,7 +426,7 @@ export default function VideoUploadPage() {
         <button
           onClick={() => navigate('/videos')}
           aria-label="Abbrechen"
-          className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 rounded-md text-brand-text-muted hover:bg-brand-table-select transition-colors"
+          className={`${HEADER_CTRL_ICON} ${HEADER_GHOST} w-11 sm:w-[30px]`}
         >
           <X className="w-5 h-5" />
         </button>

@@ -13,6 +13,7 @@ import { errorMessage, errorStatus } from '../lib/errors'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { openBlobNatively } from '../lib/openFileNatively'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -754,7 +755,7 @@ export default function DocumentsPage() {
               {canCreateFolder && (
                 <button
                   onClick={() => setShowNewFolder(true)}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                 >
                   <FolderPlus className="w-4 h-4" />
                   <span className="hidden sm:inline">Neuer Ordner</span>
@@ -763,7 +764,7 @@ export default function DocumentsPage() {
               {currentFolderId && canWrite && (
                 <button
                   onClick={() => setShowUpload(true)}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-1.5 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-1"
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                 >
                   <Upload className="w-4 h-4" />
                   <span className="hidden sm:inline">Hochladen</span>

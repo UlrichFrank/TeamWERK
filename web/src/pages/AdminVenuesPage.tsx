@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Home, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
+import { HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
 import ActionMenu from '../components/ActionMenu'
 import MapsLink from '../components/MapsLink'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -168,7 +169,7 @@ export default function AdminVenuesPage() {
           <div className="flex">
             <button
               onClick={openCreate}
-              className="bg-brand-yellow text-brand-black rounded-l-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center gap-2"
+              className={`${HEADER_SPLIT_MAIN} ${HEADER_PRIMARY}`}
             >
               <Plus className="w-4 h-4" />
               Neuer Ort
@@ -176,7 +177,7 @@ export default function AdminVenuesPage() {
             <button
               onClick={() => setShowActionsMenu(v => !v)}
               aria-label="Weitere Aktionen"
-              className="bg-brand-yellow text-brand-black border-l border-brand-black/20 rounded-r-md px-2 py-2.5 sm:py-2 font-medium hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black transition-colors"
+              className={`${HEADER_SPLIT_CARET} ${HEADER_PRIMARY}`}
             >
               <ChevronDown className="w-4 h-4" />
             </button>
