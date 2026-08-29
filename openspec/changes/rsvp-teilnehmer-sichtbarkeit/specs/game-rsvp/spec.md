@@ -71,7 +71,7 @@ Listing- und Detail-Endpoints für Spiele SHALL pro Spiel ein Feld `rsvp_locks_a
 - **WHEN** ein User `GET /api/games/{id}` aufruft
 - **THEN** enthält die Response das Feld `rsvp_locks_at`
 
-#### Scenario: rsvp_locks_at = start - 2h
+#### Scenario: rsvp_locks_at wird aus der Anstoßzeit abgeleitet
 - **WHEN** ein Spiel am 30.06.2026 um 18:00 Uhr Europe/Berlin startet
 - **THEN** liefert die API `rsvp_locks_at = "2026-06-30T14:00:00Z"` (16:00 Berliner Sommerzeit − 2h = 14:00 UTC)
 
