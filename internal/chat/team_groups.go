@@ -99,19 +99,23 @@ func (h *Handler) callerInTrainerCircle(ctx context.Context, claims *auth.Claims
 	return h.isInTrainerCircle(ctx, claims.UserID)
 }
 
-// hasGlobalTeamGroupAccess returns true if the caller may see every team's
-// standard groups regardless of personal team membership.
-func hasGlobalTeamGroupAccess(claims *auth.Claims) bool {
+// hasClubWideChatReach meldet, ob der Caller vereinsweit chatten darf: er sieht
+// die Standardgruppen *aller* Teams (unabhängig von eigener Teamzugehörigkeit)
+// und darf jeden Nutzer kontaktieren. Beides gehört zusammen — wer eine fremde
+// Kader-Gruppe auflösen kann, muss sie auch anschreiben können, sonst scheitert
+// der Gruppenaufbau am Kontaktcheck (canContactUser) für jedes teamfremde
+// Mitglied. Deshalb ein Prädikat für beide Stellen, keine zweite Kopie.
+func hasClubWideChatReach(claims *auth.Claims) bool {
 	if claims == nil {
 		return false
 	}
-	return claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung")
+	return claims.Role == "admin" || claims.HasAnyFunction("vorstand", "sportliche_leitung")
 }
 
 // canSeeTeamGroup checks whether the caller may see/resolve standard groups
 // for the given team. Verified against the active season.
 func (h *Handler) canSeeTeamGroup(r *http.Request, claims *auth.Claims, teamID int) (bool, error) {
-	if hasGlobalTeamGroupAccess(claims) {
+	if hasClubWideChatReach(claims) {
 		var exists int
 		err := h.db.QueryRowContext(r.Context(), `
 			SELECT 1 FROM teams t
@@ -143,7 +147,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 
 	var teamRows *sql.Rows
 	var err error
-	if hasGlobalTeamGroupAccess(claims) {
+	if hasClubWideChatReach(claims) {
 		teamRows, err = h.db.QueryContext(r.Context(), `
 			SELECT DISTINCT t.id, COALESCE(`+displayShort+`, t.name)
 			FROM teams t

@@ -106,7 +106,7 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	inCircle := false
-	if claims.Role != "admin" && !claims.HasFunction("vorstand") {
+	if !hasClubWideChatReach(claims) {
 		inCircle, err = h.callerInTrainerCircle(r.Context(), claims)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -115,7 +115,7 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
-	case claims.Role == "admin" || claims.HasFunction("vorstand"):
+	case hasClubWideChatReach(claims):
 		rows, err = h.db.QueryContext(r.Context(), `
 			SELECT id, first_name || ' ' || last_name AS name FROM users
 			WHERE id != ? AND (first_name || ' ' || last_name LIKE ? OR email LIKE ?)
@@ -374,7 +374,7 @@ func (h *Handler) createDirect(w http.ResponseWriter, r *http.Request, claims *a
 }
 
 func (h *Handler) canContactUser(r *http.Request, claims *auth.Claims, targetUserID int) (bool, error) {
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+	if hasClubWideChatReach(claims) {
 		return true, nil
 	}
 	// Zugriffskreis (Trainer/Vorstand/sL/Beisitzer): zwei Mitglieder dürfen sich
