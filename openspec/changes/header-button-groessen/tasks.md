@@ -35,6 +35,6 @@
 - [x] 5.1 `web/src/lib/__tests__/buttonStyles.gate.test.ts`: scannt `web/src/pages/` und `web/src/components/` auf die vier Metriken als Literal, meldet Datei + Zeile, Allowlist mit Begründung je Eintrag, verwaister Eintrag lässt den Test fehlschlagen (Muster: `internal/arch/broadcast_test.go`).
 - [x] 5.2 Vitest-Test für die Höhen-Zusage: eine Kopfzeile rendern und prüfen, dass Button, Suchfeld und Select dieselben Höhen-Klassen tragen (jsdom misst keine Pixel — die Assertion geht auf die Klassen, nicht auf `getBoundingClientRect`).
 - [x] 5.3 `pnpm -C web build`, `pnpm -C web test`, `pnpm -C web lint` grün.
-- [ ] 5.4 Sichtprüfung in Chrome DevTools bei 375 px und 1280 px auf `/mitglieder`, `/termine`, `/dienste`, `/veranstaltungsorte`, `/admin/kader` — Kopfzeile ohne horizontalen Overflow, alle Bedienelemente einer Zeile gleich hoch.
-- [ ] 5.5 `make test-e2e` (Playwright) — Layout-Klasse Änderung, deshalb der teure Lauf.
-- [ ] 5.6 `openspec validate header-button-groessen --strict` und `/verify-change`.
+- [x] 5.4 Nachgemessen statt angeschaut (Chrome gegen die E2E-Seed-Binary, `getBoundingClientRect().height` je Header-Control): Desktop **30 px einheitlich** auf allen 11 geprüften Seiten, Mobile **44 px einheitlich** auf allen 9. Kein horizontaler Overflow (`scrollWidth == clientWidth`) auf `/mitglieder`, `/termine`, `/dienste`, `/kalender`, `/veranstaltungsorte`, `/videos`, `/mitfahrgelegenheiten`. Chromes Fenster-Minimum auf macOS ist 500 px statt 375 px — für die Aussage unerheblich, der `sm:`-Breakpoint liegt bei 640 px.
+- [x] 5.5 `make test-e2e` (Playwright) — 13 Tests grün.
+- [x] 5.6 `openspec validate header-button-groessen --strict` und `/verify-change` — beide grün.

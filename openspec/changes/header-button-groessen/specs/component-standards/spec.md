@@ -8,6 +8,12 @@ Jeder Button in `web/src/` SHALL exakt einen der vier definierten Klassen-String
 kombiniert mit einem Farbsatz:
 - primär: `border-brand-yellow bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow hover:border-brand-black`
 - neutral / inaktiver Toggle: `bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text`
+- destruktiv: `border-brand-danger bg-brand-danger text-white hover:bg-brand-danger/90`
+- rahmenlos (Schließen, Abbrechen): `border-transparent bg-transparent text-brand-text-muted hover:bg-brand-table-select hover:text-brand-text`
+
+Ein Farbsatz SHALL ausschließlich Farbe tragen und kein Maß (keine Höhe, Breite, Padding, Schriftgröße oder Rundung) — sonst wäre ein Control je nach Zustand verschieden groß. Ein zustandsabhängiger Farbsatz aus einer anderen Quelle (etwa `getEventColors(type).filter` für die Termin-Typ-Filter) ist zulässig, solange er dieselbe Bedingung erfüllt.
+
+Der rahmenlose Farbsatz setzt `border-transparent` statt gar keines Rahmens, damit die Höhe die der Nachbarn bleibt.
 
 Icon-only-Varianten (Compact-Modus, Split-Button-Caret) verwenden `px-2` statt `px-3`.
 Split-Buttons ersetzen `rounded-md` durch `rounded-l-md` bzw. `rounded-r-md`.

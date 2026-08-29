@@ -190,3 +190,31 @@ Konstante → gestapelte Kopfzeilen → einzeilige Filterleiste → Aufräumen �
 jeder Schritt ist für sich lauffähig und commit-fähig (ein Commit pro Task, siehe
 `docs/agent/09-openspec.md`). Der Gate-Test kommt zuletzt, weil er vorher
 zwangsläufig rot wäre.
+
+## Beim Umbau aufgetaucht
+
+**Der Secondary-Button existiert in vier Varianten und ist nirgends definiert.**
+`component-standards` kennt Primary, Small und Danger — die Nebenaktion daneben
+(„Abbrechen") nicht. Der Bestand hat sie deshalb viermal unabhängig erfunden:
+
+| Variante | Fundstellen |
+|---|---|
+| `… text-sm font-medium hover:bg-brand-table-select` | Beitragslauf, Tresor |
+| `… px-4 py-2 text-sm text-brand-text-muted hover:bg-brand-border-subtle` | KalenderPage, GameEditModal, TrainingEditModal, SpieltagDetailModal |
+| `… px-4 py-2.5 sm:py-2 text-sm text-brand-text hover:bg-brand-surface-card` | DutyExportModal, H4AImportModal, DutyBulkRegenModal, ImageCropModal, AdminTrainingsPage, MembersPage |
+| `… px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:bg-brand-border-subtle` | GameDayHostPicker |
+
+Sie unterscheiden sich nicht nur im Hover, sondern auch in Höhe (`py-2` vs.
+`py-2.5 sm:py-2`) und Textfarbe. Eine Vereinheitlichung ist damit **keine
+Deduplizierung, sondern eine Design-Entscheidung mit sichtbarer Folge** — und
+gehört nicht in einen Change, der die Kopfzeilen normalisiert.
+
+`BTN_SECONDARY` in `buttonStyles.ts` deckt deshalb nur die erste Variante ab (die
+beiden Fundstellen, die vorher schon eine identische lokale Kopie hielten). Die
+Fundstellen der dritten Variante, die die Metrik der ersten enthalten, stehen mit
+Begründung in der Gate-Allowlist. Der Rest bleibt unangetastet.
+
+**Folge-Change:** Secondary-Button in `component-standards` definieren und die vier
+Varianten darauf ziehen. Vorher zu klären: `py-2` oder `py-2.5 sm:py-2` (die
+Nebenaktion steht meist neben einer Primary-Aktion, sollte also deren Höhe teilen),
+und `text-brand-text` oder `text-brand-text-muted`.
