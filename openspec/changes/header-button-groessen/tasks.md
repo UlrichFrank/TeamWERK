@@ -26,15 +26,15 @@
 
 ## 4. Aufräumen
 
-- [ ] 4.1 Modul-lokale `BTN_PRIMARY`-Kopien entfernen und aus `lib/buttonStyles.ts` importieren: `pages/admin/BeitragslaufPage.tsx` (11), `pages/admin/TresorPage.tsx` (11), `pages/admin/WartungsmodusPage.tsx` (9).
-- [ ] 4.2 `DashboardPage.tsx` (667, Retry-Button im Fehlerzustand) auf `BTN_PRIMARY` ziehen — heute `rounded` statt `rounded-md`, ohne `text-brand-black` und ohne Disabled-Zustand. Kein Header-Control: der Button steht im zentrierten Fehlerblock, nicht in der Kopfzeile.
-- [ ] 4.3 Restliche inline-Kopien des Primary-Strings in `pages/` und `components/` auf den Import umstellen (Fundstellen über den Gate-Test aus 5.1 ermitteln).
+- [x] 4.1 Modul-lokale `BTN_PRIMARY`-Kopien entfernen und aus `lib/buttonStyles.ts` importieren: `pages/admin/BeitragslaufPage.tsx` (11), `pages/admin/TresorPage.tsx` (11), `pages/admin/WartungsmodusPage.tsx` (9).
+- [x] 4.2 `DashboardPage.tsx` (667, Retry-Button im Fehlerzustand) auf `BTN_PRIMARY` ziehen — heute `rounded` statt `rounded-md`, ohne `text-brand-black` und ohne Disabled-Zustand. Kein Header-Control: der Button steht im zentrierten Fehlerblock, nicht in der Kopfzeile.
+- [x] 4.3 Restliche Kopien der vier Strings auf den Import umstellen: 81 von 86 Fundstellen (68 inline im JSX, 13 als modul-lokale Konstante). Fünf bleiben mit Begründung in der Gate-Allowlist — Secondary-Buttons mit abweichendem Hover; der Secondary-Button ist in `component-standards` gar nicht definiert und existiert im Bestand in vier Varianten, das zu vereinheitlichen ist eine eigene Design-Entscheidung.
 
 ## 5. Absicherung
 
-- [ ] 5.1 `web/src/lib/__tests__/buttonStyles.gate.test.ts`: scannt `web/src/pages/` und `web/src/components/` auf die vier Metriken als Literal, meldet Datei + Zeile, Allowlist mit Begründung je Eintrag, verwaister Eintrag lässt den Test fehlschlagen (Muster: `internal/arch/broadcast_test.go`).
-- [ ] 5.2 Vitest-Test für die Höhen-Zusage: eine Kopfzeile rendern und prüfen, dass Button, Suchfeld und Select dieselben Höhen-Klassen tragen (jsdom misst keine Pixel — die Assertion geht auf die Klassen, nicht auf `getBoundingClientRect`).
-- [ ] 5.3 `pnpm -C web build`, `pnpm -C web test`, `pnpm -C web lint` grün.
+- [x] 5.1 `web/src/lib/__tests__/buttonStyles.gate.test.ts`: scannt `web/src/pages/` und `web/src/components/` auf die vier Metriken als Literal, meldet Datei + Zeile, Allowlist mit Begründung je Eintrag, verwaister Eintrag lässt den Test fehlschlagen (Muster: `internal/arch/broadcast_test.go`).
+- [x] 5.2 Vitest-Test für die Höhen-Zusage: eine Kopfzeile rendern und prüfen, dass Button, Suchfeld und Select dieselben Höhen-Klassen tragen (jsdom misst keine Pixel — die Assertion geht auf die Klassen, nicht auf `getBoundingClientRect`).
+- [x] 5.3 `pnpm -C web build`, `pnpm -C web test`, `pnpm -C web lint` grün.
 - [ ] 5.4 Sichtprüfung in Chrome DevTools bei 375 px und 1280 px auf `/mitglieder`, `/termine`, `/dienste`, `/veranstaltungsorte`, `/admin/kader` — Kopfzeile ohne horizontalen Overflow, alle Bedienelemente einer Zeile gleich hoch.
 - [ ] 5.5 `make test-e2e` (Playwright) — Layout-Klasse Änderung, deshalb der teure Lauf.
 - [ ] 5.6 `openspec validate header-button-groessen --strict` und `/verify-change`.
