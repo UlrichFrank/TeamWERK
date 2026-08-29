@@ -99,6 +99,14 @@ interface Message {
   read?: boolean;
 }
 
+// Schlüssel des Volltext-Caches (fullBodies). Die id allein reicht nicht: sie
+// überlebt jede Bearbeitung, ein einmal gecachter Volltext würde den neuen
+// Text dauerhaft verdecken. edited_at wandert bei jedem erfolgreichen PUT
+// hoch und macht den alten Eintrag damit unerreichbar.
+function bodyCacheKey(msg: Pick<Message, "id" | "editedAt">): string {
+  return `${msg.id}:${msg.editedAt ?? ""}`;
+}
+
 const REACTION_EMOJIS = ["👍", "👎", "❤️", "😂", "😮", "😢", "🙌", "🔥"];
 // Serverseitige Seitengröße von GET /chat/conversations/{id}/messages —
 // eine volle Seite heißt: es kann noch ältere Nachrichten geben (?before=).
@@ -230,8 +238,17 @@ export default function ChatPage() {
   // leeren die Liste deshalb vor dem Fetch — und brauchen dann diesen State,
   // damit die leere Fläche nicht wie „Konversation ohne Nachrichten" aussieht.
   const [loadingMessages, setLoadingMessages] = useState(false);
-  // Cache für nachgeladene Volltexte gekürzter Nachrichten (id → body).
-  const [fullBodies, setFullBodies] = useState<Record<number, string>>({});
+  // Cache für nachgeladene Volltexte gekürzter Nachrichten.
+  //
+  // Der Schlüssel ist bewusst NICHT die reine msg.id, sondern id+editedAt
+  // (siehe bodyCacheKey): Bearbeiten ändert den Body, lässt die id aber
+  // stehen. Mit id-Schlüssel überlebte der alte Volltext jedes Neuladen und
+  // die Blase zeigte nach dem Speichern weiterhin den Text von vorher —
+  // sichtbar nur bei Nachrichten > messagePreviewLen, weil nur die überhaupt
+  // im Cache landen. edited_at wandert bei jedem PUT hoch, der Eintrag wird
+  // damit unerreichbar statt stale; das gilt auch für fremde Bearbeitungen,
+  // die uns nur über den SSE-Reload erreichen.
+  const [fullBodies, setFullBodies] = useState<Record<string, string>>({});
   const [msgInput, setMsgInput] = useState("");
   const [sending, setSending] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -1007,6 +1024,17 @@ export default function ChatPage() {
         await api.put(`/chat/messages/${editingMessage.id}`, {
           body: msgInput.trim(),
         });
+        // Zusätzlich zum editedAt-Schlüssel: edited_at hat in SQLite
+        // Sekundenauflösung (CURRENT_TIMESTAMP). Zwei Bearbeitungen in
+        // derselben Sekunde ergäben denselben Schlüssel — dann greift dieser
+        // gezielte Wurf, damit der Volltext auch dort neu geholt wird.
+        const staleKey = bodyCacheKey(editingMessage);
+        setFullBodies((prev) => {
+          if (prev[staleKey] === undefined) return prev;
+          const next = { ...prev };
+          delete next[staleKey];
+          return next;
+        });
         setEditingMessage(null);
         setMsgInput("");
         draftsRef.current.delete(activeConv.id);
@@ -1059,16 +1087,17 @@ export default function ChatPage() {
 
   // bodyOf liefert den bereits verfügbaren Text: den nachgeladenen Volltext, sonst
   // den Preview. Für nicht-gekürzte Nachrichten ist der Preview der Volltext.
-  const bodyOf = (msg: Message) => fullBodies[msg.id] ?? msg.preview;
+  const bodyOf = (msg: Message) => fullBodies[bodyCacheKey(msg)] ?? msg.preview;
 
   // fetchFullBody lädt bei gekürzten Nachrichten den Volltext über den Einzel-Pfad
   // nach (und cached ihn). Gibt den Volltext zurück; bei Fehlern den Preview.
   const fetchFullBody = async (msg: Message): Promise<string> => {
-    if (!msg.truncated || fullBodies[msg.id] !== undefined) return bodyOf(msg);
+    const key = bodyCacheKey(msg);
+    if (!msg.truncated || fullBodies[key] !== undefined) return bodyOf(msg);
     try {
       const r = await api.get(`/chat/messages/${msg.id}`);
       const body: string = r.data?.body ?? msg.preview;
-      setFullBodies((prev) => ({ ...prev, [msg.id]: body }));
+      setFullBodies((prev) => ({ ...prev, [key]: body }));
       return body;
     } catch {
       return msg.preview;
@@ -1520,7 +1549,8 @@ export default function ChatPage() {
                           msg={msg}
                           body={bodyOf(msg)}
                           showExpand={
-                            msg.truncated && fullBodies[msg.id] === undefined
+                            msg.truncated &&
+                            fullBodies[bodyCacheKey(msg)] === undefined
                           }
                           onExpand={() => {
                             void fetchFullBody(msg);
