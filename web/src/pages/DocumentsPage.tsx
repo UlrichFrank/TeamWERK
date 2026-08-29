@@ -729,7 +729,7 @@ export default function DocumentsPage() {
   return (
     <div>
       {/* Header — same sticky pattern as MembersPage */}
-      <div className="sticky top-0 z-10 bg-brand-white pb-4 mb-4 sm:bg-transparent sm:pb-6 sm:mb-0 sm:static sm:z-auto">
+      <div className="mb-4 sm:mb-6">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-brand-text">Dokumente</h1>
