@@ -9,6 +9,7 @@ import MapsLink from '../components/MapsLink'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 const WEEKDAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
@@ -437,7 +438,7 @@ export default function AdminTrainingsPage() {
           <div className="flex justify-end">
             <button
               onClick={openNewSeries}
-              className="flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+              className={`${BTN_PRIMARY} flex items-center gap-2`}
             >
               <Plus className="w-4 h-4" /> Neue Serie
             </button>
@@ -533,7 +534,7 @@ export default function AdminTrainingsPage() {
           <div className="flex justify-end">
             <button
               onClick={openNewSession}
-              className="flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+              className={`${BTN_PRIMARY} flex items-center gap-2`}
             >
               <Plus className="w-4 h-4" /> Neuer Termin
             </button>
@@ -697,7 +698,7 @@ export default function AdminTrainingsPage() {
 
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={saving}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40">
+                  className={BTN_PRIMARY}>
                   {saving ? 'Speichern…' : isNewSeries ? 'Serie anlegen' : 'Speichern'}
                 </button>
                 <button type="button" onClick={() => setSeriesModal(null)}
@@ -761,7 +762,7 @@ export default function AdminTrainingsPage() {
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={saving}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                  className={BTN_PRIMARY}>
                   {saving ? 'Speichern…' : 'Abmelden'}
                 </button>
                 <button type="button" onClick={() => setAbmeldModal(null)}
@@ -872,7 +873,7 @@ export default function AdminTrainingsPage() {
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={saving}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40">
+                  className={BTN_PRIMARY}>
                   {saving ? 'Speichern…' : isNewSession ? 'Termin anlegen' : 'Speichern'}
                 </button>
                 <button type="button" onClick={() => setSessionModal(null)}

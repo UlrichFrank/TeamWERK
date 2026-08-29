@@ -1,3 +1,4 @@
+import { BTN_SMALL } from '../lib/buttonStyles'
 interface Props {
   /** Anzahl der Elemente, die auf den Textfilter passen, aber von anderen
    *  aktiven Filtern ausgeblendet werden. 0 = normale Leermeldung. */
@@ -31,7 +32,7 @@ export default function FilterEmptyState({ hiddenByOtherFilters, onResetFilters,
       <button
         type="button"
         onClick={onResetFilters}
-        className="mt-2 bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+        className={`${BTN_SMALL} mt-2`}
       >
         Filter zurücksetzen
       </button>

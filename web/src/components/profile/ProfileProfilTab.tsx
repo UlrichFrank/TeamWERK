@@ -5,6 +5,7 @@ import { Member, Parent, Phone, Visibility, ChangeDraft } from '../../pages/Prof
 import { UserContact } from '../../pages/ChildProfilePage'
 import ImageCropModal from '../ImageCropModal'
 import Toggle from '../Toggle'
+import { BTN_PRIMARY } from '../../lib/buttonStyles'
 
 interface Props {
   children: Member[]
@@ -519,7 +520,7 @@ export default function ProfileProfilTab({
         <button
           onClick={handleSave}
           disabled={!isChanged || saving}
-          className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={BTN_PRIMARY}
         >
           {saving ? 'Speichern…' : 'Speichern'}
         </button>

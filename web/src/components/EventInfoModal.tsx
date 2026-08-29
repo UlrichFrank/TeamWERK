@@ -8,6 +8,7 @@ import EventNoteIndicator from './EventNoteIndicator'
 import EventNoteEditor from './EventNoteEditor'
 import GameDayHostSection from './GameDayHostPicker'
 import { api } from '../lib/api'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 interface VenueRef {
   id: number
@@ -364,7 +365,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
             <>
               {(type === 'game' || type === 'training') && (
                 <button
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  className={`${BTN_PRIMARY} flex-1`}
                   onClick={() => {
                     onClose()
                     const id = type === 'game' ? game?.id : training?.id
@@ -377,7 +378,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               {type === 'game' && (
                 <button
                   disabled={(game?.slot_count ?? 0) === 0}
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`${BTN_PRIMARY} flex-1`}
                   onClick={() => {
                     onClose()
                     navigate(`/dienste?focus=game-${game?.id}`)

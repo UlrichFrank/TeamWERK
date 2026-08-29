@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import PasswordChangeModal from './PasswordChangeModal'
 import EmailChangeModal from './EmailChangeModal'
+import { BTN_PRIMARY } from '../../lib/buttonStyles'
 
 interface Props {
   user: { email?: string } | null
@@ -46,13 +47,13 @@ export default function ProfileAccountTab({ user, logout, recoveryEmail }: Props
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setShowPwModal(true)}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className={BTN_PRIMARY}
           >
             Passwort ändern
           </button>
           <button
             onClick={() => setShowEmailModal(true)}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className={BTN_PRIMARY}
           >
             E-Mail ändern
           </button>

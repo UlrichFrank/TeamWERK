@@ -9,7 +9,7 @@ import PersonChip from '../components/PersonChip'
 import { getEventColors } from '../lib/eventColors'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
 interface CarpoolEntry {
@@ -391,7 +391,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
           <button
             type="submit"
             disabled={saving}
-            className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`${BTN_PRIMARY} w-full`}
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
@@ -482,7 +482,7 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
           <button
             type="submit"
             disabled={saving}
-            className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`${BTN_PRIMARY} w-full`}
           >
             {saving ? 'Senden…' : (isRide ? 'Mitfahrt anfragen' : 'Platz anbieten')}
           </button>
@@ -538,14 +538,14 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
             <div className="flex gap-2 flex-shrink-0">
               <button
                 onClick={() => onOpenForm(data.game.id, 'biete')}
-                className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0"
+                className={`${BTN_SMALL} min-h-[44px] sm:min-h-0`}
               >
                 <span className="hidden sm:inline">Ich biete Mitfahrt</span>
                 <Car className="w-4 h-4 sm:hidden" />
               </button>
               <button
                 onClick={() => onOpenForm(data.game.id, 'suche')}
-                className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0"
+                className={`${BTN_SMALL} min-h-[44px] sm:min-h-0`}
               >
                 <span className="hidden sm:inline">Ich suche Mitfahrt</span>
                 <Users className="w-4 h-4 sm:hidden" />
@@ -555,7 +555,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
           {hasOwn && (
             <button
               onClick={() => onOpenForm(data.game.id, hasOwnBiete ? 'suche' : 'biete')}
-              className="bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors min-h-[44px] sm:min-h-0"
+              className={`${BTN_SMALL} min-h-[44px] sm:min-h-0`}
             >
               <span className="hidden sm:inline">Eintrag hinzufügen</span>
               <span className="sm:hidden">+</span>

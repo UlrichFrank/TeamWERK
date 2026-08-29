@@ -9,7 +9,7 @@ import MobileCard from '../components/MobileCard'
 import VideoStatusPill from '../components/VideoStatusPill'
 import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 import { buildTeamShortNames } from '../lib/teamName'
-import { HEADER_CTRL, HEADER_FIELD, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 interface VideoItem {
   id: number
@@ -290,7 +290,7 @@ export default function VideosPage() {
           <button
             onClick={() => fetchPage(offset, false)}
             disabled={loading}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={BTN_PRIMARY}
           >
             {loading ? 'Lädt…' : 'Mehr laden'}
           </button>

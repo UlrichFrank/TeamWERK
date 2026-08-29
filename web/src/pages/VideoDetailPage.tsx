@@ -7,7 +7,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import VideoStatusPill from '../components/VideoStatusPill'
 import CastButton from '../components/CastButton'
 import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
-import { HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL } from '../lib/buttonStyles'
 
 interface VideoDetail {
   id: number
@@ -446,7 +446,7 @@ export default function VideoDetailPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   {saving ? 'Speichern…' : 'Speichern'}
                 </button>
@@ -480,7 +480,7 @@ export default function VideoDetailPage() {
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_DANGER}
                 >
                   {deleting ? 'Löschen…' : 'Löschen'}
                 </button>

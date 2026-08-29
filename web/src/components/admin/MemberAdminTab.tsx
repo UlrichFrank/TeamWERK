@@ -3,6 +3,7 @@ import { CheckCircle, Mail } from 'lucide-react'
 import { api } from '../../lib/api'
 import { isLikelyNameMatch } from '../../lib/nameMatch'
 import SearchableSelect from '../SearchableSelect'
+import { BTN_PRIMARY } from '../../lib/buttonStyles'
 
 interface User {
   id: number
@@ -137,7 +138,7 @@ export default function MemberAdminTab({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={BTN_PRIMARY}
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
@@ -171,7 +172,7 @@ export default function MemberAdminTab({
             <button
               onClick={handleSendWelcome}
               disabled={!currentUserId || sending}
-              className="inline-flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`${BTN_PRIMARY} inline-flex items-center gap-2`}
             >
               <Mail className="w-4 h-4" />
               {sending ? 'Wird gesendet…' : 'Willkommensmail senden'}

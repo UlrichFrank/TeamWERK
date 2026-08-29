@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 interface Season {
   id: number
@@ -144,7 +145,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
                 <button
                   onClick={() => setStep(2)}
                   disabled={!fromSeasonId || sourceKader.length === 0}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   Weiter
                 </button>
@@ -200,7 +201,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
                 <button
                   onClick={handleConfirm}
                   disabled={selectedKader.size === 0 || saving}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   {saving ? 'Anlegen…' : 'Kader anlegen'}
                 </button>

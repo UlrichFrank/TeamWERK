@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { errorData, errorMessage } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useAusrichterOptions } from './GameDayHostPicker'
+import { BTN_DANGER, BTN_PRIMARY } from '../lib/buttonStyles'
 
 // Massen-Regeneration der Dienst-Slots über einen wählbaren Zeitraum
 // (openspec/changes/duty-bulk-regen). Jede Eingabe-Änderung löst — entprellt und mit
@@ -81,8 +82,6 @@ interface Props {
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const SELECT_SM = 'border border-brand-border rounded-md px-2 py-1 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_PRIMARY = 'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-const BTN_DANGER = 'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 const BTN_SECONDARY = 'px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
 
 const EVENT_TYPES: { key: EventType; label: string }[] = [

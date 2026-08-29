@@ -12,6 +12,7 @@ import {
   type DiaryEntry,
 } from '../lib/trainingDiary'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 // Nachweis-Darstellung. Der 'purged'-Zweig löst bewusst KEINEN Bildabruf aus —
 // er würde zwangsläufig 410 liefern und im UI als kaputtes Bild erscheinen.
@@ -146,7 +147,7 @@ export function ProfilTrainingstagebuchContent({ forcedMemberId }: { forcedMembe
             setPendingFile(null)
             setFormOpen(true)
           }}
-          className="inline-flex items-center gap-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+          className={`${BTN_PRIMARY} inline-flex items-center gap-1`}
         >
           <Plus className="w-5 h-5" />
           Einheit erfassen

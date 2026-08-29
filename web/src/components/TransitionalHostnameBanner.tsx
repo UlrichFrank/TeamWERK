@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 const ALIAS_HOST = 'internal.team-stuttgart.org'
 const PRIMARY_ORIGIN = 'https://teamwerk.team-stuttgart.org'
@@ -26,7 +27,7 @@ export default function TransitionalHostnameBanner() {
       </div>
       <a
         href={target}
-        className="shrink-0 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-center"
+        className={`${BTN_PRIMARY} shrink-0 text-center`}
       >
         Jetzt wechseln
       </a>

@@ -10,6 +10,7 @@ import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import HoursInput from './HoursInput'
 import { resolveAnchorClock, clockDiffMinutes } from '../lib/duration'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 interface GameDetail {
   id: number
@@ -370,7 +371,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setShowAddSlot(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button onClick={handleAddSlot} disabled={!addDutyTypeId || addSaving}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50">
+                    className={`${BTN_PRIMARY} flex-1`}>
                     {addSaving ? 'Speichern…' : 'Hinzufügen'}
                   </button>
                 </div>
@@ -424,7 +425,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setEditSlot(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button onClick={handleEditSlot} disabled={editSaving}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50">
+                    className={`${BTN_PRIMARY} flex-1`}>
                     {editSaving ? 'Speichern…' : 'Speichern'}
                   </button>
                 </div>

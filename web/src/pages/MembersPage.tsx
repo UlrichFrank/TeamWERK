@@ -11,7 +11,7 @@ import Pagination from '../components/Pagination'
 import WindowedTableBody from '../components/WindowedTableBody'
 import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
-import { HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
+import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
 import PersonChip from '../components/PersonChip'
 
 interface Member {
@@ -949,7 +949,7 @@ export default function MembersPage() {
                 <button
                   type="button"
                   onClick={() => sepaInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`${BTN_PRIMARY} inline-flex items-center gap-2`}
                   disabled={sepaImporting}
                 >
                   <FolderUp className="w-4 h-4" />
@@ -991,7 +991,7 @@ export default function MembersPage() {
                 <button
                   onClick={handleSepaSubmit}
                   disabled={sepaImporting || sepaFiles.length === 0}
-                  className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   {sepaImporting ? 'Importiere…' : 'Hochladen & Importieren'}
                 </button>

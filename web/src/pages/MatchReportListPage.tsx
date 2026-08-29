@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { FileText, Plus, ExternalLink } from 'lucide-react'
+import { BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
 
 type ReportItem = {
     id: number
@@ -20,10 +21,6 @@ type SlotItem = {
     opponent: string
 }
 
-const btnPrimary =
-    'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-const btnSmall =
-    'bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
 const STATE_LABEL: Record<string, string> = {
     draft: 'Entwurf',
@@ -112,7 +109,7 @@ export default function MatchReportListPage() {
                                     <div className="text-xs text-brand-text-muted">Bericht ausstehend</div>
                                 </div>
                                 <button
-                                    className={btnPrimary}
+                                    className={BTN_PRIMARY}
                                     onClick={() => startReport(slot)}
                                     disabled={creating === slot.slot_id}
                                 >
@@ -165,7 +162,7 @@ export default function MatchReportListPage() {
                                         </a>
                                     )}
                                     <button
-                                        className={btnSmall}
+                                        className={BTN_SMALL}
                                         onClick={() => navigate(`/spielberichte/${r.id}`)}
                                     >
                                         Öffnen

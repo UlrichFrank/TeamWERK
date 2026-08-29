@@ -1,3 +1,4 @@
+import { BTN_PRIMARY } from '../../lib/buttonStyles'
 interface Member {
   dsgvo_verarbeitung?: boolean
   dsgvo_verarbeitung_date?: string
@@ -154,7 +155,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
           <button
             onClick={onSave}
             disabled={saving}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={BTN_PRIMARY}
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>

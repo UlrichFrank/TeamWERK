@@ -13,12 +13,11 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import NumberSpinner from '../components/NumberSpinner'
 import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
 import { errorStatus } from '../lib/errors'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_PRIMARY = 'bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-const BTN_SM = 'bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
 // ─── Verein Tab ───────────────────────────────────────────────────────────────
@@ -460,10 +459,10 @@ function SaisonsTab() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 justify-end">
-                      <button onClick={() => openEdit(s)} className={BTN_SM}>Bearbeiten</button>
+                      <button onClick={() => openEdit(s)} className={BTN_SMALL}>Bearbeiten</button>
                       {!s.is_active && (
                         <>
-                          <button onClick={() => handleActivate(s.id)} className={BTN_SM}>Aktivieren</button>
+                          <button onClick={() => handleActivate(s.id)} className={BTN_SMALL}>Aktivieren</button>
                           <button
                             onClick={() => handleDelete(s.id)}
                             disabled={deleting === s.id}
@@ -580,7 +579,7 @@ function AltersklassenTab() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex flex-col items-end gap-1">
-                        <button onClick={() => saveRow(rule.age_class)} disabled={s.saving} className={BTN_SM}>
+                        <button onClick={() => saveRow(rule.age_class)} disabled={s.saving} className={BTN_SMALL}>
                           {s.saving ? 'Speichern…' : 'Speichern'}
                         </button>
                         {s.error && <span className="text-xs text-brand-danger">{s.error}</span>}
@@ -712,7 +711,7 @@ function BeitraegeTab() {
                 onChange={e => setForms({ ...forms, [kat]: { ...f, betrag: e.target.value } })}
                 className={`${INPUT} w-32`}
               />
-              <button type="button" onClick={() => add(kat)} className={BTN_SM}>Hinzufügen</button>
+              <button type="button" onClick={() => add(kat)} className={BTN_SMALL}>Hinzufügen</button>
             </div>
           </div>
         )
@@ -970,7 +969,7 @@ function AusrichterKachel() {
           onKeyDown={e => { if (e.key === 'Enter') add() }}
           className={`${INPUT} w-auto flex-1 min-w-[16rem]`}
         />
-        <button type="button" onClick={add} className={BTN_SM}>Hinzufügen</button>
+        <button type="button" onClick={add} className={BTN_SMALL}>Hinzufügen</button>
       </div>
 
       {/* Mobile: Cards */}
@@ -991,7 +990,7 @@ function AusrichterKachel() {
                 />
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
-                  <button type="button" onClick={() => rename(a.id)} className={BTN_SM}>Speichern</button>
+                  <button type="button" onClick={() => rename(a.id)} className={BTN_SMALL}>Speichern</button>
                 </div>
               </div>
             ) : (
@@ -1060,13 +1059,13 @@ function AusrichterKachel() {
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   {editId === a.id ? (
                     <>
-                      <button type="button" onClick={() => rename(a.id)} className={`${BTN_SM} mr-2`}>Speichern</button>
+                      <button type="button" onClick={() => rename(a.id)} className={`${BTN_SMALL} mr-2`}>Speichern</button>
                       <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
                     </>
                   ) : (
                     <>
-                      <button type="button" onClick={() => { setEditId(a.id); setEditName(a.name) }} className={`${BTN_SM} mr-2`}>Umbenennen</button>
-                      <button type="button" onClick={() => toggleAktiv(a)} className={`${a.aktiv ? BTN_DANGER_SM : BTN_SM} mr-2`}>{a.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
+                      <button type="button" onClick={() => { setEditId(a.id); setEditName(a.name) }} className={`${BTN_SMALL} mr-2`}>Umbenennen</button>
+                      <button type="button" onClick={() => toggleAktiv(a)} className={`${a.aktiv ? BTN_DANGER_SM : BTN_SMALL} mr-2`}>{a.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
                       <button
                         type="button"
                         onClick={() => openDeleteConfirm(a)}
@@ -1154,7 +1153,7 @@ function AusrichterKachel() {
                 type="button"
                 onClick={confirmDelete}
                 disabled={deleting || usageLoading}
-                className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`${BTN_DANGER} flex-1`}
               >
                 {deleting ? 'Löschen…' : 'Endgültig löschen'}
               </button>
@@ -1260,7 +1259,7 @@ function StammvereineTab() {
           onKeyDown={e => { if (e.key === 'Enter') add() }}
           className={`${INPUT} w-auto flex-1 min-w-[16rem]`}
         />
-        <button type="button" onClick={add} className={BTN_SM}>Hinzufügen</button>
+        <button type="button" onClick={add} className={BTN_SMALL}>Hinzufügen</button>
       </div>
 
       {/* Mobile: Cards */}
@@ -1281,7 +1280,7 @@ function StammvereineTab() {
                 />
                 <div className="flex gap-2 justify-end">
                   <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
-                  <button type="button" onClick={() => rename(v.id)} className={BTN_SM}>Speichern</button>
+                  <button type="button" onClick={() => rename(v.id)} className={BTN_SMALL}>Speichern</button>
                 </div>
               </div>
             ) : (
@@ -1335,7 +1334,7 @@ function StammvereineTab() {
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   {editId === v.id ? (
                     <>
-                      <button type="button" onClick={() => rename(v.id)} className={`${BTN_SM} mr-2`}>Speichern</button>
+                      <button type="button" onClick={() => rename(v.id)} className={`${BTN_SMALL} mr-2`}>Speichern</button>
                       <button type="button" onClick={() => setEditId(null)} className="text-xs text-brand-text-muted hover:text-brand-text">Abbrechen</button>
                     </>
                   ) : (
@@ -1343,12 +1342,12 @@ function StammvereineTab() {
                       <button
                         type="button"
                         onClick={() => { setEditId(v.id); setEditName(v.name) }}
-                        className={`${BTN_SM} mr-2`}
+                        className={`${BTN_SMALL} mr-2`}
                       >Umbenennen</button>
                       <button
                         type="button"
                         onClick={() => toggleAktiv(v)}
-                        className={v.aktiv ? BTN_DANGER_SM : BTN_SM}
+                        className={v.aktiv ? BTN_DANGER_SM : BTN_SMALL}
                       >{v.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
                     </>
                   )}

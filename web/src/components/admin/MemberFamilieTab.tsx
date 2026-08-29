@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import { errorStatus } from '../../lib/errors'
 import { isFullNameMatch, isLastNameMatch } from '../../lib/nameMatch'
 import SearchableSelect from '../SearchableSelect'
+import { BTN_PRIMARY } from '../../lib/buttonStyles'
 
 interface User {
   id: number
@@ -125,7 +126,7 @@ export default function MemberFamilieTab({
               <button
                 onClick={handleAdd}
                 disabled={!selectedParent || saving}
-                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={BTN_PRIMARY}
               >
                 Hinzufügen
               </button>
@@ -147,7 +148,7 @@ export default function MemberFamilieTab({
           <button
             onClick={handleCreateProxyAccount}
             disabled={proxyLoading}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={BTN_PRIMARY}
           >
             {proxyLoading ? 'Anlegen…' : 'Proxy-Account anlegen'}
           </button>

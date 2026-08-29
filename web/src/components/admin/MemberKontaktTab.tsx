@@ -7,6 +7,7 @@ import { errorMessage } from '../../lib/errors'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVault } from '../../contexts/VaultContext'
 import { encryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../../lib/buttonStyles'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -318,7 +319,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={openSepaMandat}
-                    className="flex items-center gap-1.5 bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                    className={`${BTN_SMALL} flex items-center gap-1.5`}
                   >
                     <ExternalLink className="w-4 h-4" />
                     Dokument öffnen
@@ -391,7 +392,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
           <button
             onClick={onSave}
             disabled={saving}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={BTN_PRIMARY}
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
@@ -410,7 +411,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               <button onClick={() => setConfirmDelete(false)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
               <button
                 onClick={handleDeleteSepa}
-                className="bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors"
+                className={BTN_DANGER}
               >
                 Löschen
               </button>

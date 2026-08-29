@@ -5,6 +5,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus } from '../lib/errors'
 import { DUTY_INSTRUCTION_TEMPLATE } from '../lib/dutyInstructionTemplate'
 import MarkdownRenderer from './MarkdownRenderer'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 interface DutyInstructionEditorModalProps {
   dutyTypeId: number
@@ -108,7 +109,7 @@ export default function DutyInstructionEditorModal({
             type="button"
             disabled={!hasChanged || saving || loading}
             onClick={save}
-            className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`${BTN_PRIMARY} flex-1`}
           >
             {saving ? 'Speichere…' : 'Speichern'}
           </button>
