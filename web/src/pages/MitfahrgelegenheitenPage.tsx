@@ -9,6 +9,7 @@ import PersonChip from '../components/PersonChip'
 import { getEventColors } from '../lib/eventColors'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
 interface CarpoolEntry {
@@ -833,7 +834,7 @@ export default function MitfahrgelegenheitenPage() {
             <select
               value={filterTeamId ?? ''}
               onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-              className="border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow w-24 shrink-0"
+              className={`${HEADER_FIELD} w-24 shrink-0`}
             >
               <option value="">Teams</option>
               {allTeams.map(t => (
@@ -852,10 +853,8 @@ export default function MitfahrgelegenheitenPage() {
           <button
             onClick={() => updateFilter({ mine: !viewMine })}
             aria-label="Meine"
-            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
-              viewMine
-                ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
+              viewMine ? HEADER_PRIMARY : HEADER_NEUTRAL
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" />

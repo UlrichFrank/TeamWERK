@@ -14,6 +14,7 @@ import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
 import EventSearchInput from '../components/EventSearchInput'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
 
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
@@ -952,7 +953,7 @@ export default function KalenderPage() {
         <select
           value={filterTeamId ?? ''}
           onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
-          className="hidden sm:block border border-brand-border rounded-md px-2 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow shrink-0 max-w-[6rem]"
+          className={`${HEADER_FIELD} hidden sm:block shrink-0 max-w-[6rem]`}
         >
           <option value="">Alle</option>
           {teams.filter(t => t.is_active).map(t => (
@@ -985,10 +986,10 @@ export default function KalenderPage() {
             }}
             aria-label="Mannschaftsabwesenheiten"
             title="Mannschaftsabwesenheiten"
-            className={`flex items-center gap-1 rounded-md py-1.5 text-xs font-medium border transition-colors shrink-0 ${compact ? 'px-2' : 'px-3'} ${
+            className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
               showTeamAbsences
                 ? 'bg-brand-blue text-white border-brand-blue'
-                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+                : HEADER_NEUTRAL
             }`}
           >
             <UserX className="w-3.5 h-3.5" />
@@ -1009,7 +1010,9 @@ export default function KalenderPage() {
                     setShowCreate(true)
                   }}
                   aria-label={canEdit ? 'Event' : 'Abwesenheit'}
-                  className={`flex items-center gap-1 py-1.5 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors ${compact ? 'px-2' : 'px-3'} ${(canImportGames || canBulkRegenDuties) ? 'rounded-l-md' : 'rounded-md'}`}
+                  className={`${(canImportGames || canBulkRegenDuties)
+                    ? HEADER_SPLIT_MAIN
+                    : (compact ? HEADER_CTRL_ICON : HEADER_CTRL)} ${HEADER_PRIMARY}`}
                 >
                   <Plus className="w-3.5 h-3.5" />
                   {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
@@ -1021,9 +1024,9 @@ export default function KalenderPage() {
                   aria-label="Weitere Aktionen"
                   aria-expanded={showEventMenu}
                   aria-haspopup="menu"
-                  className={`flex items-center py-1.5 px-2 text-xs font-medium bg-brand-yellow text-brand-black border border-brand-yellow hover:bg-brand-black hover:text-brand-yellow transition-colors ${
-                    canEdit || canCreateAbsence ? 'border-l border-l-brand-black/20 rounded-r-md' : 'rounded-md'
-                  }`}
+                  className={`${canEdit || canCreateAbsence
+                    ? HEADER_SPLIT_CARET
+                    : HEADER_CTRL_ICON} ${HEADER_PRIMARY}`}
                 >
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>

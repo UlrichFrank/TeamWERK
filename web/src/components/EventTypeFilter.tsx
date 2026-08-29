@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Filter } from 'lucide-react'
 import { getEventColors } from '../lib/eventColors'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 export type EventTypeFilterEntry = [string, string, ReactNode]
 
@@ -46,10 +47,8 @@ export default function EventTypeFilter({ types, active, onToggle, compact, aria
             key={type}
             onClick={() => onToggle(type)}
             aria-label={label}
-            className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium border transition-colors shrink-0 ${
-              active.has(type)
-                ? getEventColors(type).filter
-                : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
+            className={`${HEADER_CTRL} ${
+              active.has(type) ? getEventColors(type).filter : HEADER_NEUTRAL
             }`}
           >
             {icon}
@@ -69,11 +68,7 @@ export default function EventTypeFilter({ types, active, onToggle, compact, aria
         onClick={() => setOpen(o => !o)}
         aria-label={ariaLabel}
         aria-expanded={open}
-        className={`flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium border transition-colors ${
-          allActive
-            ? 'bg-white text-brand-text-muted border-brand-border hover:border-brand-text hover:text-brand-text'
-            : 'bg-brand-yellow text-brand-black border-brand-yellow'
-        }`}
+        className={`${HEADER_CTRL_ICON} ${allActive ? HEADER_NEUTRAL : HEADER_PRIMARY}`}
       >
         <Filter className="w-3.5 h-3.5" />
         {!allActive && <span>{activeCount}/{types.length}</span>}
