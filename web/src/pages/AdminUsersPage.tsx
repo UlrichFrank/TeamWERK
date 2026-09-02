@@ -908,7 +908,11 @@ export default function AdminUsersPage() {
                         label: createMemberLoading.has(u.id) ? 'Wird angelegt…' : 'Mitglied anlegen',
                         onClick: () => handleCreateMember(u),
                       }] : []),
-                      ...(!u.proxy && self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' ? [{
+                      // Proxy-Accounts (can_login=0) sind ausdrücklich eingeschlossen:
+                      // sie können sich nie selbst einloggen, „Testen als" ist damit
+                      // der einzige Weg, ihre Sicht zu prüfen. Serverseitig löst
+                      // POST /api/impersonate/{id} die Identität NULL-sicher auf.
+                      ...(self?.role === 'admin' && u.id !== self?.id && u.role !== 'admin' ? [{
                         label: 'Testen als',
                         onClick: () => startImpersonation(u.id, `${u.first_name} ${u.last_name}`.trim()),
                       }] : []),

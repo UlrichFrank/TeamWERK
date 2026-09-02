@@ -536,6 +536,37 @@ func TestImpersonate_ChildAccountWithoutEmail(t *testing.T) {
 	}
 }
 
+// Impersonation eines Proxy-Kontos (can_login=0, weder E-Mail noch login_name) → 200.
+//
+// Ein Proxy-Konto kann sich nie selbst einloggen; „Testen als" ist damit der
+// einzige Weg, seine Sicht zu prüfen. Der Handler darf deshalb nicht auf
+// can_login gaten, und die leere Identität muss er aushalten (COALESCE-Kette
+// endet bei ”), statt an einem NULL-Scan zu scheitern.
+func TestImpersonate_ProxyAccount(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	res, err := db.Exec(
+		`INSERT INTO users (email, login_name, password, first_name, last_name, role, can_login)
+		 VALUES (NULL, NULL, '', 'Mia', 'Muster', 'standard', 0)`)
+	if err != nil {
+		t.Fatalf("proxy-Konto anlegen: %v", err)
+	}
+	proxyID64, _ := res.LastInsertId()
+	proxyID := int(proxyID64)
+	srv := newAuthServer(t, db)
+
+	httpRes := testutil.Post(t, srv, "/api/impersonate/"+itoa(proxyID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", httpRes.StatusCode)
+	}
+	if got := identityClaim(t, httpRes); got != "" {
+		t.Errorf("expected empty identity claim for proxy account, got %q", got)
+	}
+}
+
 // Impersonation eines Standard-Kontos mit E-Mail → 200, Identität=E-Mail (Regression).
 func TestImpersonate_RegularUser(t *testing.T) {
 	db := testutil.NewDB(t)
