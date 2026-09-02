@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import KalenderPage from './KalenderPage'
@@ -21,7 +21,11 @@ vi.mock('../contexts/AuthContext', () => ({
 }))
 vi.mock('../lib/useEscapeKey', () => ({ useEscapeKey: vi.fn() }))
 
-// Der Kalender startet im aktuellen Monat (August 2026 in dieser Test-Umgebung).
+// Der Kalender startet im aktuellen Monat — die Termine unten müssen also in
+// genau diesem Monat liegen, sonst rendert das Gitter sie gar nicht. Statt sich
+// auf die Wanduhr zu verlassen (kippte beim Monatswechsel), wird `Date` auf
+// August 2026 festgenagelt; Timer bleiben echt, damit waitFor weiter läuft.
+const NOW = new Date(2026, 7, 15, 10, 0, 0) // 15.08.2026, lokale Zeit
 const MONTH = '2026-08'
 
 function game(overrides: Record<string, unknown> = {}) {
@@ -77,7 +81,13 @@ function renderKalender(route = '/kalender') {
 
 describe('KalenderPage — Textfilter (?q=)', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   test('ohne q sind beide Termine im Gitter', async () => {

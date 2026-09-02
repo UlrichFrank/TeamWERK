@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -41,10 +41,22 @@ function renderKalender(initialEntry: string = '/kalender') {
   )
 }
 
+// Der Kalender startet ohne ?date im aktuellen Monat — die Erwartungen unten
+// ("August 2026") sind damit an die Wanduhr gebunden und kippten beim
+// Monatswechsel. Nur `Date` wird gefälscht, damit Timer, waitFor und userEvent
+// weiter auf echten Timern laufen.
+const NOW = new Date(2026, 7, 15, 10, 0, 0) // 15.08.2026, lokale Zeit
+
 describe('KalenderPage — date sync to URL', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
     vi.clearAllMocks()
     seedEmptyData()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   test('renders calendar with current month on first mount', async () => {
