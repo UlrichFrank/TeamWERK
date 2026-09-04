@@ -324,6 +324,22 @@ type calEvent struct {
 	HasEnd      bool
 }
 
+// kaderMembership vereint die drei Arten, auf die ein Nutzer an einem Kader
+// hängt — dieselbe Menge, die auth.GameVisibilityClause für den Spielplan
+// auflöst (dort zusätzlich über family_links für Eltern; der Feed braucht das
+// nicht, weil Eltern einen eigenen Kind-Token bekommen). Der
+// Funktionsträger-Bypass aus auth wird bewusst NICHT übernommen: ein Vorstand
+// will nicht alle Spiele des Vereins im Kalender haben.
+//
+// is_extended=1 nur beim erweiterten Kader — es steuert allein die
+// Kennzeichnung im Titel. Trainer zählen wie reguläre Mitglieder.
+const kaderMembership = `
+	SELECT kader_id, member_id, 0 AS is_extended FROM kader_members
+	UNION ALL
+	SELECT kader_id, member_id, 0 FROM kader_trainers
+	UNION ALL
+	SELECT kader_id, member_id, 1 FROM kader_extended_members`
+
 func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) ([]calEvent, error) {
 	placeholders := strings.Repeat("?,", len(eventTypes))
 	placeholders = placeholders[:len(placeholders)-1]
@@ -337,16 +353,16 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		    g.id, g.date, g.time, g.end_time, g.end_date,
 		    g.opponent, g.event_type, g.is_home, g.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
-		    t.name
+		    t.name, mem.is_extended
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
 		JOIN teams t ON t.id = gt.team_id
 		JOIN kader k ON k.team_id = gt.team_id AND k.season_id = g.season_id
-		JOIN kader_members km ON km.kader_id = k.id
-		JOIN members m ON m.id = km.member_id
+		JOIN (`+kaderMembership+`) mem ON mem.kader_id = k.id
+		JOIN members m ON m.id = mem.member_id
 		LEFT JOIN venues v ON v.id = g.venue_id
 		WHERE m.user_id = ? AND g.event_type IN (`+placeholders+`)
-		ORDER BY g.date, g.time`, args...)
+		ORDER BY g.date, g.time, mem.is_extended`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -355,18 +371,20 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 	loc, _ := time.LoadLocation("Europe/Berlin")
 	var events []calEvent
 	// Der Team-Join kann dasselbe Spiel mehrfach liefern, wenn der Nutzer über
-	// zwei Kader daran hängt. Ein Spiel bleibt ein Event (UID game-<id>).
+	// zwei Kader daran hängt. Ein Spiel bleibt ein Event (UID game-<id>); die
+	// ORDER BY sorgt dafür, dass dabei die reguläre Zugehörigkeit die
+	// erweiterte schlägt.
 	seen := map[int]bool{}
 	for rows.Next() {
 		var id int
 		var date, startTime, opponent, eventType string
 		var endTime, endDate sql.NullString
-		var isHome bool
+		var isHome, isExtended bool
 		var note string
 		var vName, vStreet, vPostal, vCity, teamName string
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &endDate,
 			&opponent, &eventType, &isHome, &note,
-			&vName, &vStreet, &vPostal, &vCity, &teamName); err != nil {
+			&vName, &vStreet, &vPostal, &vCity, &teamName, &isExtended); err != nil {
 			continue
 		}
 		if seen[id] {
@@ -374,7 +392,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		}
 		seen[id] = true
 
-		summary := gameTitle(eventType, isHome, opponent, teamName)
+		summary := gameTitle(eventType, isHome, opponent, kaderLabel(teamName, isExtended))
 
 		var location string
 		if vName != "" {
@@ -422,15 +440,16 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 		SELECT DISTINCT
 		    ts.id, ts.date, ts.start_time, ts.end_time,
 		    COALESCE(t.name, ''), ts.note,
-		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,'')
+		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
+		    mem.is_extended
 		FROM training_sessions ts
 		JOIN teams t ON t.id = ts.team_id
 		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
-		JOIN kader_members km ON km.kader_id = k.id
-		JOIN members m ON m.id = km.member_id
+		JOIN (`+kaderMembership+`) mem ON mem.kader_id = k.id
+		JOIN members m ON m.id = mem.member_id
 		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE m.user_id = ? AND ts.status = 'active'
-		ORDER BY ts.date, ts.start_time`, userID)
+		ORDER BY ts.date, ts.start_time, mem.is_extended`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -438,17 +457,25 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 
 	loc, _ := time.LoadLocation("Europe/Berlin")
 	var events []calEvent
+	// Wie bei den Spielen: ein Training bleibt ein Event (UID training-<id>),
+	// auch wenn der Nutzer über mehrere Kader-Zugehörigkeiten daran hängt.
+	seen := map[int]bool{}
 	for rows.Next() {
 		var id int
 		var date, startTime, endTime, teamName, note string
 		var vName, vStreet, vPostal, vCity string
+		var isExtended bool
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &teamName, &note,
-			&vName, &vStreet, &vPostal, &vCity); err != nil {
+			&vName, &vStreet, &vPostal, &vCity, &isExtended); err != nil {
 			continue
 		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
 		summary := "Training"
 		if teamName != "" {
-			summary = "Training: " + teamName
+			summary = "Training: " + kaderLabel(teamName, isExtended)
 		}
 		var location string
 		if vName != "" {
@@ -599,22 +626,31 @@ func buildGameTypeFilter(s tokenSettings) []string {
 	return types
 }
 
-// ownTeamLabel benennt die eigene Mannschaft im Spieltitel. teamName ist der
-// Name des Teams, über dessen Kader der Feed-Nutzer am Spiel hängt (z. B. "mA1");
-// ist er leer, bleibt es beim generischen "Team".
-func ownTeamLabel(teamName string) string {
-	if teamName == "" {
-		return "Team"
+// kaderLabel benennt die Mannschaft, über die der Feed-Nutzer am Termin hängt
+// (z. B. "mA1"). Hängt er nur über den erweiterten Kader daran, sagt das Label
+// das dazu — der Termin gehört dann nicht zur eigenen Stammmannschaft.
+func kaderLabel(teamName string, isExtended bool) string {
+	if isExtended && teamName != "" {
+		return teamName + " - erweiterter Kader"
 	}
-	return "Team (" + teamName + ")"
+	return teamName
 }
 
-func gameTitle(eventType string, isHome bool, opponent, teamName string) string {
+// ownTeamLabel setzt das Kader-Label in den Spieltitel; ohne auflösbaren
+// Teamnamen bleibt es beim generischen "Team".
+func ownTeamLabel(label string) string {
+	if label == "" {
+		return "Team"
+	}
+	return "Team (" + label + ")"
+}
+
+func gameTitle(eventType string, isHome bool, opponent, teamLabel string) string {
 	switch eventType {
 	case "heim":
-		return "Heim: " + ownTeamLabel(teamName) + " – " + opponent
+		return "Heim: " + ownTeamLabel(teamLabel) + " – " + opponent
 	case "auswärts":
-		return "Auswärts: " + opponent + " – " + ownTeamLabel(teamName)
+		return "Auswärts: " + opponent + " – " + ownTeamLabel(teamLabel)
 	default:
 		return opponent
 	}

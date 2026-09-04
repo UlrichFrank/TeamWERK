@@ -84,18 +84,31 @@ Content-Type SHALL `text/calendar; charset=utf-8` sein. Zeilenenden SHALL CRLF s
 #### Scenario: Training-Event im Feed (include_training=true)
 
 - **WHEN** der Feed aktiviert ist und für ein Team des Users eine aktive `training_sessions`-Row existiert
-- **THEN** erscheint sie im Feed mit `SUMMARY:Training: <team_name>`, `UID:training-<id>@teamwerk` und `LOCATION:<location>`
+- **THEN** erscheint sie im Feed mit `SUMMARY:Training: <team_name>` (erweiterter Kader: `<team_name> - erweiterter Kader`), `UID:training-<id>@teamwerk` und `LOCATION:<location>`
 - **AND** `DTSTART`/`DTEND` werden aus `date`, `start_time`, `end_time` gebildet
 
 ### Requirement: Konfigurierbare Feed-Inhalte
 
 Das System SHALL die im Token gespeicherten Toggles beim Feed-Abruf auswerten. Ein deaktivierter Toggle bewirkt, dass die entsprechenden Events nicht im iCal ausgegeben werden.
 
-Spiele werden dem User zugeordnet wenn er über `kader_members` Mitglied eines Teams ist, dem das Spiel via `game_teams` zugeordnet ist, und die aktive Saison übereinstimmt.
+Spiele und Trainings werden dem User über seine Kader-Zugehörigkeit zugeordnet. Als Zugehörigkeit zählen `kader_members` (regulär), `kader_extended_members` (erweiterter Kader) und `kader_trainers` (Trainer) — dieselbe Menge, die `auth.GameVisibilityClause` für den Spielplan auflöst. Für Spiele muss das Team via `game_teams` am Spiel hängen und die Saison des Kaders mit der des Spiels übereinstimmen; für Trainings muss es `team_id` einer `training_sessions`-Row mit `status='active'` sein.
 
-Trainings werden dem User zugeordnet wenn er über `kader_members` Mitglied eines Teams ist, das `team_id` in einer `training_sessions`-Row mit `status='active'` referenziert.
+Den Funktionsträger-Bypass aus `auth` (admin/trainer/sportliche_leitung/vorstand sehen alle Events der Saison) übernimmt der Feed bewusst NICHT — ein Vorstand hätte sonst den gesamten Vereinsspielplan im privaten Kalender. Die Auflösung über `family_links` entfällt ebenfalls, weil Eltern für jedes Kind einen eigenen Kind-Token bekommen.
+
+Hängt ein User über mehrere Kader an demselben Termin, erscheint er trotzdem nur einmal im Feed (die UID ist pro Spiel bzw. Training eindeutig); für die Beschriftung schlägt dabei eine reguläre Zugehörigkeit die erweiterte.
 
 Dienste werden dem User zugeordnet wenn ein Eintrag in `duty_assignments` mit `user_id = user_id_des_tokens` und `status IN ('assigned', 'fulfilled')` existiert.
+
+#### Scenario: Termine aus dem erweiterten Kader sind gekennzeichnet
+
+- **WHEN** ein User über `kader_extended_members` am Kader eines Teams hängt und für dieses Team ein Spiel und ein Training existieren
+- **THEN** enthält der Feed beide Events
+- **AND** die Mannschaft trägt im `SUMMARY` den Zusatz `<team_name> - erweiterter Kader` (z. B. `SUMMARY:Heim: Team (mB1 - erweiterter Kader) – <Gegner>` und `SUMMARY:Training: mB1 - erweiterter Kader`)
+
+#### Scenario: Vereinsfunktion allein zieht keine fremden Termine in den Feed
+
+- **WHEN** ein User die Vereinsfunktion `trainer` hat, aber an keinem Kader des Teams hängt, dem ein Spiel zugeordnet ist
+- **THEN** enthält der Feed dieses Spiel nicht
 
 #### Scenario: include_training=false filtert training_sessions heraus
 

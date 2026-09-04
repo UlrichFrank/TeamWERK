@@ -11,10 +11,11 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/testutil/prodserver"
 )
 
-// TestCalendar_Filter: Der iCal-Feed des Users enthält nur Spiele der Teams,
-// in denen er selbst Mitglied ist (kader_members) — Spiele anderer Teams
-// kommen nicht hinein. Bestätigt die enge Personal-Scope-Filterung und
-// damit die event-team-visibility-Invariante (Feed-Inhalt ⊆ visibility).
+// TestCalendar_Filter: Der iCal-Feed des Users enthält nur Spiele der Teams, an
+// deren Kader er selbst hängt (regulär, erweitert oder als Trainer) — Spiele
+// anderer Teams kommen nicht hinein. Bestätigt die enge Personal-Scope-
+// Filterung und damit die event-team-visibility-Invariante
+// (Feed-Inhalt ⊆ visibility).
 func TestCalendar_Filter(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")

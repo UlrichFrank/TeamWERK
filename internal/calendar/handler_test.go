@@ -207,9 +207,11 @@ func TestCalendarFeed_IncludeTrainingTrue(t *testing.T) {
 	}
 }
 
-// gameSummaryFixture builds a user in the kader of a team named teamName with a
-// single game of the given event_type, and returns the rendered feed body.
-func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
+// membershipFeed builds a user who hangs off the kader of a team named teamName
+// through membershipTable ("kader_members", "kader_extended_members" or
+// "kader_trainers"), adds one game of the given event_type plus one training
+// session for that team, and returns the rendered feed body.
+func membershipFeed(t *testing.T, teamName, eventType, membershipTable string) string {
 	t.Helper()
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -217,12 +219,18 @@ func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
 	userID := testutil.CreateUser(t, db, "standard")
 	memberID := testutil.CreateMember(t, db, userID)
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+	if _, err := db.Exec(
+		`INSERT INTO `+membershipTable+` (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID); err != nil {
+		t.Fatalf("insert into %s: %v", membershipTable, err)
+	}
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-08-15")
 	if _, err := db.Exec(`UPDATE games SET event_type = ?, is_home = ? WHERE id = ?`,
 		eventType, eventType == "heim", gameID); err != nil {
 		t.Fatalf("set event_type: %v", err)
 	}
+	db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, location, status)
+	         VALUES (?, ?, ?, ?, ?, ?, 'active')`,
+		teamID, seasonID, "2026-08-16", "18:00", "20:00", "Halle X")
 
 	userToken := testutil.Token(t, userID, "standard", nil)
 	srv := prodserver.New(t, db)
@@ -231,6 +239,90 @@ func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
 	res := testutil.Get(t, srv, "/api/calendar/feed/"+tok["token"].(string), "")
 	defer res.Body.Close()
 	return readBody(t, res.Body)
+}
+
+func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
+	t.Helper()
+	return membershipFeed(t, teamName, eventType, "kader_members")
+}
+
+// TestCalendarFeed_ErweiterterKaderIstGekennzeichnet: Wer im erweiterten Kader
+// eines anderen Teams aushilft, bekommt dessen Termine in den Feed — der Titel
+// sagt aber dazu, dass es nicht die Stammmannschaft ist.
+func TestCalendarFeed_ErweiterterKaderIstGekennzeichnet(t *testing.T) {
+	body := membershipFeed(t, "mB1", "heim", "kader_extended_members")
+	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 - erweiterter Kader) – Test Opponent") {
+		t.Errorf("game summary must mark the extended kader, body:\n%s", body)
+	}
+	if !strings.Contains(body, "SUMMARY:Training: mB1 - erweiterter Kader") {
+		t.Errorf("training summary must mark the extended kader, body:\n%s", body)
+	}
+}
+
+// TestCalendarFeed_TrainerKaderOhneZusatz: Trainer hängen über kader_trainers an
+// ihrem Kader — ihre Termine kommen in den Feed, aber ohne Kader-Zusatz.
+func TestCalendarFeed_TrainerKaderOhneZusatz(t *testing.T) {
+	body := membershipFeed(t, "mB1", "heim", "kader_trainers")
+	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1) – Test Opponent") {
+		t.Errorf("trainer's game must appear without a kader suffix, body:\n%s", body)
+	}
+	if !strings.Contains(body, "SUMMARY:Training: mB1\r\n") {
+		t.Errorf("trainer's training must appear without a kader suffix, body:\n%s", body)
+	}
+}
+
+// TestCalendarFeed_RegulaerSchlaegtErweitert: Steht ein Nutzer bei einem Termin
+// sowohl regulär als auch im erweiterten Kader, gilt die reguläre
+// Zugehörigkeit — sonst hinge die Beschriftung an der Zeilenreihenfolge.
+func TestCalendarFeed_RegulaerSchlaegtErweitert(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "mB1")
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+	db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+	testutil.CreateGame(t, db, seasonID, teamID, "2026-08-15")
+
+	userToken := testutil.Token(t, userID, "standard", nil)
+	srv := prodserver.New(t, db)
+	tok := postToken(t, srv, userToken, allTogglesOn())
+
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+tok["token"].(string), "")
+	defer res.Body.Close()
+	body := readBody(t, res.Body)
+	if strings.Contains(body, "erweiterter Kader") {
+		t.Errorf("regular membership must win over the extended one, body:\n%s", body)
+	}
+	if n := strings.Count(body, "UID:game-"); n != 1 {
+		t.Errorf("expected exactly one game VEVENT, got %d, body:\n%s", n, body)
+	}
+}
+
+// TestCalendarFeed_KeinFunktionstraegerBypass: auth.GameVisibilityClause lässt
+// Trainer/sportliche Leitung/Vorstand alle Events der Saison sehen. Der Feed
+// übernimmt diesen Bypass bewusst NICHT — sonst stünde der gesamte
+// Vereinsspielplan im privaten Kalender.
+func TestCalendarFeed_KeinFunktionstraegerBypass(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	fremdTeam := testutil.CreateTeam(t, db, "mA1")
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'trainer')`, memberID)
+	testutil.CreateGame(t, db, seasonID, fremdTeam, "2026-08-15")
+	db.Exec(`UPDATE games SET opponent='OTHERGAME' WHERE season_id=?`, seasonID)
+
+	userToken := testutil.Token(t, userID, "standard", nil)
+	srv := prodserver.New(t, db)
+	tok := postToken(t, srv, userToken, allTogglesOn())
+
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+tok["token"].(string), "")
+	defer res.Body.Close()
+	if body := readBody(t, res.Body); strings.Contains(body, "OTHERGAME") {
+		t.Errorf("club function alone must not pull foreign games into the feed, body:\n%s", body)
+	}
 }
 
 // TestCalendarFeed_GameSummaryNamesOwnTeam: der Spieltitel nennt die eigene
