@@ -1144,18 +1144,24 @@ func (h *Handler) EditBroadcast(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 
-	// Trainer sind bewusst nicht mehr dabei: Team-Ansagen laufen über die
-	// Team-Standardgruppen des Chats, die denselben Kreis mit Rückkanal
-	// erreichen (design.md §2 zu mitteilung-zielgruppen).
-	if !claims.HasFunction("vorstand") && !claims.HasFunction("sportliche_leitung") && claims.Role != "admin" {
+	// Wer senden darf und woran, steckt in derselben Allowlist, die
+	// GET /api/chat/broadcast-targets ausliefert: vereinsweite Ziele für
+	// admin/vorstand/sportliche_leitung, Team-Gruppen für den Kader-Trainer der
+	// aktiven Saison. Eine leere Liste heißt "kein Senderecht".
+	allowed, err := allowedTargets(r.Context(), h.db, claims)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if len(allowed) == 0 {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
 	var body struct {
-		Body       string `json:"body"`
-		TargetType string `json:"targetType"`
-		MediaID    *int   `json:"mediaId"`
+		Body    string   `json:"body"`
+		Targets []Target `json:"targets"`
+		MediaID *int     `json:"mediaId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -1167,8 +1173,21 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "body or mediaId required", http.StatusBadRequest)
 		return
 	}
-	if !ValidTarget(body.TargetType) {
-		http.Error(w, "targetType must be users, members, spieler or eltern", http.StatusBadRequest)
+	if len(body.Targets) == 0 {
+		http.Error(w, "targets required", http.StatusBadRequest)
+		return
+	}
+	for _, t := range body.Targets {
+		if !ValidTarget(t) {
+			http.Error(w, "invalid target", http.StatusBadRequest)
+			return
+		}
+	}
+	// Jedes Ziel muss in der Allowlist stehen; ein einziger Fehltreffer lehnt den
+	// ganzen Request ab. Still nur die erlaubten Ziele zuzustellen sähe für den
+	// Absender aus wie eine vollständige Zustellung.
+	if !maySendTo(allowed, body.Targets) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -1185,15 +1204,23 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO broadcasts (sender_id, target_type, body, media_id) VALUES (?, ?, ?, ?)`,
-		claims.UserID, body.TargetType, body.Body, mediaID)
+		`INSERT INTO broadcasts (sender_id, body, media_id) VALUES (?, ?, ?)`,
+		claims.UserID, body.Body, mediaID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	broadcastID, _ := res.LastInsertId()
 
-	recipientIDs := h.resolveBroadcastRecipients(r, body.TargetType)
+	for _, t := range body.Targets {
+		if _, err := h.db.ExecContext(r.Context(),
+			`INSERT OR IGNORE INTO broadcast_targets (broadcast_id, kind, team_id) VALUES (?, ?, ?)`,
+			broadcastID, t.Kind, t.TeamID); err != nil {
+			slog.Error("broadcast target insert failed", "broadcast", broadcastID, "kind", t.Kind, "error", err)
+		}
+	}
+
+	recipientIDs := h.resolveBroadcastRecipients(r, body.Targets)
 
 	// Mark as read for sender immediately, unread for others
 	senderIncluded := false
@@ -1723,10 +1750,10 @@ func (h *Handler) activeMembers(r *http.Request, convID, excludeUserID int) []in
 	return ids
 }
 
-func (h *Handler) resolveBroadcastRecipients(r *http.Request, targetType string) []int {
-	ids, err := resolveAudience(r.Context(), h.db, targetType)
+func (h *Handler) resolveBroadcastRecipients(r *http.Request, targets []Target) []int {
+	ids, err := resolveTargets(r.Context(), h.db, targets)
 	if err != nil {
-		slog.Error("broadcast audience resolve failed", "target", targetType, "error", err)
+		slog.Error("broadcast audience resolve failed", "targets", len(targets), "error", err)
 		return nil
 	}
 	return ids

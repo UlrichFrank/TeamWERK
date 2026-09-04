@@ -121,9 +121,14 @@ var exAdmin = map[string]int{
 // Strafenwart ist bewusst KEINE Vereinsfunktion, sondern ein per-Kader-Appointment).
 var exTeamInternalGate = exAdmin
 
-// Handler-Level-Gate: chat.SendBroadcast — admin || vorstand || sportliche_leitung.
-// Trainer sind bewusst NICHT mehr dabei: eine Mitteilung an ein Team ist derselbe
-// Empfängerkreis wie die Team-Standardgruppe im Chat, nur ohne Rückkanal.
+// Handler-Level-Gate: chat.SendBroadcast und chat.ListBroadcastTargets.
+//
+// Seit mitteilung-team-gruppen dürfen Trainer wieder senden — aber nur an die
+// Standardgruppen der Kader, die sie in der aktiven Saison trainieren. Die
+// Personas dieser Matrix tragen ihre Vereinsfunktion nur im Token und stehen in
+// keinem Kader, ihre Ziel-Allowlist ist deshalb leer und beide Routen antworten
+// 403. Der Trainer-Pfad hängt an DB-Zuständen und wird dort geprüft, wo man sie
+// aufbauen kann: internal/chat.
 var exBroadcastSend = map[string]int{
 	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
@@ -276,8 +281,9 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/chat/conversations", expected: exAuth},
 	{method: "POST", path: "/api/chat/conversations", expected: exAuth},
 	{method: "GET", path: "/api/chat/broadcasts", expected: exAuth},
-	// Broadcasts senden: Handler-Level-Gate (admin || vorstand || sportliche_leitung)
+	// Broadcasts senden: Handler-Level-Gate über die Ziel-Allowlist des Absenders
 	{method: "POST", path: "/api/chat/broadcasts", expected: exBroadcastSend},
+	{method: "GET", path: "/api/chat/broadcast-targets", expected: exBroadcastSend},
 
 	// Konversations-spezifische Routen: isMember-Check → 403 für alle wenn Konversation 1 nicht existiert.
 	// httpAnyOK: wir testen hier keine Middleware, sondern dokumentieren das bekannte Verhalten.

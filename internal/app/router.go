@@ -209,6 +209,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Delete("/api/chat/messages/{id}", h.Chat.DeleteMessage)
 		r.Post("/api/chat/messages/{id}/reactions", h.Chat.ToggleReaction)
 		r.Get("/api/chat/broadcasts", h.Chat.ListBroadcasts)
+		r.Get("/api/chat/broadcast-targets", h.Chat.ListBroadcastTargets)
 		r.Post("/api/chat/broadcasts", h.Chat.SendBroadcast)
 		r.Post("/api/chat/broadcasts/{id}/read", h.Chat.MarkBroadcastRead)
 		r.Put("/api/chat/broadcasts/{id}", h.Chat.EditBroadcast)

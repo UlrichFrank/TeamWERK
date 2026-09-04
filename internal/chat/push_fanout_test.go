@@ -90,7 +90,7 @@ func TestSendBroadcast_FansOutToNonSenderRecipients(t *testing.T) {
 
 	token := testutil.Token(t, admin, "admin", nil)
 	res := testutil.Post(t, srv, "/api/chat/broadcasts", token,
-		map[string]any{"body": "Ansage", "targetType": "users"})
+		map[string]any{"body": "Ansage", "targets": clubWide("users")})
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("status %d, want 201", res.StatusCode)
 	}

@@ -142,15 +142,22 @@ func CanManageDocuments(p *Principal) bool {
 	return p.Role == "admin"
 }
 
-// CanBroadcast returns true if the caller may send broadcast messages.
-// CanBroadcast returns true if the caller may send club-wide announcements.
+// CanBroadcast returns true if the caller may send announcements at all.
 //
-// Trainer sind bewusst nicht dabei: der Empfängerkreis eines Teams ist über die
-// Team-Standardgruppen des Chats erreichbar — mit Rückkanal und ohne zweiten Weg
-// zum selben Publikum. Es gibt keine engere zweite Stufe mehr (früher
-// CanBroadcastAll): alle drei Personas dürfen dieselben vier Zielgruppen.
+// Trainer sind wieder dabei: eine Mitteilung bleibt im eigenen Tab stehen,
+// während eine Gruppennachricht aus dem Verlauf scrollt — der Kanal ist deshalb
+// nicht deckungsgleich mit der Team-Standardgruppe des Chats, auch wenn er
+// dieselben Leute erreicht (mitteilung-team-gruppen).
+//
+// Die Capability ist bewusst grob: *woran* jemand senden darf, entscheidet sie
+// nicht. Vereinsweite Ziele bleiben admin/vorstand/sportliche_leitung
+// vorbehalten, Team-Gruppen stehen dem Kader-Trainer der aktiven Saison offen —
+// beides prüft chat.allowedTargets gegen die DB, weil die Kader-Zugehörigkeit
+// nicht im JWT steht. Ein Trainer ohne Kader hat hier true, bekommt vom Server
+// aber jedes Ziel abgelehnt; der Composer zeigt ihm deshalb die Ziel-Liste aus
+// GET /api/chat/broadcast-targets und nicht bloß diese Capability.
 func CanBroadcast(p *Principal) bool {
-	return p.Role == "admin" || p.hasAnyFunction("vorstand", "sportliche_leitung")
+	return p.Role == "admin" || p.hasAnyFunction("vorstand", "sportliche_leitung", "trainer")
 }
 
 // CanModerateChat returns true if the caller may delete other users' chat messages.

@@ -289,15 +289,21 @@ func TestCapabilities_TrainerLike(t *testing.T) {
 	}
 }
 
-// TC: Beim Mitteilungsrecht trennen sich Trainer und sportliche Leitung. Der reine
-// Trainer verliert es — Team-Ansagen laufen über die Team-Standardgruppen des Chats,
-// die denselben Kreis mit Rückkanal erreichen.
-func TestCapabilities_BroadcastNurVorstandLikeUndSportlicheLeitung(t *testing.T) {
-	if hasCap(policy.Capabilities(trainerP()), policy.CapBroadcast) {
-		t.Error("reiner trainer should NOT have broadcast_messages")
+// TC: Das Mitteilungsrecht ist eine grobe Capability — sie sagt "darf senden",
+// nicht "darf woran senden". Der reine Trainer hat sie seit
+// mitteilung-team-gruppen wieder: eine Mitteilung bleibt stehen, während eine
+// Gruppennachricht aus dem Verlauf scrollt. Dass er damit nur die Gruppen seiner
+// eigenen Kader erreicht, entscheidet chat.allowedTargets gegen die DB — die
+// Kader-Zugehörigkeit steht nicht im JWT und kann hier gar nicht geprüft werden.
+func TestCapabilities_BroadcastAuchFuerTrainer(t *testing.T) {
+	if !hasCap(policy.Capabilities(trainerP()), policy.CapBroadcast) {
+		t.Error("trainer should have broadcast_messages (Zielmenge prüft chat, nicht policy)")
 	}
 	if !hasCap(policy.Capabilities(slP()), policy.CapBroadcast) {
 		t.Error("sportliche_leitung should have broadcast_messages")
+	}
+	if hasCap(policy.Capabilities(kassiererP()), policy.CapBroadcast) {
+		t.Error("kassierer should NOT have broadcast_messages")
 	}
 }
 

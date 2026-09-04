@@ -29,11 +29,20 @@ type sendResult struct {
 	Recipients int `json:"recipients"`
 }
 
-// TC: Der Absenderkreis. Trainer verlieren das Mitteilungsrecht — Team-Ansagen
-// laufen über die Team-Standardgruppen des Chats. Die reine sportliche Leitung
-// gewinnt es: sie kam vorher zwar durch den Outer-Guard, scheiterte danach aber
-// an der Trainer-Klausel, die kader_trainers-Mitgliedschaft verlangte. Button
-// sichtbar, jede Zielgruppe 403 — dieser Test hält den Fix fest.
+// clubWide baut die targets-Liste für ein vereinsweites Ziel (ohne teamId).
+func clubWide(kind string) []any {
+	return []any{map[string]any{"kind": kind}}
+}
+
+// teamTarget baut die targets-Liste für eine Team-Standardgruppe.
+func teamTarget(kind string, teamID int) []any {
+	return []any{map[string]any{"kind": kind, "teamId": teamID}}
+}
+
+// TC: Der Absenderkreis für VEREINSWEITE Ziele. Trainer haben zwar seit
+// mitteilung-team-gruppen wieder ein Senderecht, aber nur für die
+// Standardgruppen ihrer eigenen Kader — an "Alle Nutzer" kommen weiterhin nur
+// admin, vorstand und sportliche Leitung.
 func TestSendBroadcast_Absenderkreis(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -58,7 +67,7 @@ func TestSendBroadcast_Absenderkreis(t *testing.T) {
 
 			token := testutil.Token(t, sender, tc.role, tc.clubFunctions)
 			res := testutil.Post(t, srv, "/api/chat/broadcasts", token,
-				map[string]any{"body": "Ansage", "targetType": "users"})
+				map[string]any{"body": "Ansage", "targets": clubWide("users")})
 			if res.StatusCode != tc.wantStatus {
 				t.Fatalf("status %d, want %d", res.StatusCode, tc.wantStatus)
 			}
@@ -78,34 +87,50 @@ func TestSendBroadcast_Absenderkreis(t *testing.T) {
 	}
 }
 
-// TC: Die abgelehnten Zielgruppen-Werte. Die drei Altwerte müssen hart mit 400
-// scheitern — 'role' insbesondere, weil es früher stillschweigend an null
-// Empfänger zustellte statt einen Fehler zu melden.
+// TC: Die abgelehnten Ziele. Die Altwerte müssen hart mit 400 scheitern —
+// 'role' insbesondere, weil es früher stillschweigend an null Empfänger
+// zustellte statt einen Fehler zu melden. Dazu die beiden Formfehler des
+// targets-Arrays: leer, und eine teamId, die nicht zum Kind passt (in beide
+// Richtungen — dieselbe Bindung erzwingt der CHECK auf broadcast_targets).
 func TestSendBroadcast_UngueltigeZielgruppe(t *testing.T) {
-	for _, target := range []string{"all", "team", "role", "legacy", "", "spieler_innen"} {
-		name := target
-		if name == "" {
-			name = "(leer)"
-		}
-		t.Run(name, func(t *testing.T) {
+	tests := []struct {
+		name    string
+		targets any
+	}{
+		{"all", clubWide("all")},
+		{"team", clubWide("team")},
+		{"role", clubWide("role")},
+		{"legacy", clubWide("legacy")},
+		{"spieler_innen", clubWide("spieler_innen")},
+		{"(fehlt)", nil},
+		{"(leer)", []any{}},
+		{"team-Ziel ohne teamId", clubWide("team_spieler")},
+		{"vereinsweites Ziel mit teamId", teamTarget("users", 1)},
+		{"ein gültiges, ein unbekanntes Ziel", []any{
+			map[string]any{"kind": "users"},
+			map[string]any{"kind": "nonsense"},
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			db := testutil.NewDB(t)
 			sender := testutil.CreateUser(t, db, "standard")
 			srv := broadcastSrv(t, db)
 
 			token := testutil.Token(t, sender, "standard", []string{"vorstand"})
 			body := map[string]any{"body": "Ansage"}
-			if target != "" {
-				body["targetType"] = target
+			if tc.targets != nil {
+				body["targets"] = tc.targets
 			}
 			res := testutil.Post(t, srv, "/api/chat/broadcasts", token, body)
 			if res.StatusCode != http.StatusBadRequest {
-				t.Fatalf("targetType %q: status %d, want 400", target, res.StatusCode)
+				t.Fatalf("targets %v: status %d, want 400", tc.targets, res.StatusCode)
 			}
 
 			var stored int
 			db.QueryRow(`SELECT COUNT(*) FROM broadcasts`).Scan(&stored)
 			if stored != 0 {
-				t.Errorf("targetType %q wurde gespeichert, obwohl abgelehnt", target)
+				t.Errorf("targets %v wurden gespeichert, obwohl abgelehnt", tc.targets)
 			}
 		})
 	}
@@ -123,7 +148,7 @@ func TestSendBroadcast_AbsenderZeileAberNichtGezaehlt(t *testing.T) {
 
 	token := testutil.Token(t, sender, "standard", []string{"vorstand"})
 	res := testutil.Post(t, srv, "/api/chat/broadcasts", token,
-		map[string]any{"body": "Ansage", "targetType": "users"})
+		map[string]any{"body": "Ansage", "targets": clubWide("users")})
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("status %d, want 201", res.StatusCode)
 	}

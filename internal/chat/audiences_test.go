@@ -88,7 +88,7 @@ func recipientsOf(t *testing.T, w *audienceWorld, target string) (ids []int, rep
 
 	token := testutil.Token(t, w.sender, "standard", []string{"vorstand"})
 	res := testutil.Post(t, srv, "/api/chat/broadcasts", token,
-		map[string]any{"body": "Test " + target, "targetType": target})
+		map[string]any{"body": "Test " + target, "targets": []any{map[string]any{"kind": target}}})
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("targetType %q: status %d, want 201", target, res.StatusCode)
 	}

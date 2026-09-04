@@ -49,7 +49,7 @@ func markRead(t *testing.T, db *sql.DB, msgID, userID int) {
 func insertBroadcast(t *testing.T, db *sql.DB, senderID int, body string, recipients []int) int {
 	t.Helper()
 	res, err := db.Exec(
-		`INSERT INTO broadcasts (sender_id, target_type, body) VALUES (?, 'users', ?)`,
+		`INSERT INTO broadcasts (sender_id, body) VALUES (?, ?)`,
 		senderID, body)
 	if err != nil {
 		t.Fatalf("insert broadcast: %v", err)
