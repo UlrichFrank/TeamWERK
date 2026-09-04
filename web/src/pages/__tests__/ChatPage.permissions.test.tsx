@@ -13,14 +13,18 @@ import { PERSONAS } from '../../test/personas'
 vi.mock('../../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
 vi.mock('../../hooks/useChatEvents', () => ({ useChatEvents: vi.fn() }))
 
-// canBroadcast = admin || vorstand || vorstand_elternteil
-//              || sportliche_leitung || sportliche_leitung_elternteil
-// Trainer sind bewusst NICHT dabei: der Empfängerkreis eines Teams ist über die
-// Team-Standardgruppen des Chats erreichbar — mit Rückkanal.
+// canBroadcast = admin || vorstand || trainer || sportliche_leitung (je + Elternteil)
+//
+// Trainer sind seit mitteilung-team-gruppen wieder dabei. Die Capability ist
+// grob und sagt nur "darf senden"; an welche Gruppen, entscheidet der Server
+// anhand der Kader (chat.allowedTargets) — der Composer holt die Liste über
+// GET /chat/broadcast-targets und zeigt einen Hinweis, wenn sie leer ist.
 const CAN_BROADCAST_IDS = [
   'admin',
   'vorstand',
   'vorstand_elternteil',
+  'trainer',
+  'trainer_elternteil',
   'sportliche_leitung',
   'sportliche_leitung_elternteil',
 ]
@@ -53,7 +57,7 @@ describe('ChatPage — canBroadcast-Gate: "Mitteilung senden"-Button', () => {
 })
 
 describe('BroadcastModal — Zielgruppen', () => {
-  test('Reiner Trainer sieht den Button „Mitteilung senden" nicht', async () => {
+  test('Reiner Trainer sieht den Button „Mitteilung senden"', async () => {
     renderAsPersona(<ChatPage />, 'trainer')
     await flushAsync()
 
@@ -62,12 +66,30 @@ describe('BroadcastModal — Zielgruppen', () => {
 
     expect(
       screen.queryByText('Mitteilung senden'),
-      'Trainer haben das Mitteilungsrecht verloren — Team-Ansagen laufen über die Team-Standardgruppen im Chat',
-    ).toBeNull()
+      'Trainer dürfen seit mitteilung-team-gruppen an die Gruppen ihrer eigenen Kader senden',
+    ).not.toBeNull()
   })
 
-  test('Sportliche Leitung sieht alle vier Zielgruppen', async () => {
-    renderAsPersona(<ChatPage />, 'sportliche_leitung')
+  test('Der Composer zeigt die Ziele, die der Server liefert', async () => {
+    renderAsPersona(<ChatPage />, 'sportliche_leitung', {
+      mocks: [
+        {
+          method: 'get',
+          url: '/chat/broadcast-targets',
+          data: [
+            { kind: 'users', teamId: null, label: 'Alle Nutzer', count: 183 },
+            {
+              kind: 'members',
+              teamId: null,
+              label: 'Alle Mitglieder',
+              count: 141,
+            },
+            { kind: 'spieler', teamId: null, label: 'Alle Spieler', count: 98 },
+            { kind: 'eltern', teamId: null, label: 'Alle Eltern', count: 62 },
+          ],
+        },
+      ],
+    })
     await flushAsync()
 
     fireEvent.click(screen.getByText('Mitteilungen'))
@@ -82,11 +104,9 @@ describe('BroadcastModal — Zielgruppen', () => {
       'Alle Eltern',
     ]) {
       expect(
-        screen.queryByRole('option', { name: label }),
+        screen.queryByLabelText(label, { exact: false }),
         `Zielgruppe "${label}" fehlt im Composer`,
       ).not.toBeNull()
     }
-    // Die Alt-Zielgruppe ist ersatzlos entfallen.
-    expect(screen.queryByRole('option', { name: 'Team wählen…' })).toBeNull()
   })
 })

@@ -2663,18 +2663,25 @@ function SendResultToast({
 
 // --- Broadcast Modal ---
 
-/** Die vier vereinsweiten Zielgruppen einer Mitteilung. */
-type BroadcastTarget = "users" | "members" | "spieler" | "eltern";
+/**
+ * Ein Ziel, das der Absender verwenden darf. Die Liste kommt vom Server
+ * (`GET /chat/broadcast-targets`) und wird hier nicht aus Rolle oder
+ * Vereinsfunktion abgeleitet: welche Teams ein Trainer betreut, steht nicht im
+ * JWT, und `/chat/team-groups` zeigt bewusst mehr (auch Teams, in denen jemand
+ * nur Elternteil ist).
+ */
+interface BroadcastTarget {
+  kind: string;
+  teamId: number | null;
+  label: string;
+  count: number;
+}
 
-// Team-Ansagen fehlen hier bewusst: dafür gibt es die Team-Standardgruppen im
-// Chat, die denselben Kreis mit Rückkanal erreichen. Wer den Composer öffnen
-// darf, darf alle vier — es gibt keine engere zweite Stufe mehr.
-const BROADCAST_TARGETS: { value: BroadcastTarget; label: string }[] = [
-  { value: "users", label: "Alle Nutzer" },
-  { value: "members", label: "Alle Mitglieder" },
-  { value: "spieler", label: "Alle Spieler" },
-  { value: "eltern", label: "Alle Eltern" },
-];
+/** Vereinsweite Ziele stehen im ersten Block, Team-Gruppen im zweiten. */
+const CLUB_WIDE_KINDS = ["users", "members", "spieler", "eltern"];
+
+const targetKey = (t: { kind: string; teamId: number | null }) =>
+  `${t.kind}:${t.teamId ?? ""}`;
 
 function BroadcastModal({
   onClose,
@@ -2684,7 +2691,9 @@ function BroadcastModal({
   onSent: (recipients: number) => void;
 }) {
   const [body, setBody] = useState("");
-  const [targetType, setTargetType] = useState<BroadcastTarget>("spieler");
+  const [targets, setTargets] = useState<BroadcastTarget[]>([]);
+  const [targetsLoading, setTargetsLoading] = useState(true);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [image, setImage] = useState<{ file: File; previewUrl: string } | null>(
@@ -2698,6 +2707,29 @@ function BroadcastModal({
     };
   }, [image]);
 
+  useEffect(() => {
+    api
+      .get("/chat/broadcast-targets")
+      .then((r) => setTargets(r.data ?? []))
+      .catch(() => setTargets([]))
+      .finally(() => setTargetsLoading(false));
+  }, []);
+
+  const clubWideTargets = targets.filter((t) =>
+    CLUB_WIDE_KINDS.includes(t.kind),
+  );
+  const groupTargets = targets.filter((t) => !CLUB_WIDE_KINDS.includes(t.kind));
+
+  const toggleTarget = (t: BroadcastTarget) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      const key = targetKey(t);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const pickImage = (file: File) => {
     if (!file.type.startsWith("image/")) return;
     setImage((prev) => {
@@ -2708,6 +2740,7 @@ function BroadcastModal({
 
   const submit = async () => {
     if (!body.trim() && !image) return;
+    if (picked.size === 0) return;
     setLoading(true);
     setError("");
     try {
@@ -2722,7 +2755,9 @@ function BroadcastModal({
       }
       const r = await api.post("/chat/broadcasts", {
         body: body.trim(),
-        targetType,
+        targets: targets
+          .filter((t) => picked.has(targetKey(t)))
+          .map((t) => ({ kind: t.kind, teamId: t.teamId })),
         mediaId,
       });
       onSent(r.data?.recipients ?? 0);
@@ -2745,24 +2780,54 @@ function BroadcastModal({
           </button>
         </div>
 
-        <label
-          htmlFor="broadcast-target"
-          className="block text-sm font-medium text-brand-text mb-1"
-        >
-          Zielgruppe
-        </label>
-        <select
-          id="broadcast-target"
-          value={targetType}
-          onChange={(e) => setTargetType(e.target.value as BroadcastTarget)}
-          className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
-        >
-          {BROADCAST_TARGETS.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+        <p className="block text-sm font-medium text-brand-text mb-1">
+          Empfänger
+        </p>
+        {targetsLoading ? (
+          <p className="text-sm text-brand-text-muted mb-3">Lade Empfänger…</p>
+        ) : targets.length === 0 ? (
+          <p className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text mb-3">
+            Du hast derzeit keine Gruppen, an die du eine Mitteilung senden
+            kannst.
+          </p>
+        ) : (
+          <div className="border border-brand-border rounded-md max-h-48 overflow-y-auto mb-3">
+            {[
+              { title: "Vereinsweit", items: clubWideTargets },
+              { title: "Gruppen", items: groupTargets },
+            ]
+              .filter((block) => block.items.length > 0)
+              .map((block) => (
+                <div key={block.title}>
+                  <p className="px-3 py-1.5 bg-brand-surface-card text-brand-text-muted text-xs uppercase sticky top-0">
+                    {block.title}
+                  </p>
+                  {block.items.map((t) => {
+                    const key = targetKey(t);
+                    return (
+                      <label
+                        key={key}
+                        className="flex items-center gap-2 px-3 py-2 hover:bg-brand-table-select transition-colors cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={picked.has(key)}
+                          onChange={() => toggleTarget(t)}
+                          className="accent-brand-yellow"
+                        />
+                        <span className="flex-1 min-w-0 text-sm text-brand-text truncate">
+                          {t.label}
+                        </span>
+                        <span className="text-xs text-brand-text-muted shrink-0">
+                          {t.count}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
+          </div>
+        )}
 
         <label className="block text-sm font-medium text-brand-text mb-1">
           Nachricht
@@ -2822,7 +2887,7 @@ function BroadcastModal({
 
         <button
           onClick={submit}
-          disabled={loading || (!body.trim() && !image)}
+          disabled={loading || (!body.trim() && !image) || picked.size === 0}
           className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {loading ? "Sende…" : "Mitteilung senden"}
