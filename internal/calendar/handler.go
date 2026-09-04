@@ -336,9 +336,11 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		SELECT DISTINCT
 		    g.id, g.date, g.time, g.end_time, g.end_date,
 		    g.opponent, g.event_type, g.is_home, g.note,
-		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,'')
+		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
+		    t.name
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
+		JOIN teams t ON t.id = gt.team_id
 		JOIN kader k ON k.team_id = gt.team_id AND k.season_id = g.season_id
 		JOIN kader_members km ON km.kader_id = k.id
 		JOIN members m ON m.id = km.member_id
@@ -352,20 +354,27 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 
 	loc, _ := time.LoadLocation("Europe/Berlin")
 	var events []calEvent
+	// Der Team-Join kann dasselbe Spiel mehrfach liefern, wenn der Nutzer über
+	// zwei Kader daran hängt. Ein Spiel bleibt ein Event (UID game-<id>).
+	seen := map[int]bool{}
 	for rows.Next() {
 		var id int
 		var date, startTime, opponent, eventType string
 		var endTime, endDate sql.NullString
 		var isHome bool
 		var note string
-		var vName, vStreet, vPostal, vCity string
+		var vName, vStreet, vPostal, vCity, teamName string
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &endDate,
 			&opponent, &eventType, &isHome, &note,
-			&vName, &vStreet, &vPostal, &vCity); err != nil {
+			&vName, &vStreet, &vPostal, &vCity, &teamName); err != nil {
 			continue
 		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
 
-		summary := gameTitle(eventType, isHome, opponent)
+		summary := gameTitle(eventType, isHome, opponent, teamName)
 
 		var location string
 		if vName != "" {
@@ -590,12 +599,22 @@ func buildGameTypeFilter(s tokenSettings) []string {
 	return types
 }
 
-func gameTitle(eventType string, isHome bool, opponent string) string {
+// ownTeamLabel benennt die eigene Mannschaft im Spieltitel. teamName ist der
+// Name des Teams, über dessen Kader der Feed-Nutzer am Spiel hängt (z. B. "mA1");
+// ist er leer, bleibt es beim generischen "Team".
+func ownTeamLabel(teamName string) string {
+	if teamName == "" {
+		return "Team"
+	}
+	return "Team (" + teamName + ")"
+}
+
+func gameTitle(eventType string, isHome bool, opponent, teamName string) string {
 	switch eventType {
 	case "heim":
-		return "Heim: SG Stuttgart – " + opponent
+		return "Heim: " + ownTeamLabel(teamName) + " – " + opponent
 	case "auswärts":
-		return "Auswärts: " + opponent + " – SG Stuttgart"
+		return "Auswärts: " + opponent + " – " + ownTeamLabel(teamName)
 	default:
 		return opponent
 	}

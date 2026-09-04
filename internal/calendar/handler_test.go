@@ -207,6 +207,79 @@ func TestCalendarFeed_IncludeTrainingTrue(t *testing.T) {
 	}
 }
 
+// gameSummaryFixture builds a user in the kader of a team named teamName with a
+// single game of the given event_type, and returns the rendered feed body.
+func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
+	t.Helper()
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, teamName)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-08-15")
+	if _, err := db.Exec(`UPDATE games SET event_type = ?, is_home = ? WHERE id = ?`,
+		eventType, eventType == "heim", gameID); err != nil {
+		t.Fatalf("set event_type: %v", err)
+	}
+
+	userToken := testutil.Token(t, userID, "standard", nil)
+	srv := prodserver.New(t, db)
+	tok := postToken(t, srv, userToken, allTogglesOn())
+
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+tok["token"].(string), "")
+	defer res.Body.Close()
+	return readBody(t, res.Body)
+}
+
+// TestCalendarFeed_GameSummaryNamesOwnTeam: der Spieltitel nennt die eigene
+// Mannschaft ("Team (mA1)") statt eines pauschalen Vereinsnamens — bei
+// Heimspielen vorn, bei Auswärtsspielen hinten.
+func TestCalendarFeed_GameSummaryNamesOwnTeam(t *testing.T) {
+	t.Run("heim", func(t *testing.T) {
+		body := gameSummaryFixture(t, "mA1", "heim")
+		if !strings.Contains(body, "SUMMARY:Heim: Team (mA1) – Test Opponent") {
+			t.Errorf("home game summary must name the own team, body:\n%s", body)
+		}
+	})
+	t.Run("auswärts", func(t *testing.T) {
+		body := gameSummaryFixture(t, "gD", "auswärts")
+		if !strings.Contains(body, "SUMMARY:Auswärts: Test Opponent – Team (gD)") {
+			t.Errorf("away game summary must name the own team, body:\n%s", body)
+		}
+	})
+}
+
+// TestCalendarFeed_GameAppearsOnce guards the UID invariant: der Team-Join darf
+// ein Spiel nicht doppelt in den Feed schreiben, wenn der Nutzer über zwei
+// Kader daran hängt.
+func TestCalendarFeed_GameAppearsOnce(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "mA1")
+	teamB := testutil.CreateTeam(t, db, "mB1")
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	for _, teamID := range []int{teamA, teamB} {
+		kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+		db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+	}
+	gameID := testutil.CreateGame(t, db, seasonID, teamA, "2026-08-15")
+	db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, gameID, teamB)
+
+	userToken := testutil.Token(t, userID, "standard", nil)
+	srv := prodserver.New(t, db)
+	tok := postToken(t, srv, userToken, allTogglesOn())
+
+	res := testutil.Get(t, srv, "/api/calendar/feed/"+tok["token"].(string), "")
+	defer res.Body.Close()
+	body := readBody(t, res.Body)
+	if n := strings.Count(body, "UID:game-"); n != 1 {
+		t.Errorf("expected exactly one game VEVENT, got %d, body:\n%s", n, body)
+	}
+}
+
 // TestCalendarFeed_IncludeDutyFalse verifies duty events are excluded.
 func TestCalendarFeed_IncludeDutyFalse(t *testing.T) {
 	srv, _, userToken, _, _ := setupCalendarFixture(t)

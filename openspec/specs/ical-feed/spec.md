@@ -67,7 +67,7 @@ Content-Type SHALL `text/calendar; charset=utf-8` sein. Zeilenenden SHALL CRLF s
 
 - **WHEN** der Feed ein Heimspiel mit Venue enthält
 - **THEN** hat das VEVENT:
-  - `SUMMARY:Heim: SG Stuttgart – <Gegner>` (Heimspiel) oder `SUMMARY:Auswärts: <Gegner> – SG Stuttgart` (Auswärtsspiel)
+  - `SUMMARY:Heim: Team (<Mannschaft>) – <Gegner>` (Heimspiel) oder `SUMMARY:Auswärts: <Gegner> – Team (<Mannschaft>)` (Auswärtsspiel). `<Mannschaft>` ist der Name des Teams, über dessen Kader der Feed-Nutzer am Spiel hängt (z. B. `mA1`, `gD`); ohne auflösbaren Teamnamen bleibt es bei `Team`
   - `DTSTART;TZID=Europe/Berlin:<YYYYMMDDTHHmmss>`
   - `DTEND;TZID=Europe/Berlin:<YYYYMMDDTHHmmss>` (aus `end_time`/`end_date`; fehlen diese, DURATION:PT2H)
   - `LOCATION:<Venue-Name>, <Street>, <PostalCode> <City>` (wenn Venue vorhanden)
