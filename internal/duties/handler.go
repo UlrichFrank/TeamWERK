@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -77,43 +78,98 @@ func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int 
 	return nil
 }
 
-// eligibleDutyUsers returns user IDs that could be relevant recipients for a duty slot notification:
-// members with club function spieler or trainer, plus parents of members with the spieler function.
-// Optionally filtered to a set of teams (player/trainer/parent must be connected to one of those
-// teams' active-season kader). An empty set means club-wide — reserved for slots without any team
-// context at all; see slotTeamScope for how the set is derived.
-func (h *Handler) eligibleDutyUsers(teamIDs []int) []int {
+// eligibleDutyRecipients returns the user IDs to notify about a newly created duty slot.
+// Die Menge ist bewusst dieselbe, der die Dienstbörse den Slot ohne `?audience=all` zeigt:
+// eine Push für einen Dienst, den der Empfänger auf /dienste anschließend gar nicht findet,
+// ist Rauschen mit Sackgasse. Zwei Filter greifen ineinander:
+//
+//   - Team-Quelle (teamIDs aus slotTeamScope): Spieler im Kader, Trainer des Kaders
+//     (kader_trainers) und Eltern eines Spielers im Kader — jeweils nur in der **aktiven
+//     Saison**, sonst benachrichtigt eine Kader-Zeile von vor drei Jahren weiter. Eine leere
+//     Menge heißt „kein Team-Kontext" (weder Team noch Spiel) und bleibt vereinsweit.
+//   - Zielgruppe (audiences = COALESCE(Slot, Diensttyp)): leer = keine Einschränkung, sonst
+//     Treffer über eine Vereinsfunktion des Empfängers oder — beim Eintrag 'eltern' — über
+//     ein Kind innerhalb desselben Team-Scopes.
+//
+// Der Audience-Bypass privilegierter Leser (admin, ?audience=all) wird bewusst **nicht**
+// übernommen: alles sehen zu dürfen ist keine Betroffenheit.
+func (h *Handler) eligibleDutyRecipients(ctx context.Context, teamIDs []int, audiences []string) []int {
+	teamIn := placeholders(len(teamIDs))
+	teamArgs := func() []any {
+		a := make([]any, 0, len(teamIDs))
+		for _, id := range teamIDs {
+			a = append(a, id)
+		}
+		return a
+	}
+
+	// Elternteil im Geltungsbereich — ohne Team-Kontext genügt die Elternschaft selbst.
+	parentInScope := `EXISTS (SELECT 1 FROM family_links fl WHERE fl.parent_user_id = u.id)`
+	if len(teamIDs) > 0 {
+		parentInScope = `EXISTS (
+			SELECT 1 FROM family_links fl
+			JOIN player_memberships cpm ON cpm.member_id = fl.member_id
+			JOIN seasons cs ON cs.id = cpm.season_id AND cs.is_active = 1
+			WHERE fl.parent_user_id = u.id AND cpm.team_id IN (` + teamIn + `)
+		)`
+	}
+
 	var (
-		rows *sql.Rows
-		err  error
+		scope string
+		args  []any
 	)
 	if len(teamIDs) > 0 {
-		ph := placeholders(len(teamIDs))
-		args := make([]any, 0, len(teamIDs)*2)
-		for range 2 {
-			for _, id := range teamIDs {
-				args = append(args, id)
-			}
-		}
-		rows, err = h.db.Query(
-			`SELECT DISTINCT u.id FROM users u
-			 LEFT JOIN members m ON m.user_id = u.id
-			 LEFT JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function IN ('spieler','trainer')
-			 LEFT JOIN player_memberships pm ON pm.member_id = m.id
-			 LEFT JOIN family_links fl ON fl.parent_user_id = u.id
-			 LEFT JOIN members cm ON cm.id = fl.member_id
-			 LEFT JOIN member_club_functions cmcf ON cmcf.member_id = cm.id AND cmcf.function = 'spieler'
-			 LEFT JOIN player_memberships cpm ON cpm.member_id = cm.id
-			 WHERE (mcf.member_id IS NOT NULL OR cmcf.member_id IS NOT NULL)
-			   AND (pm.team_id IN (`+ph+`) OR cpm.team_id IN (`+ph+`))`, args...)
+		scope = `(
+			EXISTS (
+				SELECT 1 FROM player_memberships pm
+				JOIN members m ON m.id = pm.member_id AND m.user_id = u.id
+				JOIN seasons ps ON ps.id = pm.season_id AND ps.is_active = 1
+				WHERE pm.team_id IN (` + teamIn + `)
+			)
+			OR EXISTS (
+				SELECT 1 FROM trainer_memberships tm
+				JOIN members m ON m.id = tm.member_id AND m.user_id = u.id
+				JOIN seasons ts ON ts.id = tm.season_id AND ts.is_active = 1
+				WHERE tm.team_id IN (` + teamIn + `)
+			)
+			OR ` + parentInScope + `
+		)`
+		args = append(args, teamArgs()...)
+		args = append(args, teamArgs()...)
+		args = append(args, teamArgs()...)
 	} else {
-		rows, err = h.db.Query(
-			`SELECT DISTINCT u.id FROM users u
-			 LEFT JOIN members m ON m.user_id = u.id
-			 LEFT JOIN member_club_functions mcf ON mcf.member_id = m.id AND mcf.function IN ('spieler','trainer')
-			 LEFT JOIN family_links fl ON fl.parent_user_id = u.id
-			 WHERE mcf.member_id IS NOT NULL OR fl.parent_user_id IS NOT NULL`)
+		scope = `(
+			EXISTS (
+				SELECT 1 FROM member_club_functions mcf
+				JOIN members m ON m.id = mcf.member_id AND m.user_id = u.id
+				WHERE mcf.function IN ('spieler','trainer')
+			)
+			OR ` + parentInScope + `
+		)`
 	}
+
+	query := `SELECT u.id FROM users u WHERE ` + scope
+	if len(audiences) > 0 {
+		// 'eltern' steht mit in der IN-Liste — es ist keine Vereinsfunktion und matcht dort
+		// nie; den Eltern-Zweig hängt der Block darunter separat an.
+		query += ` AND (
+			EXISTS (
+				SELECT 1 FROM member_club_functions mcf
+				JOIN members m ON m.id = mcf.member_id AND m.user_id = u.id
+				WHERE mcf.function IN (` + placeholders(len(audiences)) + `)
+			)`
+		for _, a := range audiences {
+			args = append(args, a)
+		}
+		if slices.Contains(audiences, "eltern") {
+			query += ` OR ` + parentInScope
+			args = append(args, teamArgs()...)
+		}
+		query += `)`
+	}
+	query += ` ORDER BY u.id`
+
+	rows, err := h.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil
 	}
@@ -670,6 +726,18 @@ func (h *Handler) ListSlots(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
 }
 
+// effectiveAudiences resolves the audience of a slot the way the duty board reads it:
+// COALESCE(duty_slots.audiences, duty_types.audiences) — der Slot-Wert gewinnt, sonst gilt
+// die Vorbelegung des Diensttyps. Ein leeres Ergebnis heißt „keine Einschränkung".
+func (h *Handler) effectiveAudiences(ctx context.Context, dutyTypeID int, slotAudiences []string) []string {
+	if len(slotAudiences) > 0 {
+		return slotAudiences
+	}
+	var fromType sql.NullString
+	h.db.QueryRowContext(ctx, `SELECT audiences FROM duty_types WHERE id = ?`, dutyTypeID).Scan(&fromType)
+	return audiencesFromDB(fromType)
+}
+
 // POST /api/duty-slots
 func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -729,7 +797,9 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.hub.Broadcast("duties")
 	}
-	notify.Send(h.db, h.cfg, h.eligibleDutyUsers(scope),
+	recipients := h.eligibleDutyRecipients(r.Context(), scope,
+		h.effectiveAudiences(r.Context(), req.DutyTypeID, req.Audiences))
+	notify.Send(h.db, h.cfg, recipients,
 		"duties", "Neuer Dienst verfügbar", req.EventName+" — jetzt eintragen", "/dienste")
 	w.WriteHeader(http.StatusCreated)
 }
