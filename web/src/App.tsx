@@ -65,7 +65,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 // System-Rolle 'standard' wird nicht benannt — sie ist der Default und
 // ergibt sich aus der Abwesenheit einer eskalierten Rolle.
 // Siehe docs/berechtigungen.md.
-const SYSTEM_ROLES = new Set(['admin', 'presseteam'])
+const SYSTEM_ROLES = new Set(['admin'])
 
 export function RoleRoute({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -133,9 +133,9 @@ export default function App() {
               <Route path="termine/:type/:id" element={<TermineDetailPage />} />
               <Route path="mein-team" element={<MeinTeamPage />} />
               <Route path="chat" element={<ChatPage />} />
-              <Route path="spielberichte" element={<RoleRoute roles={['presseteam','admin']}><MatchReportListPage /></RoleRoute>} />
+              <Route path="spielberichte" element={<MatchReportListPage />} />
               <Route path="spielberichte/pruefen" element={<RoleRoute roles={['admin','medien','vorstand']}><MatchReportPendingListPage /></RoleRoute>} />
-              <Route path="spielberichte/:id" element={<RoleRoute roles={['presseteam','admin','medien','vorstand']}><MatchReportFormPage /></RoleRoute>} />
+              <Route path="spielberichte/:id" element={<MatchReportFormPage />} />
               <Route path="videos" element={<VideosPage />} />
               <Route path="videos/upload" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><VideoUploadPage /></RoleRoute>} />
               <Route path="videos/:id" element={<VideoDetailPage />} />
