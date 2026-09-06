@@ -176,9 +176,10 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
             </div>
             <ol className="list-decimal pl-5 text-sm text-brand-text space-y-1">
               <li>Oben auf <em>Kopieren</em> tippen, um die Feed-URL in die Zwischenablage zu legen.</li>
-              <li>Einstellungen-App öffnen → <em>Apps</em> → <em>Kalender</em> → <em>Kalender-Accounts</em> → <em>Account hinzufügen</em> → <em>Andere</em>.</li>
-              <li><em>Kalenderabo hinzufügen</em> wählen und den kopierten Link als Server einfügen.</li>
-              <li>Auf <em>Weiter</em> und dann <em>Sichern</em> tippen. Die Termine erscheinen in der Kalender-App.</li>
+              <li>Die App <em>Kalender</em> öffnen und unten auf das <em>Kalender</em>-Symbol tippen.</li>
+              <li>Unten links auf <em>Hinzufügen</em> tippen und <em>Kalenderabo hinzufügen</em> wählen.</li>
+              <li>Den kopierten Link als <em>Abo-URL</em> einsetzen und auf <em>Abonnieren</em> tippen.</li>
+              <li>Auf <em>Sichern</em> tippen. Die Termine erscheinen in der Kalender-App.</li>
             </ol>
           </div>
 
