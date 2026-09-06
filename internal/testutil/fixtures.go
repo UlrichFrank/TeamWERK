@@ -386,12 +386,6 @@ func AddExtendedKaderMember(t *testing.T, database *sql.DB, kaderID, memberID in
 	}
 }
 
-// CreatePressTeamUser inserts a user with role=presseteam and returns its ID.
-// Shortcut for CreateUser(t, db, auth.RolePressTeam) — hides the role string.
-func CreatePressTeamUser(t *testing.T, database *sql.DB) int {
-	return CreateUser(t, database, auth.RolePressTeam)
-}
-
 // CreateMedienUser inserts a User+Member with Vereinsfunktion 'medien' and returns
 // the user ID. Shortcut for the review-gate tests.
 func CreateMedienUser(t *testing.T, database *sql.DB) int {

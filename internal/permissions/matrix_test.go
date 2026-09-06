@@ -199,18 +199,6 @@ var exDiaryReadACL = map[string]int{
 	"spieler": 403, "elternteil": 403,
 }
 
-// RequireRole(auth.RolePressTeam, auth.RoleAdmin) — Match-Report-Autor-Tier.
-// In der aktuellen Persona-Menge gibt es KEINE press_team-Persona, daher kommt
-// effektiv nur admin durch. Sobald eine press_team-Persona ergänzt wird (siehe
-// Welle 1 test-pii-route-authz), MUSS diese Map um press_team: httpAllowed erweitert werden.
-var exPressTeam = map[string]int{
-	"admin":    httpAllowed,
-	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
-	"kassierer": 403, "trainer": 403, "trainer_elternteil": 403,
-	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
-	"spieler": 403, "elternteil": 403,
-}
-
 // RequireClubFunction("medien","vorstand") — Match-Report-Freigeber-Tier.
 // Es gibt keine medien-Persona; daher effektiv admin (Bypass) + vorstand.
 // Bei Ergänzung einer medien-Persona MUSS medien: httpAllowed hinzukommen.
@@ -607,10 +595,14 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/admin/maintenance-mode", expected: exAdmin},
 
 	// ── Match-Reports: Autor-Tier (RequireRole press_team/admin) ─────────────────
-	{method: "GET", path: "/api/match-reports/my", expected: exPressTeam},
-	{method: "POST", path: "/api/match-reports", expected: exPressTeam},
-	{method: "DELETE", path: "/api/match-reports/{id}", expected: exPressTeam},
-	{method: "POST", path: "/api/match-reports/{id}/submit-for-review", expected: exPressTeam},
+	// Autoren-Routen: kein Middleware-Gate mehr (die Rolle presseteam ist
+	// entfallen). Jede Persona kommt durch den Authenticated-Layer; die
+	// fachliche Prüfung (Slot-Besitz, Autorenschaft) macht der Handler und
+	// liefert ohne Fixture 400/404 — nie 401/403 aus dem Middleware-Layer.
+	{method: "GET", path: "/api/match-reports/my", expected: exAuth},
+	{method: "POST", path: "/api/match-reports", expected: exAuth},
+	{method: "DELETE", path: "/api/match-reports/{id}", expected: exAuth},
+	{method: "POST", path: "/api/match-reports/{id}/submit-for-review", expected: exAuth},
 
 	// ── Match-Reports: Freigeber-Tier (RequireClubFunction medien/vorstand) ──────
 	{method: "GET", path: "/api/match-reports/pending", expected: exMatchReportPublisher},

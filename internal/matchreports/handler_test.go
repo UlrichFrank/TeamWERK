@@ -88,13 +88,13 @@ func createSlotWithAssignee(t *testing.T, db *sql.DB, seasonID, teamID, gameID, 
 func TestCreate_HappyPath(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
 
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, "/api/match-reports", token,
 		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
 	if res.StatusCode != http.StatusCreated {
@@ -110,9 +110,12 @@ func TestCreate_HappyPath(t *testing.T) {
 	}
 }
 
-// ─── TC-MR02 · Create Non-Presseteam → 403 ────────────────────────────────────
-
-func TestCreate_NonPressTeamForbidden(t *testing.T) {
+// ─── TC-MR02 · Create durch Standard-User mit eigenem Slot → 201 ──────────────
+//
+// Gegenstück zum früheren Presseteam-Gate: seit die System-Rolle entfallen ist,
+// ist der Besitz des Spielbericht-Dienstes die einzige Hürde. Wer den Dienst
+// gezogen hat, darf den Bericht schreiben — ohne zweite Rollen-Bedingung.
+func TestCreate_StandardUserMitSlot(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
 	userID := testutil.CreateUser(t, db, auth.RoleStandard)
@@ -124,8 +127,31 @@ func TestCreate_NonPressTeamForbidden(t *testing.T) {
 	token := testutil.Token(t, userID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, "/api/match-reports", token,
 		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+}
+
+// Die Kehrseite: ohne den Slot bleibt es bei 403 — der Wegfall der Rolle hat die
+// Ownership-Prüfung nicht mitgenommen.
+func TestCreate_StandardUserOhneSlot(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, teamID, gameID := setupBasicGame(t, db)
+	ownerID := testutil.CreateUser(t, db, auth.RoleStandard)
+	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, ownerID)
+
+	requesterID := testutil.CreateUser(t, db, auth.RoleStandard)
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+
+	token := testutil.Token(t, requesterID, auth.RoleStandard, nil)
+	res := testutil.Post(t, srv, "/api/match-reports", token,
+		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", res.StatusCode)
+	}
+	if body := readBody(t, res); !strings.Contains(body, "slot_not_owned") {
+		t.Errorf("expected slot_not_owned, got %s", body)
 	}
 }
 
@@ -134,15 +160,15 @@ func TestCreate_NonPressTeamForbidden(t *testing.T) {
 func TestCreate_ForeignSlot(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	otherID := testutil.CreatePressTeamUser(t, db)
+	otherID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, otherID)
 
-	// Zweiter Presseteam-User ohne Assignment.
-	requesterID := testutil.CreatePressTeamUser(t, db)
+	// Zweiter User ohne Assignment.
+	requesterID := testutil.CreateUser(t, db, auth.RoleStandard)
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
 
-	token := testutil.Token(t, requesterID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, requesterID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, "/api/match-reports", token,
 		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
 	if res.StatusCode != http.StatusForbidden {
@@ -159,14 +185,14 @@ func TestCreate_SlotForDifferentGame(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameA := setupBasicGame(t, db)
 	gameB := testutil.CreateGame(t, db, seasonID, teamID, "2026-05-22")
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	// Slot + Assignment gehören zu Spiel A.
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameA, authorID)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
 
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, "/api/match-reports", token,
 		map[string]int{"game_id": gameB, "duty_slot_id": slotID})
 	if res.StatusCode != http.StatusForbidden {
@@ -179,7 +205,7 @@ func TestCreate_SlotForDifferentGame(t *testing.T) {
 func TestCreate_Duplicate(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	// Vorhandener Bericht (via Fixture direkt in DB).
 	testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
@@ -187,7 +213,7 @@ func TestCreate_Duplicate(t *testing.T) {
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
 
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, "/api/match-reports", token,
 		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
 	if res.StatusCode != http.StatusConflict {
@@ -200,7 +226,7 @@ func TestCreate_Duplicate(t *testing.T) {
 func TestUpdate_PublishedIsReadOnly(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(`UPDATE match_reports SET state='published' WHERE id=?`, reportID); err != nil {
@@ -209,7 +235,7 @@ func TestUpdate_PublishedIsReadOnly(t *testing.T) {
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/match-reports/%d", reportID),
 		token, map[string]any{"abstract": "neuer text"})
 	if res.StatusCode != http.StatusConflict {
@@ -222,7 +248,7 @@ func TestUpdate_PublishedIsReadOnly(t *testing.T) {
 func TestPublish_HappyPath(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	// Publish erwartet State=pending_review — Bericht muss zuerst eingereicht sein.
@@ -281,7 +307,7 @@ func TestPublish_HappyPath(t *testing.T) {
 func TestPublish_AlreadyPublishing(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(`UPDATE match_reports SET state='publishing' WHERE id=?`, reportID); err != nil {
@@ -303,7 +329,7 @@ func TestPublish_AlreadyPublishing(t *testing.T) {
 func TestPublish_PublisherError(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(
@@ -341,7 +367,7 @@ func TestPublish_PublisherError(t *testing.T) {
 func TestPublish_AlreadyPublished(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(`UPDATE match_reports SET state='published' WHERE id=?`, reportID); err != nil {
@@ -363,12 +389,12 @@ func TestPublish_AlreadyPublished(t *testing.T) {
 func TestCreate_SetsDefaultTitle(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db) // date="2026-05-15", opponent="Test Opponent"
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 
 	res := testutil.Post(t, srv, "/api/match-reports", token,
 		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
@@ -402,13 +428,13 @@ func TestCreate_SetsDefaultTitle(t *testing.T) {
 func TestUpdate_CustomTitle(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/match-reports/%d", reportID), token,
 		map[string]any{"title": "Neuer Titel"})
@@ -436,13 +462,13 @@ func TestUpdate_CustomTitle(t *testing.T) {
 func TestUpdate_TitleTooLong(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 
 	longTitle := strings.Repeat("a", 201)
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/match-reports/%d", reportID), token,
@@ -467,7 +493,7 @@ func TestUpdate_TitleTooLong(t *testing.T) {
 func TestGet_ImageURLWithoutAPIPrefix(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 
@@ -482,7 +508,7 @@ func TestGet_ImageURLWithoutAPIPrefix(t *testing.T) {
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 
 	getRes := testutil.Do(t, srv, http.MethodGet, fmt.Sprintf("/api/match-reports/%d", reportID), token, nil)
 	if getRes.StatusCode != http.StatusOK {

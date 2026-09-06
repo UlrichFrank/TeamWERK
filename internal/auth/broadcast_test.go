@@ -72,7 +72,7 @@ func TestUpdateUserRole_BroadcastsUsersToTarget(t *testing.T) {
 	defer sharedHub.UnsubscribeUser(targetU, ch)
 
 	res := testutil.Do(t, srv, http.MethodPut,
-		"/api/users/"+itoa(targetU)+"/role", token, map[string]string{"role": "presseteam"})
+		"/api/users/"+itoa(targetU)+"/role", token, map[string]string{"role": "standard"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("UpdateUserRole: expected 204, got %d", res.StatusCode)

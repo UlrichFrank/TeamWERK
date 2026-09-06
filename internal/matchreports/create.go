@@ -24,10 +24,10 @@ type createResp struct {
 //	Body: { "game_id": int, "duty_slot_id": int }
 //
 // Vorbedingungen (siehe specs/match-reports/spec.md Requirement
-// "Draft-Erstellung durch Slot-Owner"):
-//   - Requester hat role IN ('presseteam','admin')
+// "Draft-Erstellung durch den Slot-Owner ohne Rollen-Gate"):
 //   - Requester besitzt den referenzierten Duty-Slot (duty_slots.assigned_user_id)
-//     ODER ist Admin (Admin darf für alle publizieren)
+//     ODER ist Admin (Admin darf für alle publizieren). Ein Rollen-Gate gibt es
+//     nicht: der Besitz des Spielbericht-Dienstes IST die Berechtigung.
 //   - Es existiert noch kein match_report für dieses Spiel (UNIQUE game_id)
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -35,11 +35,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if !isPressTeamOrAdmin(claims) {
-		writeErr(w, http.StatusForbidden, "forbidden")
-		return
-	}
-
 	var req createReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -144,12 +139,6 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	h.broadcast()
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// isPressTeamOrAdmin ist die zentrale Rolle-Prüfung. Elternteil-Users mit
-// role=presseteam funktionieren gleich wie Members mit role=presseteam.
-func isPressTeamOrAdmin(claims *auth.Claims) bool {
-	return claims.Role == auth.RolePressTeam || claims.Role == auth.RoleAdmin
 }
 
 // isReviewer prüft, ob der Requester Match-Report-Freigaben durchführen darf:

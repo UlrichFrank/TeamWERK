@@ -515,7 +515,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			}
 		})
 
-		// Match-Reports — Autor-Workflow (Presseteam) und Freigeber-Workflow
+		// Match-Reports — Autor-Workflow (jeder Eingeloggte) und Freigeber-Workflow
 		// (Vereinsfunktion medien/vorstand). Die Freigabe-Trennung stammt aus
 		// spielbericht-medien-gate: Autor reicht ein („Zur Prüfung"), Freigeber
 		// veröffentlicht. Feinere State-/Rollen-Regeln setzt der Handler
@@ -523,13 +523,13 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// pending_review + publish_failed).
 		if h.MatchReports != nil {
 			// Autor-Aktionen: Draft anlegen, eigene Liste, Löschen, Einreichen.
-			r.Group(func(r chi.Router) {
-				r.Use(auth.RequireRole(auth.RolePressTeam, auth.RoleAdmin))
-				r.Get("/api/match-reports/my", h.MatchReports.MyList)
-				r.Post("/api/match-reports", h.MatchReports.Create)
-				r.Delete("/api/match-reports/{id}", h.MatchReports.Delete)
-				r.Post("/api/match-reports/{id}/submit-for-review", h.MatchReports.SubmitForReview)
-			})
+			// Kein Middleware-Gate — wer schreiben darf, entscheidet der Besitz des
+			// Spielbericht-Dienstes (Create) bzw. die Autorenschaft am Bericht
+			// (Delete, SubmitForReview); beides prüft der Handler.
+			r.Get("/api/match-reports/my", h.MatchReports.MyList)
+			r.Post("/api/match-reports", h.MatchReports.Create)
+			r.Delete("/api/match-reports/{id}", h.MatchReports.Delete)
+			r.Post("/api/match-reports/{id}/submit-for-review", h.MatchReports.SubmitForReview)
 
 			// Freigeber-Aktionen: Pending-Liste, Publish. Admin fällt in
 			// RequireClubFunction ohnehin durch.

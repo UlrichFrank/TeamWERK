@@ -1,13 +1,12 @@
 package auth
 
-// System-Rollen (users.role). Hierarchisch: admin ⊇ presseteam ⊇ standard.
+// System-Rollen (users.role). Hierarchisch: admin ⊇ standard.
 //
 // Konstanten statt String-Literale, damit Grep und Rename verlässlich sind.
-// Semantik: RolePressTeam kann alles, was RoleStandard kann, plus die
-// presseteam-Endpunkte (Spielberichte schreiben/publizieren). RoleAdmin
-// kann alles.
+// Semantik: RoleAdmin kann alles; RoleStandard ist der Default jedes
+// eingeloggten Nutzers. Die fachliche Feingliederung läuft über
+// Vereinsfunktionen (member_club_functions), nicht über weitere System-Rollen.
 const (
-	RoleAdmin     = "admin"
-	RoleStandard  = "standard"
-	RolePressTeam = "presseteam"
+	RoleAdmin    = "admin"
+	RoleStandard = "standard"
 )

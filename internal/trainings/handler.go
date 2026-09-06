@@ -1549,7 +1549,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve the target member and authorize. Authorization keys on real claim signals
 	// (own member / parent-of-child / staff) — NOT the system role string. `claims.Role` is
-	// only admin/standard/presseteam; "spieler"/"elternteil" are club functions, never roles.
+	// only admin/standard; "spieler"/"elternteil" are club functions, never roles.
 	// The previous role-switch therefore left every real request in the unchecked default
 	// branch, so any authenticated user could set an arbitrary member's RSVP (broken access
 	// control). This resolves the member and enforces ownership before mutating.

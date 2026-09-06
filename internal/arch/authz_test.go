@@ -44,9 +44,8 @@ var httpVerbMethods = map[string]string{
 // Platzhalter in der Gate-Beschreibung, nie zu einem falsch-negativen Match
 // (die Membership-Prüfung nutzt nur method+path).
 var roleConstants = map[string]string{
-	"RoleAdmin":     "admin",
-	"RoleStandard":  "standard",
-	"RolePressTeam": "presseteam",
+	"RoleAdmin":    "admin",
+	"RoleStandard": "standard",
 }
 
 // authzAllowlist: gated Routen, die BEWUSST nicht in der Permission-Matrix
@@ -67,11 +66,9 @@ var authzAllowlist = map[string]string{
 	"POST /api/admin/maintenance-mode": "RequireRole(admin); prodserver verdrahtet h.Settings (noch) nicht → fehlt im Laufzeit-Router/Matrix",
 	// Match-Reports — unter `if h.MatchReports != nil`. prodserver verdrahtet
 	// MatchReports (noch) nicht → nicht im Laufzeit-Router / in der Matrix.
-	// Autor-Gate: RequireRole(presseteam, admin).
-	"GET /api/match-reports/my":                      "RequireRole(presseteam,admin); prodserver verdrahtet h.MatchReports (noch) nicht → fehlt im Laufzeit-Router/Matrix",
-	"POST /api/match-reports":                        "RequireRole(presseteam,admin); prodserver verdrahtet h.MatchReports (noch) nicht → fehlt im Laufzeit-Router/Matrix",
-	"DELETE /api/match-reports/{id}":                 "RequireRole(presseteam,admin); prodserver verdrahtet h.MatchReports (noch) nicht → fehlt im Laufzeit-Router/Matrix",
-	"POST /api/match-reports/{id}/submit-for-review": "RequireRole(presseteam,admin); prodserver verdrahtet h.MatchReports (noch) nicht → fehlt im Laufzeit-Router/Matrix",
+	// Die Autoren-Routen (my, Create, Delete, submit-for-review) tragen seit dem
+	// Wegfall der Rolle presseteam kein eigenes Gate mehr und gehören deshalb
+	// nicht mehr hierher.
 	// Freigeber-Gate: RequireClubFunction(medien, vorstand).
 	"GET /api/match-reports/pending":       "RequireClubFunction(medien,vorstand); prodserver verdrahtet h.MatchReports (noch) nicht → fehlt im Laufzeit-Router/Matrix",
 	"POST /api/match-reports/{id}/publish": "RequireClubFunction(medien,vorstand); prodserver verdrahtet h.MatchReports (noch) nicht → fehlt im Laufzeit-Router/Matrix",

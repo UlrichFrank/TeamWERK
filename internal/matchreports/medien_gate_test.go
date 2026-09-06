@@ -15,12 +15,12 @@ import (
 func TestSubmitForReview_HappyPath(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/submit-for-review", reportID), token, nil)
 	if res.StatusCode != http.StatusOK {
@@ -46,13 +46,13 @@ func TestSubmitForReview_HappyPath(t *testing.T) {
 func TestSubmitForReview_NotAuthor(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
-	strangerID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
+	strangerID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, strangerID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, strangerID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/submit-for-review", reportID), token, nil)
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", res.StatusCode)
@@ -64,7 +64,7 @@ func TestSubmitForReview_NotAuthor(t *testing.T) {
 func TestSubmitForReview_AlreadySubmitted(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 	if _, err := db.Exec(
 		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -74,7 +74,7 @@ func TestSubmitForReview_AlreadySubmitted(t *testing.T) {
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/submit-for-review", reportID), token, nil)
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", res.StatusCode)
@@ -86,7 +86,7 @@ func TestSubmitForReview_AlreadySubmitted(t *testing.T) {
 func TestPublish_NotSubmitted(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 	reviewerID := testutil.CreateMedienUser(t, db)
 
@@ -108,7 +108,7 @@ func TestPublish_NotSubmitted(t *testing.T) {
 func TestPublish_AuthorWithoutReviewer(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 	if _, err := db.Exec(
 		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -118,7 +118,7 @@ func TestPublish_AuthorWithoutReviewer(t *testing.T) {
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/publish", reportID), token, nil)
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d — %s", res.StatusCode, readBody(t, res))
@@ -130,7 +130,7 @@ func TestPublish_AuthorWithoutReviewer(t *testing.T) {
 func TestPublish_VorstandCanPublish(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 	if _, err := db.Exec(
 		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -154,7 +154,7 @@ func TestPublish_VorstandCanPublish(t *testing.T) {
 func TestUpdate_AuthorCannotEditPending(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 	if _, err := db.Exec(
 		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -164,7 +164,7 @@ func TestUpdate_AuthorCannotEditPending(t *testing.T) {
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Do(t, srv, "PUT", fmt.Sprintf("/api/match-reports/%d", reportID),
 		token, map[string]any{"abstract": "neuer text"})
 	if res.StatusCode != http.StatusForbidden {
@@ -177,7 +177,7 @@ func TestUpdate_AuthorCannotEditPending(t *testing.T) {
 func TestUpdate_ReviewerCanEditPending(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 	if _, err := db.Exec(
 		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -208,7 +208,7 @@ func TestUpdate_ReviewerCanEditPending(t *testing.T) {
 func TestGetPending_ReviewerSeesList(t *testing.T) {
 	db := testutil.NewDB(t)
 	_, _, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
 	if _, err := db.Exec(
 		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -231,11 +231,11 @@ func TestGetPending_ReviewerSeesList(t *testing.T) {
 
 func TestGetPending_NonReviewer(t *testing.T) {
 	db := testutil.NewDB(t)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 
 	h := newHandlerWithPublisher(db, &fakePublisher{})
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, nil)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
 	res := testutil.Get(t, srv, "/api/match-reports/pending", token)
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-reviewer, got %d", res.StatusCode)
@@ -249,7 +249,7 @@ func TestPublish_AuthorWithMedienCanSelfPublish(t *testing.T) {
 	_, _, gameID := setupBasicGame(t, db)
 
 	// User ist gleichzeitig Presseteam (Autor-Rolle) UND hat Vereinsfunktion 'medien'.
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	memberID := testutil.CreateMember(t, db, authorID)
 	testutil.AddClubFunction(t, db, memberID, "medien")
 
@@ -263,7 +263,7 @@ func TestPublish_AuthorWithMedienCanSelfPublish(t *testing.T) {
 	fp := &fakePublisher{Result: &matchreports.PublishResult{PageUID: 42, URL: "https://ts.org/spielberichte/x"}}
 	h := newHandlerWithPublisher(db, fp)
 	srv := testServer(t, h)
-	token := testutil.Token(t, authorID, auth.RolePressTeam, []string{"medien"})
+	token := testutil.Token(t, authorID, auth.RoleStandard, []string{"medien"})
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/match-reports/%d/publish", reportID), token, nil)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 (D-2: Vier-Augen weich), got %d — %s", res.StatusCode, readBody(t, res))

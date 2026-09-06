@@ -37,11 +37,6 @@ func (h *Handler) MyList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	if !isPressTeamOrAdmin(claims) {
-		writeErr(w, http.StatusForbidden, "forbidden")
-		return
-	}
-
 	reports, err := h.loadMyReports(claims.UserID)
 	if err != nil {
 		logErr("matchreports.MyList reports", err, "user", claims.UserID)

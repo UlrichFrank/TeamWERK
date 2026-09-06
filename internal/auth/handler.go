@@ -622,7 +622,7 @@ func (h *Handler) Invite(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = RoleStandard
 	}
-	if req.Role != RoleAdmin && req.Role != RoleStandard && req.Role != RolePressTeam {
+	if req.Role != RoleAdmin && req.Role != RoleStandard {
 		http.Error(w, "invalid role", http.StatusBadRequest)
 		return
 	}
@@ -1169,7 +1169,7 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if req.Role != RoleAdmin && req.Role != RoleStandard && req.Role != RolePressTeam {
+	if req.Role != RoleAdmin && req.Role != RoleStandard {
 		http.Error(w, "invalid role", http.StatusBadRequest)
 		return
 	}

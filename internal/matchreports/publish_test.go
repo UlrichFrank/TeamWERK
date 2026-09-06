@@ -23,7 +23,7 @@ func TestPublish_PayloadHasTeamCategoryName(t *testing.T) {
 	// Kader für die aktive Saison — ohne den liefert TeamDisplayShort NULL.
 	testutil.CreateKader(t, db, teamID, seasonID)
 
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(
@@ -58,7 +58,7 @@ func TestPublish_PayloadHasTeamCategoryName(t *testing.T) {
 func TestPublish_PayloadHasSeasonFromActiveSeason(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db) // Season name "2025/26"
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(
@@ -92,7 +92,7 @@ func TestPublish_PayloadHasSeasonFromActiveSeason(t *testing.T) {
 func TestPublish_PayloadUsesUserTitleFromDB(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(
@@ -129,7 +129,7 @@ func TestPublish_PayloadUsesUserTitleFromDB(t *testing.T) {
 func TestPublish_NoActiveSeason(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID, teamID, gameID := setupBasicGame(t, db)
-	authorID := testutil.CreatePressTeamUser(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
 	slotID := createSlotWithAssignee(t, db, seasonID, teamID, gameID, authorID)
 	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotID)
 	if _, err := db.Exec(

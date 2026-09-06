@@ -2724,7 +2724,7 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Autorisierung keyed auf echte Claim-Signale (own member / parent-of-child / staff) —
-	// NICHT den System-Rollen-String. `claims.Role` ist nur admin/standard/presseteam;
+	// NICHT den System-Rollen-String. `claims.Role` ist nur admin/standard;
 	// "spieler"/"elternteil" sind Vereinsfunktionen, nie Rollen. Der frühere Rollen-Switch
 	// ließ jeden Request in den ungeprüften default-Zweig fallen → jeder eingeloggte Nutzer
 	// (mit Spiel-Sichtbarkeit) konnte fremde Spiel-RSVP setzen (Broken Access Control).
