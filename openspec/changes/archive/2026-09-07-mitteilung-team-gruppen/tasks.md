@@ -33,4 +33,4 @@
 
 - [x] 6.1 `/verify-change` (Build/Test/Lint + Projekt-Invarianten: Route→Tests, Mutation→`Broadcast`, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`)
 - [x] 6.2 Ankündigungstext für die Trainer entwerfen (was der neue Kanal ist, wofür weiterhin der Gruppenchat) und Ulrich zur Freigabe vorlegen
-- [ ] 6.3 Change archivieren (`openspec archive mitteilung-team-gruppen`)
+- [x] 6.3 Change archivieren (`openspec archive mitteilung-team-gruppen`)

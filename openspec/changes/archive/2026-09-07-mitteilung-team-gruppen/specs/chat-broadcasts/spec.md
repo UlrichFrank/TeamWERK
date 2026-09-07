@@ -37,9 +37,7 @@ User ohne Senderecht SHALL HTTP 403 erhalten.
 - **WHEN** ein User ohne `admin`, `vorstand`, `sportliche_leitung` und ohne Kader-Trainer-Eintrag der aktiven Saison `GET /api/chat/broadcast-targets` aufruft
 - **THEN** antwortet das System mit HTTP 403
 
-## MODIFIED Requirements
-
-### Requirement: Broadcast senden
+### Requirement: Mitteilung an vereinsweite Ziele und Team-Gruppen senden
 
 Das System SHALL es Usern mit Rolle `admin`, einer der Vereinsfunktionen `vorstand` bzw.
 `sportliche_leitung`, oder einem Kader-Trainer-Eintrag der aktiven Saison erlauben, eine
@@ -208,6 +206,8 @@ Die gewählten Ziele SHALL als je eine Zeile in `broadcast_targets` gespeichert 
 - **WHEN** ein User ohne `admin`/`vorstand`/`sportliche_leitung` und ohne Kader-Trainer-Eintrag der aktiven Saison einen Broadcast sendet
 - **THEN** antwortet der Server mit HTTP 403
 
+## MODIFIED Requirements
+
 ### Requirement: Bestands-Mitteilungen bleiben zustellbar
 
 Das System SHALL Mitteilungen, die vor der Umstellung des Zielgruppen-Vokabulars gesendet
@@ -234,3 +234,20 @@ persistierbar und lesbar, aber über `POST /api/chat/broadcasts` **nicht** setzb
 
 - **WHEN** ein berechtigter User `POST /api/chat/broadcasts` mit einem Ziel-`kind` gleich `"legacy"` aufruft
 - **THEN** antwortet der Server mit HTTP 400
+
+
+## REMOVED Requirements
+
+### Requirement: Broadcast senden
+**Reason**: Der Zuschnitt der Anforderung hat sich umgekehrt. Sie war um die Aussage
+gebaut, dass ausschließlich `admin`/`vorstand`/`sportliche_leitung` senden dürfen und ein
+Trainer mit jeder Zielgruppe an HTTP 403 läuft (Szenario „Trainer darf nicht mehr senden").
+Genau diese Sperre hebt dieser Change auf: Trainer senden wieder — an die Gruppen ihrer
+eigenen Kader, nur nicht vereinsweit. Auch die Ziel-Angabe wechselt vom einzelnen
+`targetType` zum Array `targets`, wodurch das Szenario „Fehlende Zielgruppe" seinen
+Gegenstand verliert. Beide Szenarien entfallen deshalb bewusst und ersatzlos; die
+verbleibende Abgrenzung steht als „Trainer darf nicht vereinsweit senden" bzw. „Fehlende
+Ziele" in der Nachfolge-Anforderung.
+**Migration**: Ersetzt durch „Mitteilung an vereinsweite Ziele und Team-Gruppen senden".
+Der Endpunkt bleibt `POST /api/chat/broadcasts`; Clients schicken statt `targetType` das
+Array `targets`.

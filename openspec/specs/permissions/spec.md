@@ -67,7 +67,7 @@ Betroffene Endpoint-Gruppen (Auswahl, vollständige Liste im Matrix-Test):
 - **Trainings-Read + RSVP:** `GET /api/training-sessions`, `/training-sessions/{id}`, `POST /api/training-sessions/{id}/respond`, `GET /api/training-sessions/{id}/attendances`
 - **Saisonfenster:** `GET /api/seasons/active` (nur `id`/`name`/`start_date`/`end_date` der laufenden Saison — /termine lädt darüber bis zum Saisonende; die vollständige Saisonliste `GET /api/seasons` bleibt gegated)
 - **Teams:** `GET /api/teams`, `/teams/names`, `/teams/my`, `/teams/{id}/roster`
-- **Chat:** alle `/api/chat/*`-Konversation- und Broadcast-Endpoints (außer `POST /api/chat/broadcasts`, siehe Broadcast-Requirement)
+- **Chat:** alle `/api/chat/*`-Konversation- und Broadcast-Endpoints (außer `POST /api/chat/broadcasts` und `GET /api/chat/broadcast-targets` — beide hängen an der Ziel-Allowlist des Absenders, siehe `chat-broadcasts`)
 - **Absences:** alle `/api/absences*`-Endpoints (Ownership-Check im Handler)
 
 #### Scenario: 401 ohne Bearer-Token
@@ -77,8 +77,6 @@ Betroffene Endpoint-Gruppen (Auswahl, vollständige Liste im Matrix-Test):
 #### Scenario: Jede Persona darf Self-Service-Endpoint aufrufen
 - **WHEN** eine beliebige Persona einen Aufruf an `GET /api/dashboard` mit gültigem Token sendet
 - **THEN** antwortet der Server mit 200 (Inhaltsfilterung ist Sache des Handlers)
-
----
 
 ### Requirement: Trainer-und-Sportliche-Leitung-Gate
 

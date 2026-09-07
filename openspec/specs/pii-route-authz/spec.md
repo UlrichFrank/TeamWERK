@@ -52,23 +52,6 @@ oder einen Reviewer (medien/vorstand/admin) ausliefern.
 - **WHEN** der Autor oder ein Reviewer sein/ein Bild abruft
 - **THEN** die Route SHALL das Bild ausliefern (200)
 
-### Requirement: duties — Spielbericht-Slot-Guard beschränkt auf Presseteam/Admin
-Das Ziehen eines Duty-Slots vom Typ `"Spielbericht"` SHALL nur `presseteam`/`admin` erlaubt sein;
-andere Rollen SHALL mit `role_required` (403) abgewiesen werden. Nicht-Spielbericht-Slots SHALL
-unberührt bleiben.
-
-#### Scenario: Nicht-Presseteam zieht Spielbericht-Slot
-- **WHEN** ein Nutzer ohne Rolle `presseteam`/`admin` einen Spielbericht-Slot claimt
-- **THEN** der Guard SHALL mit 403 (`role_required`) abweisen
-
-#### Scenario: Proxy-Claim durch Elternteil (Rollenverschiebung)
-- **WHEN** ein Elternteil ohne `presseteam`-Rolle einen Spielbericht-Slot für sein Kind claimt
-- **THEN** der Guard SHALL die Rolle des **handelnden** Elternteils werten und mit 403 abweisen
-
-#### Scenario: Nicht-Spielbericht-Slot
-- **WHEN** ein beliebiger berechtigter Nutzer einen Slot anderen Typs claimt
-- **THEN** der Guard SHALL nicht eingreifen (regulärer Claim-Pfad)
-
 ### Requirement: attendance-Recording — nur Staff des zuständigen Teams darf speichern
 `POST /api/training-sessions/{id}/attendances` (`Training.SaveAttendances`) und
 `POST /api/games/{id}/attendances` (`Games.SaveAttendances`) SHALL nur Trainer/sportliche Leitung
