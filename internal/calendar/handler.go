@@ -353,7 +353,10 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		    g.id, g.date, g.time, g.end_time, g.end_date,
 		    g.opponent, g.event_type, g.is_home, g.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
-		    t.name, mem.is_extended
+		    t.name, mem.is_extended,
+		    EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id = g.id) AS lineup_exists,
+		    EXISTS(SELECT 1 FROM game_lineup gl2
+		           WHERE gl2.game_id = g.id AND gl2.member_id = mem.member_id) AS in_lineup
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
 		JOIN teams t ON t.id = gt.team_id
@@ -382,9 +385,11 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		var isHome, isExtended bool
 		var note string
 		var vName, vStreet, vPostal, vCity, teamName string
+		var lineupExists, inLineup bool
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &endDate,
 			&opponent, &eventType, &isHome, &note,
-			&vName, &vStreet, &vPostal, &vCity, &teamName, &isExtended); err != nil {
+			&vName, &vStreet, &vPostal, &vCity, &teamName, &isExtended,
+			&lineupExists, &inLineup); err != nil {
 			continue
 		}
 		if seen[id] {
@@ -392,7 +397,9 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		}
 		seen[id] = true
 
-		summary := gameTitle(eventType, isHome, opponent, kaderLabel(teamName, isExtended))
+		state := resolveLineupState(isExtended, eventType, lineupExists, inLineup)
+		summary := gameTitle(eventType, isHome, opponent,
+			kaderLabel(teamName, isExtended, state))
 
 		var location string
 		if vName != "" {
@@ -426,7 +433,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 			UID:         fmt.Sprintf("game-%d@teamwerk", id),
 			Summary:     summary,
 			Location:    location,
-			Description: note,
+			Description: joinDescription(note, state.sentence()),
 			Start:       startDT,
 			End:         endDT,
 			HasEnd:      hasEnd,
@@ -475,7 +482,7 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 		seen[id] = true
 		summary := "Training"
 		if teamName != "" {
-			summary = "Training: " + kaderLabel(teamName, isExtended)
+			summary = "Training: " + kaderLabel(teamName, isExtended, lineupNone)
 		}
 		var location string
 		if vName != "" {
@@ -626,14 +633,96 @@ func buildGameTypeFilter(s tokenSettings) []string {
 	return types
 }
 
+// joinDescription setzt die Beschreibung aus der Notiz des Termins und dem
+// generierten Aufstellungssatz zusammen, getrennt durch eine Leerzeile. Leere
+// Teile entfallen. Die Notiz steht vorn: sie ist die Aussage des Trainers zum
+// Termin, der Satz nur eine Ergänzung — umgekehrt schöbe sich generierter Text
+// vor den redaktionellen.
+func joinDescription(parts ...string) string {
+	var kept []string
+	for _, p := range parts {
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	return strings.Join(kept, "\n\n")
+}
+
+// lineupState ist der Aufstellungsstatus eines Feed-Nutzers für ein Spiel. Der
+// leere Wert heißt „gilt hier nicht" — er steht für alle Termine, an denen kein
+// Status auszuweisen ist (regulärer Kader, Trainer, generische Events).
+type lineupState string
+
+const (
+	lineupNone      lineupState = ""
+	lineupIn        lineupState = "aufgestellt"
+	lineupOut       lineupState = "nicht aufgestellt"
+	lineupUndecided lineupState = "Aufstellung offen"
+)
+
+// Die Sätze für die Beschreibung, je Zustand. Wortlaut ist Zusage an den
+// Empfänger und steht so in specs/ical-feed.
+const (
+	lineupSentenceIn        = "Du bist für das Spiel aufgestellt."
+	lineupSentenceOut       = "Du bist für das Spiel NICHT aufgestellt. Bitte mit der Trainerin/dem Trainer absprechen, ob eine Anwesenheit trotzdem erwünscht ist."
+	lineupSentenceUndecided = "Die Aufstellung für dieses Spiel steht noch nicht fest."
+)
+
+// resolveLineupState leitet den Status EINMAL aus den beiden EXISTS-Spalten ab.
+// Die Regel „keine Zeile für das Spiel ≠ nicht nominiert" lebt allein hier: an
+// zwei Stellen ausgewertet würde aus einer ungepflegten Aufstellung früher oder
+// später eine Absage, die niemand ausgesprochen hat.
+//
+// Der Status gilt nur für Spieler des erweiterten Kaders an Heim-/Auswärtsspielen.
+// Für den Stammkader ist die Teilnahme der Regelfall, generische Events haben
+// keine Aufstellung.
+func resolveLineupState(isExtended bool, eventType string, lineupExists, inLineup bool) lineupState {
+	if !isExtended || (eventType != "heim" && eventType != "auswärts") {
+		return lineupNone
+	}
+	switch {
+	case inLineup:
+		return lineupIn
+	case lineupExists:
+		return lineupOut
+	default:
+		return lineupUndecided
+	}
+}
+
+// sentence liefert den Satz für die Beschreibung; leer, wenn kein Status gilt.
+func (l lineupState) sentence() string {
+	switch l {
+	case lineupIn:
+		return lineupSentenceIn
+	case lineupOut:
+		return lineupSentenceOut
+	case lineupUndecided:
+		return lineupSentenceUndecided
+	default:
+		return ""
+	}
+}
+
 // kaderLabel benennt die Mannschaft, über die der Feed-Nutzer am Termin hängt
 // (z. B. "mA1"). Hängt er nur über den erweiterten Kader daran, sagt das Label
-// das dazu — der Termin gehört dann nicht zur eigenen Stammmannschaft.
-func kaderLabel(teamName string, isExtended bool) string {
-	if isExtended && teamName != "" {
-		return teamName + " - erweiterter Kader"
+// das dazu — der Termin gehört dann nicht zur eigenen Stammmannschaft — und bei
+// Spielen zusätzlich, ob er aufgestellt ist.
+//
+// Der Zusatz ist auf "erw. Kader" gekürzt, damit Mannschaft, Kader und Status
+// zusammen in die Titel-Klammer passen; der Mittelpunkt trennt sie stärker als
+// ein weiterer Bindestrich, von dem der Spieltitel schon einen trägt.
+// Trainings rufen denselben Helfer mit lineupNone auf — derselbe Zusatz darf im
+// Kalender nicht in zwei Schreibweisen auftauchen.
+func kaderLabel(teamName string, isExtended bool, state lineupState) string {
+	if teamName == "" || !isExtended {
+		return teamName
 	}
-	return teamName
+	label := teamName + " · erw. Kader"
+	if state != lineupNone {
+		label += " · " + string(state)
+	}
+	return label
 }
 
 // ownTeamLabel setzt das Kader-Label in den Spieltitel; ohne auflösbaren

@@ -3,9 +3,7 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `ical-feed`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-
 ## Requirements
-
 ### Requirement: Token-Verwaltung
 
 Das System SHALL pro User genau ein Calendar-Token verwalten. Ein Token ist ein UUID-v4-String, der in `calendar_tokens` zusammen mit 5 Boolean-Toggles gespeichert wird. Jeder authentifizierte Nutzer kann sein Token anlegen, seine Einstellungen ändern oder das Token löschen.
@@ -67,7 +65,7 @@ Content-Type SHALL `text/calendar; charset=utf-8` sein. Zeilenenden SHALL CRLF s
 
 - **WHEN** der Feed ein Heimspiel mit Venue enthält
 - **THEN** hat das VEVENT:
-  - `SUMMARY:Heim: Team (<Mannschaft>) – <Gegner>` (Heimspiel) oder `SUMMARY:Auswärts: <Gegner> – Team (<Mannschaft>)` (Auswärtsspiel). `<Mannschaft>` ist der Name des Teams, über dessen Kader der Feed-Nutzer am Spiel hängt (z. B. `mA1`, `gD`); ohne auflösbaren Teamnamen bleibt es bei `Team`
+  - `SUMMARY:Heim: Team (<Mannschaft>) – <Gegner>` (Heimspiel) oder `SUMMARY:Auswärts: <Gegner> – Team (<Mannschaft>)` (Auswärtsspiel). `<Mannschaft>` ist der Name des Teams, über dessen Kader der Feed-Nutzer am Spiel hängt (z. B. `mA1`, `gD`); ohne auflösbaren Teamnamen bleibt es bei `Team`. Hängt der Nutzer nur über den erweiterten Kader am Spiel, folgen in derselben Klammer der Kader-Zusatz und der Aufstellungsstatus (`<Mannschaft> · erw. Kader · <Status>`)
   - `DTSTART;TZID=Europe/Berlin:<YYYYMMDDTHHmmss>`
   - `DTEND;TZID=Europe/Berlin:<YYYYMMDDTHHmmss>` (aus `end_time`/`end_date`; fehlen diese, DURATION:PT2H)
   - `LOCATION:<Venue-Name>, <Street>, <PostalCode> <City>` (wenn Venue vorhanden)
@@ -84,7 +82,7 @@ Content-Type SHALL `text/calendar; charset=utf-8` sein. Zeilenenden SHALL CRLF s
 #### Scenario: Training-Event im Feed (include_training=true)
 
 - **WHEN** der Feed aktiviert ist und für ein Team des Users eine aktive `training_sessions`-Row existiert
-- **THEN** erscheint sie im Feed mit `SUMMARY:Training: <team_name>` (erweiterter Kader: `<team_name> - erweiterter Kader`), `UID:training-<id>@teamwerk` und `LOCATION:<location>`
+- **THEN** erscheint sie im Feed mit `SUMMARY:Training: <team_name>` (erweiterter Kader: `<team_name> · erw. Kader`), `UID:training-<id>@teamwerk` und `LOCATION:<location>`
 - **AND** `DTSTART`/`DTEND` werden aus `date`, `start_time`, `end_time` gebildet
 
 ### Requirement: Konfigurierbare Feed-Inhalte
@@ -95,7 +93,7 @@ Spiele und Trainings werden dem User über seine Kader-Zugehörigkeit zugeordnet
 
 Den Funktionsträger-Bypass aus `auth` (admin/trainer/sportliche_leitung/vorstand sehen alle Events der Saison) übernimmt der Feed bewusst NICHT — ein Vorstand hätte sonst den gesamten Vereinsspielplan im privaten Kalender. Die Auflösung über `family_links` entfällt ebenfalls, weil Eltern für jedes Kind einen eigenen Kind-Token bekommen.
 
-Hängt ein User über mehrere Kader an demselben Termin, erscheint er trotzdem nur einmal im Feed (die UID ist pro Spiel bzw. Training eindeutig); für die Beschriftung schlägt dabei eine reguläre Zugehörigkeit die erweiterte.
+Hängt ein User über mehrere Kader an demselben Termin, erscheint er trotzdem nur einmal im Feed (die UID ist pro Spiel bzw. Training eindeutig); für die Beschriftung schlägt dabei eine reguläre Zugehörigkeit die erweiterte. Damit entfällt für diesen Nutzer auch der Aufstellungsstatus — er hängt regulär am Termin.
 
 Dienste werden dem User zugeordnet wenn ein Eintrag in `duty_assignments` mit `user_id = user_id_des_tokens` und `status IN ('assigned', 'fulfilled')` existiert.
 
@@ -103,7 +101,8 @@ Dienste werden dem User zugeordnet wenn ein Eintrag in `duty_assignments` mit `u
 
 - **WHEN** ein User über `kader_extended_members` am Kader eines Teams hängt und für dieses Team ein Spiel und ein Training existieren
 - **THEN** enthält der Feed beide Events
-- **AND** die Mannschaft trägt im `SUMMARY` den Zusatz `<team_name> - erweiterter Kader` (z. B. `SUMMARY:Heim: Team (mB1 - erweiterter Kader) – <Gegner>` und `SUMMARY:Training: mB1 - erweiterter Kader`)
+- **AND** die Mannschaft trägt im `SUMMARY` den Zusatz `<team_name> · erw. Kader` (z. B. `SUMMARY:Training: mB1 · erw. Kader`)
+- **AND** das Spiel-Event trägt zusätzlich den Aufstellungsstatus (z. B. `SUMMARY:Heim: Team (mB1 · erw. Kader · aufgestellt) – <Gegner>`)
 
 #### Scenario: Vereinsfunktion allein zieht keine fremden Termine in den Feed
 
@@ -125,3 +124,75 @@ Dienste werden dem User zugeordnet wenn ein Eintrag in `duty_assignments` mit `u
 
 - **WHEN** alle 5 Toggles auf false gesetzt sind
 - **THEN** enthält der Feed einen validen VCALENDAR-Rahmen aber keine VEVENTs
+
+### Requirement: Aufstellungsstatus im Spiel-Event des erweiterten Kaders
+
+Für ein Spiel-Event vom Typ `heim` oder `auswärts`, an dem der Feed-Nutzer **ausschließlich
+über den erweiterten Kader** (`kader_extended_members`) hängt, SHALL der Feed den
+Aufstellungsstatus dieses Nutzers ausweisen — in der Mannschafts-Klammer des `SUMMARY` als
+kurzes Kennwort und im `DESCRIPTION` als vollständiger Satz.
+
+Der Status SHALL drei Zustände kennen, abgeleitet aus `game_lineup` für das jeweilige Spiel:
+
+| Zustand | Bedingung | Kennwort im `SUMMARY` | Satz im `DESCRIPTION` |
+|---|---|---|---|
+| aufgestellt | eine Zeile für dieses Spiel **und** dieses Mitglied | `aufgestellt` | „Du bist für das Spiel aufgestellt." |
+| nicht aufgestellt | mindestens eine Zeile für dieses Spiel, aber keine für dieses Mitglied | `nicht aufgestellt` | „Du bist für das Spiel NICHT aufgestellt. Bitte mit der Trainerin/dem Trainer absprechen, ob eine Anwesenheit trotzdem erwünscht ist." |
+| offen | **keine** Zeile für dieses Spiel | `Aufstellung offen` | „Die Aufstellung für dieses Spiel steht noch nicht fest." |
+
+Der Zustand „offen" SHALL eigenständig bleiben: aus einer leeren Aufstellung SHALL das
+System **nicht** „nicht aufgestellt" ableiten. Eine nicht gepflegte Aufstellung ist keine
+Nichtberücksichtigung, und der Feed SHALL dem Empfänger keine Absage melden, die niemand
+ausgesprochen hat.
+
+Der Satz SHALL an eine vorhandene Notiz des Termins angehängt werden, getrennt durch eine
+Leerzeile; die Notiz SHALL dabei erhalten bleiben. Hat der Termin keine Notiz, SHALL das
+`DESCRIPTION` allein den Satz tragen.
+
+Nutzer, die über den regulären Kader (`kader_members`) oder als Trainer
+(`kader_trainers`) am Spiel hängen, SHALL der Feed **ohne** Status ausweisen — für sie ist
+die Teilnahme der Regelfall. Events vom Typ `generisch` SHALL keinen Status tragen; sie
+haben keine Aufstellung.
+
+#### Scenario: Aufgestellter Spieler des erweiterten Kaders
+
+- **WHEN** ein Nutzer über `kader_extended_members` am Kader von `mB1` hängt, für das Heimspiel gegen `SG Weinstadt` eine Aufstellung gespeichert ist und sein Mitglied darin steht
+- **THEN** lautet das `SUMMARY` `Heim: Team (mB1 · erw. Kader · aufgestellt) – SG Weinstadt`
+- **AND** enthält das `DESCRIPTION` den Satz `Du bist für das Spiel aufgestellt.`
+
+#### Scenario: Nicht aufgestellter Spieler des erweiterten Kaders
+
+- **WHEN** für dasselbe Spiel eine Aufstellung gespeichert ist, das Mitglied des Nutzers aber nicht darin steht
+- **THEN** trägt das `SUMMARY` in der Mannschafts-Klammer den Zusatz `· nicht aufgestellt`
+- **AND** enthält das `DESCRIPTION` den Satz `Du bist für das Spiel NICHT aufgestellt. Bitte mit der Trainerin/dem Trainer absprechen, ob eine Anwesenheit trotzdem erwünscht ist.`
+
+#### Scenario: Aufstellung noch nicht gespeichert
+
+- **WHEN** für das Spiel **keine** Zeile in `game_lineup` existiert
+- **THEN** trägt das `SUMMARY` in der Mannschafts-Klammer den Zusatz `· Aufstellung offen`
+- **AND** enthält das `DESCRIPTION` den Satz `Die Aufstellung für dieses Spiel steht noch nicht fest.`
+- **AND** enthält der Feed an keiner Stelle die Aussage `NICHT aufgestellt`
+
+#### Scenario: Notiz und Aufstellungssatz stehen beide im DESCRIPTION
+
+- **WHEN** das Spiel eine Notiz trägt und der Nutzer über den erweiterten Kader daran hängt
+- **THEN** enthält das `DESCRIPTION` zuerst die Notiz, dann eine Leerzeile, dann den Aufstellungssatz
+
+#### Scenario: Regulärer Kader bekommt keinen Status
+
+- **WHEN** ein Nutzer über `kader_members` am Kader des Teams hängt
+- **THEN** lautet das `SUMMARY` `Heim: Team (mB1) – SG Weinstadt` ohne Kader- und ohne Status-Zusatz
+- **AND** enthält das `DESCRIPTION` keinen Aufstellungssatz
+
+#### Scenario: Doppelte Zugehörigkeit — regulär schlägt erweitert
+
+- **WHEN** ein Nutzer an demselben Spiel sowohl über `kader_members` als auch über `kader_extended_members` hängt
+- **THEN** enthält der Feed genau ein VEVENT für dieses Spiel
+- **AND** trägt es weder den Kader- noch den Status-Zusatz
+
+#### Scenario: Generisches Event trägt keinen Status
+
+- **WHEN** ein Event vom Typ `generisch` im Feed erscheint und der Nutzer über den erweiterten Kader daran hängt
+- **THEN** bleibt das `SUMMARY` der Terminname ohne Status-Zusatz
+- **AND** enthält das `DESCRIPTION` keinen Aufstellungssatz
+

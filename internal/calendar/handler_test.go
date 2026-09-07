@@ -22,6 +22,14 @@ func readBody(t *testing.T, r io.Reader) string {
 	return string(b)
 }
 
+// unfoldICS macht die RFC-5545-Faltung rückgängig (CRLF + ein führendes
+// Leerzeichen), damit Assertions gegen den fachlichen Text laufen können statt
+// gegen dessen Umbruchstellen. Nötig, seit Titel mit Kader- und
+// Aufstellungszusatz regelmäßig über 75 Oktetten liegen.
+func unfoldICS(body string) string {
+	return strings.ReplaceAll(body, "\r\n ", "")
+}
+
 // setupCalendarFixture creates a user with a linked member in a kader for a team,
 // a game for that team, and a duty slot assigned to the user.
 // Returns: userID, userToken, gameID, dutySlotID.
@@ -248,14 +256,16 @@ func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
 
 // TestCalendarFeed_ErweiterterKaderIstGekennzeichnet: Wer im erweiterten Kader
 // eines anderen Teams aushilft, bekommt dessen Termine in den Feed — der Titel
-// sagt aber dazu, dass es nicht die Stammmannschaft ist.
+// sagt aber dazu, dass es nicht die Stammmannschaft ist. Das Spiel trägt
+// zusätzlich den Aufstellungsstatus (hier: keine Aufstellung gepflegt), das
+// Training denselben Kader-Zusatz ohne Status.
 func TestCalendarFeed_ErweiterterKaderIstGekennzeichnet(t *testing.T) {
-	body := membershipFeed(t, "mB1", "heim", "kader_extended_members")
-	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 - erweiterter Kader) – Test Opponent") {
+	body := unfoldICS(membershipFeed(t, "mB1", "heim", "kader_extended_members"))
+	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 · erw. Kader · Aufstellung offen) – Test Opponent") {
 		t.Errorf("game summary must mark the extended kader, body:\n%s", body)
 	}
-	if !strings.Contains(body, "SUMMARY:Training: mB1 - erweiterter Kader") {
-		t.Errorf("training summary must mark the extended kader, body:\n%s", body)
+	if !strings.Contains(body, "SUMMARY:Training: mB1 · erw. Kader\r\n") {
+		t.Errorf("training summary must mark the extended kader without a lineup state, body:\n%s", body)
 	}
 }
 
@@ -292,7 +302,7 @@ func TestCalendarFeed_RegulaerSchlaegtErweitert(t *testing.T) {
 	res := testutil.Get(t, srv, "/api/calendar/feed/"+tok["token"].(string), "")
 	defer res.Body.Close()
 	body := readBody(t, res.Body)
-	if strings.Contains(body, "erweiterter Kader") {
+	if strings.Contains(body, "erw. Kader") {
 		t.Errorf("regular membership must win over the extended one, body:\n%s", body)
 	}
 	if n := strings.Count(body, "UID:game-"); n != 1 {
