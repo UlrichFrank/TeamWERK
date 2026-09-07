@@ -299,9 +299,14 @@ func (wk *Worker) notifyReady(id int) {
 }
 
 // pushRecipients liefert die distinkten User-IDs für die Ready-Push (4.8):
-// Hochladender, aktive Spieler des Teams, deren Eltern, Team-Trainer — jeweils
-// in der aktiven Saison. NULL user_ids (Spieler ohne Account) fallen via
-// IS NOT NULL heraus.
+// Hochladender, aktive Spieler des Teams, deren Eltern, Team-Trainer sowie der
+// erweiterte Kader und dessen Eltern. NULL user_ids (Spieler ohne Account)
+// fallen via IS NOT NULL heraus.
+//
+// Der Kreis MUSS deckungsgleich mit userBelongsToTeam (access.go) bleiben:
+// niemand darf über ein Video benachrichtigt werden, das er anschließend nicht
+// öffnen kann. Deshalb auch hier `status <> 'ausgetreten'` für die Zweige des
+// erweiterten Kaders (Begründung: Förderkinder, siehe access.go).
 func (wk *Worker) pushRecipients(id int) ([]int, error) {
 	rows, err := wk.db.Query(`
 		SELECT u FROM (
@@ -329,6 +334,23 @@ func (wk *Worker) pushRecipients(id int) ([]int, error) {
 			JOIN trainer_memberships tm ON tm.team_id = v.team_id AND tm.season_id = v.season_id
 			JOIN members m ON m.id = tm.member_id
 			WHERE v.id = ?1 AND m.user_id IS NOT NULL
+			UNION
+			-- erweiterter Kader des Teams
+			SELECT m.user_id AS u
+			FROM videos v
+			JOIN kader k ON k.team_id = v.team_id AND k.season_id = v.season_id
+			JOIN kader_extended_members kem ON kem.kader_id = k.id
+			JOIN members m ON m.id = kem.member_id AND m.status <> 'ausgetreten'
+			WHERE v.id = ?1 AND m.user_id IS NOT NULL
+			UNION
+			-- Eltern des erweiterten Kaders
+			SELECT fl.parent_user_id AS u
+			FROM videos v
+			JOIN kader k ON k.team_id = v.team_id AND k.season_id = v.season_id
+			JOIN kader_extended_members kem ON kem.kader_id = k.id
+			JOIN members m ON m.id = kem.member_id AND m.status <> 'ausgetreten'
+			JOIN family_links fl ON fl.member_id = m.id
+			WHERE v.id = ?1
 		) WHERE u IS NOT NULL`, id)
 	if err != nil {
 		return nil, err

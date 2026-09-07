@@ -43,8 +43,10 @@ type videoDetail struct {
 // visibilityFilter liefert ein SQL-Fragment (ohne führendes AND/WHERE) plus die
 // zugehörigen Argumente, das v.team_id auf die für den Aufrufer sichtbaren Teams
 // einschränkt. admin/vorstand sehen alles → ("", nil). Andernfalls spiegelt das
-// Fragment exakt userBelongsToTeam (aktiver Spieler / Trainer / Elternteil eines
-// aktiven Spielers, jeweils in der aktiven Saison).
+// Fragment exakt userBelongsToTeam (aktiver Spieler / Trainer / erweiterter
+// Kader / Elternteil eines der beiden, jeweils in der aktiven Saison) — inklusive
+// des dort begründeten Statusfilters `<> 'ausgetreten'` für die Zweige des
+// erweiterten Kaders.
 func visibilityFilter(claims *auth.Claims) (string, []any) {
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		return "", nil
@@ -65,8 +67,21 @@ func visibilityFilter(claims *auth.Claims) (string, []any) {
 		JOIN player_memberships pm ON pm.member_id = m.id
 		JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
 		WHERE fl.parent_user_id = ?
+		UNION
+		SELECT k.team_id FROM kader_extended_members kem
+		JOIN kader k ON k.id = kem.kader_id
+		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
+		JOIN members m ON m.id = kem.member_id AND m.status <> 'ausgetreten'
+		WHERE m.user_id = ?
+		UNION
+		SELECT k.team_id FROM family_links fl
+		JOIN members m ON m.id = fl.member_id AND m.status <> 'ausgetreten'
+		JOIN kader_extended_members kem ON kem.member_id = m.id
+		JOIN kader k ON k.id = kem.kader_id
+		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
+		WHERE fl.parent_user_id = ?
 	)`
-	return frag, []any{claims.UserID, claims.UserID, claims.UserID}
+	return frag, []any{claims.UserID, claims.UserID, claims.UserID, claims.UserID, claims.UserID}
 }
 
 // List liefert die für den Aufrufer sichtbaren Videos, paginiert.

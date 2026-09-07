@@ -54,10 +54,12 @@ var audienceAllowlist = map[string]string{
 	"carpooling.kaderRecipients": "andere Frage (wer kann fahren?): nur Eltern + Trainer, ohne den Steller",
 
 	// Die Video-Ready-Meldung adressiert Hochladenden, aktive Spieler, deren
-	// Eltern und Trainer — gebunden an die Saison DES VIDEOS und gefiltert auf
-	// members.status='aktiv'. Dass der erweiterte Kader dort fehlt, ist eine
-	// eigene, offene Frage (Video-Sichtbarkeit), kein Rest dieses Changes.
-	"videos.pushRecipients": "eigene Menge (Hochladender + aktive Spieler + Trainer), Saison des Videos",
+	// Eltern, Trainer sowie den erweiterten Kader und dessen Eltern — gebunden an
+	// die Saison DES VIDEOS (nicht die aktive) und mit einem Statusfilter, den
+	// notify.TeamAudience nicht kennt. Sie MUSS deckungsgleich mit
+	// videos.userBelongsToTeam bleiben: niemand soll über ein Video benachrichtigt
+	// werden, das er nicht öffnen kann (Change videos-erweiterter-kader).
+	"videos.pushRecipients": "eigene Menge inkl. Hochladendem, Saison des Videos, deckungsgleich mit der Video-Sichtbarkeit",
 }
 
 type audienceOccurrence struct {

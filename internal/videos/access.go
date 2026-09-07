@@ -78,8 +78,21 @@ func (h *Handler) isTrainerOfTeam(userID, teamID int) (bool, error) {
 	return n > 0, err
 }
 
-// userBelongsToTeam meldet, ob der Nutzer als aktiver Spieler, Trainer oder als
-// Elternteil eines aktiven Spielers zum Team (in einer aktiven Saison) gehört.
+// userBelongsToTeam meldet, ob der Nutzer als aktiver Spieler, Trainer, Mitglied
+// des erweiterten Kaders oder als Elternteil eines der beiden zum Team (in einer
+// aktiven Saison) gehört.
+//
+// Die beiden Zweige des erweiterten Kaders filtern `status <> 'ausgetreten'`
+// statt `= 'aktiv'` wie die Stammkader-Zweige: Förderkinder tragen
+// `members.status = 'foerderkind'` (Migration 034) und sind die typische
+// Besetzung dieser Liste — ein Gleichheitsfilter auf 'aktiv' schlösse genau die
+// Zielgruppe wieder aus, und zwar unsichtbar, weil die Query weiterhin Zeilen
+// liefert (nur eben nicht die gemeinten).
+//
+// Diese Funktion ist der Zugang zu Detailabruf UND Stream: Play prüft
+// CanViewVideo und gibt erst danach den ?st=-Token aus. visibilityFilter
+// (crud.go) und pushRecipients (worker.go) spiegeln dieselbe Menge für Liste und
+// Ready-Meldung — die drei müssen deckungsgleich bleiben.
 func (h *Handler) userBelongsToTeam(claims *auth.Claims, teamID int) (bool, error) {
 	var n int
 	err := h.db.QueryRow(`
@@ -102,7 +115,24 @@ func (h *Handler) userBelongsToTeam(claims *auth.Claims, teamID int) (bool, erro
 			JOIN player_memberships pm ON pm.member_id = m.id
 			JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
 			WHERE pm.team_id = ? AND fl.parent_user_id = ?
+			UNION
+			-- Mitglied des erweiterten Kaders des Teams
+			SELECT 1 FROM kader_extended_members kem
+			JOIN kader k ON k.id = kem.kader_id
+			JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
+			JOIN members m ON m.id = kem.member_id AND m.status <> 'ausgetreten'
+			WHERE k.team_id = ? AND m.user_id = ?
+			UNION
+			-- Elternteil eines Mitglieds des erweiterten Kaders
+			SELECT 1 FROM family_links fl
+			JOIN members m ON m.id = fl.member_id AND m.status <> 'ausgetreten'
+			JOIN kader_extended_members kem ON kem.member_id = m.id
+			JOIN kader k ON k.id = kem.kader_id
+			JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
+			WHERE k.team_id = ? AND fl.parent_user_id = ?
 		)`,
+		teamID, claims.UserID,
+		teamID, claims.UserID,
 		teamID, claims.UserID,
 		teamID, claims.UserID,
 		teamID, claims.UserID).Scan(&n)
