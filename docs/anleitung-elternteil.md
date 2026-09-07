@@ -51,7 +51,9 @@ Trage deine Fahrzeugdaten (Sitzplätze) im Profil ein.
 
 ## Benachrichtigungen
 
-Push-Benachrichtigungen funktionieren genauso wie in der Spieler-Anleitung beschrieben. Du wirst über neue Dienst-Slots, Änderungen und Terminerinnerungen informiert.
+Push-Benachrichtigungen funktionieren genauso wie in der Spieler-Anleitung beschrieben. Du wirst über neue, verschobene und abgesagte Termine deines Kindes informiert, über die Erinnerungen 24 Stunden und 3 Stunden vorher, über Hinweise des Trainers zum Termin sowie über neue Dienst-Slots und neue Videos der Mannschaft.
+
+Das gilt auch dann, wenn dein Kind **nur im erweiterten Kader** einer Mannschaft steht — also regelmäßig aushilft, ohne fest dazuzugehören. Du bekommst die Meldungen dieser Mannschaft dann ebenso wie die Eltern der Stammspieler.
 
 ---
 

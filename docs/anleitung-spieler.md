@@ -58,6 +58,22 @@ Unter **„Kalender"** findest du alle Spiele und Termine. Du siehst:
 - Heim- oder Auswärtsspiel
 - Verknüpfte Dienst-Slots (falls vorhanden)
 
+### Wenn du im erweiterten Kader stehst
+
+Neben dem Stammkader führt jede Mannschaft einen **erweiterten Kader** — Spielerinnen und Spieler, die regelmäßig aushelfen, ohne fest zur Mannschaft zu gehören. Stehst du dort, siehst du alle Spiele und Trainings dieser Mannschaft, kannst zu- und absagen, bist in ihren Chatgruppen und bekommst dieselben Benachrichtigungen wie der Stammkader. Dienste bleiben davon unberührt: dein Dienst-Soll richtet sich nach deiner festen Mannschaft.
+
+Im **Kalender-Abo** steht bei Spielen dieser Mannschaft zusätzlich, ob du aufgestellt bist:
+
+| Im Titel | Bedeutung |
+|---|---|
+| `· erw. Kader · aufgestellt` | du stehst in der Aufstellung |
+| `· erw. Kader · nicht aufgestellt` | die Aufstellung ist gepflegt, du stehst nicht drin — sprich mit dem Trainer, ob deine Anwesenheit trotzdem erwünscht ist |
+| `· erw. Kader · Aufstellung offen` | für dieses Spiel wurde noch keine Aufstellung gespeichert |
+
+Kalender-Apps holen den Feed nur etwa stündlich ab. Was in der App steht, ist immer der aktuelle Stand.
+
+---
+
 ### Dauerhaft abgemeldet
 
 Falls du an einer wiederkehrenden Trainingsserie dauerhaft nicht teilnehmen kannst (z. B. weil du fest in einem anderen Team mittrainierst), kann dein Trainer dich für diese Serie **abmelden**. Bei den betroffenen Terminen erscheinst du dann mit dem Hinweis **„dauerhaft abgemeldet"**; du kannst dort keine Rückmeldung geben, und diese Termine zählen **nicht** in deine Anwesenheitsstatistik. Die Abmeldung pflegt ausschließlich dein Trainer — sprich ihn an, wenn etwas nicht stimmt.
@@ -99,9 +115,14 @@ Trage deine Fahrzeugdaten (Sitzplätze) im Profil ein, damit andere wissen, wie 
 
 Wenn du TeamWERK auf deinem Smartphone zum Homescreen hinzufügst (als PWA installierst), kannst du **Push-Benachrichtigungen** aktivieren. Du erhältst dann Hinweise zu:
 
-- Neuen offenen Dienst-Slots
-- Änderungen an deinen Diensten
-- Terminerinnerungen
+- neuen, verschobenen und abgesagten Spielen und Trainings deiner Mannschaft — auch wenn du nur im erweiterten Kader stehst
+- Terminerinnerungen 24 Stunden und 3 Stunden vor Beginn
+- Hinweisen, die dein Trainer an einem Termin hinterlegt
+- neuen offenen Dienst-Slots und Änderungen an deinen Diensten
+- neuen Videos deiner Mannschaft
+- Nachrichten im Chat
+
+Unter **Profil → Sonstiges** kannst du jede Kategorie einzeln abschalten. Die Meldung erscheint dann trotzdem im Nachrichten-Verlauf auf deinem Dashboard — abgeschaltet wird nur der Zustellweg.
 
 **iPhone/iPad:** Push-Benachrichtigungen funktionieren nur, wenn die App über „Zum Home-Bildschirm hinzufügen" installiert wurde.
 
