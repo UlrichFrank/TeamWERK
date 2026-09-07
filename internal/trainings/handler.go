@@ -96,39 +96,6 @@ func parseBerlinDateTime(dateISO, hhmm string) (time.Time, error) {
 	return t, nil
 }
 
-// teamMembersAndParents returns user IDs of all active kader members (and their parents) for a team.
-func (h *Handler) teamMembersAndParents(teamID int) []int {
-	rows, err := h.db.Query(
-		`SELECT DISTINCT u.id FROM users u
-		 JOIN members m ON m.user_id = u.id
-		 JOIN player_memberships pm ON pm.member_id = m.id
-		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
-		 WHERE pm.team_id = ?
-		 UNION
-		 SELECT DISTINCT fl.parent_user_id FROM family_links fl
-		 JOIN members m ON m.id = fl.member_id
-		 JOIN player_memberships pm ON pm.member_id = m.id
-		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
-		 WHERE pm.team_id = ?
-		 UNION
-		 SELECT DISTINCT m.user_id FROM members m
-		 JOIN kader_extended_members kem ON kem.member_id = m.id
-		 JOIN kader k ON k.id = kem.kader_id
-		 JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
-		 WHERE k.team_id = ? AND m.user_id IS NOT NULL`, teamID, teamID, teamID)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var ids []int
-	for rows.Next() {
-		var id int
-		rows.Scan(&id)
-		ids = append(ids, id)
-	}
-	return ids
-}
-
 // hasTeamAccess returns true if the user is admin, vorstand, sportliche_leitung,
 // or a kader trainer of teamID.
 func (h *Handler) hasTeamAccess(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
@@ -533,7 +500,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	// Ein PUT auf die Serie löscht und erzeugt alle Einheiten ab genFrom neu —
 	// das verschiebt potenziell Dutzende Termine im Kalender des Teams. Der Link
 	// ist /termine ohne focus: eine Serie ist kein einzelner Termin.
-	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+	notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
 		"trainings", "Trainingsserie geändert",
 		notify.ChangeBody(seriesSubject(req.Name),
 			seriesPeriod(genFrom.Format("2006-01-02"), req.ValidUntil),
@@ -701,7 +668,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	if !silent {
 		// Kein Direktlink: die Serie existiert nicht mehr, /termine hätte dem
 		// Empfänger nur eine Lücke gezeigt.
-		notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+		notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
 			"trainings", "Trainingsserie beendet",
 			notify.CancellationBody(seriesName, seriesPeriod(affectedFrom, validUntil),
 				notify.ActorName(h.db, claims.UserID), reason), "")
@@ -751,7 +718,7 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	if !silent {
 		// Kein Direktlink: die Einheit existiert nicht mehr, /termine hätte dem
 		// Empfänger nur eine Lücke gezeigt.
-		notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+		notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
 			"trainings", "Training abgesagt",
 			notify.CancellationBody(sessionSubject(title), cancellationWhen(date),
 				notify.ActorName(h.db, claims.UserID), reason), "")
@@ -1027,7 +994,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		notifyBody = notify.CancellationBody(sessionSubject(req.Title), cancellationWhen(req.Date),
 			actor, req.CancelReason)
 	}
-	notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamID),
+	notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
 		"trainings", notifyTitle, notifyBody, fmt.Sprintf("/termine?focus=training-%d", sessionID))
 	w.WriteHeader(http.StatusNoContent)
 }

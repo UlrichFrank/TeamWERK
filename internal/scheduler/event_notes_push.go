@@ -32,8 +32,8 @@ type pendingNote struct {
 
 // processPendingEventNotes verarbeitet alle fälligen (notify_after <= now)
 // pending-Rows. Für ein Event mit event_date >= heute (und noch vorhandenem
-// Event) wird ein Push an teamMembersAndParents abgesetzt; in jedem Fall wird
-// die Row gelöscht. Liefert die Anzahl tatsächlich versendeter Pushes.
+// Event) wird ein Push an die Empfängermenge der Teams abgesetzt; in jedem
+// Fall wird die Row gelöscht. Liefert die Anzahl versendeter Pushes.
 func (s *Scheduler) processPendingEventNotes() (int, error) {
 	rows, err := s.db.Query(`
 		SELECT ref_type, ref_id, note_text
@@ -70,7 +70,7 @@ func (s *Scheduler) processPendingEventNotes() (int, error) {
 		if eventDate == "" || eventDate < today {
 			continue
 		}
-		uids := s.teamMembersAndParentsMulti(teamIDs)
+		uids := notify.TeamAudience(s.db, teamIDs...)
 		if len(uids) == 0 {
 			continue
 		}
@@ -142,19 +142,4 @@ func (s *Scheduler) gameTeamIDs(gameID int) []int {
 		ids = append(ids, id)
 	}
 	return ids
-}
-
-// teamMembersAndParentsMulti vereinigt die Empfänger mehrerer Teams (dedupliziert).
-func (s *Scheduler) teamMembersAndParentsMulti(teamIDs []int) []int {
-	seen := map[int]bool{}
-	var out []int
-	for _, tid := range teamIDs {
-		for _, uid := range s.teamMembersAndParents(tid) {
-			if !seen[uid] {
-				seen[uid] = true
-				out = append(out, uid)
-			}
-		}
-	}
-	return out
 }

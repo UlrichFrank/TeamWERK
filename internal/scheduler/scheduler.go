@@ -623,7 +623,7 @@ func (s *Scheduler) sendGameReminders() {
 		if g.eventType == "generisch" {
 			title = "Terminerinnerung"
 		}
-		recipients := s.teamMembersAndParents(g.teamID)
+		recipients := notify.TeamAudience(s.db, g.teamID)
 		url := fmt.Sprintf("/termine?focus=game-%d", g.id)
 
 		if until <= 24*time.Hour {
@@ -711,7 +711,7 @@ func (s *Scheduler) sendTrainingReminders() {
 		if until < 0 {
 			continue
 		}
-		recipients := s.teamMembersAndParents(sess.teamID)
+		recipients := notify.TeamAudience(s.db, sess.teamID)
 		url := fmt.Sprintf("/termine?focus=training-%d", sess.id)
 
 		if until <= 24*time.Hour {
@@ -786,33 +786,6 @@ func (s *Scheduler) sendCarpoolingReminders() {
 	if sent > 0 {
 		slog.Info("scheduler carpooling reminders sent", "count", sent)
 	}
-}
-
-// teamMembersAndParents returns user IDs of kader members + parents for a team in the active season.
-func (s *Scheduler) teamMembersAndParents(teamID int) []int {
-	rows, err := s.db.Query(
-		`SELECT DISTINCT u.id FROM users u
-		 JOIN members m ON m.user_id = u.id
-		 JOIN player_memberships pm ON pm.member_id = m.id
-		 JOIN seasons se ON se.id = pm.season_id AND se.is_active = 1
-		 WHERE pm.team_id = ?
-		 UNION
-		 SELECT DISTINCT fl.parent_user_id FROM family_links fl
-		 JOIN members m ON m.id = fl.member_id
-		 JOIN player_memberships pm ON pm.member_id = m.id
-		 JOIN seasons se ON se.id = pm.season_id AND se.is_active = 1
-		 WHERE pm.team_id = ?`, teamID, teamID)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var ids []int
-	for rows.Next() {
-		var id int
-		rows.Scan(&id)
-		ids = append(ids, id)
-	}
-	return ids
 }
 
 // slotTeamScope resolves which teams an open duty slot addresses — the same rule the duty

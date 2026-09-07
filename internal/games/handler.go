@@ -103,44 +103,6 @@ func writeRSVPLocked(w http.ResponseWriter, message string, locksAt time.Time) {
 	})
 }
 
-// teamMembersAndParents returns user IDs of all active kader members (and their parents)
-// for the given team IDs in the current active season.
-func (h *Handler) teamMembersAndParents(teamIDs []int) []int {
-	if len(teamIDs) == 0 {
-		return nil
-	}
-	placeholders := strings.Repeat("?,", len(teamIDs))
-	placeholders = placeholders[:len(placeholders)-1]
-	args := make([]any, len(teamIDs))
-	for i, id := range teamIDs {
-		args[i] = id
-	}
-	rows, err := h.db.Query(
-		`SELECT DISTINCT u.id FROM users u
-		 JOIN members m ON m.user_id = u.id
-		 JOIN player_memberships pm ON pm.member_id = m.id
-		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
-		 WHERE pm.team_id IN (`+placeholders+`)
-		 UNION
-		 SELECT DISTINCT fl.parent_user_id FROM family_links fl
-		 JOIN members m ON m.id = fl.member_id
-		 JOIN player_memberships pm ON pm.member_id = m.id
-		 JOIN seasons s ON s.id = pm.season_id AND s.is_active = 1
-		 WHERE pm.team_id IN (`+placeholders+`)`,
-		append(args, args...)...)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var ids []int
-	for rows.Next() {
-		var id int
-		rows.Scan(&id)
-		ids = append(ids, id)
-	}
-	return ids
-}
-
 // gameTeamIDs returns the team IDs for a given game.
 func (h *Handler) gameTeamIDs(gameID any) []int {
 	rows, err := h.db.Query(`SELECT team_id FROM game_teams WHERE game_id=?`, gameID)
@@ -1202,7 +1164,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	// Anlage-Meldung: derselbe Zeitpunkt-Baustein wie bei Änderung und Absage.
 	// Vorher stand hier das rohe ISO-Datum aus dem Request ("am 2026-09-14"),
 	// ohne Uhrzeit und ohne Aktor.
-	notify.Send(h.db, h.cfg, h.teamMembersAndParents(req.TeamIDs),
+	notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, req.TeamIDs...),
 		"games", creationTitle(req.EventType),
 		notify.CreationBody(eventName, notify.EventWhen(req.Date, req.Time),
 			notify.ActorName(h.db, claims.UserID)),
@@ -1448,11 +1410,11 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		notify.PreviousMoment(oldDate, oldTime, req.Date, req.Time),
 		notify.ActorName(h.db, claims.UserID))
 	notify.Send(h.db, h.cfg,
-		h.teamMembersAndParents(h.gameTeamIDs(gameIDInt)),
+		notify.TeamAudience(h.db, h.gameTeamIDs(gameIDInt)...),
 		"games", changeTitle, changeBody, fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
 	if len(removedTeamIDs) > 0 {
 		notify.Send(h.db, h.cfg,
-			h.teamMembersAndParents(removedTeamIDs),
+			notify.TeamAudience(h.db, removedTeamIDs...),
 			"games", changeTitle, changeBody, fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
 	}
 	h.dispatchRegenNotifications(summary)
@@ -1610,10 +1572,10 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 			notify.Send(h.db, h.cfg, assignedUIDs, "duties", "Dienst entfällt", body, "/dienste")
 		}
 
-		// Team-wide event-cancellation notification in "games" category (unchanged
-		// audience). Das Linkziel ist bewusst leer: /termine zeigt den Termin nach
+		// Team-wide event-cancellation notification in "games" category. Das
+		// Linkziel ist bewusst leer: /termine zeigt den Termin nach
 		// der Löschung nicht mehr, ein Sprung dorthin wirkt wie ein Fehler.
-		notify.Send(h.db, h.cfg, h.teamMembersAndParents(teamIDs),
+		notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamIDs...),
 			"games", cancellationTitle(eventType),
 			notify.CancellationBody(eventName, "am "+eventDay, actor, reason), "")
 	}

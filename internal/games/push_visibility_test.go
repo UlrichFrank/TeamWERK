@@ -10,9 +10,10 @@ import (
 
 // Diese Tests dokumentieren die Push-Sichtbarkeits-Invariante (event-team-
 // visibility, Requirement „Push-Notifications synchron mit Event-Sichtbarkeit"):
-// Der existierende Empfänger-Berechner `teamMembersAndParents` liefert
-// player_memberships + family_links — definitionsgemäß ein Subset der
-// visibility-berechtigten User. Funktionsträger sind durch den Bypass-Pfad in
+// Der Empfänger-Berechner `notify.TeamAudience` liefert Stammkader und
+// erweiterten Kader samt deren Eltern (family_links) — definitionsgemäß ein
+// Subset der visibility-berechtigten User, weil `auth.UserCanSeeGame` genau
+// diese vier Gruppen ebenfalls durchlässt. Funktionsträger sind durch den Bypass-Pfad in
 // `auth.UserCanSeeGame` ebenfalls visibility-berechtigt; sie werden in
 // inhaltlich gerichteten Pushes (z. B. „Aufstellung geändert") weiterhin über
 // ihre bestehenden Inhalts-Filter adressiert.
