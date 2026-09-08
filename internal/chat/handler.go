@@ -398,7 +398,13 @@ func (h *Handler) canContactUser(r *http.Request, claims *auth.Claims, targetUse
 		JOIN user_accessible_teams uat2 ON uat1.team_id = uat2.team_id
 		WHERE uat1.user_id = ? AND uat2.user_id = ?`,
 		claims.UserID, targetUserID).Scan(&count)
-	return count > 0, err
+	if err != nil || count > 0 {
+		return count > 0, err
+	}
+	// Übungsgruppen stehen nicht in user_accessible_teams (die View filtert
+	// team_id IS NOT NULL). Ohne diesen Zweig sähe ein Spieler die aufgelöste
+	// Standardgruppe seiner Übungsgruppe, könnte sie aber nicht anschreiben.
+	return h.sharesPracticeGroup(r.Context(), claims.UserID, targetUserID)
 }
 
 func (h *Handler) createGroup(w http.ResponseWriter, r *http.Request, claims *auth.Claims, name string, memberIDs []int) {

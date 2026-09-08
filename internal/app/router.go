@@ -218,6 +218,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Delete("/api/chat/broadcasts/{id}", h.Chat.DeleteBroadcast)
 		r.Get("/api/chat/team-groups", h.Chat.ListTeamGroups)
 		r.Get("/api/chat/team-groups/{teamId}/{kind}/members", h.Chat.ResolveTeamGroup)
+		r.Get("/api/chat/practice-groups/{id}/{kind}/members", h.Chat.ResolvePracticeGroup)
 
 		// Media (Bild-Upload/-Abruf für Chat + Mitteilungen)
 		r.Post("/api/media/upload", h.Media.Upload)

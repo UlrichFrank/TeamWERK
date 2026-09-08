@@ -13,6 +13,10 @@ import (
 )
 
 type TeamGroup struct {
+	// GroupType unterscheidet Mannschaft von Übungsgruppe. Bei "practice" trägt
+	// TeamID die kader.id (die Gruppe hat keine teams.id) und DisplayShort den
+	// kader.name.
+	GroupType    string `json:"groupType"`
 	TeamID       int    `json:"teamId"`
 	DisplayShort string `json:"displayShort"`
 	Kind         string `json:"kind"`
@@ -193,6 +197,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	if eligible {
 		if count, err := h.countTeamGroupMembers(r, 0, "alle_trainer", claims.UserID); err == nil && count > 0 {
 			results = append(results, TeamGroup{
+				GroupType:    "team",
 				TeamID:       0,
 				DisplayShort: "Alle Trainer",
 				Kind:         "alle_trainer",
@@ -208,6 +213,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			results = append(results, TeamGroup{
+				GroupType:    "team",
 				TeamID:       t.id,
 				DisplayShort: t.displayShort,
 				Kind:         kind,
@@ -215,6 +221,10 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+
+	// Übungsgruppen der aktiven Saison. Eigene Auflösung, weil
+	// user_accessible_teams sie nicht kennt (siehe practice_groups.go).
+	results = append(results, h.listPracticeGroups(r, claims)...)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)

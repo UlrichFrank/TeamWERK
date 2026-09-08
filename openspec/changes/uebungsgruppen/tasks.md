@@ -67,12 +67,12 @@
 
 ## 4. Chat
 
-- [ ] 4.1 `internal/chat/team_groups.go` — `ListTeamGroups` liefert Übungsgruppen mit
+- [x] 4.1 `internal/chat/team_groups.go` — `ListTeamGroups` liefert Übungsgruppen mit
       `groupType='practice'`; Sichtbarkeit über Mitgliedschaft/Trainer/Eltern statt über
       `user_accessible_teams`
-- [ ] 4.2 Neue Route `GET /api/chat/practice-groups/{id}/{kind}/members` samt Auflösung;
+- [x] 4.2 Neue Route `GET /api/chat/practice-groups/{id}/{kind}/members` samt Auflösung;
       `spieler` **ohne** Union mit `kader_extended_members`
-- [ ] 4.3 404 bei `kind='team'`-Kader über die Übungsgruppen-Route
+- [x] 4.3 404 bei `kind='team'`-Kader über die Übungsgruppen-Route
 
 ## 5. Frontend
 

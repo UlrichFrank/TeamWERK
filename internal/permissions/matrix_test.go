@@ -300,6 +300,9 @@ var matrix = []endpointCase{
 	// Resolve gating geschieht im Handler (canSeeTeamGroup); für die Matrix gilt: kein Auth-Tier-Gate.
 	{method: "GET", path: "/api/chat/team-groups", expected: exAuth},
 	{method: "GET", path: "/api/chat/team-groups/{teamId}/{kind}/members", expected: exPublic},
+	// Übungsgruppen-Auflösung: 404 ohne Fixture, 403 ohne Bezug zur Gruppe —
+	// der Handler entscheidet, nicht die Middleware (wie bei der Team-Variante).
+	{method: "GET", path: "/api/chat/practice-groups/{id}/{kind}/members", expected: exPublic},
 
 	// Media (Bild-Upload/-Abruf für Chat + Mitteilungen): nur authentifiziert.
 	{method: "POST", path: "/api/media/upload", expected: exAuth},
