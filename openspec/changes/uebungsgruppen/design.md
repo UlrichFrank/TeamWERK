@@ -195,6 +195,24 @@ ist ein situatives Gefäß (Sichtung, Athletikblock, Torwartrunde), dessen Beset
 zur Saison neu zu entscheiden ist — ein Kopierpfad würde eine Kontinuität suggerieren, die
 das Modell ohne `team_id` gar nicht trägt.
 
+## Bekannter Rest — Selbst-RSVP ohne Kaderprüfung
+
+Beim Umstellen der Trainings auf `kader_id` ist aufgefallen: **`Respond` prüft für die
+Selbst-RSVP keine Kaderzugehörigkeit.** Jeder eingeloggte Nutzer mit Mitglieds-Datensatz
+kann `POST /api/training-sessions/{id}/respond` auf eine beliebige Session-ID schicken; die
+Zeile wird gespeichert (HTTP 204) und zählt in `confirmed_count` mit — der Trainer sieht
+eine Zusage von jemandem, der nicht in seinem Kader ist. Nachgemessen, nicht abgeleitet.
+
+Das ist **Bestandsverhalten und variantenunabhängig**: Mannschaftstrainings sind exakt
+gleich betroffen, der Change verursacht es nicht. Es hier mitzubeheben hieße, das Verhalten
+der Mannschaftsvariante zu ändern (es gibt nur einen Codepfad — das ist der Punkt von
+Entscheidung 1) und Bestandstests fallen zu lassen, die sich ausdrücklich darauf stützen
+(`TestRespond_CreatesRSVP` nutzt ein Mitglied ohne jeden Kader und erwartet 204). Beides
+widerspräche der Zusage „rein additiv" und dem Regressionsschutz aus Task 6.3.
+
+Deshalb bleibt die Lücke hier stehen und wird im eigenen Change **`rsvp-kader-gate`**
+geschlossen — mit eigenen Tests für die Mannschaftsseite, wo das Risiko liegt.
+
 ## Risiken
 
 **Backfill von `kader_id` (Migration 058).** `kader_id` ist NOT NULL; ein

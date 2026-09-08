@@ -5,9 +5,15 @@
 Das System SHALL `training_sessions.kader_id` und `training_series.kader_id` (beide
 NOT NULL, `REFERENCES kader(id) ON DELETE RESTRICT`) als **alleinigen** Besitzer eines
 Trainingstermins bzw. einer Trainingsserie führen. Jede Auflösung der Frage „wer gehört zu
-diesem Training?" — Sichtbarkeit, RSVP-Berechtigung, Anwesenheitserfassung,
-Serien-Abmeldung, Erinnerungen, SSE-Zielmenge — SHALL über `kader_id` erfolgen, nicht mehr
-über die Kombination `(team_id, season_id)`.
+diesem Training?" — Sichtbarkeit, Anwesenheitserfassung, Serien-Abmeldung,
+Erinnerungen, SSE-Zielmenge — SHALL über `kader_id` erfolgen, nicht mehr über die
+Kombination `(team_id, season_id)`.
+
+Die **Selbst-RSVP** (`POST /api/training-sessions/{id}/respond` ohne `member_id`) ist
+davon ausgenommen: sie prüft die Kaderzugehörigkeit im Bestand an keiner Stelle — weder
+für Mannschaften noch für Übungsgruppen — und wird von diesem Change bewusst nicht
+geändert (siehe `design.md — Bekannter Rest`). Das Antworten für **andere**
+(`member_id` gesetzt) bleibt unverändert an Eltern- und Staff-Rechte gebunden.
 
 Damit gilt ein einziger Pfad für Mannschaftstrainings und Übungsgruppentrainings.
 
@@ -36,10 +42,6 @@ Damit gilt ein einziger Pfad für Mannschaftstrainings und Übungsgruppentrainin
   anschließend die Anwesenheit erfasst
 - **THEN** werden Antwort und Anwesenheit gespeichert (HTTP 200/201), wie bei einem
   Mannschaftstraining
-
-#### Scenario: Fremder darf nicht antworten
-- **WHEN** ein Nutzer ohne Zugehörigkeit zur Übungsgruppe auf deren Termin antwortet
-- **THEN** antwortet das System mit HTTP 403
 
 #### Scenario: Erinnerungen erreichen die Gruppe
 - **WHEN** ein Übungsgruppentermin in 24 bzw. 3 Stunden beginnt

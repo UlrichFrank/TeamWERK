@@ -76,14 +76,14 @@
 
 ## 5. Frontend
 
-- [ ] 5.1 `web/src/pages/UebungsgruppenPage.tsx` — Maske analog `AdminKaderPage`, aber
+- [x] 5.1 `web/src/pages/UebungsgruppenPage.tsx` — Maske analog `AdminKaderPage`, aber
       ohne Altersklasse, Geschlecht, Jahrgang und erweiterten Kader; Name als Pflichtfeld
-- [ ] 5.2 Route `/uebungsgruppen` in `App.tsx`, Nav-Eintrag in `AppShell.tsx`
+- [x] 5.2 Route `/uebungsgruppen` in `App.tsx`, Nav-Eintrag in `AppShell.tsx`
       (Vorstand/Admin), `useLiveUpdates` auf `practice-groups`
-- [ ] 5.3 Trainings-Anlage kann eine Übungsgruppe als Ziel wählen
-- [ ] 5.4 `AdminKaderPage.tsx:561` und `:725` — `optgroup label="Trainingsgruppen"` →
+- [x] 5.3 Trainings-Anlage kann eine Übungsgruppe als Ziel wählen
+- [x] 5.4 `AdminKaderPage.tsx:561` und `:725` — `optgroup label="Trainingsgruppen"` →
       `"Sonderkader"`. Reine Beschriftung, keine Datenänderung
-- [ ] 5.5 Nur `brand-*`-Tokens, `lucide-react`-Icons, Klassen-Strings aus
+- [x] 5.5 Nur `brand-*`-Tokens, `lucide-react`-Icons, Klassen-Strings aus
       `lib/buttonStyles.ts` importieren
 
 ## 6. Tests & Abschluss
@@ -91,22 +91,26 @@
 - [ ] 6.1 **Vor dem Deploy** auf Prod zählen:
       `SELECT COUNT(*) FROM training_sessions ts WHERE NOT EXISTS (SELECT 1 FROM kader k WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id);`
       (analog `training_series`). Ergebnis muss 0 sein, sonst bricht Migration `058` ab
-- [ ] 6.2 Alle Tests aus `proposal.md — Test-Anforderungen`
-- [ ] 6.3 **Bestehende Trainings-Tests müssen grün bleiben** — sie sind der
+- [x] 6.2 Alle Tests aus `proposal.md — Test-Anforderungen`. Der ursprünglich
+      gelistete `TestRsvpUebungsgruppe_FremderAbgelehnt` ist entfallen: die
+      fehlende Kaderprüfung der Selbst-RSVP ist variantenunabhängiges
+      Bestandsverhalten und wird im Folge-Change `rsvp-kader-gate` geschlossen
+      (`design.md — Bekannter Rest`)
+- [x] 6.3 **Bestehende Trainings-Tests müssen grün bleiben** — sie sind der
       Regressionsschutz für Task 3, insbesondere die RSVP-Sichtbarkeit für Spieler,
       Eltern, Trainer und erweiterten Kader der Mannschaftsvariante
-- [ ] 6.4 `TestDeleteKader_MitTrainingsAbgelehnt`, `TestDeletePracticeGroup_MitTrainingsAbgelehnt`,
+- [x] 6.4 `TestDeleteKader_MitTrainingsAbgelehnt`, `TestDeletePracticeGroup_MitTrainingsAbgelehnt`,
       `TestDeletePracticeGroup_OhneTrainingsErfolg`,
       `TestCopyFromSeason_UeberspringtUebungsgruppen`
-- [ ] 6.5 `TestPracticeGroup_KeineTeamRoute` — hält die strukturelle Aussage fest, dass
+- [x] 6.5 `TestPracticeGroup_KeineTeamRoute` — hält die strukturelle Aussage fest, dass
       Übungsgruppen unter `/api/teams/{id}/…` nicht adressierbar sind
-- [ ] 6.6 `make test`, `golangci-lint`, `pnpm -C web build/test/lint`,
+- [x] 6.6 `make test`, `golangci-lint`, `pnpm -C web build/test/lint`,
       `openspec validate uebungsgruppen --strict`
-- [ ] 6.7 Gotcha in `docs/agent/06-gotchas.md`: „Übungsgruppen" — `kader_id` ist der
+- [x] 6.7 Gotcha in `docs/agent/06-gotchas.md`: „Übungsgruppen" — `kader_id` ist der
       Besitzer eines Trainings, `training_sessions.team_id IS NULL` ist die Zusage und
       **kein** Datenfehler; die Abwesenheit der `teams`-Zeile ist das Gate. Bei der
       Gelegenheit den Satz im Ordner-Rechte-Gotcha präzisieren: „Kader ohne `team_id`
       (Trainingsgruppen) sind darüber nicht adressierbar" stimmt für Förderkader/
       Perspektivkader **nicht** (`createTrainingGroupKader` ruft `ensureTeam`, sie haben
       ein `team_id`) — er beschreibt ab jetzt genau die Übungsgruppen
-- [ ] 6.8 `docs/agent/04-api-db.md` — Auth-Tier-Tabelle um `/api/practice-groups` ergänzen
+- [x] 6.8 `docs/agent/04-api-db.md` — Auth-Tier-Tabelle um `/api/practice-groups` ergänzen

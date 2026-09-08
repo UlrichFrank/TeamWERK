@@ -142,7 +142,6 @@ reguläre Kader mit `kind='team'`. Der Change ist rein additiv.
 | `GET /api/training-sessions` | `TestListTrainings_ElternSehenUebungsgruppenTermin` | Elternteil über `family_links` sieht ihn |
 | `GET /api/training-sessions` | `TestListTrainings_TrainerSiehtUebungsgruppenTermin` | Trainer der Gruppe sieht ihn |
 | `POST /api/training-sessions/{id}/rsvp` | `TestRsvpUebungsgruppe_Erfolg` | 201/200, Antwort wird gespeichert |
-| `POST /api/training-sessions/{id}/rsvp` | `TestRsvpUebungsgruppe_FremderAbgelehnt` | 403 |
 | `PUT /api/training-sessions/{id}/attendance` | `TestAttendanceUebungsgruppe_TrainerDarf` | 200 |
 | `GET /api/teams/{id}/attendance-stats` | `TestAttendanceStats_UebungsgruppeTaucthNichtAuf` | Übungsgruppen-Trainings fließen **nicht** in die Team-Statistik |
 | `GET /api/chat/team-groups` | `TestListTeamGroups_EnthaeltUebungsgruppe` | Mitglied sieht die Gruppe mit `groupType='practice'` |
