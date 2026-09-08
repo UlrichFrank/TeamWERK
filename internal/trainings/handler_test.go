@@ -45,6 +45,24 @@ func testServer(t *testing.T, h *trainings.Handler) *httptest.Server {
 	})
 }
 
+// joinKaderOfSession macht das Mitglied zum Teilnehmer des Termins — es landet
+// im Stammkader des besitzenden Kaders.
+//
+// Seit `rsvp-kader-gate` verlangt Respond diese Zugehörigkeit. Die Tests unten
+// haben sie fachlich immer gemeint ("der Spieler sagt ab", "der Trainer trägt
+// für einen Spieler nach"), nur nie hergestellt — vorher kam man ohne durch.
+func joinKaderOfSession(t *testing.T, db *sql.DB, sessionID, memberID int) {
+	t.Helper()
+	var kaderID int
+	if err := db.QueryRow(`SELECT kader_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&kaderID); err != nil {
+		t.Fatalf("joinKaderOfSession: kader_id von Session %d: %v", sessionID, err)
+	}
+	if _, err := db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`,
+		kaderID, memberID); err != nil {
+		t.Fatalf("joinKaderOfSession: %v", err)
+	}
+}
+
 func newHandler(t *testing.T) (*trainings.Handler, *httptest.Server) {
 	t.Helper()
 	db := testutil.NewDB(t)
@@ -248,6 +266,7 @@ func TestRespond_SavesRSVP(t *testing.T) {
 
 	spielerUserID := testutil.CreateUser(t, db, "standard")
 	memberID := testutil.CreateMember(t, db, spielerUserID)
+	joinKaderOfSession(t, db, sessionID, memberID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
@@ -281,6 +300,7 @@ func TestRespond_UpdatesExistingRSVP(t *testing.T) {
 
 	spielerUserID := testutil.CreateUser(t, db, "standard")
 	memberID := testutil.CreateMember(t, db, spielerUserID)
+	joinKaderOfSession(t, db, sessionID, memberID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
@@ -616,6 +636,7 @@ func TestRespond_ParentForChild(t *testing.T) {
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	childMemberID := testutil.CreateMember(t, db, 0)
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+	joinKaderOfSession(t, db, sessionID, childMemberID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-05-31 12:00"))) // vor Cutoff
@@ -1280,7 +1301,7 @@ func setupCutoffSession(t *testing.T) (db *sql.DB, sessionID, teamID, seasonID i
 func TestRespond_Cutoff_PlayerBefore_OK(t *testing.T) {
 	db, sessionID, _, _ := setupCutoffSession(t)
 	spielerUserID := testutil.CreateUser(t, db, "standard")
-	testutil.CreateMember(t, db, spielerUserID)
+	joinKaderOfSession(t, db, sessionID, testutil.CreateMember(t, db, spielerUserID))
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 15:00"))) // T-3h
@@ -1300,6 +1321,7 @@ func TestRespond_Cutoff_PlayerAfter_422(t *testing.T) {
 	db, sessionID, _, _ := setupCutoffSession(t)
 	spielerUserID := testutil.CreateUser(t, db, "standard")
 	memberID := testutil.CreateMember(t, db, spielerUserID)
+	joinKaderOfSession(t, db, sessionID, memberID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30"))) // T-30min
@@ -1337,6 +1359,7 @@ func TestRespond_Cutoff_PlayerStatusChange_422(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, spielerUserID)
 	db.Exec(`INSERT INTO training_responses (training_id, member_id, responded_by, status, responded_at)
 	         VALUES (?, ?, ?, 'confirmed', CURRENT_TIMESTAMP)`, sessionID, memberID, spielerUserID)
+	joinKaderOfSession(t, db, sessionID, memberID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
@@ -1363,6 +1386,7 @@ func TestRespond_Cutoff_ParentAfter_422(t *testing.T) {
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	childMemberID := testutil.CreateMember(t, db, 0)
 	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+	joinKaderOfSession(t, db, sessionID, childMemberID)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
@@ -1383,6 +1407,7 @@ func TestRespond_Cutoff_TrainerAfter_OK(t *testing.T) {
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	testutil.CreateMember(t, db, trainerUserID)
 	targetMember := testutil.CreateMember(t, db, 0)
+	joinKaderOfSession(t, db, sessionID, targetMember)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
@@ -1403,6 +1428,7 @@ func TestRespond_Cutoff_SportlicheLeitung_OK(t *testing.T) {
 	slUserID := testutil.CreateUser(t, db, "standard")
 	testutil.CreateMember(t, db, slUserID)
 	targetMember := testutil.CreateMember(t, db, 0)
+	joinKaderOfSession(t, db, sessionID, targetMember)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
@@ -1423,6 +1449,7 @@ func TestRespond_Cutoff_VorstandAfterStart_OK(t *testing.T) {
 	vUserID := testutil.CreateUser(t, db, "standard")
 	testutil.CreateMember(t, db, vUserID)
 	targetMember := testutil.CreateMember(t, db, 0)
+	joinKaderOfSession(t, db, sessionID, targetMember)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 18:05"))) // 5 min nach Beginn
@@ -1443,6 +1470,7 @@ func TestRespond_Cutoff_AdminAfter_OK(t *testing.T) {
 	adminUserID := testutil.CreateUser(t, db, "admin")
 	testutil.CreateMember(t, db, adminUserID)
 	targetMember := testutil.CreateMember(t, db, 0)
+	joinKaderOfSession(t, db, sessionID, targetMember)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))
@@ -1462,11 +1490,14 @@ func TestRespond_Cutoff_AdminAfter_OK(t *testing.T) {
 // Antwort für ein fremdes Mitglied ist 403 (Ownership-Gate, VOR dem Cutoff). Früher erwartete
 // dieser Test 422 — das kodierte das inzwischen behobene Broken-Access-Control-Loch (jeder
 // durfte für jedes Mitglied antworten, nur der Cutoff bremste).
+// Das Zielmitglied gehört bewusst zum Kader des Termins: das 403 kommt damit
+// nachweislich vom Ownership-Gate und nicht vom Kader-Gate aus rsvp-kader-gate.
 func TestRespond_Cutoff_KassiererForeignMember_403(t *testing.T) {
 	db, sessionID, _, _ := setupCutoffSession(t)
 	kUserID := testutil.CreateUser(t, db, "standard")
 	testutil.CreateMember(t, db, kUserID)
 	targetMember := testutil.CreateMember(t, db, 0)
+	joinKaderOfSession(t, db, sessionID, targetMember)
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-15 17:30")))

@@ -231,6 +231,7 @@ func TestRespond_NotAffected_Succeeds(t *testing.T) {
 	player := testutil.CreateMember(t, sc.db, playerUser)
 	// Zukünftiger Termin (kein RSVP-Cutoff) außerhalb des Abmelde-Fensters.
 	futureSession := testutil.CreateTrainingSessionForSeries(t, sc.db, sc.teamID, sc.seasonID, sc.seriesID, "2026-09-10")
+	testutil.AddKaderMember(t, sc.db, testutil.CreateKader(t, sc.db, sc.teamID, sc.seasonID), player)
 	testutil.CreateSeriesUnavailability(t, sc.db, player, sc.seriesID, "2026-05-01", "2026-06-30", "", sc.trainerUser)
 	token := testutil.Token(t, playerUser, "standard", nil)
 

@@ -113,6 +113,33 @@ func (h *Handler) hasKaderAccess(ctx context.Context, claims *auth.Claims, kader
 	return count > 0, err
 }
 
+// isKaderParticipant beantwortet „gehört dieses Mitglied zu diesem Kader?" —
+// Stammkader, erweiterter Kader oder Trainer.
+//
+// Dieselbe Frage beantworten ListSessions und GetSession als
+// `am_i_participant` (drei EXISTS gegen ts.kader_id). Alle Fundstellen MÜSSEN
+// deckungsgleich bleiben: driften sie auseinander, entsteht ein Termin, der als
+// „du bist dabei" angezeigt wird, dessen Zusage aber 403 liefert — oder
+// umgekehrt. Die Queries behalten ihre SQL-Form, weil ein Aufruf dieses
+// Helfers pro Zeile die Seite in ein N+1 zerlegen würde; die
+// Deckungsgleichheit hält stattdessen ein Test fest
+// (TestRespond_AnzeigeUndAntwortrechtStimmenUeberein).
+//
+// Abgegrenzt von hasKaderAccess: dort geht es um das Recht, den Termin zu
+// VERWALTEN (Staff/Trainer), hier um die Zugehörigkeit zu ihm.
+func (h *Handler) isKaderParticipant(ctx context.Context, kaderID, memberID int) (bool, error) {
+	var ok bool
+	err := h.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM kader_members       WHERE kader_id = ? AND member_id = ?
+			UNION ALL
+			SELECT 1 FROM kader_extended_members WHERE kader_id = ? AND member_id = ?
+			UNION ALL
+			SELECT 1 FROM kader_trainers      WHERE kader_id = ? AND member_id = ?
+		)`, kaderID, memberID, kaderID, memberID, kaderID, memberID).Scan(&ok)
+	return ok, err
+}
+
 // kaderRef ist der aufgelöste Besitzer eines Trainings: der Kader selbst und die
 // aus ihm abgeleitete Projektion team_id — NULL, wenn der Besitzer eine
 // Übungsgruppe ist (proposal.md — Invariante 3).
@@ -1295,6 +1322,14 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		       END AS default_rsvp,
 		       (SELECT absence_id IS NOT NULL FROM training_responses WHERE training_id = ts.id AND member_id = ? LIMIT 1),
 		       (SELECT reason FROM training_responses WHERE training_id = ts.id AND member_id = ?) AS explicit_reason,
+		       -- am_i_participant beantwortet dieselbe Frage wie isKaderParticipant
+		       -- (Go, s. o.): Stammkader, erweiterter Kader oder Trainer des
+		       -- ts.kader_id. Bewusst als SQL statt als Helfer-Aufruf pro Zeile —
+		       -- das wäre ein N+1 über die ganze Seite. Alle drei Fundstellen
+		       -- (hier, GetSession, isKaderParticipant) müssen deckungsgleich
+		       -- bleiben: driften sie, wird ein Termin als "du bist dabei"
+		       -- angezeigt, dessen Zusage 403 liefert — oder umgekehrt.
+		       -- TestRespond_AnzeigeUndAntwortrechtStimmenUeberein hält das fest.
 		       CASE WHEN
 		           EXISTS (SELECT 1 FROM kader_members pmP WHERE pmP.member_id=? AND pmP.kader_id = ts.kader_id)
 		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.id = ts.kader_id)
@@ -1466,6 +1501,14 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		           THEN NULLIF(ts.rsvp_default_extended, 'none')
 		         ELSE NULL
 		       END,
+		       -- am_i_participant beantwortet dieselbe Frage wie isKaderParticipant
+		       -- (Go, s. o.): Stammkader, erweiterter Kader oder Trainer des
+		       -- ts.kader_id. Bewusst als SQL statt als Helfer-Aufruf pro Zeile —
+		       -- das wäre ein N+1 über die ganze Seite. Alle drei Fundstellen
+		       -- (hier, GetSession, isKaderParticipant) müssen deckungsgleich
+		       -- bleiben: driften sie, wird ein Termin als "du bist dabei"
+		       -- angezeigt, dessen Zusage 403 liefert — oder umgekehrt.
+		       -- TestRespond_AnzeigeUndAntwortrechtStimmenUeberein hält das fest.
 		       CASE WHEN
 		           EXISTS (SELECT 1 FROM kader_members pmP WHERE pmP.member_id=? AND pmP.kader_id = ts.kader_id)
 		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.id = ts.kader_id)
@@ -1635,6 +1678,34 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	// Zugehörigkeit zum Termin — für BEIDE Zweige und immer für das ZIEL-Mitglied.
+	// Der Eltern-/Staff-Zweig oben beantwortet „darf ich für diese Person
+	// antworten?", nicht „gehört diese Person zu diesem Termin?". Beides ist
+	// nötig: ein Vorstand darf für ein Mitglied antworten, aber nicht auf einem
+	// Termin, mit dem dieses Mitglied nichts zu tun hat.
+	//
+	// Die Prüfung läuft bewusst VOR Absence-Lock, Serien-Abmeldung und
+	// RSVP-Cutoff: deren Fehlermeldungen geben Auskunft über den Termin und über
+	// vorhandene Abmeldungen — ein Termin-Fremder soll die nicht bekommen.
+	var ownerKaderID int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT kader_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&ownerKaderID); err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	participant, err := h.isKaderParticipant(r.Context(), ownerKaderID, memberID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !participant {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 
 	var existingAbsenceID sql.NullInt64
