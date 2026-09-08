@@ -558,7 +558,7 @@ export default function AdminKaderPage() {
                             ))}
                           </optgroup>
                           {trainingCategories.length > 0 && (
-                            <optgroup label="Trainingsgruppen">
+                            <optgroup label="Sonderkader">
                               {trainingCategories.map(c => (
                                 <option key={c.name} value={c.name}>{c.name}</option>
                               ))}
@@ -722,7 +722,7 @@ export default function AdminKaderPage() {
                     ))}
                   </optgroup>
                   {trainingCategories.length > 0 && (
-                    <optgroup label="Trainingsgruppen">
+                    <optgroup label="Sonderkader">
                       {trainingCategories.map(c => (
                         <option key={c.name} value={c.name}>{c.name}</option>
                       ))}
