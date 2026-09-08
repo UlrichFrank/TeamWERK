@@ -61,11 +61,13 @@ einem Spiel oder generischen Event SHALL der Hinweistext für **Vorstand**,
 
 Das System SHALL **5 Minuten nach der letzten Änderung** eines Hinweistexts
 eine Push-Notification an alle Mitglieder und Eltern der betroffenen Teams
-versenden. Jeder neue `PUT`-Aufruf SHALL den 5-Minuten-Timer für diesen
-Termin **zurücksetzen**, sodass mehrfache Korrekturen nur **einen** Push
-auslösen. Ein Push SHALL **nie** für ein Event in der Vergangenheit
-versendet werden (`event_date < today`). Ein Push SHALL **nie** ohne
-Hinweistext versendet werden.
+versenden. Die Empfängermenge SHALL der Regel der Capability
+`terminmeldung-empfaenger` folgen und damit **Stammkader und erweiterten
+Kader samt deren Elternteilen sowie die Trainer des Kaders** umfassen. Jeder neue `PUT`-Aufruf SHALL den
+5-Minuten-Timer für diesen Termin **zurücksetzen**, sodass mehrfache
+Korrekturen nur **einen** Push auslösen. Ein Push SHALL **nie** für ein
+Event in der Vergangenheit versendet werden (`event_date < today`). Ein Push
+SHALL **nie** ohne Hinweistext versendet werden.
 
 Die Debounce-Queue SHALL in der Tabelle `pending_event_notes_push (ref_type,
 ref_id, note_text, notify_after, updated_by)` persistiert werden, mit
@@ -103,10 +105,18 @@ abgesetzt wurde.
 - **GIVEN** eine pending-Row mit `notify_after <= now` für ein Event mit
   `event_date >= today`
 - **WHEN** der Scheduler-Tick läuft
-- **THEN** wird `notify.Send` für `teamMembersAndParents(team_ids)` mit
-  `category` `'trainings'` bzw. `'games'`, dem Hinweistext als Body und
-  der Detail-URL als `url`-Argument aufgerufen
+- **THEN** wird die Benachrichtigung an die Empfängermenge der betroffenen
+  Teams mit `category` `'trainings'` bzw. `'games'`, dem Hinweistext als
+  Body und der Detail-URL als `url`-Argument versendet
 - **AND** die pending-Row wird gelöscht
+
+#### Scenario: Erweiterter Kader erhält den Termin-Hinweis
+
+- **GIVEN** eine fällige pending-Row für ein zukünftiges Event einer
+  Mannschaft, in deren erweitertem Kader ein Mitglied steht
+- **WHEN** der Scheduler-Tick läuft
+- **THEN** erhalten dieses Mitglied und seine über `family_links`
+  verknüpften Elternteile denselben Hinweis-Push wie der Stammkader
 
 #### Scenario: Scheduler unterdrückt Push für vergangenes Event
 

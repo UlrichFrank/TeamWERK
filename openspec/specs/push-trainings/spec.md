@@ -11,6 +11,11 @@ Notification senden, wenn eine Trainingseinheit abgesagt, verschoben oder gelös
 sofern Push für Kategorie `trainings` nicht deaktiviert ist und die Benachrichtigung nicht
 per `silent`-Flag unterdrückt wurde.
 
+Die Empfängermenge SHALL der Regel der Capability `terminmeldung-empfaenger` folgen und
+damit **Stammkader und erweiterten Kader samt deren Elternteilen sowie die Trainer des Kaders** umfassen. Die
+Elternteile der Mitglieder des erweiterten Kaders SHALL NICHT mehr fehlen: bei
+Minderjährigen entscheidet das Elternteil über die Fahrt, nicht das Kind.
+
 Für **bestehende** Einheiten MUSS die Notification-`url` auf den konkreten Trainingstermin
 in der Termine-Seite zeigen (`/termine?focus=training-<id>`), damit der Empfänger direkt zu-
 oder absagen kann. **Das gilt ausdrücklich auch für abgesagte Einheiten** (`status =
@@ -86,4 +91,8 @@ er zurück auf `active`, SHALL weiterhin „Training geändert" gesendet werden.
 #### Scenario: Serien-Rhythmus verschoben
 - **WHEN** ein `PUT /api/training-series/{id}` den Wochentag oder die Startzeit der Serie ändert
 - **THEN** enthält der Body zusätzlich den alten Rhythmus als Vorher-Angabe
+
+#### Scenario: Elternteil eines erweiterten Kader-Mitglieds wird benachrichtigt
+- **WHEN** eine Einheit abgesagt, verschoben oder gelöscht wird und ein Mitglied steht nur im erweiterten Kader der Mannschaft
+- **THEN** erhält nicht nur das Mitglied selbst, sondern auch ein über `family_links` verknüpftes Elternteil dieselbe `trainings`-Benachrichtigung
 

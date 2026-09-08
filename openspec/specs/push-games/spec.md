@@ -11,6 +11,11 @@ Notification senden, wenn ein Spiel erstellt, geändert oder gelöscht wird — 
 Nutzer Push für die Kategorie `games` nicht deaktiviert hat und die Benachrichtigung nicht
 per `silent`-Flag unterdrückt wurde.
 
+Die Empfängermenge SHALL der Regel der Capability `terminmeldung-empfaenger` folgen und
+damit **Stammkader und erweiterten Kader samt deren Elternteilen sowie die Trainer des Kaders** umfassen. Ein Spieler,
+der nur im erweiterten Kader steht, SHALL NICHT mehr übergangen werden: für ihn ist die
+Meldung die einzige aktive Einladung zum Spiel.
+
 Für **bestehende** Spiele MUSS die Notification-`url` auf den konkreten Spieltermin in der
 Termine-Seite zeigen (`/termine?focus=game-<id>`), damit der Empfänger direkt zu- oder
 absagen kann.
@@ -30,19 +35,24 @@ benennt dort das falsche Ereignis.
 
 #### Scenario: Neues Spiel erstellt
 - **WHEN** ein Admin oder Trainer ein neues Spiel über `POST /api/games` anlegt
-- **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams + deren Elternteile eine Push Notification mit Titel „Neues Spiel" und der Gegnerinfo
+- **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams — Stammkader, erweiterter Kader und Trainer — sowie die Elternteile beider Kader-Listen eine Push Notification mit Titel „Neues Spiel" und der Gegnerinfo
 - **THEN** zeigt der Klick-Link auf `/termine?focus=game-<id>` des neu erstellten Spiels
 
 #### Scenario: Spiel verschoben oder geändert
 - **WHEN** ein Admin oder Trainer ein Spiel über `PUT /api/games/{id}` aktualisiert (Datum, Zeit oder Ort geändert)
-- **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams + deren Elternteile eine Push Notification „Spielinfo geändert"
+- **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams — Stammkader, erweiterter Kader und Trainer — sowie die Elternteile beider Kader-Listen eine Push Notification „Spielinfo geändert"
 - **THEN** zeigt der Klick-Link auf `/termine?focus=game-<id>`
 
 #### Scenario: Spiel abgesagt (gelöscht)
 - **WHEN** ein Admin oder Trainer ein Spiel (`event_type` `heim` oder `auswärts`) über `DELETE /api/games/{id}` löscht
-- **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams + deren Elternteile eine Push Notification „Spiel abgesagt"
+- **THEN** erhalten alle aktiven Mitglieder des betroffenen Teams — Stammkader, erweiterter Kader und Trainer — sowie die Elternteile beider Kader-Listen eine Push Notification „Spiel abgesagt"
 - **THEN** enthält der Body Gegner, Datum im Format `TT.MM.JJJJ` und den Namen des auslösenden Nutzers
 - **THEN** ist die `url` der leere String
+
+#### Scenario: Spieler des erweiterten Kaders wird über ein neues Spiel benachrichtigt
+- **WHEN** ein Spiel für eine Mannschaft angelegt wird und ein Mitglied nur in deren erweitertem Kader steht
+- **THEN** erhält dieses Mitglied dieselbe `games`-Benachrichtigung wie ein Mitglied des Stammkaders
+- **THEN** erhält auch ein über `family_links` verknüpftes Elternteil dieses Mitglieds die Benachrichtigung
 
 #### Scenario: Generisches Event abgesagt (gelöscht)
 - **WHEN** ein Admin oder Trainer ein Event mit `event_type='generisch'` über `DELETE /api/games/{id}` löscht
