@@ -35,6 +35,9 @@ deshalb dort herausgenommen und hierher verlagert
   korrekt; er bekommt zusätzlich dieselbe Kaderprüfung für das **Ziel**-Mitglied.
 - **Bestandstests, die sich auf die Lücke stützen, werden angepasst** — sie dokumentieren
   kein gewolltes Verhalten, sondern haben es nur nicht geprüft.
+- **Der Sichtbarkeitsfilter von `ListSessions` verlangt für den Trainer-Zweig nicht mehr
+  zusätzlich die Vereinsfunktion `trainer`.** Nachgemessen beim Bau des
+  Deckungsgleichheits-Tests, nicht vorher bekannt (`design.md — Entscheidung 4`).
 
 ## Impact
 
@@ -43,6 +46,8 @@ deshalb dort herausgenommen und hierher verlagert
 - `internal/trainings/handler.go` — `Respond` (Selbst- und Fremd-Zweig), neuer Helfer
   `isKaderParticipant(ctx, kaderID, memberID)`; `ListSessions` nutzt denselben Helfer für
   `am_i_participant`, soweit ohne SQL-Umbau möglich.
+- `internal/trainings/handler.go` — `ListSessions`, Sichtbarkeitsfilter: der
+  `kader_trainers`-Zweig gilt unabhängig von der Vereinsfunktion `trainer`.
 
 **Tests**
 
@@ -78,6 +83,8 @@ wäre ein Datenlöschlauf ohne Not; sie verschwinden mit der normalen Saison-His
 | `POST /api/training-sessions/{id}/respond` | `TestRespond_ElternteilFuerFremdesKindAbgelehnt` | 403, unverändertes Bestandsverhalten |
 | `POST /api/training-sessions/{id}/respond` | `TestRespond_StaffFuerNichtKadermitgliedAbgelehnt` | 403 — auch Vorstand/Trainer setzen keine Zusage für jemanden, der nicht zum Termin gehört |
 | `GET /api/training-sessions` | bestehende `am_i_participant`-Tests | bleiben grün — der Helfer ändert die Lesesicht nicht |
+| `GET /api/training-sessions` | `TestRespond_AnzeigeUndAntwortrechtStimmenUeberein` | für alle drei Beteiligungszweige und den Fremden sagen `am_i_participant` und der Ausgang der Antwort dasselbe |
+| `GET /api/training-sessions` | `TestListSessions_KaderTrainerOhneVereinsfunktion` | der Termin ist gelistet mit `am_i_participant: true` — die Eintragung in `kader_trainers` genügt |
 
 **Garantierte Invarianten:**
 

@@ -42,3 +42,21 @@ denselben Pfad nehmen.
 - **WHEN** `GET /api/training-sessions` einen Termin mit `am_i_participant: true` ausweist
 - **THEN** wird eine Antwort desselben Nutzers auf diesen Termin angenommen — beide Fragen
   werden von derselben Funktion beantwortet
+
+### Requirement: Termin-Sichtbarkeit folgt der Kader-Eintragung, nicht der Vereinsfunktion
+
+Das System SHALL einen Trainingstermin in `GET /api/training-sessions` für jeden Nutzer
+listen, der zum Kader des Termins gehört. Die Zugehörigkeit als Trainer SHALL allein an der
+Eintragung in `kader_trainers` hängen; die Vereinsfunktion `trainer` SHALL dafür **nicht**
+zusätzlich verlangt werden.
+
+Grund ist die Invariante des Requirements oben: das Antwortrecht hängt an der Eintragung.
+Verlangte die Sichtbarkeit zusätzlich die Vereinsfunktion, entstünde ein Termin, den ein
+Nutzer verwalten und beantworten darf, aber nicht sieht. Die Konstellation ist vorgesehen —
+die Trainer-Auswahl einer Übungsgruppe bietet den Funktionsfilter als abwählbare Checkbox
+an, ein Gruppenleiter ohne Vereinsfunktion ist damit anlegbar.
+
+#### Scenario: Kader-Trainer ohne Vereinsfunktion sieht seinen Termin
+- **WHEN** ein Nutzer ohne Vereinsfunktion als Trainer eines Kaders eingetragen ist und
+  `GET /api/training-sessions` aufruft
+- **THEN** enthält die Liste die Termine dieses Kaders mit `am_i_participant: true`

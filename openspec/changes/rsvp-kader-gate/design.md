@@ -73,6 +73,38 @@ schreibt.
 Das ist eine echte Verschärfung für Staff. Sie ist gewollt: der praktische Fall
 „Trainer trägt für einen Spieler nach" betrifft immer einen Spieler seines Kaders.
 
+## Entscheidung 4 — Die Sichtbarkeit wird an das Antwortrecht angeglichen, nicht umgekehrt
+
+Nachgemessen erst beim Bau des Deckungsgleichheits-Tests, nicht vorher bekannt: der
+Sichtbarkeitsfilter von `ListSessions` (`teamSQL`) nahm den `kader_trainers`-Zweig nur auf,
+wenn der Nutzer **zusätzlich** die Vereinsfunktion `trainer` trug. `isKaderParticipant`
+und `hasKaderAccess` prüfen beide nur die Eintragung. Damit gab es eine Person, die einen
+Termin verwalten und (nach diesem Change) beantworten darf, ihn aber nicht sieht — genau
+der Widerspruch, den Invariante 2 ausschließen soll.
+
+Der Absatz „Risiken" unten behauptete das Gegenteil („`ListSessions` filtert über dieselben
+drei Zweige"). Das stimmte für Spieler und erweiterten Kader, nicht für Trainer.
+
+Zwei Wege standen offen:
+
+1. **Antwortrecht verengen** — `kader_trainers` nur mit Vereinsfunktion zählen. Verworfen:
+   das widerspräche `hasKaderAccess` (Verwaltungsrecht ohne Funktion) und dem Szenario
+   „Trainer des Termin-Kaders darf antworten"; der Widerspruch wanderte nur eine Stelle
+   weiter.
+2. **Sichtbarkeit erweitern** — der `kader_trainers`-Zweig gilt ohne Funktionsprüfung.
+   Gewählt.
+
+Die Erweiterung ist eng: sie zeigt genau die Termine der Kader, in denen der Nutzer
+namentlich als Trainer eingetragen ist. Kein Leak über die Zugehörigkeit hinaus, keine
+Änderung für Spieler, Eltern oder Staff. Die Konstellation ist auch kein Randfall, den man
+per Datenpflege ausschließen könnte: `KaderTrainerSearch` bietet den Funktionsfilter als
+**abwählbare** Checkbox an — ein Übungsgruppenleiter ohne Vereinsfunktion ist ausdrücklich
+anlegbar.
+
+**Nicht mitgezogen:** `internal/calendar` (iCal-Feed) und die übrigen Konsumenten der
+Kader-Zugehörigkeit. Sie beantworten andere Fragen und stehen nicht unter Invariante 2; ein
+Durchgriff wäre eine eigene Messung wert, nicht ein Nebeneffekt dieses Changes.
+
 ## Risiken
 
 **Verhaltensänderung an einer viel genutzten Route.** Die Prüfung lehnt ab, was heute
@@ -80,8 +112,8 @@ durchgeht. Das Risiko liegt nicht bei Fremden (die gibt es im Alltag kaum), sond
 Konstellationen, die *unabsichtlich* außerhalb des Kaders stehen — etwa ein Spieler, dessen
 Kaderzuordnung zur neuen Saison noch fehlt. Er bekäme statt einer Zusage ein 403. Die
 Sichtbarkeit ist davon aber schon heute gleich betroffen (`ListSessions` filtert über
-dieselben drei Zweige): er sieht den Termin ohnehin nicht. Die Änderung macht einen
-bestehenden Zustand konsistent, sie erzeugt ihn nicht.
+dieselben Zweige — für Trainer erst nach Entscheidung 4): er sieht den Termin ohnehin
+nicht. Die Änderung macht einen bestehenden Zustand konsistent, sie erzeugt ihn nicht.
 
 **Bestandstests, die die Lücke nutzen.** `TestRespond_CreatesRSVP` und
 `TestRespond_UpdatesExistingRSVP` legen ihr Mitglied in keinen Kader. Sie werden angepasst,
