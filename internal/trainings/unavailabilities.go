@@ -127,13 +127,13 @@ type seriesUnavailability struct {
 	CreatedAt  string  `json:"created_at"`
 }
 
-// seriesTeamID lädt die team_id einer Serie; liefert (0, sql.ErrNoRows) wenn es die
-// Serie nicht gibt (→ 404 durch den Aufrufer).
-func (h *Handler) seriesTeamID(ctx context.Context, seriesID int) (int, error) {
-	var teamID int
+// seriesKaderID lädt den besitzenden Kader einer Serie; liefert
+// (0, sql.ErrNoRows), wenn es die Serie nicht gibt (→ 404 durch den Aufrufer).
+func (h *Handler) seriesKaderID(ctx context.Context, seriesID int) (int, error) {
+	var kaderID int
 	err := h.db.QueryRowContext(ctx,
-		`SELECT team_id FROM training_series WHERE id = ?`, seriesID).Scan(&teamID)
-	return teamID, err
+		`SELECT kader_id FROM training_series WHERE id = ?`, seriesID).Scan(&kaderID)
+	return kaderID, err
 }
 
 // GET /api/training-series/{id}/unavailabilities
@@ -144,7 +144,7 @@ func (h *Handler) ListSeriesUnavailabilities(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	teamID, err := h.seriesTeamID(r.Context(), seriesID)
+	kaderID, err := h.seriesKaderID(r.Context(), seriesID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -153,7 +153,7 @@ func (h *Handler) ListSeriesUnavailabilities(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -222,7 +222,7 @@ func (h *Handler) CreateSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	teamID, err := h.seriesTeamID(r.Context(), seriesID)
+	kaderID, err := h.seriesKaderID(r.Context(), seriesID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -231,7 +231,7 @@ func (h *Handler) CreateSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -256,7 +256,7 @@ func (h *Handler) CreateSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	id, _ := res.LastInsertId()
-	h.broadcastTeam(r.Context(), []int{teamID}, "training-unavailability-changed")
+	h.broadcastKader(r.Context(), []int{kaderID}, "training-unavailability-changed")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"id": id})
@@ -275,7 +275,7 @@ func (h *Handler) DeleteSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "invalid uid", http.StatusBadRequest)
 		return
 	}
-	teamID, err := h.seriesTeamID(r.Context(), seriesID)
+	kaderID, err := h.seriesKaderID(r.Context(), seriesID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -284,7 +284,7 @@ func (h *Handler) DeleteSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -302,7 +302,7 @@ func (h *Handler) DeleteSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	h.broadcastTeam(r.Context(), []int{teamID}, "training-unavailability-changed")
+	h.broadcastKader(r.Context(), []int{kaderID}, "training-unavailability-changed")
 	w.WriteHeader(http.StatusNoContent)
 }
 

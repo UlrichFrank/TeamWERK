@@ -79,8 +79,21 @@ func CreateMember(t *testing.T, database *sql.DB, userID int) int {
 }
 
 // CreateKader inserts a kader for the given team and season, returns its ID.
+// CreateKader returns the kader of (teamID, seasonID), creating it if it does
+// not exist yet. Idempotent on purpose: kader holds at most one row per team and
+// season, and the training fixtures need the same row — a second call must not
+// fork the ownership of already-created sessions.
 func CreateKader(t *testing.T, database *sql.DB, teamID, seasonID int) int {
 	t.Helper()
+	var existing int
+	err := database.QueryRow(
+		`SELECT id FROM kader WHERE team_id = ? AND season_id = ?`, teamID, seasonID).Scan(&existing)
+	if err == nil {
+		return existing
+	}
+	if err != sql.ErrNoRows {
+		t.Fatalf("CreateKader lookup: %v", err)
+	}
 	var maxNum int
 	database.QueryRow(
 		`SELECT COALESCE(MAX(team_number), 0) FROM kader WHERE season_id=? AND age_class=? AND gender=?`,
@@ -90,6 +103,19 @@ func CreateKader(t *testing.T, database *sql.DB, teamID, seasonID int) int {
 		seasonID, "Erwachsene", "mixed", teamID, maxNum+1)
 	if err != nil {
 		t.Fatalf("CreateKader: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
+// CreatePracticeGroup inserts an Übungsgruppe: a kader row with kind='practice',
+// a name and neither age_class, gender nor a teams twin.
+func CreatePracticeGroup(t *testing.T, database *sql.DB, seasonID int, name string) int {
+	t.Helper()
+	res, err := database.Exec(
+		`INSERT INTO kader (season_id, kind, name) VALUES (?, 'practice', ?)`, seasonID, name)
+	if err != nil {
+		t.Fatalf("CreatePracticeGroup: %v", err)
 	}
 	id, _ := res.LastInsertId()
 	return int(id)
@@ -143,9 +169,9 @@ func AddKaderTrainer(t *testing.T, database *sql.DB, kaderID, memberID int) {
 func CreateTrainingSeries(t *testing.T, database *sql.DB, teamID, seasonID, createdByUserID int) int {
 	t.Helper()
 	res, err := database.Exec(
-		`INSERT INTO training_series (team_id, season_id, name, day_of_week, start_time, end_time, valid_from, valid_until, created_by)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		teamID, seasonID, "Test Series", 2, "18:00", "20:00", "2025-10-01", "2026-06-30", createdByUserID)
+		`INSERT INTO training_series (kader_id, team_id, season_id, name, day_of_week, start_time, end_time, valid_from, valid_until, created_by)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		CreateKader(t, database, teamID, seasonID), teamID, seasonID, "Test Series", 2, "18:00", "20:00", "2025-10-01", "2026-06-30", createdByUserID)
 	if err != nil {
 		t.Fatalf("CreateTrainingSeries: %v", err)
 	}
@@ -154,13 +180,15 @@ func CreateTrainingSeries(t *testing.T, database *sql.DB, teamID, seasonID, crea
 }
 
 // CreateTrainingSession inserts a single training session and returns its ID.
-// date must be in "2006-01-02" format.
+// date must be in "2006-01-02" format. Owner is the kader of (teamID, seasonID),
+// created on demand — kader_id is NOT NULL, and tests commonly create the
+// session before the kader.
 func CreateTrainingSession(t *testing.T, database *sql.DB, teamID, seasonID int, date string) int {
 	t.Helper()
 	res, err := database.Exec(
-		`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, title)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		teamID, seasonID, date, "18:00", "20:00", "Test Session")
+		`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, title)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		CreateKader(t, database, teamID, seasonID), teamID, seasonID, date, "18:00", "20:00", "Test Session")
 	if err != nil {
 		t.Fatalf("CreateTrainingSession: %v", err)
 	}
@@ -175,9 +203,9 @@ func CreateTrainingSession(t *testing.T, database *sql.DB, teamID, seasonID int,
 func CreateTrainingSessionForSeries(t *testing.T, database *sql.DB, teamID, seasonID, seriesID int, date string) int {
 	t.Helper()
 	res, err := database.Exec(
-		`INSERT INTO training_sessions (team_id, season_id, series_id, date, start_time, end_time, title)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		teamID, seasonID, seriesID, date, "18:00", "20:00", "Test Session")
+		`INSERT INTO training_sessions (kader_id, team_id, season_id, series_id, date, start_time, end_time, title)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		CreateKader(t, database, teamID, seasonID), teamID, seasonID, seriesID, date, "18:00", "20:00", "Test Session")
 	if err != nil {
 		t.Fatalf("CreateTrainingSessionForSeries: %v", err)
 	}

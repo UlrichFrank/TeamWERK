@@ -229,9 +229,9 @@ func measureSeed(t *testing.T, db *sql.DB) *measureData {
 			seriesArg = seriesID
 		}
 		mustExec(t, db,
-			`INSERT INTO training_sessions (series_id, team_id, season_id, date, start_time, end_time, title)
-			 VALUES (?, ?, ?, ?, '18:00', '20:00', 'Training')`,
-			seriesArg, teams[i%seedTeams], seasonID, dayOffset(i%50-25))
+			`INSERT INTO training_sessions (series_id, kader_id, team_id, season_id, date, start_time, end_time, title)
+			 VALUES (?, (SELECT id FROM kader WHERE team_id = ? AND season_id = ?), ?, ?, ?, '18:00', '20:00', 'Training')`,
+			seriesArg, teams[i%seedTeams], seasonID, teams[i%seedTeams], seasonID, dayOffset(i%50-25))
 	}
 
 	// A few venues so /api/venues has content.

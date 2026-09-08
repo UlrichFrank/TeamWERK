@@ -166,9 +166,9 @@ func TestCalendarFeed_IncludeTrainingFalse(t *testing.T) {
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
 	// Insert a training session for the user's team.
-	db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, location, status)
-	         VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-		teamID, seasonID, "2026-08-15", "18:00", "20:00", "Halle X")
+	db.Exec(`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, location, status)
+	         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+		kaderID, teamID, seasonID, "2026-08-15", "18:00", "20:00", "Halle X")
 
 	userToken := testutil.Token(t, userID, "standard", nil)
 	srv := prodserver.New(t, db)
@@ -195,9 +195,9 @@ func TestCalendarFeed_IncludeTrainingTrue(t *testing.T) {
 	memberID := testutil.CreateMember(t, db, userID)
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
-	db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, location, status)
-	         VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-		teamID, seasonID, "2026-08-15", "18:00", "20:00", "Halle X")
+	db.Exec(`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, location, status)
+	         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+		kaderID, teamID, seasonID, "2026-08-15", "18:00", "20:00", "Halle X")
 
 	userToken := testutil.Token(t, userID, "standard", nil)
 	srv := prodserver.New(t, db)
@@ -236,9 +236,9 @@ func membershipFeed(t *testing.T, teamName, eventType, membershipTable string) s
 		eventType, eventType == "heim", gameID); err != nil {
 		t.Fatalf("set event_type: %v", err)
 	}
-	db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, location, status)
-	         VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-		teamID, seasonID, "2026-08-16", "18:00", "20:00", "Halle X")
+	db.Exec(`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, location, status)
+	         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+		kaderID, teamID, seasonID, "2026-08-16", "18:00", "20:00", "Halle X")
 
 	userToken := testutil.Token(t, userID, "standard", nil)
 	srv := prodserver.New(t, db)
@@ -486,9 +486,9 @@ func TestCalendarFeed_TrainingLocation(t *testing.T) {
 		"Sporthalle Vaihingen", "Rosenstraße 5", "70563", "Stuttgart")
 	row.Scan(&venueID)
 
-	db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, venue_id, status)
-	         VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-		teamID, seasonID, "2026-08-20", "18:00", "20:00", venueID)
+	db.Exec(`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, venue_id, status)
+	         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+		kaderID, teamID, seasonID, "2026-08-20", "18:00", "20:00", venueID)
 
 	userToken := testutil.Token(t, userID, "standard", nil)
 	srv := prodserver.New(t, db)

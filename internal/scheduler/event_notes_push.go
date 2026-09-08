@@ -56,7 +56,7 @@ func (s *Scheduler) processPendingEventNotes() (int, error) {
 	today := time.Now().Format("2006-01-02")
 	pushed := 0
 	for _, p := range pending {
-		eventDate, teamIDs, title, url := s.resolveEventNote(p)
+		eventDate, audience, title, url := s.resolveEventNote(p)
 
 		// Row immer löschen — idempotent, auch ohne Push.
 		if _, err := s.db.Exec(
@@ -70,7 +70,7 @@ func (s *Scheduler) processPendingEventNotes() (int, error) {
 		if eventDate == "" || eventDate < today {
 			continue
 		}
-		uids := notify.TeamAudience(s.db, teamIDs...)
+		uids := audience()
 		if len(uids) == 0 {
 			continue
 		}
@@ -84,24 +84,28 @@ func (s *Scheduler) processPendingEventNotes() (int, error) {
 	return pushed, nil
 }
 
-// resolveEventNote liest Datum, beteiligte Teams, Push-Titel und Deep-Link für
+// resolveEventNote liest Datum, Empfängerauflösung, Push-Titel und Deep-Link für
 // eine pending-Row. Ein nicht (mehr) existierendes Event liefert ein leeres
 // Datum, sodass der Aufrufer den Push überspringt.
-func (s *Scheduler) resolveEventNote(p pendingNote) (eventDate string, teamIDs []int, title, url string) {
+//
+// Die Empfänger kommen als Funktion zurück, nicht als Liste: die beiden
+// Event-Arten adressieren verschieden (ein Training seinen Kader, ein Spiel
+// seine Mannschaften), und die Auflösung soll erst laufen, wenn der Aufrufer
+// Datum und Vergangenheitsprüfung passiert hat.
+func (s *Scheduler) resolveEventNote(p pendingNote) (eventDate string, audience func() []int, title, url string) {
+	none := func() []int { return nil }
 	switch p.refType {
 	case "training":
 		var date, sessTitle sql.NullString
-		var teamID sql.NullInt64
+		var kaderID int
 		err := s.db.QueryRow(
-			`SELECT date, team_id, COALESCE(NULLIF(title,''),'Training')
-			 FROM training_sessions WHERE id=?`, p.refID).Scan(&date, &teamID, &sessTitle)
+			`SELECT date, kader_id, COALESCE(NULLIF(title,''),'Training')
+			 FROM training_sessions WHERE id=?`, p.refID).Scan(&date, &kaderID, &sessTitle)
 		if err != nil || !date.Valid {
-			return "", nil, "", ""
+			return "", none, "", ""
 		}
-		if teamID.Valid {
-			teamIDs = []int{int(teamID.Int64)}
-		}
-		return normalizeDate(date.String), teamIDs,
+		return normalizeDate(date.String),
+			func() []int { return notify.KaderAudience(s.db, kaderID) },
 			"Hinweis zu " + sessTitle.String,
 			fmt.Sprintf("/termine?focus=training-%d", p.refID)
 
@@ -110,13 +114,14 @@ func (s *Scheduler) resolveEventNote(p pendingNote) (eventDate string, teamIDs [
 		err := s.db.QueryRow(
 			`SELECT date, COALESCE(opponent,'') FROM games WHERE id=?`, p.refID).Scan(&date, &opponent)
 		if err != nil || !date.Valid {
-			return "", nil, "", ""
+			return "", none, "", ""
 		}
-		return normalizeDate(date.String), s.gameTeamIDs(p.refID),
+		return normalizeDate(date.String),
+			func() []int { return notify.TeamAudience(s.db, s.gameTeamIDs(p.refID)...) },
 			"Hinweis zu " + opponent.String,
 			fmt.Sprintf("/termine?focus=game-%d", p.refID)
 	}
-	return "", nil, "", ""
+	return "", none, "", ""
 }
 
 // normalizeDate schneidet einen evtl. als ISO-Timestamp gelieferten Datumswert

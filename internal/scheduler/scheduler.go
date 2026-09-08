@@ -676,10 +676,16 @@ func (s *Scheduler) sendTrainingReminders() {
 	from := now.Format("2006-01-02")
 	to := now.Add(25 * time.Hour).Format("2006-01-02")
 
+	// Besitzer ist der Kader (kader_id), nicht das Team: ein Termin einer
+	// Übungsgruppe trägt team_id NULL und fiele über einen JOIN auf teams
+	// komplett aus der Erinnerung heraus. Der angezeigte Name kommt vom Team,
+	// wo es eines gibt, sonst vom Kader.
 	rows, err := s.db.Query(`
-		SELECT ts.id, ts.team_id, COALESCE(NULLIF(ts.title,''),'Training'), ts.date, ts.start_time, t.name
+		SELECT ts.id, ts.kader_id, COALESCE(NULLIF(ts.title,''),'Training'), ts.date, ts.start_time,
+		       COALESCE(t.name, k.name, '')
 		FROM training_sessions ts
-		JOIN teams t ON t.id = ts.team_id
+		JOIN kader k ON k.id = ts.kader_id
+		LEFT JOIN teams t ON t.id = ts.team_id
 		WHERE ts.date BETWEEN ? AND ?
 		  AND ts.status = 'active'`, from, to)
 	if err != nil {
@@ -691,7 +697,7 @@ func (s *Scheduler) sendTrainingReminders() {
 
 	type sessionRow struct {
 		id        int
-		teamID    int
+		kaderID   int
 		title     string
 		date      string
 		startTime string
@@ -700,7 +706,7 @@ func (s *Scheduler) sendTrainingReminders() {
 	var sessions []sessionRow
 	for rows.Next() {
 		var s sessionRow
-		rows.Scan(&s.id, &s.teamID, &s.title, &s.date, &s.startTime, &s.teamName)
+		rows.Scan(&s.id, &s.kaderID, &s.title, &s.date, &s.startTime, &s.teamName)
 		sessions = append(sessions, s)
 	}
 
@@ -711,7 +717,7 @@ func (s *Scheduler) sendTrainingReminders() {
 		if until < 0 {
 			continue
 		}
-		recipients := notify.TeamAudience(s.db, sess.teamID)
+		recipients := notify.KaderAudience(s.db, sess.kaderID)
 		url := fmt.Sprintf("/termine?focus=training-%d", sess.id)
 
 		if until <= 24*time.Hour {

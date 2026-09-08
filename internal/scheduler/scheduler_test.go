@@ -275,9 +275,9 @@ func TestTrainingReminder_SlotsAndCancelled(t *testing.T) {
 	at := time.Now().In(timez.Berlin()).Add(2 * time.Hour)
 	insertSession := func(status string) int {
 		res, err := db.Exec(
-			`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, title, status)
-			 VALUES (?, ?, ?, ?, '20:00', 'Einheit', ?)`,
-			teamID, seasonID, at.Format("2006-01-02"), at.Format("15:04"), status)
+			`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, title, status)
+			 VALUES ((SELECT id FROM kader WHERE team_id = ? AND season_id = ?), ?, ?, ?, ?, '20:00', 'Einheit', ?)`,
+			teamID, seasonID, teamID, seasonID, at.Format("2006-01-02"), at.Format("15:04"), status)
 		if err != nil {
 			t.Fatalf("insert training_session: %v", err)
 		}

@@ -59,6 +59,7 @@ func TestListSessions_FilterByTeam(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
 	teamB := testutil.CreateTeam(t, db, "Team B")
+	testutil.CreateKader(t, db, teamB, seasonID)
 
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
@@ -173,6 +174,7 @@ func TestCreateSeries_GeneratesSessions(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
+	testutil.CreateKader(t, db, teamID, seasonID)
 	adminUserID := testutil.CreateUser(t, db, "admin")
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
@@ -209,6 +211,7 @@ func TestCreateSeries_WrongTeam_Forbidden(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
 	teamB := testutil.CreateTeam(t, db, "Team B")
+	testutil.CreateKader(t, db, teamB, seasonID)
 
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
@@ -651,6 +654,7 @@ func TestCreateSession_AdminOK(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
+	testutil.CreateKader(t, db, teamID, seasonID)
 	adminUserID := testutil.CreateUser(t, db, "admin")
 
 	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
@@ -840,9 +844,9 @@ func TestDeleteSeries_CascadesSessionsAndResponses(t *testing.T) {
 
 	// Drei Sessions zur Serie verknüpfen.
 	for _, date := range []string{"2026-09-01", "2026-09-08", "2026-09-15"} {
-		db.Exec(`INSERT INTO training_sessions (team_id, season_id, date, start_time, end_time, title, series_id)
-		         VALUES (?, ?, ?, '18:00', '20:00', 'Test', ?)`,
-			teamID, seasonID, date, seriesID)
+		db.Exec(`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, title, series_id)
+		         VALUES ((SELECT kader_id FROM training_series WHERE id = ?), ?, ?, ?, '18:00', '20:00', 'Test', ?)`,
+			seriesID, teamID, seasonID, date, seriesID)
 	}
 	var sessionCount int
 	db.QueryRow(`SELECT COUNT(*) FROM training_sessions WHERE series_id=?`, seriesID).Scan(&sessionCount)
@@ -1709,6 +1713,7 @@ func TestDeleteSession_ForeignTeamTrainer_Forbidden(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
 	teamB := testutil.CreateTeam(t, db, "Team B")
+	testutil.CreateKader(t, db, teamB, seasonID)
 
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
@@ -1887,6 +1892,7 @@ func TestCreateSession_ForeignTeam_Forbidden(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
 	teamB := testutil.CreateTeam(t, db, "Team B")
+	testutil.CreateKader(t, db, teamB, seasonID)
 
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
@@ -1918,6 +1924,7 @@ func TestUpdateSession_ForeignTeam_Forbidden(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamA := testutil.CreateTeam(t, db, "Team A")
 	teamB := testutil.CreateTeam(t, db, "Team B")
+	testutil.CreateKader(t, db, teamB, seasonID)
 
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)

@@ -31,15 +31,16 @@ func NewHandler(db *sql.DB, cfg *appconfig.Config, h *hub.EventHub) *Handler {
 	return &Handler{db: db, cfg: cfg, hub: h, now: time.Now}
 }
 
-// broadcastTeam sends event only to the team audience (team members +
-// trainers/sL + parents + vorstand/admin) of the given team IDs. Replaces the
-// former global Broadcast for training-bound topics; the Frontend contract
-// (topic string + useLiveUpdates) is unchanged, only the recipient set shrinks.
-func (h *Handler) broadcastTeam(ctx context.Context, teamIDs []int, event string) {
+// broadcastKader sends event only to the audience of the given kader rows
+// (members + extended squad + trainers + parents + vorstand/admin). The
+// Frontend contract (topic string + useLiveUpdates) is unchanged, only the
+// recipient set is resolved over kader_id — a training of an Übungsgruppe
+// carries team_id NULL and would otherwise reach nobody.
+func (h *Handler) broadcastKader(ctx context.Context, kaderIDs []int, event string) {
 	if h.hub == nil {
 		return
 	}
-	ids := hub.NewAudience(h.db).Team(ctx, teamIDs)
+	ids := hub.NewAudience(h.db).Kader(ctx, kaderIDs)
 	h.hub.BroadcastToUsers(ids, event)
 }
 
@@ -96,20 +97,58 @@ func parseBerlinDateTime(dateISO, hhmm string) (time.Time, error) {
 	return t, nil
 }
 
-// hasTeamAccess returns true if the user is admin, vorstand, sportliche_leitung,
-// or a kader trainer of teamID.
-func (h *Handler) hasTeamAccess(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
+// hasKaderAccess returns true if the user is admin, vorstand, sportliche_leitung,
+// or a trainer of kaderID. Keyed on the kader, not the team: an Übungsgruppe has
+// no teams row, so team-keyed access would never grant its trainers anything.
+func (h *Handler) hasKaderAccess(ctx context.Context, claims *auth.Claims, kaderID int) (bool, error) {
 	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") {
 		return true, nil
 	}
 	var count int
 	err := h.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM kader_trainers kt
-		 JOIN kader k ON k.id = kt.kader_id
 		 JOIN members m ON m.id = kt.member_id
-		 WHERE m.user_id = ? AND k.team_id = ?`,
-		claims.UserID, teamID).Scan(&count)
+		 WHERE m.user_id = ? AND kt.kader_id = ?`,
+		claims.UserID, kaderID).Scan(&count)
 	return count > 0, err
+}
+
+// kaderRef ist der aufgelöste Besitzer eines Trainings: der Kader selbst und die
+// aus ihm abgeleitete Projektion team_id — NULL, wenn der Besitzer eine
+// Übungsgruppe ist (proposal.md — Invariante 3).
+type kaderRef struct {
+	ID       int
+	TeamID   sql.NullInt64
+	SeasonID int
+}
+
+// teamIDArg liefert den Bind-Wert für training_*.team_id: die Team-ID einer
+// Mannschaft, NULL für eine Übungsgruppe.
+func (k kaderRef) teamIDArg() any {
+	if k.TeamID.Valid {
+		return k.TeamID.Int64
+	}
+	return nil
+}
+
+// resolveKaderTarget löst das Ziel eines Schreibzugriffs auf. kader_id hat
+// Vorrang; team_id + season_id bleiben als Eingabe zulässig, weil der Kader für
+// eine Mannschaft daraus eindeutig folgt (kader führt je Saison höchstens eine
+// Zeile pro Team). Eine Übungsgruppe ist nur über kader_id adressierbar — sie
+// hat kein team_id.
+func (h *Handler) resolveKaderTarget(ctx context.Context, kaderID, teamID, seasonID int) (kaderRef, error) {
+	var k kaderRef
+	var err error
+	if kaderID > 0 {
+		err = h.db.QueryRowContext(ctx,
+			`SELECT id, team_id, season_id FROM kader WHERE id = ?`, kaderID).
+			Scan(&k.ID, &k.TeamID, &k.SeasonID)
+	} else {
+		err = h.db.QueryRowContext(ctx,
+			`SELECT id, team_id, season_id FROM kader WHERE team_id = ? AND season_id = ?`,
+			teamID, seasonID).Scan(&k.ID, &k.TeamID, &k.SeasonID)
+	}
+	return k, err
 }
 
 // memberIDForUser returns the member_id for a user, or 0 if not found.
@@ -148,16 +187,16 @@ func generateSessionDates(from, until time.Time, dayOfWeek int) []time.Time {
 }
 
 // insertSessions bulk-inserts training_sessions within an existing transaction.
-func insertSessions(ctx context.Context, tx *sql.Tx, seriesID int, teamID, seasonID int, startTime, endTime string, venueID *int, note string, rsvpDefaultPlayers, rsvpDefaultExtended string, rsvpRequireReason int, dates []time.Time) error {
+func insertSessions(ctx context.Context, tx *sql.Tx, seriesID int, kader kaderRef, startTime, endTime string, venueID *int, note string, rsvpDefaultPlayers, rsvpDefaultExtended string, rsvpRequireReason int, dates []time.Time) error {
 	var venueIDVal interface{}
 	if venueID != nil {
 		venueIDVal = *venueID
 	}
 	for _, d := range dates {
 		_, err := tx.ExecContext(ctx,
-			`INSERT INTO training_sessions (series_id, team_id, season_id, date, start_time, end_time, venue_id, note, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			seriesID, teamID, seasonID, d.Format("2006-01-02"), startTime, endTime, venueIDVal, note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason)
+			`INSERT INTO training_sessions (series_id, kader_id, team_id, season_id, date, start_time, end_time, venue_id, note, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			seriesID, kader.ID, kader.teamIDArg(), kader.SeasonID, d.Format("2006-01-02"), startTime, endTime, venueIDVal, note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason)
 		if err != nil {
 			return err
 		}
@@ -179,9 +218,8 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "admin" {
 		whereSQL = "1=1"
 	} else {
-		whereSQL = `s.team_id IN (
-			SELECT DISTINCT k.team_id FROM kader k
-			JOIN kader_trainers kt ON kt.kader_id = k.id
+		whereSQL = `s.kader_id IN (
+			SELECT kt.kader_id FROM kader_trainers kt
 			JOIN members m ON m.id = kt.member_id
 			WHERE m.user_id = ?)`
 		args = append(args, claims.UserID)
@@ -190,16 +228,23 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 		whereSQL += " AND s.team_id = ?"
 		args = append(args, tid)
 	}
+	if kid := r.URL.Query().Get("kader_id"); kid != "" {
+		whereSQL += " AND s.kader_id = ?"
+		args = append(args, kid)
+	}
 
+	// Der Anzeigename kommt vom Team, wo es eines gibt, sonst vom Kader —
+	// genau der Fall einer Übungsgruppe (LEFT JOIN teams, kein JOIN).
 	query := fmt.Sprintf(`
-		SELECT s.id, s.team_id, s.season_id, s.name, s.day_of_week,
+		SELECT s.id, s.kader_id, s.team_id, s.season_id, s.name, s.day_of_week,
 		       s.start_time, s.end_time, s.valid_from, s.valid_until, s.note,
-		       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) as team_name,
+		       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, k.name, '') as team_name,
 		       COUNT(ts.id) as session_count,
 		       s.rsvp_default_players, s.rsvp_default_extended, s.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM training_series s
-		JOIN teams t ON t.id = s.team_id
+		JOIN kader k ON k.id = s.kader_id
+		LEFT JOIN teams t ON t.id = s.team_id
 		LEFT JOIN training_sessions ts ON ts.series_id = s.id
 		LEFT JOIN venues v ON v.id = s.venue_id
 		WHERE %s
@@ -224,6 +269,7 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	type seriesItem struct {
 		ID                  int       `json:"id"`
+		KaderID             int       `json:"kader_id"`
 		TeamID              int       `json:"team_id"`
 		SeasonID            int       `json:"season_id"`
 		Name                string    `json:"name"`
@@ -243,12 +289,15 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 	result := []seriesItem{}
 	for rows.Next() {
 		var s seriesItem
-		var vID sql.NullInt64
+		var vID, teamID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
-		rows.Scan(&s.ID, &s.TeamID, &s.SeasonID, &s.Name, &s.DayOfWeek,
+		rows.Scan(&s.ID, &s.KaderID, &teamID, &s.SeasonID, &s.Name, &s.DayOfWeek,
 			&s.StartTime, &s.EndTime, &s.ValidFrom, &s.ValidUntil, &s.Note,
 			&s.TeamName, &s.SessionCount, &s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
+		// team_id ist bei einer Übungsgruppe NULL; 0 im JSON heißt "keine
+		// Mannschaft", nicht "Team 0".
+		s.TeamID = int(teamID.Int64)
 		if vID.Valid {
 			s.Venue = &venueRef{
 				ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,
@@ -265,6 +314,7 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
+		KaderID             int    `json:"kader_id"`
 		TeamID              int    `json:"team_id"`
 		SeasonID            int    `json:"season_id"`
 		Name                string `json:"name"`
@@ -293,9 +343,19 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, req.TeamID)
+	kader, err := h.resolveKaderTarget(r.Context(), req.KaderID, req.TeamID, req.SeasonID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "kader not found", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "CreateSeries team check: %v\n", err)
+		fmt.Fprintf(os.Stderr, "CreateSeries kader lookup: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	ok, err := h.hasKaderAccess(r.Context(), claims, kader.ID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "CreateSeries kader check: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -330,9 +390,9 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		venueIDVal = *req.VenueID
 	}
 	res, err := tx.ExecContext(r.Context(),
-		`INSERT INTO training_series (team_id, season_id, name, venue_id, day_of_week, start_time, end_time, valid_from, valid_until, note, created_by, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		req.TeamID, req.SeasonID, req.Name, venueIDVal, req.DayOfWeek,
+		`INSERT INTO training_series (kader_id, team_id, season_id, name, venue_id, day_of_week, start_time, end_time, valid_from, valid_until, note, created_by, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		kader.ID, kader.teamIDArg(), kader.SeasonID, req.Name, venueIDVal, req.DayOfWeek,
 		req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, claims.UserID,
 		req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason)
 	if err != nil {
@@ -343,7 +403,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	seriesID, _ := res.LastInsertId()
 
 	dates := generateSessionDates(from, until, req.DayOfWeek)
-	if err := insertSessions(r.Context(), tx, int(seriesID), req.TeamID, req.SeasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason, dates); err != nil {
+	if err := insertSessions(r.Context(), tx, int(seriesID), kader, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason, dates); err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSeries insert sessions: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -352,7 +412,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.broadcastTeam(r.Context(), []int{req.TeamID}, "trainings")
+	h.broadcastKader(r.Context(), []int{kader.ID}, "trainings")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -397,11 +457,12 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 
 	// prevDayOfWeek/prevStart tragen den alten Rhythmus für die
 	// Änderungs-Benachrichtigung — nur bei echter Verschiebung wird er genannt.
-	var teamID, seasonID, curReqReason, prevDayOfWeek int
+	var kader kaderRef
+	var curReqReason, prevDayOfWeek int
 	var curDefPlayers, curDefExtended, prevStart string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason, day_of_week, start_time FROM training_series WHERE id = ?`, seriesID).
-		Scan(&teamID, &seasonID, &curDefPlayers, &curDefExtended, &curReqReason, &prevDayOfWeek, &prevStart)
+		`SELECT kader_id, team_id, season_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason, day_of_week, start_time FROM training_series WHERE id = ?`, seriesID).
+		Scan(&kader.ID, &kader.TeamID, &kader.SeasonID, &curDefPlayers, &curDefExtended, &curReqReason, &prevDayOfWeek, &prevStart)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -410,7 +471,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kader.ID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -488,7 +549,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dates := generateSessionDates(genFrom, until, req.DayOfWeek)
-	if err := insertSessions(r.Context(), tx, seriesID, teamID, seasonID, req.StartTime, req.EndTime, req.VenueID, req.Note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason, dates); err != nil {
+	if err := insertSessions(r.Context(), tx, seriesID, kader, req.StartTime, req.EndTime, req.VenueID, req.Note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason, dates); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -496,11 +557,11 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
+	h.broadcastKader(r.Context(), []int{kader.ID}, "trainings")
 	// Ein PUT auf die Serie löscht und erzeugt alle Einheiten ab genFrom neu —
 	// das verschiebt potenziell Dutzende Termine im Kalender des Teams. Der Link
 	// ist /termine ohne focus: eine Serie ist kein einzelner Termin.
-	notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
+	notify.Send(h.db, h.cfg, notify.KaderAudience(h.db, kader.ID),
 		"trainings", "Trainingsserie geändert",
 		notify.ChangeBody(seriesSubject(req.Name),
 			seriesPeriod(genFrom.Format("2006-01-02"), req.ValidUntil),
@@ -605,11 +666,11 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var teamID int
+	var kaderID int
 	var seriesName, validFrom, validUntil string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, name, date(valid_from), date(valid_until) FROM training_series WHERE id = ?`,
-		seriesID).Scan(&teamID, &seriesName, &validFrom, &validUntil)
+		`SELECT kader_id, name, date(valid_from), date(valid_until) FROM training_series WHERE id = ?`,
+		seriesID).Scan(&kaderID, &seriesName, &validFrom, &validUntil)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -618,7 +679,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -662,13 +723,13 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	// Serie gelöscht → Team aus dem vorab geladenen teamID scopen. Das
+	// Serie gelöscht → Empfänger aus dem vorab geladenen kaderID scopen. Das
 	// Live-Update läuft immer, `silent` betrifft nur notify.Send (design.md §8).
-	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
+	h.broadcastKader(r.Context(), []int{kaderID}, "trainings")
 	if !silent {
 		// Kein Direktlink: die Serie existiert nicht mehr, /termine hätte dem
 		// Empfänger nur eine Lücke gezeigt.
-		notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
+		notify.Send(h.db, h.cfg, notify.KaderAudience(h.db, kaderID),
 			"trainings", "Trainingsserie beendet",
 			notify.CancellationBody(seriesName, seriesPeriod(affectedFrom, validUntil),
 				notify.ActorName(h.db, claims.UserID), reason), "")
@@ -684,11 +745,11 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var teamID int
+	var kaderID int
 	var title, date string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, title, date(date) FROM training_sessions WHERE id = ?`,
-		sessionID).Scan(&teamID, &title, &date)
+		`SELECT kader_id, title, date(date) FROM training_sessions WHERE id = ?`,
+		sessionID).Scan(&kaderID, &title, &date)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -697,7 +758,7 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -712,13 +773,13 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	// Session gelöscht → Team aus dem vorab geladenen teamID scopen. Das
+	// Session gelöscht → Empfänger aus dem vorab geladenen kaderID scopen. Das
 	// Live-Update läuft immer, `silent` betrifft nur notify.Send (design.md §8).
-	h.broadcastTeam(r.Context(), []int{teamID}, "trainings")
+	h.broadcastKader(r.Context(), []int{kaderID}, "trainings")
 	if !silent {
 		// Kein Direktlink: die Einheit existiert nicht mehr, /termine hätte dem
 		// Empfänger nur eine Lücke gezeigt.
-		notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
+		notify.Send(h.db, h.cfg, notify.KaderAudience(h.db, kaderID),
 			"trainings", "Training abgesagt",
 			notify.CancellationBody(sessionSubject(title), cancellationWhen(date),
 				notify.ActorName(h.db, claims.UserID), reason), "")
@@ -748,9 +809,9 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var teamID int
+	var kaderID int
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+		`SELECT kader_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&kaderID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -759,7 +820,7 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -810,6 +871,7 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var req struct {
+		KaderID             int    `json:"kader_id"`
 		TeamID              int    `json:"team_id"`
 		SeasonID            int    `json:"season_id"`
 		Title               string `json:"title"`
@@ -836,7 +898,17 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, req.TeamID)
+	kader, err := h.resolveKaderTarget(r.Context(), req.KaderID, req.TeamID, req.SeasonID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "kader not found", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "CreateSession kader lookup: %v\n", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	ok, err := h.hasKaderAccess(r.Context(), claims, kader.ID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -846,9 +918,9 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		venueIDVal = *req.VenueID
 	}
 	res, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO training_sessions (team_id, season_id, title, date, start_time, end_time, venue_id, note, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		req.TeamID, req.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason)
+		`INSERT INTO training_sessions (kader_id, team_id, season_id, title, date, start_time, end_time, venue_id, note, rsvp_default_players, rsvp_default_extended, rsvp_require_reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		kader.ID, kader.teamIDArg(), kader.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CreateSession: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -861,13 +933,12 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		SELECT ?, km.member_id, m.user_id, 'declined', a.type, datetime('now'), a.id
 		FROM member_absences a
 		JOIN members m ON m.id = a.member_id
-		JOIN kader_members km ON km.member_id = a.member_id
-		JOIN kader k ON k.id = km.kader_id AND k.team_id = ? AND k.season_id = ?
+		JOIN kader_members km ON km.member_id = a.member_id AND km.kader_id = ?
 		WHERE ? BETWEEN a.start_date AND a.end_date
 		ON CONFLICT(training_id, member_id) DO NOTHING`,
-		id, req.TeamID, req.SeasonID, req.Date)
+		id, kader.ID, req.Date)
 
-	h.broadcastTeam(r.Context(), []int{req.TeamID}, "trainings")
+	h.broadcastKader(r.Context(), []int{kader.ID}, "trainings")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"id": id})
@@ -886,11 +957,11 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	// einer bereits abgesagten Einheit erneut "Training abgesagt" ans Team.
 	// prevDate/prevStart tragen dieselbe Rolle für die Änderungs-Meldung: nur
 	// eine echte Verschiebung nennt den alten Zeitpunkt.
-	var teamID int
+	var kaderID int
 	var prevStatus, prevDate, prevStart string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, status, date(date), start_time FROM training_sessions WHERE id = ?`,
-		sessionID).Scan(&teamID, &prevStatus, &prevDate, &prevStart)
+		`SELECT kader_id, status, date(date), start_time FROM training_sessions WHERE id = ?`,
+		sessionID).Scan(&kaderID, &prevStatus, &prevDate, &prevStart)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -899,7 +970,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -994,7 +1065,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		notifyBody = notify.CancellationBody(sessionSubject(req.Title), cancellationWhen(req.Date),
 			actor, req.CancelReason)
 	}
-	notify.Send(h.db, h.cfg, notify.TeamAudience(h.db, teamID),
+	notify.Send(h.db, h.cfg, notify.KaderAudience(h.db, kaderID),
 		"trainings", notifyTitle, notifyBody, fmt.Sprintf("/termine?focus=training-%d", sessionID))
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1017,8 +1088,11 @@ type sessionVenueRef struct {
 }
 
 type sessionListItem struct {
-	ID                  int              `json:"id"`
-	SeriesID            *int             `json:"series_id,omitempty"`
+	ID       int  `json:"id"`
+	SeriesID *int `json:"series_id,omitempty"`
+	KaderID  int  `json:"kader_id"`
+	// TeamID ist die Projektion des Besitzers: 0 heißt "gehört einer
+	// Übungsgruppe" (training_sessions.team_id IS NULL), nicht "Team 0".
 	TeamID              int              `json:"team_id"`
 	TeamName            string           `json:"team_name"`
 	SeasonID            int              `json:"season_id"`
@@ -1051,6 +1125,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	q := r.URL.Query()
 	teamFilter := q.Get("team_id")
+	kaderFilter := q.Get("kader_id")
 	from := q.Get("from")
 	to := q.Get("to")
 	if from == "" {
@@ -1089,11 +1164,12 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") {
 		teamSQL = "1=1"
 	} else {
-		// Sichtbarkeit ist saison-gebunden: die Kader-Zugehörigkeit muss aus
-		// derselben Saison stammen wie der Termin (ts.season_id). Alt-Saison-
-		// Zugehörigkeiten sonst leaken Termine der neuen Saison ins gleiche
-		// team_id (Bug: Elternteil sah gD-Training, weil das Kind eine Saison
-		// vorher im gD-Kader stand).
+		// Sichtbarkeit hängt am Kader des Termins (ts.kader_id), nicht am Team:
+		// kader ist saisongebunden, die frühere Doppelbedingung
+		// (team_id + season_id) fällt damit weg. Der Bug, den sie verhinderte
+		// (Elternteil sah gD-Training, weil das Kind eine Saison vorher im
+		// gD-Kader stand), bleibt strukturell ausgeschlossen — eine Alt-Saison-
+		// Zugehörigkeit ist eine andere kader_id.
 		var conds []string
 		if claims.HasFunction("trainer") {
 			conds = append(conds, `EXISTS (
@@ -1101,40 +1177,35 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 				JOIN kader_trainers kt ON kt.kader_id = k.id
 				JOIN members m ON m.id = kt.member_id
 				WHERE m.user_id = ?
-				  AND k.team_id = ts.team_id
-				  AND k.season_id = ts.season_id)`)
+				  AND k.id = ts.kader_id)`)
 			teamArgs = append(teamArgs, claims.UserID)
 		}
 		if claims.IsParent {
 			conds = append(conds, `(EXISTS (
-				SELECT 1 FROM player_memberships pm
+				SELECT 1 FROM kader_members pm
 				JOIN members m ON m.id = pm.member_id
 				JOIN family_links fl ON fl.member_id = m.id
 				WHERE fl.parent_user_id = ?
-				  AND pm.team_id = ts.team_id
-				  AND pm.season_id = ts.season_id)
+				  AND pm.kader_id = ts.kader_id)
 				OR EXISTS (
 				SELECT 1 FROM kader_extended_members kem
 				JOIN kader k ON k.id = kem.kader_id
 				JOIN family_links fl ON fl.member_id = kem.member_id
 				WHERE fl.parent_user_id = ?
-				  AND k.team_id = ts.team_id
-				  AND k.season_id = ts.season_id))`)
+				  AND k.id = ts.kader_id))`)
 			teamArgs = append(teamArgs, claims.UserID, claims.UserID)
 		}
 		conds = append(conds, `(EXISTS (
-				SELECT 1 FROM player_memberships pm
+				SELECT 1 FROM kader_members pm
 				JOIN members m ON m.id = pm.member_id
 				WHERE m.user_id = ?
-				  AND pm.team_id = ts.team_id
-				  AND pm.season_id = ts.season_id)
+				  AND pm.kader_id = ts.kader_id)
 				OR EXISTS (
 				SELECT 1 FROM kader_extended_members kem
 				JOIN kader k ON k.id = kem.kader_id
 				JOIN members m2 ON m2.id = kem.member_id
 				WHERE m2.user_id = ?
-				  AND k.team_id = ts.team_id
-				  AND k.season_id = ts.season_id))`)
+				  AND k.id = ts.kader_id))`)
 		teamArgs = append(teamArgs, claims.UserID, claims.UserID)
 		teamSQL = "(" + strings.Join(conds, " OR ") + ")"
 	}
@@ -1151,6 +1222,10 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	if teamFilter != "" {
 		optTeamFilter = "AND ts.team_id = ?"
 		whereArgs = append(whereArgs, teamFilter)
+	}
+	if kaderFilter != "" {
+		optTeamFilter += " AND ts.kader_id = ?"
+		whereArgs = append(whereArgs, kaderFilter)
 	}
 	optExcludeSeries := ""
 	if excludeSeries {
@@ -1175,53 +1250,55 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	args := append([]any{memberID, memberID, memberID, memberID, memberID, memberID, memberID, memberID, memberID}, whereArgs...)
 
 	query := fmt.Sprintf(`
-		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
+		SELECT ts.id, ts.series_id, ts.kader_id, ts.team_id,
+		       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, (SELECT kName.name FROM kader kName WHERE kName.id = ts.kader_id), ''),
+		       ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.note, ts.status, ts.cancel_reason,
 		       COALESCE(SUM(CASE WHEN tr.status='confirmed' THEN 1 ELSE 0 END), 0)
 		         + CASE WHEN ts.rsvp_default_players='confirmed' THEN (
-		             SELECT COUNT(*) FROM player_memberships pm2
-		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		             SELECT COUNT(*) FROM kader_members pm2
+		             WHERE pm2.kader_id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = pm2.member_id)
-		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.id = ts.kader_id)
 		           ) ELSE 0 END
 		         + CASE WHEN ts.rsvp_default_extended='confirmed' THEN (
 		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
-		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		             WHERE k3.id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = kem2.member_id)
-		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
-		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM kader_members pm3 WHERE pm3.kader_id = ts.kader_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.id = ts.kader_id)
 		           ) ELSE 0 END AS confirmed_count,
 		       COALESCE(SUM(CASE WHEN tr.status='declined' THEN 1 ELSE 0 END), 0)
 		         + CASE WHEN ts.rsvp_default_players='declined' THEN (
-		             SELECT COUNT(*) FROM player_memberships pm2
-		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		             SELECT COUNT(*) FROM kader_members pm2
+		             WHERE pm2.kader_id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = pm2.member_id)
-		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.id = ts.kader_id)
 		           ) ELSE 0 END
 		         + CASE WHEN ts.rsvp_default_extended='declined' THEN (
 		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
-		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		             WHERE k3.id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id = ts.id AND trX.member_id = kem2.member_id)
-		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
-		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM kader_members pm3 WHERE pm3.kader_id = ts.kader_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.id = ts.kader_id)
 		           ) ELSE 0 END AS declined_count,
 		       COALESCE(SUM(CASE WHEN tr.status='maybe' THEN 1 ELSE 0 END), 0) AS maybe_count,
 		       (SELECT status FROM training_responses WHERE training_id = ts.id AND member_id = ?) AS explicit_rsvp,
 		       CASE
-		         WHEN EXISTS (SELECT 1 FROM player_memberships pmMe WHERE pmMe.member_id=? AND pmMe.team_id=ts.team_id AND pmMe.season_id=ts.season_id)
+		         WHEN EXISTS (SELECT 1 FROM kader_members pmMe WHERE pmMe.member_id=? AND pmMe.kader_id = ts.kader_id)
 		           THEN NULLIF(ts.rsvp_default_players, 'none')
-		         WHEN EXISTS (SELECT 1 FROM kader_extended_members kemMe JOIN kader kMe ON kMe.id=kemMe.kader_id WHERE kemMe.member_id=? AND kMe.team_id=ts.team_id AND kMe.season_id=ts.season_id)
+		         WHEN EXISTS (SELECT 1 FROM kader_extended_members kemMe JOIN kader kMe ON kMe.id=kemMe.kader_id WHERE kemMe.member_id=? AND kMe.id = ts.kader_id)
 		           THEN NULLIF(ts.rsvp_default_extended, 'none')
-		         WHEN EXISTS (SELECT 1 FROM kader_trainers ktMe JOIN kader kTr ON kTr.id=ktMe.kader_id WHERE ktMe.member_id=? AND kTr.team_id=ts.team_id AND kTr.season_id=ts.season_id)
+		         WHEN EXISTS (SELECT 1 FROM kader_trainers ktMe JOIN kader kTr ON kTr.id=ktMe.kader_id WHERE ktMe.member_id=? AND kTr.id = ts.kader_id)
 		           THEN 'confirmed'
 		         ELSE NULL
 		       END AS default_rsvp,
 		       (SELECT absence_id IS NOT NULL FROM training_responses WHERE training_id = ts.id AND member_id = ? LIMIT 1),
 		       (SELECT reason FROM training_responses WHERE training_id = ts.id AND member_id = ?) AS explicit_reason,
 		       CASE WHEN
-		           EXISTS (SELECT 1 FROM player_memberships pmP WHERE pmP.member_id=? AND pmP.team_id=ts.team_id AND pmP.season_id=ts.season_id)
-		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.team_id=ts.team_id AND kEP.season_id=ts.season_id)
-		        OR EXISTS (SELECT 1 FROM kader_trainers ktP JOIN kader kTP ON kTP.id=ktP.kader_id WHERE ktP.member_id=? AND kTP.team_id=ts.team_id AND kTP.season_id=ts.season_id)
+		           EXISTS (SELECT 1 FROM kader_members pmP WHERE pmP.member_id=? AND pmP.kader_id = ts.kader_id)
+		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.id = ts.kader_id)
+		        OR EXISTS (SELECT 1 FROM kader_trainers ktP JOIN kader kTP ON kTP.id=ktP.kader_id WHERE ktP.member_id=? AND kTP.id = ts.kader_id)
 		       THEN 1 ELSE 0 END AS am_i_participant,
 		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
@@ -1231,7 +1308,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		     AND tr.member_id NOT IN (
 		         SELECT kt.member_id FROM kader_trainers kt
 		         JOIN kader k ON k.id = kt.kader_id
-		         WHERE k.team_id = ts.team_id AND k.season_id = ts.season_id
+		         WHERE k.id = ts.kader_id
 		     )
 		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE %s AND ts.date >= ? AND ts.date <= ? %s %s
@@ -1251,14 +1328,14 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	result := []sessionListItem{}
 	for rows.Next() {
 		var s sessionListItem
-		var seriesID sql.NullInt64
+		var seriesID, teamID sql.NullInt64
 		var explicitRSVP, defaultRSVP, explicitReason sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var amIParticipant int
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		err := rows.Scan(
-			&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
+			&s.ID, &seriesID, &s.KaderID, &teamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 			&s.Note, &s.Status, &s.CancelReason,
 			&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP, &myRSVPLocked, &explicitReason,
 			&amIParticipant,
@@ -1269,6 +1346,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		s.TeamID = int(teamID.Int64)
 		if seriesID.Valid {
 			id := int(seriesID.Int64)
 			s.SeriesID = &id
@@ -1337,59 +1415,61 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var s sessionListItem
-	var seriesID sql.NullInt64
+	var seriesID, teamID sql.NullInt64
 	var explicitRSVP, defaultRSVP sql.NullString
 	var amIParticipant int
 	var attendanceTracked int
 	var vID sql.NullInt64
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	err = h.db.QueryRowContext(r.Context(), `
-		SELECT ts.id, ts.series_id, ts.team_id, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, ''), ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
+		SELECT ts.id, ts.series_id, ts.kader_id, ts.team_id,
+		       COALESCE(`+appdb.TeamDisplayName("t")+`, t.name, (SELECT kName.name FROM kader kName WHERE kName.id = ts.kader_id), ''),
+		       ts.season_id, ts.title, ts.date, ts.start_time, ts.end_time,
 		       ts.note, ts.status, ts.cancel_reason,
 		       COALESCE((SELECT COUNT(*) FROM training_responses tr_c WHERE tr_c.training_id=ts.id AND tr_c.status='confirmed'
-		                  AND tr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
+		                  AND tr_c.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.id = ts.kader_id)),0)
 		         + CASE WHEN ts.rsvp_default_players='confirmed' THEN (
-		             SELECT COUNT(*) FROM player_memberships pm2
-		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		             SELECT COUNT(*) FROM kader_members pm2
+		             WHERE pm2.kader_id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=pm2.member_id)
-		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.id = ts.kader_id)
 		           ) ELSE 0 END
 		         + CASE WHEN ts.rsvp_default_extended='confirmed' THEN (
 		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
-		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		             WHERE k3.id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=kem2.member_id)
-		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
-		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM kader_members pm3 WHERE pm3.kader_id = ts.kader_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.id = ts.kader_id)
 		           ) ELSE 0 END,
 		       COALESCE((SELECT COUNT(*) FROM training_responses tr_d WHERE tr_d.training_id=ts.id AND tr_d.status='declined'
-		                  AND tr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0)
+		                  AND tr_d.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.id = ts.kader_id)),0)
 		         + CASE WHEN ts.rsvp_default_players='declined' THEN (
-		             SELECT COUNT(*) FROM player_memberships pm2
-		             WHERE pm2.team_id = ts.team_id AND pm2.season_id = ts.season_id
+		             SELECT COUNT(*) FROM kader_members pm2
+		             WHERE pm2.kader_id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=pm2.member_id)
-		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.team_id=ts.team_id AND k2.season_id=ts.season_id)
+		               AND pm2.member_id NOT IN (SELECT kt2.member_id FROM kader_trainers kt2 JOIN kader k2 ON k2.id=kt2.kader_id WHERE k2.id = ts.kader_id)
 		           ) ELSE 0 END
 		         + CASE WHEN ts.rsvp_default_extended='declined' THEN (
 		             SELECT COUNT(*) FROM kader_extended_members kem2 JOIN kader k3 ON k3.id=kem2.kader_id
-		             WHERE k3.team_id=ts.team_id AND k3.season_id=ts.season_id
+		             WHERE k3.id = ts.kader_id
 		               AND NOT EXISTS (SELECT 1 FROM training_responses trX WHERE trX.training_id=ts.id AND trX.member_id=kem2.member_id)
-		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM player_memberships pm3 WHERE pm3.team_id=ts.team_id AND pm3.season_id=ts.season_id)
-		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.team_id=ts.team_id AND k4.season_id=ts.season_id)
+		               AND kem2.member_id NOT IN (SELECT pm3.member_id FROM kader_members pm3 WHERE pm3.kader_id = ts.kader_id)
+		               AND kem2.member_id NOT IN (SELECT kt3.member_id FROM kader_trainers kt3 JOIN kader k4 ON k4.id=kt3.kader_id WHERE k4.id = ts.kader_id)
 		           ) ELSE 0 END,
 		       COALESCE((SELECT COUNT(*) FROM training_responses tr_m WHERE tr_m.training_id=ts.id AND tr_m.status='maybe'
-		                  AND tr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.team_id=ts.team_id AND k.season_id=ts.season_id)),0),
+		                  AND tr_m.member_id NOT IN (SELECT kt.member_id FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id WHERE k.id = ts.kader_id)),0),
 		       (SELECT status FROM training_responses WHERE training_id=ts.id AND member_id=?),
 		       CASE
-		         WHEN EXISTS (SELECT 1 FROM player_memberships pmMe WHERE pmMe.member_id=? AND pmMe.team_id=ts.team_id AND pmMe.season_id=ts.season_id)
+		         WHEN EXISTS (SELECT 1 FROM kader_members pmMe WHERE pmMe.member_id=? AND pmMe.kader_id = ts.kader_id)
 		           THEN NULLIF(ts.rsvp_default_players, 'none')
-		         WHEN EXISTS (SELECT 1 FROM kader_extended_members kemMe JOIN kader kMe ON kMe.id=kemMe.kader_id WHERE kemMe.member_id=? AND kMe.team_id=ts.team_id AND kMe.season_id=ts.season_id)
+		         WHEN EXISTS (SELECT 1 FROM kader_extended_members kemMe JOIN kader kMe ON kMe.id=kemMe.kader_id WHERE kemMe.member_id=? AND kMe.id = ts.kader_id)
 		           THEN NULLIF(ts.rsvp_default_extended, 'none')
 		         ELSE NULL
 		       END,
 		       CASE WHEN
-		           EXISTS (SELECT 1 FROM player_memberships pmP WHERE pmP.member_id=? AND pmP.team_id=ts.team_id AND pmP.season_id=ts.season_id)
-		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.team_id=ts.team_id AND kEP.season_id=ts.season_id)
-		        OR EXISTS (SELECT 1 FROM kader_trainers ktP JOIN kader kTP ON kTP.id=ktP.kader_id WHERE ktP.member_id=? AND kTP.team_id=ts.team_id AND kTP.season_id=ts.season_id)
+		           EXISTS (SELECT 1 FROM kader_members pmP WHERE pmP.member_id=? AND pmP.kader_id = ts.kader_id)
+		        OR EXISTS (SELECT 1 FROM kader_extended_members kemP JOIN kader kEP ON kEP.id=kemP.kader_id WHERE kemP.member_id=? AND kEP.id = ts.kader_id)
+		        OR EXISTS (SELECT 1 FROM kader_trainers ktP JOIN kader kTP ON kTP.id=ktP.kader_id WHERE ktP.member_id=? AND kTP.id = ts.kader_id)
 		       THEN 1 ELSE 0 END AS am_i_participant,
 		       ts.rsvp_default_players, ts.rsvp_default_extended, ts.rsvp_require_reason,
 		       ts.attendance_tracked,
@@ -1398,7 +1478,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN teams t ON t.id = ts.team_id
 		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE ts.id = ?`, memberID, memberID, memberID, memberID, memberID, memberID, sessionID).Scan(
-		&s.ID, &seriesID, &s.TeamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
+		&s.ID, &seriesID, &s.KaderID, &teamID, &s.TeamName, &s.SeasonID, &s.Title, &s.Date, &s.StartTime, &s.EndTime,
 		&s.Note, &s.Status, &s.CancelReason,
 		&s.ConfirmedCount, &s.DeclinedCount, &s.MaybeCount, &explicitRSVP, &defaultRSVP,
 		&amIParticipant,
@@ -1414,6 +1494,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	s.TeamID = int(teamID.Int64)
 	if seriesID.Valid {
 		id := int(seriesID.Int64)
 		s.SeriesID = &id
@@ -1646,11 +1727,11 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var teamID, seasonID int
+	var kaderID int
 	var defPlayers, defExtended string
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, season_id, rsvp_default_players, rsvp_default_extended FROM training_sessions WHERE id = ?`, sessionID).
-		Scan(&teamID, &seasonID, &defPlayers, &defExtended)
+		`SELECT kader_id, rsvp_default_players, rsvp_default_extended FROM training_sessions WHERE id = ?`, sessionID).
+		Scan(&kaderID, &defPlayers, &defExtended)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1660,17 +1741,34 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isTrainerLike, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	isTrainerLike, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	if !isTrainerLike {
+		// Kader-Zugehörigkeit statt der View user_accessible_teams: die filtert
+		// `k.team_id IS NOT NULL` und kennt Übungsgruppen deshalb nicht.
 		var count int
-		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM user_accessible_teams WHERE user_id = ? AND team_id = ? AND season_id = ?`,
-			claims.UserID, teamID, seasonID).Scan(&count)
+		h.db.QueryRowContext(r.Context(), `
+			SELECT COUNT(*) FROM (
+				SELECT m.user_id AS user_id FROM kader_members km
+				JOIN members m ON m.id = km.member_id WHERE km.kader_id = ?
+				UNION
+				SELECT m.user_id FROM kader_extended_members kem
+				JOIN members m ON m.id = kem.member_id WHERE kem.kader_id = ?
+				UNION
+				SELECT m.user_id FROM kader_trainers kt
+				JOIN members m ON m.id = kt.member_id WHERE kt.kader_id = ?
+				UNION
+				SELECT fl.parent_user_id FROM family_links fl
+				JOIN kader_members km2 ON km2.member_id = fl.member_id WHERE km2.kader_id = ?
+				UNION
+				SELECT fl.parent_user_id FROM family_links fl
+				JOIN kader_extended_members kem2 ON kem2.member_id = fl.member_id WHERE kem2.kader_id = ?
+			) WHERE user_id = ?`,
+			kaderID, kaderID, kaderID, kaderID, kaderID, claims.UserID).Scan(&count)
 		if count == 0 {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -1710,8 +1808,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			       tr.reason AS reason,
 			       NULL AS present
 			FROM members m
-			JOIN kader_trainers kt ON kt.member_id = m.id
-			JOIN kader k ON k.id = kt.kader_id AND k.team_id = ? AND k.season_id = ?
+			JOIN kader_trainers kt ON kt.member_id = m.id AND kt.kader_id = ?
 			LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 
 			UNION
@@ -1725,13 +1822,12 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			       tr.reason AS reason,
 			       ta.present AS present
 			FROM members m
-			JOIN player_memberships pm ON pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?
+			JOIN kader_members pm ON pm.member_id = m.id AND pm.kader_id = ?
 			LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 			LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
 			WHERE NOT EXISTS (
 				SELECT 1 FROM kader_trainers kt2
-				JOIN kader k2 ON k2.id = kt2.kader_id
-				WHERE kt2.member_id = m.id AND k2.team_id = ? AND k2.season_id = ?
+				WHERE kt2.member_id = m.id AND kt2.kader_id = ?
 			)
 
 			UNION
@@ -1745,23 +1841,21 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			       tr.reason AS reason,
 			       ta.present AS present
 			FROM members m
-			JOIN kader_extended_members kem ON kem.member_id = m.id
-			JOIN kader k ON k.id = kem.kader_id AND k.team_id = ? AND k.season_id = ?
+			JOIN kader_extended_members kem ON kem.member_id = m.id AND kem.kader_id = ?
 			LEFT JOIN training_responses tr ON tr.training_id = ? AND tr.member_id = m.id
 			LEFT JOIN training_attendances ta ON ta.training_id = ? AND ta.member_id = m.id
 			WHERE NOT EXISTS (
-				SELECT 1 FROM player_memberships pm WHERE pm.member_id = m.id AND pm.team_id = ? AND pm.season_id = ?
+				SELECT 1 FROM kader_members pm WHERE pm.member_id = m.id AND pm.kader_id = ?
 			)
 			AND NOT EXISTS (
 				SELECT 1 FROM kader_trainers kt3
-				JOIN kader k3 ON k3.id = kt3.kader_id
-				WHERE kt3.member_id = m.id AND k3.team_id = ? AND k3.season_id = ?
+				WHERE kt3.member_id = m.id AND kt3.kader_id = ?
 			)
 		)
 		ORDER BY member_name`,
-		teamID, seasonID, sessionID,
-		teamID, seasonID, sessionID, sessionID, teamID, seasonID,
-		teamID, seasonID, sessionID, sessionID, teamID, seasonID, teamID, seasonID)
+		kaderID, sessionID,
+		kaderID, sessionID, sessionID, kaderID,
+		kaderID, sessionID, sessionID, kaderID, kaderID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "GetAttendances: %v\n", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -1836,10 +1930,10 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var teamID int
+	var kaderID int
 	var isPastOrToday bool
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id, date(date) <= date('now') FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID, &isPastOrToday)
+		`SELECT kader_id, date(date) <= date('now') FROM training_sessions WHERE id = ?`, sessionID).Scan(&kaderID, &isPastOrToday)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1848,7 +1942,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -1914,11 +2008,10 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		var isTrainerOnly int
 		if err := tx.QueryRowContext(r.Context(), `
 			SELECT CASE
-			  WHEN EXISTS (SELECT 1 FROM kader_trainers kt JOIN kader k ON k.id=kt.kader_id
-			               WHERE kt.member_id=? AND k.team_id=? AND k.season_id=(SELECT season_id FROM training_sessions WHERE id=?))
-			    AND NOT EXISTS (SELECT 1 FROM player_memberships pm WHERE pm.member_id=? AND pm.team_id=?)
+			  WHEN EXISTS (SELECT 1 FROM kader_trainers kt WHERE kt.member_id=? AND kt.kader_id=?)
+			    AND NOT EXISTS (SELECT 1 FROM kader_members pm WHERE pm.member_id=? AND pm.kader_id=?)
 			  THEN 1 ELSE 0 END`,
-			e.MemberID, teamID, sessionID, e.MemberID, teamID).Scan(&isTrainerOnly); err != nil {
+			e.MemberID, kaderID, e.MemberID, kaderID).Scan(&isTrainerOnly); err != nil {
 			fmt.Fprintf(os.Stderr, "SaveAttendances trainer check: %v\n", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -1972,9 +2065,9 @@ func (h *Handler) ResetAttendanceTracking(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	var teamID int
+	var kaderID int
 	err = h.db.QueryRowContext(r.Context(),
-		`SELECT team_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&teamID)
+		`SELECT kader_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&kaderID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -1983,7 +2076,7 @@ func (h *Handler) ResetAttendanceTracking(w http.ResponseWriter, r *http.Request
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	ok, err := h.hasTeamAccess(r.Context(), claims, teamID)
+	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -2018,7 +2111,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_players, tr.reason, tr.absence_id IS NOT NULL AS locked
 		FROM training_sessions ts
-		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
+		JOIN kader k ON k.id = ts.kader_id
 		JOIN kader_members km ON km.kader_id = k.id
 		JOIN members m ON m.id = km.member_id
 		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
@@ -2029,7 +2122,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 
 		SELECT ts.id, m.id, m.first_name || ' ' || m.last_name, tr.status, ts.rsvp_default_extended, tr.reason, tr.absence_id IS NOT NULL AS locked
 		FROM training_sessions ts
-		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
+		JOIN kader k ON k.id = ts.kader_id
 		JOIN kader_extended_members kem ON kem.kader_id = k.id
 		JOIN members m ON m.id = kem.member_id
 		JOIN family_links fl ON fl.member_id = m.id AND fl.parent_user_id = ?
@@ -2038,7 +2131,7 @@ func (h *Handler) attachChildrenRSVPToSessions(ctx context.Context, parentUserID
 		  AND NOT EXISTS (
 			SELECT 1 FROM kader_members km2
 			JOIN kader k2 ON k2.id = km2.kader_id
-			WHERE km2.member_id = m.id AND k2.team_id = ts.team_id AND k2.season_id = ts.season_id
+			WHERE km2.member_id = m.id AND k2.id = ts.kader_id
 		  )
 
 		ORDER BY 3`, ph, ph),

@@ -69,15 +69,44 @@ func (a *Audience) Team(ctx context.Context, teamIDs []int, extraUserIDs ...int)
 	return set.slice()
 }
 
+// Kader returns the user IDs that should be notified about an event bound to the
+// given kader rows: their members (players), extended members and trainers, the
+// parents linked to those members, plus the club-wide staff.
+//
+// The kader-keyed twin of Team. It exists because an Übungsgruppe has no teams
+// row at all — Team would resolve to the staff-only set for it. For team kader
+// both produce the same audience.
+func (a *Audience) Kader(ctx context.Context, kaderIDs []int, extraUserIDs ...int) []int {
+	set := newIDSet()
+	a.collectAdmins(ctx, set)
+	a.collectByFunctions(ctx, set, []string{"vorstand", "vorstand_beisitzer", "sportliche_leitung"})
+
+	if len(kaderIDs) > 0 {
+		a.collectKaderMembers(ctx, set, kaderIDs)
+		a.collectKaderParents(ctx, set, kaderIDs)
+	}
+
+	for _, uid := range extraUserIDs {
+		if uid > 0 {
+			set.add(uid)
+		}
+	}
+	return set.slice()
+}
+
 // TeamIDsForGame returns the team IDs linked to a game via game_teams.
 func (a *Audience) TeamIDsForGame(ctx context.Context, gameID int) []int {
 	return a.teamIDs(ctx, `SELECT team_id FROM game_teams WHERE game_id = ?`, gameID)
 }
 
-// TeamIDsForTraining returns the team ID of a training session (single team per
-// session). Returned as a slice for symmetry with the games path.
-func (a *Audience) TeamIDsForTraining(ctx context.Context, trainingID int) []int {
-	return a.teamIDs(ctx, `SELECT team_id FROM training_sessions WHERE id = ?`, trainingID)
+// KaderIDsForTraining returns the kader ID owning a training session (single
+// kader per session). Returned as a slice for symmetry with the games path.
+//
+// Deliberately keyed on kader_id, not team_id: a session owned by an
+// Übungsgruppe carries team_id NULL, and resolving over it would leave the
+// audience empty — live updates would silently reach nobody.
+func (a *Audience) KaderIDsForTraining(ctx context.Context, trainingID int) []int {
+	return a.teamIDs(ctx, `SELECT kader_id FROM training_sessions WHERE id = ?`, trainingID)
 }
 
 // MembersAudience resolves the audience for events bound to one or more members
@@ -167,9 +196,9 @@ func (a *Audience) TeamIDsForKader(ctx context.Context, kaderID any) []int {
 	return a.teamIDs(ctx, `SELECT team_id FROM kader WHERE id = ? AND team_id IS NOT NULL`, kaderID)
 }
 
-// TeamIDsForTrainingSeries returns the team ID of a training series.
-func (a *Audience) TeamIDsForTrainingSeries(ctx context.Context, seriesID int) []int {
-	return a.teamIDs(ctx, `SELECT team_id FROM training_series WHERE id = ?`, seriesID)
+// KaderIDsForTrainingSeries returns the kader ID owning a training series.
+func (a *Audience) KaderIDsForTrainingSeries(ctx context.Context, seriesID int) []int {
+	return a.teamIDs(ctx, `SELECT kader_id FROM training_series WHERE id = ?`, seriesID)
 }
 
 // GameAudience resolves the team audience for a game (its teams' players +
@@ -180,9 +209,10 @@ func (a *Audience) GameAudience(ctx context.Context, gameID int, extraUserIDs ..
 	return a.Team(ctx, a.TeamIDsForGame(ctx, gameID), extraUserIDs...)
 }
 
-// TrainingAudience resolves the team audience for a training session.
+// TrainingAudience resolves the audience for a training session over its owning
+// kader.
 func (a *Audience) TrainingAudience(ctx context.Context, trainingID int, extraUserIDs ...int) []int {
-	return a.Team(ctx, a.TeamIDsForTraining(ctx, trainingID), extraUserIDs...)
+	return a.Kader(ctx, a.KaderIDsForTraining(ctx, trainingID), extraUserIDs...)
 }
 
 // teamIDs runs a single-int-column query and returns the distinct positive IDs.
@@ -258,6 +288,55 @@ func (a *Audience) collectTeamParents(ctx context.Context, set *idSet, teamIDs [
 	      JOIN team_memberships tm ON tm.member_id = fl.member_id
 	      WHERE tm.team_id IN (` + placeholders(len(teamIDs)) + `)`
 	rows, err := a.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return
+	}
+	scanIDs(rows, set)
+}
+
+// kaderMemberIDsQuery yields the member IDs of the given kader rows: players,
+// extended squad and trainers. Shared by collectKaderMembers (→ their users) and
+// collectKaderParents (→ their parents).
+const kaderMemberIDsQuery = `
+	SELECT member_id FROM kader_members         WHERE kader_id IN (%[1]s)
+	UNION
+	SELECT member_id FROM kader_extended_members WHERE kader_id IN (%[1]s)
+	UNION
+	SELECT member_id FROM kader_trainers        WHERE kader_id IN (%[1]s)`
+
+// kaderMemberArgs repeats kaderIDs n times for the n placeholder groups in
+// kaderMemberIDsQuery.
+func kaderMemberArgs(kaderIDs []int, n int) []any {
+	args := make([]any, 0, n*len(kaderIDs))
+	for range n {
+		for _, id := range kaderIDs {
+			args = append(args, id)
+		}
+	}
+	return args
+}
+
+// collectKaderMembers adds the user IDs of members belonging to any of the given
+// kader rows (players + extended squad + trainers).
+func (a *Audience) collectKaderMembers(ctx context.Context, set *idSet, kaderIDs []int) {
+	q := `SELECT DISTINCT m.user_id
+	      FROM members m
+	      WHERE m.user_id IS NOT NULL
+	        AND m.id IN (` + strings.ReplaceAll(kaderMemberIDsQuery, "%[1]s", placeholders(len(kaderIDs))) + `)`
+	rows, err := a.db.QueryContext(ctx, q, kaderMemberArgs(kaderIDs, 3)...)
+	if err != nil {
+		return
+	}
+	scanIDs(rows, set)
+}
+
+// collectKaderParents adds the user IDs of parents linked (family_links) to
+// members of any of the given kader rows.
+func (a *Audience) collectKaderParents(ctx context.Context, set *idSet, kaderIDs []int) {
+	q := `SELECT DISTINCT fl.parent_user_id
+	      FROM family_links fl
+	      WHERE fl.member_id IN (` + strings.ReplaceAll(kaderMemberIDsQuery, "%[1]s", placeholders(len(kaderIDs))) + `)`
+	rows, err := a.db.QueryContext(ctx, q, kaderMemberArgs(kaderIDs, 3)...)
 	if err != nil {
 		return
 	}

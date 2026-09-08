@@ -995,8 +995,9 @@ func TestFoerderkind_KaderUndErweiterterKaderZuordnung(t *testing.T) {
 	database := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, database, "2025/26")
 	teamID := testutil.CreateTeam(t, database, "Förderteam")
+	teamID2 := testutil.CreateTeam(t, database, "Förderteam 2")
 	kader1 := testutil.CreateKader(t, database, teamID, seasonID)
-	kader2 := testutil.CreateKader(t, database, teamID, seasonID)
+	kader2 := testutil.CreateKader(t, database, teamID2, seasonID)
 
 	memberID := testutil.CreateMemberWithFields(t, database, testutil.MemberOpts{
 		FirstName: "Timo", LastName: "Talent", Status: "foerderkind",

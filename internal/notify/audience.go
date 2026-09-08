@@ -19,8 +19,10 @@ import (
 // Trainer bekommen KEINEN Eltern-Zweig: sie stehen hier in ihrer Funktion als
 // Trainer, nicht als Kind.
 //
-// `%[1]s` ist die Platzhalterliste der Mannschafts-IDs; sie steht fünfmal, die
-// Argumente werden entsprechend fünfmal angehängt.
+// `%[1]s` ist die Platzhalterliste der Schlüssel-IDs; sie steht fünfmal, die
+// Argumente werden entsprechend fünfmal angehängt. `%[2]s` ist die Spalte, über
+// die der Kader adressiert wird: `team_id` für eine Mannschaft, `id` für eine
+// Übungsgruppe (die keine `teams`-Zeile hat, siehe KaderAudience).
 const teamAudienceQuery = `
 	SELECT DISTINCT user_id FROM (
 		SELECT m.user_id AS user_id
@@ -28,7 +30,7 @@ const teamAudienceQuery = `
 		JOIN kader_members km ON km.kader_id = k.id
 		JOIN members m ON m.id = km.member_id
 		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
-		WHERE k.team_id IN (%[1]s) AND m.user_id IS NOT NULL
+		WHERE k.%[2]s IN (%[1]s) AND m.user_id IS NOT NULL
 
 		UNION
 
@@ -37,7 +39,7 @@ const teamAudienceQuery = `
 		JOIN kader_members km ON km.kader_id = k.id
 		JOIN family_links fl ON fl.member_id = km.member_id
 		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
-		WHERE k.team_id IN (%[1]s)
+		WHERE k.%[2]s IN (%[1]s)
 
 		UNION
 
@@ -46,7 +48,7 @@ const teamAudienceQuery = `
 		JOIN kader_extended_members kem ON kem.kader_id = k.id
 		JOIN members m ON m.id = kem.member_id
 		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
-		WHERE k.team_id IN (%[1]s) AND m.user_id IS NOT NULL
+		WHERE k.%[2]s IN (%[1]s) AND m.user_id IS NOT NULL
 
 		UNION
 
@@ -55,7 +57,7 @@ const teamAudienceQuery = `
 		JOIN kader_extended_members kem ON kem.kader_id = k.id
 		JOIN family_links fl ON fl.member_id = kem.member_id
 		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
-		WHERE k.team_id IN (%[1]s)
+		WHERE k.%[2]s IN (%[1]s)
 
 		UNION
 
@@ -64,7 +66,7 @@ const teamAudienceQuery = `
 		JOIN kader_trainers kt ON kt.kader_id = k.id
 		JOIN members m ON m.id = kt.member_id
 		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
-		WHERE k.team_id IN (%[1]s) AND m.user_id IS NOT NULL
+		WHERE k.%[2]s IN (%[1]s) AND m.user_id IS NOT NULL
 	)`
 
 // TeamAudience liefert die Nutzerkonten, die eine Benachrichtigung zu einem
@@ -97,38 +99,61 @@ const teamAudienceQuery = `
 // Fehler ohnehin nur loggen. Anders als die drei Vorgänger gibt die Funktion bei
 // einem Query-Fehler aber nicht stumm nil zurück, sondern protokolliert ihn.
 func TeamAudience(db *sql.DB, teamIDs ...int) []int {
-	if len(teamIDs) == 0 {
+	return audienceByKader(db, "team_id", "notify.TeamAudience", teamIDs)
+}
+
+// KaderAudience liefert dieselbe Menge wie TeamAudience, adressiert den Kader
+// aber direkt über `kader.id` statt über die Mannschaft. Nötig für
+// Übungsgruppen: sie haben keine `teams`-Zeile, `TeamAudience` fände für sie
+// niemanden.
+//
+// Für Mannschaftskader sind beide Wege deckungsgleich — `kader` führt je Saison
+// höchstens eine Zeile pro Team. Der Trainings-Meldungsweg nutzt deshalb
+// ausschließlich diesen hier: ein Termin kennt seinen Kader (`kader_id`), nicht
+// notwendig eine Mannschaft.
+//
+// Bezugsgröße bleibt die AKTIVE Saison (unveränderte Zusage von TeamAudience):
+// Termine außerhalb der aktiven Saison erzeugen weiterhin keine Meldung.
+func KaderAudience(db *sql.DB, kaderIDs ...int) []int {
+	return audienceByKader(db, "id", "notify.KaderAudience", kaderIDs)
+}
+
+// audienceByKader führt teamAudienceQuery über die gegebene Schlüsselspalte aus.
+// keyColumn ist eine Konstante aus diesem Paket, nie Nutzereingabe.
+func audienceByKader(db *sql.DB, keyColumn, label string, ids []int) []int {
+	if len(ids) == 0 {
 		return nil
 	}
 
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(teamIDs)), ",")
-	args := make([]any, 0, 5*len(teamIDs))
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, 0, 5*len(ids))
 	for range 5 {
-		for _, id := range teamIDs {
+		for _, id := range ids {
 			args = append(args, id)
 		}
 	}
 
 	query := strings.ReplaceAll(teamAudienceQuery, "%[1]s", placeholders)
+	query = strings.ReplaceAll(query, "%[2]s", keyColumn)
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		slog.Error("notify.TeamAudience query", "team_ids", teamIDs, "error", err)
+		slog.Error(label+" query", "ids", ids, "error", err)
 		return nil
 	}
 	defer rows.Close()
 
-	var ids []int
+	var out []int
 	for rows.Next() {
 		var id int
 		if err := rows.Scan(&id); err != nil {
-			slog.Error("notify.TeamAudience scan", "error", err)
+			slog.Error(label+" scan", "error", err)
 			return nil
 		}
-		ids = append(ids, id)
+		out = append(out, id)
 	}
 	if err := rows.Err(); err != nil {
-		slog.Error("notify.TeamAudience rows", "error", err)
+		slog.Error(label+" rows", "error", err)
 		return nil
 	}
-	return ids
+	return out
 }

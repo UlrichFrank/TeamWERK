@@ -80,9 +80,9 @@ func TestListSessions_ExcludeSeriesFilter(t *testing.T) {
 	singleID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-03-05")
 	seriesID := testutil.CreateTrainingSeries(t, db, teamID, seasonID, creatorID)
 	res, err := db.Exec(
-		`INSERT INTO training_sessions (team_id, season_id, series_id, date, start_time, end_time, title)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		teamID, seasonID, seriesID, "2026-03-06", "18:00", "20:00", "Serientermin")
+		`INSERT INTO training_sessions (kader_id, team_id, season_id, series_id, date, start_time, end_time, title)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		testutil.CreateKader(t, db, teamID, seasonID), teamID, seasonID, seriesID, "2026-03-06", "18:00", "20:00", "Serientermin")
 	if err != nil {
 		t.Fatalf("insert series session: %v", err)
 	}

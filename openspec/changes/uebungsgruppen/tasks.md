@@ -47,21 +47,21 @@
 
 ## 3. Trainings auf `kader_id` umstellen
 
-- [ ] 3.1 `internal/trainings/handler.go` — alle Vorkommen von
+- [x] 3.1 `internal/trainings/handler.go` — alle Vorkommen von
       `k.team_id = ts.team_id AND k.season_id = ts.season_id` durch `k.id = ts.kader_id`
       ersetzen (63 Fundstellen). Der Block wird dabei kürzer, nicht länger
-- [ ] 3.2 `player_memberships`-Zugriffe im selben Paket durch direktes `kader_members` mit
+- [x] 3.2 `player_memberships`-Zugriffe im selben Paket durch direktes `kader_members` mit
       `kader_id` ersetzen — die View filtert `WHERE k.team_id IS NOT NULL` und würde
       Übungsgruppen ausschließen
-- [ ] 3.3 Schreibpfade (`POST`/`PUT` Session und Serie) setzen `kader_id`; `team_id` wird
+- [x] 3.3 Schreibpfade (`POST`/`PUT` Session und Serie) setzen `kader_id`; `team_id` wird
       aus `kader.team_id` abgeleitet und ist für Übungsgruppen NULL
-- [ ] 3.4 `internal/trainings/unavailabilities.go` auf `kader_id` umstellen
-- [ ] 3.5 `internal/hub/audience.go` — `trainingTeams` (Zeile 80) löst die SSE-Zielmenge
+- [x] 3.4 `internal/trainings/unavailabilities.go` auf `kader_id` umstellen
+- [x] 3.5 `internal/hub/audience.go` — `trainingTeams` (Zeile 80) löst die SSE-Zielmenge
       über `kader_id` auf. Ohne diesen Schritt bleiben Live-Updates für Übungsgruppen
       **stumm**, ohne Fehlermeldung
-- [ ] 3.6 `internal/scheduler` — 24-h-/3-h-Erinnerungen und Termin-Hinweise erreichen
+- [x] 3.6 `internal/scheduler` — 24-h-/3-h-Erinnerungen und Termin-Hinweise erreichen
       Übungsgruppen (Empfänger über `kader_id`)
-- [ ] 3.7 Verifizieren, dass `internal/attendance`, `absences`, `calendar`, `dashboard`,
+- [x] 3.7 Verifizieren, dass `internal/attendance`, `absences`, `calendar`, `dashboard`,
       `videos` **unverändert** bleiben und über `team_id` weiter auflösen — das ist der
       Ausschlussmechanismus, kein Versäumnis
 
