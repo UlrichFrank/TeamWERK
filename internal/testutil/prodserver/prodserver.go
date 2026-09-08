@@ -30,6 +30,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/matchreports"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/practicegroups"
 	"github.com/teamstuttgart/teamwerk/internal/settings"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
@@ -62,6 +63,7 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Dashboard:      dashboard.NewHandler(database),
 		Games:          games.NewHandler(database, cfg, hubInstance),
 		Kader:          kader.NewHandler(database, hubInstance),
+		PracticeGroups: practicegroups.NewHandler(database, hubInstance),
 		Upload:         upload.NewHandler(database, t.TempDir(), testutil.TestJWTSecret, hubInstance),
 		Files:          files.NewHandler(database, t.TempDir(), testutil.TestJWTSecret),
 		Carpool:        carpooling.NewHandler(database, cfg, hubInstance),
