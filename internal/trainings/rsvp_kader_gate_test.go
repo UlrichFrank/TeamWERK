@@ -242,10 +242,14 @@ func TestRespond_AnzeigeUndAntwortrechtStimmenUeberein(t *testing.T) {
 		json.NewDecoder(lr.Body).Decode(&body)
 		lr.Body.Close()
 
-		shown := false
+		// listed und flag getrennt: fehlt das Item ganz, ist das ein anderer
+		// Befund (Sichtbarkeitsfilter) als ein am_i_participant=false auf einem
+		// gelieferten Termin — beides bricht die Invariante, aber an
+		// verschiedenen Stellen.
+		listed, flag := false, false
 		for _, it := range body.Items {
 			if it.ID == sessionID {
-				shown = it.AmIParticipant
+				listed, flag = true, it.AmIParticipant
 			}
 		}
 
@@ -254,9 +258,57 @@ func TestRespond_AnzeigeUndAntwortrechtStimmenUeberein(t *testing.T) {
 		rr.Body.Close()
 		mayAnswer := rr.StatusCode == http.StatusNoContent
 
-		if shown != mayAnswer {
-			t.Errorf("%s: am_i_participant=%v, Antwort=%d — Anzeige und Antwortrecht widersprechen sich",
-				c.name, shown, rr.StatusCode)
+		if flag != mayAnswer {
+			t.Errorf("%s: gelistet=%v, am_i_participant=%v, Antwort=%d — Anzeige und Antwortrecht widersprechen sich",
+				c.name, listed, flag, rr.StatusCode)
 		}
 	}
+}
+
+// TestListSessions_KaderTrainerOhneVereinsfunktion: der Befund, den der
+// Konsistenztest oben zutage gefördert hat. Der Trainer-Zweig des
+// Sichtbarkeitsfilters in ListSessions hing an der Vereinsfunktion `trainer`
+// UND der Eintragung in kader_trainers; das Antwortrecht (isKaderParticipant)
+// hängt nur an der Eintragung. Wer als Trainer eines Kaders geführt wird, ohne
+// die Vereinsfunktion zu tragen, durfte den Termin damit verwalten und
+// beantworten, sah ihn aber nicht.
+//
+// Die Konstellation ist keine Theorie: KaderTrainerSearch bietet den
+// Funktionsfilter als abwählbare Checkbox an — ein Übungsgruppenleiter ohne
+// Vereinsfunktion ist ausdrücklich vorgesehen.
+func TestListSessions_KaderTrainerOhneVereinsfunktion(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	groupID := testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+	sessionID := createPracticeSession(t, db, groupID, seasonID, "2026-06-15")
+
+	uid := testutil.CreateUser(t, db, "standard")
+	testutil.AddKaderTrainer(t, db, groupID, testutil.CreateMember(t, db, uid))
+
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	h.SetNow(fixedNow(berlinTime(t, "2006-01-02 15:04", "2026-06-14 12:00")))
+	srv := testServer(t, h)
+
+	// Token ohne jede Vereinsfunktion — die Zugehörigkeit steht allein in
+	// kader_trainers.
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-01-01&to=2026-12-31",
+		testutil.Token(t, uid, "standard", nil))
+	var body struct {
+		Items []struct {
+			ID             int  `json:"id"`
+			AmIParticipant bool `json:"am_i_participant"`
+		} `json:"items"`
+	}
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+
+	for _, it := range body.Items {
+		if it.ID == sessionID {
+			if !it.AmIParticipant {
+				t.Fatalf("Termin gelistet, aber am_i_participant=false")
+			}
+			return
+		}
+	}
+	t.Fatalf("Termin %d fehlt in der Liste — der Kader-Trainer sieht seinen eigenen Termin nicht", sessionID)
 }

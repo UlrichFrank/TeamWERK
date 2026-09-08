@@ -1198,15 +1198,22 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		// gD-Kader stand), bleibt strukturell ausgeschlossen — eine Alt-Saison-
 		// Zugehörigkeit ist eine andere kader_id.
 		var conds []string
-		if claims.HasFunction("trainer") {
-			conds = append(conds, `EXISTS (
-				SELECT 1 FROM kader k
-				JOIN kader_trainers kt ON kt.kader_id = k.id
-				JOIN members m ON m.id = kt.member_id
-				WHERE m.user_id = ?
-				  AND k.id = ts.kader_id)`)
-			teamArgs = append(teamArgs, claims.UserID)
-		}
+		// Der Trainer-Zweig hängt an der EINTRAGUNG in kader_trainers, nicht an
+		// der Vereinsfunktion `trainer`. Beides zu verlangen erzeugte genau den
+		// Widerspruch, den isKaderParticipant (s. o.) ausschließen soll: wer als
+		// Trainer eines Kaders eingetragen ist, darf dessen Termine verwalten
+		// (hasKaderAccess) und seit `rsvp-kader-gate` auch beantworten — sah sie
+		// hier aber nicht. Die Konstellation ist keine Theorie: die
+		// Trainer-Auswahl einer Übungsgruppe (KaderTrainerSearch) bietet den
+		// Funktionsfilter als abwählbare Checkbox an, ein Gruppenleiter ohne
+		// Vereinsfunktion ist also vorgesehen.
+		conds = append(conds, `EXISTS (
+			SELECT 1 FROM kader k
+			JOIN kader_trainers kt ON kt.kader_id = k.id
+			JOIN members m ON m.id = kt.member_id
+			WHERE m.user_id = ?
+			  AND k.id = ts.kader_id)`)
+		teamArgs = append(teamArgs, claims.UserID)
 		if claims.IsParent {
 			conds = append(conds, `(EXISTS (
 				SELECT 1 FROM kader_members pm
