@@ -635,6 +635,14 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/fee-run/protocol", expected: exVorstandKassierer},
 
 	// ── Vorstand ─────────────────────────────────────────────────────────────────
+	// Übungsgruppen (kader kind='practice', ohne teams-Zwilling) — Einrichtung
+	// ist Vorstandssache; die Mitarbeit läuft danach über die Trainings-Routen.
+	{method: "GET", path: "/api/practice-groups", expected: exVorstand},
+	{method: "POST", path: "/api/practice-groups", expected: exVorstand},
+	{method: "GET", path: "/api/practice-groups/{id}", expected: exVorstand},
+	{method: "PUT", path: "/api/practice-groups/{id}", expected: exVorstand},
+	{method: "DELETE", path: "/api/practice-groups/{id}", expected: exVorstand},
+	{method: "GET", path: "/api/practice-groups/{id}/member-suggestions", expected: exVorstand},
 	{method: "POST", path: "/api/members", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}/status", expected: exVorstand},

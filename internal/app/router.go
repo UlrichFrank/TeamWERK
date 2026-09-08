@@ -34,6 +34,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/media"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/practicegroups"
 	"github.com/teamstuttgart/teamwerk/internal/settings"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
 	"github.com/teamstuttgart/teamwerk/internal/teams"
@@ -54,6 +55,7 @@ type Handlers struct {
 	Dashboard      *dashboard.Handler
 	Games          *games.Handler
 	Kader          *kader.Handler
+	PracticeGroups *practicegroups.Handler
 	Upload         *upload.Handler
 	Files          *files.Handler
 	Media          *media.Handler
@@ -594,6 +596,16 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Vorstand
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))
+			// Übungsgruppen: benannte Kader ohne teams-Zwilling. Enger als die
+			// Kader-Routen (dort auch Trainer/sportliche Leitung) — die Gruppe
+			// wird vom Vorstand eingerichtet, danach arbeitet der eingetragene
+			// Trainer über die Trainings-Routen mit ihr.
+			r.Get("/api/practice-groups", h.PracticeGroups.List)
+			r.Post("/api/practice-groups", h.PracticeGroups.Create)
+			r.Get("/api/practice-groups/{id}", h.PracticeGroups.Get)
+			r.Put("/api/practice-groups/{id}", h.PracticeGroups.Update)
+			r.Delete("/api/practice-groups/{id}", h.PracticeGroups.Delete)
+			r.Get("/api/practice-groups/{id}/member-suggestions", h.PracticeGroups.MemberSuggestions)
 			r.Post("/api/members", h.Members.Create)
 			r.Put("/api/members/{id}", h.Members.Update)
 			r.Put("/api/members/{id}/status", h.Members.UpdateStatus)

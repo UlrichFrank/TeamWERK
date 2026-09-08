@@ -49,6 +49,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/metrics"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
+	"github.com/teamstuttgart/teamwerk/internal/practicegroups"
 	"github.com/teamstuttgart/teamwerk/internal/scheduler"
 	"github.com/teamstuttgart/teamwerk/internal/settings"
 	"github.com/teamstuttgart/teamwerk/internal/stammvereine"
@@ -281,6 +282,7 @@ func serve() {
 		Dashboard:           dashboard.NewHandler(database),
 		Games:               games.NewHandler(database, cfg, hubInstance),
 		Kader:               kader.NewHandler(database, hubInstance),
+		PracticeGroups:      practicegroups.NewHandler(database, hubInstance),
 		Upload:              upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret, hubInstance),
 		Files:               files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret),
 		Media:               media.NewHandler(database, cfg.MediaDir),

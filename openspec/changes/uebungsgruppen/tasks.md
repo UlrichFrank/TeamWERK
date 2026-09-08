@@ -23,23 +23,23 @@
 
 ## 2. Übungsgruppen-Package
 
-- [ ] 2.1 `internal/practicegroups/handler.go` — `NewHandler(db, hub)`, CRUD für
+- [x] 2.1 `internal/practicegroups/handler.go` — `NewHandler(db, hub)`, CRUD für
       `GET|POST /api/practice-groups`, `GET|PUT|DELETE /api/practice-groups/{id}`,
       `GET /api/practice-groups/{id}/member-suggestions`
-- [ ] 2.2 Anlage schreibt `kind='practice'` **ohne** `ensureTeam` — kein `teams`-Zwilling.
+- [x] 2.2 Anlage schreibt `kind='practice'` **ohne** `ensureTeam` — kein `teams`-Zwilling.
       Aktive Saison ist Pflicht (400 sonst), Namensdublette → 409
-- [ ] 2.3 Jede Mutation ruft `h.hub.Broadcast("practice-groups")` (Broadcast-Gate,
+- [x] 2.3 Jede Mutation ruft `h.hub.Broadcast("practice-groups")` (Broadcast-Gate,
       `internal/arch/broadcast_test.go`)
-- [ ] 2.4 Routen in `internal/app/router.go` im Vorstand-Tier registrieren, Handler in
+- [x] 2.4 Routen in `internal/app/router.go` im Vorstand-Tier registrieren, Handler in
       `cmd/teamwerk/main.go` verdrahten
-- [ ] 2.5 `internal/arch/arch_test.go` — neues Package `practicegroups` als Domain
+- [x] 2.5 `internal/arch/arch_test.go` — neues Package `practicegroups` als Domain
       klassifizieren
-- [ ] 2.6 Gate in `internal/kader/handler.go`: `PUT /api/kader/{id}` lehnt
+- [x] 2.6 Gate in `internal/kader/handler.go`: `PUT /api/kader/{id}` lehnt
       `extended_members_add`/`_remove` bei `kind='practice'` mit HTTP 409 ab
-- [ ] 2.7 Trainings-Guard in `DeleteKader` **und** `DeletePracticeGroup`: 409 mit
+- [x] 2.7 Trainings-Guard in `DeleteKader` **und** `DeletePracticeGroup`: 409 mit
       `training_count`, solange Termine oder Serien am Kader hängen — dieselbe Form wie die
       bestehende Mitglieder-Guard (`handler.go:737`)
-- [ ] 2.8 `internal/kader/copy.go` — `CopyFromSeason` filtert `kind='practice'` aus der
+- [x] 2.8 `internal/kader/copy.go` — `CopyFromSeason` filtert `kind='practice'` aus der
       Quellmenge. Ohne diesen Filter kollabieren alle Übungsgruppen auf den `sourceMap`-
       Schlüssel `"|"` und `ensureTeam(NULL, NULL, 1)` legt ein Müll-Team an.
       *Nur die Sicherung — ein Kopierpfad für Übungsgruppen ist entschieden ausgeschlossen

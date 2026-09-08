@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,10 +252,12 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	where := ` WHERE k.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
+	// kind='team': Übungsgruppen haben weder Altersklasse noch Geschlecht (beide
+	// NULL) und gehören nicht in die Kader-Maske — sie haben eine eigene Route.
+	where := ` WHERE k.kind='team' AND k.season_id=(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
 	var args []any
 	if seasonID != "" {
-		where = ` WHERE k.season_id=?`
+		where = ` WHERE k.kind='team' AND k.season_id=?`
 		args = append(args, seasonID)
 	}
 
@@ -312,7 +315,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	k, seasonStartYear, err := scanKaderRow(h.db.QueryRowContext(r.Context(),
-		kaderSelectSQL+` WHERE k.id=?`, id))
+		kaderSelectSQL+` WHERE k.id=? AND k.kind='team'`, id))
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -363,6 +366,30 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
+	}
+
+	// Erweiterter Kader ist die einzige unerwünschte Fläche, die an kader_id statt
+	// an teams.id hängt und für eine Übungsgruppe deshalb erreichbar bliebe.
+	// 409, nicht 404: der Kader existiert, nur passt die Operation nicht zur
+	// Variante (design.md — Entscheidung 3).
+	if len(req.ExtendedMembersAdd) > 0 || len(req.ExtendedMembersRemove) > 0 {
+		var kind string
+		if err := h.db.QueryRowContext(r.Context(), `SELECT kind FROM kader WHERE id=?`, id).Scan(&kind); err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "not found", http.StatusNotFound)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+		if kind == "practice" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error": "Übungsgruppen haben keinen erweiterten Kader",
+			})
+			return
+		}
 	}
 
 	// Team(s) VOR den Änderungen erfassen: bei einem Age-Class-Wechsel repointet
@@ -491,7 +518,7 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 		`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year,
 		        CAST(strftime('%Y', s.start_date) AS INTEGER)
 		 FROM kader k JOIN seasons s ON s.id=k.season_id
-		 WHERE k.id=?`, id).
+		 WHERE k.id=? AND k.kind='team'`, id).
 		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &seasonStartYear)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -748,10 +775,27 @@ func (h *Handler) DeleteKader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Zweite Guard derselben Gestalt: ein LEERER Altkader — genau das Ergebnis
+	// eines Saisonaufräumens — wäre sonst löschbar und nähme seine Trainings samt
+	// Anwesenheits- und RSVP-Historie mit. training_sessions.kader_id trägt
+	// ON DELETE RESTRICT; ohne diese Guard käme statt 409 ein 500.
+	kaderID, err := strconv.Atoi(id)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if n, err := policy.KaderTrainingCount(r.Context(), h.db, kaderID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if n > 0 {
+		policy.WriteKaderTrainingConflict(w, n)
+		return
+	}
+
 	// Team vor dem Löschen auflösen (team_id ist danach weg).
 	teamIDs := hub.NewAudience(h.db).TeamIDsForKader(r.Context(), id)
 
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM kader WHERE id=?`, id)
+	_, err = h.db.ExecContext(r.Context(), `DELETE FROM kader WHERE id=?`, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

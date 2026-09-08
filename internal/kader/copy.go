@@ -43,8 +43,14 @@ func copyKader(ctx context.Context, db *sql.DB, fromSeasonID, toSeasonID, target
 	defer tx.Rollback()
 
 	// Load source kader: map[ageClass|gender] → kader_id
+	// kind='team': Übungsgruppen werden übersprungen. Der Kopierer keyt auf
+	// age_class|gender und ruft ensureTeam — bei zwei NULL-Werten kollabierten
+	// alle Übungsgruppen auf denselben Schlüssel "|" und es entstünde ein Team
+	// ohne Altersklasse und Geschlecht. Ein Kopierpfad für Übungsgruppen ist
+	// entschieden ausgeschlossen (design.md — Entscheidung 7): sie werden zu
+	// jeder Saison neu angelegt und neu besetzt.
 	srcRows, err := tx.QueryContext(ctx,
-		`SELECT id, age_class, gender FROM kader WHERE season_id=?`, fromSeasonID)
+		`SELECT id, age_class, gender FROM kader WHERE season_id=? AND kind='team'`, fromSeasonID)
 	if err != nil {
 		return nil, err
 	}
