@@ -230,6 +230,10 @@ export default function KalenderPage() {
   const [selectedTime, setSelectedTime] = useState('15:00')
   const [selectedOpponent, setSelectedOpponent] = useState('')
   const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>([])
+  // Ziel eines Trainings ist entweder eine Mannschaft (selectedTeamIds) oder eine
+  // Übungsgruppe (kader_id). Nie beides — der Setter unten hält das auseinander.
+  const [practiceGroups, setPracticeGroups] = useState<{ id: number; name: string }[]>([])
+  const [selectedPracticeGroupId, setSelectedPracticeGroupId] = useState<number | null>(null)
   const [selectedEndTime, setSelectedEndTime] = useState('16:00')
   const [selectedEndDate, setSelectedEndDate] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
@@ -345,6 +349,11 @@ export default function KalenderPage() {
         api.get('/teams/names')
           .then(r => setAllTeamNames(Array.isArray(r.data) ? r.data : []))
           .catch(() => setAllTeamNames([])),
+        // Vorstand-Tier: für Trainer antwortet die Route 403 — dann bleibt die
+        // Liste leer und die Übungsgruppen-Optgroup erscheint gar nicht.
+        api.get('/practice-groups')
+          .then(r => setPracticeGroups(r.data?.items ?? []))
+          .catch(() => setPracticeGroups([])),
         api.get('/seasons')
           .then(r => {
             const seasons = Array.isArray(r.data) ? r.data : []
@@ -685,8 +694,34 @@ export default function KalenderPage() {
     }
   }
 
+  // Ein Training gehört genau einem Kader: entweder dem einer Mannschaft
+  // (team_id, der Server leitet kader_id ab) oder direkt einer Übungsgruppe
+  // (kader_id, team_id bleibt NULL). Der kombinierte Select kodiert beides in
+  // einem String, damit nie beide Zustände gleichzeitig gesetzt sind.
+  const trainingTarget = selectedPracticeGroupId !== null
+    ? `p${selectedPracticeGroupId}`
+    : selectedTeamIds[0] ? `t${selectedTeamIds[0]}` : ''
+  const setTrainingTarget = (value: string) => {
+    if (value.startsWith('p')) {
+      setSelectedPracticeGroupId(Number(value.slice(1)))
+      setSelectedTeamIds([])
+    } else if (value.startsWith('t')) {
+      setSelectedTeamIds([Number(value.slice(1))])
+      setSelectedPracticeGroupId(null)
+    } else {
+      setSelectedTeamIds([])
+      setSelectedPracticeGroupId(null)
+    }
+  }
+  const hasTrainingTarget = selectedPracticeGroupId !== null || selectedTeamIds.length > 0
+  // Besitzer-Feld für die Schreibpfade: kader_id gewinnt, team_id ist die
+  // Mannschaftsvariante.
+  const trainingOwnerPayload = () => selectedPracticeGroupId !== null
+    ? { kader_id: selectedPracticeGroupId }
+    : { team_id: selectedTeamIds[0] }
+
   const doCreateTraining = async () => {
-    if (!selectedDate || selectedTeamIds.length === 0 || !trainingStartTime || !trainingEndTime || !activeSeasonId) {
+    if (!selectedDate || !hasTrainingTarget || !trainingStartTime || !trainingEndTime || !activeSeasonId) {
       setCreateError('Bitte alle Pflichtfelder ausfüllen. Ist eine aktive Saison vorhanden?')
       return
     }
@@ -694,7 +729,7 @@ export default function KalenderPage() {
     setCreateError(null)
     try {
       await api.post('/training-sessions', {
-        team_id: selectedTeamIds[0],
+        ...trainingOwnerPayload(),
         season_id: activeSeasonId,
         title: trainingTitle,
         date: selectedDate,
@@ -715,16 +750,18 @@ export default function KalenderPage() {
   }
 
   const doCreateSerie = async () => {
-    if (selectedTeamIds.length === 0 || !seriesValidFrom || !seriesValidUntil || !trainingStartTime || !trainingEndTime || !activeSeasonId) {
+    if (!hasTrainingTarget || !seriesValidFrom || !seriesValidUntil || !trainingStartTime || !trainingEndTime || !activeSeasonId) {
       setCreateError('Bitte alle Pflichtfelder ausfüllen. Ist eine aktive Saison vorhanden?')
       return
     }
-    const teamName = teams.find(t => t.id === selectedTeamIds[0])?.name ?? 'Training'
+    const teamName = selectedPracticeGroupId !== null
+      ? practiceGroups.find(g => g.id === selectedPracticeGroupId)?.name ?? 'Übungsgruppe'
+      : teams.find(t => t.id === selectedTeamIds[0])?.name ?? 'Training'
     setCreating(true)
     setCreateError(null)
     try {
       await api.post('/training-series', {
-        team_id: selectedTeamIds[0],
+        ...trainingOwnerPayload(),
         season_id: activeSeasonId,
         name: `Training ${teamName}`,
         venue_id: trainingVenueId,
@@ -868,6 +905,7 @@ export default function KalenderPage() {
     setSelectedEndDate('')
     setSelectedOpponent('')
     setSelectedTeamIds([])
+    setSelectedPracticeGroupId(null)
     setSelectedTemplate(null)
     setPreview([])
     setSelectedSlotIndices(new Set())
@@ -1499,13 +1537,24 @@ export default function KalenderPage() {
                     <VenuePicker value={trainingVenueId} onChange={setTrainingVenueId} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Mannschaft *</label>
-                    <select value={selectedTeamIds[0] ?? ''} onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                      {practiceGroups.length > 0 ? 'Mannschaft / Übungsgruppe *' : 'Mannschaft *'}
+                    </label>
+                    <select value={trainingTarget} onChange={e => setTrainingTarget(e.target.value)}
                       className={INPUT_WIZ}>
                       <option value="">Auswählen…</option>
-                      {teams.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
-                      ))}
+                      <optgroup label="Mannschaften">
+                        {teams.filter(t => t.is_active).map(t => (
+                          <option key={t.id} value={`t${t.id}`}>{shortNames.get(t.id) ?? t.name}</option>
+                        ))}
+                      </optgroup>
+                      {practiceGroups.length > 0 && (
+                        <optgroup label="Übungsgruppen">
+                          {practiceGroups.map(g => (
+                            <option key={g.id} value={`p${g.id}`}>{g.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
                   <RsvpDefaultsEditor
@@ -1523,7 +1572,7 @@ export default function KalenderPage() {
                   <button onClick={() => setWizardStep(1)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
                     onClick={doCreateTraining}
-                    disabled={creating || !selectedDate || selectedTeamIds.length === 0}
+                    disabled={creating || !selectedDate || !hasTrainingTarget}
                     className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Training anlegen'}
@@ -1557,13 +1606,24 @@ export default function KalenderPage() {
                     <VenuePicker value={trainingVenueId} onChange={setTrainingVenueId} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Mannschaft *</label>
-                    <select value={selectedTeamIds[0] ?? ''} onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
+                    <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                      {practiceGroups.length > 0 ? 'Mannschaft / Übungsgruppe *' : 'Mannschaft *'}
+                    </label>
+                    <select value={trainingTarget} onChange={e => setTrainingTarget(e.target.value)}
                       className={INPUT_WIZ}>
                       <option value="">Auswählen…</option>
-                      {teams.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
-                      ))}
+                      <optgroup label="Mannschaften">
+                        {teams.filter(t => t.is_active).map(t => (
+                          <option key={t.id} value={`t${t.id}`}>{shortNames.get(t.id) ?? t.name}</option>
+                        ))}
+                      </optgroup>
+                      {practiceGroups.length > 0 && (
+                        <optgroup label="Übungsgruppen">
+                          {practiceGroups.map(g => (
+                            <option key={g.id} value={`p${g.id}`}>{g.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
                   <div>
@@ -1593,7 +1653,7 @@ export default function KalenderPage() {
                   <button onClick={() => setWizardStep(1)} className={BTN_SECONDARY}>← Zurück</button>
                   <button
                     onClick={doCreateSerie}
-                    disabled={creating || selectedTeamIds.length === 0 || !seriesValidFrom || !seriesValidUntil}
+                    disabled={creating || !hasTrainingTarget || !seriesValidFrom || !seriesValidUntil}
                     className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
                   >
                     {creating ? 'Anlegen…' : 'Serie anlegen'}
