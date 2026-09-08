@@ -41,4 +41,6 @@
       Regressionsschutz für Task 1.2
 - [x] 4.4 `TestListSessions_KaderTrainerOhneVereinsfunktion` als benannter
       Regressionsschutz für Task 3.1
-- [ ] 4.5 `make test`, `golangci-lint`, `openspec validate rsvp-kader-gate --strict`
+- [x] 4.5 `make test` (Go: alle Pakete grün; Vitest: 138 Dateien / 1064 Tests grün),
+      `golangci-lint run ./internal/trainings/...` (0 issues),
+      `openspec validate rsvp-kader-gate --strict` (valid)
