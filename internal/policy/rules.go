@@ -340,7 +340,11 @@ func NavFor(p *Principal) []NavItem {
 	if IsTrainerLike(p) || IsVorstandLike(p) {
 		nav = append(nav, NavItem{"Kader", "/kader"})
 	}
+	// Übungsgruppen sind ein reines Verwaltungsobjekt des Vorstands — Anlage,
+	// Umbenennung, Besetzung. Trainer sehen ihre Termine über den Kalender,
+	// pflegen die Gruppe aber nicht (die Routen liegen im Vorstand-Tier).
 	if IsVorstandLike(p) {
+		nav = append(nav, NavItem{"Übungsgruppen", "/uebungsgruppen"})
 		nav = append(nav, NavItem{"Nutzerverwaltung", "/nutzer"})
 	}
 	// Mitglieder + Beitragslauf + Einstellungen: auch für Kassierer sichtbar.

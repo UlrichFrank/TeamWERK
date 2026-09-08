@@ -66,6 +66,7 @@ const navModules: NavModule[] = [
       { to: '/nutzer', label: 'Nutzerverwaltung' },
       { to: '/mitglieder', label: 'Mitglieder' },
       { to: '/kader', label: 'Kader' },
+      { to: '/uebungsgruppen', label: 'Übungsgruppen' },
       { to: '/diensttypen', label: 'Diensttypen' },
       { to: '/dienstplan-vorlagen', label: 'Dienstplan-Vorlagen' },
       { to: '/veranstaltungsorte', label: 'Veranstaltungsorte' },

@@ -27,6 +27,7 @@ import AdminDutyTypesPage from './pages/AdminDutyTypesPage'
 import KalenderPage from './pages/KalenderPage'
 import AdminDutyTemplatesPage from './pages/AdminDutyTemplatesPage'
 import AdminKaderPage from './pages/AdminKaderPage'
+import UebungsgruppenPage from './pages/UebungsgruppenPage'
 import MitfahrgelegenheitenPage from './pages/MitfahrgelegenheitenPage'
 import DocumentsPage from './pages/DocumentsPage'
 import DocumentFileLinkPage from './pages/DocumentFileLinkPage'
@@ -126,6 +127,7 @@ export default function App() {
               <Route path="beitragslauf" element={<RoleRoute roles={['admin','vorstand','kassierer']}><BeitragslaufPage /></RoleRoute>} />
               <Route path="tresor" element={<RoleRoute roles={['admin','vorstand','kassierer']}><TresorPage /></RoleRoute>} />
               <Route path="kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
+              <Route path="uebungsgruppen" element={<RoleRoute roles={['admin','vorstand']}><UebungsgruppenPage /></RoleRoute>} />
               <Route path="nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
               <Route path="kalender" element={<KalenderPage />} />

@@ -16,21 +16,26 @@ interface Props {
   onMemberAdded: () => void
   filterByAgeBracket?: boolean
   birthYears?: number[]
+  // Übungsgruppen hängen an /practice-groups statt /kader — dieselbe Maske,
+  // andere Ressource. Default bleibt der Mannschaftskader.
+  basePath?: string
+  // Eine Übungsgruppe hat keine Altersklasse, deshalb dort kein Jahrgangsfilter.
+  showAgeFilter?: boolean
 }
 
-export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeBracket = true }: Props) {
+export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeBracket = true, basePath = '/kader', showAgeFilter = true }: Props) {
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [filterAge, setFilterAge] = useState(filterByAgeBracket)
+  const [filterAge, setFilterAge] = useState(showAgeFilter && filterByAgeBracket)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const fetchSuggestions = useCallback(async (search: string, filter: boolean) => {
     setLoading(true)
     try {
-      const res = await api.get(`/kader/${kaderId}/member-suggestions`, {
+      const res = await api.get(`${basePath}/${kaderId}/member-suggestions`, {
         params: { search, filter_age_bracket: filter },
       })
       setSuggestions(res.data.suggestions ?? [])
@@ -40,7 +45,7 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
     } finally {
       setLoading(false)
     }
-  }, [kaderId])
+  }, [kaderId, basePath])
 
   useEffect(() => {
     if (!query && !open) return
@@ -64,7 +69,7 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
   const handleSelect = async (s: Suggestion) => {
     if (s.already_in_kader) return
     try {
-      await api.put(`/kader/${kaderId}`, { members_add: [s.id], members_remove: [] })
+      await api.put(`${basePath}/${kaderId}`, { members_add: [s.id], members_remove: [] })
       onMemberAdded()
     } catch {
       // ignore — parent will show error if needed
@@ -84,13 +89,15 @@ export default function KaderMemberSearch({ kaderId, onMemberAdded, filterByAgeB
           placeholder="Mitglied suchen…"
           className="w-full border border-brand-border rounded-md px-3 py-2 pr-9 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
         />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-          <BrandCheckbox
-            checked={filterAge}
-            onChange={setFilterAge}
-            title="Jahrgang filtern"
-          />
-        </div>
+        {showAgeFilter && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <BrandCheckbox
+              checked={filterAge}
+              onChange={setFilterAge}
+              title="Jahrgang filtern"
+            />
+          </div>
+        )}
       </div>
 
       {open && (
