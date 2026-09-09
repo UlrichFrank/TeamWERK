@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { buildPreviewUrl } from '../lib/dutyPreview'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
+import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
 import { errorStatus } from '../lib/errors'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -13,8 +14,9 @@ import { useCompactHeader } from '../hooks/useCompactHeader'
 import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
 import EventSearchInput from '../components/EventSearchInput'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
+import TeamFilter from '../components/TeamFilter'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
 
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
@@ -207,8 +209,21 @@ export default function KalenderPage() {
   // Erklärung bräuchte. Das ist eine Auslassung, kein Vergessen.
   const [query, setQuery] = useDebouncedQueryParam('q')
   const queryTokens = useMemo(() => parseQuery(query), [query])
-  const [filterTeamId, setFilterTeamId] = useState<number | null>(null)
+  // Menge statt einzelner ID: der Mannschafts-Filter ist eine Mehrfachauswahl,
+  // die leere Menge heißt „kein Filter" (siehe lib/teamFilter.ts).
+  const [filterTeamIds, setFilterTeamIds] = useState<Set<number>>(new Set())
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
+  const teamFilterOptions = useMemo(() => buildTeamOptions(teams.filter(t => t.is_active)), [teams])
+  const activeTeamIds = effectiveTeamIds(filterTeamIds, teamFilterOptions)
+  const toggleTeam = (teamId: number) => {
+    const next = toggleTeamId(activeTeamIds, teamId)
+    // Leere und vollständige Auswahl sind derselbe Zustand „kein Filter" — der
+    // State hält deshalb nur echte Teilmengen (oder die leere Menge).
+    setFilterTeamIds(serializeTeamIds(next, teamFilterOptions.length) === null ? new Set() : next)
+  }
+  // Query-Wert für die Abwesenheiten-Route; zugleich stabile Effekt-Abhängigkeit
+  // (die Set-Instanz wäre bei jedem Render eine neue).
+  const teamFilterParam = serializeTeamIds(filterTeamIds, teamFilterOptions.length)
   const [showTeamAbsences, setShowTeamAbsences] = useState<boolean>(
     () => sessionStorage.getItem('kalender_show_team_absences') === 'true'
   )
@@ -310,17 +325,20 @@ export default function KalenderPage() {
     }
   }
 
-  const loadAbsences = async (overrideShowTeam?: boolean, overrideTeamId?: number | null) => {
+  const loadAbsences = async (overrideShowTeam?: boolean, overrideTeamParam?: string | null) => {
     try {
       const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
       const lastDay = new Date(year, month + 1, 0).getDate()
       const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
       const show = overrideShowTeam !== undefined ? overrideShowTeam : showTeamAbsences
-      const tid = overrideTeamId !== undefined ? overrideTeamId : filterTeamId
+      // Abwesenheiten sind die einzige Datenquelle des Kalenders, die der Server
+      // filtert — die Route nimmt dafür dieselbe ID-Liste wie die URL-Parameter
+      // der Listenseiten.
+      const teamParam = overrideTeamParam !== undefined ? overrideTeamParam : teamFilterParam
       let url = `/absences/calendar?from=${from}&to=${to}`
       if (show && canSeeTeamAbsences) {
         url += '&show_team=true'
-        if (tid !== null) url += `&team_id=${tid}`
+        if (teamParam) url += `&team_id=${teamParam}`
       }
       const r = await api.get(url)
       setAbsences(Array.isArray(r.data) ? r.data : [])
@@ -377,7 +395,7 @@ export default function KalenderPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
   useEffect(() => { loadTrainings(); loadAbsences() }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
   // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
-  useEffect(() => { loadAbsences() }, [filterTeamId, showTeamAbsences]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadAbsences() }, [teamFilterParam, showTeamAbsences]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select the only child once children have loaded — keeps the parent
   // with exactly one linked kid from being forced through a useless selector.
@@ -555,7 +573,7 @@ export default function KalenderPage() {
     const start = g.date.slice(0, 10)
     if (start > monthEnd || effectiveEnd < monthStart) return false
     if (!filterTypes.has(g.event_type)) return false
-    if (filterTeamId !== null && !g.teams.some(t => t.id === filterTeamId)) return false
+    if (!matchesTeamFilter(filterTeamIds, g.teams.map(t => t.id))) return false
     if (!matchesQuery(queryTokens, gameFilterFields(g), [g.date])) return false
     return true
   })
@@ -578,7 +596,7 @@ export default function KalenderPage() {
 
   const filteredTrainings = trainings.filter(t => {
     if (!filterTypes.has('training')) return false
-    if (filterTeamId !== null && t.team_id !== filterTeamId) return false
+    if (!matchesTeamFilter(filterTeamIds, [t.team_id])) return false
     if (!matchesQuery(queryTokens, trainingFilterFields(t), [t.date])) return false
     return true
   })
@@ -993,18 +1011,14 @@ export default function KalenderPage() {
       )}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
-        {/* `hidden sm:block`: siehe TerminePage — auf Mobile fehlt neben Typ-Filter
-            und Suchfeld der Platz. */}
-        <select
-          value={filterTeamId ?? ''}
-          onChange={e => setFilterTeamId(e.target.value === '' ? null : Number(e.target.value))}
-          className={`${HEADER_FIELD} hidden sm:block shrink-0 max-w-[6rem]`}
-        >
-          <option value="">Alle</option>
-          {teams.filter(t => t.is_active).map(t => (
-            <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
-          ))}
-        </select>
+        {/* Auch auf Mobile bedienbar (Icon + Zähler), anders als das frühere
+            <select>, für das neben Typ-Filter und Suchfeld der Platz fehlte. */}
+        <TeamFilter
+          teams={teamFilterOptions}
+          active={activeTeamIds}
+          onToggle={toggleTeam}
+          compact={compact}
+        />
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
           <EventTypeFilter
             types={KALENDER_TYPES}
@@ -1027,7 +1041,7 @@ export default function KalenderPage() {
               const next = !showTeamAbsences
               setShowTeamAbsences(next)
               sessionStorage.setItem('kalender_show_team_absences', String(next))
-              loadAbsences(next, filterTeamId)
+              loadAbsences(next, teamFilterParam)
             }}
             aria-label="Mannschaftsabwesenheiten"
             title="Mannschaftsabwesenheiten"

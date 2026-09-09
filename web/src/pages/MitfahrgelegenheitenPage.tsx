@@ -9,7 +9,9 @@ import PersonChip from '../components/PersonChip'
 import { getEventColors } from '../lib/eventColors'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
+import TeamFilter from '../components/TeamFilter'
+import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
 interface CarpoolEntry {
@@ -646,7 +648,8 @@ type EventTypeFilter = typeof EVENT_TYPES[number]
 const ALL_TYPES = new Set<string>(EVENT_TYPES)
 
 function parseFilters(sp: URLSearchParams) {
-  const team = parseInt(sp.get('team') ?? '') || null
+  // Kommaseparierte ID-Liste (`team=3,7`); ein einzelnes `team=3` bleibt gültig.
+  const team = parseTeamIds(sp.get('team'))
   const typesRaw = sp.get('types')
   const types = typesRaw
     ? (() => {
@@ -667,7 +670,7 @@ export default function MitfahrgelegenheitenPage() {
   const [quickPair, setQuickPair] = useState<{ side: 'biete' | 'suche'; counterpartId: number } | null>(null)
   const [allTeams, setAllTeams] = useState<TeamForName[]>([])
   const [searchParams, setSearchParams] = useSearchParams()
-  const { team: filterTeamId, types: filterTypes, mine: viewMine } = parseFilters(searchParams)
+  const { team: filterTeamIds, types: filterTypes, mine: viewMine } = parseFilters(searchParams)
   const location = useLocation()
   const compact = useCompactHeader(950)
 
@@ -677,14 +680,16 @@ export default function MitfahrgelegenheitenPage() {
     return { kind: m[1] as 'paarung' | 'biete' | 'suche', id: Number(m[2]) }
   }, [location.hash])
   const teamShortNames = useMemo(() => buildTeamShortNames(allTeams), [allTeams])
+  const teamOptions = useMemo(() => buildTeamOptions(allTeams), [allTeams])
 
   void user // used to re-render when auth changes
 
-  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean }) => {
+  const updateFilter = (patch: { team?: Set<number>; types?: Set<string>; mine?: boolean }) => {
     const next = new URLSearchParams(searchParams)
-    if ('team' in patch) {
-      if (patch.team === null) next.delete('team')
-      else next.set('team', String(patch.team))
+    if ('team' in patch && patch.team) {
+      const value = serializeTeamIds(patch.team, allTeams.length)
+      if (value === null) next.delete('team')
+      else next.set('team', value)
     }
     if ('types' in patch && patch.types) {
       const isDefault = patch.types.size === ALL_TYPES.size && [...ALL_TYPES].every(t => patch.types!.has(t))
@@ -704,11 +709,17 @@ export default function MitfahrgelegenheitenPage() {
     updateFilter({ types: next })
   }
 
-  const load = (silent = false, teamId?: number | null) => {
+  const activeTeamIds = effectiveTeamIds(filterTeamIds, teamOptions)
+  const toggleTeam = (teamId: number) => updateFilter({ team: toggleTeamId(activeTeamIds, teamId) })
+
+  // Der Mannschafts-Filter wirkt clientseitig, nicht mehr über `?team_id=` — die
+  // Antwort trägt `teamIds` je Spiel, die Menge ohne Filter ist ohnehin die
+  // geladene. Das erspart ein Neuladen pro Filterklick und behebt nebenbei, dass
+  // der serverseitige Filter (`gt.team_id = ?`) bei Mehr-Team-Spielen auch die
+  // angezeigte Mannschaftsliste auf die gefilterte verkürzte.
+  const load = (silent = false) => {
     if (!silent) setLoading(true)
-    const tid = teamId !== undefined ? teamId : filterTeamId
-    const url = tid != null ? `/mitfahrgelegenheiten?team_id=${tid}` : '/mitfahrgelegenheiten'
-    api.get(url)
+    api.get('/mitfahrgelegenheiten')
       .then(res => {
         setResponse({ games: res.data?.games ?? [], vehicleSeats: res.data?.vehicleSeats, children: res.data?.children ?? [] })
         setLoading(false)
@@ -725,7 +736,9 @@ export default function MitfahrgelegenheitenPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     load()
-  }, [filterTeamId]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Einmal beim Mount: der Mannschafts-Filter wirkt clientseitig, löst also
+    // kein Neuladen mehr aus.
+  }, [])
   useLiveUpdates((event) => { if (event === 'mitfahrgelegenheiten') load(true) })
 
   const handleDelete = async (id: number) => {
@@ -794,6 +807,7 @@ export default function MitfahrgelegenheitenPage() {
 
   const visibleGames = response.games
     .filter(d => filterTypes.has(d.game.eventType))
+    .filter(d => matchesTeamFilter(filterTeamIds, d.game.teamIds))
     .filter(d => !viewMine || mineMatches(d))
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
 
@@ -831,16 +845,12 @@ export default function MitfahrgelegenheitenPage() {
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Mitfahrten</h1>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
           {allTeams.length > 1 && (
-            <select
-              value={filterTeamId ?? ''}
-              onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-              className={`${HEADER_FIELD} w-24 shrink-0`}
-            >
-              <option value="">Teams</option>
-              {allTeams.map(t => (
-                <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? `Team ${t.id}`}</option>
-              ))}
-            </select>
+            <TeamFilter
+              teams={teamOptions}
+              active={activeTeamIds}
+              onToggle={toggleTeam}
+              compact={compact}
+            />
           )}
           <EventTypeFilter
             types={TYPE_PILLS}
