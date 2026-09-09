@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History, MessageCircle } from 'lucide-react'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
+import TeamFilter from '../components/TeamFilter'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
@@ -15,7 +16,7 @@ import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
 import EventSearchInput from '../components/EventSearchInput'
 import FilterEmptyState from '../components/FilterEmptyState'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -116,8 +117,20 @@ type Termin =
 
 const ALL_TYPES = new Set(['heim', 'auswärts', 'generisch', 'training'])
 
+// `team` trägt eine kommaseparierte ID-Liste (`team=3,7`). Ein einzelnes
+// `team=3` bleibt gültig — Bestandslinks und alte Lesezeichen sind damit
+// unverändert gültig. Leere Menge = kein Team-Filter.
+function parseTeams(raw: string | null): Set<number> {
+  if (!raw) return new Set()
+  const ids = raw
+    .split(',')
+    .map(s => parseInt(s.trim()))
+    .filter(n => Number.isFinite(n) && n > 0)
+  return new Set(ids)
+}
+
 function parseFilters(sp: URLSearchParams) {
-  const team = parseInt(sp.get('team') ?? '') || null
+  const team = parseTeams(sp.get('team'))
   const typesRaw = sp.get('types')
   const types = typesRaw
     ? (() => {
@@ -223,7 +236,7 @@ export default function TerminePage() {
   const queryTokens = useMemo(() => parseQuery(query), [query])
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const { team: filterTeamId, types: filterTypes, past: showPast, focus } = parseFilters(searchParams)
+  const { team: filterTeamIds, types: filterTypes, past: showPast, focus } = parseFilters(searchParams)
   const triedPastExpansion = useRef(false)
   const scrollToTodayRef = useRef(false)
 
@@ -231,6 +244,10 @@ export default function TerminePage() {
   const [season, setSeason] = useState<SeasonWindow | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
+  const teamOptions = useMemo(
+    () => teams.map(t => ({ id: t.id, label: teamShortNames.get(t.id) ?? t.name })),
+    [teams, teamShortNames],
+  )
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
   const [rsvpErrors, setRsvpErrors] = useState<Record<string, string>>({})
@@ -244,11 +261,14 @@ export default function TerminePage() {
     ['training',  'Training',   <Dumbbell className="w-3.5 h-3.5" />],
   ]
 
-  const updateFilter = (patch: { team?: number | null; types?: Set<string>; past?: boolean; focus?: { kind: 'training' | 'game'; id: number } | null }) => {
+  const updateFilter = (patch: { team?: Set<number>; types?: Set<string>; past?: boolean; focus?: { kind: 'training' | 'game'; id: number } | null }) => {
     const next = new URLSearchParams(searchParams)
-    if ('team' in patch) {
-      if (patch.team === null) next.delete('team')
-      else next.set('team', String(patch.team))
+    if ('team' in patch && patch.team) {
+      // Leere und vollständige Auswahl sind derselbe Zustand „kein Filter" —
+      // wie beim Typ-Filter, dessen Default ebenfalls „alles aktiv" ist.
+      const isDefault = patch.team.size === 0 || (teams.length > 0 && patch.team.size === teams.length)
+      if (isDefault) next.delete('team')
+      else next.set('team', [...patch.team].join(','))
     }
     if ('types' in patch && patch.types) {
       const isDefault = patch.types.size === ALL_TYPES.size && [...ALL_TYPES].every(t => patch.types!.has(t))
@@ -280,6 +300,16 @@ export default function TerminePage() {
     const next = new Set(filterTypes)
     if (next.has(type)) next.delete(type); else next.add(type)
     updateFilter({ types: next })
+  }
+
+  // „Kein Filter" wird als vollständige Auswahl angezeigt, damit das Abwählen
+  // der ersten Mannschaft wie beim Typ-Filter aus „alle" eine Menge macht.
+  const effectiveTeamIds = filterTeamIds.size > 0 ? filterTeamIds : new Set(teams.map(t => t.id))
+
+  const toggleTeam = (teamId: number) => {
+    const next = new Set(effectiveTeamIds)
+    if (next.has(teamId)) next.delete(teamId); else next.add(teamId)
+    updateFilter({ team: next })
   }
 
   const today = new Date().toISOString().slice(0, 10)
@@ -335,10 +365,11 @@ export default function TerminePage() {
     if (focus && t.kind === focus.kind && t.data.id === focus.id) return true
     if (t.kind === 'training') {
       if (!filterTypes.has('training')) return false
-      if (filterTeamId !== null && t.data.team_id !== filterTeamId) return false
+      if (filterTeamIds.size > 0 && !filterTeamIds.has(t.data.team_id)) return false
     } else {
       if (!filterTypes.has(t.data.event_type)) return false
-      if (filterTeamId !== null && !t.data.team_ids?.includes(filterTeamId)) return false
+      // Ein Termin passt, sobald er einer der gewählten Mannschaften gehört.
+      if (filterTeamIds.size > 0 && !(t.data.team_ids ?? []).some(id => filterTeamIds.has(id))) return false
     }
     // Textfilter zuletzt — teuerstes Prädikat, und der Fokus-Durchlass oben
     // muss ihn überleben (design.md §8).
@@ -349,13 +380,13 @@ export default function TerminePage() {
   // Siehe design.md §7: ohne diesen Zähler ist eine leere Liste bei aktivem
   // Team-/Typ-Filter korrektes, aber stumm irreführendes Verhalten. `showPast`
   // zählt nicht mit — die Vergangenheit ist ohne Toggle gar nicht geladen.
-  const otherFiltersActive = filterTeamId !== null || filterTypes.size !== ALL_TYPES.size
+  const otherFiltersActive = filterTeamIds.size > 0 || filterTypes.size !== ALL_TYPES.size
   const hiddenByOtherFilters =
     visibleTermine.length === 0 && queryTokens.length > 0 && otherFiltersActive
       ? termine.filter(t => matchesQuery(queryTokens, terminFilterFields(t), [t.data.date])).length
       : 0
 
-  const resetFilters = () => updateFilter({ team: null, types: new Set(ALL_TYPES) })
+  const resetFilters = () => updateFilter({ team: new Set(), types: new Set(ALL_TYPES) })
 
   // Index des ersten nicht-vergangenen Termins (date >= today). Die „heute"-Trennlinie
   // wird nur davor gerendert, wenn mind. ein vergangener Termin darüber steht (> 0) —
@@ -497,20 +528,15 @@ export default function TerminePage() {
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Termine</h1>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
-          {/* Auf Mobile ausgeblendet: neben Typ-Filter und Suchfeld bleibt in der
-              Leiste kein Platz, das Suchfeld schob sich über die Auswahl. Ein per
-              URL gesetzter Team-Filter wirkt dort weiter — der Reset-Weg bleibt
-              über FilterEmptyState (resetFilters) erreichbar. */}
-          <select
-            value={filterTeamId ?? ''}
-            onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-            className={`${HEADER_FIELD} hidden sm:block w-24 shrink-0`}
-          >
-            <option value="">Teams</option>
-            {teams.map(t => (
-              <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? t.name}</option>
-            ))}
-          </select>
+          {/* Auch auf Mobile bedienbar: als Icon-Button mit Zähler braucht der
+              Filter nicht mehr den Platz, an dem das frühere <select> mit dem
+              Suchfeld kollidierte. */}
+          <TeamFilter
+            teams={teamOptions}
+            active={effectiveTeamIds}
+            onToggle={toggleTeam}
+            compact={compact}
+          />
           <EventTypeFilter
             types={TERMINE_TYPES}
             active={filterTypes}

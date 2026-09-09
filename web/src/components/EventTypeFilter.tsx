@@ -1,6 +1,7 @@
-import { ReactNode, useEffect, useRef, useState } from 'react'
+import { ReactNode, useRef, useState } from 'react'
 import { ChevronDown, Filter } from 'lucide-react'
 import { getEventColors } from '../lib/eventColors'
+import { useDismissOnOutside } from '../hooks/useDismissOnOutside'
 import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 export type EventTypeFilterEntry = [string, string, ReactNode]
@@ -17,27 +18,9 @@ export default function EventTypeFilter({ types, active, onToggle, compact, aria
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const closeIfOutside = (e: Event) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    // Auf Mobile (compact) liegt das Dropdown als `absolute`-Overlay über der Liste.
-    // Bleibt es offen, „schluckt" es dort Touch-/Scroll-Gesten und die Seite wirkt
-    // unscrollbar. Deshalb schließen wir es, sobald der Nutzer den Inhalt berührt
-    // (touchstart) oder überhaupt zu scrollen beginnt — danach ist das Overlay weg
-    // und die Geste scrollt normal weiter. `capture: true` fängt das nicht-bubbelnde
-    // scroll-Event des <main>-Containers.
-    const closeOnScroll = () => setOpen(false)
-    document.addEventListener('mousedown', closeIfOutside)
-    document.addEventListener('touchstart', closeIfOutside, { passive: true })
-    window.addEventListener('scroll', closeOnScroll, { capture: true, passive: true })
-    return () => {
-      document.removeEventListener('mousedown', closeIfOutside)
-      document.removeEventListener('touchstart', closeIfOutside)
-      window.removeEventListener('scroll', closeOnScroll, { capture: true })
-    }
-  }, [open])
+  // Auf Mobile (compact) liegt das Dropdown als `absolute`-Overlay über der Liste
+  // und würde Scroll-Gesten schlucken — Begründung im Hook.
+  useDismissOnOutside(open, ref, () => setOpen(false))
 
   if (!compact) {
     return (
