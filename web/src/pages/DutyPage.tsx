@@ -4,6 +4,7 @@ import { Home, Plane, Calendar, UserCheck, History, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
+import TeamFilter from '../components/TeamFilter'
 import EventSearchInput from '../components/EventSearchInput'
 import FilterEmptyState from '../components/FilterEmptyState'
 import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
@@ -11,8 +12,8 @@ import { parseQuery, matchesQuery } from '../lib/eventFilter'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 import { getEventColors } from '../lib/eventColors'
-import { buildTeamShortNames } from '../lib/teamName'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 
 interface BoardGroup {
@@ -69,7 +70,8 @@ const ALL_TYPES = new Set(['heim', 'auswärts', 'generisch'])
 const AUDIENCE_FILTER_FUNCTIONS = ['vorstand', 'vorstand_beisitzer', 'trainer', 'sportliche_leitung']
 
 function parseFilters(sp: URLSearchParams) {
-  const team = parseInt(sp.get('team') ?? '') || null
+  // Kommaseparierte ID-Liste (`team=3,7`); ein einzelnes `team=3` bleibt gültig.
+  const team = parseTeamIds(sp.get('team'))
   const typesRaw = sp.get('types')
   const types = typesRaw
     ? (() => {
@@ -94,7 +96,7 @@ export default function DutyPage() {
   const canManageDuties = hasCapability('manage_duties')
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const { team: filterTeamId, types: filterTypes, mine: viewMine, past: showPast, audienceAll, focus } = parseFilters(searchParams)
+  const { team: filterTeamIds, types: filterTypes, mine: viewMine, past: showPast, audienceAll, focus } = parseFilters(searchParams)
   const showAudiencePill = AUDIENCE_FILTER_FUNCTIONS.some(f => user?.clubFunctions?.includes(f))
 
   // q lebt getrennt von parseFilters: die Filterung wirkt sofort, die URL zieht
@@ -105,7 +107,7 @@ export default function DutyPage() {
   const [groups, setGroups] = useState<BoardGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [teams, setTeams] = useState<Team[]>([])
-  const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
+  const teamOptions = useMemo(() => buildTeamOptions(teams), [teams])
   const [proxyChildren, setProxyChildren] = useState<ProxyChild[]>([])
   const compact = useCompactHeader(950)
   const DUTY_TYPES: EventTypeFilterEntry[] = [
@@ -114,11 +116,12 @@ export default function DutyPage() {
     ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
   ]
 
-  const updateFilter = (patch: { team?: number | null; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean; focus?: { kind: 'slot' | 'game'; id: number } | null }) => {
+  const updateFilter = (patch: { team?: Set<number>; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean; focus?: { kind: 'slot' | 'game'; id: number } | null }) => {
     const next = new URLSearchParams(searchParams)
-    if ('team' in patch) {
-      if (patch.team === null) next.delete('team')
-      else next.set('team', String(patch.team))
+    if ('team' in patch && patch.team) {
+      const value = serializeTeamIds(patch.team, teams.length)
+      if (value === null) next.delete('team')
+      else next.set('team', value)
     }
     if ('types' in patch && patch.types) {
       const isDefault = patch.types.size === ALL_TYPES.size && [...ALL_TYPES].every(t => patch.types!.has(t))
@@ -140,6 +143,13 @@ export default function DutyPage() {
     if ('focus' in patch) {
       if (patch.focus) next.set('focus', `${patch.focus.kind}-${patch.focus.id}`)
       else next.delete('focus')
+    } else if ('team' in patch || 'types' in patch) {
+      // Der Fokus-Durchlass unten ignoriert bewusst Team- und Typ-Filter — er
+      // gilt dem Moment des Sprungziels (Rückkehr von der Anleitung, Sprung aus
+      // dem Kalender via `/dienste?focus=game-<id>`), nicht der Sitzung danach.
+      // Ohne dieses Ende bliebe eine fremde Gruppe trotz gewähltem Filter
+      // stehen; identisch zu TerminePage.tsx.
+      next.delete('focus')
     }
     setSearchParams(next, { replace: true })
   }
@@ -149,6 +159,9 @@ export default function DutyPage() {
     if (next.has(type)) next.delete(type); else next.add(type)
     updateFilter({ types: next })
   }
+
+  const activeTeamIds = effectiveTeamIds(filterTeamIds, teamOptions)
+  const toggleTeam = (teamId: number) => updateFilter({ team: toggleTeamId(activeTeamIds, teamId) })
 
   // Wird von DutySlotList vor der Navigation zur Anleitungsseite aufgerufen: hinterlegt
   // den Fokus-Marker auf der aktuellen /dienste-URL, damit „Zurück" später zu dieser
@@ -206,7 +219,7 @@ export default function DutyPage() {
     if (!showPast && g.past) return false
     const eventType = g.event_type ?? 'generisch'
     if (!filterTypes.has(eventType)) return false
-    if (filterTeamId !== null && !g.team_ids.includes(filterTeamId)) return false
+    if (!matchesTeamFilter(filterTeamIds, g.team_ids)) return false
     // Textfilter zuletzt: er ist das teuerste Prädikat (String-Normalisierung
     // über mehrere Felder), die billigen Set-Lookups schneiden vorher weg.
     if (!matchesQuery(queryTokens, groupFilterFields(g), [g.date])) return false
@@ -219,13 +232,13 @@ export default function DutyPage() {
   // der Server die Vergangenheit gar nicht erst, ein Treffer dort wäre auch in
   // diesem zweiten Durchlauf nicht auffindbar.
   const otherFiltersActive =
-    filterTeamId !== null || filterTypes.size !== ALL_TYPES.size || viewMine
+    filterTeamIds.size > 0 || filterTypes.size !== ALL_TYPES.size || viewMine
   const hiddenByOtherFilters =
     visibleGroups.length === 0 && queryTokens.length > 0 && otherFiltersActive
       ? groups.filter(g => matchesQuery(queryTokens, groupFilterFields(g), [g.date])).length
       : 0
 
-  const resetFilters = () => updateFilter({ team: null, types: new Set(ALL_TYPES), mine: false })
+  const resetFilters = () => updateFilter({ team: new Set(), types: new Set(ALL_TYPES), mine: false })
 
   const noTypesActive = filterTypes.size === 0
 
@@ -262,19 +275,15 @@ export default function DutyPage() {
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Dienste</h1>
         <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
-          {/* `hidden sm:block`: siehe TerminePage — auf Mobile fehlt neben Typ-Filter
-              und Suchfeld der Platz. */}
+          {/* Nur ab zwei Mannschaften — bei einer einzigen filtert der Knopf nichts.
+              Auf Mobile bedienbar (Icon + Zähler), anders als das frühere <select>. */}
           {teams.length > 1 && (
-            <select
-              value={filterTeamId ?? ''}
-              onChange={e => updateFilter({ team: e.target.value === '' ? null : Number(e.target.value) })}
-              className={`${HEADER_FIELD} hidden sm:block w-24 shrink-0`}
-            >
-              <option value="">Teams</option>
-              {teams.map(t => (
-                <option key={t.id} value={t.id}>{teamShortNames.get(t.id) ?? t.name}</option>
-              ))}
-            </select>
+            <TeamFilter
+              teams={teamOptions}
+              active={activeTeamIds}
+              onToggle={toggleTeam}
+              compact={compact}
+            />
           )}
           <EventTypeFilter
             types={DUTY_TYPES}
