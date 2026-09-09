@@ -262,6 +262,16 @@ export default function TerminePage() {
     if ('focus' in patch) {
       if (patch.focus) next.set('focus', `${patch.focus.kind}-${patch.focus.id}`)
       else next.delete('focus')
+    } else if ('team' in patch || 'types' in patch) {
+      // Der Fokus-Durchlass in `visibleTermine` ignoriert bewusst alle Filter —
+      // er gilt aber dem Moment des Deep-Links, nicht der Sitzung danach. Ohne
+      // dieses Ende bliebe ein per Push geöffneter Termin (`?focus=game-17`)
+      // auch dann stehen, wenn der Nutzer anschließend auf eine andere
+      // Mannschaft filtert; genau so tauchte ein mC2-Turnier unter dem
+      // mA2-Filter auf. `past` und `q` beenden ihn nicht: `past` schaltet die
+      // Fokus-Logik selbst um, das Überleben von `q` ist zugesagt
+      // (Capability `termin-textfilter`).
+      next.delete('focus')
     }
     setSearchParams(next, { replace: true })
   }
