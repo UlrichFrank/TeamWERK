@@ -539,6 +539,13 @@ export default function KalenderPage() {
 
   const shortNames = useMemo(() => buildTeamShortNames(allTeamNames), [allTeamNames])
 
+  // Übungsgruppen (kader ohne teams-Zwilling) haben team_id = 0 — die Projektion
+  // von training_sessions.team_id IS NULL — und stehen deshalb nie in shortNames.
+  // Ihren Namen liefert der Server bereits in team_name (COALESCE auf den
+  // Kadernamen), sonst fiele die Kachel auf "Training" zurück.
+  const trainingLabel = (t: Training) =>
+    shortNames.get(t.team_id) ?? (t.team_name?.trim() || t.title || 'Training')
+
   const safeGames = Array.isArray(games) ? games : []
   const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
   const lastDay = new Date(year, month + 1, 0).getDate()
@@ -1251,8 +1258,8 @@ export default function KalenderPage() {
                   <button
                     key={`t-${t.id}`}
                     onPointerDown={e => e.stopPropagation()}
-                    title={`${shortNames.get(t.team_id) ?? (t.title || 'Training')} · ${t.start_time}`}
-                    onClick={() => setInfoItem({ type: 'training', training: { ...t, team_name: shortNames.get(t.team_id) } })}
+                    title={`${trainingLabel(t)} · ${t.start_time}`}
+                    onClick={() => setInfoItem({ type: 'training', training: { ...t, team_name: trainingLabel(t) } })}
                     className={`w-full text-left mb-1 p-1.5 rounded-md text-xs border ${
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
@@ -1262,7 +1269,7 @@ export default function KalenderPage() {
                     <div className="flex items-center gap-1 mb-0.5">
                       <Dumbbell className={`w-3 h-3 shrink-0 ${getEventColors('training').pillIcon}`} />
                       <span className="hidden @tile-sm:inline font-semibold truncate text-brand-text flex-1">
-                        {shortNames.get(t.team_id) ?? (t.title || 'Training')}
+                        {trainingLabel(t)}
                       </span>
                       {(t.note ?? '').trim() !== '' && (
                         <span
@@ -1908,7 +1915,7 @@ export default function KalenderPage() {
       {editingTraining && (
         <TrainingEditModal
           session={editingTraining}
-          teamName={teams.find(t => t.id === editingTraining.team_id)?.name}
+          teamName={teams.find(t => t.id === editingTraining.team_id)?.name ?? editingTraining.team_name}
           onClose={() => setEditingTraining(null)}
           onSaved={() => { loadTrainings(); setEditingTraining(null) }}
         />

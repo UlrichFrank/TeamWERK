@@ -174,7 +174,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
         </div>
 
         {teamName && (
-          <p className="text-sm text-brand-text-muted mb-4">Mannschaft: <span className="font-medium text-brand-text">{teamName}</span></p>
+          <p className="text-sm text-brand-text-muted mb-4">{session.team_id ? 'Mannschaft' : 'Übungsgruppe'}: <span className="font-medium text-brand-text">{teamName}</span></p>
         )}
 
         {session.series_id && (
