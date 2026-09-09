@@ -1,12 +1,8 @@
 import { useRef, useState } from 'react'
 import { ChevronDown, Users } from 'lucide-react'
 import { useDismissOnOutside } from '../hooks/useDismissOnOutside'
+import { type TeamFilterOption } from '../lib/teamFilter'
 import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
-
-export interface TeamFilterOption {
-  id: number
-  label: string
-}
 
 interface Props {
   teams: TeamFilterOption[]
@@ -39,6 +35,11 @@ export default function TeamFilter({ teams, active, onToggle, compact, ariaLabel
 
   useDismissOnOutside(open, ref, () => setOpen(false))
 
+  // Ohne Mannschaften gibt es nichts zu filtern — ein toter Knopf wäre eine
+  // Behauptung, es gäbe eine Auswahl. (Seiten, die den Filter erst ab zwei
+  // Mannschaften zeigen, entscheiden das zusätzlich selbst.)
+  if (teams.length === 0) return null
+
   const activeCount = teams.filter(t => active.has(t.id)).length
   const allActive = activeCount === teams.length
 
@@ -54,7 +55,6 @@ export default function TeamFilter({ teams, active, onToggle, compact, ariaLabel
         onClick={() => setOpen(o => !o)}
         aria-label={ariaLabel}
         aria-expanded={open}
-        disabled={teams.length === 0}
         className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${allActive ? HEADER_NEUTRAL : HEADER_PRIMARY}`}
       >
         <Users className="w-3.5 h-3.5" />

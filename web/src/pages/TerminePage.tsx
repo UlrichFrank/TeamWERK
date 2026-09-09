@@ -8,7 +8,7 @@ import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { getEventColors } from '../lib/eventColors'
-import { buildTeamShortNames } from '../lib/teamName'
+import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -117,20 +117,10 @@ type Termin =
 
 const ALL_TYPES = new Set(['heim', 'auswärts', 'generisch', 'training'])
 
-// `team` trägt eine kommaseparierte ID-Liste (`team=3,7`). Ein einzelnes
-// `team=3` bleibt gültig — Bestandslinks und alte Lesezeichen sind damit
-// unverändert gültig. Leere Menge = kein Team-Filter.
-function parseTeams(raw: string | null): Set<number> {
-  if (!raw) return new Set()
-  const ids = raw
-    .split(',')
-    .map(s => parseInt(s.trim()))
-    .filter(n => Number.isFinite(n) && n > 0)
-  return new Set(ids)
-}
-
 function parseFilters(sp: URLSearchParams) {
-  const team = parseTeams(sp.get('team'))
+  // `team` trägt eine kommaseparierte ID-Liste (`team=3,7`); ein einzelnes
+  // `team=3` bleibt gültig, Bestandslinks funktionieren weiter.
+  const team = parseTeamIds(sp.get('team'))
   const typesRaw = sp.get('types')
   const types = typesRaw
     ? (() => {
@@ -243,11 +233,7 @@ export default function TerminePage() {
   const [termine, setTermine] = useState<Termin[]>([])
   const [season, setSeason] = useState<SeasonWindow | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
-  const teamShortNames = useMemo(() => buildTeamShortNames(teams), [teams])
-  const teamOptions = useMemo(
-    () => teams.map(t => ({ id: t.id, label: teamShortNames.get(t.id) ?? t.name })),
-    [teams, teamShortNames],
-  )
+  const teamOptions = useMemo(() => buildTeamOptions(teams), [teams])
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
   const [rsvpErrors, setRsvpErrors] = useState<Record<string, string>>({})
@@ -264,11 +250,9 @@ export default function TerminePage() {
   const updateFilter = (patch: { team?: Set<number>; types?: Set<string>; past?: boolean; focus?: { kind: 'training' | 'game'; id: number } | null }) => {
     const next = new URLSearchParams(searchParams)
     if ('team' in patch && patch.team) {
-      // Leere und vollständige Auswahl sind derselbe Zustand „kein Filter" —
-      // wie beim Typ-Filter, dessen Default ebenfalls „alles aktiv" ist.
-      const isDefault = patch.team.size === 0 || (teams.length > 0 && patch.team.size === teams.length)
-      if (isDefault) next.delete('team')
-      else next.set('team', [...patch.team].join(','))
+      const value = serializeTeamIds(patch.team, teams.length)
+      if (value === null) next.delete('team')
+      else next.set('team', value)
     }
     if ('types' in patch && patch.types) {
       const isDefault = patch.types.size === ALL_TYPES.size && [...ALL_TYPES].every(t => patch.types!.has(t))
@@ -302,15 +286,8 @@ export default function TerminePage() {
     updateFilter({ types: next })
   }
 
-  // „Kein Filter" wird als vollständige Auswahl angezeigt, damit das Abwählen
-  // der ersten Mannschaft wie beim Typ-Filter aus „alle" eine Menge macht.
-  const effectiveTeamIds = filterTeamIds.size > 0 ? filterTeamIds : new Set(teams.map(t => t.id))
-
-  const toggleTeam = (teamId: number) => {
-    const next = new Set(effectiveTeamIds)
-    if (next.has(teamId)) next.delete(teamId); else next.add(teamId)
-    updateFilter({ team: next })
-  }
+  const activeTeamIds = effectiveTeamIds(filterTeamIds, teamOptions)
+  const toggleTeam = (teamId: number) => updateFilter({ team: toggleTeamId(activeTeamIds, teamId) })
 
   const today = new Date().toISOString().slice(0, 10)
   // Obere Fenstergrenze ist das Ende der laufenden Saison — vorher war es ein
@@ -365,11 +342,10 @@ export default function TerminePage() {
     if (focus && t.kind === focus.kind && t.data.id === focus.id) return true
     if (t.kind === 'training') {
       if (!filterTypes.has('training')) return false
-      if (filterTeamIds.size > 0 && !filterTeamIds.has(t.data.team_id)) return false
+      if (!matchesTeamFilter(filterTeamIds, [t.data.team_id])) return false
     } else {
       if (!filterTypes.has(t.data.event_type)) return false
-      // Ein Termin passt, sobald er einer der gewählten Mannschaften gehört.
-      if (filterTeamIds.size > 0 && !(t.data.team_ids ?? []).some(id => filterTeamIds.has(id))) return false
+      if (!matchesTeamFilter(filterTeamIds, t.data.team_ids)) return false
     }
     // Textfilter zuletzt — teuerstes Prädikat, und der Fokus-Durchlass oben
     // muss ihn überleben (design.md §8).
@@ -533,7 +509,7 @@ export default function TerminePage() {
               Suchfeld kollidierte. */}
           <TeamFilter
             teams={teamOptions}
-            active={effectiveTeamIds}
+            active={activeTeamIds}
             onToggle={toggleTeam}
             compact={compact}
           />
