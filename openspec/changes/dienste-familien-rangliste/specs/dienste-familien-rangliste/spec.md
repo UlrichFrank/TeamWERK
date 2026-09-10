@@ -135,8 +135,9 @@ Kader dieses Teams, oder er ist selbst als Spieler im Kader dieses Teams.
 
 Innerhalb einer für ihn sichtbaren Rangliste SHALL die Zeile des eigenen Kindes
 (bzw. die eigene Zeile, falls er selbst Spieler ist) den echten Namen zeigen. Alle
-anderen Zeilen SHALL ausschließlich mit ihrer Platzierung beschriftet werden (z.B.
-„Platz 3") — kein Name, kein erfundenes Pseudonym.
+anderen Zeilen SHALL ausschließlich ihre Platzierung zeigen (in der Rang-Spalte);
+anstelle des Namens steht nur ein Strich „-" — kein Name, kein erfundenes
+Pseudonym.
 
 #### Scenario: Elternteil sieht nur Teams der eigenen Kinder
 - **WHEN** ein Elternteil hat ein Kind im Kader der wCJ, aber kein Kind oder

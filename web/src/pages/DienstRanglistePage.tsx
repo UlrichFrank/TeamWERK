@@ -49,7 +49,9 @@ function RanglisteRowView({ row, scale, soll }: { row: RanglisteRow; scale: numb
   const geleistetPct = scale > 0 ? (row.geleistet / scale) * 100 : 0
   const vorhersagePct = scale > 0 ? (row.vorhersage / scale) * 100 : 0
   const sollPct = scale > 0 ? Math.min(100, (soll / scale) * 100) : 0
-  const displayName = row.name ?? `Platz ${row.rank}`
+  // Anonymisierte Zeilen: nur ein Strich — die Platzierung steht schon in der
+  // Rang-Spalte links, ein zweites „Platz N" wäre doppelt.
+  const displayName = row.name ?? '-'
 
   return (
     <div className={`flex items-center gap-2 sm:gap-3 py-2 px-2 rounded-md ${row.isOwn ? 'bg-brand-yellow/20' : ''}`}>
@@ -62,7 +64,7 @@ function RanglisteRowView({ row, scale, soll }: { row: RanglisteRow; scale: numb
       </span>
       <div
         className="relative flex-1 h-2.5 bg-brand-border-subtle rounded-full overflow-hidden min-w-0"
-        title={`Geleistet: ${formatDiensteZahl(row.geleistet)} · Vorhersage: ${formatDiensteZahl(row.vorhersage)} · Fair-Anteil: ${formatDiensteZahl(soll)}`}
+        title={`Geleistet: ${formatDiensteZahl(row.geleistet)} · Eingetragen: ${formatDiensteZahl(row.vorhersage)} · Fair-Anteil: ${formatDiensteZahl(soll)}`}
       >
         <div className="h-full bg-brand-green" style={{ width: `${geleistetPct}%` }} aria-hidden="true" />
         <div className="absolute inset-y-0 h-full bg-brand-info" style={{ left: `${geleistetPct}%`, width: `${vorhersagePct}%` }} aria-hidden="true" />
@@ -114,7 +116,7 @@ function Legend() {
         <span className="inline-block w-2.5 h-2.5 rounded-full bg-brand-green" aria-hidden="true" /> Geleistet
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="inline-block w-2.5 h-2.5 rounded-full bg-brand-info" aria-hidden="true" /> Vorhersage
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-brand-info" aria-hidden="true" /> Eingetragen
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-block w-0.5 h-3 bg-brand-text" aria-hidden="true" /> Fair-Anteil

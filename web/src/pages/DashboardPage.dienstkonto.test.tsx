@@ -70,9 +70,15 @@ describe('DashboardPage — Meine-Dienste-Kachel (Familien-Rangliste)', () => {
     expect(annaRow.closest('a')).toHaveAttribute('href', '/dienste/rangliste?team=5')
     expect(benRow.closest('a')).toHaveAttribute('href', '/dienste/rangliste?team=7')
 
-    // Zähler-Text mit deutschem Format.
-    expect(screen.getByText('2 + 1 von 4 Dienste')).toBeInTheDocument()
-    expect(screen.getByText('0 + 0 von 3 Dienste')).toBeInTheDocument()
+    // Zähler benennt beide Werte statt „2 + 1". Lang- und Kurzform liegen beide
+    // im DOM (Umschaltung per sm:-Klasse), daher Teilstring-Prüfung.
+    const anna = annaRow.closest('a')!
+    expect(anna).toHaveTextContent('2 geleistet')
+    expect(anna).toHaveTextContent('1 eingetragen')
+    expect(anna).toHaveTextContent('Ziel 4')
+    expect(anna).not.toHaveTextContent('+')
+    expect(benRow.closest('a')).toHaveTextContent('0 geleistet')
+    expect(benRow.closest('a')).toHaveTextContent('Ziel 3')
   })
 
   test('soll = 0 zeigt keinen Fortschrittsbalken, nur den Zähler', async () => {

@@ -131,6 +131,17 @@ function formatDiensteZahl(n: number): string {
   return n.toLocaleString('de-DE', { maximumFractionDigits: 1 })
 }
 
+// Beschriftung, die unter 640 px auf die Kurzform schrumpft — die Kachel-Zeile
+// teilt sich die Breite mit Name + Team.
+function ResponsiveLabel({ long, short }: { long: string; short: string }) {
+  return (
+    <>
+      <span className="hidden sm:inline">{long}</span>
+      <span className="sm:hidden">{short}</span>
+    </>
+  )
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function ExtendedBadge() {
@@ -309,12 +320,16 @@ function DutyAccountRow({ entry }: { entry: DutyAccountEntry }) {
       <div className="flex items-center justify-between gap-2">
         {nameBlock}
         <span className="text-xs text-brand-text-muted whitespace-nowrap">
-          {formatDiensteZahl(geleistet)} + {formatDiensteZahl(vorhersage)} von {formatDiensteZahl(soll)} Dienste
+          {formatDiensteZahl(geleistet)} <ResponsiveLabel long="geleistet" short="gel." />
+          {' · '}
+          {formatDiensteZahl(vorhersage)} <ResponsiveLabel long="eingetragen" short="eingetr." />
+          {' · '}
+          Ziel {formatDiensteZahl(soll)}
         </span>
       </div>
       <div
         className="mt-1 h-1.5 w-full max-w-[10rem] bg-brand-border-subtle rounded-full overflow-hidden flex"
-        title={`Geleistet: ${formatDiensteZahl(geleistet)} · Vorhersage: ${formatDiensteZahl(vorhersage)} · Fair-Anteil: ${formatDiensteZahl(soll)}`}
+        title={`Geleistet: ${formatDiensteZahl(geleistet)} · Eingetragen: ${formatDiensteZahl(vorhersage)} · Fair-Anteil: ${formatDiensteZahl(soll)}`}
       >
         <div className="h-full bg-brand-green" style={{ width: `${geleistetPct}%` }} aria-hidden="true" />
         <div className="h-full bg-brand-info" style={{ width: `${vorhersagePct}%` }} aria-hidden="true" />

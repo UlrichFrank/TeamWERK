@@ -61,15 +61,15 @@ describe('DienstRanglistePage', () => {
     expect(screen.getByText('wC1')).toBeInTheDocument()
     expect(screen.getByText('Anna Beispiel')).toBeInTheDocument()
     expect(screen.getByText('Ben Beispiel')).toBeInTheDocument()
-    // Zwei anonymisierte Zeilen ("Platz N"), eine pro Block.
-    expect(screen.getAllByText('Platz 2').length + screen.getAllByText('Platz 1').length).toBe(2)
+    // Zwei anonymisierte Zeilen (nur „-" statt Name), eine pro Block.
+    expect(screen.getAllByText('-')).toHaveLength(2)
 
     expect(mockGet).toHaveBeenCalled()
     const calledUrl = mockGet.mock.calls[0][0] as string
     expect(calledUrl).toContain('team=1%2C2')
   })
 
-  test('Standard-Nutzer: nur eigene Zeile benannt, andere als "Platz N"', async () => {
+  test('Standard-Nutzer: nur eigene Zeile benannt, andere nur mit "-"', async () => {
     mockGet.mockResolvedValue({
       data: {
         teams: [{ id: 5, label: 'mB2' }],
@@ -91,8 +91,8 @@ describe('DienstRanglistePage', () => {
     renderAt('/dienste/rangliste')
 
     await screen.findByText('Eigenes Kind')
-    expect(screen.getByText('Platz 1')).toBeInTheDocument()
-    expect(screen.getByText('Platz 3')).toBeInTheDocument()
+    expect(screen.getAllByText('-')).toHaveLength(2)
+    expect(screen.queryByText(/Platz/)).toBeNull()
   })
 
   test('Vorstand: alle Zeilen benannt', async () => {
@@ -119,7 +119,7 @@ describe('DienstRanglistePage', () => {
     await screen.findByText('Familie Meier')
     expect(screen.getByText('Familie Schmidt')).toBeInTheDocument()
     expect(screen.getByText('Familie Weber')).toBeInTheDocument()
-    expect(screen.queryByText(/^Platz \d+$/)).toBeNull()
+    expect(screen.queryByText('-')).toBeNull()
   })
 
   test('teams: [] zeigt Leerzustand', async () => {
