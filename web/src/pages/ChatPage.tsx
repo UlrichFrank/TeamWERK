@@ -25,6 +25,7 @@ import {
   Check,
   CheckCheck,
   Loader2,
+  BarChart3,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
@@ -43,6 +44,9 @@ import { useChatEvents } from "../hooks/useChatEvents";
 import ConversationParticipantsModal from "../components/ConversationParticipantsModal";
 import MessageReadsModal from "../components/MessageReadsModal";
 import CreatorExitChoiceModal from "../components/CreatorExitChoiceModal";
+import ChatPollCreateModal from "../components/ChatPollCreateModal";
+import ChatPollCard from "../components/ChatPollCard";
+import ChatPollVotesModal from "../components/ChatPollVotesModal";
 import { BTN_SMALL } from '../lib/buttonStyles'
 
 interface ConvMember {
@@ -52,6 +56,7 @@ interface ConvMember {
 interface LastMessage {
   body: string;
   sentAt: string;
+  isPoll: boolean;
 }
 interface Conversation {
   id: number;
@@ -67,6 +72,28 @@ interface Reaction {
   count: number;
   userNames: string[];
   myReaction: boolean;
+}
+
+// Umfrage-Datenmodell — siehe design.md §4. Kanonisch hier definiert und von
+// den drei Umfrage-Komponenten (ChatPollCard/-CreateModal/-VotesModal) als
+// Typ importiert, damit Liste, Einzelabruf und Live-Event dieselbe Form
+// erwarten.
+export interface PollVoter {
+  id: number;
+  name: string;
+}
+export interface PollOption {
+  id: number;
+  label: string;
+  count: number;
+  voted: boolean;
+  voters: PollVoter[];
+}
+export interface Poll {
+  allowMultiple: boolean;
+  closedAt: string | null;
+  voterCount: number;
+  options: PollOption[];
 }
 
 interface Message {
@@ -98,6 +125,8 @@ interface Message {
   readCount?: number;
   readTotal?: number;
   read?: boolean;
+  // Umfrage-Nachricht, wenn gesetzt — die Frage steht weiterhin in `preview`.
+  poll: Poll | null;
 }
 
 // Schlüssel des Volltext-Caches (fullBodies). Die id allein reicht nicht: sie
@@ -275,6 +304,8 @@ export default function ChatPage() {
   // Bild im Vollbild-Overlay (Lightbox), url ohne /api-Prefix.
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [readsModalMsgId, setReadsModalMsgId] = useState<number | null>(null);
+  const [showPollCreate, setShowPollCreate] = useState(false);
+  const [pollVotesMsgId, setPollVotesMsgId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [mobileOverlay, setMobileOverlay] = useState<{
@@ -744,6 +775,29 @@ export default function ChatPage() {
         loadConversations();
       }
     }
+    if (event.startsWith("chat:poll-updated")) {
+      // chat:poll-updated:<convId>:<messageId> — nur die eine Umfrage neu
+      // laden (design.md §3), kein loadMessages/Voll-Reload und keine
+      // Scroll-Änderung. Ignoriert, wenn die Konversation nicht offen ist
+      // oder die Nachricht (noch) nicht im geladenen Fenster steht.
+      const parts = event.split(":");
+      const convId = parseInt(parts[2]);
+      const msgId = parseInt(parts[3]);
+      if (
+        activeConv?.id === convId &&
+        !Number.isNaN(msgId) &&
+        messages.some((m) => m.id === msgId)
+      ) {
+        api
+          .get(`/chat/messages/${msgId}/poll`)
+          .then((r) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === msgId ? { ...m, poll: r.data } : m)),
+            );
+          })
+          .catch(() => {});
+      }
+    }
     if (event.startsWith("chat:read-receipt")) {
       // chat:read-receipt:<convId>:<readerUserId>:<upToMessageId>
       const parts = event.split(":");
@@ -1135,6 +1189,28 @@ export default function ChatPage() {
     } catch {}
   };
 
+  // closePoll beendet die eigene Umfrage (nur Ersteller, kein Admin-Bypass —
+  // siehe design.md §6). Setzt `closedAt` zusätzlich optimistisch: der
+  // Ersteller ist zwar selbst Empfänger von chat:poll-updated, aber ohne
+  // sofortige Rückmeldung wirkte der Klick sonst wirkungslos.
+  const closePoll = async (msg: Message) => {
+    setContextMenu(null);
+    setMobileOverlay(null);
+    try {
+      await api.post(`/chat/messages/${msg.id}/poll/close`);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msg.id && m.poll
+            ? { ...m, poll: { ...m.poll, closedAt: new Date().toISOString() } }
+            : m,
+        ),
+      );
+    } catch (e) {
+      setToast(errorMessage(e, "Umfrage konnte nicht beendet werden"));
+      setTimeout(() => setToast(null), 4000);
+    }
+  };
+
   const handleContextMenu = (e: React.MouseEvent, msg: Message) => {
     if (msg.deletedAt) return;
     e.preventDefault();
@@ -1297,8 +1373,13 @@ export default function ChatPage() {
                       </div>
                       {conv.lastMessage && (
                         <div className="flex items-center justify-between gap-2 mt-0.5">
-                          <p className="text-xs text-brand-text-muted truncate">
-                            {conv.lastMessage.body}
+                          <p className="flex items-center gap-1 min-w-0 text-xs text-brand-text-muted">
+                            {conv.lastMessage.isPoll && (
+                              <BarChart3 className="w-3 h-3 shrink-0" />
+                            )}
+                            <span className="truncate">
+                              {conv.lastMessage.body}
+                            </span>
                           </p>
                           {conv.unreadCount > 0 && (
                             <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 shrink-0">
@@ -1568,6 +1649,7 @@ export default function ChatPage() {
                           onClosePicker={() => setEmojiPickerMsgId(null)}
                           onToggleReaction={toggleReaction}
                           onOpenReads={(m) => setReadsModalMsgId(m.id)}
+                          onOpenVotes={(m) => setPollVotesMsgId(m.id)}
                           onImageClick={() => {
                             if (msg.mediaUrl) setLightboxUrl(msg.mediaUrl);
                           }}
@@ -1649,6 +1731,16 @@ export default function ChatPage() {
                     aria-label="Bild anhängen"
                   >
                     <Paperclip className="w-5 h-5" />
+                  </button>
+                )}
+                {!editingMessage && activeConv.type === "group" && (
+                  <button
+                    onClick={() => setShowPollCreate(true)}
+                    disabled={sending}
+                    className="text-brand-text-muted hover:text-brand-text transition-colors shrink-0 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    aria-label="Umfrage erstellen"
+                  >
+                    <BarChart3 className="w-5 h-5" />
                   </button>
                 )}
                 <textarea
@@ -1816,15 +1908,27 @@ export default function ChatPage() {
             <Copy className="w-4 h-4" />
             {contextMenu.selectedText ? "Auswahl kopieren" : "Kopieren"}
           </button>
-          {contextMenu.message.senderId === user?.id && (
-            <button
-              onClick={() => startEdit(contextMenu.message)}
-              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors"
-            >
-              <Pencil className="w-4 h-4" />
-              Bearbeiten
-            </button>
-          )}
+          {contextMenu.message.senderId === user?.id &&
+            !contextMenu.message.poll && (
+              <button
+                onClick={() => startEdit(contextMenu.message)}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors"
+              >
+                <Pencil className="w-4 h-4" />
+                Bearbeiten
+              </button>
+            )}
+          {contextMenu.message.poll &&
+            !contextMenu.message.poll.closedAt &&
+            contextMenu.message.senderId === user?.id && (
+              <button
+                onClick={() => closePoll(contextMenu.message)}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-brand-text hover:bg-brand-table-select transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Umfrage beenden
+              </button>
+            )}
           {canDelete(contextMenu.message) && (
             <button
               onClick={() => deleteMsg(contextMenu.message)}
@@ -1855,6 +1959,7 @@ export default function ChatPage() {
             deleteMsg(msg);
             setMobileOverlay(null);
           }}
+          onClosePoll={closePoll}
           onToggleReaction={(msgId, emoji) => {
             toggleReaction(msgId, emoji);
             setMobileOverlay(null);
@@ -1927,6 +2032,24 @@ export default function ChatPage() {
         <MessageReadsModal
           messageId={readsModalMsgId}
           onClose={() => setReadsModalMsgId(null)}
+        />
+      )}
+
+      {showPollCreate && activeConv && activeConv.type === "group" && (
+        <ChatPollCreateModal
+          convId={activeConv.id}
+          onClose={() => setShowPollCreate(false)}
+          onCreated={async () => {
+            setShowPollCreate(false);
+            if (activeConv) await appendNewMessages(activeConv.id);
+          }}
+        />
+      )}
+
+      {pollVotesMsgId !== null && (
+        <ChatPollVotesModal
+          messageId={pollVotesMsgId}
+          onClose={() => setPollVotesMsgId(null)}
         />
       )}
 
@@ -2010,6 +2133,7 @@ function MessageBubble({
   onToggleReaction,
   onImageClick,
   onOpenReads,
+  onOpenVotes,
 }: {
   msg: Message;
   body: string;
@@ -2025,6 +2149,7 @@ function MessageBubble({
   onToggleReaction: (msgId: number, emoji: string) => void;
   onImageClick: () => void;
   onOpenReads?: (msg: Message) => void;
+  onOpenVotes?: (msg: Message) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
@@ -2170,28 +2295,40 @@ function MessageBubble({
               <p className="truncate">{(msg.replyToBody ?? "").slice(0, 60)}</p>
             </div>
           )}
-          {body && (
-            <span className="whitespace-pre-wrap break-words">
-              {renderWithLinks(body, isOwn)}
-            </span>
-          )}
-          {msg.mediaUrl && (
-            <AuthImage
-              url={msg.mediaUrl}
-              alt="Bild"
-              className={`${body ? "mt-2 " : ""}max-w-full rounded-lg cursor-pointer`}
-              onClick={onImageClick}
-              naturalWidth={msg.mediaWidth}
-              naturalHeight={msg.mediaHeight}
+          {msg.poll ? (
+            <ChatPollCard
+              poll={msg.poll}
+              question={body}
+              messageId={msg.id}
+              isOwn={isOwn}
+              onOpenVotes={() => onOpenVotes?.(msg)}
             />
-          )}
-          {showExpand && (
-            <button
-              onClick={onExpand}
-              className={`block mt-1 text-xs font-medium underline ${isOwn ? "text-brand-black/70" : "text-brand-info"}`}
-            >
-              Mehr anzeigen
-            </button>
+          ) : (
+            <>
+              {body && (
+                <span className="whitespace-pre-wrap break-words">
+                  {renderWithLinks(body, isOwn)}
+                </span>
+              )}
+              {msg.mediaUrl && (
+                <AuthImage
+                  url={msg.mediaUrl}
+                  alt="Bild"
+                  className={`${body ? "mt-2 " : ""}max-w-full rounded-lg cursor-pointer`}
+                  onClick={onImageClick}
+                  naturalWidth={msg.mediaWidth}
+                  naturalHeight={msg.mediaHeight}
+                />
+              )}
+              {showExpand && (
+                <button
+                  onClick={onExpand}
+                  className={`block mt-1 text-xs font-medium underline ${isOwn ? "text-brand-black/70" : "text-brand-info"}`}
+                >
+                  Mehr anzeigen
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -2273,6 +2410,7 @@ function MobileMessageActionOverlay({
   onEdit,
   onDelete,
   onToggleReaction,
+  onClosePoll,
   canDeleteMsg,
   userId,
 }: {
@@ -2284,6 +2422,7 @@ function MobileMessageActionOverlay({
   onEdit: (msg: Message) => void;
   onDelete: (msg: Message) => void;
   onToggleReaction: (msgId: number, emoji: string) => void;
+  onClosePoll: (msg: Message) => void;
   canDeleteMsg: (msg: Message) => boolean;
   userId: number | undefined;
 }) {
@@ -2357,13 +2496,22 @@ function MobileMessageActionOverlay({
             <Copy className="w-4 h-4 text-brand-text-muted shrink-0" />
             Kopieren
           </button>
-          {msg.senderId === userId && (
+          {msg.senderId === userId && !msg.poll && (
             <button
               onClick={() => onEdit(msg)}
               className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-text border-b border-brand-border-subtle"
             >
               <Pencil className="w-4 h-4 text-brand-text-muted shrink-0" />
               Bearbeiten
+            </button>
+          )}
+          {msg.poll && !msg.poll.closedAt && msg.senderId === userId && (
+            <button
+              onClick={() => onClosePoll(msg)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 text-sm text-brand-text border-b border-brand-border-subtle"
+            >
+              <BarChart3 className="w-4 h-4 text-brand-text-muted shrink-0" />
+              Umfrage beenden
             </button>
           )}
           {canDeleteMsg(msg) && (
