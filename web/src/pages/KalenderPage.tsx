@@ -1150,8 +1150,11 @@ export default function KalenderPage() {
         <div className="flex-1" />
       </div>
 
-      {/* Calendar */}
-      <div className="rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      {/* Calendar — `isolate` kapselt die z-Indizes der Zellen (Abwesenheits-
+          Balken z-20, Inhalt z-10) in einem eigenen Stacking-Context. Ohne ihn
+          konkurrieren sie auf Seitenebene mit den Kopfzeilen-Dropdowns (auch
+          z-20) und malen als spätere DOM-Geschwister darüber. */}
+      <div className="isolate rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
       <div
         ref={calendarRef}
         className="bg-brand-surface-card select-none"
