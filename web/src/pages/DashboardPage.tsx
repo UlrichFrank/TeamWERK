@@ -45,19 +45,26 @@ interface NextDiensteGame {
 
 interface RecentAssignment { date: string; dutyType: string; status: string }
 
-interface DutyAccount {
-  season: string
-  ist: number
-  soll: number | null
-  children: number
-  recentAssignments: RecentAssignment[]
+// Eine Position pro Kind (bzw. eine Position für den Nutzer selbst, wenn er
+// ohne verknüpftes Kind Spieler ist) — siehe
+// openspec/changes/dienste-familien-rangliste. BREAKING: früher ein einzelnes
+// aggregiertes Objekt, jetzt eine Liste.
+interface DutyAccountEntry {
+  memberId: number
+  name: string
+  teamId: number
+  teamLabel: string
+  geleistet: number
+  vorhersage: number
+  soll: number
 }
 
 interface MeineDienste {
   nextGame: NextDiensteGame | null
   mySlots: DiensteSlot[]
   openSlotsCount: number
-  dutyAccount: DutyAccount | null
+  dutyAccount: DutyAccountEntry[]
+  recentAssignments: RecentAssignment[]
 }
 
 interface CarpoolingPaarung { paarungId: number; partnerName: string; partnerTreffpunkt: string }
@@ -116,6 +123,12 @@ function statusLabel(status: string) {
   if (status === 'fulfilled') return { label: 'Erfüllt', cls: 'bg-brand-success-light text-brand-success' }
   if (status === 'cash_substitute') return { label: 'Ablöse', cls: 'bg-brand-warning-light text-brand-text' }
   return { label: 'Zugesagt', cls: 'bg-brand-info/10 text-brand-blue' }
+}
+
+// de-DE, höchstens eine Nachkommastelle (Geschwister-Aufteilung kann 0,5
+// ergeben) — kein unnötiges ",0" bei ganzen Zahlen.
+function formatDiensteZahl(n: number): string {
+  return n.toLocaleString('de-DE', { maximumFractionDigits: 1 })
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -260,14 +273,62 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
   )
 }
 
+// Eine Zeile pro Kind (bzw. pro Nutzer selbst): Name + Team, Segment-Balken
+// (Geleistet/Vorhersage/Rest bis Fair-Anteil), Link auf die Rangliste des
+// zugehörigen Kaders. `soll = 0` (noch keine Slots bekannt) zeigt bewusst
+// keinen Balken, nur den nackten Zähler — eine Formel-Andeutung im UI ist
+// nicht gewünscht (spec: „Erklärtext im Frontend").
+function DutyAccountRow({ entry }: { entry: DutyAccountEntry }) {
+  const { name, teamId, teamLabel, geleistet, vorhersage, soll } = entry
+  const total = geleistet + vorhersage
+  const linkTo = `/dienste/rangliste?team=${teamId}`
+  const linkCls = 'block py-1.5 rounded px-2 -mx-2 hover:bg-brand-border-subtle transition-colors'
+  const nameBlock = (
+    <span className="text-sm font-medium text-brand-text truncate">
+      {name} <span className="text-brand-text-muted font-normal">· {teamLabel}</span>
+    </span>
+  )
+
+  if (soll === 0) {
+    return (
+      <Link to={linkTo} className={`${linkCls} flex items-center justify-between gap-2`}>
+        {nameBlock}
+        <span className="text-xs text-brand-text-muted whitespace-nowrap">{formatDiensteZahl(total)} Dienste</span>
+      </Link>
+    )
+  }
+
+  // Skala = max(soll, geleistet+vorhersage) — eine Übererfüllung sprengt den
+  // Balken nicht, sondern schiebt den Fair-Anteil-Rest auf 0.
+  const scale = Math.max(soll, total)
+  const geleistetPct = scale > 0 ? (geleistet / scale) * 100 : 0
+  const vorhersagePct = scale > 0 ? (vorhersage / scale) * 100 : 0
+
+  return (
+    <Link to={linkTo} className={linkCls}>
+      <div className="flex items-center justify-between gap-2">
+        {nameBlock}
+        <span className="text-xs text-brand-text-muted whitespace-nowrap">
+          {formatDiensteZahl(geleistet)} + {formatDiensteZahl(vorhersage)} von {formatDiensteZahl(soll)} Dienste
+        </span>
+      </div>
+      <div
+        className="mt-1 h-1.5 w-full max-w-[10rem] bg-brand-border-subtle rounded-full overflow-hidden flex"
+        title={`Geleistet: ${formatDiensteZahl(geleistet)} · Vorhersage: ${formatDiensteZahl(vorhersage)} · Fair-Anteil: ${formatDiensteZahl(soll)}`}
+      >
+        <div className="h-full bg-brand-green" style={{ width: `${geleistetPct}%` }} aria-hidden="true" />
+        <div className="h-full bg-brand-info" style={{ width: `${vorhersagePct}%` }} aria-hidden="true" />
+      </div>
+    </Link>
+  )
+}
+
 function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
-  const [accountOpen, setAccountOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   if (!dienste) return null
 
-  const { nextGame, mySlots, openSlotsCount, dutyAccount } = dienste
-  const showProgress = dutyAccount?.soll != null && dutyAccount.soll > 0
-  const pct = showProgress ? Math.min(100, Math.round(((dutyAccount?.ist ?? 0) / (dutyAccount?.soll ?? 1)) * 100)) : 0
+  const { nextGame, mySlots, openSlotsCount, dutyAccount, recentAssignments } = dienste
 
   return (
     <div className="space-y-3 mt-1">
@@ -299,41 +360,38 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
         <p className="text-sm text-brand-text-muted">Kein kommendes Spiel mit Diensten.</p>
       )}
 
-      {dutyAccount && (
-        <div className="pt-3 border-t border-brand-border-subtle">
-          <button
-            onClick={() => setAccountOpen(o => !o)}
-            className="w-full flex items-center justify-between hover:bg-brand-border-subtle rounded px-2 py-1.5 -mx-2 transition-colors min-h-[36px]"
-          >
-            <div>
-              <span className="text-sm font-medium text-brand-text">
-                Dienstkonto: {dutyAccount.ist}{showProgress ? `/${dutyAccount.soll}` : ''}
-              </span>
-              {showProgress && (
-                <div className="mt-1 h-1.5 w-32 bg-brand-border-subtle rounded-full overflow-hidden">
-                  <div className="h-full bg-brand-blue rounded-full" style={{ width: `${pct}%` }} />
-                </div>
-              )}
-            </div>
-            {accountOpen ? <ChevronDown className="w-4 h-4 text-brand-text-muted" /> : <ChevronRight className="w-4 h-4 text-brand-text-muted" />}
-          </button>
-          {accountOpen && (
-            <div className="mt-2 space-y-1">
-              {dutyAccount.recentAssignments.length === 0 ? (
-                <p className="text-xs text-brand-text-muted">Noch keine Dienste diese Saison.</p>
-              ) : dutyAccount.recentAssignments.map((a, i) => {
-                const { label, cls } = statusLabel(a.status)
-                return (
-                  <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-brand-border-subtle last:border-0">
-                    <span className="text-brand-text-muted">{formatDate(a.date)} — {a.dutyType}</span>
-                    <span className={`px-1.5 py-0.5 rounded ${cls}`}>{label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      {dutyAccount.length > 0 && (
+        <div className="pt-3 border-t border-brand-border-subtle space-y-1">
+          {dutyAccount.map(entry => (
+            <DutyAccountRow key={`${entry.memberId}-${entry.teamId}`} entry={entry} />
+          ))}
         </div>
       )}
+
+      <div className="pt-3 border-t border-brand-border-subtle">
+        <button
+          onClick={() => setHistoryOpen(o => !o)}
+          className="w-full flex items-center justify-between hover:bg-brand-border-subtle rounded px-2 py-1.5 -mx-2 transition-colors min-h-[36px]"
+        >
+          <span className="text-sm font-medium text-brand-text">Bisherige Dienste</span>
+          {historyOpen ? <ChevronDown className="w-4 h-4 text-brand-text-muted" /> : <ChevronRight className="w-4 h-4 text-brand-text-muted" />}
+        </button>
+        {historyOpen && (
+          <div className="mt-2 space-y-1">
+            {recentAssignments.length === 0 ? (
+              <p className="text-xs text-brand-text-muted">Noch keine Dienste diese Saison.</p>
+            ) : recentAssignments.map((a, i) => {
+              const { label, cls } = statusLabel(a.status)
+              return (
+                <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-brand-border-subtle last:border-0">
+                  <span className="text-brand-text-muted">{formatDate(a.date)} — {a.dutyType}</span>
+                  <span className={`px-1.5 py-0.5 rounded ${cls}`}>{label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       <Link to="/dienste" className="text-xs text-brand-text-muted hover:text-brand-text flex items-center gap-1 pt-2">
         Alle Dienste <ArrowRight className="w-3 h-3" />

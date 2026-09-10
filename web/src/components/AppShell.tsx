@@ -54,6 +54,7 @@ const navModules: NavModule[] = [
       { to: '/mein-team', label: 'Mein Team' },
       { to: '/dokumente', label: 'Dokumente' },
       { to: '/dienste', label: 'Dienste' },
+      { to: '/dienste/rangliste', label: 'Dienst-Rangliste' },
       { to: '/mitfahrgelegenheiten', label: 'Mitfahrten' },
       { to: '/chat', label: 'Nachrichten' },
       { to: '/spielberichte', label: 'Spielberichte' },

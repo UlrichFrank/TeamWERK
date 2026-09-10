@@ -17,6 +17,7 @@ import MemberDetailPage from './pages/MemberDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import ChildProfilePage from './pages/ChildProfilePage'
 import DutyPage from './pages/DutyPage'
+import DienstRanglistePage from './pages/DienstRanglistePage'
 const DutyInstructionPage = lazy(() => import('./pages/DutyInstructionPage'))
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import BeitragslaufPage from './pages/admin/BeitragslaufPage'
@@ -116,6 +117,7 @@ export default function App() {
               <Route path="dokumente/:folderId" element={<DocumentsPage />} />
               <Route path="mitglieder/:memberId/sepa-mandat/anzeigen" element={<RoleRoute roles={['admin','vorstand','kassierer']}><SepaMandatViewerPage /></RoleRoute>} />
               <Route path="dienste" element={<DutyPage />} />
+              <Route path="dienste/rangliste" element={<DienstRanglistePage />} />
               <Route path="dienste/anleitung/:typeId" element={
                 <Suspense fallback={<p className="text-sm text-brand-text-muted">Lade Anleitung…</p>}>
                   <DutyInstructionPage />
