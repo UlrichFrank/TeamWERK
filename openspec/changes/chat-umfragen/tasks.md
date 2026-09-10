@@ -54,5 +54,5 @@
 
 ## 9. Verifikation
 
-- [ ] 9.1 `/verify-change` — Build/Test/Lint + Projekt-Invarianten (Route→Tests, Broadcast, brand-Tokens, lucide, Migrationsnummer, `openspec validate`).
+- [x] 9.1 `/verify-change` — Build/Test/Lint + Projekt-Invarianten (Route→Tests, Broadcast, brand-Tokens, lucide, Migrationsnummer, `openspec validate`).
 - [ ] 9.2 Manuell mit zwei Sessions in einer Gruppe: Umfrage anlegen (Push/Unread beim Gegenüber), abstimmen/ändern/zurückziehen live beobachten, Scroll-Position bleibt stehen, beenden, Bearbeiten nicht angeboten, Löschen zeigt Placeholder; Mobile-Breite (< 640 px) prüfen.
