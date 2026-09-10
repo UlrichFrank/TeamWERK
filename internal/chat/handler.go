@@ -191,6 +191,7 @@ type Member struct {
 type LastMessage struct {
 	Body   string `json:"body"`
 	SentAt string `json:"sentAt"`
+	IsPoll bool   `json:"isPoll"`
 }
 
 type Conversation struct {
@@ -217,7 +218,12 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 		     )
 		  ) AS unread_count,
 		  (SELECT m.body FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1) AS last_body,
-		  (SELECT m.sent_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1) AS last_at
+		  (SELECT m.sent_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1) AS last_at,
+		  (SELECT EXISTS (
+		     SELECT 1 FROM chat_polls cp WHERE cp.message_id = (
+		       SELECT m.id FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1
+		     )
+		   )) AS last_is_poll
 		FROM conversations c
 		JOIN conversation_members cm ON cm.conversation_id = c.id
 		WHERE cm.user_id = ? AND cm.left_at IS NULL
@@ -237,14 +243,15 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 		var c Conversation
 		var name sql.NullString
 		var lastBody, lastAt sql.NullString
-		if err := rows.Scan(&c.ID, &c.Type, &name, &c.CreatedBy, &c.UnreadCount, &lastBody, &lastAt); err != nil {
+		var lastIsPoll int
+		if err := rows.Scan(&c.ID, &c.Type, &name, &c.CreatedBy, &c.UnreadCount, &lastBody, &lastAt, &lastIsPoll); err != nil {
 			continue
 		}
 		if name.Valid {
 			c.Name = &name.String
 		}
 		if lastBody.Valid && lastAt.Valid {
-			c.LastMessage = &LastMessage{Body: lastBody.String, SentAt: lastAt.String}
+			c.LastMessage = &LastMessage{Body: lastBody.String, SentAt: lastAt.String, IsPoll: lastIsPoll == 1}
 		}
 		convs = append(convs, c)
 	}
@@ -460,6 +467,7 @@ func (h *Handler) getConversation(r *http.Request, convID, userID int) (*Convers
 	var c Conversation
 	var name sql.NullString
 	var lastBody, lastAt sql.NullString
+	var lastIsPoll int
 	err := h.db.QueryRowContext(r.Context(), `
 		SELECT c.id, c.type, c.name, c.created_by,
 		  (SELECT COUNT(*) FROM messages m
@@ -470,10 +478,15 @@ func (h *Handler) getConversation(r *http.Request, convID, userID int) (*Convers
 		     )
 		  ) AS unread_count,
 		  (SELECT m.body FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1),
-		  (SELECT m.sent_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1)
+		  (SELECT m.sent_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1),
+		  (SELECT EXISTS (
+		     SELECT 1 FROM chat_polls cp WHERE cp.message_id = (
+		       SELECT m.id FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1
+		     )
+		   ))
 		FROM conversations c WHERE c.id = ?`,
 		userID, userID, convID).Scan(
-		&c.ID, &c.Type, &name, &c.CreatedBy, &c.UnreadCount, &lastBody, &lastAt)
+		&c.ID, &c.Type, &name, &c.CreatedBy, &c.UnreadCount, &lastBody, &lastAt, &lastIsPoll)
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +494,7 @@ func (h *Handler) getConversation(r *http.Request, convID, userID int) (*Convers
 		c.Name = &name.String
 	}
 	if lastBody.Valid && lastAt.Valid {
-		c.LastMessage = &LastMessage{Body: lastBody.String, SentAt: lastAt.String}
+		c.LastMessage = &LastMessage{Body: lastBody.String, SentAt: lastAt.String, IsPoll: lastIsPoll == 1}
 	}
 	members, _ := h.loadMembers(r, convID)
 	c.Members = members
@@ -601,6 +614,7 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		MediaWidth        *int              `json:"mediaWidth,omitempty"`
 		MediaHeight       *int              `json:"mediaHeight,omitempty"`
 		Reactions         []messageReaction `json:"reactions"`
+		Poll              *pollView         `json:"poll"`
 		// Read-Receipts (Absender-Sicht): readCount = Leser außer Sender,
 		// readTotal = aktive Mitglieder außer Sender, read = readCount>0
 		// (Direct kollabiert damit auf gesendet/gelesen).
@@ -754,6 +768,27 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Attach polls (Batch-Anhang nach Reaktions-Muster, design.md §4). Nur für
+	// nicht gelöschte Nachrichten — eine gelöschte Umfrage liefert kein poll.
+	if len(msgs) > 0 {
+		pollIDs := make([]int, 0, len(msgs))
+		for _, m := range msgs {
+			if m.DeletedAt == nil {
+				pollIDs = append(pollIDs, m.ID)
+			}
+		}
+		if len(pollIDs) > 0 {
+			polls, perr := h.loadPolls(r.Context(), claims.UserID, pollIDs)
+			if perr == nil {
+				for i := range msgs {
+					if pv, ok := polls[msgs[i].ID]; ok {
+						msgs[i].Poll = pv
+					}
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(msgs)
 }
@@ -873,20 +908,38 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 			convID)
 	}
 
+	preview := truncate(body.Body, 80)
+	if preview == "" {
+		preview = "Bild"
+	}
+	h.broadcastNewMessage(r, convID, claims.UserID, convType, convName, preview)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]int64{"id": msgID})
+}
+
+// broadcastNewMessage fächert eine neu angelegte Nachricht auf (SSE
+// chat:new-message + Chat-Push mit Unread-Badge) — geteilter Fan-out-Teil von
+// SendMessage und CreatePoll (design.md §5). Direct-Rejoin bleibt beim
+// jeweiligen Aufrufer, weil nur SendMessage ihn braucht (Direktkonversationen
+// haben keine Umfragen). preview ist die bereits fertige Push-Vorschau
+// (Text-Truncation bzw. "Umfrage: <Frage>" liegt beim Aufrufer).
+func (h *Handler) broadcastNewMessage(r *http.Request, convID, senderID int, convType string, convName sql.NullString, preview string) {
 	recipientIDs := h.activeMembers(r, convID, 0)
 	event := fmt.Sprintf("chat:new-message:%d", convID)
 	for _, uid := range recipientIDs {
 		h.hub.BroadcastToUser(uid, event)
 	}
 
-	pushRecipients := push.FilterByPushPref(h.db, h.activeMembers(r, convID, claims.UserID), "chat")
-	title := h.senderName(r, claims.UserID, claims.Email)
+	pushRecipients := push.FilterByPushPref(h.db, h.activeMembers(r, convID, senderID), "chat")
+	fallback := ""
+	if c := auth.ClaimsFromCtx(r.Context()); c != nil && c.UserID == senderID {
+		fallback = c.Email
+	}
+	title := h.senderName(r, senderID, fallback)
 	if convType == "group" && strings.TrimSpace(convName.String) != "" {
 		title = title + " (" + strings.TrimSpace(convName.String) + ")"
-	}
-	preview := truncate(body.Body, 80)
-	if preview == "" {
-		preview = "Bild"
 	}
 	for _, uid := range pushRecipients {
 		badge, err := ComputeUnreadForUser(h.db, uid)
@@ -896,10 +949,6 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		go h.pushFn(h.db, h.cfg, uid, title, preview, fmt.Sprintf("/chat?conv=%d", convID), badge)
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]int64{"id": msgID})
 }
 
 // PUT /api/chat/messages/{id}
@@ -921,6 +970,16 @@ func (h *Handler) EditMessage(w http.ResponseWriter, r *http.Request) {
 
 	var convID int
 	h.db.QueryRowContext(r.Context(), `SELECT conversation_id FROM messages WHERE id = ?`, msgID).Scan(&convID)
+
+	// Umfrage-Nachrichten sind nicht bearbeitbar (design.md §7): Frage und
+	// Optionen einer versendeten Umfrage bleiben unveränderlich, damit
+	// abgegebene Stimmen sich nicht nachträglich auf eine andere Frage beziehen.
+	var hasPoll int
+	h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_polls WHERE message_id = ?`, msgID).Scan(&hasPoll)
+	if hasPoll > 0 {
+		http.Error(w, "poll cannot be edited", http.StatusConflict)
+		return
+	}
 
 	res, err := h.db.ExecContext(r.Context(),
 		`UPDATE messages SET body = ?, edited_at = CURRENT_TIMESTAMP
@@ -1719,6 +1778,333 @@ func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 		h.hub.BroadcastToUser(uid, event)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/chat/conversations/{id}/polls
+func (h *Handler) CreatePoll(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	if !h.isActiveMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var convType string
+	var convName sql.NullString
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT type, name FROM conversations WHERE id = ?`, convID).Scan(&convType, &convName); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if convType != "group" {
+		http.Error(w, "polls are only available in group conversations", http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Question      string   `json:"question"`
+		Options       []string `json:"options"`
+		AllowMultiple bool     `json:"allowMultiple"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	question := strings.TrimSpace(body.Question)
+	if n := utf8.RuneCountInString(question); n < 1 || n > 200 {
+		http.Error(w, "question must be 1..200 chars", http.StatusBadRequest)
+		return
+	}
+	if len(body.Options) < 2 || len(body.Options) > 10 {
+		http.Error(w, "poll needs 2..10 options", http.StatusBadRequest)
+		return
+	}
+	options := make([]string, len(body.Options))
+	seenOptions := map[string]bool{}
+	for i, raw := range body.Options {
+		opt := strings.TrimSpace(raw)
+		if n := utf8.RuneCountInString(opt); n < 1 || n > 100 {
+			http.Error(w, "option must be 1..100 chars", http.StatusBadRequest)
+			return
+		}
+		key := strings.ToLower(opt)
+		if seenOptions[key] {
+			http.Error(w, "duplicate options", http.StatusBadRequest)
+			return
+		}
+		seenOptions[key] = true
+		options[i] = opt
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	res, err := tx.ExecContext(r.Context(),
+		`INSERT INTO messages (conversation_id, sender_id, body) VALUES (?, ?, ?)`,
+		convID, claims.UserID, question)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	msgID, _ := res.LastInsertId()
+
+	allowMultiple := 0
+	if body.AllowMultiple {
+		allowMultiple = 1
+	}
+	if _, err := tx.ExecContext(r.Context(),
+		`INSERT INTO chat_polls (message_id, allow_multiple) VALUES (?, ?)`,
+		msgID, allowMultiple); err != nil {
+		tx.Rollback()
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	for i, opt := range options {
+		if _, err := tx.ExecContext(r.Context(),
+			`INSERT INTO chat_poll_options (message_id, position, label) VALUES (?, ?, ?)`,
+			msgID, i, opt); err != nil {
+			tx.Rollback()
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	preview := truncate("Umfrage: "+question, 80)
+	h.broadcastNewMessage(r, convID, claims.UserID, convType, convName, preview)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]int64{"id": msgID})
+}
+
+// PUT /api/chat/messages/{id}/poll/vote
+//
+// Setzt die vollständige Auswahl des Nutzers für diese Umfrage (design.md §2):
+// ersetzt atomar alle bisherigen Stimmen des Nutzers; leere Liste zieht die
+// Stimme zurück. Der closed_at-Check läuft in derselben Transaktion wie das
+// Schreiben, damit eine Stimme nie nach dem Beenden durchrutscht.
+func (h *Handler) VotePoll(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	msgID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var convID int
+	var deletedAt sql.NullString
+	var allowMultiple sql.NullInt64
+	if err := h.db.QueryRowContext(r.Context(), `
+		SELECT m.conversation_id, m.deleted_at, cp.allow_multiple
+		FROM messages m LEFT JOIN chat_polls cp ON cp.message_id = m.id
+		WHERE m.id = ?`, msgID).Scan(&convID, &deletedAt, &allowMultiple); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if deletedAt.Valid || !allowMultiple.Valid {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if !h.isActiveMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body struct {
+		OptionIDs []int `json:"optionIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	seenIDs := map[int]bool{}
+	for _, id := range body.OptionIDs {
+		if seenIDs[id] {
+			http.Error(w, "duplicate optionIds", http.StatusBadRequest)
+			return
+		}
+		seenIDs[id] = true
+	}
+	if allowMultiple.Int64 == 0 && len(body.OptionIDs) > 1 {
+		http.Error(w, "single-choice poll accepts at most one optionId", http.StatusBadRequest)
+		return
+	}
+
+	validOptions := map[int]bool{}
+	optRows, err := h.db.QueryContext(r.Context(),
+		`SELECT id FROM chat_poll_options WHERE message_id = ?`, msgID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	for optRows.Next() {
+		var id int
+		if err := optRows.Scan(&id); err != nil {
+			optRows.Close()
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		validOptions[id] = true
+	}
+	optRows.Close()
+	for _, id := range body.OptionIDs {
+		if !validOptions[id] {
+			http.Error(w, "invalid optionId", http.StatusBadRequest)
+			return
+		}
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	var closedAt sql.NullString
+	if err := tx.QueryRowContext(r.Context(),
+		`SELECT closed_at FROM chat_polls WHERE message_id = ?`, msgID).Scan(&closedAt); err != nil {
+		tx.Rollback()
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if closedAt.Valid {
+		tx.Rollback()
+		http.Error(w, "poll is closed", http.StatusConflict)
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), `
+		DELETE FROM chat_poll_votes
+		WHERE user_id = ? AND option_id IN (SELECT id FROM chat_poll_options WHERE message_id = ?)`,
+		claims.UserID, msgID); err != nil {
+		tx.Rollback()
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	for _, id := range body.OptionIDs {
+		if _, err := tx.ExecContext(r.Context(),
+			`INSERT INTO chat_poll_votes (option_id, user_id) VALUES (?, ?)`, id, claims.UserID); err != nil {
+			tx.Rollback()
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	event := fmt.Sprintf("chat:poll-updated:%d:%d", convID, msgID)
+	for _, uid := range h.activeMembers(r, convID, 0) {
+		h.hub.BroadcastToUser(uid, event)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/chat/messages/{id}/poll/close
+//
+// Nur der Ersteller (messages.sender_id) darf beenden, kein Admin-Bypass
+// (design.md §6). Idempotent: ein erneuter Aufruf auf eine bereits beendete
+// Umfrage antwortet 204 ohne Änderung und ohne Event.
+func (h *Handler) ClosePoll(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	msgID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var convID, senderID int
+	var deletedAt sql.NullString
+	var hasPoll int
+	if err := h.db.QueryRowContext(r.Context(), `
+		SELECT m.conversation_id, m.sender_id, m.deleted_at,
+		       (SELECT COUNT(*) FROM chat_polls WHERE message_id = m.id)
+		FROM messages m WHERE m.id = ?`, msgID).Scan(&convID, &senderID, &deletedAt, &hasPoll); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if deletedAt.Valid || hasPoll == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if senderID != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE chat_polls SET closed_at = CURRENT_TIMESTAMP WHERE message_id = ? AND closed_at IS NULL`,
+		msgID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		event := fmt.Sprintf("chat:poll-updated:%d:%d", convID, msgID)
+		for _, uid := range h.activeMembers(r, convID, 0) {
+			h.hub.BroadcastToUser(uid, event)
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/chat/messages/{id}/poll
+func (h *Handler) GetPoll(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	msgID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var convID int
+	var deletedAt sql.NullString
+	var hasPoll int
+	if err := h.db.QueryRowContext(r.Context(), `
+		SELECT m.conversation_id, m.deleted_at,
+		       (SELECT COUNT(*) FROM chat_polls WHERE message_id = m.id)
+		FROM messages m WHERE m.id = ?`, msgID).Scan(&convID, &deletedAt, &hasPoll); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if deletedAt.Valid || hasPoll == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !h.isMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	polls, err := h.loadPolls(r.Context(), claims.UserID, []int{msgID})
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	pv, ok := polls[msgID]
+	if !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pv)
 }
 
 // --- helpers ---

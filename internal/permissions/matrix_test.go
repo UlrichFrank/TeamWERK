@@ -291,6 +291,11 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/chat/messages/{id}", expected: exPublic},
 	{method: "DELETE", path: "/api/chat/messages/{id}", expected: exPublic},
 	{method: "POST", path: "/api/chat/messages/{id}/reactions", expected: exPublic},
+	// Umfragen (chat-umfragen): Mitgliedschafts-/Ersteller-Check im Handler → 403/404 für alle (kein Fixture)
+	{method: "POST", path: "/api/chat/conversations/{id}/polls", expected: exPublic},
+	{method: "GET", path: "/api/chat/messages/{id}/poll", expected: exPublic},
+	{method: "PUT", path: "/api/chat/messages/{id}/poll/vote", expected: exPublic},
+	{method: "POST", path: "/api/chat/messages/{id}/poll/close", expected: exPublic},
 	// Broadcast-Mutations: Sender-Check → 403 für alle (kein Fixture)
 	{method: "POST", path: "/api/chat/broadcasts/{id}/read", expected: exPublic},
 	{method: "PUT", path: "/api/chat/broadcasts/{id}", expected: exPublic},
