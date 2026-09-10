@@ -48,7 +48,14 @@ jobs:
       # libxml2-utils (xmllint) fürs SEPA-XSD-Gate in sepaXml.xsd.test.ts.
       # Ohne xmllint würde der Test skippen und schema-brüchige Änderungen am
       # SEPA-Generator (web/src/lib/sepaXml.ts) unbemerkt durch das Gate rutschen.
-      - run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+      #
+      # Das Runner-Image bringt die Google-Chrome-apt-Quelle mit. Liefert deren
+      # Index einen Hash-Mismatch, bricht `apt-get update` mit Exit 100 ab und
+      # reißt das ganze Gate mit (Run 34386316055). Die Quelle braucht hier
+      # niemand — also vor dem apt-Aufruf entfernen.
+      - run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*
+          sudo apt-get update && sudo apt-get install -y libxml2-utils
 
       # Frontend zuerst bauen: vite schreibt nach cmd/teamwerk/web/dist/
       # (gitignored). //go:embed all:web/dist braucht das Verzeichnis, sonst
@@ -105,6 +112,11 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ hashFiles('web/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-playwright-
+
+      # Wie im gate-Job: die mitgelieferte Google-Chrome-apt-Quelle vor
+      # install-deps entfernen (das intern `apt-get update` aufruft) —
+      # Playwright bringt sein eigenes Chromium mit.
+      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome*
 
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm -C web exec playwright install-deps chromium

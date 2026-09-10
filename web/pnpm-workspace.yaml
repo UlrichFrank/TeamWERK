@@ -9,3 +9,10 @@
 # versions have aged in. Keep Dependabot's cooldown aligned with this window so
 # incoming PRs do not land pins that block installs for everyone.
 #minimumReleaseAge: 11520
+
+# Die Datei darf nie nur aus Kommentaren bestehen: Dependabot liest sie als YAML
+# und bricht bei einem leeren Dokument (nil) mit `undefined method '[]' for nil`
+# ab — das npm-Update für /web lief dann gar nicht mehr. `packages` beschreibt
+# den Ist-Zustand (ein einziges Paket, dieses Verzeichnis) und ändert nichts.
+packages:
+  - '.'
