@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"slices"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
+	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
 	"github.com/teamstuttgart/teamwerk/internal/eventlog"
 )
 
@@ -50,10 +50,11 @@ type NextDiensteGame struct {
 }
 
 type MeineDienste struct {
-	NextGame       *NextDiensteGame `json:"nextGame"`
-	MySlots        []DiensteSlot    `json:"mySlots"`
-	OpenSlotsCount int              `json:"openSlotsCount"`
-	DutyAccount    *DutyAccount     `json:"dutyAccount"`
+	NextGame          *NextDiensteGame   `json:"nextGame"`
+	MySlots           []DiensteSlot      `json:"mySlots"`
+	OpenSlotsCount    int                `json:"openSlotsCount"`
+	DutyAccount       []DutyAccountEntry `json:"dutyAccount"`
+	RecentAssignments []RecentAssignment `json:"recentAssignments"`
 }
 
 type RecentAssignment struct {
@@ -62,12 +63,16 @@ type RecentAssignment struct {
 	Status   string `json:"status"`
 }
 
-type DutyAccount struct {
-	Season            string             `json:"season"`
-	Ist               int                `json:"ist"`
-	Soll              *int               `json:"soll"`
-	Children          int                `json:"children"`
-	RecentAssignments []RecentAssignment `json:"recentAssignments"`
+// DutyAccountEntry ist eine Zeile der Dienstkonto-Kachel: ein Kind (bzw. der
+// Nutzer selbst) in einer seiner Mannschaften der aktiven Saison.
+type DutyAccountEntry struct {
+	MemberID   int     `json:"memberId"`
+	Name       string  `json:"name"`
+	TeamID     int     `json:"teamId"`
+	TeamLabel  string  `json:"teamLabel"`
+	Geleistet  float64 `json:"geleistet"`
+	Vorhersage float64 `json:"vorhersage"`
+	Soll       float64 `json:"soll"`
 }
 
 type CarpoolingPaarung struct {
@@ -150,7 +155,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	seasonID := season.ID
 
 	resp.MeineTermine = h.queryNextEvents(r, userID, seasonID)
-	resp.MeineDienste = h.queryMeineDienste(r, userID, role, seasonID, season.Name)
+	resp.MeineDienste = h.queryMeineDienste(r, userID, role, seasonID)
 	resp.CarpoolingConfirmed = h.queryCarpoolingConfirmed(r, userID, seasonID)
 	resp.CarpoolingOpenGroups = h.queryCarpoolingOpenRequests(r, userID, seasonID)
 
@@ -350,10 +355,11 @@ const audienceMatchClauseSQL = `(
 // next-game lookup and the open-slot count are restricted to slots whose
 // audience matches the user — a trainer must not see player-only slots on
 // their dashboard, even when those slots belong to one of their teams.
-func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, seasonID int, seasonName string) *MeineDienste {
+func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, seasonID int) *MeineDienste {
 	result := &MeineDienste{
-		MySlots:     []DiensteSlot{},
-		DutyAccount: h.queryDutyAccount(r, userID, role, seasonID, seasonName),
+		MySlots:           []DiensteSlot{},
+		DutyAccount:       h.queryDutyAccount(r.Context(), userID, seasonID),
+		RecentAssignments: h.queryRecentAssignments(r.Context(), userID, role, seasonID),
 	}
 
 	teamSubquery := h.teamQueryForUser()
@@ -415,26 +421,36 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 	return result
 }
 
-// queryDutyAccount returns the duty account for a user in the active season.
-func (h *Handler) queryDutyAccount(r *http.Request, userID int, role string, seasonID int, seasonName string) *DutyAccount {
-	acc := &DutyAccount{
-		Season:            seasonName,
-		RecentAssignments: []RecentAssignment{},
+// queryDutyAccount liefert eine Position je Kind (bzw. für den Nutzer selbst)
+// mit aktiver Kader-Mitgliedschaft. Die Zahlen kommen aus dutyfairness —
+// derselbe Codepfad wie die Rangliste, damit Kachel und Rangliste nie
+// auseinanderlaufen.
+func (h *Handler) queryDutyAccount(ctx context.Context, userID, seasonID int) []DutyAccountEntry {
+	entries := []DutyAccountEntry{}
+	snap, err := dutyfairness.Compute(ctx, h.db, seasonID)
+	if err != nil {
+		slog.Error("dashboard queryDutyAccount: compute failed", "user", userID, "error", err)
+		return entries
 	}
+	for _, p := range snap.PositionsFor(userID) {
+		entries = append(entries, DutyAccountEntry{
+			MemberID:   p.Member.MemberID,
+			Name:       p.Member.Name,
+			TeamID:     p.Team.TeamID,
+			TeamLabel:  p.Team.Label,
+			Geleistet:  dutyfairness.Round2(p.Member.Geleistet),
+			Vorhersage: dutyfairness.Round2(p.Member.Vorhersage),
+			Soll:       dutyfairness.Round2(p.Team.Soll),
+		})
+	}
+	return entries
+}
 
-	h.db.QueryRowContext(r.Context(), `
-		SELECT COUNT(*)
-		FROM duty_assignments da
-		JOIN duty_slots ds ON da.duty_slot_id = ds.id
-		JOIN duty_types dt ON ds.duty_type_id = dt.id
-		WHERE da.user_id = ?
-		  AND ds.season_id = ?
-		  AND dt.target_role = ?
-		  AND da.status IN ('assigned', 'fulfilled', 'cash_substitute')`,
-		userID, seasonID, role,
-	).Scan(&acc.Ist)
-
-	rows, err := h.db.QueryContext(r.Context(), `
+// queryRecentAssignments returns the user's five most recent assignments in
+// the active season (collapsible list below the duty account).
+func (h *Handler) queryRecentAssignments(ctx context.Context, userID int, role string, seasonID int) []RecentAssignment {
+	recent := []RecentAssignment{}
+	rows, err := h.db.QueryContext(ctx, `
 		SELECT ds.event_date, dt.name, da.status
 		FROM duty_assignments da
 		JOIN duty_slots ds ON da.duty_slot_id = ds.id
@@ -451,26 +467,10 @@ func (h *Handler) queryDutyAccount(r *http.Request, userID int, role string, sea
 		for rows.Next() {
 			var ra RecentAssignment
 			rows.Scan(&ra.Date, &ra.DutyType, &ra.Status)
-			acc.RecentAssignments = append(acc.RecentAssignments, ra)
+			recent = append(recent, ra)
 		}
 	}
-
-	switch role {
-	case "elternteil":
-		var childCount int
-		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM family_links WHERE parent_user_id = ?`, userID,
-		).Scan(&childCount)
-		acc.Children = childCount
-		avgPerGame, _ := computeAvgSlotsPerGame(r.Context(), h.db)
-		soll, _ := computeSollForElternteil(r.Context(), h.db, userID, seasonID, avgPerGame)
-		acc.Soll = &soll
-	case "spieler":
-		soll := 5
-		acc.Soll = &soll
-	}
-
-	return acc
+	return recent
 }
 
 // queryCarpoolingConfirmed returns confirmed pairings for the next max. 3 away games.
@@ -617,76 +617,6 @@ func (h *Handler) queryCarpoolingOpenRequests(r *http.Request, userID int, seaso
 	}
 
 	return result
-}
-
-func computeAvgSlotsPerGame(ctx context.Context, db *sql.DB) (float64, error) {
-	var heimSlots, auswärtsSlots int
-	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(gti.slots_count), 0)
-		FROM game_template_items gti
-		JOIN game_templates gt ON gt.id = gti.template_id
-		WHERE gt.template_type = 'heim' AND gt.is_active = 1`,
-	).Scan(&heimSlots)
-	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(gti.slots_count), 0)
-		FROM game_template_items gti
-		JOIN game_templates gt ON gt.id = gti.template_id
-		WHERE gt.template_type = 'auswärts' AND gt.is_active = 1`,
-	).Scan(&auswärtsSlots)
-	return float64(heimSlots+auswärtsSlots) / 2.0, nil
-}
-
-func computeSollForElternteil(ctx context.Context, db *sql.DB, userID int, seasonID int, avgPerGame float64) (int, error) {
-	rows, err := db.QueryContext(ctx,
-		`SELECT member_id FROM family_links WHERE parent_user_id = ?`, userID)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	var total float64
-	for rows.Next() {
-		var memberID int
-		rows.Scan(&memberID)
-
-		var kaderID, gamesPerSeason int
-		err := db.QueryRowContext(ctx, `
-			SELECT k.id, k.games_per_season
-			FROM kader_members km
-			JOIN kader k ON k.id = km.kader_id
-			WHERE km.member_id = ? AND k.season_id = ?
-			LIMIT 1`, memberID, seasonID,
-		).Scan(&kaderID, &gamesPerSeason)
-		if err == sql.ErrNoRows {
-			continue
-		}
-		if err != nil {
-			return 0, err
-		}
-		if gamesPerSeason == 0 {
-			continue
-		}
-
-		var playerCount int
-		db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM kader_members WHERE kader_id = ?`, kaderID,
-		).Scan(&playerCount)
-		if playerCount == 0 {
-			continue
-		}
-
-		var parentCount int
-		db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM family_links WHERE member_id = ?`, memberID,
-		).Scan(&parentCount)
-		if parentCount == 0 {
-			parentCount = 1
-		}
-
-		childSoll := float64(gamesPerSeason) * avgPerGame / float64(playerCount) / float64(parentCount)
-		total += childSoll
-	}
-	return int(math.Round(total)), nil
 }
 
 func effectivePersona(clubFunctions []string, isParent bool) string {

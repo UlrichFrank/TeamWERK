@@ -785,3 +785,114 @@ func TestDashboard_OhneAuth401(t *testing.T) {
 		t.Fatalf("expected 401, got %d", res.StatusCode)
 	}
 }
+
+type dutyAccountEntry struct {
+	MemberID int     `json:"memberId"`
+	TeamID   int     `json:"teamId"`
+	Soll     float64 `json:"soll"`
+}
+
+func decodeDutyAccount(t *testing.T, srv *httptest.Server, token string) []dutyAccountEntry {
+	t.Helper()
+	res := testutil.Get(t, srv, "/api/dashboard", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		MeineDienste struct {
+			DutyAccount []dutyAccountEntry `json:"dutyAccount"`
+		} `json:"meineDienste"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.MeineDienste.DutyAccount == nil {
+		t.Fatal("dutyAccount must be a JSON array, got null/missing")
+	}
+	return body.MeineDienste.DutyAccount
+}
+
+// teamSlotTotal legt einen spiellosen Slot des Teams mit slots_total=total an.
+func teamSlotTotal(t *testing.T, db *sql.DB, seasonID, teamID, total int) {
+	t.Helper()
+	dt := testutil.CreateDutyType(t, db, fmt.Sprintf("Dienst %d", teamID), 1.0)
+	slot := testutil.CreateDutySlot(t, db, dt, seasonID, teamID, 0, time.Now().AddDate(0, 0, 7).Format("2006-01-02"))
+	db.Exec(`UPDATE duty_slots SET slots_total=? WHERE id=?`, total, slot)
+}
+
+// Zwei Kinder in unterschiedlichen Kadern: zwei Positionen mit je eigenem soll
+// aus dem jeweiligen Kader (Gesamtsumme / Spieleranzahl).
+func TestDashboard_DutyAccount_ZweiKinderUnterschiedlicheKader(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2026/27")
+	teamA := testutil.CreateTeam(t, db, "A-Jugend")
+	teamB := testutil.CreateTeam(t, db, "B-Jugend")
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	kaderB := testutil.CreateKader(t, db, teamB, seasonID)
+
+	parent := testutil.CreateUser(t, db, "standard")
+	kid1 := testutil.CreateMember(t, db, 0)
+	kid2 := testutil.CreateMember(t, db, 0)
+	testutil.AddKaderMember(t, db, kaderA, kid1)
+	testutil.AddKaderMember(t, db, kaderA, testutil.CreateMember(t, db, 0))
+	testutil.AddKaderMember(t, db, kaderB, kid2)
+	testutil.AddFamilyLink(t, db, parent, kid1)
+	testutil.AddFamilyLink(t, db, parent, kid2)
+	teamSlotTotal(t, db, seasonID, teamA, 4) // A: 4 / 2 Spieler = 2
+	teamSlotTotal(t, db, seasonID, teamB, 3) // B: 3 / 1 Spieler = 3
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	entries := decodeDutyAccount(t, srv, testutil.TokenWithIsParent(t, parent, "standard", nil, true))
+
+	want := map[int]dutyAccountEntry{
+		kid1: {MemberID: kid1, TeamID: teamA, Soll: 2},
+		kid2: {MemberID: kid2, TeamID: teamB, Soll: 3},
+	}
+	if len(entries) != 2 {
+		t.Fatalf("dutyAccount = %+v, want 2 Positionen", entries)
+	}
+	for _, e := range entries {
+		if want[e.MemberID] != e {
+			t.Errorf("Position %+v, want %+v", e, want[e.MemberID])
+		}
+	}
+}
+
+// Ein verknüpftes Kind ohne Kader der aktiven Saison bekommt keine Position —
+// auch nicht, wenn es in einer früheren Saison im Kader stand.
+func TestDashboard_DutyAccount_KindOhneAktivenKaderFehlt(t *testing.T) {
+	db := testutil.NewDB(t)
+	oldSeason := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "A-Jugend")
+	kid := testutil.CreateMember(t, db, 0)
+	testutil.AddKaderMember(t, db, testutil.CreateKader(t, db, teamID, oldSeason), kid)
+	seasonID := testutil.CreateSeason(t, db, "2026/27")
+	testutil.AddKaderMember(t, db, testutil.CreateKader(t, db, teamID, seasonID), testutil.CreateMember(t, db, 0))
+
+	parent := testutil.CreateUser(t, db, "standard")
+	testutil.AddFamilyLink(t, db, parent, kid)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	if entries := decodeDutyAccount(t, srv, testutil.TokenWithIsParent(t, parent, "standard", nil, true)); len(entries) != 0 {
+		t.Errorf("dutyAccount = %+v, want leer", entries)
+	}
+}
+
+// Ohne bekannte Slots ist soll = 0 — kein Fehler, die Position bleibt.
+// Ein Spieler ohne Kind bekommt genau eine Position für sich selbst.
+func TestDashboard_DutyAccount_SpielerSelbst_GesamtsummeNullSollNull(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2026/27")
+	teamID := testutil.CreateTeam(t, db, "Herren 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	userID := testutil.CreateUser(t, db, "standard")
+	own := testutil.CreateMember(t, db, userID)
+	testutil.AddKaderMember(t, db, kaderID, own)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	entries := decodeDutyAccount(t, srv, testutil.Token(t, userID, "standard", []string{"spieler"}))
+	if len(entries) != 1 || entries[0] != (dutyAccountEntry{MemberID: own, TeamID: teamID, Soll: 0}) {
+		t.Errorf("dutyAccount = %+v, want eine eigene Position mit soll 0", entries)
+	}
+}
