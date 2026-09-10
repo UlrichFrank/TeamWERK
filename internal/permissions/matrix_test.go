@@ -370,6 +370,9 @@ var matrix = []endpointCase{
 
 	// Dashboard
 	{method: "GET", path: "/api/dashboard", expected: exAuth},
+	// Dienst-Rangliste: für alle Eingeloggten; Team-Scope (403 bei fremdem
+	// Team) und Namens-Maskierung prüft der Handler selbst.
+	{method: "GET", path: "/api/duty-fairness/rangliste", expected: exAuth},
 
 	// Duties (self-service)
 	{method: "GET", path: "/api/duty-board", expected: exAuth},

@@ -25,6 +25,7 @@ import (
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
+	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
 	"github.com/teamstuttgart/teamwerk/internal/files"
 	"github.com/teamstuttgart/teamwerk/internal/games"
 	"github.com/teamstuttgart/teamwerk/internal/health"
@@ -53,6 +54,7 @@ type Handlers struct {
 	WelcomeEmail   *members.WelcomeEmailHandler
 	Duties         *duties.Handler
 	Dashboard      *dashboard.Handler
+	DutyFairness   *dutyfairness.Handler
 	Games          *games.Handler
 	Kader          *kader.Handler
 	PracticeGroups *practicegroups.Handler
@@ -277,6 +279,10 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 
 		// Dashboard
 		r.Get("/api/dashboard", h.Dashboard.Get)
+
+		// Dienst-Rangliste: Scope (eigene Teams bzw. alle für admin/vorstand)
+		// und Namens-Maskierung löst der Handler selbst auf.
+		r.Get("/api/duty-fairness/rangliste", h.DutyFairness.Rangliste)
 
 		// Duties
 		r.Get("/api/duty-board", h.Duties.Board)

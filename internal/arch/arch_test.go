@@ -36,6 +36,9 @@ var foundation = map[string]bool{
 	"sepa": true, "upload": true, "files": true, "scheduler": true, "permissions": true,
 	"health": true, "metrics": true, "crypto": true, "timez": true, "httpcache": true,
 	"settings": true, "h4aimport": true, "eventlog": true,
+	// dutyfairness: Dienst-Bilanz je Kind; Foundation, weil dashboard (Domain)
+	// dieselbe Berechnung wiederverwendet, statt sie zu duplizieren.
+	"dutyfairness": true,
 }
 
 // domain = one HTTP handler package per business domain. May import FOUNDATION only.

@@ -328,6 +328,9 @@ func NavFor(p *Principal) []NavItem {
 	nav = append(nav, NavItem{"Mein Team", "/mein-team"})
 	nav = append(nav, NavItem{"Dokumente", "/dokumente"})
 	nav = append(nav, NavItem{"Dienste", "/dienste"})
+	// Rangliste für alle: der Scope (eigene Teams bzw. alle für Vorstand) wird
+	// serverseitig in GET /api/duty-fairness/rangliste aufgelöst.
+	nav = append(nav, NavItem{"Dienst-Rangliste", "/dienste/rangliste"})
 	nav = append(nav, NavItem{"Mitfahrten", "/mitfahrgelegenheiten"})
 	nav = append(nav, NavItem{"Nachrichten", "/chat"})
 	nav = append(nav, NavItem{"Spielberichte", "/spielberichte"})

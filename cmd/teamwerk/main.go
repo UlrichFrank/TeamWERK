@@ -38,6 +38,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/dashboard"
 	"github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/duties"
+	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
 	"github.com/teamstuttgart/teamwerk/internal/files"
 	"github.com/teamstuttgart/teamwerk/internal/games"
 	"github.com/teamstuttgart/teamwerk/internal/health"
@@ -280,6 +281,7 @@ func serve() {
 		WelcomeEmail:        members.NewWelcomeEmailHandler(database, m),
 		Duties:              duties.NewHandler(database, cfg, hubInstance),
 		Dashboard:           dashboard.NewHandler(database),
+		DutyFairness:        dutyfairness.NewHandler(database),
 		Games:               games.NewHandler(database, cfg, hubInstance),
 		Kader:               kader.NewHandler(database, hubInstance),
 		PracticeGroups:      practicegroups.NewHandler(database, hubInstance),
