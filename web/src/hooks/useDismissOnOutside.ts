@@ -10,6 +10,12 @@ import { useEffect, type RefObject } from 'react'
  * Nach `touchstart`/Scroll-Beginn ist das Overlay weg und die Geste scrollt
  * normal weiter. `capture: true` fängt das nicht-bubbelnde scroll-Event des
  * `<main>`-Containers (AppShell, `overflow-auto`) mit ab.
+ *
+ * Genau deshalb muss der Scroll-Handler das eigene Dropdown ausnehmen: mit
+ * `capture` kommt auch das scroll-Event einer scrollbaren Liste *im* Dropdown
+ * (Mannschafts-Filter, `max-h-72 overflow-y-auto`) hier an — ohne den Check
+ * schloss sich das Dropdown beim ersten Scroll-Tick, lange Listen waren
+ * unerreichbar.
  */
 export function useDismissOnOutside(
   open: boolean,
@@ -21,14 +27,13 @@ export function useDismissOnOutside(
     const closeIfOutside = (e: Event) => {
       if (ref.current && !ref.current.contains(e.target as Node)) close()
     }
-    const closeOnScroll = () => close()
     document.addEventListener('mousedown', closeIfOutside)
     document.addEventListener('touchstart', closeIfOutside, { passive: true })
-    window.addEventListener('scroll', closeOnScroll, { capture: true, passive: true })
+    window.addEventListener('scroll', closeIfOutside, { capture: true, passive: true })
     return () => {
       document.removeEventListener('mousedown', closeIfOutside)
       document.removeEventListener('touchstart', closeIfOutside)
-      window.removeEventListener('scroll', closeOnScroll, { capture: true })
+      window.removeEventListener('scroll', closeIfOutside, { capture: true })
     }
     // `close` kommt als stabile Setter-Referenz (useState) aus den Aufrufern.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -58,7 +58,7 @@ export default function EventTypeFilter({ types, active, onToggle, compact, aria
         <ChevronDown className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-brand-border rounded-md shadow-lg py-1 min-w-[160px]">
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-brand-border rounded-md shadow-xl ring-1 ring-brand-black/10 py-1 min-w-[160px]">
           {types.map(([type, label, icon]) => (
             <label
               key={type}

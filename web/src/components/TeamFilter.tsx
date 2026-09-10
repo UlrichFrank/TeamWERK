@@ -64,7 +64,7 @@ export default function TeamFilter({ teams, active, onToggle, compact, ariaLabel
         <ChevronDown className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-brand-border rounded-md shadow-lg py-1 min-w-[160px] max-h-72 overflow-y-auto">
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-brand-border rounded-md shadow-xl ring-1 ring-brand-black/10 py-1 min-w-[160px] max-h-72 overflow-y-auto">
           {teams.map(t => (
             <label
               key={t.id}
