@@ -207,6 +207,79 @@ func TestTeams_ParentNoKader_TeamNotListed(t *testing.T) {
 	}
 }
 
+// TestTeams_ScopeDuties_OhneErweitertenKader: der Team-Filter der Dienstbörse
+// (?scope=duties) listet nur Stammkader-Teams — der erweiterte Kader schuldet
+// keine Dienste. Ohne scope bleibt die Liste unverändert (Termine/Kalender).
+func TestTeams_ScopeDuties_OhneErweitertenKader(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	stammTeam := testutil.CreateTeam(t, db, "Team A")
+	erwTeam := testutil.CreateTeam(t, db, "Team B")
+	stammKader := testutil.CreateKader(t, db, stammTeam, seasonID)
+	erwKader := testutil.CreateKader(t, db, erwTeam, seasonID)
+
+	parentUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, 0)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, stammKader, childMemberID)
+	testutil.AddExtendedKaderMember(t, db, erwKader, childMemberID)
+	db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?, ?)`, parentUserID, childMemberID)
+
+	srv := testServer(t, db)
+	token := testutil.TokenWithIsParent(t, parentUserID, "standard", nil, true)
+
+	get := func(path string) []map[string]any {
+		res := testutil.Get(t, srv, path, token)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d", path, res.StatusCode)
+		}
+		var teams []map[string]any
+		json.NewDecoder(res.Body).Decode(&teams)
+		res.Body.Close()
+		return teams
+	}
+
+	duties := get("/api/teams?scope=duties")
+	if !containsTeam(duties, stammTeam) {
+		t.Errorf("scope=duties: expected Stammkader team %d, got %+v", stammTeam, duties)
+	}
+	if containsTeam(duties, erwTeam) {
+		t.Errorf("scope=duties: extended-kader team %d must not be listed, got %+v", erwTeam, duties)
+	}
+
+	all := get("/api/teams")
+	if !containsTeam(all, stammTeam) || !containsTeam(all, erwTeam) {
+		t.Errorf("without scope: expected both teams, got %+v", all)
+	}
+}
+
+// TestTeams_ScopeDuties_SpielerNurErweitert_Leer: ein Spieler, der nur im
+// erweiterten Kader steht, bekommt mit scope=duties keine Mannschaft.
+func TestTeams_ScopeDuties_SpielerNurErweitert_Leer(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	testutil.AddExtendedKaderMember(t, db, kaderID, memberID)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, userID, "standard", []string{"spieler"})
+
+	res := testutil.Get(t, srv, "/api/teams?scope=duties", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var teams []map[string]any
+	json.NewDecoder(res.Body).Decode(&teams)
+	res.Body.Close()
+
+	if len(teams) != 0 {
+		t.Errorf("expected no teams for extended-only player with scope=duties, got %+v", teams)
+	}
+}
+
 func containsTeam(teams []map[string]any, teamID int) bool {
 	for _, tm := range teams {
 		if id, ok := tm["id"].(float64); ok && int(id) == teamID {

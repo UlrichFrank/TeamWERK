@@ -192,7 +192,9 @@ export default function DutyPage() {
   useLiveUpdates((event) => { if (event === 'duties') load() })
 
   useEffect(() => {
-    api.get('/teams')
+    // scope=duties: ohne Teams, in denen man (oder das Kind) nur im erweiterten
+    // Kader steht — dort gibt es keine Dienstpflicht und keine Slots.
+    api.get('/teams?scope=duties')
       .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
       .catch(() => {})
     api.get('/family/proxy-accounts')

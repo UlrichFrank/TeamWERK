@@ -218,6 +218,21 @@ func (h *Handler) teamQueryForUser() string {
 	return `SELECT uat.team_id FROM user_accessible_teams uat WHERE uat.user_id = ? AND uat.season_id = ?`
 }
 
+// dutyTeamQuery liefert die Teams, deren Dienste den User betreffen: Stammkader
+// (selbst oder Kind via family_links) und Trainer — bewusst OHNE erweiterten
+// Kader, anders als teamQueryForUser. Wer im erweiterten Kader aushilft,
+// schuldet keine Dienste (vgl. duties.eligibleDutyRecipients); deckungsgleich
+// mit der Team-Quelle der Dienstbörse (duties.Handler.Board).
+// Parameter: seasonID, userID, userID, seasonID, userID.
+const dutyTeamQuery = `SELECT pm.team_id FROM player_memberships pm
+	WHERE pm.season_id = ? AND pm.member_id IN (
+		SELECT id FROM members WHERE user_id = ?
+		UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)
+	UNION
+	SELECT trm.team_id FROM trainer_memberships trm
+	JOIN members m ON m.id = trm.member_id
+	WHERE trm.season_id = ? AND m.user_id = ?`
+
 // queryNextEvents returns all events on the next day that has at least one event.
 // Combines training_sessions and games for the user's teams.
 // isExtended is true when the user's access to the event team is via kader_extended_members only.
@@ -362,7 +377,6 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 		RecentAssignments: h.queryRecentAssignments(r.Context(), userID, role, seasonID),
 	}
 
-	teamSubquery := h.teamQueryForUser()
 	var game NextDiensteGame
 	err := h.db.QueryRowContext(r.Context(), fmt.Sprintf(`
 		SELECT g.id, g.date, g.opponent
@@ -379,8 +393,8 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 		  )
 		GROUP BY g.id
 		ORDER BY g.date ASC, g.time ASC
-		LIMIT 1`, teamSubquery),
-		userID, seasonID, seasonID, seasonID, userID, userID,
+		LIMIT 1`, dutyTeamQuery),
+		seasonID, userID, userID, seasonID, userID, seasonID, seasonID, userID, userID,
 	).Scan(&game.ID, &game.Date, &game.Opponent)
 	if err != nil {
 		return result

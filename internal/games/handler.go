@@ -1716,16 +1716,26 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		// spieler / elternteil: only teams the user or their children belong to.
 		// user_accessible_teams covers regular AND extended squad (kader_extended_members)
 		// for both the player themselves and their parents (via family_links).
+		// ?scope=duties (Dienstbörse): nur Stammkader — der erweiterte Kader
+		// schuldet keine Dienste und sieht auf /dienste keine Slots seines
+		// Teams, eine Filter-Option dafür bliebe immer leer.
+		teamSource := `SELECT team_id FROM user_accessible_teams
+			     WHERE user_id = ? AND season_id = ` + activeSeasonSub
+		teamArgs := []any{claims.UserID}
+		if r.URL.Query().Get("scope") == "duties" {
+			teamSource = `SELECT pm.team_id FROM player_memberships pm
+			     WHERE pm.season_id = ` + activeSeasonSub + ` AND pm.member_id IN (
+			       SELECT id FROM members WHERE user_id = ?
+			       UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)`
+			teamArgs = []any{claims.UserID, claims.UserID}
+		}
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
-			   AND t.id IN (
-			     SELECT team_id FROM user_accessible_teams
-			     WHERE user_id = ? AND season_id = `+activeSeasonSub+`
-			   )
-			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`, claims.UserID)
+			   AND t.id IN (`+teamSource+`)
+			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`, teamArgs...)
 	} else {
 		// sportliche_leitung: all teams
 		rows, err = h.db.QueryContext(r.Context(),
