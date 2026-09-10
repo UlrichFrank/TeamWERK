@@ -24,6 +24,15 @@ func newChatServer(t *testing.T, db *sql.DB) (*chat.Handler, func(r chi.Router))
 		r.Delete("/api/chat/conversations/{id}/everyone", h.DeleteConversationForEveryone)
 		r.Post("/api/chat/conversations/{id}/members", h.AddMember)
 		r.Post("/api/chat/conversations/{id}/transfer-ownership", h.TransferOwnership)
+		r.Get("/api/chat/conversations/{id}/messages", h.ListMessages)
+		r.Post("/api/chat/conversations/{id}/messages", h.SendMessage)
+		r.Get("/api/chat/messages/{id}", h.GetMessage)
+		r.Put("/api/chat/messages/{id}", h.EditMessage)
+		r.Delete("/api/chat/messages/{id}", h.DeleteMessage)
+		r.Post("/api/chat/conversations/{id}/polls", h.CreatePoll)
+		r.Put("/api/chat/messages/{id}/poll/vote", h.VotePoll)
+		r.Post("/api/chat/messages/{id}/poll/close", h.ClosePoll)
+		r.Get("/api/chat/messages/{id}/poll", h.GetPoll)
 	}
 }
 
