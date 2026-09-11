@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
 import AuthImage from '../AuthImage'
+import { api } from '../../lib/api'
 
 // Wir mocken den axios-Client: gibt bei jedem GET einen fake Blob zurück.
 vi.mock('../../lib/api', () => ({
@@ -75,5 +76,43 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
     })
 
     globalThis.Image = originalImage
+  })
+
+  // Ein leerer Platzhalter-div mit aspect-ratio trägt in der shrink-to-fit-
+  // Sprechblase 0 px zur max-content-Breite bei (gemessen 24×16 px statt
+  // 344×262 px in Chromium und WebKit) — deshalb braucht der Platzhalter bei
+  // bekannten Server-Dims eine explizite width.
+  test('mit Server-Dims trägt der Platzhalter eine explizite width (sonst kollabiert er in der shrink-to-fit-Sprechblase)', async () => {
+    vi.mocked(api.get).mockReturnValueOnce(new Promise(() => {}))
+
+    const { container } = render(
+      <AuthImage
+        url="/media/7"
+        alt="test"
+        className="max-w-full"
+        naturalWidth={1200}
+        naturalHeight={800}
+      />,
+    )
+
+    await waitFor(() => {
+      const placeholder = container.querySelector('[aria-busy="true"]')
+      expect(placeholder).not.toBeNull()
+      expect(placeholder?.getAttribute('style')).toMatch(/aspect-ratio:\s*1200\s*\/\s*800/)
+      expect(placeholder?.getAttribute('style')).toMatch(/width:\s*1200px/)
+    })
+
+    vi.mocked(api.get).mockReturnValueOnce(new Promise(() => {}))
+
+    const { container: containerOhneDims } = render(
+      <AuthImage url="/media/8" alt="test" className="max-w-full" />,
+    )
+
+    await waitFor(() => {
+      const placeholder = containerOhneDims.querySelector('[aria-busy="true"]')
+      expect(placeholder).not.toBeNull()
+      expect(placeholder?.getAttribute('style')).toMatch(/min-height:\s*6rem/)
+      expect(placeholder?.getAttribute('style')).not.toMatch(/width:/)
+    })
   })
 })

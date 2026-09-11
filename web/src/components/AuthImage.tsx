@@ -94,10 +94,21 @@ export default function AuthImage({
     : { minHeight: "6rem" };
 
   if (!src) {
+    // Der Platzhalter braucht zusätzlich zur aspect-ratio eine EXPLIZITE Breite:
+    // Die Chat-Sprechblase ist ein Flex-Kind mit items-start/-end (shrink-to-fit),
+    // ihre Breite ist die max-content-Breite ihrer Kinder. Ein leerer div trägt
+    // dazu 0 bei — die Blase kollabiert aufs Padding, und aspect-ratio auf 0 px
+    // Breite ist 0 px Höhe (gemessen: 24×16 px statt 344×262 px, in Chromium UND
+    // WebKit). Mit width = natürliche Bildbreite bringt der Platzhalter dieselbe
+    // intrinsische Breite ein wie später das <img>; das `max-w-full` aus der
+    // className deckelt beide identisch auf die Blasenbreite. Ohne diese Zeile
+    // wächst jede Blase erst beim Blob-Load — unter iOS Safari (kein CSS
+    // scroll-anchoring) pro Bild ein sichtbarer Sprung.
+    const placeholderStyle = dims ? { ...style, width: `${dims.w}px` } : style;
     return (
       <div
         className={`${className ?? ""} bg-brand-surface-card animate-pulse`}
-        style={style}
+        style={placeholderStyle}
         aria-busy="true"
       />
     );
