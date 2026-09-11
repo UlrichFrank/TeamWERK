@@ -5,6 +5,7 @@
 package media
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -129,12 +130,53 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// canSee beantwortet die Sichtbarkeit eines Bildes über das referenzierende
+// Objekt: Hochladender, Mitglied der Konversation, in der eine Nachricht das
+// Bild trägt, oder Empfänger einer Mitteilung mit diesem Bild.
+//
+// Die Konversations-Bedingung fragt bewusst OHNE `left_at IS NULL` — analog
+// chat.isMember: wer die Gruppe verlassen hat, behält den Verlauf und damit
+// auch dessen Bilder. Ein Rollen-Bypass (admin/vorstand) fehlt bewusst: der
+// Store liegt hinter privaten Unterhaltungen, eine Vereinsfunktion verschafft
+// dort keinen Zugang.
+func (h *Handler) canSee(ctx context.Context, mediaID, userID int) (bool, error) {
+	var ok bool
+	err := h.db.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM media WHERE id = ? AND uploaded_by = ?)
+		    OR EXISTS(SELECT 1 FROM messages m
+		              JOIN conversation_members cm ON cm.conversation_id = m.conversation_id
+		              WHERE m.media_id = ? AND cm.user_id = ?)
+		    OR EXISTS(SELECT 1 FROM broadcasts b
+		              JOIN broadcast_reads br ON br.broadcast_id = b.id
+		              WHERE b.media_id = ? AND br.user_id = ?)`,
+		mediaID, userID, mediaID, userID, mediaID, userID).Scan(&ok)
+	return ok, err
+}
+
 // Serve liefert die Bild-Bytes anhand der media-ID aus.
 // GET /api/media/{id}
 func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	// Objekt-Gate VOR dem Dateizugriff. Fehlende Berechtigung antwortet 404 wie
+	// eine unbekannte ID — sonst wäre über den Statuscode erratbar, welche
+	// media-IDs existieren.
+	visible, err := h.canSee(r.Context(), id, claims.UserID)
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	if !visible {
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 

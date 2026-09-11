@@ -136,12 +136,19 @@ var exBroadcastSend = map[string]int{
 	"vorstand_beisitzer": 403, "kassierer": 403, "spieler": 403, "elternteil": 403,
 }
 
-// Handler-Level-Gate: games.SaveLineup — admin || trainer (nur diese beiden Checks)
+// Handler-Level-Gate: games.SaveLineup — canRecordGameAttendance, also admin
+// und sportliche_leitung vereinsweit, sonst Trainer eines am Spiel beteiligten
+// Teams. Der Trainer-Zweig hängt an trainer_memberships und game_teams und ist
+// auf der leeren Matrix-DB (Spiel-ID 1 existiert nicht) für jeden Trainer
+// falsch → 403. Dass ein Trainer des richtigen Teams durchkommt und einer eines
+// fremden Teams nicht, prüft internal/games (lineup_authz_test.go); die Matrix
+// beweist das Tier, nicht das Objekt.
 var exLineup = map[string]int{
-	"admin": httpAllowed, "trainer": httpAllowed, "trainer_elternteil": httpAllowed,
+	"admin":              httpAllowed,
+	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
+	"trainer": 403, "trainer_elternteil": 403,
 	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
-	"kassierer": 403, "sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
-	"spieler": 403, "elternteil": 403,
+	"kassierer": 403, "spieler": 403, "elternteil": 403,
 }
 
 // Handler-Level-Gate: upload.SepaDownloadToken / DeleteSepaMandat
@@ -273,8 +280,12 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/chat/broadcasts", expected: exBroadcastSend},
 	{method: "GET", path: "/api/chat/broadcast-targets", expected: exBroadcastSend},
 
-	// Konversations-spezifische Routen: isMember-Check → 403 für alle wenn Konversation 1 nicht existiert.
+	// Konversations-spezifische Routen: Mitgliedschafts-Check im Handler (isMember
+	// bzw. isActiveMember) → 403 für alle, wenn Konversation 1 nicht existiert.
 	// httpAnyOK: wir testen hier keine Middleware, sondern dokumentieren das bekannte Verhalten.
+	// /read und /members/me tragen diesen Check seit security-haertung-welle-1
+	// (vorher schrieben beide ohne jede Prüfung); der Nachweis am Objekt steht in
+	// internal/chat/membership_authz_test.go.
 	{method: "GET", path: "/api/chat/conversations/{id}/messages", expected: exPublic},
 	{method: "POST", path: "/api/chat/conversations/{id}/messages", expected: exPublic},
 	{method: "POST", path: "/api/chat/conversations/{id}/read", expected: exPublic},
@@ -311,6 +322,11 @@ var matrix = []endpointCase{
 
 	// Media (Bild-Upload/-Abruf für Chat + Mitteilungen): nur authentifiziert.
 	{method: "POST", path: "/api/media/upload", expected: exAuth},
+	// GET /api/media/{id}: Objekt-Gate im Handler (Uploader / Konversations-
+	// Mitgliedschaft / broadcast_reads, sonst 404 statt 403), siehe
+	// internal/media. Auf der leeren Matrix-DB antwortet die Route jeder Persona
+	// 404 — das ist weder 401 noch 403 und erfüllt damit exAuth: die Matrix
+	// beweist hier nur das Auth-Tier, das Objektrecht prüft internal/media.
 	{method: "GET", path: "/api/media/{id}", expected: exAuth},
 
 	// Members (self-service)
@@ -443,7 +459,8 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/games/{id}/respond", expected: exAuth},
 	{method: "GET", path: "/api/games/{id}/responses", expected: exAuth},
 	{method: "GET", path: "/api/games/{id}/participants", expected: exAuth},
-	// lineup: Handler-Level-Gate (admin || trainer — kein vorstand, kein sportliche_leitung)
+	// lineup: Objekt-Gate im Handler (canRecordGameAttendance — kein Vorstand),
+	// siehe internal/games/handler.go
 	{method: "POST", path: "/api/games/{id}/lineup", expected: exLineup},
 	// attendance: GET unter Authenticated (Handler-Authz: admin/sL/trainer);
 	// POST unter Trainer+sL (RequireClubFunction-Group).
@@ -552,6 +569,10 @@ var matrix = []endpointCase{
 	{method: "DELETE", path: "/api/games/{id}/attendance-tracking", expected: exTrainer},
 	{method: "POST", path: "/api/games/{id}/attendance-excluded", expected: exTrainer},
 	{method: "DELETE", path: "/api/games/{id}/attendance-excluded", expected: exTrainer},
+	// Dienst abhaken/ablösen: das Tier ist trainer/sL, der Handler spiegelt es
+	// seit security-haertung-welle-1 zusätzlich über policy.CanFulfillAssignment
+	// und antwortet auf eine unbekannte Zuweisung 404 statt 204 (internal/duties/
+	// fulfill_authz_test.go). 404 ist weder 401 noch 403 → httpAllowed bleibt gültig.
 	{method: "POST", path: "/api/duty-assignments/{id}/fulfill", expected: exTrainer},
 	{method: "POST", path: "/api/duty-assignments/{id}/cash-substitute", expected: exTrainer},
 	// ── Vorstand + Trainer + sportliche_leitung ──────────────────────────────────
