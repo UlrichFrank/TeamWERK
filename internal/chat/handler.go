@@ -558,7 +558,7 @@ const messageSelect = `
 // messagePageSize begrenzt jede ListMessages-Antwort (voll, after, before).
 const messagePageSize = 100
 
-// GET /api/chat/conversations/{id}/messages[?after=<msgId>|?before=<msgId>]
+// GET /api/chat/conversations/{id}/messages[?after=<msgId>|?before=<msgId>|?around=<msgId>]
 //
 // Die Liste liefert je Nachricht nur einen gekürzten Preview (≤ messagePreviewLen
 // Zeichen) plus truncated-Flag; der Volltext wird bei Bedarf über
@@ -568,6 +568,23 @@ const messagePageSize = 100
 //   - ?after=<msgId>  → nur Nachrichten mit id > msgId, aufsteigend (Delta-Nachladen).
 //   - ?before=<msgId> → Seite der Nachrichten unmittelbar vor msgId (Verlaufs-Scroll).
 //   - ohne Parameter  → letzte messagePageSize Nachrichten, älteste zuerst.
+//
+// ?around=<msgId> ist der Jump-to-Message-Einstieg für Suchtreffer
+// (chat-message-search design.md Entscheidung 6): liefert bis zu
+// messagePageSize/2 Nachrichten mit id <= around (absteigend geladen, dann
+// umgedreht) plus bis zu messagePageSize/2 mit id > around (aufsteigend),
+// zusammen aufsteigend sortiert. `around` ist zu `after`/`before` mutually
+// exclusive (jede Kombination → HTTP 400). Zeigt `around` auf eine gelöschte
+// oder nicht (mehr) existierende Nachricht, gibt es keinen 404 — es wird
+// einfach das Fenster um die id geliefert (die Nachricht selbst fehlt darin
+// bzw. erscheint maskiert); das Frontend behandelt „nicht gefunden" selbst.
+//
+// Abweichende Response-Form NUR im around-Modus: statt des nackten Arrays
+// liefert der Handler {"items": [...], "hasOlder": bool, "hasNewer": bool} —
+// hasOlder/hasNewer melden explizit, ob in der Konversation weitere
+// Nachrichten vor bzw. nach dem gelieferten Fenster existieren. Alle anderen
+// Modi (after/before/ohne Parameter) liefern weiterhin das nackte Array
+// (Bestandsverhalten, mehrere Frontend-Aufrufer hängen daran).
 func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
@@ -578,8 +595,13 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 
 	afterStr := r.URL.Query().Get("after")
 	beforeStr := r.URL.Query().Get("before")
+	aroundStr := r.URL.Query().Get("around")
 	if afterStr != "" && beforeStr != "" {
 		http.Error(w, "after and before are mutually exclusive", http.StatusBadRequest)
+		return
+	}
+	if aroundStr != "" && (afterStr != "" || beforeStr != "") {
+		http.Error(w, "around is mutually exclusive with after/before", http.StatusBadRequest)
 		return
 	}
 	parseCursor := func(s string) (int, bool) {
@@ -623,88 +645,143 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		Read      bool `json:"read"`
 	}
 
-	var rows *sql.Rows
-	newestFirst := false // true, wenn die Query absteigend sortiert → vor Antwort umdrehen
+	// scanMessages liest eine Row-Menge in []Message ein (gemeinsamer
+	// Scan-Rumpf für after/before/ohne-Parameter UND für beide Teilfenster des
+	// around-Modus, der zwei getrennte Queries braucht statt einer). Schließt
+	// rows selbst — Aufrufer übergeben das Ergebnis von QueryContext direkt.
+	scanMessages := func(rows *sql.Rows) []Message {
+		defer rows.Close()
+		list := []Message{}
+		for rows.Next() {
+			var msg Message
+			var body string
+			var replyToID, mediaID, mediaWidth, mediaHeight sql.NullInt64
+			var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
+			rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &body, &msg.SentAt,
+				&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem, &mediaID, &mediaWidth, &mediaHeight,
+				&msg.ReadCount, &msg.ReadTotal)
+			msg.Read = msg.ReadCount > 0
+			if mediaID.Valid {
+				id := int(mediaID.Int64)
+				msg.MediaID = &id
+				url := mediaURL(id)
+				msg.MediaURL = &url
+				if mediaWidth.Valid && mediaHeight.Valid {
+					w := int(mediaWidth.Int64)
+					h := int(mediaHeight.Int64)
+					msg.MediaWidth = &w
+					msg.MediaHeight = &h
+				}
+			}
+			// Body ist bei gelöschten Nachrichten bereits '' (SQL-CASE) → Preview leer,
+			// truncated=false. Sonst rune-genau auf messagePreviewLen kürzen.
+			msg.Preview, msg.Truncated = previewBody(body)
+			if replyToID.Valid {
+				id := int(replyToID.Int64)
+				msg.ReplyToID = &id
+			}
+			if replyToBody.Valid {
+				msg.ReplyToBody = &replyToBody.String
+			}
+			if replyToSenderName.Valid {
+				msg.ReplyToSenderName = &replyToSenderName.String
+			}
+			if editedAt.Valid {
+				msg.EditedAt = &editedAt.String
+			}
+			if deletedAt.Valid {
+				msg.DeletedAt = &deletedAt.String
+			}
+			list = append(list, msg)
+		}
+		return list
+	}
+
+	var msgs []Message
+	hasOlder := false
+	hasNewer := false
+
 	switch {
+	case aroundStr != "":
+		around, ok := parseCursor(aroundStr)
+		if !ok {
+			http.Error(w, "invalid around", http.StatusBadRequest)
+			return
+		}
+		halfSize := messagePageSize / 2
+		olderRows, oerr := h.db.QueryContext(r.Context(),
+			messageSelect+` AND m.id <= ? ORDER BY m.id DESC LIMIT ?`,
+			convID, around, halfSize)
+		if oerr != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		older := scanMessages(olderRows)
+		// Absteigend gelesen → für den zusammengeführten Block umdrehen.
+		for i, j := 0, len(older)-1; i < j; i, j = i+1, j-1 {
+			older[i], older[j] = older[j], older[i]
+		}
+		newerRows, nerr := h.db.QueryContext(r.Context(),
+			messageSelect+` AND m.id > ? ORDER BY m.id ASC LIMIT ?`,
+			convID, around, halfSize)
+		if nerr != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		newer := scanMessages(newerRows)
+		msgs = append(older, newer...)
+		if len(msgs) > 0 {
+			h.db.QueryRowContext(r.Context(),
+				`SELECT EXISTS(SELECT 1 FROM messages WHERE conversation_id = ? AND id < ?)`,
+				convID, msgs[0].ID).Scan(&hasOlder)
+			h.db.QueryRowContext(r.Context(),
+				`SELECT EXISTS(SELECT 1 FROM messages WHERE conversation_id = ? AND id > ?)`,
+				convID, msgs[len(msgs)-1].ID).Scan(&hasNewer)
+		}
 	case afterStr != "":
 		after, ok := parseCursor(afterStr)
 		if !ok {
 			http.Error(w, "invalid after", http.StatusBadRequest)
 			return
 		}
-		rows, err = h.db.QueryContext(r.Context(),
+		rows, aerr := h.db.QueryContext(r.Context(),
 			messageSelect+` AND m.id > ? ORDER BY m.id ASC LIMIT ?`,
 			convID, after, messagePageSize)
+		if aerr != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		msgs = scanMessages(rows)
 	case beforeStr != "":
 		before, ok := parseCursor(beforeStr)
 		if !ok {
 			http.Error(w, "invalid before", http.StatusBadRequest)
 			return
 		}
-		newestFirst = true
-		rows, err = h.db.QueryContext(r.Context(),
+		rows, berr := h.db.QueryContext(r.Context(),
 			messageSelect+` AND m.id < ? ORDER BY m.id DESC LIMIT ?`,
 			convID, before, messagePageSize)
+		if berr != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		msgs = scanMessages(rows)
+		// Absteigend gelesen → oldest-first umdrehen.
+		for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+			msgs[i], msgs[j] = msgs[j], msgs[i]
+		}
 	default:
-		newestFirst = true
 		// id als Tie-Breaker: sent_at hat Sekundengranularität, gleiche
 		// Timestamps wären sonst instabil sortiert.
-		rows, err = h.db.QueryContext(r.Context(),
+		rows, derr := h.db.QueryContext(r.Context(),
 			messageSelect+` ORDER BY m.sent_at DESC, m.id DESC LIMIT ?`,
 			convID, messagePageSize)
-	}
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	msgs := []Message{}
-	for rows.Next() {
-		var msg Message
-		var body string
-		var replyToID, mediaID, mediaWidth, mediaHeight sql.NullInt64
-		var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
-		rows.Scan(&msg.ID, &msg.SenderID, &msg.SenderName, &body, &msg.SentAt,
-			&replyToID, &replyToBody, &replyToSenderName, &editedAt, &deletedAt, &msg.IsSystem, &mediaID, &mediaWidth, &mediaHeight,
-			&msg.ReadCount, &msg.ReadTotal)
-		msg.Read = msg.ReadCount > 0
-		if mediaID.Valid {
-			id := int(mediaID.Int64)
-			msg.MediaID = &id
-			url := mediaURL(id)
-			msg.MediaURL = &url
-			if mediaWidth.Valid && mediaHeight.Valid {
-				w := int(mediaWidth.Int64)
-				h := int(mediaHeight.Int64)
-				msg.MediaWidth = &w
-				msg.MediaHeight = &h
-			}
+		if derr != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
 		}
-		// Body ist bei gelöschten Nachrichten bereits '' (SQL-CASE) → Preview leer,
-		// truncated=false. Sonst rune-genau auf messagePreviewLen kürzen.
-		msg.Preview, msg.Truncated = previewBody(body)
-		if replyToID.Valid {
-			id := int(replyToID.Int64)
-			msg.ReplyToID = &id
-		}
-		if replyToBody.Valid {
-			msg.ReplyToBody = &replyToBody.String
-		}
-		if replyToSenderName.Valid {
-			msg.ReplyToSenderName = &replyToSenderName.String
-		}
-		if editedAt.Valid {
-			msg.EditedAt = &editedAt.String
-		}
-		if deletedAt.Valid {
-			msg.DeletedAt = &deletedAt.String
-		}
-		msgs = append(msgs, msg)
-	}
-
-	// Reverse so oldest first (nur nötig, wenn absteigend gelesen wurde)
-	if newestFirst {
+		msgs = scanMessages(rows)
+		// Absteigend gelesen → oldest-first umdrehen.
 		for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
 			msgs[i], msgs[j] = msgs[j], msgs[i]
 		}
@@ -790,6 +867,16 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if aroundStr != "" {
+		// Abweichende Form nur im around-Modus (s. Doku-Kommentar oben) — alle
+		// anderen Modi liefern weiterhin das nackte Array.
+		json.NewEncoder(w).Encode(map[string]any{
+			"items":    msgs,
+			"hasOlder": hasOlder,
+			"hasNewer": hasNewer,
+		})
+		return
+	}
 	json.NewEncoder(w).Encode(msgs)
 }
 
