@@ -1034,6 +1034,15 @@ export default function ChatPage() {
       // Unsere eigenen (programmatischen) Scrolls ignorieren — applyAnchor schiebt
       // das Fenster bei jeder Layout-Änderung um 300 ms vor.
       if (Date.now() < programmaticScrollUntilRef.current) return;
+      // Leerphase (awaitingMessagesRef): das Leeren der Liste klemmt scrollTop
+      // der weiterbestehenden Box auf 0 und feuert dafür ein scroll-Event. Das
+      // ist kein Nutzer-Scroll — ausgewertet hieße es auf der leeren Box
+      // „am Ende" (isAtBottom=true) bzw. gäbe den Öffnungs-Anker frei, und beim
+      // Eintreffen der Nachrichten risse der Sticky-Wächter die Ansicht ans
+      // Ende — beim Such-Sprung weg von der gerade zentrierten Zielnachricht.
+      // Tritt nur auf, wenn die Box schon existiert (Konversation offen oder
+      // vorher offen), weil der Listener sonst noch nicht hängt.
+      if (awaitingMessagesRef.current) return;
       // Ein Scroll AUSSERHALB des Fensters ist echter Nutzer-Scroll — auch der
       // Maus-Scrollbar-Drag, der KEIN wheel/touch/keydown feuert. Aktiven Anker
       // freigeben (releaseAnchor setzt isAtBottom aus der echten Position).
