@@ -47,7 +47,8 @@ import CreatorExitChoiceModal from "../components/CreatorExitChoiceModal";
 import ChatPollCreateModal from "../components/ChatPollCreateModal";
 import ChatPollCard from "../components/ChatPollCard";
 import ChatPollVotesModal from "../components/ChatPollVotesModal";
-import { BTN_SMALL } from '../lib/buttonStyles'
+import { BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL } from '../lib/buttonStyles'
+import ChatSearchModal, { type SearchHit } from "../components/ChatSearchModal";
 
 interface ConvMember {
   id: number;
@@ -314,6 +315,12 @@ export default function ChatPage() {
   } | null>(null);
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<number | null>(null);
   const [hasOlder, setHasOlder] = useState(false);
+  // chat-message-search: Such-Overlay und Sprung zur Treffer-Nachricht.
+  // highlightMsgId hebt die getroffene Nachricht 2 s hervor; searchJumpTargetRef
+  // trägt die Ziel-id vom around-Load bis zum Layout-Effekt, der sie zentriert.
+  const [showSearch, setShowSearch] = useState(false);
+  const [highlightMsgId, setHighlightMsgId] = useState<number | null>(null);
+  const searchJumpTargetRef = useRef<number | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesBoxRef = useRef<HTMLDivElement>(null);
@@ -709,6 +716,73 @@ export default function ChatPage() {
     await loadMessages(conv.id, conv.unreadCount);
   };
 
+  // chat-message-search: Konversation zentriert um eine Treffer-Nachricht
+  // öffnen. Bewusst ein EIGENER Pfad neben openConversation/loadMessages
+  // (design.md, Entscheidung 7): kein Öffnungs-Anker (anchorRef bleibt null),
+  // kein UnreadDivider — die Position trägt allein der Such-Sprung-Effekt
+  // ([messages]-Layout-Effekt unten, searchJumpTargetRef). Entwurf sichern,
+  // Liste leeren und Ladezustand setzen laufen wie in openConversation, damit
+  // der Konversationswechsel dieselben Invarianten hält (kein Fremdinhalt).
+  const openConversationAround = async (conv: Conversation, msgId: number) => {
+    if (activeConv && activeConv.id !== conv.id && !editingMessage) {
+      if (msgInput) draftsRef.current.set(activeConv.id, msgInput);
+      else draftsRef.current.delete(activeConv.id);
+    }
+    setTab("chats");
+    setActiveConv(conv);
+    setMobileShowChat(true);
+    setReplyTo(null);
+    setEditingMessage(null);
+    setMsgInput(draftsRef.current.get(conv.id) ?? "");
+    if (anchorSettleTimerRef.current !== null) {
+      window.clearTimeout(anchorSettleTimerRef.current);
+      anchorSettleTimerRef.current = null;
+    }
+    anchorRef.current = null;
+    unreadDividerIndexRef.current = null;
+    // Nicht am Ende: Sticky-to-Bottom darf beim Bild-Decode im Fenster nicht
+    // ans Ende reißen, die Zielnachricht liegt in der Mitte.
+    isAtBottomRef.current = false;
+    awaitingMessagesRef.current = true;
+    setMessages([]);
+    setLoadingMessages(true);
+    await loadMessagesAround(conv.id, msgId);
+  };
+
+  // GET …/messages?around=<id> liefert — anders als die übrigen Modi — ein
+  // Objekt { items, hasOlder, hasNewer } (design.md, Nachtrag 9). hasNewer wird
+  // bewusst nicht angezeigt: neuere Nachrichten holt der bestehende
+  // ?after=-Delta-Pfad (appendNewMessages) beim nächsten SSE-Event nach.
+  const loadMessagesAround = async (convId: number, msgId: number) => {
+    try {
+      const r = await api.get(`/chat/conversations/${convId}/messages`, {
+        params: { around: msgId },
+      });
+      const items: Message[] = r.data?.items ?? [];
+      searchJumpTargetRef.current = msgId;
+      setMessages(items);
+      setHasOlder(Boolean(r.data?.hasOlder));
+      setEmojiPickerMsgId(null);
+      if (items.some((m) => m.id === msgId && !m.deletedAt)) {
+        setHighlightMsgId(msgId);
+        window.setTimeout(() => setHighlightMsgId(null), 2000);
+      } else {
+        // Treffer zwischenzeitlich gelöscht (oder nicht mehr im Fenster):
+        // verständliche Rückmeldung statt stummem Fehlschlag (Spec-Szenario).
+        setToast("Die Nachricht wurde inzwischen gelöscht");
+        setTimeout(() => setToast(null), 4000);
+      }
+      await api.post(`/chat/conversations/${convId}/read`);
+      loadConversations();
+    } catch (e) {
+      setToast(errorMessage(e, "Konversation konnte nicht geladen werden"));
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setLoadingMessages(false);
+      awaitingMessagesRef.current = false;
+    }
+  };
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
     loadConversations();
@@ -899,6 +973,42 @@ export default function ChatPage() {
       messagesEndRef.current?.scrollIntoView();
     }
   }, [messages, applyAnchor, scrollBox]);
+
+  // chat-message-search: Sprung zur Treffer-Nachricht. Einmaliger Effekt NEBEN
+  // der Anker-Logik (design.md, Entscheidung 7) — aktiv nur, wenn die
+  // Konversation über einen Suchtreffer geöffnet wurde (searchJumpTargetRef
+  // gesetzt); anchorRef ist in diesem Pfad null. Läuft bewusst NACH dem
+  // Effekt darüber (Reihenfolge der Definition), damit dessen
+  // Sticky-Entscheidung nicht nachträglich überschreibt. Das Ziel wird nach
+  // Verbrauch genullt. Bild-Decodes im Fenster verschieben die Zielnachricht
+  // noch für kurze Zeit; deshalb 1,5 s lang bei jedem Bild-`load` neu
+  // zentrieren (Muster wie keepPosition in loadOlderMessages) — danach ist
+  // der Nutzer am Zug.
+  useLayoutEffect(() => {
+    const target = searchJumpTargetRef.current;
+    if (target === null || messages.length === 0) return;
+    const box = scrollBox();
+    if (!box) return;
+    searchJumpTargetRef.current = null;
+    const el = box.querySelector<HTMLElement>(`[data-message-id="${target}"]`);
+    if (!el) return;
+    const center = () => {
+      programmaticScrollUntilRef.current = Date.now() + 300;
+      el.scrollIntoView({ block: "center" });
+    };
+    center();
+    const onImg = (e: Event) => {
+      if ((e.target as HTMLElement)?.tagName === "IMG") center();
+    };
+    box.addEventListener("load", onImg, true);
+    const t = window.setTimeout(() => {
+      box.removeEventListener("load", onImg, true);
+    }, 1500);
+    return () => {
+      window.clearTimeout(t);
+      box.removeEventListener("load", onImg, true);
+    };
+  }, [messages, scrollBox]);
 
   // Sticky-to-Bottom-Wächter für den aktiven Chat-Container. Bilder in
   // Chat-Nachrichten laden asynchron und expandieren erst NACH dem initialen
@@ -1275,6 +1385,38 @@ export default function ChatPage() {
     }
   };
 
+  // chat-message-search: Klick auf einen Treffer. Mitteilungen laufen über den
+  // bestehenden openBroadcast (nicht paginiert); Chat-Treffer über den
+  // around-Pfad. Die Panes schalten über `tab`, ein setActiveX(null) ist
+  // nicht nötig.
+  const handleSearchSelect = async (hit: SearchHit) => {
+    setShowSearch(false);
+    if (hit.kind === "broadcast") {
+      let bc = broadcasts.find((b) => b.id === hit.id);
+      if (!bc) {
+        try {
+          const r = await api.get("/chat/broadcasts");
+          bc = ((r.data ?? []) as Broadcast[]).find((b) => b.id === hit.id);
+        } catch {}
+      }
+      if (!bc) {
+        setToast("Die Mitteilung ist nicht mehr verfügbar");
+        setTimeout(() => setToast(null), 4000);
+        return;
+      }
+      setTab("broadcasts");
+      await openBroadcast(bc);
+      return;
+    }
+    const conv = conversations.find((c) => c.id === hit.conversationId);
+    if (!conv) {
+      setToast("Die Konversation ist nicht mehr verfügbar");
+      setTimeout(() => setToast(null), 4000);
+      return;
+    }
+    await openConversationAround(conv, hit.id);
+  };
+
   const convName = (conv: Conversation) => {
     if (conv.name) return conv.name;
     const others = conv.members.filter((m) => m.id !== user?.id);
@@ -1297,6 +1439,14 @@ export default function ChatPage() {
         <h1 className="text-2xl font-bold text-brand-text flex items-center gap-2">
           Nachrichten
         </h1>
+        <button
+          type="button"
+          onClick={() => setShowSearch(true)}
+          aria-label="Nachrichten durchsuchen"
+          className={`${HEADER_CTRL_ICON} ${HEADER_NEUTRAL}`}
+        >
+          <Search className="w-4 h-4" />
+        </button>
       </div>
 
       <div className="flex flex-1 min-h-0 gap-4">
@@ -1653,6 +1803,7 @@ export default function ChatPage() {
                           onImageClick={() => {
                             if (msg.mediaUrl) setLightboxUrl(msg.mediaUrl);
                           }}
+                          highlighted={highlightMsgId === msg.id}
                         />
                       </div>
                     );
@@ -2088,6 +2239,13 @@ export default function ChatPage() {
         </div>
       )}
 
+      {showSearch && (
+        <ChatSearchModal
+          onClose={() => setShowSearch(false)}
+          onSelect={handleSearchSelect}
+        />
+      )}
+
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-brand-text text-white text-sm rounded-md shadow-lg px-4 py-2">
           {toast}
@@ -2134,6 +2292,7 @@ function MessageBubble({
   onImageClick,
   onOpenReads,
   onOpenVotes,
+  highlighted = false,
 }: {
   msg: Message;
   body: string;
@@ -2150,6 +2309,8 @@ function MessageBubble({
   onImageClick: () => void;
   onOpenReads?: (msg: Message) => void;
   onOpenVotes?: (msg: Message) => void;
+  // chat-message-search: Treffer-Nachricht nach dem Such-Sprung 2 s hervorheben.
+  highlighted?: boolean;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
@@ -2199,7 +2360,10 @@ function MessageBubble({
 
   if (msg.deletedAt) {
     return (
-      <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+      <div
+        data-message-id={msg.id}
+        className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}
+      >
         <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-surface-card border border-brand-border-subtle text-brand-text-subtle text-sm italic">
           <Trash2 className="w-3.5 h-3.5 shrink-0" />
           Nachricht gelöscht
@@ -2218,7 +2382,8 @@ function MessageBubble({
 
   return (
     <div
-      className={`flex items-center gap-1 ${isOwn ? "flex-row-reverse" : "flex-row"} group/msg`}
+      data-message-id={msg.id}
+      className={`flex items-center gap-1 ${isOwn ? "flex-row-reverse" : "flex-row"} group/msg rounded-xl transition-colors duration-700 ${highlighted ? "bg-brand-yellow/20" : ""}`}
     >
       {/* Swipe reply icon */}
       <div
