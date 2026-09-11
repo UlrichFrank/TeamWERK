@@ -21,6 +21,12 @@ type Claims struct {
 	Role          string   `json:"role"`
 	ClubFunctions []string `json:"club_functions"`
 	IsParent      bool     `json:"is_parent"`
+	// ImpersonatedBy trägt die User-ID des Admins, der dieses Token per
+	// "Testen als" ausgestellt hat (security-haertung-welle-1, Entscheidung 7).
+	// Nur IssueImpersonationToken setzt das Feld — ein reguläres Login-/
+	// Refresh-Token lässt es weg (omitempty), ParseAccessToken reicht es
+	// unverändert durch, weil Claims direkt als jwt.Claims genutzt wird.
+	ImpersonatedBy *int `json:"impersonated_by,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -58,6 +64,30 @@ func IssueAccessToken(secret string, userID int, email, role string, clubFunctio
 		Role:          role,
 		ClubFunctions: clubFunctions,
 		IsParent:      isParent,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenDuration)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+}
+
+// IssueImpersonationToken stellt ein Access-Token für "Testen als" aus — wie
+// IssueAccessToken, aber mit gesetztem ImpersonatedBy-Claim, damit das Token
+// serverseitig von einem regulären Login-Token unterscheidbar ist
+// (security-haertung-welle-1, Entscheidung 7). IssueAccessToken selbst bleibt
+// unverändert, weil es zu viele bestehende Aufrufer mit fester Signatur hat.
+func IssueImpersonationToken(secret string, targetID int, ident, role string, clubFunctions []string, isParent bool, adminID int) (string, error) {
+	if clubFunctions == nil {
+		clubFunctions = []string{}
+	}
+	claims := Claims{
+		UserID:         targetID,
+		Email:          ident,
+		Role:           role,
+		ClubFunctions:  clubFunctions,
+		IsParent:       isParent,
+		ImpersonatedBy: &adminID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

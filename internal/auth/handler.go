@@ -14,6 +14,7 @@ import (
 	"time"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/eventlog"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
@@ -1009,7 +1010,7 @@ func (h *Handler) Impersonate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clubFunctions, isParent := h.loadJWTExtras(r.Context(), targetID)
-	accessToken, err := IssueAccessToken(h.jwtSecret, targetID, ident, role, clubFunctions, isParent)
+	accessToken, err := IssueImpersonationToken(h.jwtSecret, targetID, ident, role, clubFunctions, isParent, caller.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1018,6 +1019,18 @@ func (h *Handler) Impersonate(w http.ResponseWriter, r *http.Request) {
 	if lastName != "" {
 		name += " " + lastName
 	}
+
+	// Audit-Spur (security-haertung-welle-1, Entscheidung 7): slog trägt den
+	// technischen Fall fest, das Event-Log macht ihn dem Admin selbst drei
+	// Tage im Dashboard sichtbar (eventlog.Record schreibt an den Akteur, nicht
+	// an das Ziel-Konto — das Ziel merkt von der Impersonation serverseitig
+	// nichts).
+	slog.Warn("impersonation", "actor_user_id", caller.UserID, "target_user_id", targetID, "target_role", role)
+	eventlog.Record(h.db, []int{caller.UserID}, "admin",
+		"Als "+name+" angemeldet",
+		"Impersonation gestartet durch Admin-Konto "+caller.Email,
+		"/nutzer")
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"access_token": accessToken,
