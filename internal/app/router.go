@@ -196,6 +196,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Chat
 		r.Get("/api/chat/users", h.Chat.Users)
 		r.Get("/api/chat/conversations", h.Chat.ListConversations)
+		r.Get("/api/chat/search", h.Chat.Search)
 		r.Post("/api/chat/conversations", h.Chat.CreateConversation)
 		r.Get("/api/chat/conversations/{id}/messages", h.Chat.ListMessages)
 		r.Post("/api/chat/conversations/{id}/messages", h.Chat.SendMessage)

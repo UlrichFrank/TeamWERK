@@ -299,3 +299,62 @@ test('Konversationswechsel zeigt keinen Fremdinhalt', async ({ page }) => {
   // Nach Auflösen der Verzögerung: B's echte Nachrichten stehen im DOM.
   await expect(box.getByText('Nachricht 150', { exact: true })).toBeVisible()
 })
+
+// HÖHENSTABILITÄT, nicht Position: Die Anker-Tests oben prüfen, WO der Container nach dem
+// Bild-Decode steht — nicht, ob sich die Inhaltshöhe dabei überhaupt ändern musste. Genau
+// das war der blinde Fleck: der AuthImage-Platzhalter (leerer div mit aspect-ratio) trägt
+// in der shrink-to-fit-Sprechblase 0 zur Breite bei und kollabiert auf 24×16 px, das
+// fertige <img> wird 344×262 px. Jeder eintreffende Blob wächst die Blase, der Anker
+// korrigiert nachträglich — unter iOS Safari (kein scroll-anchoring) pro Bild ein sichtbarer
+// Sprung. Mit korrekt reserviertem Platzhalter ist Δ scrollHeight ≈ 0.
+//
+// Deterministisch gemacht durch Anhalten der Medien-Antworten (page.route): lokal ist der
+// Blob-Fetch im Millisekunden-Bereich, ohne Anhalten gibt es keinen stabilen Moment, in dem
+// alle Platzhalter sichtbar sind. „E2E Chat mit Bildern" hat 4 Bilder, ALLE mit Server-Dims
+// (seedChatMedia → seedImage(…, true)); die langen Threads mischen absichtlich Bilder ohne
+// Dims (6-rem-Fallback) und taugen deshalb nicht für Δ≈0.
+test('Bild-Platzhalter mit Dims: Inhaltshöhe bleibt beim Decode stabil', async ({ page }) => {
+  await loginAsAdmin(page)
+
+  // Medien-Antworten anhalten, bis die Ausgangshöhe gemessen ist.
+  const pending: Array<() => void> = []
+  await page.route('**/api/media/*', async (route) => {
+    await new Promise<void>((resolve) => pending.push(resolve))
+    await route.continue()
+  })
+
+  await openChat(page)
+  await page.getByText('E2E Chat mit Bildern').click()
+
+  const box = page.locator(BOX)
+  await expect(box).toBeVisible()
+  await expect(page.locator(`${BOX} [aria-busy="true"]`)).toHaveCount(4)
+
+  const before = await box.evaluate((el: HTMLElement) => ({
+    height: el.scrollHeight,
+    // Breite der Platzhalter: ein kollabierter Platzhalter ist schmaler als die Blase.
+    minPlaceholderWidth: Math.min(
+      ...Array.from(el.querySelectorAll('[aria-busy="true"]')).map(
+        (p) => p.getBoundingClientRect().width,
+      ),
+    ),
+  }))
+
+  // Routen freigeben → Blobs kommen, <img> ersetzen die Platzhalter.
+  pending.splice(0).forEach((release) => release())
+  await waitAllImagesLoaded(page, 4)
+
+  const after = await box.evaluate((el: HTMLElement) => ({
+    height: el.scrollHeight,
+    minImgWidth: Math.min(
+      ...Array.from(el.querySelectorAll('img[alt="Bild"]')).map(
+        (i) => i.getBoundingClientRect().width,
+      ),
+    ),
+  }))
+
+  // Ohne Fix: ~4 × 430 px Wachstum (Platzhalter 16 px → Bild ~444 px).
+  expect(Math.abs(after.height - before.height)).toBeLessThanOrEqual(4)
+  // Kein Platzhalter war schmaler als das Bild, das ihn ersetzt hat.
+  expect(before.minPlaceholderWidth).toBeGreaterThanOrEqual(after.minImgWidth - 1)
+})
