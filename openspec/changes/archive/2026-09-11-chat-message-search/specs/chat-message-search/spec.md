@@ -5,7 +5,7 @@ Ermöglicht Nutzern, per Volltextsuche über alle ihre Chat-Konversationen und M
 ## ADDED Requirements
 
 ### Requirement: Übergreifende Volltextsuche
-Das System MUSS eine Suche bereitstellen, die den Nachrichtentext (`messages.body`) aller Konversationen, in denen der anfragende Nutzer aktives Mitglied ist (`conversation_members.left_at IS NULL`), sowie den Text (`broadcasts.body`) aller für ihn sichtbaren Mitteilungen (`broadcast_reads`-Zeile vorhanden, `hidden_at IS NULL`) nach einem Suchbegriff durchsucht. Gelöschte Nachrichten (`messages.deleted_at IS NOT NULL`) MÜSSEN von der Suche ausgeschlossen werden, unabhängig vom gespeicherten `body`-Inhalt. Die Ergebnisliste ist nach Zeitpunkt absteigend (neueste zuerst) sortiert und paginiert (`limit`/`offset`, analog zur bestehenden Mitglieder-/Nutzer-Paginierung), Antwortform `{ items: [...], total: N }`.
+Das System MUST eine Suche bereitstellen, die den Nachrichtentext (`messages.body`) aller Konversationen, in denen der anfragende Nutzer aktives Mitglied ist (`conversation_members.left_at IS NULL`), sowie den Text (`broadcasts.body`) aller für ihn sichtbaren Mitteilungen (`broadcast_reads`-Zeile vorhanden, `hidden_at IS NULL`) nach einem Suchbegriff durchsucht. Gelöschte Nachrichten (`messages.deleted_at IS NOT NULL`) MUST von der Suche ausgeschlossen werden, unabhängig vom gespeicherten `body`-Inhalt. Die Ergebnisliste ist nach Zeitpunkt absteigend (neueste zuerst) sortiert und paginiert (`limit`/`offset`, analog zur bestehenden Mitglieder-/Nutzer-Paginierung), Antwortform `{ items: [...], total: N }`.
 
 #### Scenario: Treffer in eigener Konversation
 - **WHEN** ein Nutzer nach einem Begriff sucht, der im Text einer Nachricht in einer seiner aktiven Konversationen vorkommt
@@ -28,7 +28,7 @@ Das System MUSS eine Suche bereitstellen, die den Nachrichtentext (`messages.bod
 - **THEN** antwortet das System mit HTTP 400 statt eine ungefilterte Volltabelle zurückzugeben
 
 ### Requirement: Sprung zur Fundstelle im Chat
-Das System MUSS es erlauben, eine Konversation zentriert um eine bestimmte Nachricht zu laden (Nachrichten davor und danach in einem Fenster um die Ziel-Nachricht), damit ein Suchtreffer direkt sichtbar gemacht werden kann, ohne dass der Nutzer manuell zur passenden Stelle scrollen muss. Dieser Zugriff unterliegt denselben Sichtbarkeitsregeln wie das reguläre Laden von Nachrichten (nur Mitglieder der Konversation, gelöschte Nachrichten bleiben maskiert).
+Das System MUST es erlauben, eine Konversation zentriert um eine bestimmte Nachricht zu laden (Nachrichten davor und danach in einem Fenster um die Ziel-Nachricht), damit ein Suchtreffer direkt sichtbar gemacht werden kann, ohne dass der Nutzer manuell zur passenden Stelle scrollen muss. Dieser Zugriff unterliegt denselben Sichtbarkeitsregeln wie das reguläre Laden von Nachrichten (nur Mitglieder der Konversation, gelöschte Nachrichten bleiben maskiert).
 
 #### Scenario: Konversation wird um Treffer zentriert geöffnet
 - **WHEN** ein Nutzer in den Suchergebnissen auf einen Chat-Treffer klickt
@@ -39,7 +39,7 @@ Das System MUSS es erlauben, eine Konversation zentriert um eine bestimmte Nachr
 - **THEN** zeigt das System eine verständliche Rückmeldung statt eines Fehlerabsturzes
 
 ### Requirement: Sprung zur Fundstelle bei Mitteilungen
-Ein Klick auf einen Mitteilungs-Treffer MUSS die vollständige Mitteilung öffnen (wie beim regulären Öffnen aus der Mitteilungs-Liste).
+Ein Klick auf einen Mitteilungs-Treffer MUST die vollständige Mitteilung öffnen (wie beim regulären Öffnen aus der Mitteilungs-Liste).
 
 #### Scenario: Mitteilung wird aus Suchergebnis geöffnet
 - **WHEN** ein Nutzer in den Suchergebnissen auf einen Mitteilungs-Treffer klickt

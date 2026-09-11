@@ -35,6 +35,9 @@ Es gibt aktuell **keinen** "Jump-to-Message"-Mechanismus im Frontend (auch nicht
 
 **8. Header-Control-Button, kein globales Tastenkürzel.** Lupe (`Search`-Icon aus `lucide-react`, bereits importiert) als `HEADER_CTRL_ICON` neben der `<h1>Nachrichten</h1>` öffnet ein Modal (Card-Look wie bestehende Modals: `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow`). Kein `Cmd/Ctrl+K`-Shortcut in dieser Iteration — kein bestehendes Shortcut-System in der App, würde Scope unnötig vergrößern.
 
+
+**9. (Nachtrag bei der Umsetzung) Response-Form des `around`-Modus.** `ListMessages` liefert in allen bestehenden Modi ein nacktes JSON-Array; drei Frontend-Aufrufer (`loadMessages`, `appendNewMessages`, `loadOlderMessages`) und die E2E-Tests hängen daran. Die in Entscheidung 6 vorgesehenen `hasOlder`/`hasNewer`-Flags lassen sich deshalb nicht ohne Bruch an das Array hängen. Festlegung: **nur der `around`-Modus** antwortet mit einem Objekt `{ items: [...], hasOlder, hasNewer }`; `after`/`before`/Default bleiben unverändert Array. Der Modus wird ausschließlich vom neuen Such-Sprung aufgerufen, die Formabweichung ist im Handler-Kommentar dokumentiert. Alternative verworfen: alle Modi auf ein Objekt umstellen — hätte drei Aufrufer, die Vitest-Mocks und die E2E-Seeds in einem Bugfix-fremden Change mitgezogen.
+
 ## Risks / Trade-offs
 
 - **[Risiko] Gelöschter `body` bleibt in der DB, ein Bug im `deleted_at`-Filter würde gelöschte Inhalte durchsuchbar machen.** → Mitigation: dedizierter Test (`TestSearch_GeloeschteNachrichtNichtGefunden`), der eine gelöschte Nachricht mit eindeutigem Suchbegriff anlegt und die Abwesenheit in den Ergebnissen prüft — nicht nur den Happy-Path.
