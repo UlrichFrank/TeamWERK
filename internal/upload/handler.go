@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -20,8 +21,47 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 )
 
-var imageTypes = []string{"image/jpeg", "image/jpg", "image/png", "image/webp"}
+// imageTypes / pdfOnlyTypes sind die je Upload-Pfad erlaubten MIME-Types. Sie
+// werden ausschließlich gegen den per Byte-Sniffing erkannten Typ geprüft — die
+// Angabe des Clients (`Content-Type` des Multipart-Teils) wird bewusst nicht mehr
+// gelesen. Sie ist frei wählbar und war der Hebel für den Stored-XSS-Befund:
+// HTML als `image/png` deklariert kam ungeprüft durch.
+var imageTypes = []string{"image/jpeg", "image/png", "image/webp"}
 var pdfOnlyTypes = []string{"application/pdf"}
+
+// extByMime bildet den erkannten MIME-Type auf die gespeicherte Dateiendung ab
+// (Muster aus internal/media). Die Endung folgt damit immer dem Inhalt, nie
+// `hdr.Filename`: eine als `foto.html` hochgeladene PNG landet als `<uuid>.png`.
+var extByMime = map[string]string{
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/webp":      ".webp",
+	"application/pdf": ".pdf",
+}
+
+// octetStream ist der Auslieferungs-Fallback für alles, was beim Streamen nicht
+// zweifelsfrei als harmloser Typ erkannt wird.
+const octetStream = "application/octet-stream"
+
+// serveTypes sind die Typen, die beim Ausliefern als solche gesetzt werden
+// dürfen. Alles andere geht als application/octet-stream raus; `text/html` darf
+// unter dem App-Origin nie entstehen (die CSP erlaubt `script-src 'self'`, ein
+// ausgeliefertes HTML-Dokument wäre damit Stored XSS).
+var serveTypes = map[string]bool{
+	"image/jpeg":      true,
+	"image/png":       true,
+	"image/webp":      true,
+	"image/gif":       true,
+	"application/pdf": true,
+}
+
+// Sentinel-Fehler der Speicherpfade. Der Meldungstext bleibt unverändert, weil er
+// als HTTP-400-Body beim Client landet; `errors.Is` macht die Fälle für Aufrufer
+// (Bulk-Import) unterscheidbar, auch wenn die Meldung den erkannten Typ anhängt.
+var (
+	errTooLarge        = errors.New("too_large")
+	errUnsupportedType = errors.New("unsupported_type")
+)
 
 const (
 	maxPhotoBytes        = 5 << 20   // 5 MB
@@ -86,11 +126,59 @@ func sniffImageType(b []byte) string {
 	return ""
 }
 
+// typeAllowed prüft den erkannten MIME-Type gegen die Allowlist des Upload-Pfads.
+func typeAllowed(ct string, allowed []string) bool {
+	for _, t := range allowed {
+		if t == ct {
+			return true
+		}
+	}
+	return false
+}
+
+// detectAndValidate bestimmt den Typ eines Uploads ausschließlich aus seinen
+// ersten 512 Byte und liefert dazu die Dateiendung, unter der er gespeichert
+// wird. Reihenfolge: http.DetectContentType, dann sniffImageType als Fallback
+// (fängt WEBP-Varianten, die DetectContentType nicht kennt). Passt nichts in die
+// Allowlist, gibt es HTTP 400 mit dem erkannten Typ in der Meldung — der Client
+// soll sehen, was der Server gelesen hat, statt zu raten.
+//
+// Der Lesezeiger steht danach wieder auf 0, die Datei kann unverändert kopiert
+// werden. Weder `hdr.Header.Get("Content-Type")` noch `hdr.Filename` fließen ein.
+func detectAndValidate(file multipart.File, allowed []string) (string, string, error) {
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		return "", "", fmt.Errorf("cannot read file")
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", "", fmt.Errorf("cannot read file")
+	}
+	head := buf[:n]
+
+	mime := http.DetectContentType(head)
+	if !typeAllowed(mime, allowed) {
+		if s := sniffImageType(head); s != "" {
+			mime = s
+		}
+	}
+	if !typeAllowed(mime, allowed) {
+		return "", "", fmt.Errorf("%w (erkannt: %s)", errUnsupportedType, mime)
+	}
+	ext, ok := extByMime[mime]
+	if !ok {
+		// Allowlist und Endungs-Tabelle sind auseinandergelaufen — lieber
+		// ablehnen als eine Datei ohne Endung ablegen.
+		return "", "", fmt.Errorf("%w (erkannt: %s)", errUnsupportedType, mime)
+	}
+	return mime, ext, nil
+}
+
 // saveFile reads a multipart upload, validates type/size, writes to uploadDir/subdir, returns filename.
 func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string, maxBytes int64) (string, error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, maxBytes+1024)
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		return "", fmt.Errorf("too_large")
+		return "", errTooLarge
 	}
 	file, hdr, err := r.FormFile("file")
 	if err != nil {
@@ -106,36 +194,15 @@ func (h *Handler) saveFile(r *http.Request, subdir string, allowedTypes []string
 // maxBytes returns "too_large".
 func (h *Handler) persistMultipartFile(file multipart.File, hdr *multipart.FileHeader, subdir string, allowedTypes []string, maxBytes int64) (string, error) {
 	if hdr.Size > maxBytes {
-		return "", fmt.Errorf("too_large")
+		return "", errTooLarge
 	}
 
-	contentType := hdr.Header.Get("Content-Type")
-	isAllowed := func(ct string) bool {
-		for _, t := range allowedTypes {
-			if t == ct {
-				return true
-			}
-		}
-		return false
+	// Typ und Endung kommen ausschließlich aus dem Dateiinhalt (detectAndValidate);
+	// hdr.Header und hdr.Filename werden nicht gelesen.
+	_, ext, err := detectAndValidate(file, allowedTypes)
+	if err != nil {
+		return "", err
 	}
-	if !isAllowed(contentType) {
-		// Sniff from first bytes when Content-Type is absent or unrecognized
-		buf := make([]byte, 512)
-		n, _ := file.Read(buf)
-		if s, ok := file.(io.Seeker); ok {
-			s.Seek(0, io.SeekStart)
-		}
-		contentType = http.DetectContentType(buf[:n])
-		if !isAllowed(contentType) {
-			// Try magic bytes as final fallback
-			contentType = sniffImageType(buf[:n])
-		}
-		if !isAllowed(contentType) {
-			return "", fmt.Errorf("unsupported_type")
-		}
-	}
-
-	ext := filepath.Ext(hdr.Filename)
 	filename := uuid.NewString() + ext
 
 	dir := filepath.Join(h.uploadDir, subdir)
@@ -408,10 +475,14 @@ func (h *Handler) UploadSepaMandat(w http.ResponseWriter, r *http.Request) {
 // saveEncryptedBlob speichert einen bereits clientseitig verschlüsselten Datei-Blob roh
 // (keine Typ-Prüfung — Ciphertext ist kein PDF; keine Server-Verschlüsselung). Verlangt
 // den Client-Magic-Header, damit kein Klartext-PDF durchrutscht.
+//
+// Sniffing wäre hier sinnlos: der Blob hat per Konstruktion keinen erkennbaren Typ.
+// Die Endung ist deshalb fest `.bin`, und beim Ausliefern erkennt sniffStoredType den
+// Ciphertext als application/octet-stream → immer `attachment`, nie inline.
 func (h *Handler) saveEncryptedBlob(r *http.Request, subdir string, maxBytes int64) (string, error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, maxBytes+4096)
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		return "", fmt.Errorf("too_large")
+		return "", errTooLarge
 	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
@@ -500,8 +571,23 @@ func (h *Handler) SepaDownload(w http.ResponseWriter, r *http.Request) {
 }
 
 // streamFile liefert eine Datei direkt aus (Range-Support, kein Voll-Read in den RAM).
+//
+// Der Content-Type kommt aus den ersten 512 Byte der Datei, nicht aus ihrer Endung:
+// weder `users.photo_path` noch `members.sepa_mandat_path` haben eine MIME-Spalte,
+// es gibt also keinen gespeicherten Typ. Ohne gesetzten Header würde
+// http.ServeContent ihn aus dem Dateinamen raten und aus einer `.html` ein
+// `text/html` unter dem App-Origin machen — Stored XSS. Übernommen wird nur, was
+// in `serveTypes` steht, alles andere geht als application/octet-stream raus.
+// Alles, was kein Bild ist, zusätzlich als `attachment`; damit sind auch
+// Bestandsdateien mit falscher Endung entschärft (die Auslieferung entscheidet).
+//
 // Zero-Knowledge: SEPA-Mandat-Blobs sind clientseitig verschlüsselt; der Server streamt nur
 // den Ciphertext, der Browser entschlüsselt mit dem gewrappten DEK (kein Server-Decrypt).
+// Der Ciphertext wird als application/octet-stream erkannt und damit immer als
+// Download ausgeliefert.
+//
+// `X-Content-Type-Options: nosniff` setzt die globale Security-Header-Middleware
+// (internal/app/security_headers.go) — hier bewusst nicht dupliziert.
 func (h *Handler) streamFile(w http.ResponseWriter, r *http.Request, full, name string) {
 	f, err := os.Open(full)
 	if err != nil {
@@ -509,7 +595,47 @@ func (h *Handler) streamFile(w http.ResponseWriter, r *http.Request, full, name 
 		return
 	}
 	defer f.Close()
+
+	ct := sniffStoredType(f)
+	w.Header().Set("Content-Type", ct)
+	if !strings.HasPrefix(ct, "image/") {
+		w.Header().Set("Content-Disposition", `attachment; filename="`+sanitizeDispositionName(name)+`"`)
+	}
 	http.ServeContent(w, r, name, time.Time{}, f)
+}
+
+// sniffStoredType bestimmt den Typ einer gespeicherten Datei aus ihren ersten
+// 512 Byte und setzt den Lesezeiger zurück. Unbekannte oder gefährliche Typen
+// (allen voran text/html) fallen auf application/octet-stream.
+func sniffStoredType(f *os.File) string {
+	buf := make([]byte, 512)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return octetStream
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return octetStream
+	}
+	head := buf[:n]
+	if ct := http.DetectContentType(head); serveTypes[ct] {
+		return ct
+	}
+	if s := sniffImageType(head); serveTypes[s] {
+		return s
+	}
+	return octetStream
+}
+
+// sanitizeDispositionName entschärft einen Dateinamen für den quoted-string im
+// Content-Disposition-Header. Die Namen sind serverseitig erzeugte UUIDs, der
+// Schutz ist Vorsorge gegen Header-Injection bei Bestandspfaden.
+func sanitizeDispositionName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '"' || r == '\\' || r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, name)
 }
 
 // DELETE /api/members/{id}/sepa-mandat — authenticated
