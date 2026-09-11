@@ -267,6 +267,8 @@ var matrix = []endpointCase{
 	// Chat (einfache Operationen ohne Konversations-Membership)
 	{method: "GET", path: "/api/chat/users", expected: exAuth},
 	{method: "GET", path: "/api/chat/conversations", expected: exAuth},
+	// Suche: Sichtbarkeit pro Treffer im Handler (aktive Mitgliedschaft / broadcast_reads)
+	{method: "GET", path: "/api/chat/search", expected: exAuth},
 	{method: "POST", path: "/api/chat/conversations", expected: exAuth},
 	{method: "GET", path: "/api/chat/broadcasts", expected: exAuth},
 	// Broadcasts senden: Handler-Level-Gate über die Ziel-Allowlist des Absenders
