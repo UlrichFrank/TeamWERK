@@ -101,20 +101,39 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
 		grep -E '^(PORT|DB_PATH|JWT_SECRET|BASE_URL|SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_PASS|SMTP_FROM)=' .env | \
 		sed 's|DB_PATH=.*|DB_PATH=/var/lib/teamwerk/teamwerk.db|; s|BASE_URL=.*|BASE_URL=https://teamwerk.team-stuttgart.org|' | \
 		ssh $(REMOTE) "sudo mkdir -p /etc/teamwerk && sudo tee /etc/teamwerk/env > /dev/null && sudo chmod 600 /etc/teamwerk/env"
-	@# Storage-Verzeichnisse + zugehörige Env-Schlüssel idempotent sicherstellen.
-	@# Nötig, weil der Block oben /etc/teamwerk/env nur beim ERSTEN Deploy
-	@# schreibt: ein neuer Storage-Pfad fehlt auf Bestandsservern sonst dauerhaft.
-	@# Ohne Env-Eintrag greift der relative Default (./storage/... relativ zu
-	@# WorkingDirectory=/usr/local/bin) — dort darf www-data nicht schreiben, der
-	@# Prozess kommt nicht hoch und Nginx antwortet mit 502.
-	@for kv in "TRAINING_DIARY_DIR=$(TRAINING_DIARY_DIR_REMOTE)" "BEITRAGSLAUF_DIR=$(BEITRAGSLAUF_DIR_REMOTE)"; do \
-		key=$${kv%%=*}; dir=$${kv#*=}; \
-		ssh $(REMOTE) "sudo mkdir -p $$dir && sudo chown www-data:www-data $$dir && \
-			if ! sudo grep -q '^$$key=' /etc/teamwerk/env; then \
+	@# Storage-Verzeichnisse + zugehörige Env-Schlüssel idempotent sicherstellen,
+	@# dazu reine Konfig-Schlüssel ohne Verzeichnis (HSTS_ENABLED). Nötig, weil der
+	@# Block oben /etc/teamwerk/env nur beim ERSTEN Deploy schreibt: ein neuer
+	@# Schlüssel fehlt auf Bestandsservern sonst dauerhaft. Schlüssel mit Endung
+	@# _DIR bekommen zusätzlich mkdir+chown; Ohne Env-Eintrag greift bei diesen der
+	@# relative Default (./storage/... relativ zu WorkingDirectory=/usr/local/bin)
+	@# — dort darf www-data nicht schreiben, der Prozess kommt nicht hoch und
+	@# Nginx antwortet mit 502. HSTS_ENABLED=true setzt voraus, dass hier bereits
+	@# ein gültiges TLS-Zertifikat aktiv ist (siehe docs/agent/10-deployment.md) —
+	@# auf einem frischen VPS mit nur selbstsigniertem Zertifikat schreibt
+	@# deploy/setup-vps.sh den Schlüssel deshalb schon explizit als false vor, das
+	@# hier greift nur bei fehlendem Schlüssel.
+	@for kv in "TRAINING_DIARY_DIR=$(TRAINING_DIARY_DIR_REMOTE)" "BEITRAGSLAUF_DIR=$(BEITRAGSLAUF_DIR_REMOTE)" "HSTS_ENABLED=true"; do \
+		key=$${kv%%=*}; val=$${kv#*=}; \
+		mkcmd=""; \
+		case "$$key" in \
+			*_DIR) mkcmd="sudo mkdir -p $$val && sudo chown www-data:www-data $$val && " ;; \
+		esac; \
+		ssh $(REMOTE) "$${mkcmd}if ! sudo grep -q '^$$key=' /etc/teamwerk/env; then \
 				echo '$$kv' | sudo tee -a /etc/teamwerk/env > /dev/null; \
 				echo '  $$key in /etc/teamwerk/env ergänzt'; \
 			fi" || exit 1; \
 	done
+	@# JWT_SECRET-Mindestlänge VOR dem Restart prüfen (analog config.Load): ein zu
+	@# kurzes oder fehlendes Secret darf nicht erst beim Prozessstart auffallen,
+	@# sonst bleibt der alte Prozess unten (kein Halb-Deploy), aber die Migration
+	@# lief schon — deshalb Abbruch hier, bevor migrate/restart überhaupt laufen.
+	@echo "Prüfe JWT_SECRET-Länge auf $(REMOTE)..."
+	@ssh $(REMOTE) 'secret=$$(sudo grep "^JWT_SECRET=" /etc/teamwerk/env | cut -d= -f2-); \
+		if [ -z "$$secret" ] || [ $${#secret} -lt 32 ]; then \
+			echo "JWT_SECRET in /etc/teamwerk/env fehlt oder ist kuerzer als 32 Byte - Deploy abgebrochen (kein Restart)." >&2; \
+			exit 1; \
+		fi' || exit 1
 	ssh $(REMOTE) "sudo mkdir -p $(dir $(DB_PATH)) && \
 		if ! [ -f /etc/systemd/system/teamwerk.service ]; then \
 			sudo mv /tmp/teamwerk.service /etc/systemd/system/teamwerk.service && \
