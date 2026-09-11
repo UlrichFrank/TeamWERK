@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: '1.26.0'
+  GO_VERSION: '1.26.6'
   NODE_VERSION: '22'
   PNPM_VERSION: '11.17.0'
 
@@ -77,6 +77,37 @@ jobs:
           TEAMWERK_REQUIRE_XSD: '1'
 
       - run: pnpm -C web lint
+
+  # Läuft PARALLEL zu gate (kein needs). Eigener Job statt Schritt im Gate: die Datenbanken
+  # hinter govulncheck/pnpm audit sind extern (nicht dieses Repo) und können jederzeit einen
+  # neuen Alert auf unveränderten Code ziehen — das soll sichtbar rot werden, darf aber
+  # keinen Merge blockieren, den das Gate sonst freigäbe. `e2e` hängt weiterhin nur an `gate`
+  # (kein `needs: audit`).
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
+
+      - run: pnpm -C web install --frozen-lockfile
+      - run: pnpm -C web audit --audit-level=high
 
   # Läuft PARALLEL zu gate (kein needs). Playwright-Golden-Paths gegen die eingebettete
   # Prod-SPA + Seed-DB. Der webServer (web/e2e/playwright.config.ts) baut die Test-Binary

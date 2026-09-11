@@ -16,3 +16,24 @@
 # den Ist-Zustand (ein einziges Paket, dieses Verzeichnis) und ändert nichts.
 packages:
   - '.'
+
+# Security-Härtung Welle 1, Task 6.1: Dependabot-Alerts auf transitive Deps, die
+# kein direkter Eintrag in package.json sind (pnpm 10+ liest "pnpm.overrides" in
+# package.json nicht mehr, siehe https://pnpm.io/settings). Jede Zeile schließt
+# genau einen Alert; oberes Ende der Range bleibt in der jeweiligen Major-Linie,
+# um keinen ungeprüften Major-Bump transitiver Pakete einzuschleusen.
+overrides:
+  browserslist: '>=4.28.7'          # Dependabot high: browserslist
+  fast-uri: '>=3.1.6 <4'            # Dependabot high: fast-uri
+  undici: '>=7.29.0 <8'             # Dependabot high: undici
+  baseline-browser-mapping: '>=2.11.0' # Dependabot medium: baseline-browser-mapping
+  postcss-selector-parser: '>=6.1.3 <7' # Dependabot low: postcss-selector-parser
+  # `pnpm audit`: brace-expansion DoS (GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895).
+  # Zwei koexistierende Major-Linien im Baum (minimatch@5 -> brace-expansion@2.x
+  # via vite-plugin-pwa/workbox-build, minimatch@10 -> brace-expansion@5.x via
+  # eslint/glob) — je Elternversion gescopet, damit kein globaler Major-Bump
+  # eine der beiden Linien in die falsche Richtung zieht.
+  minimatch@5>brace-expansion: '>=2.1.4 <3'
+  minimatch@10>brace-expansion: '>=5.0.9'
+  # `pnpm audit`: nanoid custom-generator infinite loop bei size=0 (GHSA-2v37-7h3g-55p8).
+  nanoid: '>=3.3.18 <4'
