@@ -36,7 +36,8 @@ export default defineConfig({
     command:
       'go build -o ./bin/teamwerk-e2e ./cmd/teamwerk && ' +
       './bin/teamwerk-e2e e2e-seed --db=./e2e.db && ' +
-      `DB_PATH=./e2e.db PORT=${PORT} LOG_FORMAT=text JWT_SECRET=e2e-test-secret MAILER_DISABLED=true ` +
+      // JWT_SECRET muss >= 32 Byte sein (config.Load lehnt kürzere Secrets ab).
+      `DB_PATH=./e2e.db PORT=${PORT} LOG_FORMAT=text JWT_SECRET=e2e-test-secret-at-least-32-bytes-long MAILER_DISABLED=true ` +
       // AUTH_RATE_LIMIT_PER_MIN=0 schaltet die IP-Drosselung ab: Login UND Refresh teilen
       // denselben Bucket (10/min default), und parallele Worker + Auto-Refresh von localhost
       // erschöpfen ihn sonst → 429 → Login schlägt sporadisch fehl (chat-Seiten am ehesten).

@@ -263,3 +263,163 @@ func TestServe_Unauth(t *testing.T) {
 		t.Fatalf("expected 401, got %d", getRes.StatusCode)
 	}
 }
+
+// ── Objekt-Gate (security-haertung-welle-1, Entscheidung 3) ───────────────────
+
+// uploadMedia lädt ein PNG als uid hoch und gibt die media-ID zurück.
+func uploadMedia(t *testing.T, srv *httptest.Server, db *sql.DB, uid int) int {
+	t.Helper()
+	res := upload(t, srv.URL+"/api/media/upload", testutil.Token(t, uid, "standard", nil), pngBytes)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("upload: expected 201, got %d", res.StatusCode)
+	}
+	var body struct {
+		MediaID int `json:"mediaId"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return body.MediaID
+}
+
+// TestServe_FremderNutzer404 hält die Kernzusage fest: wer weder hochgeladen
+// hat noch das referenzierende Objekt sehen darf, bekommt 404 — nicht 403,
+// damit die Existenz einer ID nicht erratbar ist.
+func TestServe_FremderNutzer404(t *testing.T) {
+	db := testutil.NewDB(t)
+	uploader := testutil.CreateUser(t, db, "standard")
+	fremder := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+
+	mediaID := uploadMedia(t, srv, db, uploader)
+
+	res := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
+		testutil.Token(t, fremder, "standard", nil))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("Fremder: erwartet 404, bekommen %d", res.StatusCode)
+	}
+}
+
+// TestServe_AdminOhneBezug404: eine Vereinsfunktion verschafft keinen Zugang
+// zu fremden Chat-Bildern — auch der System-Admin nicht.
+func TestServe_AdminOhneBezug404(t *testing.T) {
+	db := testutil.NewDB(t)
+	uploader := testutil.CreateUser(t, db, "standard")
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := newMediaServer(t, db)
+
+	mediaID := uploadMedia(t, srv, db, uploader)
+
+	res := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
+		testutil.Token(t, adminID, "admin", nil))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("admin ohne Bezug: erwartet 404, bekommen %d", res.StatusCode)
+	}
+}
+
+// TestServe_KonversationsmitgliedOK: das Bild hängt an einer Nachricht in einer
+// Konversation, in der der Abrufende Mitglied ist → 200.
+func TestServe_KonversationsmitgliedOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	sender := testutil.CreateUser(t, db, "standard")
+	empfaenger := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+
+	mediaID := uploadMedia(t, srv, db, sender)
+
+	res, err := db.Exec(`INSERT INTO conversations (type, name, created_by) VALUES ('group', 'Gruppe', ?)`, sender)
+	if err != nil {
+		t.Fatalf("conversations: %v", err)
+	}
+	convID, _ := res.LastInsertId()
+	for _, uid := range []int{sender, empfaenger} {
+		if _, err := db.Exec(
+			`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`, convID, uid); err != nil {
+			t.Fatalf("conversation_members: %v", err)
+		}
+	}
+	if _, err := db.Exec(
+		`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
+		convID, sender, mediaID); err != nil {
+		t.Fatalf("messages: %v", err)
+	}
+
+	getRes := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
+		testutil.Token(t, empfaenger, "standard", nil))
+	defer getRes.Body.Close()
+	if getRes.StatusCode != http.StatusOK {
+		t.Fatalf("Konversationsmitglied: erwartet 200, bekommen %d", getRes.StatusCode)
+	}
+}
+
+// TestServe_AusgetretenesMitgliedOK: der Verlauf bleibt lesbar — wer die Gruppe
+// verlassen hat (left_at gesetzt), sieht die Bilder seiner Zeit weiter.
+func TestServe_AusgetretenesMitgliedOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	sender := testutil.CreateUser(t, db, "standard")
+	ausgetreten := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+
+	mediaID := uploadMedia(t, srv, db, sender)
+
+	res, err := db.Exec(`INSERT INTO conversations (type, name, created_by) VALUES ('group', 'Gruppe', ?)`, sender)
+	if err != nil {
+		t.Fatalf("conversations: %v", err)
+	}
+	convID, _ := res.LastInsertId()
+	db.Exec(`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`, convID, sender)
+	db.Exec(`INSERT INTO conversation_members (conversation_id, user_id, left_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
+		convID, ausgetreten)
+	if _, err := db.Exec(
+		`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
+		convID, sender, mediaID); err != nil {
+		t.Fatalf("messages: %v", err)
+	}
+
+	getRes := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
+		testutil.Token(t, ausgetreten, "standard", nil))
+	defer getRes.Body.Close()
+	if getRes.StatusCode != http.StatusOK {
+		t.Fatalf("ausgetretenes Mitglied: erwartet 200, bekommen %d", getRes.StatusCode)
+	}
+}
+
+// TestServe_MitteilungsempfaengerOK: das Bild hängt an einer Mitteilung, für
+// die der Abrufende eine broadcast_reads-Zeile hat → 200.
+func TestServe_MitteilungsempfaengerOK(t *testing.T) {
+	db := testutil.NewDB(t)
+	sender := testutil.CreateUser(t, db, "standard")
+	empfaenger := testutil.CreateUser(t, db, "standard")
+	fremder := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+
+	mediaID := uploadMedia(t, srv, db, sender)
+
+	res, err := db.Exec(`INSERT INTO broadcasts (sender_id, body, media_id) VALUES (?, '', ?)`, sender, mediaID)
+	if err != nil {
+		t.Fatalf("broadcasts: %v", err)
+	}
+	broadcastID, _ := res.LastInsertId()
+	if _, err := db.Exec(
+		`INSERT INTO broadcast_reads (broadcast_id, user_id) VALUES (?, ?)`, broadcastID, empfaenger); err != nil {
+		t.Fatalf("broadcast_reads: %v", err)
+	}
+
+	okRes := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
+		testutil.Token(t, empfaenger, "standard", nil))
+	defer okRes.Body.Close()
+	if okRes.StatusCode != http.StatusOK {
+		t.Fatalf("Mitteilungsempfänger: erwartet 200, bekommen %d", okRes.StatusCode)
+	}
+
+	// Gegenprobe: ohne broadcast_reads-Zeile bleibt es bei 404.
+	denyRes := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
+		testutil.Token(t, fremder, "standard", nil))
+	defer denyRes.Body.Close()
+	if denyRes.StatusCode != http.StatusNotFound {
+		t.Fatalf("Nicht-Empfänger: erwartet 404, bekommen %d", denyRes.StatusCode)
+	}
+}

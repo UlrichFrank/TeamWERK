@@ -3,7 +3,7 @@ import { ShieldCheck, Lock, LockOpen, AlertTriangle } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useVault } from '../../contexts/VaultContext'
 import { useLiveUpdates } from '../../hooks/useLiveUpdates'
-import { generateVaultSetup, rewrapPrivateKeyForRotation } from '../../lib/crypto'
+import { generateVaultSetup } from '../../lib/crypto'
 import { BTN_PRIMARY, BTN_SECONDARY } from '../../lib/buttonStyles'
 
 const INPUT =
@@ -13,11 +13,12 @@ const ALERT_ERR = 'p-3 bg-brand-danger-light border border-brand-danger/30 round
 const ALERT_INFO = 'p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text'
 
 export default function TresorPage() {
-  const { isUnlocked, privateKey, unlock, lock } = useVault()
+  const { isUnlocked, unlock, rotate, lock } = useVault()
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [pass, setPass] = useState('')
   const [confirm, setConfirm] = useState('')
   const [rotating, setRotating] = useState(false)
+  const [currentPass, setCurrentPass] = useState('')
   const [newPass, setNewPass] = useState('')
   const [newConfirm, setNewConfirm] = useState('')
   const [rotateMsg, setRotateMsg] = useState<string | null>(null)
@@ -79,7 +80,6 @@ export default function TresorPage() {
   async function handleRotate(e: FormEvent) {
     e.preventDefault()
     setRotateMsg(null)
-    if (!privateKey) return
     if (newPass.length < 12) {
       setRotateMsg('Die neue Passphrase muss mindestens 12 Zeichen lang sein.')
       return
@@ -91,13 +91,20 @@ export default function TresorPage() {
     setBusy(true)
     try {
       // Passphrase-Rotation (O(1)): denselben privaten Schlüssel unter neuer Passphrase
-      // neu verschlüsseln — Keypair und DEKs bleiben unverändert.
-      const rot = await rewrapPrivateKeyForRotation(privateKey, newPass)
+      // neu verschlüsseln — Keypair und DEKs bleiben unverändert. Dafür wird die aktuelle
+      // Passphrase erneut gebraucht: der im Tresor gecachte Schlüssel ist bewusst nicht
+      // exportierbar (XSS-Schutz) und lässt sich deshalb nicht neu verpacken.
+      const rot = await rotate(currentPass, newPass)
+      if (!rot) {
+        setRotateMsg('Die aktuelle Passphrase ist falsch.')
+        return
+      }
       await api.put('/admin/rotate-encryption', {
         group_private_key_enc: rot.groupPrivateKeyEnc,
         vorstand_kdf_salt: rot.vorstandKdfSalt,
         vorstand_key_check: rot.vorstandKeyCheck,
       })
+      setCurrentPass('')
       setNewPass('')
       setNewConfirm('')
       setRotating(false)
@@ -159,6 +166,13 @@ export default function TresorPage() {
                   <input
                     type="password"
                     className={INPUT}
+                    placeholder="Aktuelle Passphrase"
+                    value={currentPass}
+                    onChange={e => setCurrentPass(e.target.value)}
+                  />
+                  <input
+                    type="password"
+                    className={INPUT}
                     placeholder="Neue Passphrase (min. 12 Zeichen)"
                     value={newPass}
                     onChange={e => setNewPass(e.target.value)}
@@ -171,13 +185,18 @@ export default function TresorPage() {
                     onChange={e => setNewConfirm(e.target.value)}
                   />
                   <div className="flex gap-2">
-                    <button type="submit" disabled={busy || !newPass || !newConfirm} className={BTN_PRIMARY}>
+                    <button
+                      type="submit"
+                      disabled={busy || !currentPass || !newPass || !newConfirm}
+                      className={BTN_PRIMARY}
+                    >
                       Passphrase rotieren
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         setRotating(false)
+                        setCurrentPass('')
                         setNewPass('')
                         setNewConfirm('')
                       }}

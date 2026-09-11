@@ -198,6 +198,26 @@ func (h *Handler) parentHasChild(ctx context.Context, parentUserID, memberID int
 	return count > 0, err
 }
 
+// parentHasChildInKader beantwortet „hat dieser Elternteil ein Kind in diesem
+// Kader?" — Stammkader oder erweiterter Kader. Spiegelt den Eltern-Zweig der
+// Sichtbarkeits-Bedingung von ListSessions; beide Fundstellen müssen
+// deckungsgleich bleiben, sonst erscheint ein Termin in der Liste, dessen
+// Detailansicht 403 liefert (oder umgekehrt).
+func (h *Handler) parentHasChildInKader(ctx context.Context, parentUserID, kaderID int) (bool, error) {
+	var ok bool
+	err := h.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM kader_members pm
+			JOIN family_links fl ON fl.member_id = pm.member_id
+			WHERE fl.parent_user_id = ? AND pm.kader_id = ?
+			UNION ALL
+			SELECT 1 FROM kader_extended_members kem
+			JOIN family_links fl2 ON fl2.member_id = kem.member_id
+			WHERE fl2.parent_user_id = ? AND kem.kader_id = ?
+		)`, parentUserID, kaderID, parentUserID, kaderID).Scan(&ok)
+	return ok, err
+}
+
 // generateSessionDates returns all dates in [from, until] matching dayOfWeek (0=Mon…6=Sun).
 func generateSessionDates(from, until time.Time, dayOfWeek int) []time.Time {
 	// Convert our 0=Monday scheme to Go's time.Weekday (Sunday=0, Monday=1…)
@@ -1558,6 +1578,33 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 	s.AmIParticipant = amIParticipant == 1
 	s.AttendanceTracked = attendanceTracked == 1
+
+	// Objekt-Gate: den Termin sehen darf, wer ihn verwalten darf
+	// (hasKaderAccess: admin/vorstand/sportliche_leitung/Trainer des Kaders),
+	// wer selbst zum Kader gehört (am_i_participant: Stammkader, erweiterter
+	// Kader, Trainer) oder wer ein Kind darin hat. Das ist exakt die
+	// Sichtbarkeits-Bedingung von ListSessions — driftet eine der beiden, wird
+	// ein gelisteter Termin beim Öffnen 403 (oder ein fremder bleibt lesbar).
+	// Die Prüfung läuft VOR dem Nachladen der Antworten: die Antwortliste nennt
+	// Namen und Absagegründe fremder Mitglieder.
+	if !s.AmIParticipant {
+		mayAccess, err := h.hasKaderAccess(r.Context(), claims, s.KaderID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if !mayAccess && claims.IsParent {
+			mayAccess, err = h.parentHasChildInKader(r.Context(), claims.UserID, s.KaderID)
+			if err != nil {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+		}
+		if !mayAccess {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
 	if vID.Valid {
 		s.Venue = &sessionVenueRef{
 			ID: int(vID.Int64), Name: vName.String, Street: vStreet.String,

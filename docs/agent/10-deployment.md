@@ -1,6 +1,6 @@
 # Deployment & VPS
 
-IONOS VPS Linux XS+ · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN — **kein** `FIELD_ENCRYPTION_KEY` mehr, Zero-Knowledge). DB `/var/lib/teamwerk/teamwerk.db`. **Backup-relevante Storage-Pfade** neben der DB: `BEITRAGSLAUF_DIR` (append-only Saison-Protokolle) und `TRAINING_DIARY_DIR` (Trainingsnachweise) — beide liegen unter `/var/lib/teamwerk/…` und werden von `make backup-files` mitgesichert; die Nachweise werden rollierend 90 Tage nach Saisonende automatisch bereinigt, ein älteres Backup holt gelöschte Nachweise also zurück. **Storage-Pfade müssen absolut in `/etc/teamwerk/env` stehen**: die relativen Defaults (`./storage/…`) lösen gegen `WorkingDirectory=/usr/local/bin` auf, wo `www-data` nicht schreiben darf. Der Env-Block im `deploy`-Target schreibt die Datei nur beim **ersten** Deploy — ein neu hinzugekommener Pfad fehlt auf Bestandsservern sonst dauerhaft, deshalb legt `make deploy` `TRAINING_DIARY_DIR` und `BEITRAGSLAUF_DIR` bei jedem Lauf idempotent an und ergänzt fehlende Env-Schlüssel. Beim Hinzufügen eines weiteren Storage-Pfads: diese Schleife im `deploy`-Target, `setup-vps.sh`, `.env.example` und die Backup-/Umzugs-Targets mitziehen. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
+IONOS VPS Linux XS+ · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN, HSTS_ENABLED — **kein** `FIELD_ENCRYPTION_KEY` mehr, Zero-Knowledge). DB `/var/lib/teamwerk/teamwerk.db`. **Backup-relevante Storage-Pfade** neben der DB: `BEITRAGSLAUF_DIR` (append-only Saison-Protokolle) und `TRAINING_DIARY_DIR` (Trainingsnachweise) — beide liegen unter `/var/lib/teamwerk/…` und werden von `make backup-files` mitgesichert; die Nachweise werden rollierend 90 Tage nach Saisonende automatisch bereinigt, ein älteres Backup holt gelöschte Nachweise also zurück. **Storage-Pfade müssen absolut in `/etc/teamwerk/env` stehen**: die relativen Defaults (`./storage/…`) lösen gegen `WorkingDirectory=/usr/local/bin` auf, wo `www-data` nicht schreiben darf. Der Env-Block im `deploy`-Target schreibt die Datei nur beim **ersten** Deploy — ein neu hinzugekommener Pfad fehlt auf Bestandsservern sonst dauerhaft, deshalb legt `make deploy` `TRAINING_DIARY_DIR` und `BEITRAGSLAUF_DIR` bei jedem Lauf idempotent an und ergänzt fehlende Env-Schlüssel. Beim Hinzufügen eines weiteren Storage-Pfads: diese Schleife im `deploy`-Target, `setup-vps.sh`, `.env.example` und die Backup-/Umzugs-Targets mitziehen. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
 
 SSH-Alias `teamwerk.team-stuttgart.org` (in `.env`), direkt `https://31.70.110.19`. Domain + Certbot-Zertifikat noch ausstehend.
 
@@ -83,3 +83,31 @@ festgehaltener Vorbehalt aus `openspec/changes/h4a-import/design.md` §2.
 **Der Vereins-Account ist geteilt.** Der Server sieht das Passwort transient (er stellt den
 H4A-Request), speichert es aber nirgends. Diese Modellgrenze muss dem Vorstand bewusst
 sein — sie ist bewusst schwächer als der Zero-Knowledge-Kurs bei den Bankdaten.
+
+## Vor dem Deploy der Sicherheitswelle 1 (09/2026)
+
+`openspec/changes/security-haertung-welle-1/design.md`, Entscheidungen 5/6. Vier Punkte,
+die vor bzw. mit diesem Deploy zu beachten sind:
+
+1. **`JWT_SECRET` auf dem VPS prüfen.** `config.Load` lehnt seit dieser Welle ein Secret
+   < 32 Byte oder den unveränderten Beispielwert (`change-me-to-a-random-secret`) mit
+   Startabbruch ab — ein zu kurzes Bestandssecret bringt den Prozess sonst erst beim
+   Neustart zu Fall. `make deploy` prüft das automatisch vor dem Restart (derselbe Check
+   wie unten, kein Halb-Deploy: Migration lief schon, alter Prozess bleibt unten). Manuell
+   nachvollziehen:
+   ```bash
+   ssh teamwerk.team-stuttgart.org 'secret=$(sudo grep "^JWT_SECRET=" /etc/teamwerk/env | cut -d= -f2-); echo "Laenge: ${#secret}"'
+   ```
+   Bei < 32: neues Secret setzen (`openssl rand -base64 48`) — das **invalidiert alle
+   bestehenden Access-/Refresh-Token**, alle Nutzer müssen sich neu anmelden.
+2. **`HSTS_ENABLED=true`** wird von `make deploy` idempotent in `/etc/teamwerk/env`
+   ergänzt (analog `TRAINING_DIARY_DIR`/`BEITRAGSLAUF_DIR`). Voraussetzung: ein zum
+   Deploy-Zeitpunkt bereits gültiges TLS-Zertifikat — auf einem frischen VPS mit nur
+   selbstsigniertem Zertifikat trägt `deploy/setup-vps.sh` den Schlüssel deshalb explizit
+   als `false` vor.
+3. **Tresor-Inhaber (Vorstand/Kassierer) müssen den Bankdaten-Tresor nach dem Deploy
+   einmal neu entsperren.** Der private Vereinsschlüssel liegt jetzt als
+   nicht-exportierbarer `CryptoKey` in IndexedDB statt als PKCS8 in `sessionStorage`
+   (Entscheidung 2) — das alte Format wird nicht migriert, sondern beim Mount entfernt.
+4. **Migration `060`** (Event-Log-Kategorie `admin`, für den Impersonation-Audit) läuft
+   automatisch mit `make deploy`/`make migrate-remote-up`, kein manueller Schritt nötig.

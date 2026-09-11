@@ -810,3 +810,71 @@ func TestMigration051_LeertTeamIdNurBeiSpielgebundenenSlots(t *testing.T) {
 		t.Fatalf("migrate down to 50: %v", err)
 	}
 }
+
+// TestMigration060_AdminCategoryRoundtrip prüft die Impersonation-Audit-Migration
+// (security-haertung-welle-1, Entscheidung 7): 'admin' wird nach dem up-Rebuild als
+// Kategorie akzeptiert, bestehende Zeilen überleben den Rebuild, und down entfernt
+// 'admin'-Zeilen wieder und stellt den alten, engeren CHECK her.
+func TestMigration060_AdminCategoryRoundtrip(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(50); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 50: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO users (id, email, password) VALUES (9101, 'g@x.test', 'x')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO user_events (user_id, category, title) VALUES (9101, 'games', 'Bestandszeile')`); err != nil {
+		t.Fatalf("seed Bestandszeile vor 060: %v", err)
+	}
+
+	if err := m.Migrate(60); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 60: %v", err)
+	}
+
+	var bestandCount int
+	if err := sqlDB.QueryRow(
+		`SELECT COUNT(*) FROM user_events WHERE user_id=9101 AND category='games'`,
+	).Scan(&bestandCount); err != nil {
+		t.Fatalf("query Bestandszeile nach 060 up: %v", err)
+	}
+	if bestandCount != 1 {
+		t.Errorf("erwartet Bestandszeile überlebt den Rebuild, bekam count=%d", bestandCount)
+	}
+
+	if _, err := sqlDB.Exec(
+		`INSERT INTO user_events (user_id, category, title) VALUES (9101, 'admin', 'Als X angemeldet')`,
+	); err != nil {
+		t.Errorf("erwartet 'admin' als erlaubte Kategorie nach 060 up, bekam: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO user_events (user_id, category, title) VALUES (9101, 'chat', 't')`,
+	); err == nil {
+		t.Error("erwartet CHECK-Verletzung für category='chat' auch nach 060 up")
+	}
+
+	if err := m.Migrate(59); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate down to 59: %v", err)
+	}
+
+	var adminCount int
+	if err := sqlDB.QueryRow(
+		`SELECT COUNT(*) FROM user_events WHERE category='admin'`,
+	).Scan(&adminCount); err != nil {
+		t.Fatalf("query admin-Zeilen nach 060 down: %v", err)
+	}
+	if adminCount != 0 {
+		t.Errorf("erwartet 'admin'-Zeilen nach down gelöscht, bekam count=%d", adminCount)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO user_events (user_id, category, title) VALUES (9101, 'admin', 't')`,
+	); err == nil {
+		t.Error("erwartet CHECK-Verletzung für category='admin' nach 060 down (alter CHECK wiederhergestellt)")
+	}
+
+	// erneut hoch: der Rebuild muss wiederholbar sein.
+	if err := m.Migrate(60); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 60 (erneut): %v", err)
+	}
+}

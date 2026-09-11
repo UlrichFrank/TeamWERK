@@ -3147,16 +3147,29 @@ func (h *Handler) myTeamsInEvent(ctx context.Context, gameID, userID int) (map[i
 }
 
 // POST /api/games/{id}/lineup
+//
+// Objekt-Gate statt Tier-Gate (security-haertung-welle-1, Entscheidung 4): die
+// Aufstellung gehört zu genau einem Spiel, also entscheidet die Beteiligung an
+// diesem Spiel — nicht die Vereinsfunktion allein. Wiederverwendet wird
+// canRecordGameAttendance (admin und sportliche_leitung vereinsweit, sonst
+// Trainer eines beteiligten Teams); die Semantik ist dieselbe wie bei der
+// Anwesenheit, inklusive des bewussten Ausschlusses des reinen Vorstands.
 func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
-	if claims.Role != "admin" && !claims.HasFunction("trainer") {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
 
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 

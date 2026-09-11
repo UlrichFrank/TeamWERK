@@ -1133,6 +1133,16 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Objekt-Gate (security-haertung-welle-1): eine Lesebestätigung ist eine
+	// Schreiboperation in fremden Nachrichten — nur aktive Mitglieder der
+	// Konversation. Ohne diese Prüfung konnte jeder Eingeloggte für jede
+	// beliebige convID message_reads-Zeilen anlegen und damit fremden Absendern
+	// ein Read-Receipt vortäuschen.
+	if !h.isActiveMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	// Vor dem INSERT die pro Absender höchste JETZT neu-zu-markierende message_id
 	// erfassen — nach dem INSERT OR IGNORE ist ein neuer Read nicht mehr von einem
 	// Bestands-Read unterscheidbar.
@@ -1169,6 +1179,17 @@ func (h *Handler) LeaveConversation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	// Objekt-Gate (security-haertung-welle-1): austreten kann nur, wer aktiv
+	// drin ist. Vorher schrieb jeder Eingeloggte für jede Gruppe eine
+	// System-Nachricht "hat die Gruppe verlassen" in den Verlauf — auch ohne je
+	// Mitglied gewesen zu sein, und ein bereits Ausgetretener beliebig oft.
+	// Die Prüfung steht vor der Typ-Prüfung, damit ein Fremder nicht einmal
+	// erfährt, ob hinter der ID eine Gruppe oder ein Direkt-Chat steckt.
+	if !h.isActiveMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	if convType != "group" {
 		http.Error(w, "cannot leave direct conversation", http.StatusBadRequest)
 		return

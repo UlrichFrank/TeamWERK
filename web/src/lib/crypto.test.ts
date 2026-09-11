@@ -133,7 +133,9 @@ describe('Tresor-Einrichtung & Key-Check (End-to-End)', () => {
 
     // Mit alter Passphrase entsperren → Privatschlüssel → unter neuer Passphrase neu wrappen.
     const kekOld = await deriveKEK('alt', setup.vorstandKdfSalt)
-    const priv = await decryptPrivateKey(setup.groupPrivateKeyEnc, kekOld)
+    // Rotation braucht den exportierbaren Schlüssel (wie VaultContext.rotate); der
+    // Default ist seit der Sicherheitswelle 1 nicht exportierbar.
+    const priv = await decryptPrivateKey(setup.groupPrivateKeyEnc, kekOld, { extractable: true })
     const rot = await rewrapPrivateKeyForRotation(priv, 'neu')
 
     // Alte Passphrase ist jetzt wertlos, neue funktioniert.

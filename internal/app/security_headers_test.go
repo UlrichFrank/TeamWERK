@@ -39,12 +39,14 @@ func TestSecurityHeaders_Present(t *testing.T) {
 	}
 }
 
-// B-4: HSTS wird nur bei aktivem Flag gesetzt.
+// B-4: HSTS wird nur bei aktivem Flag gesetzt, dann mit exaktem Wert
+// (2 Jahre, includeSubDomains; kein preload, siehe design.md Entscheidung 5).
 func TestSecurityHeaders_HSTSGated(t *testing.T) {
 	if got := serveThroughSecurityHeaders(t, false).Get("Strict-Transport-Security"); got != "" {
 		t.Errorf("HSTS sollte ohne Flag fehlen, war %q", got)
 	}
-	if got := serveThroughSecurityHeaders(t, true).Get("Strict-Transport-Security"); !strings.Contains(got, "max-age=") {
-		t.Errorf("HSTS mit Flag: erwartet max-age, bekam %q", got)
+	const wantHSTS = "max-age=63072000; includeSubDomains"
+	if got := serveThroughSecurityHeaders(t, true).Get("Strict-Transport-Security"); got != wantHSTS {
+		t.Errorf("HSTS mit Flag: erwartet %q, bekam %q", wantHSTS, got)
 	}
 }

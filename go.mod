@@ -2,6 +2,8 @@ module github.com/teamstuttgart/teamwerk
 
 go 1.26.0
 
+toolchain go1.26.6
+
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/go-chi/chi/v5 v5.3.1
@@ -14,8 +16,8 @@ require (
 	github.com/tus/tusd/v2 v2.10.0
 	github.com/yuin/goldmark v1.8.5
 	golang.org/x/crypto v0.54.0
-	golang.org/x/image v0.44.0
-	golang.org/x/text v0.40.0
+	golang.org/x/image v0.45.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.55.0
 )
 

@@ -93,14 +93,29 @@ export async function encryptPrivateKey(priv: CryptoKey, kek: CryptoKey): Promis
   return bufToB64(out.buffer)
 }
 
-export async function decryptPrivateKey(encB64: string, kek: CryptoKey): Promise<CryptoKey> {
+// Der entschlüsselte Privatschlüssel wird standardmäßig NICHT exportierbar importiert: so
+// kann ein XSS ihn zwar benutzen, solange die Seite offen ist, aber nicht exfiltrieren.
+// `extractable: true` braucht nur, wer die PKCS8-Bytes danach wirklich herausschreibt —
+// heute ausschließlich die Passphrase-Rotation (`rewrapPrivateKeyForRotation` →
+// `encryptPrivateKey` → `exportKey('pkcs8', …)`). Solche Aufrufe verwerfen den Schlüssel
+// sofort wieder; gecacht (VaultContext/IndexedDB) wird immer nur die nicht-exportierbare
+// Variante.
+export async function decryptPrivateKey(
+  encB64: string,
+  kek: CryptoKey,
+  opts?: { extractable?: boolean },
+): Promise<CryptoKey> {
   const buf = new Uint8Array(b64ToBuf(encB64))
   const iv = buf.slice(0, IV_BYTES) as BufferSource
   const data = buf.slice(IV_BYTES) as BufferSource
   const pkcs8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, kek, data)
-  return crypto.subtle.importKey('pkcs8', pkcs8, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, [
-    'unwrapKey',
-  ])
+  return crypto.subtle.importKey(
+    'pkcs8',
+    pkcs8,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    opts?.extractable ?? false,
+    ['unwrapKey'],
+  )
 }
 
 // --- DEK-Erzeugung + Wrapping an das Gruppen-Keypair ---
@@ -205,6 +220,9 @@ export async function generateVaultSetup(passphrase: string): Promise<VaultSetup
 
 // Passphrase-Rotation (O(1)): denselben privaten Schlüssel unter einer neuen Passphrase
 // neu verschlüsseln. Keypair (und damit alle DEKs) bleiben unverändert.
+// `priv` MUSS exportierbar sein (`decryptPrivateKey(…, { extractable: true })`) — der im
+// Tresor gecachte Schlüssel ist es bewusst nicht; die Rotation entschlüsselt ihn deshalb
+// mit der eingegebenen aktuellen Passphrase frisch (siehe VaultContext.rotate).
 export async function rewrapPrivateKeyForRotation(
   priv: CryptoKey,
   newPassphrase: string,

@@ -3,6 +3,7 @@ package upload
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -95,7 +96,9 @@ func (h *Handler) BulkImportSepaMandate(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) processBulkFile(r *http.Request, hdr *multipart.FileHeader, report *bulkImportReport) bool {
 	basename := strings.TrimSuffix(hdr.Filename, filepath.Ext(hdr.Filename))
 
-	// Pre-validate: PDF extension required (cheap check before matching).
+	// Billiger Vorfilter vor dem Member-Matching. Er entscheidet nichts über die
+	// gespeicherte Datei: Typ und Endung bestimmt allein das Byte-Sniffing in
+	// persistMultipartFile (detectAndValidate).
 	if !strings.EqualFold(filepath.Ext(hdr.Filename), ".pdf") {
 		report.NoMatch = append(report.NoMatch, bulkImportEntry{
 			Filename: hdr.Filename, Reason: "kein PDF",
@@ -172,10 +175,10 @@ func (h *Handler) tryStoreForMember(r *http.Request, hdr *multipart.FileHeader, 
 	stored, err := h.persistMultipartFile(file, hdr, "sepa-mandats", pdfOnlyTypes, maxBulkSepaFileBytes)
 	if err != nil {
 		reason := err.Error()
-		switch reason {
-		case "too_large":
+		switch {
+		case errors.Is(err, errTooLarge):
 			reason = "zu groß (>10 MB)"
-		case "unsupported_type":
+		case errors.Is(err, errUnsupportedType):
 			reason = "kein PDF"
 		}
 		report.NoMatch = append(report.NoMatch, bulkImportEntry{

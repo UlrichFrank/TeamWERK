@@ -125,6 +125,17 @@ func Load() (*Config, error) {
 	if c.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
 	}
+	// Fail-Fast gegen zwei bekannte Schwächungen: den unveränderten Platzhalter aus
+	// .env.example (Klartext im Repo, jedem bekannt) und ein zu kurzes Secret (HMAC-
+	// Brute-Force). Reihenfolge bewusst: der Platzhalter ist selbst kürzer als 32 Byte,
+	// die spezifischere Meldung ("Beispielwert") soll die generische Längenmeldung
+	// nicht verdecken.
+	if c.JWTSecret == "change-me-to-a-random-secret" {
+		return nil, fmt.Errorf("JWT_SECRET is the example value from .env.example; set a real secret")
+	}
+	if len(c.JWTSecret) < 32 {
+		return nil, fmt.Errorf("JWT_SECRET must be at least 32 bytes (got %d); generate one with: openssl rand -base64 48", len(c.JWTSecret))
+	}
 	// Fail-Fast: Im Produktionsmodus (LOG_FORMAT != "text" — derselbe Schalter, der
 	// json- statt Klartext-Logs aktiviert, vgl. setupLogger) muss das Stream-Secret
 	// gesetzt sein. Ohne Secret könnten Stream-Token nicht signiert/verifiziert

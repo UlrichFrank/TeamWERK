@@ -39,6 +39,10 @@ if [ ! -f /etc/teamwerk/env ]; then
 PORT=8080
 BASE_URL=https://REPLACE_WITH_DOMAIN
 DB_PATH=/var/lib/teamwerk/teamwerk.db
+# Strict-Transport-Security-Header. Bleibt false, solange nur das selbstsignierte
+# Zertifikat aus Schritt 5 aktiv ist — erst nach Domain+Certbot (siehe Runbook)
+# manuell auf true setzen oder mit \`make deploy\` nachziehen lassen.
+HSTS_ENABLED=false
 UPLOAD_DIR=/var/lib/teamwerk/uploads
 FILES_DIR=/var/lib/teamwerk/files
 MEDIA_DIR=/var/lib/teamwerk/media

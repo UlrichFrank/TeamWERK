@@ -23,7 +23,7 @@ Das System SHALL auf allen HTTP-Antworten die folgenden Header setzen: `X-Frame-
 
 ### Requirement: HSTS erst nach TLS-Aufschaltung
 
-Das System SHALL `Strict-Transport-Security` NUR dann senden, wenn TLS/Live-Zertifikat aktiv ist; die Aktivierung SHALL über Konfiguration steuerbar sein und im Standard (vor Live-Cert) deaktiviert bleiben, um Aussperrung bei noch fehlender gültiger Zertifikatskette zu vermeiden.
+Das System SHALL `Strict-Transport-Security` NUR dann senden, wenn TLS/Live-Zertifikat aktiv ist; die Aktivierung SHALL über Konfiguration (`HSTS_ENABLED`) steuerbar sein und im Standard (vor Live-Cert) deaktiviert bleiben. Im Produktivbetrieb MUST der Header `max-age=63072000; includeSubDomains` gesendet werden; der Deploy-Prozess MUST `HSTS_ENABLED=true` in der Server-Umgebung idempotent setzen.
 
 #### Scenario: HSTS deaktiviert vor Live-Zertifikat
 - **WHEN** die HSTS-Konfiguration deaktiviert ist
@@ -31,5 +31,9 @@ Das System SHALL `Strict-Transport-Security` NUR dann senden, wenn TLS/Live-Zert
 
 #### Scenario: HSTS aktiv nach Aufschaltung
 - **WHEN** die HSTS-Konfiguration aktiviert ist
-- **THEN** enthält die Antwort `Strict-Transport-Security` mit einer `max-age`-Direktive
+- **THEN** enthält die Antwort `Strict-Transport-Security` mit `max-age=63072000; includeSubDomains`
+
+#### Scenario: Deploy setzt HSTS
+- **WHEN** `make deploy` auf einen Bestandsserver ohne `HSTS_ENABLED` läuft
+- **THEN** steht danach `HSTS_ENABLED=true` in der Server-Umgebung
 

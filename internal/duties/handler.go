@@ -1374,10 +1374,40 @@ func (h *Handler) ListAssignments(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/duty-assignments/:id/fulfill
+// canFulfill spiegelt policy.CanFulfillAssignment (admin, trainer,
+// sportliche_leitung) im Handler — bewusst als zweites Gate neben dem
+// Router-Tier: die Regel gehört zur Route, nicht zur Verdrahtung in
+// BuildRouter, und der Test im Domänen-Package kann sie ohne Middleware prüfen.
+func canFulfill(claims *auth.Claims) bool {
+	if claims == nil {
+		return false
+	}
+	return policy.CanFulfillAssignment(&policy.Principal{
+		UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions,
+	})
+}
+
 func (h *Handler) Fulfill(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if !canFulfill(claims) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	id := r.PathValue("id")
-	h.db.ExecContext(r.Context(),
+	res, err := h.db.ExecContext(r.Context(),
 		`UPDATE duty_assignments SET status='fulfilled', fulfilled_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	// Keine Zeile getroffen = die Zuweisung gibt es nicht. Vorher antwortete die
+	// Route auch dann 204 und broadcastete — ein stiller Erfolg auf nichts.
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
 	// Betrifft die (staff-weite) Dienst-Konten-Ansicht; Adressat schwer eng
 	// einzugrenzen → bewusst global (niederfrequente Kassierer-/Vorstand-Aktion).
 	h.hub.Broadcast("duties")
@@ -1386,14 +1416,39 @@ func (h *Handler) Fulfill(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/duty-assignments/:id/cash-substitute
 func (h *Handler) CashSubstitute(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if !canFulfill(claims) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	id := r.PathValue("id")
 	var req struct {
 		Amount float64 `json:"amount"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
-	h.db.ExecContext(r.Context(),
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	// Ein Ablösebetrag <= 0 ist keine Ablösung — vorher wurde eine 0 bzw. ein
+	// negativer Betrag klaglos gebucht und stand so im Kassen-Export.
+	if req.Amount <= 0 {
+		http.Error(w, "amount must be > 0", http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.db.ExecContext(r.Context(),
 		`UPDATE duty_assignments SET status='cash_substitute', cash_amount=?, fulfilled_at=CURRENT_TIMESTAMP WHERE id=?`,
 		req.Amount, id)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
 	// Betrifft die (staff-weite) Dienst-Konten-Ansicht → bewusst global.
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)

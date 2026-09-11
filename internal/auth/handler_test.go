@@ -602,6 +602,81 @@ func TestImpersonate_AdminRejected(t *testing.T) {
 	}
 }
 
+// Impersonation trägt den ImpersonatedBy-Claim und hinterlässt eine Audit-Zeile
+// im Event-Log des Admins (security-haertung-welle-1, Entscheidung 7).
+func TestImpersonate_ImpersonatedByClaimUndEventLog(t *testing.T) {
+	db := testutil.NewDB(t)
+	adminID := testutil.CreateUser(t, db, "admin")
+	targetID := testutil.CreateUser(t, db, "standard")
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/impersonate/"+itoa(targetID),
+		testutil.Token(t, adminID, "admin", nil), nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode impersonate response: %v", err)
+	}
+	claims, err := auth.ParseAccessToken(testutil.TestJWTSecret, body.AccessToken)
+	if err != nil {
+		t.Fatalf("parse access_token: %v", err)
+	}
+	if claims.ImpersonatedBy == nil {
+		t.Fatal("expected ImpersonatedBy claim to be set on impersonation token")
+	}
+	if *claims.ImpersonatedBy != adminID {
+		t.Errorf("expected ImpersonatedBy=%d, got %d", adminID, *claims.ImpersonatedBy)
+	}
+	if claims.UserID != targetID {
+		t.Errorf("expected token subject to be target user %d, got %d", targetID, claims.UserID)
+	}
+
+	var count int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM user_events WHERE user_id=? AND category='admin'`, adminID,
+	).Scan(&count); err != nil {
+		t.Fatalf("query user_events: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 event-log row for admin, got %d", count)
+	}
+}
+
+// Ein reguläres Login-Token trägt keinen ImpersonatedBy-Claim (Regression, damit
+// künftige Aufrufer sich blind auf nil verlassen können).
+func TestLogin_KeinImpersonatedByClaim(t *testing.T) {
+	db := testutil.NewDB(t)
+	userID := testutil.CreateUser(t, db, "standard") // password = "test"
+	srv := newAuthServer(t, db)
+
+	res := testutil.Post(t, srv, "/api/auth/login",
+		"", map[string]string{"email": emailSuffix(t, db, userID), "password": "test"})
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	claims, err := auth.ParseAccessToken(testutil.TestJWTSecret, body.AccessToken)
+	if err != nil {
+		t.Fatalf("parse access_token: %v", err)
+	}
+	if claims.ImpersonatedBy != nil {
+		t.Errorf("expected no ImpersonatedBy claim on regular login token, got %v", *claims.ImpersonatedBy)
+	}
+}
+
 // Löschen eines Nutzers → 204 und genau ein Broadcast("users").
 func TestDeleteUser_Broadcast(t *testing.T) {
 	db := testutil.NewDB(t)
