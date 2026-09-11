@@ -1,8 +1,8 @@
 /**
  * KalenderPage inline gates:
  *   canEdit = admin || vorstand || trainer || sportliche_leitung → "Event"-Button
- *   canCreateAbsence = spieler || isParent → "Abwesenheit"-Button
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ *   canCreateAbsence = spieler || trainer || isParent → "Abwesenheit"-Button
+ * Quelle: openspec/specs/permissions/spec.md §"Inline-Gates auf Pages"
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
@@ -24,11 +24,13 @@ const CAN_EDIT_IDS = [
   'sportliche_leitung_elternteil',
 ]
 
-// canCreateAbsence = spieler || isParent
+// canCreateAbsence = spieler || trainer || isParent
 // isParent: vorstand_elternteil, trainer_elternteil, sportliche_leitung_elternteil, elternteil
 // spieler: spieler
+// trainer (auch ohne isParent): trainer, trainer_elternteil
 const CAN_CREATE_ABSENCE_IDS = [
   'vorstand_elternteil',
+  'trainer',
   'trainer_elternteil',
   'sportliche_leitung_elternteil',
   'spieler',
@@ -91,6 +93,49 @@ describe('KalenderPage — canCreateAbsence-Gate: "Abwesenheit"-Button', () => {
         `Persona ${persona.id}: kein "Abwesenheit"-Button erwartet`,
       ).toBeNull()
     }
+  })
+})
+
+// Für canEdit-Personas (Event-Button statt eigenem Abwesenheit-Button) steckt
+// canCreateAbsence nur als Option im Event-Typ-Wizard — Regressionsschutz für den
+// Bug, dass Trainer dort keine "Abwesenheit"-Option sahen (nur spieler/isParent).
+describe('KalenderPage — canCreateAbsence-Option im Event-Typ-Wizard (canEdit-Personas)', () => {
+  const openWizard = async () => {
+    await userEvent.click(screen.getByRole('button', { name: /^Event$/i }))
+  }
+
+  test('trainer sieht "Abwesenheit" als Event-Typ-Option', async () => {
+    renderAsPersona(<KalenderPage />, 'trainer', {
+      mocks: [
+        { url: /\/games/, data: [] },
+        { url: /\/training-sessions/, data: [] },
+        { url: /\/teams/, data: [] },
+        { url: /\/absences/, data: [] },
+      ],
+    })
+    await flushAsync()
+    await openWizard()
+    expect(
+      screen.queryByText('Urlaub oder Verletzung / Sportverbot eintragen'),
+      'trainer (canCreateAbsence via trainer-Funktion): "Abwesenheit"-Option muss im Wizard stehen',
+    ).not.toBeNull()
+  })
+
+  test('sportliche_leitung sieht keine "Abwesenheit"-Option (weder spieler noch trainer noch Eltern)', async () => {
+    renderAsPersona(<KalenderPage />, 'sportliche_leitung', {
+      mocks: [
+        { url: /\/games/, data: [] },
+        { url: /\/training-sessions/, data: [] },
+        { url: /\/teams/, data: [] },
+        { url: /\/absences/, data: [] },
+      ],
+    })
+    await flushAsync()
+    await openWizard()
+    expect(
+      screen.queryByText('Urlaub oder Verletzung / Sportverbot eintragen'),
+      'sportliche_leitung: keine "Abwesenheit"-Option erwartet',
+    ).toBeNull()
   })
 })
 

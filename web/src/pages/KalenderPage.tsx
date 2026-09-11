@@ -978,7 +978,12 @@ export default function KalenderPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showEventMenu])
 
-  const canCreateAbsence = Boolean(user && (user.clubFunctions?.includes('spieler') || user.isParent))
+  // Trainer sind wie Spieler an einem eigenen Mitglieds-Datensatz hängende Termin-Teilnehmer
+  // (GetAttendances zählt sie bei Trainings automatisch als "confirmed") — ihre Abwesenheit
+  // muss deshalb wie die eines Spielers eingetragen werden können, nicht nur die der Eltern.
+  const canCreateAbsence = Boolean(
+    user && (user.clubFunctions?.includes('spieler') || user.clubFunctions?.includes('trainer') || user.isParent)
+  )
 
   return (
     <div>

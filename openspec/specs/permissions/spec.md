@@ -319,13 +319,13 @@ Die folgenden Page-internen Sichtbarkeits-Variablen SHALL pro Persona das jeweil
 |---|---|---|---|---|---|---|---|---|---|---|
 | ✅ | ✅ | ✅ | – | – | ✅ | ✅ | ✅ | ✅ | – | – |
 
-**`KalenderPage` — `canCreateAbsence = hasFunction('spieler') || user.isParent`**
+**`KalenderPage` — `canCreateAbsence = hasFunction('spieler') || hasFunction('trainer') || user.isParent`**
 
 | a | v | ve | vb | ka | t | te | s | se | sp | e |
 |---|---|---|---|---|---|---|---|---|---|---|
-| – | – | ✅ | – | – | – | ✅ | – | ✅ | ✅ | ✅ |
+| – | – | ✅ | – | – | ✅ | ✅ | – | ✅ | ✅ | ✅ |
 
-(Bedingung: `hasFunction(user, 'spieler') || user.isParent`. Admin ist hier KEIN Sonderfall, weil die Aktion nicht „administrativ" ist sondern dem Spieler-/Eltern-Modell gehört. Alle `_elternteil`-Personas und reine Eltern/Spieler sehen den Button.)
+(Bedingung: `hasFunction(user, 'spieler') || hasFunction(user, 'trainer') || user.isParent`. Admin ist hier KEIN Sonderfall, weil die Aktion nicht „administrativ" ist sondern dem Termin-Teilnehmer-Modell gehört. Trainer wurden ergänzt, weil `GetAttendances` sie bei Trainings automatisch als „confirmed" zählt (`internal/trainings/handler.go`) — ihre Abwesenheit muss wie die eines Spielers eintragbar sein, sonst fehlt die Auto-Absage überlappender Trainings/Spiele. `vorstand`/`vorstand_beisitzer`/`kassierer`/`sportliche_leitung` bleiben ausgenommen, weil sie keine automatische Termin-Teilnahme haben. Bei `canEdit`-Personas (Trainer, `_elternteil`, `admin`, `vorstand`) erscheint die Option nicht als eigener Button, sondern als Eintrag „Abwesenheit" im Event-Typ-Wizard.)
 
 **`MemberDatenschutzTab` — `isVorstand = hasFunction(user, 'vorstand')`**
 
