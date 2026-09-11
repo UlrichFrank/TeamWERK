@@ -448,8 +448,17 @@ func seedChatLongThreads(database *sql.DB, mediaDir string, adminID int, userIDs
 	for i := 5; i < 150; i += 7 { // 5,12,...,145 → 21 Bilder
 		langGelesenImgs[i] = (i/7)%2 == 0 // abwechselnd with/without dims
 	}
-	seedLongThread(database, mediaDir, "E2E Chat lang gelesen", []int{adminID, user1}, adminID, 150,
+	_, gelesenMsgIDs := seedLongThread(database, mediaDir, "E2E Chat lang gelesen", []int{adminID, user1}, adminID, 150,
 		func(int) int { return adminID }, imageAtSet(langGelesenImgs), &imgCounter)
+	// chat-message-search: eindeutiger Suchmarker in Nachricht 30 — liegt VOR der
+	// Standard-100er-Seite (die letzten 100 von 150), damit der Such-Sprung den
+	// around-Cursor wirklich braucht und nicht zufällig in der Default-Seite landet.
+	// Der Marker kommt nur hier vor (Test sucht danach und erwartet genau einen Treffer).
+	if _, err := database.Exec(
+		`UPDATE messages SET body = ? WHERE id = ?`,
+		"Hallenadresse Musterweg 7 (E2E-Suchmarker)", gelesenMsgIDs[29]); err != nil {
+		fatal("e2e-seed: set search marker failed", "error", err)
+	}
 
 	// 2) "E2E Chat lang unread": 150 Nachrichten von user1. Admin liest alle außer den
 	//    letzten 40 → unread=40 (Divider innerhalb der neuesten 100er-Seite).
