@@ -1,7 +1,7 @@
 # chat-open-at-unread Specification
 
 ## Purpose
-TBD - created by archiving change chat-open-at-unread. Update Purpose after archive.
+Legt fest, wo eine Konversation unter `/chat` beim Öffnen positioniert wird (Ende, erste ungelesene Nachricht oder Chip bei älteren Ungelesenen) und wie diese Position asynchrones Nachladen von Bildern, Konversationswechsel und Browser ohne CSS scroll-anchoring (iOS Safari) überlebt.
 ## Requirements
 ### Requirement: Öffnen positioniert am ersten Ungelesenen
 
@@ -60,6 +60,16 @@ ein absolutes Zeitlimit erreicht ist, und MUST durch echte Nutzer-Eingabe jederz
 freigegeben werden. Bei Freigabe MUST der Sticky-Zustand aus der tatsächlichen Scroll-Position
 abgeleitet werden.
 
+Für Bilder, deren Dimensionen dem Client beim Rendern bekannt sind, MUST der Platzhalter
+bereits vor dem Laden des Bildes **dieselbe Layout-Höhe und -Breite** einnehmen wie das
+fertige Bild. Der Übergang vom Platzhalter zum dekodierten Bild MUST die Höhe des
+Scroll-Inhalts unverändert lassen; die Re-Verankerung darf für solche Bilder nicht benötigt
+werden. Das gilt in jedem Container-Kontext, in dem Chat-Bilder gerendert werden,
+insbesondere in einer Sprechblase, deren Breite sich an ihrem Inhalt bemisst
+(shrink-to-fit) — ein Platzhalter, der dort keine eigene Breite einbringt, erfüllt diese
+Anforderung nicht. Für Bilder **ohne** bekannte Dimensionen bleibt ein einmaliger
+Höhenwechsel zulässig; dort trägt die Re-Verankerung die Position.
+
 #### Scenario: Divider bleibt oben, nachdem Bilder darüber decoden (ohne Browser-scroll-anchoring)
 
 - **GIVEN** eine lange Konversation mit `unreadCount = 40`, deren geladene Seite ein Bild ohne Server-Dimensionen ÜBER dem Divider enthält, in einem Umfeld ohne CSS scroll-anchoring (z. B. iOS Safari)
@@ -82,6 +92,27 @@ abgeleitet werden.
 - **GIVEN** der Chip-Fall (erste Ungelesene älter als die geladene Seite), Container oben
 - **WHEN** der User „Ältere Nachrichten laden" klickt und die voran-gestellten älteren Nachrichten inkl. Bilder decoden
 - **THEN** bleibt der zuvor sichtbare Inhalt an derselben Stelle (die Ansicht springt nicht ans Ende oder nach oben weg)
+
+#### Scenario: Platzhalter mit bekannten Dimensionen verändert die Inhaltshöhe beim Decode nicht
+
+- **GIVEN** eine Konversation, deren geladene Seite ausschließlich Bilder **mit** bekannten Dimensionen enthält, und die Bild-Downloads sind noch nicht abgeschlossen (alle Platzhalter sichtbar)
+- **WHEN** die Bilder anschließend geladen und vollständig dekodiert werden
+- **THEN** ist die Gesamthöhe des Scroll-Inhalts nach dem Decode gleich der Höhe vor dem Decode (Toleranz wenige Pixel für Rundung)
+- **AND** kein Bild-Platzhalter hatte vor dem Decode eine kleinere Breite als das fertige Bild
+
+#### Scenario: Reines Bild in einer inhaltsbreiten Sprechblase
+
+- **GIVEN** eine Bild-Nachricht ohne Text mit bekannten Dimensionen in einer Sprechblase, deren Breite sich am Inhalt bemisst
+- **WHEN** die Nachricht gerendert wird, bevor das Bild geladen ist
+- **THEN** hat die Sprechblase bereits die Breite, die sie mit dem fertigen Bild haben wird (natürliche Bildbreite, gedeckelt auf die maximale Blasenbreite)
+- **AND** der Platzhalter hat die aus Breite und Seitenverhältnis folgende Höhe (nicht 0 px, nicht nur das Blasen-Padding)
+
+#### Scenario: Bild ohne bekannte Dimensionen bleibt tolerierter Einzelfall
+
+- **GIVEN** eine Bild-Nachricht, für die keine Dimensionen bekannt sind (Altbestand ohne Backfill, unlesbarer Header)
+- **WHEN** das Bild geladen wird
+- **THEN** darf sich die Inhaltshöhe einmalig ändern
+- **AND** die Öffnungs-Positionierung wird durch die fortlaufende Re-Verankerung gehalten (bestehendes Verhalten)
 
 ### Requirement: UnreadDivider als visuelle Trennlinie
 
