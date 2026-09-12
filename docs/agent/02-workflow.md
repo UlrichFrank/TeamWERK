@@ -12,6 +12,10 @@ make test / lint / coverage
 make test-e2e                # Playwright (echter Chromium gegen Prod-Binary + Seed-DB) — ~2–4 min, NICHT Teil von make test/pre-push; für UI-riskante Änderungen (Scroll/Layout/Focus)
 make metrics                 # Code-Metriken (Größe/Komplexität/Coverage/Lint-Dichte/Duplikation) → stdout + metrics/REPORT.md (Exit 0)
 make metrics-gate            # Wie metrics + Schwellwert-Prüfung gegen metrics/thresholds.yml (Exit 1 bei Regression)
+
+# Video-Encoder (Desktop-Tool, eigenes Go-Modul — NICHT Teil von make test/pre-push)
+cd tools/video-encoder && go test ./internal/...   # reines Go; mit ffmpeg/ffprobe im PATH laufen auch die Integrationstests
+cd tools/video-encoder && go run .                 # Fyne braucht einen C-Compiler; ohne eingebettetes ffmpeg wird das aus dem PATH genutzt
 ```
 
 **Neue Migration:** `internal/db/migrations/00N_beschreibung.up.sql` + `.down.sql` mit der **nächsten freien Nummer**. Nie eine Nummer ≤ aktueller DB-Version — golang-migrate überspringt sie lautlos.

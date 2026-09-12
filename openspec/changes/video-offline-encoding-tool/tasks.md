@@ -14,36 +14,36 @@
 
 ## 3. Tool: Go-Modul-Grundgerüst
 
-- [ ] 3.1 Neues Verzeichnis `tools/video-encoder/` mit eigenem `go.mod` (eigener Modulpfad, unabhängig vom Server-Modul)
-- [ ] 3.2 Fyne-Abhängigkeit einbinden, minimales Fenster mit Dateiauswahl-Button + Drag&Drop-Ziel + Fortschrittsbalken (noch ohne Funktionalität)
-- [ ] 3.3 ffmpeg-Binaries (Windows + macOS, statischer GPL-Build) beschaffen, per `go:embed` einbetten, Lizenztext (GPL + Build-Herkunft) im Repo/Tool-About-Dialog hinterlegen
-- [ ] 3.4 Erst-Start-Extraktion: eingebettete ffmpeg-Binary nach `os.UserCacheDir()` entpacken, falls dort noch keine/eine andere Version liegt; Exec-Pfad merken
+- [x] 3.1 Neues Verzeichnis `tools/video-encoder/` mit eigenem `go.mod` (eigener Modulpfad, unabhängig vom Server-Modul)
+- [x] 3.2 Fyne-Abhängigkeit einbinden, minimales Fenster mit Dateiauswahl-Button + Drag&Drop-Ziel + Fortschrittsbalken (noch ohne Funktionalität)
+- [x] 3.3 ffmpeg-Binaries (Windows + macOS, statischer GPL-Build) beschaffen, per `go:embed` einbetten, Lizenztext (GPL + Build-Herkunft) im Repo/Tool-About-Dialog hinterlegen
+- [x] 3.4 Erst-Start-Extraktion: eingebettete ffmpeg-Binary nach `os.UserCacheDir()` entpacken, falls dort noch keine/eine andere Version liegt; Exec-Pfad merken
 
 ## 4. Tool: Encoding
 
-- [ ] 4.1 ffmpeg-Aufruf mit den Zielparametern bauen: scale auf 720p, `-pix_fmt yuv420p`, `-c:v libx264 -preset medium -crf 26 -maxrate 2800k -bufsize 5600k`, `-force_key_frames expr:gte(t,n_forced*4)`, festes `-profile:v`/`-level` (z. B. High@3.1), AAC-Audio (128k oder `copy` bei AAC-Quelle, analog `sourceIsAAC` in `internal/videos/worker.go`)
-- [ ] 4.2 Fortschrittsanzeige aus ffmpeg-`stderr`-Progress-Parsing (z. B. `-progress pipe:1`) an die Fyne-UI koppeln, ohne UI-Blockade bei hoher Event-Frequenz
-- [ ] 4.3 Fehlerbehandlung: ffmpeg-Exit-Code ≠ 0 → verständliche Fehlermeldung in der UI, kein Absturz
+- [x] 4.1 ffmpeg-Aufruf mit den Zielparametern bauen: scale auf 720p, `-pix_fmt yuv420p`, `-c:v libx264 -preset medium -crf 26 -maxrate 2800k -bufsize 5600k`, `-force_key_frames expr:gte(t,n_forced*4)`, festes `-profile:v`/`-level` (z. B. High@3.1), AAC-Audio (128k oder `copy` bei AAC-Quelle, analog `sourceIsAAC` in `internal/videos/worker.go`)
+- [x] 4.2 Fortschrittsanzeige aus ffmpeg-`stderr`-Progress-Parsing (z. B. `-progress pipe:1`) an die Fyne-UI koppeln, ohne UI-Blockade bei hoher Event-Frequenz
+- [x] 4.3 Fehlerbehandlung: ffmpeg-Exit-Code ≠ 0 → verständliche Fehlermeldung in der UI, kein Absturz
 
 ## 5. Tool: Auth + Upload
 
-- [ ] 5.1 Login-Dialog (E-Mail/Passwort) → `POST /api/auth/login` über `http.Client` mit `CookieJar` (Refresh-Token-Cookie wird automatisch verwaltet)
-- [ ] 5.2 Metadaten-Formular (Titel oder Spiel-Auswahl, Team, Saison) → `POST /api/videos`
-- [ ] 5.3 tus-Client in Go implementieren oder vorhandene Go-tus-Client-Bibliothek einbinden; Upload gegen `/api/videos/upload/` mit denselben Metadata-Feldern wie der bisherige Browser-Client (`video_id`)
-- [ ] 5.4 401-Retry-Hook: bei 401 auf einem Chunk → `POST /api/auth/refresh`, Chunk wiederholen; bei 401 auf den Refresh selbst → Upload sauber abbrechen, Re-Login anfordern
-- [ ] 5.5 Resumable-Verhalten: laufende tus-Session bei Verbindungsabbruch fortsetzen (tus-Protokoll-Standardverhalten)
+- [x] 5.1 Login-Dialog (E-Mail/Passwort) → `POST /api/auth/login` über `http.Client` mit `CookieJar` (Refresh-Token-Cookie wird automatisch verwaltet)
+- [x] 5.2 Metadaten-Formular (Titel oder Spiel-Auswahl, Team, Saison) → `POST /api/videos`
+- [x] 5.3 tus-Client in Go implementieren oder vorhandene Go-tus-Client-Bibliothek einbinden; Upload gegen `/api/videos/upload/` mit denselben Metadata-Feldern wie der bisherige Browser-Client (`video_id`)
+- [x] 5.4 401-Retry-Hook: bei 401 auf einem Chunk → `POST /api/auth/refresh`, Chunk wiederholen; bei 401 auf den Refresh selbst → Upload sauber abbrechen, Re-Login anfordern
+- [x] 5.5 Resumable-Verhalten: laufende tus-Session bei Verbindungsabbruch fortsetzen (tus-Protokoll-Standardverhalten)
 
 ## 6. Tool: Tests
 
-- [ ] 6.1 Go-Tests für die 401-Retry-Logik (Fake-HTTP-Server: erster Chunk 401, Refresh liefert neuen Token, Retry-Chunk 204)
-- [ ] 6.2 Go-Tests für den Refresh-Failure-Pfad (Refresh liefert 401 → Upload bricht ab, keine Endlosschleife)
-- [ ] 6.3 Test für die ffmpeg-Argument-Konstruktion (reine Funktion, analog `buildFFmpegRenditionArgs` im Server) — insbesondere `-pix_fmt yuv420p` vor `-c:v libx264` und das feste Profil/Level
+- [x] 6.1 Go-Tests für die 401-Retry-Logik (Fake-HTTP-Server: erster Chunk 401, Refresh liefert neuen Token, Retry-Chunk 204)
+- [x] 6.2 Go-Tests für den Refresh-Failure-Pfad (Refresh liefert 401 → Upload bricht ab, keine Endlosschleife)
+- [x] 6.3 Test für die ffmpeg-Argument-Konstruktion (reine Funktion, analog `buildFFmpegRenditionArgs` im Server) — insbesondere `-pix_fmt yuv420p` vor `-c:v libx264` und das feste Profil/Level
 
 ## 7. Release-Pipeline
 
-- [ ] 7.1 `.github/workflows/release.yml`: neuen Job-Block mit Matrix `[windows-latest, macos-latest]` ergänzen, der `tools/video-encoder/` nativ pro Runner baut (kein Cross-Compile, siehe design.md Entscheidung 3)
-- [ ] 7.2 Gebaute Binaries als Release-Assets hochladen (`gh release upload "$VERSION" ...`), Namensschema z. B. `teamwerk-video-encoder-windows-amd64.exe` / `teamwerk-video-encoder-macos.dmg`
-- [ ] 7.3 Lizenztexte (ffmpeg GPL + Build-Attribution) als zusätzliche Release-Assets oder im Tool selbst (About-Dialog) mit ausliefern
+- [x] 7.1 `.github/workflows/release.yml`: neuen Job-Block mit Matrix `[windows-latest, macos-latest]` ergänzen, der `tools/video-encoder/` nativ pro Runner baut (kein Cross-Compile, siehe design.md Entscheidung 3)
+- [x] 7.2 Gebaute Binaries als Release-Assets hochladen (`gh release upload "$VERSION" ...`), Namensschema z. B. `teamwerk-video-encoder-windows-amd64.exe` / `teamwerk-video-encoder-macos.dmg`
+- [x] 7.3 Lizenztexte (ffmpeg GPL + Build-Attribution) als zusätzliche Release-Assets oder im Tool selbst (About-Dialog) mit ausliefern
 
 ## 8. Frontend: Browser-Upload entfernen, Download-Dropdown ergänzen
 
@@ -65,6 +65,6 @@
 
 ## 11. Abschluss
 
-- [ ] 11.1 `make test` / `make lint` / `pnpm -C web build` grün (inkl. Architektur- und Broadcast-Gate)
-- [ ] 11.2 `cd tools/video-encoder && go build ./...` sowie `go vet ./...` grün (eigenes Modul, nicht Teil von `make test`)
-- [ ] 11.3 `openspec validate --strict` für diesen Change
+- [x] 11.1 `make test` / `make lint` / `pnpm -C web build` grün (inkl. Architektur- und Broadcast-Gate)
+- [x] 11.2 `cd tools/video-encoder && go build ./...` sowie `go vet ./...` grün (eigenes Modul, nicht Teil von `make test`)
+- [x] 11.3 `openspec validate --strict` für diesen Change

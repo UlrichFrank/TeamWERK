@@ -165,3 +165,26 @@ die vor bzw. mit diesem Deploy zu beachten sind:
    (Entscheidung 2) — das alte Format wird nicht migriert, sondern beim Mount entfernt.
 4. **Migration `060`** (Event-Log-Kategorie `admin`, für den Impersonation-Audit) läuft
    automatisch mit `make deploy`/`make migrate-remote-up`, kein manueller Schritt nötig.
+
+## Cutover Video-Encoder-Tool (`video-offline-encoding-tool`)
+
+Harter Wechsel ohne Feature-Flag: mit dem Deploy verschwindet der Browser-Upload, und der
+Worker packt nur noch um. Reihenfolge (design.md, Migration Plan):
+
+1. **Warteschlange leer.** Ein über den alten Weg hochgeladenes Rohvideo (HEVC/10-bit vom
+   Handy) würde der neue Worker mit `unsupported_input_format` ablehnen. Muss `0` liefern:
+   ```bash
+   ssh teamwerk.team-stuttgart.org "sudo sqlite3 /var/lib/teamwerk/teamwerk.db \"SELECT COUNT(*) FROM videos WHERE status IN ('uploading','queued','processing')\""
+   ```
+2. **Erst das Release, dann der Deploy.** Der Merge nach `main` erzeugt das Release; der Job
+   `video-encoder` in `release.yml` hängt Windows-`.exe`, macOS-`.dmg` und die ffmpeg-
+   Lizenztexte an. Erst wenn die Assets unter
+   `https://github.com/UlrichFrank/TeamWERK/releases/latest` stehen, deployen — sonst zeigt
+   der neue Dropdown auf `/videos` ins Leere.
+3. **Rollback** (`make deploy-rollback`) ist gefahrlos: der alte Worker encodiert die vom Tool
+   gelieferten MP4s einfach noch einmal voll. `ffmpeg`/`ffprobe` bleiben auf dem VPS (Remux,
+   Formatprüfung, Codec-Backfill).
+
+Das Tool ist **nicht signiert**: macOS meldet beim ersten Start einen nicht verifizierten
+Entwickler (Rechtsklick → Öffnen), Windows SmartScreen einen unbekannten Herausgeber. Den
+Filmenden das einmal sagen.
