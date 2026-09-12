@@ -1,0 +1,8 @@
+Website = "https://teamwerk.team-stuttgart.org"
+
+[Details]
+Icon = "Icon.png"
+Name = "TeamWERK Video-Encoder"
+ID = "org.team-stuttgart.teamwerk.videoencoder"
+Version = "0.0.0"
+Build = 1

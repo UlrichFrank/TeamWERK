@@ -1,0 +1,11 @@
+# Vom Release-Build abgelegt (bis 30 MB je Plattform) — nie einchecken,
+# siehe internal/ffmpegbin/bin/README.md.
+/internal/ffmpegbin/bin/ffmpeg.*
+
+# Build-Artefakte
+/build/
+/dist/
+/teamwerk-video-encoder*
+/*.app
+/*.dmg
+/*.exe
